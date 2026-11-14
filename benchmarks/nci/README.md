@@ -20,13 +20,17 @@ and `fit.py` read. Hosts carry no compute and no run beats the reference's effic
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
 where every unit is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
-hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep older names (`GLOSSARY.md`, Older names) in the names built on these stems: `rho` for
-the slowdown (`bracket.py`'s stored key `"rho"`); `efficiency` or `eta` for η, the term the slowdown
-replaces (`tiers.py`'s `efficiency`, `exposure.py`'s `eta`); `residual` for free compute (`residual_share`, `memory_caps_residual`);
-`unmonitored` for unregistered hardware's share, ε_unreg (`tiers.py`'s key `unmonitored`); and `dampener` or `D` for the
-slowdown (`fit.py`'s `dampener`, the output keys `D_*`). These are not older names: `tiers.py`'s `rho_T`, `rho_PoS` and
-`rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s `RESIDUAL`, the
-model's residual stream; and `reference_efficiency`, the reference-efficiency assumption.
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. For the slowdown's terms, the code and its outputs keep older names (`GLOSSARY.md`, Older names) in the names built on
+these stems: `rho` for the slowdown (`bracket.py`'s stored key `"rho"`); `efficiency` or `eta` for the older efficiency
+term, written η in older text and replaced by the slowdown (`tiers.py`'s `efficiency`, `exposure.py`'s `eta`; today's η is
+the success threshold, and `exposure.py`'s docstring says 1/eta is not the slowdown D); `residual` for free compute
+(`residual_share`, `memory_caps_residual`); `unmonitored` for unregistered hardware's share, ε_unreg (`tiers.py`'s key
+`unmonitored`); and `dampener` for the slowdown, in functions and prose (`fit.py`'s `dampener`), with the output keys that
+begin `D_` in `fit.py` and `statement.py` and `statement.py`'s key `D`. These are not older names: `tiers.py`'s `rho_T`,
+`rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
+`RESIDUAL`, the model's residual stream; `fit.py`'s `D_max` and its loop variable `D` over `DATA_LIMITS`, token counts in
+the loss law; `kappa.py`'s `c.D` and the `D` of its softmax comment; `reference_efficiency`, the reference-efficiency
+assumption; and `catalog.py`'s category id `efficiency-metrics`.
 
 ## Files
 
