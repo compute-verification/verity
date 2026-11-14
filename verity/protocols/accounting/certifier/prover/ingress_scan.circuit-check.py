@@ -31,3 +31,14 @@ def _network_ingress_scan_w63k4_roots() -> list[Any]:
 
     statics = dict(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=4, KI=32)
     return [bind(IngressScanBucket, **statics), bind(IngressScanFirst, **statics)]
+
+
+def _network_ingress_scan_start_roots() -> list[Any]:
+    """The carried start's unit at the two classes above, the slow test's and w63k4's: a state row of each class's
+    width, each bit through two NOTs. It has no AND and takes seconds, so it is a unit of its own that never waits on
+    the buckets' traces."""
+    from verity.circuits.defs import bind
+    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanStart
+
+    return [bind(IngressScanStart, B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
+            bind(IngressScanStart, B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=4, KI=32)]

@@ -123,10 +123,18 @@ first bucket's unit, `IngressScanFirst`, has no `sin`: its S_{−1} is the empty
 row the prover commits stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and
 o2 are committed.
 
+**A carried start.** `IngressScanStart` is the unit of a link-window whose scan starts from a state another record
+holds: its `sin` is that state, a registered read of the value the link-window's record names for it (an earlier
+link-window's last state row, or the empty state), and its output is `sin`, each bit through two NOTs, committed as the
+row the link-window's state tree holds at leaf 0, the row its first bucket's `sin` and its first boundary's Programs
+read. So that row is the carried state by gates, and no bucket's unit is another Definition for it: every bucket of
+such a link-window, the first included, is `IngressScanBucket`.
+
     IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
         prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
     IngressScanFirst{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>,
         prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
+    IngressScanStart{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(sin: Array<NS>) -> (Array<NS>)
         NS = `state_bits`: 96 + lanes·(338 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
         NE = `entry_bits`: 33 + KO·IDB rounded up to a multiple of 16 (`SlotEntry_v1`'s row)
         NV = `view_bits`: 32 + lanes·(112 + KO·IDB rounded up to a multiple of 16)
@@ -137,7 +145,10 @@ from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Sequence
 
+from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.accounting.certifier.prover import egress as EG
@@ -654,6 +665,16 @@ def _sig_first(S):
     return (("row", Array(cls.S * cls.B, BYTE)), *_progs(cls)), _outs(cls)
 
 
+def _sig_start(S):
+    state = Array(state_bits(_cls(S)), BIT)
+    return (("sin", state),), Tuple(state)
+
+
+def _body_start(B, S, sin):
+    # gates, never a pass-through: an output that is an input wire commits nothing the statement computes
+    return tuple_of(B.batch(BL.NOT, B.batch(BL.NOT, sin, axes=(0,)), axes=(0,)))
+
+
 def _eq(C, x: Sequence, y: Sequence):
     return and_reduce(C, [(a ^ b).inv() for a, b in zip(x, y, strict=True)])
 
@@ -902,6 +923,10 @@ IngressScanFirst = _part(
     "row and the Programs' entries prog0 … prog<lanes − 1>, and its egress view at 0, with 1 in bit 0 of the first "
     "output iff every check of the step holds: " + _STEP, version=3)
 IngressScanFirst.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
+IngressScanStart = CompositeDefinition(
+    "IngressScanStart", 1, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
+    doc="the scan's carried start: sin, the state a link-window's scan starts from (`state_bits` bits, the class's "
+        "state row), each bit through two NOTs, so the row its output commits is sin")
 
 
 def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]] | tuple[bytes, Sequence[int]]]
@@ -915,7 +940,8 @@ def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[i
     return [rows, *sins, *([p[j] for p in progs] for j in range(cls.NR))]
 
 
-__all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanFirst", "NONE", "STATICS", "Slot", "State", "arguments",
+__all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanFirst", "IngressScanStart", "NONE", "STATICS", "Slot",
+           "State", "arguments",
            "decode", "due", "empty", "encode", "entry", "entry_bits", "entry_encode", "entry_layout", "held", "layout",
            "position", "prog_bits", "prog_decode", "prog_encode", "prog_rows", "programs", "reference", "scan",
            "slot_row", "state_bits", "step", "token_row", "view", "view_bits", "view_encode", "window_state"]
