@@ -75,3 +75,39 @@ The three terms, as ordered [ran: the tests; read: the code]:
 
 Least sure of: item 3's process. I read which process the tasks' peak is of from the code that fills it, not from the run.
 
+[2026-11-14T01:22Z] a23d77f098cc
+TERMGB to network-accounting (lead), Fri 13 Nov 5:23 PM PST, to your 5:11 PM PST resume and your 4:58 PM PST line. **None of the four runs has ended; #9305's has 9 suites left of 132 and nothing failed so far. One thing is new: the old job of #9329 at `aba14110ec6f` ended, its tie's arm is green and its suites are red by one test of this change's own, and that forced one push on #9329.**
+
+**What I hold** [ran, each read]
+- A new machine, up since about 5:11 PM PST. It had no worktree of mine. **Nothing unpushed is lost:** each of the four heads was on origin before the old machine went, and `ls-remote` at 5:18 PM PST gives the four you name.
+- Lost with the machine: scratch only. The builder of #9329's body for its merged head was never written (the command that wrote it was the first to fail). The builders of the other three bodies are in the shared store.
+- Bodies: #9305, #9501 and #9811 each name their head and run, set and read back by about 4:40 PM PST [ran then]. **#9329's body is stale:** it names `aba14110ec6f`. It is next after this line.
+- Inbox pulled by hand: 0 new; your 4:58 PM PST line came through the hook at 5:12 PM PST.
+- Timers: none [ran: the list is empty]. None removed.
+- What stopped the last turn, as I saw it: from about 4:42 PM PST every shell and file call on the machine failed to start, for 25 minutes, and then the turn ended.
+
+**The four runs, at 5:17 PM PST** [read: each run's own files, fetched]
+- **#9305, `r20261114-000646-9628`, head printed `a8268a302c51`: running.** The six lint files exit 0, 38 passed. Suites: the change from `f5bd1f351236` touches 132 (the merge holds 172 commits of `main`), 121 passed, 2 passes kept from the cache, **0 failed**, 9 left: `verity-vllm`, `verity-numerical`, `verity-ops`, `research`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`. The pins step follows. One line the moment it ends.
+- **#9501, `r20261114-000732-f96e`, head `538f3e20468a`: running.** Lint exit 0. 61 suites named, 49 passed, 1 failed, 11 left. The failure is `verity-bench`, 621 passed and 8 failed: the harness's eight, each by the name the body gives it, and nothing else.
+- **#9811, `r20261114-002402-0ee6`, head `13ab0ebd9c44`: running.** Lint exit 0. 61 named, 47 passed, 1 kept from the cache, 1 failed, 12 left. The failure is `verity-bench`, the same eight by name.
+- **#9329, `r20261114-001345-b5be`, head `0a9a1bc70963`: running.** Lint exit 0. 132 named, 22 passed, 0 failed, 110 left. `benchmarks/one_stage` is among the 110 and will be red there by the test below.
+
+**The old job of #9329, `r20261113-232106-6efd` at `aba14110ec6f`: ended at 5:07 PM PST, exit 1.** It had ended, so there was nothing to cancel. Marks nothing; what it says:
+- **The tie's arm: exit 0.** The three `RECORDS` lines:
+  - `weights-tie`: accepted, 613 of 613 units sampled, 16 weights pinned.
+  - `weights-tie-other`: its record rejects, `ok` true, **`passes_on: read_refused`**. Checks: `checks_before_draw` true, `rejected` true, `read_refused` true, `no_proof_released` false, `lean_refused` no value. 57 sessions, none with 0 proofs. Lean refused members 20, 38 and 56 at setup, each on a table row that does not open the registered root of the value read. No root pinned.
+  - `weights-tie-forged`: its record rejects, `ok` true, **`passes_on: no_proof_released`**. Checks: `checks_before_draw` true, `rejected` true, `no_proof_released` true, `read_refused` false, `lean_refused` no value. 57 sessions, 3 with 0 proofs. No root pinned.
+- **The suites: exit 1.** 9 suites, 8 passed, 1 failed: `benchmarks/one_stage`, 1,087 passed and 1 failed, `tests/test_audit_two_members.py::test_a_member_with_one_bit_changed_is_refused`.
+  - Why: that test compares a forged run's `checks` whole against four names. Step 6 has every forged run compute and show a fifth, `read_refused`. The run under test passes as before, on `no_proof_released`; the dictionary holds one more key, `read_refused: False`. My fault at step 6: the test needs built binaries, so the VM never ran it, and I ran no pool job of the suites at that step.
+  - The other eight: `demos/onsite_served` 8, `benchmarks/prove_path` 203 and 10 skipped, `verity-graph` 220, `verity-network-e2e` 70, `verity-cli` 138, `repository` 357, `verity-network-traces` 716, `verity-vllm` 17,154 and 479 skipped.
+
+**The push a red run forced: #9329 is at `fe9296fde681`** [ran: `0a9a1bc7096..fe9296fde68`, a fast-forward; one commit, under the checkout's identity]
+- One file, +3 −2, `benchmarks/one_stage/tests/test_audit_two_members.py`, one of this change's nine: the expected `checks` gain `"read_refused": False`, and the docstring gains one sentence saying why. No line of the check changes, and no other test in the tree compares those checks whole [ran: a search for the names].
+- On the VM at `fe9296fde681` [ran]: the six lint files, 38 passed; the ratchet gate over #9305's head, exit 1, the same 20 sites.
+- **Job `r20261114-012103-6071`**, waiting in the pool's line: the six lint files, then `suites.py --changed 0a9a1bc70963 --quick`, which is the suites that read that one file. `r20261114-001345-b5be` goes on at `0a9a1bc70963` for the other suites of the merge; I read its one-stage failure by name when it ends.
+- The tie's arm is not run again: the mend is a test's expectation.
+
+Nothing else is pushed. I mark nothing.
+
+TIMER: none.
+
