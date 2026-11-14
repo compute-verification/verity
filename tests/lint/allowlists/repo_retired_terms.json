@@ -4386,6 +4386,7 @@
     {"file": "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py", "count": 3},
     {"file": "verity/protocols/accounting/pouw/verifier/window.py", "count": 58},
     {"file": "verity/protocols/proofs/spot/verifier/profile.py", "count": 90},
+    {"file": "verity/protocols/accounting/registration/verifier/registration.py", "count": 10},
     {"file": "verity/protocols/compose/verifier/remote/CoreRemote.lean", "count": 98},
     {"file": "verity/protocols/compose/verifier/remote/README.md", "count": 154},
     {"file": "verity/protocols/compose/verifier/remote/lakefile.toml", "count": 6},
@@ -5035,7 +5036,7 @@
     {"file": "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py", "count": 1},
     {"file": "verity/protocols/proofs/flock/prover/verity_unit.rs", "count": 10},
     {"file": "verity/circuits/kernels/tc.py", "count": 1},
-    {"file": "verity/circuits/kernels/tests/cuda_build.py", "count": 3},
+    {"file": "verity/commitments/cuda/tests/cuda_build.py", "count": 3},
     {"file": "verity/circuits/private_circuits/README.md", "count": 2},
     {"file": "verity/circuits/private_circuits/tests/test_boolean_universal.py", "count": 16},
     {"file": "verity/circuits/private_circuits/universal.py", "count": 14},
@@ -5208,7 +5209,6 @@
     {"file": "benchmarks/serve_tax/pyproject.toml", "count": 1},
     {"file": "benchmarks/serve_tax/tests/test_cell_shim.py", "count": 4},
     {"file": "benchmarks/serve_tax/tests/test_certified.py", "count": 5},
-    {"file": "verity/protocols/accounting/registration/verifier/registration.py", "count": 10},
     {"file": "security/Proofs/Flock/SpotFlock/AddressesWired.lean", "count": 1},
     {"file": "security/Proofs/Flock/SpotFlock/RevealsWired.lean", "count": 1}
   ]
