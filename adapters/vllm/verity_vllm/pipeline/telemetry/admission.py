@@ -34,7 +34,7 @@ from verity_vllm.engine.profiles.admission_calibration import (
 )
 from verity_vllm.records.schema_ids import ADMISSION_PLAN_SCHEMA
 
-__all__ = ["CALIBRATION", "predict", "request_prompt_len", "row_config_from_workload"]
+__all__ = ["predict", "request_prompt_len", "row_config_from_workload"]
 
 MiB = 1 << 20
 SCHEMA = ADMISSION_PLAN_SCHEMA

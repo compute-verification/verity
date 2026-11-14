@@ -92,7 +92,7 @@ import `ChallengerGate`), `commit_plan` (`key`, `keyed`, `write`), `cpu_replay` 
 `tree_refusal`, `weights_attest`, `worker_peak`), `m1_capture` (`dump_cos_sin`), `replay_bundle` (`ARGS`, `HASHED`,
 `MANIFEST`, `NOT_RETAINED`, `PENDING`, `deferred_records`, `discard`, `open_bundle`, `partial`, `path`, `seal`,
 `seal_all`, `weights_extra`, `write_store`, `write_store_files`), `replay_plan` (its command alone), `spans`
-(`Spans`) and `telemetry.admission` (`CALIBRATION`, `predict`, `request_prompt_len`, `row_config_from_workload`). The
+(`Spans`) and `telemetry.admission` (`predict`, `request_prompt_len`, `row_config_from_workload`). The
 exception is `spans`: `serve_commit` also takes `commit_s_of`, `end_lap`, `gc_of` and `phases_of` from it, which its
 `__all__` does not list. The benchmarks import `cpu_replay` and `replay_bundle` as modules. Six modules state no
 `__all__`: `commit`, `commit_arb`, `c2_replay`, `gpu_lease`, `compiled_merge` and `source_identity`. Others
