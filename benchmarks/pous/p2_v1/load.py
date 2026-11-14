@@ -4,7 +4,7 @@ load buffers on the GPU by `libp2v1.so` (`gpu.Kernels`), with the refusals the s
 
 The store's layout is this package's fixture (`store.py`, schema `verity-pous/p2-store-layout/v1`):
 
-- the registered codec `p2-16448/v4` (`verity/protocols/pous/verifier/schemes/p2.py`): 2,056-byte big-endian blocks, block
+- the registered codec `p2-16448/v4` (`verity/protocols/accounting/pous/verifier/schemes/p2.py`): 2,056-byte big-endian blocks, block
   i = blocks_per_segment · s + v being block v of segment s;
 - block i's payload is W bytes [2054 i, 2054 i + 2054), bytes 2 .. 2055 of its decoded row, whose bytes 0 and 1 are zero;
 - each tensor (s8 [N, K] row-major) starts on a block, `first_block`, takes ⌈N K / 2054⌉ blocks, and its last block's
@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pous.verifier.schemes import p2 as S
+from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
 from . import gpu
 from . import reference as R
