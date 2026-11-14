@@ -308,7 +308,7 @@ import threading
 import time
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -517,12 +517,12 @@ class Host:
 
 
 def utc(now: datetime) -> str:
-    return now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def later(t: str, minutes: int) -> str:
     """`t` (`utc`'s form) plus `minutes`: a reserve's expiry."""
-    return utc(datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC) + timedelta(minutes=minutes))
+    return utc(datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc) + timedelta(minutes=minutes))
 
 
 def pinned_commit(tree: Path = TREE) -> str:
@@ -1170,7 +1170,7 @@ def gate_reserve(argv: list[str], host: Host, *, by: str, admin: bool, now: date
     lines = read_ledger(host.ledger)
     if (why := cap_refusal(lines, req.get("for") or by)) is not None:
         raise Refused(why)
-    session = f"s{now.astimezone(UTC):%Y%m%dT%H%M%SZ}-{token}"
+    session = f"s{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
     d = host.sessions / session
     d.mkdir(mode=0o755)
     req.update(session=session, by=by, requested_utc=utc(now))
@@ -1304,7 +1304,7 @@ def gate_declare(argv: list[str], host: Host, *, by: str, admin: bool, now: date
 def gate_fetch(session: str, host: Host) -> bytes:
     """The session's directory (its request and out/, never its secret) as a gzipped tar; a withheld session's only once
     its `end` is in the ledger, since `out/record.json` signs its coin commitment's root and `releases.jsonl` names it."""
-    s = gate_status(session, host, lambda _: False, datetime.now(UTC))
+    s = gate_status(session, host, lambda _: False, datetime.now(timezone.utc))
     if root_held(s):
         raise Refused(f"session {session} is withheld, and its end is not in the ledger: its directory, whose record.json "
                       "signs its coin commitment's root, is fetched once its end is (status says when)")
@@ -1766,7 +1766,7 @@ def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token
         if not host.certifier.is_dir():
             host.certifier.mkdir(mode=0o755)
             own(host.certifier)
-        run = f"c{now.astimezone(UTC):%Y%m%dT%H%M%SZ}-{token}"
+        run = f"c{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
         d = host.certifier / run
         d.mkdir(mode=0o755)
         req.update(run=run, by=by, requested_utc=utc(now))
@@ -1901,7 +1901,7 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             return refused(f"the request doesn't parse as shell words: {e}")
     verb, rest = (argv[0], argv[1:]) if argv else ("", [])
     active = hooks.get("active") or unit_active
-    now = hooks.get("now") or datetime.now(UTC)
+    now = hooks.get("now") or datetime.now(timezone.utc)
     try:
         if verb in ("reserve", "open") and by is None:
             raise Refused("this key reads only: a window is reserved and opened with its prover's own gate key, which "
@@ -2629,30 +2629,30 @@ def main(argv: list[str] | None = None) -> int:
         return rc
     try:
         if argv[:1] == ["reserve"] and len(argv) == 2:
-            e = reserve(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(UTC))
+            e = reserve(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"]}))
         elif argv[:1] == ["admit"] and len(argv) == 2:
-            e = admit(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(UTC),
+            e = admit(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
                       active=unit_active)
             print(json.dumps({"seq": e["seq"], "session": e["session"]}))
         elif argv[:1] in (["period-open"], ["period-close"]):
-            e = period(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(UTC),
+            e = period(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(timezone.utc),
                        active=unit_active)
             print(json.dumps(e))
         elif argv[:1] == ["declare"]:
             print(json.dumps(declare(host, argv, signer=key_signer(host), pinned=pinned_commit(), now=datetime.now(UTC))))
         elif argv[:1] == ["run"] and len(argv) == 2:
-            e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(UTC))
+            e = run(host, argv[1], signer=key_signer(host), pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
         elif argv[:1] == ["certifier-run"] and len(argv) == 2:
-            e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(UTC))
+            e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs", "device") if k in e}))
         elif argv[:1] in (["model-register"], ["policy-register"]) and len(argv) == 5:
             register = model_register if argv[0] == "model-register" else policy_register
-            line = register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(UTC))
+            line = register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
             print(json.dumps(line, sort_keys=True))
         elif argv[:1] == ["pinned"] and len(argv) == 3:
-            print(record_pin(host.pins, argv[1], argv[2], datetime.now(UTC)))
+            print(record_pin(host.pins, argv[1], argv[2], datetime.now(timezone.utc)))
         elif argv[:1] == ["keygen"] and len(argv) == 1:
             from verity.commitments.crypto import lms
             key, state = load_key(host)

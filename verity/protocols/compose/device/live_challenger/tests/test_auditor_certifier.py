@@ -11,7 +11,7 @@ import shlex
 import signal
 import sys
 import tarfile
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 import pytest
 
@@ -21,8 +21,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
-T0 = datetime(2026, 10, 23, 11, 0, 0, tzinfo=UTC)
-T1 = datetime(2026, 10, 23, 11, 30, 0, tzinfo=UTC)
+T0 = datetime(2026, 10, 23, 11, 0, 0, tzinfo=timezone.utc)
+T1 = datetime(2026, 10, 23, 11, 30, 0, tzinfo=timezone.utc)
 PIN = "c" * 40
 REQUEST = ["certifier-rehearse", "--peer", "vy-nebius-1", "--port", "8011", "--minutes", "30"]
 #: a tunnel that stays up until the run closes it

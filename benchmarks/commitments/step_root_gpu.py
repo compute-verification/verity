@@ -41,6 +41,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 
 from verity_vllm.commit import row_tables as RTB

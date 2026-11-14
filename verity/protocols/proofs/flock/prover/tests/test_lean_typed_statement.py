@@ -15,10 +15,10 @@ import pytest
 from verity.circuits.codec import canonical_json
 
 pytest.importorskip("verity.definitions.registry.prims")
-from verity_flock import circuit as FC
-from verity_flock import typed_statement as TS
-from verity_flock import lowerings
-from verity_flock import subcircuit_templates as TM
+from verity_flock import circuit as FC  # noqa: E402
+from verity_flock import typed_statement as TS  # noqa: E402
+from verity_flock import lowerings  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
@@ -133,10 +133,10 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
     ones pass every check and are refused for that reason, and every other case fails the check that catches it. That build
     has no zk patch, so its plain files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes,
     which `verify` refuses and `agree --upstream-plain` reads (`Flock.Proof`)."""
-    import sys
+    import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agreement"))
-    import ci
+    import ci  # noqa: PLC0415
 
     try:
         root = ci.fetch(f"{RUST_SESSIONS}/stage", tmp_path / "store").parent

@@ -18,8 +18,8 @@ from verity_flock import layouts as LY
 from verity_flock import typed_statement as TS
 
 pytest.importorskip("verity.definitions.registry.prims")
-from verity_flock import lowerings
-from verity_flock import subcircuit_templates as TM
+from verity_flock import lowerings  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).parent))
 

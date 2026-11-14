@@ -18,13 +18,13 @@ import pytest
 
 pytest.importorskip("verity.circuits.units")
 pytest.importorskip("verity.definitions.registry")
-from circuit_check import targets as TG
-from verity.circuits.defs import bind
-from verity.circuits.program import Program
+from circuit_check import targets as TG  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
 
-from verity_flock import circuit as FC
-from verity_flock import class_statement as CS
-from verity_flock import partition_units as PU
+from verity_flock import circuit as FC  # noqa: E402
+from verity_flock import class_statement as CS  # noqa: E402
+from verity_flock import partition_units as PU  # noqa: E402
 
 
 @pytest.fixture(scope="module")

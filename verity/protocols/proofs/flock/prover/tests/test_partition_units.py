@@ -6,12 +6,12 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("verity.definitions.registry")
-from circuit_check import targets as TG
-from verity.circuits import partition_object as PO
-from verity.circuits.defs import bind
-from verity.circuits.program import Program
+from circuit_check import targets as TG  # noqa: E402
+from verity.circuits import partition_object as PO  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
 
-from verity_flock import partition_units as PU
+from verity_flock import partition_units as PU  # noqa: E402
 
 
 @pytest.fixture(scope="module")
