@@ -451,6 +451,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/audit_prover.py",
     "verity/protocols/accounting/poub/prover/codec_tensor/reader.py",
     "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
+    "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
     "verity/protocols/accounting/poub/prover/period_prover.py",
     "verity/protocols/accounting/poub/prover/remote_session/device.py",
