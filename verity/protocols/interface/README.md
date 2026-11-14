@@ -131,6 +131,17 @@ for nothing. `Account.rests` names the answers a protocol's own rest on, those i
 verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an accepted
 answer `rows` is given.
 
+Memory's accounts state more, which `rows` does not read yet:
+- the key of the step at which a moment amount held (`Amount.held`);
+- memory held throughout a span whose steps the answer names (`Amount.FormedHeld`);
+- the tiers an answer names, by its protocol's labels mapped to the Site's tiers (`Amount.tiers`, `Amount.labels`,
+  `Amount.TiersNamed`);
+- the figures an answer was computed at, each covering the registration's (`Amount.params`, `Amount.Covers`);
+- groups of metrics that are alternative forms of one bound, never added (`Account.alternatives`,
+  `Account.AlternativesFormed`);
+- an accepted answer that stands for a line of record a verifier gives outside `Core.Protocol` (`Account.OfLine`);
+- errors stated exactly, as ratio text (`Account.ErrorsExact`).
+
 `Account.rows` reads a Site, the auditor, the period, the answers and their accounts into the accounting rows
 (`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). Which registration the Site is, and
 which answers are the period's, is the composite's: it reads the head once, from each window's record. Each amount gets
