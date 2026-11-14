@@ -8,7 +8,7 @@ public import Definitions.NetworkCertifier.Warden
 Definitions only. The relay (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
 connection) gives both what the client receives, the warden's cells (`certifierCode`), and the certifier's record of
-them, the observations the audits read (`recordingCode`). Its trust is one `trusted-host`
+them, the observations the audits read (`recordingCode`). Its trust is one `trusted-device`
 (`Verity.Assumptions.TrustedDevice`) over that code, with no second device and no second trust, so that what the
 certifier saw is what the warden sent is a fact of the code, not a premise.
 

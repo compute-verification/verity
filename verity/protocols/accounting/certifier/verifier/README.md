@@ -44,7 +44,7 @@ assumptions: none. A premise that is part of what it says (`domain`):
 
 Open premises (`open`):
 
-- `Verity.Assumptions.TrustedDevice` (`trusted-host`): the network certifier, the auditor's device on a host the developer
+- `Verity.Assumptions.TrustedDevice` (`trusted-device`): the network certifier, the auditor's device on a host the developer
   doesn't control, runs its stated code.
 - `Claims.SamplingGeneric.Compiled.KS`: the compiled sampled verifier is knowledge sound at its errors on the
   statements in scope.

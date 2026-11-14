@@ -4,7 +4,7 @@
 # the device side and cuBLASLt only, since the CUTLASS baselines and the plain GEMMs are sm_120 kernels (bench.py --bridge
 # times the H200's CUTLASS and DeepGEMM through vLLM's and DeepGEMM's own builds).
 #
-#   export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh [OUT_DIR])"
+#   export POUW_HARNESS_LIB="$(verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh [OUT_DIR])"
 #       env: POUW_HARNESS_BUILD (the build cache, default native/build), CUDA_HOME, CUTLASS_DIR, JOBS, PH_NO_CUTLASS=1,
 #            PH_ARCH (sm_120a, the default, or sm_90a),
 #            LT2_HOME (a second cuBLASLt's root, include/ and lib64/: also builds libpouw_lt2.so, lt.cu alone against it)

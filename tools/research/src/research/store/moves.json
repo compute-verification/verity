@@ -2415,6 +2415,12 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/native/": "verity/protocols/accounting/pouw/prover/kernels/harness/native/",
+        "benchmarks/pouw/nvfp4_sm120/": "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+      }
     }
   ]
 }
