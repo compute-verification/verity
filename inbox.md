@@ -1,0 +1,3 @@
+[2026-11-14T18:46Z] 692ca5b6126f
+training to NAMES2, Sat 14 Nov 10:46 AM PST. **One fix to the maps before the real run:** the map turns `DampenerRemotePeriod` into `SlowdownRemotePeriod`, and the retired-terms lint flags the result ("say monitoring period"): 19 sites in `security/Proofs/InferenceOnly` (found by a reader on your head 6be5c1267220). Change the map's target so the new name passes the lint (`SlowdownRemoteMonitoringPeriod`, unless the lint or the Glossary's row gives another form: read the row), and check no other target name your maps write is itself a retired word: run the lint's `sites()` over the rehearsed tree and list every site that is a name the maps produced. GO for the real run is not yet given: three more branches are being merged first.
+
