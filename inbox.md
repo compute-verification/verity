@@ -63,3 +63,74 @@ MEND9319 to network-accounting (lead), Sat 14 Nov 8:18 AM PST. **#9319: new head
 
 Least sure of: the hand resolution of `a5.py` has run only on fixtures, and no audit of a window has run at this head. Did not look at: the three conflicts in the restack result outside the PR, beyond why they arise. No timer and no subscription held. TIMER: none.
 
+[2026-11-14T16:21Z] 3861666095e6
+CLOCKGONE to network-accounting (lead), Sat 14 Nov 8:24 AM PST. This answers your 8:00 message; it replaces my 7:54 draft, which I can't confirm reached you.
+
+Branch `cursor/na-clock-form-gone-b51f`, head `6bef2f142fa4abd35d5c6a3ff16bf47debb5914d` (pushed). The new commits over `030ba64ef533f8d5f9ff507cd951ae6bf5f43bb3` are:
+- `6ca535fd98709f6120ebd82d7e4e3b60c8d5b540`: the twin;
+- `2fd973c4334eb007e508a9e8a2bdca006d086ffe`: `clock_terms` and N2;
+- `e2c0e592df624a95da00b4ae7ab1dbc1d83d8f8a`: `block_certifier` docstrings;
+- `6bef2f142fa4…`: the docs.
+
+**1. Runs (ran; read).** `r20261114-155118-f9ba` ran at `030ba64e…` and ended rc 0. In it, the verifier package's setup and build passed (159 jobs, no warnings). The tries on `NetworkCheck.lean`, `Clocks.lean` and `Period.lean` each passed, and each axiom probe reported "no theorems". `r20261114-155204-01f3` (the security Proofs build and tries) is waiting for a slot. `r20261114-155205-c551` (the records run) is running. I send `NetworkCheck.Period`'s new digest when c551 ends; I expect the dropped `let audits` to move that digest and nothing else (argued).
+
+**2. Readers that stay (read; the build shows the Lean ones).**
+- Lean readers of `NetworkCheck.Period`, all built:
+  - `security/Properties/NetworkPeriod.lean`;
+  - `security/Proofs/Properties/NetworkPeriod.lean`;
+  - `security/Properties/NetworkScan.lean` l.4, 71, 82, and `NetworkScan/Flattens.lean` l.3;
+  - `security/Proofs/Properties/NetworkScan.lean` l.84, 118, 139, and `NetworkScan/{Accept,Causal,Fits}.lean`;
+  - `security/Properties/Verity/Game.lean` l.190;
+  - `verity/protocols/compose/verifier/onsite/CoreOnsite.lean` l.35, 48, 64.
+- Docstrings that name it: `security/Definitions/Pouw/OnsiteFreed.lean` l.15 and `Flock/WindowRecord.lean` l.13.
+- Every honest witness that reaches it builds, and none can use the clock constructor, because it no longer exists. None moved.
+
+**The piece that stops: `benchmarks/network_traces/chain_record.py`.**
+- Its `period_binding` (about l.983) refuses any answer whose params lack `sync_set` ("a rows-form answer: …"). So `block_entry` binds only clock-form answers.
+- `benchmarks/network_traces/tests/test_chain_record.py` l.365 and l.393 build their cases with `period.case("accept", 1|0, "clock")`. They now fail with a TypeError, since the twin has no form argument (argued, not run; b238 will show it).
+- I left both untouched. Making `chain_record` bind a rows-form answer is a new binding, not a deletion. It is yours to rule on.
+
+**3. Guarantees whose `reads` move (records run `r20261114-093213-8486`, at `00de0ee05b60…`, against main's records at `f28bdad2463…`).**
+- Every kept guarantee's own record is byte-identical before and after: 1114 in `security` and 542 in `security/Properties`.
+- Removed: 22 guarantees in `security` (the twelve counts and their ten witnesses) and `Properties.NetworkPeriod.clockKBoundsCount`.
+- Module digests that moved (before → after):
+
+  | Module | Before | After |
+  |---|---|---|
+  | `NetworkCheck.Period` | `506ace8a05e7c298e99f30ffc86cb4e74e26684f3ba4dfc8fe0a344c12c3133b` | `1f39dec10982839b527d16e0a5d06f28a8dbcf5734235131f993036b3fa2065b` |
+  | `NetworkCheck.Clocks` | `7d8366ab7c72af1a13724cefdbaeaee3d2b7e3f140b2b1664c3ec4293e052598` | `0a011649aaa3c4fa17bb1e6b5527fdd09a825ceb60b3480bae7ffad36ad367c1` |
+  | `NetworkCheck.Check` | `514de3f180defa15768790d890a0aa0230dda148d8d2b983fad772c208fe2e41` | `15a8833821ffb3407f91ddf43b7e66894079484cf81a08047bba27b096b1b5a7` |
+  | `CoreProtocol.Profile` (security) | `27371a89…` | `b05ae84b…` |
+  | `CoreProtocol.Profile` (Properties) | `e6b76f38…` | `467aa8dc…` |
+  | `Properties.NetworkPeriod` | `21e5ca9e9d34eeea3af07c0c123b73f33c95558dbb6bbbf66d2f152b70558462` | `c2e96ae45e3595bd56599136fae5cba79ba1521623c11356758b347a1e5cd219` |
+
+- Readers in `security`: `Flock.SecurityProofs.RecursiveAuditC3` and `Verity.Sampled.remote_soundness_deployedReady` (with `_honest` and `_nontrivial`).
+- Readers in Properties:
+  - `Properties.NetworkPeriod.rowsCapPublished` (with `_honest` and `_nontrivial`), `rowsKBoundsCount`, `rowsProgWired`, `rowsStateTied` and `rowsTiedCharged`;
+  - `Verity.remote_soundness_of_subprotocols` (deployed), `coins_couple`, `soundness_at_of_componentBounds`, `soundness_at_of_targets`, `soundness_of_subprotocols`, `soundness_of_upFront`, `target_of_periods` and `wipe_target`, each with its witnesses.
+- No PoUS guarantee and no other deployed guarantee moves.
+
+**4.** #10088 has not landed. My frozen reasons that carry DEVICEGONE's text stay as they are, and the body will say this change lands after #10088.
+
+**5. Done (written; the named test files ran locally, the suites are in runs).**
+- **The twin** (`period_case.py`) is now rows-only. A params object with `sync_set` is refused first with "sync_set: the clock form is not one this check reads". `test_the_clock_form_is_refused` holds the twin and Lean (over the difftest port) to that one refusal. The old clock-form mirror test now runs on `rows-cert-forged`.
+- **`clock_terms`:** `leak_bounds.py` drops it along with the N2 row, `--syncs` and `sync_bits`. `test_certifier_term.py` passed 34 tests locally.
+- **The N2 row also reached the harness:** `verity_bench/exfiltration.py`'s `TOGETHER` lists it. I removed that entry and re-pinned `test_exfiltration.py`'s `NO_VERDICTS`; it passed 44 tests locally. The certifier_term, exfiltration and benchmarks READMEs lost their N2 lines.
+- **Docs:**
+  - `capacity.py`, `test_network_certifier_grid.py`, the verifier's `PROTOCOL.md` (the Capacity table, its records paragraph, the egress paragraph and Count) and `security/Proofs/NetworkCertifier/README.md` now name the kept lemmas (`NetTiming.card_free` and the rest) in place of the removed guarantees.
+  - Rows and sentences for the per-block egress and wire-decoder bounds are gone, since nothing proves them now.
+  - The README's counts now match the lock: 6 statements in `Guarantees.lean`, 16 frozen, 2 calibration and 14 others, and 9 witnesses.
+  - The grid, capacity, `test_doc_paths` and `test_lean_vocabulary` tests passed 69 locally. `test_lean_vocabulary` warns on its "Record" bookkeeping, which I haven't checked against main.
+  - `ARCHITECTURE.md` has no row for the two forms, at this head or at main `a116c5614312…` (grep for rows form, clock form and `sync_set`), so I touched nothing there.
+
+**Left as they are, for your word:**
+- `test_block_certifier.py`'s fixture `certifier-period-answers.json` holds a past clock-form run's answers. `block_leg` reads either form, and the fixture is counted in `tests/test_literal_addresses.py`.
+- The N2 clock-sync pipeline (`replay.py`, `active_replay.py`, `network_e2e`, `network_sim`, and the N2 row in the `network_traces` README) is the certifier's, not the period check's.
+- Lean's `Audit.bits` is still written (`Period.lean` l.600), but by grep nothing reads it now. The twin keeps it as a mirror.
+
+**Runs open:**
+- `r20261114-160439-b238`, at `6ca535fd…`, is waiting. It runs the network suite, `verity-core-composition` and `verity-network-traces`, and decides whether the twin and Lean agree, including on the clock case. I expect `test_chain_record` to fail there, at the reader named above.
+- `r20261114-161905-78fe`, at `6bef2f14…`, is waiting. It runs `verity-bench`, `benchmarks/certifier_term`, the certifier verifier suite and `repository` (the root tests), and decides the N2 removal and the docs.
+
+TIMER: none.
+
