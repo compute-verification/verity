@@ -285,7 +285,7 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "security" / "Definitions" / "InferenceOnly"
+    nci = ROOT / "security" / "Definitions" / "Slowdown"
     layered = (nci / "Assumptions/Layered.lean").read_text()
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * {EMBED_BITS}))" in layered
     stated = (nci / "Guarantees/Layered.lean").read_text()
