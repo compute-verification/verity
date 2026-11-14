@@ -112,10 +112,11 @@ def sites(source: str, path: str, text: str) -> list[tuple[int, str | None, str 
 
 
 def parse(doc: object, handles: set[str]) -> list[dict]:
-    """The list's entries, from its document; refuses a malformed one with a message that starts with the list's name."""
-    assert isinstance(doc, dict) and set(doc) == {"rule", "entries"} and isinstance(doc["entries"], list), \
+    """The list's entries, from its document; refuses a malformed one with a message that starts with the list's name.  The
+    ratchet gate writes the list as ``{"entries": [...]}`` alone, so ``rule`` may be left out."""
+    assert isinstance(doc, dict) and set(doc) <= {"rule", "entries"} and isinstance(doc.get("entries"), list), \
         f"{LIST.name}: {{'rule': ..., 'entries': [...]}} expected"
-    assert doc["rule"] == RULE, f"{LIST.name}: the rule is {RULE!r}, not {doc['rule']!r}"
+    assert doc.get("rule", RULE) == RULE, f"{LIST.name}: the rule is {RULE!r}, not {doc['rule']!r}"
     seen: set[tuple[str, str]] = set()
     places: dict[str, tuple[str, str]] = {}
     for e in doc["entries"]:
@@ -229,7 +230,7 @@ def test_no_listed_function_changed_since_it_was_read() -> None:
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
     good = {"file": "a/b.py", "kind": "p", "symbol": "", "detail": "x = 1", "owner": "lean", "what": "w",
             "digest": "0123456789abcdef"}
-    assert parse({"rule": RULE, "entries": [good]}, {"lean"}) == [good]
+    assert parse({"rule": RULE, "entries": [good]}, {"lean"}) == parse({"entries": [good]}, {"lean"}) == [good]
     for bad in ({"rule": RULE}, {"rule": "x", "entries": [good]}, {"rule": RULE, "entries": [good], "more": 1},
                 {"rule": RULE, "entries": [{**good, "count": 1}]}, {"rule": RULE, "entries": [{**good, "what": ""}]},
                 {"rule": RULE, "entries": [{**good, "digest": "0123456789ABCDEF"}]},
