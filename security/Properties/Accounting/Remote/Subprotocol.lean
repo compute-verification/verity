@@ -10,7 +10,7 @@ Onsite's bandwidth component is `RemoteAudit.Protocol.protocol` (`verity/remote-
 verifier's log of a session through `Shared.run g` at the session's windows a draw g (`groups_per_coin`; `Session.run`
 at g = 1) and accepts once the session does, publishing `certify` of the run's record at the session's parameters and
 g. The composition reads of it that the check accepts three byte strings (`Properties.Composition.DecodedAccepted` at
-the component, which `Verity.ComponentAccepts` reads); the remote audit's guarantees are stated on `Shared.run` at the
+the component, which `Verity.ComponentAccepts` reads); PoUB's guarantees are stated on `Shared.run` at the
 node's g accepting a record's session (`Properties.RemoteAudit.Line.Verified`). The three properties join them, each
 stated here as a form over the verifier and, at the deployed one, as a closed statement in
 `Properties.Accounting.Remote.SubprotocolDeployed`:
@@ -27,9 +27,9 @@ stated here as a form over the verifier and, at the deployed one, as a closed st
   bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the verifier's
   messages entering the node and the record's line credits more bits read than the trace's passes read is at most
   `LineHeld`'s bound, term for term.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is that bound's draw term, `δ + Σ_c s/2^64`
-  over the session's `⌈W/g⌉` draws at its `samples` s, at the component's δ (`RemoteAudit.Protocol.DELTA`), or nothing
-  certified at all.
+* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64` over the session's `⌈W/g⌉`
+  draws at its `samples` s, at the component's δ (`RemoteAudit.Protocol.DELTA`), at least that bound's draw term
+  `δ + Σ_c s/2^256`, or nothing certified at all.
 * **QBytesAtSubprotocol** and **PublishedQBytes**: what the subprotocol publishes as `q_bytes` on acceptance. The first
   bounds, except with the samples' part of `LineHeldAtSubprotocol`'s bound at `DELTA`, the trace's wrong receipts among
   the verifier's own count `U`; the second is what the check itself gives of a record it accepts, with no premise.
@@ -108,7 +108,7 @@ def AcceptIsVerifiedFor (chk : RemoteAudit.Protocol.Params → RemoteAudit.Regis
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
 /-- **`PublishedEps` at a check `chk`**: whenever `chk` accepts parameters `p`, a registration `reg` and a log `e` with
-public outputs `pub`, they decode to a session, and either `pub` certifies nothing or its `eps` is the draw term
+public outputs `pub`, they decode to a session, and either `pub` certifies nothing or its `eps` is
 `δ + Σ_c s/2^64` at every node of the session's parameters and g whose δ is `RemoteAudit.Protocol.DELTA`.
 `PublishedEps` (`Properties.Accounting.Remote.SubprotocolDeployed`) is it at `RemoteAudit.Protocol.check`. -/
 def PublishedEpsFor (chk : RemoteAudit.Protocol.Params → RemoteAudit.Registration → RemoteAudit.Protocol.Evidence →
@@ -182,7 +182,7 @@ def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Optio
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
     Pouw.pr (fun ω => ver node (r ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
@@ -207,7 +207,7 @@ def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray �
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
     Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
@@ -246,7 +246,7 @@ def QBytesAtSubprotocolBy
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
     Pouw.pr (fun ω => (∃ pub, acc node (r ω) (a ω) (b ω) (e ω) pub) ∧
         ¬ ∀ pub, acc node (r ω) (a ω) (b ω) (e ω) pub → QBytesBy sum (traceBy T node ver r) ω node (r ω) pub) ≤
-      (RemoteAudit.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      (RemoteAudit.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (RemoteAudit.Protocol.DELTA : ℝ) t)).toReal +
         (∑ t, F.hide com prf (RemoteAudit.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal

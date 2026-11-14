@@ -44,7 +44,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     batch_order,
     COIN_DRAW,
     commit_committed,
-    commit_host,
     commit_site,
     CommitTap,
     draw_challenger,
@@ -60,6 +59,7 @@ from verity.protocols.accounting.pouw.prover.serving import (
     program_salt,
     ROUND0,
     Shape,
+    to_host,
     verifier_coins,
     weights_root,
     Workload,
@@ -138,12 +138,12 @@ class RankTap(CommitTap):
 
     def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
         if self.port is not None and name == self.port:
-            self.out.append((name, int(step), None if n is None else np.array(commit_host(t)).reshape(-1)[:n]))
+            self.out.append((name, int(step), None if n is None else np.array(to_host(t)).reshape(-1)[:n]))
             return
         op, _, port = name.rpartition("/")
         module = op.removesuffix("/row_quant")
         if module != op and port in ("0", "1"):
-            self.out.append((f"{commit_site(self.names.get(module, module))}/{port}", int(step), np.array(commit_host(t))))
+            self.out.append((f"{commit_site(self.names.get(module, module))}/{port}", int(step), np.array(to_host(t))))
 
     def drain(self) -> list[tuple[str, int, np.ndarray | None]]:
         out, self.out = self.out, []

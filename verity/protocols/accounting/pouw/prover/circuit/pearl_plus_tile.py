@@ -13,7 +13,7 @@ auditor reads only the verifier's own registered rows and the proof, never a row
         (x: u8[64], y: u8[192], root, domain: u8[64], pos: Array<D, bit>, path: Array<D, u8[64]>) -> bit
         1 iff the hm96-sha512 leaf of digest x under salt y opens at pos to root (`Hm96Sha512Leaf_v1`, `FrameV3Read_v1`)
 
-The core, from the registry's call Definitions (`verity.definitions.registry.pearl_c_call`) and PoUW's cap (`cap`):
+The core, from the registry's call Definitions (`verity_vllm.definitions.registry.pearl_c_call`) and PoUW's cap (`cap`):
 
   - **rows.** Row i of A (``a[i]``, the tile's row ``rows[i]`` of unit ``unit``) by `PearlCRowA_v1`: its line E_A from the
     salt, the row's own digest and B's root (``root``), its codes A′_i, its peel factors P_A,i and its statistics; row j
@@ -39,7 +39,7 @@ one-tile measurement takes, ``verity-verify-proof --zk --registered`` a statemen
 
   - **the formed rows** ``a``, ``b`` and ``y``, each a registered read opening the serve's own root at the position the
     Program fixes (`statement_rows`: one row a port).  Their roots are registered values reused from the serve's record
-    (R7, `Spot/Registration.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
+    (R7, `Spot/Docket.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
     is Pearl+'s own Lean protocol's, outside this measurement.
   - **``pub``, a supplied row of known content** (`PUBLIC`): the salt, B's root, the unit, the rows' indices, the column
     tile, the public noise (E_B's lines, F_A, F_B and G, which anyone derives from seed_B = s512("seed-B", salt ‖ root):
@@ -72,11 +72,11 @@ from verity.commitments.gates import frame_v3 as F3
 from verity.commitments.gates.hm96 import Hm96Sha512Leaf
 from verity.commitments.gates.hm96 import reference as hm96_reference
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
-from verity.definitions.boolean import boolean_version, lift_body
-from verity.definitions.registry.pearl_c_call import PearlCRowA, PearlCRowB
-from verity.definitions.registry.pearl_c_forming import LINE
-from verity.definitions.registry.pearl_c_noise import BYTES32, BYTES64, PearlCRowDigest
-from verity.definitions.registry.pearl_c_tile import PearlCUnscale
+from verity_vllm.definitions.boolean import boolean_version, lift_body
+from verity_vllm.definitions.registry.pearl_c_call import PearlCRowA, PearlCRowB
+from verity_vllm.definitions.registry.pearl_c_forming import LINE
+from verity_vllm.definitions.registry.pearl_c_noise import BYTES32, BYTES64, PearlCRowDigest
+from verity_vllm.definitions.registry.pearl_c_tile import PearlCUnscale
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Shape
 from ..schemes import pearl_c as C
@@ -113,7 +113,7 @@ def _bits_of(fn: Any) -> Any:
 
 
 def _on_bits(word: CompositeDefinition, version: int, register: bool = True) -> CompositeDefinition:
-    """σ of ``word`` (`verity.definitions.boolean.sigma_lift`'s, whose statics here are integers and names), each Call the
+    """σ of ``word`` (`verity_vllm.definitions.boolean.sigma_lift`'s, whose statics here are integers and names), each Call the
     Boolean version of its Definition or `_bits_of`'s."""
     statics = tuple(word.statics)
 

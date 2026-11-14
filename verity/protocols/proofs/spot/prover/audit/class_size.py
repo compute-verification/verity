@@ -35,7 +35,7 @@ from typing import Any
 
 from verity_vllm.program.predict import scan_state as SS
 
-from verity.definitions.registry.attention_vocab import fa2_masked_from
+from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
 from verity.commitments.periods.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
 
 FIRST = "AttnBlockFirst_v1"
@@ -146,9 +146,9 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
-#: the sources that cite a run, an artifact or a change, kept as data (``sources.json``): ``composed`` and ``rows_3``, a
+#: the sources that cite a run, an artifact or a change, kept as data (``benchmarks/prove_path/sources.json``): ``composed`` and ``rows_3``, a
 #: unit's by its label (``measured``) and a family's that `measured` prices past `MEASURED` (``families``)
-SOURCES: dict[str, Any] = json.loads(Path(__file__).resolve().with_name("sources.json").read_text())
+SOURCES: dict[str, Any] = json.loads((Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path" / "sources.json").read_text())
 #: the compositions of the blocks this estimate scaled or interpolated, each staged by Flock's `UnitStager` at V3b's
 #: cuts
 COMPOSED: str = SOURCES["composed"]

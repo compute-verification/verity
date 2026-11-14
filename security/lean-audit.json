@@ -353,17 +353,17 @@
   "Pouw.Dither.CallsAtPub": {
    "owner": "@compute-research",
    "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
-   "why": "A scope: the headline on a card table is stated for an accelerator whose oracle call costs one public SHA-512 compression of the menu on the card. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+   "why": "A scope: the headline on a card table is stated for an accelerator whose oracle call costs one public SHA-512 compression of the menu on the card. (met by `WorkSoundAtTables_honest`)"
   },
   "Pouw.Dither.HostsCounted": {
    "owner": "@compute-research",
    "digest": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e",
-   "why": "A scope: the headline on a card table is stated for devices that count the cards' hosts at the host row's rates. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+   "why": "A scope: the headline on a card table is stated for devices that count the cards' hosts at the host row's rates. (met by `WorkSoundAtTables_honest`)"
   },
   "Pouw.Dither.OnCard": {
    "owner": "@compute-research",
    "digest": "e20c87706269f72b71ea976ba7603ab9d00d2ef322d355e02f7b49e0c96f6aef",
-   "why": "A scope: the headline on a card table is stated for an accelerator that is the period's devices at the table's rates. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+   "why": "A scope: the headline on a card table is stated for an accelerator that is the period's devices at the table's rates. (met by `WorkSoundAtTables_honest`)"
   },
   "Pouw.NCP.Params.InstanceU": {
    "owner": "@compute-research",
@@ -398,7 +398,7 @@
   "Verity.Accel.Card.Exact": {
    "owner": "@compute-research",
    "digest": "f13b0004040c17242c244b1336f78520617d481e56e477b018c872f9d707bafd",
-   "why": "A scope: the headline on a card table is stated at open parameters inside the table's exactness range (P1). (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+   "why": "A scope: the headline on a card table is stated at open parameters inside the table's exactness range (P1). (met by `WorkSoundAtTables_honest`)"
   },
   "Verity.Accel.Machine.Fits": {
    "owner": "@compute-research",
@@ -4587,14 +4587,6 @@
    "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_honest"],
    "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_nontrivial"
   },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
-   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest"],
-   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": {
-   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest"],
-   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial"
-  },
   "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": {
    "honest": ["Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest"],
    "nontrivial": "Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted_nontrivial"
@@ -4697,9 +4689,25 @@
   "Flock.SecurityProofs.SpotOneWaitTwo": {
    "nontrivial": "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial"
   },
-  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
-   "honest": ["Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest"],
-   "nontrivial": "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial"
+  "Accounting.SecurityProofs.Remote.PooledSample": {
+   "honest": ["Accounting.SecurityProofs.Remote.PooledSample_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.PooledSample_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.LiveCoinsSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.LiveCoinsSampled_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.HeldSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.HeldSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.HeldSampled_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.HeldOverTimeSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_nontrivial"
   },
   "Flock.SecurityProofs.EndToEndRegisteredSampled": {
    "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
@@ -4708,6 +4716,10 @@
   "Verity.Sampled.onsite_soundness_deployedReady": {
    "honest": ["Verity.Sampled.onsite_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.onsite_soundness_deployedReady_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
+   "honest": ["Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5018,26 +5030,6 @@
   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": {
    "type_hash": "1d80b85ac63a83d13745f1efaaa3b28b669426784b4c01aa4e864f3291c0b344",
    "unfolded_hash": "c30e732c651905a05460d3a02ef33d2f8561a0a8d8876c3a608b6b067349ef68"
-  },
-  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": {
-   "type_hash": "36a591ddef83ba3e44e4724f4a12f4be19cfe40a6348a94312b3b021943331aa",
-   "unfolded_hash": "8437f2dfbbb95fa30df0f01bbe756eeffad587be1ae222e0acb0ebb5bf333adb"
-  },
-  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
-   "type_hash": "3bb5b48c6eadb3c43ecad98991310e007b821125b826b0dd0f7302cdc75b2dd5",
-   "unfolded_hash": "f69c6c586caa250e43f3a2f6cb4f5a329cad2576bfff434fd9b7a4e31ca6bd5c"
-  },
-  "Accounting.SecurityProofs.Remote.HeldSampled": {
-   "type_hash": "55578c104e1dc7aebbaf476702004f43247cf1f78c23d7d7ea80dcb194a764b7",
-   "unfolded_hash": "5983759a7305169d474ba14a3c44dd8a80f031d6220bba7e2a60f0a0fcd92362"
-  },
-  "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
-   "type_hash": "323da1a731bafc04b3f297c8e55c97b1fa40e5c65e1de4e04e1f5ab55554903e",
-   "unfolded_hash": "b5f00900f4cba21f8afbc1506f403e0472bf93ba2d370506661bf024912b7786"
-  },
-  "Accounting.SecurityProofs.Remote.PooledSample": {
-   "type_hash": "ffdcb6b6df33d9e044a1a6d7dc12c82655d3fd9a736b18b5b85e39cfc7346e4b",
-   "unfolded_hash": "b96e17ab299c1a3caa23876a038efae3fb6deafe354dc831b3e5d1f8aca3fdec"
   },
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
    "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067",
@@ -5474,13 +5466,9 @@
    "type_hash": "67f3658934c74720d65f6dee7ae0d77df683c3dadfdce0ae498b9bbc899090b2",
    "unfolded_hash": "d4824e5c59af9a1967b1c2082686a2aa9211e16aefa093f3d264fe03c304d6d0"
   },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": {
-   "type_hash": "976778649c1a045eb4165c8b72e71a82af245ea1fd099800ca29e3fed945ce2c",
-   "unfolded_hash": "a2da6ac587ca319c0f58171f58c310bfd98b713ecf987662682d03c6f753f404"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": {
-   "type_hash": "52c39b1631fdf8d50794d876a25c2755914afe4e2d9887dc06b137158c46ca28",
-   "unfolded_hash": "244ab8f61c7d79568f656838f65687c11925b610ffa2c470e239f8cc05161fe7"
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables": {
+   "type_hash": "e76586bcde2aa46e84b954eb7d5c2d6d3b9935a6be70267acc54e6cd9b6edf33",
+   "unfolded_hash": "9173d9c152051a4544b110b95bee8ee2f27eb2fccd2790d0fa18ca413a71a3ec"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
    "type_hash": "76e1dd28768cc1a4ef30251a9db63bda229915b3c2d50ff921394a143c179cdf",
@@ -9105,7 +9093,112 @@
     "reads": ["Accounting.Actual.wordIndex"]
    },
    "type_hash": "36a591ddef83ba3e44e4724f4a12f4be19cfe40a6348a94312b3b021943331aa",
-   "unfolded_hash": "8437f2dfbbb95fa30df0f01bbe756eeffad587be1ae222e0acb0ebb5bf333adb"
+   "unfolded_hash": "a13be6e580bb14782b1b0e6c99929a9c9cbc3b6ac852f499b43cdb2dcb7d6c0f"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_honest :",
+    "  And (Real.instLT.lt 0 98016)",
+    "    (And (Real.instLE.le 0 191.5)",
+    "      (And (Real.instLE.le 0 (instHDiv.hDiv (instHDiv.hDiv 432e7 4096) 1e9))",
+    "        (And (Real.instLE.le 0 (instHDiv.hDiv (instHDiv.hDiv 50e9 4096) 1e9))",
+    "          (And (Real.instLE.le 0 (1 / 1099511627776))",
+    "            (And (instLTNat.lt 18446744073709551615 18446744073709551616)",
+    "              (And",
+    "                (Accounting.Remote.Held.Assumptions.Links (Accounting.Remote.Instances.w2Draw 1536)",
+    "                  (instHDiv.hDiv (instHDiv.hDiv 50e9 4096) 1e9) (Nat.cast 1536))",
+    "                (And",
+    "                  (Accounting.Remote.Held.Assumptions.SquaringCeiling (Accounting.Remote.Instances.w2Draw 1536) 191.5",
+    "                    98016 (Nat.cast 743590))",
+    "                  (And",
+    "                    (Accounting.Remote.Held.Assumptions.Disks (Accounting.Remote.Instances.w2Draw 1536)",
+    "                      (instHDiv.hDiv (instHDiv.hDiv 432e7 4096) 1e9) (Nat.cast 1054688))",
+    "                    (And",
+    "                      (Accounting.Remote.Held.Assumptions.ChipCeiling (Accounting.Remote.Instances.w2Draw 1536) 743590)",
+    "                      (And (Accounting.Remote.Held.Assumptions.Routed (Accounting.Remote.Instances.w2Draw 1536))",
+    "                        (And",
+    "                          (Accounting.Remote.Held.Assumptions.Paced (Accounting.Remote.Instances.w2Draw 1536)",
+    "                            (Accounting.Remote.Instances.burstPace 85000000))",
+    "                          (And (Accounting.Remote.Held.Assumptions.Covers (Accounting.Remote.Instances.w2Draw 1536))",
+    "                            (And",
+    "                              (Accounting.Remote.Held.Assumptions.SketchBound (Accounting.Remote.Instances.w2Draw 1536)",
+    "                                0)",
+    "                              (And (Accounting.Remote.Draw.Assumptions.Live Accounting.Remote.Instances.w2Session)",
+    "                                (And",
+    "                                  (Accounting.Remote.Draw.Assumptions.Refused Accounting.Remote.Instances.w2Session",
+    "                                    Accounting.Remote.Instances.zeroStream (fun x x_1 x_2 => 0)",
+    "                                    (Accounting.Remote.Instances.w2Draw 1536) Accounting.Remote.Instances.w2Receipts)",
+    "                                  (Accounting.Remote.Draw.Assumptions.Counted Accounting.Remote.Instances.w2Session",
+    "                                    (Accounting.Remote.Instances.w2Draw 1536)))))))))))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Accounting.Actual.wordIndex",
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused",
+     "Accounting.Remote.Held.Assumptions.ChipCeiling",
+     "Accounting.Remote.Held.Assumptions.Covers",
+     "Accounting.Remote.Held.Assumptions.Disks",
+     "Accounting.Remote.Held.Assumptions.Links",
+     "Accounting.Remote.Held.Assumptions.Paced",
+     "Accounting.Remote.Held.Assumptions.Routed",
+     "Accounting.Remote.Held.Assumptions.SketchBound",
+     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
+    ]
+   },
+   "type_hash": "b553f6ee0cb6bdc5b1ccf94fbaa2622f489e66dacd594909221ef12e17f19287"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_nontrivial :",
+    "  Not",
+    "    (Accounting.Remote.Instances.acceptAll.Holds",
+    "      (instHAdd.hAdd 0",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (1 / 1099511627776) (instHDiv.hDiv (Finset.univ.sum fun _t => 1).cast (instHPow.hPow 2 256)))",
+    "            (Finset.univ.sum fun t =>",
+    "                Pous.StreamedWipe.prfAdvantage (Accounting.Remote.Instances.toyStream t)",
+    "                  (Accounting.Remote.Instances.toy.distinguisher Accounting.Remote.Instances.toyStream",
+    "                    (1 / 1099511627776) t)).toReal)",
+    "          (Accounting.Remote.Instances.unsalted.binding Accounting.Remote.Instances.toy",
+    "              Accounting.Remote.Instances.toyStream fun x x_1 x_2 => 0).toReal))",
+    "      fun ω =>",
+    "      Real.instLE.le",
+    "        (instHSub.hSub",
+    "          (instHSub.hSub",
+    "            (instHMul.hMul",
+    "              (instHSub.hSub (Accounting.Remote.Instances.toyPace.stop ω)",
+    "                  (Accounting.Remote.Instances.toyPace.start ω)).cast",
+    "              (instHSub.hSub Accounting.Remote.Instances.acceptAll.blocks.cast (Nat.cast 0)))",
+    "            (instHMul.hMul (instHMul.hMul 2 (Accounting.Remote.Instances.toyPace.longest ω).cast)",
+    "              (instHAdd.hAdd",
+    "                (instHMul.hMul (instHAdd.hAdd (instHAdd.hAdd (0 / 1) 0) 0)",
+    "                  (instHAdd.hAdd",
+    "                    (instHSub.hSub (Accounting.Remote.Instances.toyPace.stop ω)",
+    "                        (Accounting.Remote.Instances.toyPace.start ω)).cast",
+    "                    (instHMul.hMul 2 (Accounting.Remote.Instances.toyPace.longest ω).cast)))",
+    "                (instHAdd.hAdd (instHAdd.hAdd 0 0) 0))))",
+    "          (Accounting.Remote.Instances.toyPace.fill ω Accounting.Remote.Instances.acceptAll.blocks",
+    "            (Accounting.Remote.Instances.toy.pooled (1 / 1099511627776) ω)))",
+    "        (Accounting.Remote.Instances.acceptAll.heldOver ω (Accounting.Remote.Instances.toyPace.start ω)",
+    "            (Accounting.Remote.Instances.toyPace.stop ω)).cast)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Accounting.Actual.wordIndex"]
+   },
+   "type_hash": "f1e72a62dc42e4f6b271d142d90df7f317d0dfd0552171cd97eaeb0172faab0f"
   },
   "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
    "owner": "@memory-accounting",
@@ -9132,7 +9225,106 @@
     "reads": ["Accounting.Actual.wordIndex"]
    },
    "type_hash": "3bb5b48c6eadb3c43ecad98991310e007b821125b826b0dd0f7302cdc75b2dd5",
-   "unfolded_hash": "f69c6c586caa250e43f3a2f6cb4f5a329cad2576bfff434fd9b7a4e31ca6bd5c"
+   "unfolded_hash": "3859d6cc7afa81f568acb61682d775c8560dd430044376f8a8bd8c4f6b29757c"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_honest :",
+    "  And (Real.instLT.lt 0 98016)",
+    "    (And (Real.instLE.le 0 191.5)",
+    "      (And (Real.instLE.le 0 (instHDiv.hDiv (instHDiv.hDiv 432e7 4096) 1e9))",
+    "        (And (Real.instLE.le 0 (1 / 1099511627776))",
+    "          (And (instLTNat.lt 18446744073709551615 18446744073709551616)",
+    "            (And (Accounting.Remote.Held.Assumptions.Identity (Accounting.Remote.Instances.w2Draw 0))",
+    "              (And",
+    "                (Accounting.Remote.Held.Assumptions.SquaringCeiling (Accounting.Remote.Instances.w2Draw 0) 191.5 98016",
+    "                  (Nat.cast 743590))",
+    "                (And",
+    "                  (Accounting.Remote.Held.Assumptions.Disks (Accounting.Remote.Instances.w2Draw 0)",
+    "                    (instHDiv.hDiv (instHDiv.hDiv 432e7 4096) 1e9) (Nat.cast 1054688))",
+    "                  (And (Accounting.Remote.Held.Assumptions.ChipCeiling (Accounting.Remote.Instances.w2Draw 0) 743590)",
+    "                    (And (Accounting.Remote.Held.Assumptions.Routed (Accounting.Remote.Instances.w2Draw 0))",
+    "                      (And",
+    "                        (Accounting.Remote.Held.Assumptions.Paced (Accounting.Remote.Instances.w2Draw 0)",
+    "                          (Accounting.Remote.Instances.burstPace 85000000))",
+    "                        (And (Accounting.Remote.Held.Assumptions.Covers (Accounting.Remote.Instances.w2Draw 0))",
+    "                          (And (Accounting.Remote.Held.Assumptions.SketchBound (Accounting.Remote.Instances.w2Draw 0) 0)",
+    "                            (And (Accounting.Remote.Draw.Assumptions.Live Accounting.Remote.Instances.w2Session)",
+    "                              (And",
+    "                                (Accounting.Remote.Draw.Assumptions.Refused Accounting.Remote.Instances.w2Session",
+    "                                  Accounting.Remote.Instances.zeroStream (fun x x_1 x_2 => 0)",
+    "                                  (Accounting.Remote.Instances.w2Draw 0) Accounting.Remote.Instances.w2Receipts)",
+    "                                (Accounting.Remote.Draw.Assumptions.Counted Accounting.Remote.Instances.w2Session",
+    "                                  (Accounting.Remote.Instances.w2Draw 0))))))))))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Accounting.Actual.wordIndex",
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused",
+     "Accounting.Remote.Held.Assumptions.ChipCeiling",
+     "Accounting.Remote.Held.Assumptions.Covers",
+     "Accounting.Remote.Held.Assumptions.Disks",
+     "Accounting.Remote.Held.Assumptions.Identity",
+     "Accounting.Remote.Held.Assumptions.Paced",
+     "Accounting.Remote.Held.Assumptions.Routed",
+     "Accounting.Remote.Held.Assumptions.SketchBound",
+     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
+    ]
+   },
+   "type_hash": "8819adc554ef566d6266ecc58c47173dccaf9188839fd33eb29a786d303296de"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_nontrivial :",
+    "  Not",
+    "    (Accounting.Remote.Instances.acceptAll.Holds",
+    "      (instHAdd.hAdd 0",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (1 / 1099511627776) (instHDiv.hDiv (Finset.univ.sum fun _t => 1).cast (instHPow.hPow 2 256)))",
+    "            (Finset.univ.sum fun t =>",
+    "                Pous.StreamedWipe.prfAdvantage (Accounting.Remote.Instances.toyStream t)",
+    "                  (Accounting.Remote.Instances.toy.distinguisher Accounting.Remote.Instances.toyStream",
+    "                    (1 / 1099511627776) t)).toReal)",
+    "          (Accounting.Remote.Instances.unsalted.binding Accounting.Remote.Instances.toy",
+    "              Accounting.Remote.Instances.toyStream fun x x_1 x_2 => 0).toReal))",
+    "      fun ω =>",
+    "      Real.instLE.le",
+    "        (instHSub.hSub",
+    "          (instHSub.hSub",
+    "            (instHMul.hMul",
+    "              (instHSub.hSub (Accounting.Remote.Instances.toyPace.stop ω)",
+    "                  (Accounting.Remote.Instances.toyPace.start ω)).cast",
+    "              (instHSub.hSub Accounting.Remote.Instances.acceptAll.blocks.cast (Nat.cast 0)))",
+    "            (instHMul.hMul (instHMul.hMul 2 (Accounting.Remote.Instances.toyPace.longest ω).cast)",
+    "              (instHAdd.hAdd",
+    "                (instHMul.hMul (instHAdd.hAdd (0 / 1) 0)",
+    "                  (instHAdd.hAdd",
+    "                    (instHSub.hSub (Accounting.Remote.Instances.toyPace.stop ω)",
+    "                        (Accounting.Remote.Instances.toyPace.start ω)).cast",
+    "                    (instHMul.hMul 2 (Accounting.Remote.Instances.toyPace.longest ω).cast)))",
+    "                (instHAdd.hAdd 0 0))))",
+    "          (Accounting.Remote.Instances.toyPace.fill ω Accounting.Remote.Instances.acceptAll.blocks",
+    "            (Accounting.Remote.Instances.toy.pooled (1 / 1099511627776) ω)))",
+    "        (Accounting.Remote.Instances.acceptAll.heldOver ω (Accounting.Remote.Instances.toyPace.start ω)",
+    "            (Accounting.Remote.Instances.toyPace.stop ω)).cast)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Accounting.Actual.wordIndex"]
+   },
+   "type_hash": "6d0415c8bc969fbc16de724052bbb3dcc6c2c1db47f5ff6d0c3b7454337cb97d"
   },
   "Accounting.SecurityProofs.Remote.HeldSampled": {
    "owner": "@memory-accounting",
@@ -9156,7 +9348,94 @@
     "reads": ["Accounting.Actual.wordIndex"]
    },
    "type_hash": "55578c104e1dc7aebbaf476702004f43247cf1f78c23d7d7ea80dcb194a764b7",
-   "unfolded_hash": "5983759a7305169d474ba14a3c44dd8a80f031d6220bba7e2a60f0a0fcd92362"
+   "unfolded_hash": "f9835c3dd54fe084b42679ad0e2aee5ebfaba74cf8ead210af67a0cc6a812e4e"
+  },
+  "Accounting.SecurityProofs.Remote.HeldSampled_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldSampled_honest :",
+    "  And (Real.instLT.lt 0 98016)",
+    "    (And (Real.instLE.le 0 191.5)",
+    "      (And (Real.instLE.le 0 (instHDiv.hDiv (instHDiv.hDiv 432e7 4096) 1e9))",
+    "        (And (Real.instLE.le 0 (1 / 1099511627776))",
+    "          (And (instLTNat.lt 18446744073709551615 18446744073709551616)",
+    "            (And (Accounting.Remote.Held.Assumptions.Identity (Accounting.Remote.Instances.w2Draw 0))",
+    "              (And",
+    "                (Accounting.Remote.Held.Assumptions.SquaringCeiling (Accounting.Remote.Instances.w2Draw 0) 191.5 98016",
+    "                  (Nat.cast 743590))",
+    "                (And",
+    "                  (Accounting.Remote.Held.Assumptions.Disks (Accounting.Remote.Instances.w2Draw 0)",
+    "                    (instHDiv.hDiv (instHDiv.hDiv 432e7 4096) 1e9) (Nat.cast 1054688))",
+    "                  (And (Accounting.Remote.Held.Assumptions.ChipCeiling (Accounting.Remote.Instances.w2Draw 0) 743590)",
+    "                    (And (Accounting.Remote.Held.Assumptions.Routed (Accounting.Remote.Instances.w2Draw 0))",
+    "                      (And",
+    "                        (Accounting.Remote.Held.Assumptions.Causal (Accounting.Remote.Instances.w2Draw 0) 0",
+    "                          (instHMul.hMul 2 85000000))",
+    "                        (And (Accounting.Remote.Held.Assumptions.SketchBound (Accounting.Remote.Instances.w2Draw 0) 0)",
+    "                          (And (Accounting.Remote.Draw.Assumptions.Live Accounting.Remote.Instances.w2Session)",
+    "                            (And",
+    "                              (Accounting.Remote.Draw.Assumptions.Refused Accounting.Remote.Instances.w2Session",
+    "                                Accounting.Remote.Instances.zeroStream (fun x x_1 x_2 => 0)",
+    "                                (Accounting.Remote.Instances.w2Draw 0) Accounting.Remote.Instances.w2Receipts)",
+    "                              (Accounting.Remote.Draw.Assumptions.Counted Accounting.Remote.Instances.w2Session",
+    "                                (Accounting.Remote.Instances.w2Draw 0)))))))))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Accounting.Actual.wordIndex",
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused",
+     "Accounting.Remote.Held.Assumptions.Causal",
+     "Accounting.Remote.Held.Assumptions.ChipCeiling",
+     "Accounting.Remote.Held.Assumptions.Disks",
+     "Accounting.Remote.Held.Assumptions.Identity",
+     "Accounting.Remote.Held.Assumptions.Routed",
+     "Accounting.Remote.Held.Assumptions.SketchBound",
+     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
+    ]
+   },
+   "type_hash": "9dd41f0a2a257e440a38a0e3dec60dcae5e4d12d5e64c49ee8325ce73479745e"
+  },
+  "Accounting.SecurityProofs.Remote.HeldSampled_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.HeldSampled_nontrivial :",
+    "  Not",
+    "    (Accounting.Remote.Instances.acceptAll.Holds",
+    "      (instHAdd.hAdd 0",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (1 / 1099511627776) (instHDiv.hDiv (Finset.univ.sum fun _t => 1).cast (instHPow.hPow 2 256)))",
+    "            (Finset.univ.sum fun t =>",
+    "                Pous.StreamedWipe.prfAdvantage (Accounting.Remote.Instances.toyStream t)",
+    "                  (Accounting.Remote.Instances.toy.distinguisher Accounting.Remote.Instances.toyStream",
+    "                    (1 / 1099511627776) t)).toReal)",
+    "          (Accounting.Remote.Instances.unsalted.binding Accounting.Remote.Instances.toy",
+    "              Accounting.Remote.Instances.toyStream fun x x_1 x_2 => 0).toReal))",
+    "      fun ω =>",
+    "      Real.instLE.le",
+    "        (instHSub.hSub",
+    "          (instHSub.hSub",
+    "            (instHSub.hSub (Accounting.Remote.Instances.acceptAll.planned ω).cast",
+    "              (Accounting.Remote.Instances.toy.pooled (1 / 1099511627776) ω))",
+    "            (instHAdd.hAdd (instHMul.hMul (instHAdd.hAdd (0 / 1) 0) (instHSub.hSub (Nat.cast 0) (Nat.cast 0)))",
+    "              (instHAdd.hAdd 0 0)))",
+    "          (instHMul.hMul Accounting.Remote.Instances.acceptAll.passes.cast (Nat.cast 0)))",
+    "        (Accounting.Remote.Instances.acceptAll.held ω).cast)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Accounting.Actual.wordIndex"]
+   },
+   "type_hash": "50d1722328bdd6840b3c61a508f82a32fc8fbf9bd0412ca03e1b3e5bd9e96f7f"
   },
   "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
    "owner": "@memory-accounting",
@@ -9173,7 +9452,67 @@
     "reads": ["Accounting.Actual.wordIndex", "Accounting.Remote.Held.Assumptions.LiveCoins"]
    },
    "type_hash": "323da1a731bafc04b3f297c8e55c97b1fa40e5c65e1de4e04e1f5ab55554903e",
-   "unfolded_hash": "b5f00900f4cba21f8afbc1506f403e0472bf93ba2d370506661bf024912b7786"
+   "unfolded_hash": "9a8c46090d92ae823c15ec33dcbc89b946a771c113916a0e581106cb3d59e0f4"
+  },
+  "Accounting.SecurityProofs.Remote.LiveCoinsSampled_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.LiveCoinsSampled_honest :",
+    "  And (Real.instLE.le 0 (1 / 1099511627776))",
+    "    (And (instLTNat.lt 18446744073709551615 18446744073709551616)",
+    "      (And (Accounting.Remote.Draw.Assumptions.Live Accounting.Remote.Instances.w2Session)",
+    "        (And",
+    "          (Accounting.Remote.Draw.Assumptions.Refused Accounting.Remote.Instances.w2Session",
+    "            Accounting.Remote.Instances.zeroStream (fun x x_1 x_2 => 0) (Accounting.Remote.Instances.w2Draw 1536)",
+    "            Accounting.Remote.Instances.w2Receipts)",
+    "          (And",
+    "            (Accounting.Remote.Draw.Assumptions.Counted Accounting.Remote.Instances.w2Session",
+    "              (Accounting.Remote.Instances.w2Draw 1536))",
+    "            (∀ (ω : Accounting.Remote.Draw.DrawCoins 1 256 Unit),",
+    "              (Accounting.Remote.Instances.w2Draw 1536).accepts ω →",
+    "                Real.instLE.le (Accounting.Remote.Instances.w2Session.pooled (1 / 1099511627776) ω)",
+    "                  (Accounting.Remote.Draw.pooled 1 (fun t => (Accounting.Remote.Instances.w2Window t).val)",
+    "                    (fun t => instMinNat.min 33273 (Accounting.Remote.Instances.w2Window t).val)",
+    "                    (1 / 1099511627776)))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Accounting.Actual.wordIndex",
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ]
+   },
+   "type_hash": "d7578fd434af55e6eb6b3064117f70465ab2fcf0ca4fe8bf9b6bf3c69b0430b9"
+  },
+  "Accounting.SecurityProofs.Remote.LiveCoinsSampled_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.LiveCoinsSampled_nontrivial :",
+    "  Not",
+    "    (Accounting.Remote.Held.Assumptions.LiveCoins Accounting.Remote.Instances.acceptAll 0",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (1 / 1099511627776) (instHDiv.hDiv (Finset.univ.sum fun _t => 1).cast (instHPow.hPow 2 256)))",
+    "          (Finset.univ.sum fun t =>",
+    "              Pous.StreamedWipe.prfAdvantage (Accounting.Remote.Instances.toyStream t)",
+    "                (Accounting.Remote.Instances.toy.distinguisher Accounting.Remote.Instances.toyStream (1 / 1099511627776)",
+    "                  t)).toReal)",
+    "        (Accounting.Remote.Instances.unsalted.binding Accounting.Remote.Instances.toy",
+    "            Accounting.Remote.Instances.toyStream fun x x_1 x_2 => 0).toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Accounting.Actual.wordIndex", "Accounting.Remote.Held.Assumptions.LiveCoins"]
+   },
+   "type_hash": "9e17a43e9295d3a06b4851247830fe23c42742e93083c96e4b80434dbd11c39b"
   },
   "Accounting.SecurityProofs.Remote.PooledSample": {
    "owner": "@memory-accounting",
@@ -9190,7 +9529,63 @@
     "reads": ["Accounting.Actual.wordIndex"]
    },
    "type_hash": "ffdcb6b6df33d9e044a1a6d7dc12c82655d3fd9a736b18b5b85e39cfc7346e4b",
-   "unfolded_hash": "b96e17ab299c1a3caa23876a038efae3fb6deafe354dc831b3e5d1f8aca3fdec"
+   "unfolded_hash": "4130e725cac95cfb252dffa13f2df94ea6415ce21bf5327f8876c1435d59e805"
+  },
+  "Accounting.SecurityProofs.Remote.PooledSample_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.PooledSample_honest :",
+    "  And (Real.instLE.le 0 (1 / 1099511627776))",
+    "    (And (instLTNat.lt 18446744073709551615 18446744073709551616)",
+    "      (And (Accounting.Remote.Draw.Assumptions.Live Accounting.Remote.Instances.w2Session)",
+    "        (And",
+    "          (Accounting.Remote.Draw.Assumptions.Refused Accounting.Remote.Instances.w2Session",
+    "            Accounting.Remote.Instances.zeroStream (fun x x_1 x_2 => 0) (Accounting.Remote.Instances.w2Draw 1536)",
+    "            Accounting.Remote.Instances.w2Receipts)",
+    "          (Accounting.Remote.Draw.Assumptions.Counted Accounting.Remote.Instances.w2Session",
+    "            (Accounting.Remote.Instances.w2Draw 1536)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Accounting.Actual.wordIndex",
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ]
+   },
+   "type_hash": "4496bacce0db543c4244ab4f503fb987b2eb88c8510167e0dfbd263509e9e6b1"
+  },
+  "Accounting.SecurityProofs.Remote.PooledSample_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.PooledSample_nontrivial :",
+    "  Not",
+    "    (Accounting.Remote.Instances.acceptAll.Holds",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (1 / 1099511627776) (instHDiv.hDiv (Finset.univ.sum fun _t => 1).cast (instHPow.hPow 2 256)))",
+    "          (Finset.univ.sum fun t =>",
+    "              Pous.StreamedWipe.prfAdvantage (Accounting.Remote.Instances.toyStream t)",
+    "                (Accounting.Remote.Instances.toy.distinguisher Accounting.Remote.Instances.toyStream (1 / 1099511627776)",
+    "                  t)).toReal)",
+    "        (Accounting.Remote.Instances.unsalted.binding Accounting.Remote.Instances.toy",
+    "            Accounting.Remote.Instances.toyStream fun x x_1 x_2 => 0).toReal)",
+    "      fun ω =>",
+    "      Real.instLE.le (Accounting.Remote.Instances.acceptAll.incorrect ω).cast",
+    "        (Accounting.Remote.Instances.toy.pooled (1 / 1099511627776) ω))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Accounting.Actual.wordIndex"]
+   },
+   "type_hash": "42629988dfcfe130eb79d11ddbaf8b57360474cc0bd9c71e04fcb94effd1411a"
   },
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
    "owner": "@memory-accounting",
@@ -21923,93 +22318,10 @@
    },
    "type_hash": "d816654bcfc06b4dc49bd9cefb252347f1d151851ae3f49ab85f13299c889854"
   },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard", "Verity.Accel.Card.Exact"],
-    "open": [
-     "Pouw.Assumptions.AnswerAfterWork",
-     "Pouw.Assumptions.CertifierSeesImports",
-     "Pouw.Assumptions.CommitAfterWork",
-     "Pouw.Assumptions.ExtractAdv",
-     "Pouw.Assumptions.OutsourceWithinEgress",
-     "Pouw.Assumptions.ProofSystemSound",
-     "Pouw.Assumptions.RootAfterCoin",
-     "Pouw.Assumptions.SAKMatmul",
-     "Pouw.Assumptions.SAKSha",
-     "Pouw.Dither.Accel.G1",
-     "Pouw.Dither.Accel.G2",
-     "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.Period.DualOpt",
-     "Pouw.Dither.Prover.Passes",
-     "Verity.Assumptions.AccelProductForm"
-    ],
-    "reads": ["Pouw.Assumptions.ExtractAdvAt"]
-   },
-   "type_hash": "24b90356174c20edf30dd824c9bd4905d24528aee5c2368d18361a3cd8d08eaa",
-   "unfolded_hash": "b046eb6ddd4a124ace85f829832bcfffe133ee98be82a53c054542be465bd9fc"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest": {
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables": {
    "owner": "@compute-research",
    "signature": [
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest :",
-    "  Exists fun x =>",
-    "    Exists fun D =>",
-    "      Exists fun G =>",
-    "        Exists fun L =>",
-    "          Exists fun e =>",
-    "            Exists fun Pd =>",
-    "              Exists fun μ =>",
-    "                And (Verity.Accel.H200.card.Exact x)",
-    "                  (And (Verity.Assumptions.AccelProductForm x)",
-    "                    (And (Pouw.Dither.OnCard G Verity.Accel.H200.card x D Pouw.Witness.twRound L e)",
-    "                      (And (Pouw.Dither.HostsCounted D Pouw.Dither.hostH200)",
-    "                        (And (Pouw.Dither.CallsAtPub G e Pouw.Dither.pubBestH200)",
-    "                          (And G.G1 (And G.G2 (And G.G3 (Pd.DualOpt μ 1))))))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Accel.Machine.Fits"],
-    "open": [],
-    "reads": ["Verity.Assumptions.AccelProductForm"]
-   },
-   "type_hash": "b47021b0d7dd974f56eb2ff1bad89bd5e5c893434899c3870c5a13d6a6a6ba8a"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial :",
-    "  Exists fun x =>",
-    "    Exists fun D =>",
-    "      Exists fun G =>",
-    "        Exists fun L =>",
-    "          Exists fun e =>",
-    "            Exists fun Pd =>",
-    "              Exists fun μ =>",
-    "                Exists fun x =>",
-    "                  Not",
-    "                    (Pouw.Dither.WorkBound G Pouw.Witness.twRound 2 (fun x x_1 x_2 x_3 => True)",
-    "                      (fun x x_1 x_2 => Unit.unit) Pd (fun x => 1 / 2)",
-    "                      (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r))) (fun x => 1 / 2)",
-    "                      fun x => True)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Dither.Prover.Passes"],
-    "reads": ["Verity.Assumptions.AccelProductForm"]
-   },
-   "type_hash": "592e04fbc3cf893956c1f8541ca23269314b09c3fba4917c890d4f8e6041a84e"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200"
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables : Pouw.Guarantees.DitherInstance.WorkSoundOnCardTables"
    ],
    "assumptions": [],
    "premises": {
@@ -22034,122 +22346,8 @@
     ],
     "reads": ["Pouw.Assumptions.ExtractAdvAt", "Verity.Assumptions.AccelProductForm"]
    },
-   "type_hash": "976778649c1a045eb4165c8b72e71a82af245ea1fd099800ca29e3fed945ce2c",
-   "unfolded_hash": "a2da6ac587ca319c0f58171f58c310bfd98b713ecf987662682d03c6f753f404"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardSm120"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard"],
-    "open": [
-     "Pouw.Assumptions.AnswerAfterWork",
-     "Pouw.Assumptions.CertifierSeesImports",
-     "Pouw.Assumptions.CommitAfterWork",
-     "Pouw.Assumptions.ExtractAdv",
-     "Pouw.Assumptions.OutsourceWithinEgress",
-     "Pouw.Assumptions.ProofSystemSound",
-     "Pouw.Assumptions.RootAfterCoin",
-     "Pouw.Assumptions.SAKMatmul",
-     "Pouw.Assumptions.SAKSha",
-     "Pouw.Dither.Accel.G1",
-     "Pouw.Dither.Accel.G2",
-     "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.Period.DualOpt",
-     "Pouw.Dither.Prover.Passes",
-     "Verity.Assumptions.CardWithinAccel"
-    ],
-    "reads": ["Pouw.Assumptions.ExtractAdvAt", "Verity.Assumptions.AccelProductForm"]
-   },
-   "type_hash": "52c39b1631fdf8d50794d876a25c2755914afe4e2d9887dc06b137158c46ca28",
-   "unfolded_hash": "244ab8f61c7d79568f656838f65687c11925b610ffa2c470e239f8cc05161fe7"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundSm120 : Pouw.Guarantees.DitherInstance.WorkSoundSm120"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard", "Verity.Accel.Card.Exact"],
-    "open": [
-     "Pouw.Assumptions.AnswerAfterWork",
-     "Pouw.Assumptions.CertifierSeesImports",
-     "Pouw.Assumptions.CommitAfterWork",
-     "Pouw.Assumptions.ExtractAdv",
-     "Pouw.Assumptions.OutsourceWithinEgress",
-     "Pouw.Assumptions.ProofSystemSound",
-     "Pouw.Assumptions.RootAfterCoin",
-     "Pouw.Assumptions.SAKMatmul",
-     "Pouw.Assumptions.SAKSha",
-     "Pouw.Dither.Accel.G1",
-     "Pouw.Dither.Accel.G2",
-     "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.Period.DualOpt",
-     "Pouw.Dither.Prover.Passes",
-     "Verity.Assumptions.AccelProductForm"
-    ],
-    "reads": ["Pouw.Assumptions.ExtractAdvAt"]
-   },
-   "type_hash": "f783d09e652e6d59f971b0d91401e64bd149ebbfa574976cdc439f52ab29a04b",
-   "unfolded_hash": "739ae52f9fd8674edece4a4c6ea3727aae357207b4a6e9fbb1aa4a86dae20083"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest :",
-    "  Exists fun x =>",
-    "    Exists fun D =>",
-    "      Exists fun G =>",
-    "        Exists fun L =>",
-    "          Exists fun e =>",
-    "            Exists fun Pd =>",
-    "              Exists fun μ =>",
-    "                And (Verity.Accel.Sm120.card.Exact x)",
-    "                  (And (Verity.Assumptions.AccelProductForm x)",
-    "                    (And (Pouw.Dither.OnCard G Verity.Accel.Sm120.card x D Pouw.Witness.twRound L e)",
-    "                      (And (Pouw.Dither.HostsCounted D Pouw.Dither.hostSm120)",
-    "                        (And (Pouw.Dither.CallsAtPub G e Pouw.Dither.pubBestSm120)",
-    "                          (And G.G1 (And G.G2 (And G.G3 (Pd.DualOpt μ 1))))))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Verity.Accel.Machine.Fits"],
-    "open": [],
-    "reads": ["Verity.Assumptions.AccelProductForm"]
-   },
-   "type_hash": "c2671e11615e00ac2ddfdd5bb62ae5cefffdbac31dc96e856fc7e0b842d9c5f0"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial :",
-    "  Exists fun x =>",
-    "    Exists fun D =>",
-    "      Exists fun G =>",
-    "        Exists fun L =>",
-    "          Exists fun e =>",
-    "            Exists fun Pd =>",
-    "              Exists fun μ =>",
-    "                Exists fun x =>",
-    "                  Not",
-    "                    (Pouw.Dither.WorkBound G Pouw.Witness.twRound 2 (fun x x_1 x_2 x_3 => True)",
-    "                      (fun x x_1 x_2 => Unit.unit) Pd (fun x => 1 / 2)",
-    "                      (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r))) (fun x => 1 / 2)",
-    "                      fun x => True)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Dither.Prover.Passes"],
-    "reads": ["Verity.Assumptions.AccelProductForm"]
-   },
-   "type_hash": "d92a76b3c1f7f6bd3a666c2efdcce92dab1d7348105fbd94bf6bb6a7be0baeca"
+   "type_hash": "e76586bcde2aa46e84b954eb7d5c2d6d3b9935a6be70267acc54e6cd9b6edf33",
+   "unfolded_hash": "9173d9c152051a4544b110b95bee8ee2f27eb2fccd2790d0fa18ca413a71a3ec"
   },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
@@ -25921,7 +26119,7 @@
    "Pouw.SecurityProofs.Eps1.ClassPSlots": "frozen (no-function): Theorem C's count of EPS1-QSTAR over issue slots, over every class-P M3 program with its writers' creations a parameter (w), not a Lean function.",
    "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
-   "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
+   "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first blocks of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Pouw.Guarantees.Window.ServiceEscapes": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so WindowDelta reads the deployed draw with each session a call; stated with WindowDelta, and its theorem Pouw.SecurityProofs.Window.ServiceEscapes is not proved yet.",
    "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
@@ -25982,8 +26180,8 @@
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
-   "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
+   "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first blocks of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first blocks of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Accounting.SecurityProofs.TS.Sm100SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline at DS-100 at 0.783%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-100 and dither-2s-licpw-redux-ldtm0-l32, crediting no tcgen05.ld (Definitions.Accounting.HeadlineDc.Sm100: 52 classes, 27 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue 666666667/1000000000 + DS_alu 333333333/1000000000, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.78288%; the folded one gives 0.69835%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share: there a LOP3 costs 4/3 and an IMAD or FFMA 2/3, so it also says li's two-word XOR has no IMAD- or FP-pipe program of 1 instruction, checked for programs of 1 or 2 instructions within a modelled menu, FOLD-XOR #2778 and #2850, not over the B200's whole instruction set; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline on its measured vector DC-100-ri at 0.900%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-100-ri and dither-2s-licpw-redux-ldtm0-l32 (Definitions.Accounting.HeadlineDc.Sm100Measured: 52 classes, 9 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's fold the global CP_RED2, an exact tie at pi* with its generic twin) with pi* the issue row, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.89918%; the folded one gives 0.81490%); FacetCeilings on DC-100-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue row and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm90SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline at DS-90 at 0.944%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-90 and dither-2s-licpw-redux-p1-l32 with ffill at p = 1 and no filler credited (Definitions.Accounting.HeadlineDc.Sm90: 50 classes, 34 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 56 fold routes: the bit-exact loops with the generic-address checkpoint routes, and every counted fold known to come near them, none built, RT4-SHEET-13's and -14's moves of LI on li and each loop and li-bulk with its counted members, RT4-SHEET-17 and -22), with pi* DS_issue alone, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.94302%; the folded one gives 0.86184%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at DS_issue and the run's unfolded share: at one issue slot an instruction it is an instruction count, with no pipe premise; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6, where on the H200's the fold that shows it is at least an IMAD.WIDE route of the menu on every row), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
@@ -26095,10 +26293,6 @@
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv.",
    "Pouw.SecurityProofs.Dither.FleetSound": "frozen (verdict): the accepted replicas' moments pooled by convexity, each at its own quantified verdict, as WorkSound.",
    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": "frozen (premise): ExtractAdv from ShaRealize and SHA-512 as a random oracle, one premise's form from another's, about no protocol function's acceptance.",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "frozen (verdict): as WorkSoundH200, at the open parameters card-within-accel(H200) gives.",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "frozen (verdict): as WorkSoundOnCardH200, on the RTX PRO 6000.",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof system's verdict is a named Lean function the event reads.",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000.",
    "Flock.SecurityProofs.JointStratified": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizon": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedHorizonMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -26227,11 +26421,11 @@
    "Accounting.SecurityProofs.RateRunSample": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for a session of such windows, each a function of the earlier windows' coins and draws (security/Definitions/Accounting/RateAuditHorizon.lean, Session), each window's correct receipts its good set, and again with every window's receipts good but the first holding at most K_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
-   "Accounting.SecurityProofs.Remote.PooledSample": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher (claim prf/sha-512: SHA-512's keyed stream as a PRF, a term of the statement's error that no premise assumes and nothing prices), one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.LiveCoinsSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledSample at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.HeldSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.PooledSample": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher (claim prf/sha-512: SHA-512's keyed stream as a PRF, a term of the statement's error that no premise assumes and nothing prices), one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.LiveCoinsSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledSample at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.HeldSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first block and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Accounting.SecurityProofs.JointPooledLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPooledBlocksLive": "frozen (no-function): Like JointPooledLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts are fields of the run, not Lean functions (security/Definitions/Accounting/JointLive.lean), each wipe is core's Verity.Wipe, with its survivor bound (Verity.Wipe.SurvivorBound) and a map of the run into the wipe's game at its boundary (Verity.Wipe.OfRun, whose measure preservation is a hypothesis) whose preimage of the survivor event is a disjunct, and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
@@ -26251,7 +26445,7 @@
    "Nci.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: Nci.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (Nci.Cut.SecurityProofs.CountsOn, security/Proofs/Nci/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
    "Nci.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Nci.Cut.Toy, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
    "Nci.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): as WorkSoundH200, over every card table, menu and host row; the statements at the two cards are its consequences.",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function, over every card table, menu and host row; it gets the shape when the proof system's verdict is a named Lean function the event reads.",
    "NetTiming.Guarantees.MonitoringPeriodLeakChecked": "unstated: MonitoringPeriodLeakAccepted with each window's checked inputs left out of the count (the check held to the run at the network certifier's rows, CheckedWitness at certifierRun) and the client's view read from the records under a registered parameter (RecordFormat.ReadsBy), so the count is the registered parameters' times the windows'; stated first, and its theorem NetTiming.SecurityProofs.MonitoringPeriodLeakChecked is not proved yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's monitoring period of sampled audits, pooled (RealizesCommOfPooledLeakAccepted), from PooledLeakAccepted's first conjunct at the run's coins: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Verity.SecurityProofs.NaiveBeatsStrassenAny": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model rather than a Lean function's acceptance.",
@@ -26275,14 +26469,15 @@
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
    "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
-   "Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest": "frozen (no-function): SketchBoundDeployed's honest witness, about the model of the receipts' sketch (Accounting.Remote.Sketch) and not the verifier's code: at one pass of one candidate over one 4096-byte block at the deployed receipts, a device that holds the block on chip and tags it with one query, SHA-512's keys the outcome's own, and a trace that accepts where the block's receipt is right and holds it in node memory, KeyBudget at one query, Receipted, Present and SketchHashRandom hold",
-   "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial": "frozen (no-function): SketchBoundDeployed's nontrivial witness, about the trace SketchBound is stated on and not the verifier's code: on a trace that accepts everything, one pass's correct receipt of a block never present has probability 1, above the deployed δs at Q = 0, P = 1, ε = 0 and N = 1",
    "FlockSoundness.Audit.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Flock.SecurityProofs.EndToEndSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHiddenSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredSampledFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Verity.Sampled.onsite_soundness_deployedReady": "frozen (premise): Verity.soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles at onsite), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets, at the deployment's constructions in spotSound_deployedReady); it takes as an open premise the deployment's input SessionRegistered, owed of the compiled check (its openings and registered files are proved at every instance: Instance.opensAt, Instance.registeredFiles), and the base's six other targets at onsite (Verity.Vocab.PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound), until each is proved: the network certifier's stands while its period check reads the answers its evidence states and verifies no proof behind one, and the wipe's while no statement ties the wipe's egress to the network certifier's count"
+   "Verity.Sampled.onsite_soundness_deployedReady": "frozen (premise): Verity.soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles at onsite), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets, at the deployment's constructions in spotSound_deployedReady); it takes as an open premise the deployment's input SessionRegistered, owed of the compiled check (its openings and registered files are proved at every instance: Instance.opensAt, Instance.registeredFiles), and the base's six other targets at onsite (Verity.Vocab.PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound), until each is proved: the network certifier's stands while its period check reads the answers its evidence states and verifies no proof behind one, and the wipe's while no statement ties the wipe's egress to the network certifier's count",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest": "frozen (no-function): SketchBoundDeployed's honest witness, about the model of the receipts' sketch (Accounting.Remote.Sketch) and not the verifier's code: at one pass of one candidate over one 4096-byte block at the deployed receipts, a device that holds the block on chip and tags it with one query, SHA-512's keys the outcome's own, and a trace that accepts where the block's receipt is right and holds it in node memory, KeyBudget at one query, Receipted, Present and SketchHashRandom hold",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial": "frozen (no-function): SketchBoundDeployed's nontrivial witness, about the trace SketchBound is stated on and not the verifier's code: on a trace that accepts everything, one pass's correct receipt of a block never present has probability 1, above the deployed δs at Q = 0, P = 1, ε = 0 and N = 1",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables": "frozen (verdict): as WorkSoundAtTables, at the open parameters the card premise gives at each table."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -26776,21 +26971,8 @@
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": {
-    "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
-    "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.Remote.HeldSampled": {
-    "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
-    "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.Remote.PooledSample": {
-    "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
     "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -30177,13 +30359,13 @@
    }
   },
   "Definitions.Accounting.Guarantees.RemoteDraw": {
-   "digest": "d968eb658171fd46e02529968535bc58df535ac9b2a149202386d228142ff568",
+   "digest": "bf292891f0c9d897699a85490991717af1e8d83b2c9fa5a5ff4e7cfdaeeda2f5",
    "definitions": {
-    "Accounting.Guarantees.Remote.HeldOverTimeLinksSampled": "7c7e483bdf54f89797bc752aec03103698136a7877f0bc0242dd663edc59e3aa",
-    "Accounting.Guarantees.Remote.HeldOverTimeSampled": "70dbc4be7ff7321f2b8dc5f7c897f2b3719ac8d02f8ddaeed422ab25cba38ba9",
-    "Accounting.Guarantees.Remote.HeldSampled": "f04b9f5f8c8c275dbc1326a871e6bb6a8fa2d588c0794be72f8b2cded08a72d4",
-    "Accounting.Guarantees.Remote.LiveCoinsSampled": "b740180cff162403939b41036ee3efdc2c7ab3d8697a3a5a449cdbc659fc9dab",
-    "Accounting.Guarantees.Remote.PooledSample": "be53bce8f3d852acd44c45b97fd507b71069b3d6dbe05d288be505c4ab78ec00"
+    "Accounting.Guarantees.Remote.HeldOverTimeLinksSampled": "61dec2d66155bbbad032fd9ee015d956392cf7dd7ba2a9377fde4952c304c5b8",
+    "Accounting.Guarantees.Remote.HeldOverTimeSampled": "9ec3244dee41511974bbc10c5802d45240f318784c800ecc79fc15902d52005f",
+    "Accounting.Guarantees.Remote.HeldSampled": "9affe21e13b616386cc187cff12abf2e7db1e02b0c9aa9ee6618d166884c11f2",
+    "Accounting.Guarantees.Remote.LiveCoinsSampled": "97cfada22971a5362f6ebf1b01b1c0ea9d1bee733609116f353465918c670d59",
+    "Accounting.Guarantees.Remote.PooledSample": "ea3a59650a40068c6a298173c492ccca98beb519b396f8f31e7626bebb56f6b9"
    }
   },
   "Definitions.Accounting.Guarantees.RemoteHeld": {
@@ -31177,7 +31359,7 @@
    }
   },
   "Definitions.Accounting.Remote.Draw": {
-   "digest": "cd4eaf379128b125661f4dd9f4fee6a0e4bfe5068ef0c0d7d7700a0c0671858f",
+   "digest": "be63f0d702ff202797876fe7acc32ec02eb5a5c109f345d2297b1e93c6c53e33",
    "definitions": {
     "Accounting.Remote.Draw.Blocks": "c039d32ff0024407a58df4ca4cd9489e00cd3968a16cc2b29cd83ff475aad5c8",
     "Accounting.Remote.Draw.DrawCoins": "b6583366ba2d2e6689b91601af1db693ca50619eb89988eb26a42b73ac5b4c98",
@@ -31202,18 +31384,39 @@
     "Accounting.Remote.Draw.Run.pooled": "3bbedd6fe54c10219b3d8051186136ec636d6bf7953e8d84221de3e98692a875",
     "Accounting.Remote.Draw.Run.samples": "a221b61803d90be02eb8cce81709a75453baf2b688f81157571ef2ff3927b035",
     "Accounting.Remote.Draw.Run.size": "d28408b4549e9330736c82f4fb3ed30710614c7e90c762968a2b21e142b7450c",
-    "Accounting.Remote.Draw.accepted": "b0a92a5e05c26a8037ed70a16b94ff1287fdac2e513330dbe5679c1d499b94c6",
+    "Accounting.Remote.Draw.accepted": "c711fcea27d74a1ce34b17ff9b7feafcfd5c0cfb3c32a191025fe29bb2c1fa3c",
     "Accounting.Remote.Draw.arrange": "37920cbd071e929ccbbdeb23969e55343410ffb0a8eb027f49736e34a57ddc07",
     "Accounting.Remote.Draw.below": "01e6a2f311d6d4edc13e8be18327a1c65667b3ce06fcbcd401e05b5c973a969e",
     "Accounting.Remote.Draw.budget": "f2420d149470daf39805deb86dc8c1dbf4fe053a01569f29dd24bfb4b6137302",
     "Accounting.Remote.Draw.cont": "8ba5bea85461448626426ecbf57b1b1a697dd72ed3bf38120596993b9c70fceb",
-    "Accounting.Remote.Draw.offset": "795755fad153056dd737dfe6ad9dfae7f23914343aaf79dc839d225419c4f2d2",
+    "Accounting.Remote.Draw.offset": "95bc3bfe14cf0b45b268b24f1fca49ea12560c1a7e7ca1485653a95860983cd9",
     "Accounting.Remote.Draw.offsets": "986b9c49b7bd390877b5ba71588876f203728a830718a30c3af059d6a860bb48",
     "Accounting.Remote.Draw.openings": "47cc9ba6cd4841ef58d296e8ebd98e680845aaa74d6705da0f65170169012425",
+    "Accounting.Remote.Draw.pick": "c95b83c7913e40e76e9555353612d0a48f3a5c3260cdec96141c0dcc7104dbfb",
     "Accounting.Remote.Draw.pooled": "b1043e9ddcda2923acc1f24f1baf2e37ae4131aaee95e75685bbd11e97ef9371",
     "Accounting.Remote.Draw.test": "b1a2f0e138861d3806439f5d5e809c014243c32978534143063cf633d1899d74",
     "Accounting.Remote.Draw.width": "5ba583f4de89a5631bf424804829c778f2fb72d857b5200727facdc3dd153a68",
-    "Accounting.Remote.Draw.word": "4f71d22bf712f489fa670bb2e077267247e164e2a368dc61d2efd0845e2c62a1"
+    "Accounting.Remote.Draw.wordAt": "ba43c489f05fb41a32705aa81e6fcbe812df37ec20104d76715dc25efc86d705"
+   }
+  },
+  "Definitions.Accounting.Remote.DrawInstances": {
+   "digest": "9c089cbcb69e2210bf29407b4d35e8d218320b523124bcd9e1bba745ca1f09ff",
+   "definitions": {
+    "Accounting.Remote.Instances.acceptAll": "5d75065e412ee5d86a66bd05444ef36456ac6613fe20b398fb4e1cd716e504ca",
+    "Accounting.Remote.Instances.burst": "d76a70a142c65347f749d2dc4a317a97b2a1e85c90d04cd0dce52b9952c65435",
+    "Accounting.Remote.Instances.burstMem": "2793e345a6ad9924dc7b3a2223b8f3acc81ec06543de81c31421954bcfbe96f4",
+    "Accounting.Remote.Instances.burstPace": "62312be5998d0463374562c2d3d56dd7efa42d62a162a9e4f51bbd3f3ff69700",
+    "Accounting.Remote.Instances.honest": "7daf4468ac905ead4b774ff0805d035f44f831c310d222af339f85418f4ae7ab",
+    "Accounting.Remote.Instances.pulse": "cbd71a0d48cd83c2e34fcaf2187fe60652198631ac2d25ff58f3577a7f91a2a6",
+    "Accounting.Remote.Instances.toy": "812c3d4c4cbc70b0612c70e6e19a5c7610dddd9a51be66572551385f192e6499",
+    "Accounting.Remote.Instances.toyPace": "5b2cc37510d43ba9819b8330de4b26c270f3aa725e16a199f7b95eafdec525b2",
+    "Accounting.Remote.Instances.toyStream": "4b6e29f648465739fb1aa7363868479a190c27ae2c56d1f109ddcbf5294a0f06",
+    "Accounting.Remote.Instances.unsalted": "5db7180f45f46a0c634bf1ba4a9e3701d2cb0a44809f199710e7b463efc24fdf",
+    "Accounting.Remote.Instances.w2Draw": "3c95db15af624f32137f2332aa46e343dce19c0cb2488c1e5056a3ad1d1e45f5",
+    "Accounting.Remote.Instances.w2Receipts": "0dc90416c156222a7a664916c878f74b7e50eb77c90e436135060c3a355a4564",
+    "Accounting.Remote.Instances.w2Session": "8c40b09eb4b7f2f10a62177472a76b9172561a2f5537cc9721950afbadefbf92",
+    "Accounting.Remote.Instances.w2Window": "376c8c6293dfd56aebeac4f1bfa20c0f0ef3d1587df8b7a5401c1fd60da7b901",
+    "Accounting.Remote.Instances.zeroStream": "cd31c105d9d3a62aa729502391d4b267d709f7312aec517fbeb6063b97c43b4a"
    }
   },
   "Definitions.Accounting.Remote.Fork": {
@@ -32901,11 +33104,9 @@
    }
   },
   "Definitions.Core.Accel.H200": {
-   "digest": "c62821046ac5a366b6bbb205fb993dd06792fb1a8134ed597e1dc3438dd869e4",
+   "digest": "dd9d83169463e9c0c7331c24c0ef7506678d062623344ea2dd8f62113ab950fd",
    "definitions": {
-    "Verity.Accel.H200.card": "b5bbcb6bf2b31aea6c088b76d229d4c9fcd25bf32817ef35c5e53a9078857e84",
-    "Verity.Accel.H200.clock": "87b2fc121dc3c40d2eeb5d3058a4c961170522aef4b3053b97c2b74da3267012",
-    "Verity.Accel.H200.tensorClock": "92f9f8a10be5ec82770d6673373ff95c716e2084f584e481e38ab83981cb1692"
+    "Verity.Accel.H200.card": "b5bbcb6bf2b31aea6c088b76d229d4c9fcd25bf32817ef35c5e53a9078857e84"
    }
   },
   "Definitions.Core.Accel.Isa": {
@@ -33072,13 +33273,6 @@
     "Verity.Accel.Machine.sem": "74942c3fc10c2143f6a97c68ef447f0b3b72e9336a5230a43b04d4dd23dca567",
     "Verity.Accel.Machine.step": "6347f596ccd2cbf43cbbcb7bd579135de4c175ee65867a0a77a221754c8c849e",
     "Verity.Accel.Machine.units": "7a95d03de9f53bf0b9da53424ed895d9205e99b055e536fdc737d646208984cb"
-   }
-  },
-  "Definitions.Core.Accel.Sm120": {
-   "digest": "ad27808571d830a513df5bb75afbcef31cc6edf36cbf91049b5a17c543ee9a24",
-   "definitions": {
-    "Verity.Accel.Sm120.card": "803f6efa03447713db1c6770d94c48456203ee23c2837176f63ef5388d308df5",
-    "Verity.Accel.Sm120.clock": "ea2673b6de9e58c6fa35f80fede9d753d34db5730a04763a291a618e45509bd5"
    }
   },
   "Definitions.Core.Advice": {
@@ -37191,7 +37385,7 @@
    }
   },
   "Definitions.Pouw.DitherInstance": {
-   "digest": "91613469814a7f118c5f9858ec578e96c557d7b70a95129661b0afcbd56f93c7",
+   "digest": "0149997e136c97db3ffcccebc361eb95b3e2268c3b1e2216ff0c064db5039cde",
    "definitions": {
     "Pouw.Dither.CallsAtPub": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
     "Pouw.Dither.CardRunsAt": "5e79c94717cbf271888e33bd189df60cf3592130f9c4be689ee6811157bd382b",
@@ -37224,19 +37418,9 @@
     "Pouw.Dither.WorkBound": "3e02a6fe367e6fb0289fe06ee59cae0fd4686f661c4529b2d9187fdc1f27b968",
     "Pouw.Dither.cardRun": "3016cac84d25a6b758d60f89bae812a774026c41638cac5e7feabe3c1c708443",
     "Pouw.Dither.cardUnits": "9dff00021482e7a1f5477b823f290e6064de3f63b0b3d4866d90e37700979b16",
-    "Pouw.Dither.hostH200": "aeffd41fb84fcae4f27a6fd38300f05fbc18e863603ccfe65ad547e8109beed2",
-    "Pouw.Dither.hostSm120": "5264f0f42a1fc7aab50d0792a77fb7c385c01392eb547827add45f5406917e84",
     "Pouw.Dither.instFintypeAccelRes": "b1c82a8f417f106aa51327d01752dda8fc11617c2c8d8c6b7abdb8a0526b61a6",
-    "Pouw.Dither.mmUnits": "2018b3f9918dcc1af8c06143c33a4f0121ed0905fc65c4a3214f954cbdcd8c14",
     "Pouw.Dither.poolCard": "48271e622d4b97a6b8a1eb1654b952373f9cb3406259a0ed9449fc3566130627",
-    "Pouw.Dither.pubBestH200": "7f07779425668830562be2d129a4322c9506e2f128dac4eed35ca4af66adb190",
-    "Pouw.Dither.pubBestSm120": "1a2b64f8a4ae0b9fc5fbfaba01fa578db8cfa999e9216905ed328023214b03bf",
     "Pouw.Dither.pubCost": "5404caa2b5bbdaa7463a07fa402adbe612df288cc7ad65e974f530023ef7f345",
-    "Pouw.Dither.pubMmH200": "2dba578c21b48503c0a5fe21f7902dcef7add2e3b7f200e8f143d9fbc72631f3",
-    "Pouw.Dither.pubMmSm120": "2d4b17a5f0d5d3f6164a67fd2ff2570d7adce1b3d5aa9d7d88cfd6dc1bf33dd0",
-    "Pouw.Dither.pubShaH200": "9f86edb6b0405a6f68663f490cde393c5d750360dbdbe7c728ccbb16d78fa18b",
-    "Pouw.Dither.pubShaSm120": "0dea1ca8471395ad51f976b8f4f449ff9f2080ac98dbab2a185644577104b676",
-    "Pouw.Dither.shaUnits": "3ff562c40e78e404b420d5acaf5d3e9f625333b5ac1274f8741bd936d8eda431",
     "Pouw.Dither.unitCost": "08bc2e55379ab9bdde8b238856f9e6a85ec7fd978e05135139b0141b2194967c"
    }
   },
@@ -37543,16 +37727,13 @@
    }
   },
   "Definitions.Pouw.Guarantees.DitherInstance": {
-   "digest": "bc67ba6293d77f090b2f96ff8ad02bd8a58a2c722e348546a6e594e7f7646b87",
+   "digest": "44d3099374c0a36aae25b8f8dde9147542157648759ac12d4a820d7278fd9204",
    "definitions": {
     "Pouw.Guarantees.DitherInstance.WorkSoundAt": "368f1f2ade0dfbd379aca0aea8c44ba2f8fed6749da5f05b73a1224b7a2fbff9",
     "Pouw.Guarantees.DitherInstance.WorkSoundAtTables": "f9721093634376c559e60de454d87cf204b2137c18cf883687b9ac1e55a5d128",
     "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "ea50640c7748b4f4aa3d0fdb3ecdee95ce1219de67c0a97061ddf24058f1e493",
-    "Pouw.Guarantees.DitherInstance.WorkSoundH200": "fa9597a9f89c02b477637bab831c3892f4cb39c2573cbcbadbca8f32c78e5385",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCard": "60d9c1b01c7f3715ecf4a3ef33d4feeceaabca5b72bb5a144bbbd8612c98aafa",
-    "Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200": "8ee80046f55922ff1450d52cf565b3a0922baa23d8ac99f1f2c80d6dae918af4",
-    "Pouw.Guarantees.DitherInstance.WorkSoundOnCardSm120": "07095e9b685a38a32667d817dc970607f835f8e3c0796fe1a7e5faddfb831db1",
-    "Pouw.Guarantees.DitherInstance.WorkSoundSm120": "e98b3e2d7b0d50e0cb947334962fbddf6f4269b562c566ad6fd31b1c37b8c00b"
+    "Pouw.Guarantees.DitherInstance.WorkSoundOnCardTables": "5ae2777aed220cbdce59baf47b66bb04b157311273028fab345c7a589b6472b9"
    }
   },
   "Definitions.Pouw.Guarantees.Eps1": {
@@ -55118,7 +55299,7 @@
    }
   },
   "Proofs.Properties.Verity.Recursive": {
-   "digest": "71f50a827d2a75d2752dc0ee914d224ba28f4be50f232ba66617689b1748e8f6",
+   "digest": "216f1b2c055534bf4a2f62123434ac01590f4a587bdb90203a485d82d39dae6c",
    "definitions": {
     "Verity.Recursive.Dep": "c3514fcc465eb6f95c65f836d9e46823a4f839810af5713e98d5f58c51f99fb0",
     "Verity.Recursive.Dep.Bd": "a8b0b26fffefc7fa2b053b6a4374ddc83b96ca0f3c7b84ab631cd759e28ea88d",
@@ -55149,10 +55330,10 @@
     "Verity.Recursive.Dep.w": "ff7f6bebc7110f5e60d65b7afa42fb6dfcf067ac374d4e1e813e5f3749bcc171",
     "Verity.Recursive.Dep.wE": "1e1bb307b678875ec9186e7e02b2df9448e8bb72754c4a6a5a129942f42a0703",
     "Verity.Recursive.Dep.weight": "3f14f85ed11ca0f72c921dbcc93e5ff40f4fd709ca3ee0880e2f5c77b15e667e",
-    "Verity.Recursive.RecVerdict": "99ed101b5c250e2f15562f4cc576ce0352e0edcf50fdbd6103c80a55dfb799db",
+    "Verity.Recursive.RecVerdict": "54da885a3c69895d88048122c4960043b81c89b0e4133e387451930243ebc73f",
     "Verity.Recursive.RowsShow": "ed190e290ad4c9c59fa89f34627b804a49f166afe81a36ad7fd166eb16ea1d14",
     "Verity.Recursive.SampledCase": "be8a734bbefa7331838f683f7847bc4bbb5ab96c1467840d4d904a8c5eb29110",
-    "Verity.Recursive.SessionIn": "9ab2cbe5a2241d5b58714b744086671984493c59172cfbe02238919ff919e899",
+    "Verity.Recursive.SessionIn": "e77b92cc8738a491964519945f027347d0dd9eabfdaeba209701235ea65c5365",
     "Verity.Recursive.SessionIn.P": "bd4d69b187f16101b90514103bba9d288a434536c1d9dbb34eee00b230fecebf",
     "Verity.Recursive.SessionIn.drawOf": "48ca66557f615b3dad1b253c6eaed98ded4b002e37cb4b803191a2fcbc4567ec",
     "Verity.Recursive.SessionIn.finΞ": "38bfc7d2ea0d2a0148ecd2ed5d2bd097b99094abda783b804385767502c01611",
@@ -55197,7 +55378,7 @@
    }
   },
   "Proofs.Properties.Verity.Sampled": {
-   "digest": "dfee81425b3f0d4cfd965de5ffa2b1cbc46175c61ff0d844dde1b2fd2f31d744",
+   "digest": "3e1a8ec5958afd0a4c25fb217c1e7e460d7a283e751ee5a401490e3c42dff37e",
    "definitions": {
     "Verity.Sampled.Constructions": "d1bbd64855b67120a83eb6dff4900611aeea23ccb00bfaeef13ed81dc3f82a57",
     "Verity.Sampled.Constructions.bindFinder": "5f02ee17bd838b7f3a9a99f0f0518f27e861a583f22124b01e2abe28f8e8a45f",
@@ -55269,7 +55450,7 @@
     "Verity.Sampled.Live.ε": "da99251ec3e67c3dae90e0f6ce43b1e8c5abe8608ffe0d092bd21560ffc801b5",
     "Verity.Sampled.Live.κ": "9c4aaa0b6d7ec4184a5b15ef5180c4b041d5228c82b9512c25ecb2a283dfd0a7",
     "Verity.Sampled.Live.ρ": "cf759c3c20f44d0c10ac8d822be6f043985011e0773c93164234f4e34b7d5af8",
-    "Verity.Sampled.ParamsAt": "67dfd503b40caeb0bda812e3cb32e6a10cb0d6986b8db44240d794e44f268654",
+    "Verity.Sampled.ParamsAt": "3155319d347b4171f4bab04c2778f109d5a15b7b4b56ac1d541ca0704b8d7c03",
     "Verity.Sampled.PinnedTables": "5f0b24486b093bc65a15840a9b66147b1029b3fb42546a509e5587675448b457",
     "Verity.Sampled.PinnedTables.empty": "19eff6245ed526ba6ac9da86b40c184d71fd589cf5f8eeeabc5756e8cb80fc80",
     "Verity.Sampled.PinnedTables.file": "8e00bf4355f5dcc15360d81143ce89599c8c1a9c9055aca6864ed9497b309a80",
@@ -55277,13 +55458,13 @@
     "Verity.Sampled.Widening": "d4dfd7d3e7b1abaf33c4a16b43b25f4f9054ddf757d2f7548abf3c20b63e8f6f",
     "Verity.Sampled.Widening.T": "fe0c36c68750a8fd95725290d10ca814f9445adf5d748fd43fd1d298de5b846a",
     "Verity.Sampled.Widening.fT": "3ab7b47812da06a61b9b58218e29695f2b029c84e8a55abe2a1d1963158fec72",
-    "Verity.Sampled.caseOf": "386f96e93ca871e0879f20cebdc1f83f6ba572debc848042eebcb8cee19194bd",
+    "Verity.Sampled.caseOf": "f2d74d80ac3bb44cd372cf4653354ea63953ddef1b0cfe39d4381c1adb27cd59",
     "Verity.Sampled.coinsRead": "22f3427af70c6cb417c8328e500e5225d557c59e41f1b6d4ae2f9d77ebe1e857",
     "Verity.Sampled.digestOf": "7b30a8144f0c075aeec10461ae3a0caee3c1ae29a90bbc27b058c4df214d4f10",
     "Verity.Sampled.helloSpecs": "29a3104ac53a05db4a066cc77c1a75449756386e56b813ae45b7e613600978ef",
     "Verity.Sampled.lawAt": "3d59f741a5c7e3e10931da879ed5b17622fa8c135b77642dc94792308090d00f",
     "Verity.Sampled.linesOf": "b4a77f33d16794505cb5ec6a472883aa9288df39755450494e6953d5fac026c8",
-    "Verity.Sampled.paramsOf": "488193856d3db4042404d2715dbf25541b0329c62c2df2edae09a0427bb525a4",
+    "Verity.Sampled.paramsOf": "804815e5bb9fa959d4c97153f73568f1c6da6db5c7ac99da320a527ce52dc933",
     "Verity.Sampled.pinnedTables": "f50f6db5b6033a62f53c66c0f9e9e9727f0b5bef13ba6172b029f5c30a477c84",
     "Verity.Sampled.programDigestOf": "c454d43559bbd853b6f3063ad49c87647d85db5b51d75515770a457a957a2507",
     "Verity.Sampled.publicDigestOf": "375e2ff44c72130dbec2e08502ca46f092982ae9f1e6cbf4401340836b2c3b6b",
@@ -55310,17 +55491,17 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.Binding": {
-   "digest": "048cdb910720b59d55c86693bd72c3bbf8702d273bd827f40919d03d64cf7365",
+   "digest": "7fb8cdefdde5eede771446646ddbc7d14f025178d3f194c137eee6d3fa43f183",
    "definitions": {
     "Verity.Sampled.Binding.breakCalls": "345a427d451de9b45b3642975af7829183db853530b53b57533c5130bd5ddd8a",
     "Verity.Sampled.Binding.collisionOf": "9df51d3a808e530b6f05b12ff91df0825db24d8a7207a79c0b7a8cd3b93fe030",
     "Verity.Sampled.Binding.forger": "5fda73fad4064fdff8f4f8fded1331381e9f5fbf760cc30a2490de99c2a3aff7",
     "Verity.Sampled.Binding.forgeryOf": "62ba90f1a1f4496f32a1c89791b0457122789045e40a8d2b32f20eaaa26c1847",
-    "Verity.Sampled.Binding.keyAt": "69d21b3b074107484c903025489788339978f6ce562cbca9f3db35835dd40e4f",
+    "Verity.Sampled.Binding.keyAt": "8a064e2af3a9f16bac279f056cf577fa13d1a5eee97929b03bb830ac0ca29fe3",
     "Verity.Sampled.Binding.keyOf": "23ebc9f452c1966eda0c77b06e7f05dc15ef9441c8eb8830d4e0cb4debd3b830",
     "Verity.Sampled.Binding.lmsCalls": "622452849f545e521d7e5b99eb5a0d5c43cb82f3a44a845c6d108bf00237856a",
     "Verity.Sampled.Binding.readFinder": "859c7bf54b604c9f3596c5dec561e372810940737fc8102266e2c372f2e8b1ee",
-    "Verity.Sampled.Binding.record?": "8affed265a8072892dd0a594066ddaa45848dea18b4fd0b6f2613f171d1fe49d",
+    "Verity.Sampled.Binding.record?": "315e61eb9944669732a2cbdbdfa81bdca0929afad2a591576bfc3f2cfd853b35",
     "Verity.Sampled.Binding.records": "88436655dcf0c8d3fd0414721f90238431691545c2034a711d92d76e62e1f20f",
     "Verity.Sampled.Binding.tableCollision": "ed6734b0296caf7cfddd57cfbf647685d3e7db60d23646a406d496ae2f46e2b2",
     "Verity.Sampled.Binding.withBinding": "24118818b2d410acd3cd2eb2087b6cf40e9ff53d542865725272b37510b33719"
@@ -56890,8 +57071,9 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "0e322b9b7c5b799cd81c5b58adc652ffa71bfe9413429c42ba4c366668842a68",
+   "digest": "7b32fd3042ad6c0848275fd4c10145b5bd4d1287cc97956cfd930ff65203c3f5",
    "definitions": {
+    "Spot.Challenger.COINS_FORM": "c6d23cf67ed8d57dcc00af1d55acbd3c11f32053ca2e574aa8dd4c2567c17d81",
     "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
     "Spot.Challenger.Limits": "a0216a077b6946bf95377c777c0353192d673edebe19b2d0854123fcfef6433e",
@@ -56910,6 +57092,8 @@
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
     "Spot.Challenger.challengerStream": "f233f44a6e4dafa1bcb451af24510fc1e4973bb8e6b47c54f45e55e9ce02abe3",
+    "Spot.Challenger.coinsReason": "4736813a83e17d1f1a1f8bda227768061ce2449f0acb510edba875cc93623b6a",
+    "Spot.Challenger.readReason": "d4e026a5d6c88c8d1ace2a2cdd5917a2cc5db1037c4079110961ee8987950db5",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
    }
@@ -57279,12 +57463,13 @@
    }
   },
   "Spot.Json": {
-   "digest": "50cd8453e0d39173371ed779315f4f419623f7425590ff9dd31591fc33bf7d3b",
+   "digest": "1a0b9c758b2688eb512e076b6341e9f83f2758a1fb14d5a2dfefc0ce1e414a26",
    "definitions": {
     "Spot.Check": "7dfc036c0ba1e812942dcd7f6defc02cfba46485806ba0ffebbabd4c7c9260c1",
     "Spot.Check.codes": "2023c19204f36cb7b59a06c9f2226c76b613dcf8638fe1e5bacd4aad0829fc9e",
     "Spot.Check.detail": "d2d6003eab4ecd43b13cf495bc8ffd0c45b42573a91c98d11949fdd838ee8d0d",
     "Spot.Check.fail": "0b737e0ce4884593cbdbdb850d9c5302da0da1c9d8abf249b0a55c3ca7c5bd3f",
+    "Spot.Check.toJson": "5243cc18c97452c616459988279605596a6230b404edee2fa4d1ec3d0cb4cdc3",
     "Spot.addCode": "10b5cf5c77b37c321e0a4f1f1410742eea7fbf85c3be5506f236b415e22e11d2",
     "Spot.canonSha512": "59d330455382e09a531d56e82c399a854fc5176b0c45e52d7bff4b041843d8ac",
     "Spot.entries": "683f64d4009f36a8c4abe3344db7c00e158b9b8d810e7a269e8ba5289eb9cfbf",
@@ -57383,7 +57568,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "a08e0a86a6bf4ea65297635e17bd35117f1dcde29aff37bb8eb4e0c63e58e95e",
+   "digest": "53532b6c8c62af3ac413ea1389690881f098f64dcf4255489da2b0f6fb84280c",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -57465,6 +57650,7 @@
     "Spot.OneStageZk.UNIT_CLASS_MAX": "1345024fbc1dea4ef4be9355f1918bdab55eb41b4c3e576b214cc6736153418a",
     "Spot.OneStageZk.WIDE_WHY": "5951e578debd06c9e03a575a0d4365d95f6dcac3a93212669f566395413af179",
     "Spot.OneStageZk.WORD": "42fd0e4755e72cb224a859d7c5d730f9723f654a5cf326ddef796cb95af5d8c6",
+    "Spot.OneStageZk.ascending": "097b55ef256b5eeeb8659ca9c562d046a2bbfac5a76dceb28ec11fb61a6eaa83",
     "Spot.OneStageZk.buildSessionOf": "364744488c948368efe8e4fe613d2165b177ca4fc89cd687cd8f25966b34b8f6",
     "Spot.OneStageZk.checkBlobs": "ff544fbc735b16c2b1c1045c9d788bba61521521ba21d54995e6537e40588e90",
     "Spot.OneStageZk.checkBlobsAt": "0580739ebc357459d8da351ee6a63099cd8ed19aa8959ae777d81e8e13843850",
@@ -57493,8 +57679,11 @@
     "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
     "Spot.OneStageZk.linesOf": "ea58ef2214221f1a7075a8c0461ce4a6a8eb9a06da64fcf96eb7b0bc64f6a5c0",
     "Spot.OneStageZk.lookupsOf": "c6c15967aa40752c7b9f4adc4608e3732149b0d018a70ca9f1bb497ef44e1793",
+    "Spot.OneStageZk.membersEvidenceOf": "8e854d36ef8d8bfb2a4682dc8cac29ca98276391260014c9c59adc3dcda3f6c4",
     "Spot.OneStageZk.membersFiles": "3c468c5dc9c33037f745196ad47b9d1e38469b9a9062c3d5205fcb66080b9dfe",
     "Spot.OneStageZk.membersHeld": "e1935c3cf06b4978654a7630080695cbf6e68f7d3384158ec88fe98a4fcaf628",
+    "Spot.OneStageZk.membersOf": "3d76954bb99bced3794bd6cbf65a3e7e1e56f73758c21a7ccbf7b4902784324c",
+    "Spot.OneStageZk.membersParamsOfJson": "169139a0cd5a442a91ca018add3e98f442fae4e55d5b56db4172cf0296ce31bc",
     "Spot.OneStageZk.membersRun": "11970b1124378a8e9310ff14a664652cc30af648c0bc30d8385ec5d1880f6d32",
     "Spot.OneStageZk.membersStructure": "3b7b22a494729000cc32e110e06859a9217db437d951327a45d13409c4d7f98c",
     "Spot.OneStageZk.membersTreesHeld": "f8ffb341a371bb5b09919370591016bca648e677ea8042e54cc2d22a8b61b72f",
@@ -57536,6 +57725,7 @@
     "Spot.OneStageZk.splitsOf": "d18169c4bc3a4ed7a2bbcd18fe4ad3536f51583a85d0683fa7b3c78447fa7255",
     "Spot.OneStageZk.statementAt": "e569643c828f2a85cabb02918dfbc3c2cac9f1dd861f7872a40db6a2a20f6a45",
     "Spot.OneStageZk.statementOf": "73071f2600e90690cc6a9c4351e38c6888054efb72440cfbb6e8665a317d61f8",
+    "Spot.OneStageZk.statementsOf": "becd9ef67e84c85260916d3d6d017dca3b1f83f380c7b28f5d698b23153e6c0f",
     "Spot.OneStageZk.step": "3b03721d6ced6798eddc70854cb60612be4c38b1ec6167f44f123f4f83aa40d3",
     "Spot.OneStageZk.stepMember": "608e8bfd59a145d82a09efdf39d95d03dc071160e50ca520bbb0721df6e0a32a",
     "Spot.OneStageZk.tablesAmong": "f8245c860a29504cee2b5f7ef295a4aba575f5a4a4fc64d37aaed895db5a9ee2",
@@ -57549,6 +57739,7 @@
     "Spot.OneStageZk.unitsIn": "c4a41c6d72d23525d0ec12687cac976b22fe1c1cf24b6fe5390118efef6c83bd",
     "Spot.OneStageZk.verdictJson": "a71159b5c6cbb7e122d1b7c40a6e3958e5f6f5fc6e481883e507a2f5094030c6",
     "Spot.OneStageZk.verdictOf": "1b4c8865d510ba5ba4827e8c25734e6fad4eac4dbfb4c81ce4e8f9126742c082",
+    "_private.Spot.OneStageZk.0.Spot.OneStageZk.NO_FILE": "bdee2326225d29c2c26c323c69691f7cafa649878a5e23d0e54d888ae88cc85f",
     "_private.Spot.OneStageZk.0.Spot.OneStageZk.committedOf": "2cab8298aad1ea6696f0a352347be769387fe3b887fa30494a7a301121039e2c",
     "_private.Spot.OneStageZk.0.Spot.OneStageZk.digest?": "cb3ec7ccb94ba07d62804b5d5f7f43cc9252ca05a84ea9775a66dbb5c7bb2aba",
     "_private.Spot.OneStageZk.0.Spot.OneStageZk.digestOf": "2364fd0bbc8421bf98648552340f3891a3550880b7696e38641ada3ecb593900",
@@ -57631,25 +57822,51 @@
    }
   },
   "Spot.Record": {
-   "digest": "7f80d5bf56c2cd48a0d64c39e5dd644e2c841c99dab2355c63744fca63aba291",
+   "digest": "d5cba2729c6ccecb10625c28b7701e014469188d365029b21a182d553a446712",
    "definitions": {
+    "Spot.Record.FORMAT": "3d1aea715af633eca60772acd82d62096fa770ea336b5873506fc8f536be35ce",
+    "Spot.Record.Input": "4e3a3905d21612c1cd6f9459fb9085f772a2a16e838a5a3c243efe4df46dd5b6",
+    "Spot.Record.Input.delta": "d42e04ab2fe862e7f4962d2a7817802ede9fc77c996eda23901bbb93b91b58e4",
+    "Spot.Record.Input.draw": "fa78834b87c3c1f16a2493e8495f39ad935c0490f608230fd3ad567096657c76",
+    "Spot.Record.Input.instances": "d11aa7229cb2e3a73b142f75b33560df48140709452f6758a44e1795c49d0c31",
+    "Spot.Record.Input.law": "1b8df35dbe77ea37ddbc521c5ba34798eec8b905f15b754212b58a287e2f4792",
+    "Spot.Record.Input.ownReads": "35606947a15babcab9a657bb150a3ad45c1102c24dfc68211d4cf666821b74c3",
+    "Spot.Record.Input.provedUnits": "e92bef6a5fe5dffaf405ea465fa8fad454b80d337051528e59c1a18442d2348d",
+    "Spot.Record.Input.receipt": "b4f5a59d31eb42f29b5679ff2c4ba22b164360df4bc027ca549d7859d0cd787e",
+    "Spot.Record.Input.registration": "6d0f30c25196097f3463629369026875a3dea4ca3c7da0675ecfb89b11624fa2",
+    "Spot.Record.Input.served": "85f626985cce300fae6c3530b47946e945bf3f08d9b075528237ff4c189bbebf",
+    "Spot.Record.Input.sessionRoots": "f428082da728ac4f905f9dbb5c7324c7544cca4efbb4186088467e9e28b16bd4",
+    "Spot.Record.Input.sessions": "138ea98779741f4a00d871b61c6321c3c2eda71560d976edc213e434b468dc43",
+    "Spot.Record.Input.statement": "9e56ccece3f4fe45ca933ca5c47ecc72946f037950e549c654da8bb1fe9807d9",
+    "Spot.Record.Input.units": "4f00a7bb1256a2c169b6f5ac5c866fc75ee38200d1b7a3f3c8f612ff56274409",
+    "Spot.Record.Input.verdicts": "d1b2623d59e4603b5d9771a6ceaa05a7969b0baf404ab56e8fe2eca191895682",
     "Spot.Record.LEVEL": "543751b14b271912e0fe9a6f2605542d4a14d342e5c2194177433aed58d48227",
+    "Spot.Record.PROFILE": "ca3ca3188d9dff45045111431eec4b2e03fe6488bb82d2510159ca01f2e6c2b7",
     "Spot.Record.allRan": "0bf32581414fd8f94a209b656c4c2c35fd2208a80af73d07a40b44b8d24b8d10",
     "Spot.Record.byPort": "ae4fc391218602d26959d85b062979a9d7cfe9a586a0faa77704e796ab5427dd",
     "Spot.Record.certifiedCheck": "a115ebd7643f1f3f4542a998d247f5d5995cf9a55211b52859260464ba2ad301",
     "Spot.Record.checks": "b42822058c307232f68e6a3813318013a1b12903ff6d670d422b0d90014c0282",
+    "Spot.Record.floatJson": "0869005f6b83423cc28d2a477906980e59a0a05681fb562b837e8bb1e4332606",
+    "Spot.Record.inputOf": "4444e7d3ccca25917a5c529665873772f1a12d71af39bb5289b05c8922d37381",
     "Spot.Record.lessOwnReads": "ea085bdf365ba55b29e27544378953f1fda747915dbcfb96e2ab00659935cd51",
     "Spot.Record.matchesPublic": "1643e079f9ea7c3fd55f2c247b0cb138b0c8f7594e0888b87781c29728a67b30",
     "Spot.Record.matchesPublicBy": "3aca7a4ccaa709691501538f4a95e94deaf29c0e89705ac737115ab0bd5a23e5",
     "Spot.Record.ownRegistered": "c03c7e82007dc6ab74231e65106159ac61cb6b9298b162f53c8660713912aade",
     "Spot.Record.profileDraw": "f7a6fc1ab1e8055e2a1e933f3d5c50187688bda0439a73c28b0ba75412dcdf22",
+    "Spot.Record.pyCanonical": "69df8c3ca149dd7d7d4808fe8fdc7f6a880e16a57f08c869042c3dc09f878e1b",
+    "Spot.Record.pySha512": "811351ade6331f2639e61eaf566698eb0fb80ac8c3b1d31acb1e6627b40fee9d",
+    "Spot.Record.record": "781a09db86b04e0137d619e6811f801e62656f5b5beafd07a436047a9ece93d8",
     "Spot.Record.registeredRoots": "ca7ef2ef9ae75a22514ae05bdde77d50484dd042185e0ed93cbca6a993002e3e",
     "Spot.Record.sameDict": "dc8951f114bf6c71379d648bbe69a35f07777dadb14417b9bd43671019cb3519",
     "Spot.Record.sessionRegistered": "2e5a86a59035f84280bb1b7adc72eeecf6b58d56a9f7d748f3c6345e8526e5f0",
     "Spot.Record.subDict": "72f1a3b91c7e09b5a45f3490a5a993825a60120294a8ec45046e99d16efea8c8",
+    "_private.Spot.Record.0.Spot.Record.INPUT_KEYS": "495331f928764c3e0e1eb0a851d9cc3a226dcc98305aa01747ee275dc3fb26be",
     "_private.Spot.Record.0.Spot.Record.failed": "d55fc8844ca5c91c47f11e28b86a3941419893c4f633709f8ba627b826c577a9",
+    "_private.Spot.Record.0.Spot.Record.ints?": "464d0f0ff7646fed5e5f6e81e4738d2c91c638b39a8fc9e3e0006400c19d030b",
+    "_private.Spot.Record.0.Spot.Record.need": "cfe1af0f27677e186d7f8def6796b795fb0924a4a817f0c4592272a9580a24d1",
     "_private.Spot.Record.0.Spot.Record.obj": "2e5e71022a7378856e0d9e8e3328bf61403799cf34a93d813f4814d0cabc9eaf",
-    "_private.Spot.Record.0.Spot.Record.sortedInts": "6665aeaa977690a9d60d1a35ee09ffac6dbc4ab9362b8f54110f36bdecda3fb5"
+    "_private.Spot.Record.0.Spot.Record.sortedInts": "6665aeaa977690a9d60d1a35ee09ffac6dbc4ab9362b8f54110f36bdecda3fb5",
+    "_private.Spot.Record.0.Spot.Record.strataDrawn": "ec518a4ea043026ae099d892849ddb80aeb5929169583e826f069f418fa0530a"
    }
   },
   "Spot.Registered": {
@@ -57782,19 +57999,104 @@
     "_private.Spot.Registration.0.Spot.Registration.optWeek": "11c26997de2e58791eb01ce290e327ada6d6a1ce980c0a4dbda36ab9feb4d77a"
    }
   },
-  "Spot.SecondStage": {
-   "digest": "5166b9bed9f6778be0e816426e45a38b302430fcf2c394d2d5301bcb9f31bd69",
+  "Spot.Run": {
+   "digest": "dd65aa1c5a678a4e70ad51efbf89f927c3bb8d3be97b9ab3a2137bdd0685436e",
    "definitions": {
+    "Spot.Run.Input": "682f1c993676b14737d3c413701564d95999fa0baff9e4c043c01e9ad48f447d",
+    "Spot.Run.Input.challenger": "d264406f6280f6c3d0c31fc3d1cb5c9cd461fe2293eff0b3d1eaeffd04289015",
+    "Spot.Run.Input.closure": "0cafc0608f509e8e5f0c717690520d0e4913b0b11a256731f3c8a9d688872b00",
+    "Spot.Run.Input.coins": "29ca4a377ae86465902068954c615bd15a4d3ac936cad74ee3946e0b4f4c708a",
+    "Spot.Run.Input.declared": "7e6e25ef1b1f8b761556f21ceac913b967d15364458f0fcf2e6a7d7bc6bb0306",
+    "Spot.Run.Input.delta": "de4a6d558f02a6761a93786175d242a1bf40c706268ef334e312152a4a384ceb",
+    "Spot.Run.Input.instances": "abf2e0833ec33ae3cc534ac21a2c2144b307ae46c588f1cf446f705a1ac39f61",
+    "Spot.Run.Input.interior": "ce77ee98f0dd236dc2b7eac710813e20d404efda60335f11264c213e96a559dc",
+    "Spot.Run.Input.outputs": "a804d4fbe4bbf1e496979ee3d63ce1dc9b8b8f82251b75823c8b19a6452ac1f0",
+    "Spot.Run.Input.params": "2f21f9f0d2f3a01db6309e22b997c3f448491c104c4e2640a59ec983f8cd91e5",
+    "Spot.Run.Input.provedUnits": "8522b9a0133627b5f468893d35520a201bacf8bc650e7bc4a4cd7d2085ff50a9",
+    "Spot.Run.Input.received": "3f58abf1944964fe6d7cdd09bb44e346f429791430ad5885b3b4f85b88cb59d2",
+    "Spot.Run.Input.record": "2391f9fb51a1289ad976c4754db09b3e5d522779282af6cac38f66827ae6e5ca",
+    "Spot.Run.Input.rule": "7442475e32d395a4e31c23574ad67c771e05fa407a5def11d7a6e87a525716ac",
+    "Spot.Run.Input.served": "5fb664eb6e98dad6811ee757bb302f6d68388e1cd3fef4397a7fb10784f2115e",
+    "Spot.Run.Input.sessionRoots": "04e122d26eb6da8a1f4dd6600b73d873e04ceb29479b0149ecf8f4cf68f12b5f",
+    "Spot.Run.Input.sessions": "1ea11bd8a51d5ab1b3ed9a8a99032a75cb2ddfe09d0527cbda3956095cbea3c3",
+    "Spot.Run.Input.source": "eab696ca16070b7d23a58f9f58f9dca6b605ea325595be0317deebcf3ee63581",
+    "Spot.Run.Input.statement": "176a5ea0f5843550d881ed1a7a662e38cbe3ef2cab5690155c34206719407f0e",
+    "Spot.Run.Input.values": "3ef2ecbea166a0e296563e18b87c1547413c29548299c7a3e8ad9e3611418d6a",
+    "Spot.Run.Input.verdicts": "5bce4a09c2577722588ef515bc2bac08241334861be2f6f7ccec86b53bde9efb",
+    "Spot.Run.Interior": "a34f515c9c9e9d951138efdf63c7d81fe0ab3baad128fb4e6017f7cac2d238f0",
+    "Spot.Run.Interior.circuits": "a9826ddd291f0d522e4442bb5f917a260966fcdc076519b22364c8d47933579f",
+    "Spot.Run.Interior.coins": "b257496434d25ddeb6830cc4cda8d0803bf4ba6fc1ebb3d89820602f8e1d4f3b",
+    "Spot.Run.Interior.instances": "e42e5f6f300d119cbc18afa9a29e4b9dee81c00926d8e56e061275c3d599f458",
+    "Spot.Run.Interior.params": "172f406f2cca709779ab41c57b7f3b00ee220e368ac2d560637292c547dc7316",
+    "Spot.Run.Interior.provedUnits": "9f9e81213c4740818951964fce89adbc9ebf99f4ef374afc5f740b611c1d8b2b",
+    "Spot.Run.Interior.received": "86212f6b33befa81607f95842d7d76638d9583da63b868382186290283227916",
+    "Spot.Run.Interior.record": "782c579975b6ccc0d86c2a4d6215f449ac883f7fbdf656b28200bbf73b32303d",
+    "Spot.Run.Interior.replay": "0c380c56703e970d50ec4f5160c2b33597d4ef832b344977bc0140401d775628",
+    "Spot.Run.Interior.served": "fbe9cb8d8b9c0d69002688826fa10402f6995b5b2a919fa85b487c2d54e774d5",
+    "Spot.Run.Interior.sessionRoots": "1c0aee3ccc874edb1af147d1aec90b93d64f2cee6e0045ca7e2dc9217165863e",
+    "Spot.Run.Interior.source": "cb59561d7c759a5aac04dc65e6225ea5ace0f0b227d5ac44660827da9f857951",
+    "Spot.Run.Interior.statements": "6bc2a51ed12c6dfbaca13ffef1e18ce400f6d573e8417c08f1c93402d5d1bd31",
+    "Spot.Run.Interior.values": "7a413e6d17d9999d2724d9221558db999d38e4937c7e0f6ed664c5f713432aa3",
+    "Spot.Run.RECEIPT": "e05a54e8e5609482a8e1c99062199007b2ded27c1dad63dc20b69038809356bd",
+    "Spot.Run.coinsHold": "63cd206a72ed896fd23ad18fa0a1af9e7f79fe9f5d6849fa849df582a4af8208",
+    "Spot.Run.digest?": "157a6ddffadd82452732d2979cb9d5522a68e31e3fa7f7fe3441b63531b1ec3a",
+    "Spot.Run.interiorWindowOk": "a5a14fcbe2b7261aa151333309d5234be85ab11a065d833b5d5dbe79b82dc570",
+    "Spot.Run.receipt": "5c2b2f50483c5a64c395685b0710da30383b5644afe46cf77788593f306b4199",
+    "Spot.Run.run": "e93b6efc370b078aa172a7cdfebb572c881f3a1a43f07fb0fbb3cbe061c0e352",
+    "Spot.Run.templateCircuits": "bd129c5ef0dc0463084239465b783f20eaa5ba085eae22878d9b37b4644c6aab",
+    "_private.Spot.Run.0.Spot.Run.audit": "0a768f5dbc773a572a7bf0518faa92ed4cd670120ce3d2123fd0f5cf8a8dafd7",
+    "_private.Spot.Run.0.Spot.Run.grainHolds": "04be4a2c59bdb003584114ec1eda21f42075abe09d2fb5d941d4e904831f9120",
+    "_private.Spot.Run.0.Spot.Run.hexDigit": "1ec677032a444d849b4779159be25540a55afa79e0f1303cdc72abb13e83c695",
+    "_private.Spot.Run.0.Spot.Run.interiorAudit": "45b4091a532cb4f1eb962c6dec4cc2c9ee1375c389f741c755c77a0f8b9a5277",
+    "_private.Spot.Run.0.Spot.Run.interiorSteps": "6e658ecd0bd5f81c16bfe2647b669427373ad079a70c57bf815635e395e79f9d",
+    "_private.Spot.Run.0.Spot.Run.refused": "a9bdba4217d214e4510d6750550acb07bd43006e80a95518fd3c42cc769b4b26",
+    "_private.Spot.Run.0.Spot.Run.secondStage": "576d5e3758f1c2f8e6ac8d62614c5ca3ab5ed4adcfe42f192f48b833175aa9ec"
+   }
+  },
+  "Spot.Schedule": {
+   "digest": "26f6049c3d588bb7467de1073a1770b764e3d2d08c0d7dbf86916ba4f745feca",
+   "definitions": {
+    "Spot.Schedule.KEYS": "4debc4609e39eea10c6a5c18d43564ad24e41b5fcbc7bffb23c685f59e23f328",
+    "Spot.Schedule.Run": "5f17e80fd24c0e96b2f38f87d7bc842394f5148609398a63e3d4a53b61507481",
+    "Spot.Schedule.Run.firstPosition": "8504a1b9b0ea5e91b20d6caf38555b720695b8ddf8cb9f3afd0cbba64f7b3d38",
+    "Spot.Schedule.Run.firstSpan": "057321221aeefb818668dfcf2c5f0deeb9ff42a2e0aec1951c5d7d817daa07a0",
+    "Spot.Schedule.Run.length": "e4c12740ddb679afebf96b3a6815876e16827719b9c2ed8184a6f227f0aeba4c",
+    "Spot.Schedule.Run.ofJson?": "9f13e59d6dd6be8ddc335587ebc3505096b61390beaeec848d5a39d8d732b4b7",
+    "Spot.Schedule.Run.request": "1ef2c20c910a54aab0a8edc2817d255ae3dc2d6a1642a87417217741c3f93c37",
+    "Spot.Schedule.Run.spans": "25395dc772cad6dcb52e29343d2948dc0fd2802a4a6ebefd6ddd21236f7890b7",
+    "Spot.Schedule.failure": "8294e8aabafe4496aa9d4f344f818dc9d6c775a6c4afe469ad8830359d808d82",
+    "Spot.Schedule.nextOf": "10d4aa7785c2b17116009ab9d548a0ef070938b06adf4d8ab9bdab01a8fdedad",
+    "Spot.Schedule.ofJson?": "7897941700991cc31620f7d3cbcad518a39e66a47f1acdfd646b08027551e5f5",
+    "Spot.Schedule.setNext": "9918e32712836b4a6452fab22131e6d133800b70026cca78c22c5efcbac25453",
+    "Spot.Schedule.step": "509a4a2f7cbc2c5ee7ddc1d261abf120d6727ad3059e7aef06ee38ce9d9a4ce1",
+    "Spot.Schedule.why": "2f4e2cc62dd42bcdc3d8e9d0d31fff3687b58573b29593bf5011c475dba65d82"
+   }
+  },
+  "Spot.SecondStage": {
+   "digest": "1aca2327a4f4859e52f5fcc9edaec6b1e22596a86fe8acb57ce6464beaa40080",
+   "definitions": {
+    "Spot.SecondStage.CELLS_WHY": "b560d386dc6373599522f33601aa3e5ca5c71157e173ffd53144f3ac33bd456d",
+    "Spot.SecondStage.Callers": "c314c79167654bbed5489d603de1af59caa3cc1987868ef118c0831bcf0b9be9",
+    "Spot.SecondStage.Callers.first": "b17f5f6c840215fd66edd1769df75783e083673ecd96938b511fbaf36b9d1136",
+    "Spot.SecondStage.Callers.of": "77dd3fa212d6346cae4de740d6b6beb867092ce8bbb2665dbc5c92db248a9f57",
+    "Spot.SecondStage.Callers.template": "514d27ac49711b040f7aa9c2d111604a159425e7e67a5043b80075cc4fa9f6aa",
+    "Spot.SecondStage.Callers.units": "ed07610d6c8e72521c7e6817dfe84348c669b277c7861999636bf0248fdb7f78",
     "Spot.SecondStage.Checked": "52526db3f80591213b39931dabf9b672031fd8cc237edb85b12d063b24b0b158",
     "Spot.SecondStage.Checked.draw": "b3d2c49ff050a3b47ddab2d926e49b54f309985a6de1dff50317aa835fe9e9a0",
     "Spot.SecondStage.Checked.header": "e81581712288efb1d9afba775c6ead3a001ab68ea3af3524d3f98c26bafa6ac7",
     "Spot.SecondStage.Checked.registered": "ea314c4714b7db63cace4ae0c881861d6f8334767dd853a4fc28abff2a091524",
     "Spot.SecondStage.Checked.tables": "7592dec6bf6be62c5aab30cf619490d5c3c217462be104e9667be0d051b31ba5",
+    "Spot.SecondStage.FORM": "8d3ba2829c01716b6571fb454cf71f1ba9101a4a916326c7538d519f5200874a",
+    "Spot.SecondStage.FORM_WHY": "d87122c2271a1ac8650b81c4794bd59ed8e9d0375c7c20e772cac5524056a59a",
+    "Spot.SecondStage.INTERIOR_ORDER_WHY": "ccd80235d8cb3f9e53bea57e501c5c43434b422c9b9588f6b4317aa9eb13a6d7",
+    "Spot.SecondStage.INTERIOR_ROOT": "ca814c8a80869e12c9d16827867eab0afada940d431955902507c3921a8fe719",
+    "Spot.SecondStage.LINKS_WHY": "ca39a9bf399461acd8d745ced1b10792b6e760a1fbca0a910cd38dcff2377bbe",
     "Spot.SecondStage.Link": "41796131c11bd651ae3f65307f5608fc0e9451ba4ecf978a29c3e275c7a3351c",
     "Spot.SecondStage.Link.port": "dd13faa2adbac55e48cd40acae1263e0bd4f74735abe51d2b617b6403c0e8960",
     "Spot.SecondStage.Link.template": "08e7ca514fe226f8c12a29b996ded2b4f9222eb36395ffead7f746cddc45acff",
     "Spot.SecondStage.Link.value": "05b49e9b82be48ac872dec9ca7a938847733bc31c915264f79698966c7160188",
     "Spot.SecondStage.MAX_LEAVES": "9c2dead127137f4fd0e1bf06cf8b63d54d275bfb0d53877f441552c7d844e962",
+    "Spot.SecondStage.NAMES_WHY": "c71ff9ef64707c126741b32836cf1eded1cddb993e58f71c54072c9b954b5d16",
     "Spot.SecondStage.ONE_TABLE": "2bd5a5b24e1b6c25a374182809a79cb7c7d9a180764476309262e1763ee9afea",
     "Spot.SecondStage.OPENING_DOMAIN": "008f58732b68442c8d6cda970ffff4433c978cfa7957aa0f71519744cfe1d196",
     "Spot.SecondStage.OPENING_KEY": "4336c5e4a778fcd8749e5d94217fb4d40df3de443afc6636dba047970ec9b122",
@@ -57829,6 +58131,8 @@
     "Spot.SecondStage.Part.unit": "fbb3c18629bd4de22f8519094e8ce09eb3f14edb4a91c9d6b500e1f1ba719bfa",
     "Spot.SecondStage.READ_ROW_FIELDS": "15e27550c0135551d6591828ca33edcd11c6315f482f7c36111871ad4993be8e",
     "Spot.SecondStage.READ_RUN_FIELDS": "e105eb07133016846312d678a21929dd8e5113acb8d443ba7a45582c5c6020eb",
+    "Spot.SecondStage.REPORTED_WHY": "b548c62ac5d6067ba289809efb1d9c3a790b669cd9473e1e66e0da14663aa6da",
+    "Spot.SecondStage.RETURN_WHY": "00f9a14d21422dbd4f11651fb709eb4fe1bd0536c9c50da2d4689b7a6ab209d5",
     "Spot.SecondStage.RUN_FIELDS": "c63cedb1d1ed3945a30685d9417401f50a9fd945aad684d404f6dc07e99203a7",
     "Spot.SecondStage.Rows": "6b80002284b043b0e0ec5a13a32bfcb39abe71e244350115db7d7528f0ab4c9f",
     "Spot.SecondStage.Rows.per": "550e3df5171991a58386c8d995de7b0a0d00f359b4f6ee783142a0c1e2ef588f",
@@ -57842,7 +58146,13 @@
     "Spot.SecondStage.Run.row": "75beb95cf4da60cd23ef2f87f852dc613623857fa36c4fea36c0273e3920f48b",
     "Spot.SecondStage.Run.step": "770e7d8370ca651c7159c4989d027a67d3c334c8e742444095f8d250ff64b373",
     "Spot.SecondStage.Run.unit": "1c01ce768fc6939c953e4ad15d3ae89ae1e0b6dae7260b2e988532be8059f96a",
+    "Spot.SecondStage.STATEMENTS_WHY": "a433a9014206494e582e57394528691d509dc2fb4876355433600f4d9b17fc3d",
     "Spot.SecondStage.STMT_KEYS": "d28fbd77a842f77c9fcb851ce42b19d3a97a45a1f0a26892946d6d5099255c0d",
+    "Spot.SecondStage.Share": "4f20912aed2f6189e9d8e0c41898db2156976ea7e79caf29f798fb914d4f26a0",
+    "Spot.SecondStage.Share.edge": "57bd49d2b74f65a185bf101eeb7600dc7eb359490d5c96f34f7305be232911b4",
+    "Spot.SecondStage.Share.fn": "4fecf41a491d748c409ef0d1810040186e7370655493761917199d5fc0bc04c3",
+    "Spot.SecondStage.Share.per": "3f68ccfd11a4a75e82be8033313f35820167ca61a4eada5faf5fe6d1fd5ea730",
+    "Spot.SecondStage.Share.run": "42406ea34e8aaf06b20a3db4498312b49d65e0577f4a4d55952407c198ce6692",
     "Spot.SecondStage.Stmt": "987a1b4099f8bf7fb825582a41ac2b706e5bf881c99f56a0cce74ceb967dc55a",
     "Spot.SecondStage.Stmt.checked": "31ec11dce4a18fe2da53bae0e761dea4ffd8327832757e134c85271a45148144",
     "Spot.SecondStage.Stmt.draw": "d0f5a402026140f171fbdb0c6e74b678ba72248465c6ffc6d574b75c1eea438f",
@@ -57852,19 +58162,32 @@
     "Spot.SecondStage.Stmt.template": "efd6eb2936371b58a11c1f6490a221962aa6708a6a98b0ab91317069afda197c",
     "Spot.SecondStage.VERDICT_ONE": "00dac84167497d7ac0874cc64a0d2c21a011a95fab1d3050e59b2ff933d467eb",
     "Spot.SecondStage.WINDOW_DOMAIN": "0ff0c67d8b15094f2c83ae016064f6373b57b229c9d5f15d1323949ffddc4098",
+    "Spot.SecondStage.WIRES_WHY": "b74a384f13012bebdd3e6fa60ef502a6f1bda4dbff77f05e741271790f2af85a",
     "Spot.SecondStage.Wire": "0a40a24f351260d7b0752e4134d97cd768b83946970fcaaba46b76bc09e2df05",
     "Spot.SecondStage.Wire.port": "22b3b05f4787c5a9a28a43ea3909f38408462af824b522073d621ed0eee72c52",
     "Spot.SecondStage.Wire.template": "25670db439f18fd8080cf4216cc1238f4a3b9f3038a796982ff1f55501a58892",
     "Spot.SecondStage.Wire.wport": "6388e4984880cd9200791d1d90e657a2a5d1057c34999507a45dc59f3f9d7ca8",
     "Spot.SecondStage.Wire.writer": "ab7d54720c5499df1bbc797bf64ec51d105500e392c858cc913e13812b74b305",
     "Spot.SecondStage.atRun": "d071b56e70898587daba2d65fb7214c06088bd445396cc8f5d896367e85e59b1",
+    "Spot.SecondStage.attach": "8f28eaf2b88381942e166457a057dfdbc7e69d87bda8484f1a43d5c287467980",
     "Spot.SecondStage.blankAt": "4b6ceb271903dc0c5128ddc5e6fe21853becb995ef2678880dbe8bddb9eb81c8",
     "Spot.SecondStage.blankReads": "dedafa7763daa673c99de1d265c75d585bc5b0d6d1ea24bfe7a0b490badf2906",
     "Spot.SecondStage.blankRun": "e62c8216b1abb9110345010dd8a3ee142c408f49eefc632b6ae35ed5b2ea2a07",
     "Spot.SecondStage.byTemplate": "5295d41f7a8a2271cb87d3840072d7853dd3e2b0dad7792e922d9061540ec7ea",
     "Spot.SecondStage.bytesOf": "9ef3da7f3faa759cfd2c1de48102be502caca3ffce5878fe04a78f2aa28ca581",
+    "Spot.SecondStage.callCounts": "cafca68097bfd21efa09e0d9c204975b30024d3169089d9c68f9d6a511d1e12b",
+    "Spot.SecondStage.callersOf": "ae926856e7cdc459749274eaa562f46c9183c50bef9c0f4709e5e57a96380f4d",
+    "Spot.SecondStage.check": "d62b26b26011283d91bb38c84f4967f2926e030ee8b02d7ce530363aa57641e1",
+    "Spot.SecondStage.coverFailures": "8c4f7af1e7a16946b13ad3b7eee6bab9466ee4e627edd1b7242fc32190a5f66b",
+    "Spot.SecondStage.designFailures": "1b542a15a14fc4b84be089ea0b22c0b528ae469ef30141d04cdf2ce9a973c8d3",
     "Spot.SecondStage.designOk": "27ff86f875a272c42afa3ebfc0fc4475f0ecf64a13e77e89c041428371a0222c",
+    "Spot.SecondStage.detailOf": "a7639ac9c896453dfaf84b05aeb4403535f65cff93b18bd3a270055bb3f3dba1",
+    "Spot.SecondStage.failures": "dd3b334f6e5d92fd79f2033cc9ecdd2970176ec077919f6669e1abb3b26e8fe9",
+    "Spot.SecondStage.fieldAt": "d05d2f3634e485b5438c81793a86b2212329ce476e0aeee7c24e8d557ffded7c",
+    "Spot.SecondStage.fieldOf": "619c770fdf731635ac22c4bf87d1eaddf8df4a806db2e2210b5fd180e1c76139",
+    "Spot.SecondStage.fields": "5e7887c6eff3e0db2c623a525a3b98509e80185d097be5aadc93f7384457f675",
     "Spot.SecondStage.fits": "c2c455bda07806ad9a0af1a09ba6a1c21cf78fb421f564f48fa06c2c112aacc2",
+    "Spot.SecondStage.gather": "d36e0710df54d14907e3b07ebc1723657a37009428b144c868f0493541039fcb",
     "Spot.SecondStage.headerOk": "9fb3d5c76fce9a0a11ec8985755464efcd8f0d0c908920e45dbb1a5ea7446123",
     "Spot.SecondStage.heldPort": "f5edb533e3194481d3a3a56b28e365b556a001d45bf5c54c859300007adb6d84",
     "Spot.SecondStage.inputsFailure": "7eb1c113c6cdf9386c8bd25f69dd7a57d0ad25c34b2a4e2818763d14b80df370",
@@ -57872,24 +58195,37 @@
     "Spot.SecondStage.instDecidableEqRun.decEq": "43b54defcbdb73625df3d1debcfbe5364a3ddfedcde61f59f5047c80b2691a36",
     "Spot.SecondStage.instInhabitedRun": "b8916262cb5545ed953dc003bd43e9b75a4921af3855e5eec19cfac0d3906d70",
     "Spot.SecondStage.instInhabitedRun.default": "20c918f6e27230dc76667eabc4dbde35dbf6c7c4c30c3f4a56b9f14ac2e15ce1",
+    "Spot.SecondStage.interiorFailures": "34a755a0dc71a99df567d9b086b1f15ab1818a54d6d4f73c78efe135c6a77908",
     "Spot.SecondStage.interiorOrderOk": "48a11a759389ca763092fdd77644626800769e3d8aadeff0d292a8bb88832d9b",
+    "Spot.SecondStage.interiorReads": "5917566bc772422c1b8bf529770f1f7082ae522b7e6dfaf9b64985ff0779166c",
+    "Spot.SecondStage.interiorRoot": "da86a9af6d86c640ceb83f9431bf1815b6e7416394dd471abde6d99e5e1ad643",
     "Spot.SecondStage.leavesOk": "3ccced91f6c73a1510eacbea786a7945e2d138db00ead30b5e4929c9336b4b2a",
     "Spot.SecondStage.linkOf": "cf4e927a484861a5af19485d51622fc8eb79ae84677cdd17c848d7b426b36421",
+    "Spot.SecondStage.linkRuns": "4fdf2a41b09c74485ea645fb56d45246e827c40b8843c7aa03fe01af61d4ec39",
     "Spot.SecondStage.linkedRead": "dd53173112066294bd5c5c0dde2e8e002fef76d2ec4851106617ca709a803a8c",
     "Spot.SecondStage.linkedRow": "48c7152e99abc0afdb304742aa484b114ae7190608cf6569cd617b4674791627",
+    "Spot.SecondStage.linksOf": "70b6ef6b8675edf557139561a0c7d5f282aa6167b01fd7fd75bf16437fe1a093",
     "Spot.SecondStage.linksOk": "96c7ff2fd57b749902b6683f45999ba335318998fb4cc9521eb508a861ed9173",
     "Spot.SecondStage.namesOk": "bb9abddcc549344e5233e2e2ce22e716f1b4fa7cb3a55621d60cfcd76d8024cf",
+    "Spot.SecondStage.nodeLinks": "223520e00ad1def5634f03489593e3541a0e684a690986eee457c5db5ee3c34b",
+    "Spot.SecondStage.nodeWires": "b2506ab8ed59bd193cccf86226d37e90f944a300116070c16b122aea2d10ea69",
     "Spot.SecondStage.oneTable": "312d1c43e9089eccc21dcfcd153589dd86a05edbd69ad49f6d7c4ae581870616",
     "Spot.SecondStage.openedRow": "b829401124d8119d226c2b776929e80515b157ec980374498a2bf0001c109cd9",
+    "Spot.SecondStage.orderFailures": "9fbb12249d521df58a3c81f106ee67a7919ba80177a2714ea77881c3fb9be771",
+    "Spot.SecondStage.outputs": "df3b308919821fecda24dba3a03288826f324b63046c5357e4b826408169915d",
     "Spot.SecondStage.ownDraw": "984a1fc095e7d9a818cbad2928a5b49962bcd52f5467f70a4b2a8279c1c7c983",
     "Spot.SecondStage.ownRows": "efa230b319a6341c964fb57241e494fff03b7528537e236662c802741bce6f55",
     "Spot.SecondStage.ownValues": "177e69b784371d2a913d85b42eb81712658f5a053c94a1f9d9ed2de2ade7b156",
+    "Spot.SecondStage.partOf": "d81a527a656f3ffdcb85c6118b57d545f3b4abde0d00c9f6e21ecf939841bd8e",
+    "Spot.SecondStage.partSources": "4cea861e78f768a1bba2af764ef93613bddead566fbd5585a78bca1a2ef9f2f4",
+    "Spot.SecondStage.parts": "5e5158084cdd01bac92c92ebb258dda6916440a7124c27706725cf11f659083d",
     "Spot.SecondStage.placed": "e652c2c30a84e9336e26a0f6c30a81ab61c0029c24c5d42caa08156ad9a2e3e4",
     "Spot.SecondStage.placedOk": "a80967e6b78d683089d476363e894e8f4d84606d6e6a2ec2b6d72d81fe6c2a78",
     "Spot.SecondStage.populationOk": "b1156e615d46a066ddbd7823eafc0f7888835a3d9b54df0fbb4516b9e44f252f",
     "Spot.SecondStage.portBinding": "c32ae535800449b68c1bf9c613e04aa1c71c1f2c2f7d5a245c0a71adf77980a7",
     "Spot.SecondStage.portOf": "c1967fc629b74c9ad002805342bb69242a252d54d37870319256adbcb02e5229",
     "Spot.SecondStage.posOf": "02385fb4fb2e0b22c1ed739e61259071d1b49d727dae0a74bfd4e916a152b907",
+    "Spot.SecondStage.pushRun": "4895b098a3b7e704e5be0d9b8dae148d1a064dee29ba64b6728b7d81ef596672",
     "Spot.SecondStage.putAt": "323fb65624aa3d6eb14c574e83795fbb65c99eb62e128ffa94630b66c5a1761b",
     "Spot.SecondStage.readOk": "edc579139345ea815cb35618b10916bef22e5576defa22c1b1758b5da4b69a53",
     "Spot.SecondStage.readSize": "102b09141d351fbac2cf39c75002faadff70433f4a3945940bed397998e5164d",
@@ -57898,6 +58234,13 @@
     "Spot.SecondStage.refReadsOf": "184901e7d161373ea20732b6d2a62adfbe37ba3b0de114d7690306315106b81f",
     "Spot.SecondStage.refsOk": "b5433edee01d43b2ffad82171bdb9780c8682b7fb64b08e12ded8e43b295bc73",
     "Spot.SecondStage.registeredEntry": "e42c4d1e5b46d777a8f2827898b8c4552c79b5d7bbaeba65c002589be4b6927b",
+    "Spot.SecondStage.replayLinks": "573ac61ed32c242cc81f84a7e6f0b1632e25914eae94e9ad2e81aed3c72d01a2",
+    "Spot.SecondStage.replayReturns": "d8ce4080454c7cfc7fb956a2b3dcf71b697beda9d95d609f7189145d28e9ddf8",
+    "Spot.SecondStage.replayRows": "aa7bd3c15b5ccfe119ff1fcc194e6efafa16329b97217dfe0a8fcc527947404c",
+    "Spot.SecondStage.replayWires": "4ec54165b037085b2a0083a5e36319c67474bef0eaee5832e10269578b6a7a3d",
+    "Spot.SecondStage.reportedFailures": "bea2ba59d7ffa3c105526db786a0066a0fe14536289719fdec7e86c7699d87c6",
+    "Spot.SecondStage.returnLinks": "e5a83f224a9267a111f5a01e700ae83eecbaaec6a93f191320834ea1ede95d40",
+    "Spot.SecondStage.returnsOk": "7f23416beafd832c042660003e03e64bead682402366301c9fca6d1bc5e89841",
     "Spot.SecondStage.rootsOk": "40de194398704c49c5c481218fc8942a9d92531dc23cb3232a8f8c39bed958b3",
     "Spot.SecondStage.rowAt": "234526fb4f065aa15e0a9da4950227458b6727b3c15f02d0871ccfb1b1cec1ba",
     "Spot.SecondStage.rowsOf": "6cb174aee83312b86a48f06392acf5242c41214366b5c1c7c97a29d91aad37e6",
@@ -57907,47 +58250,82 @@
     "Spot.SecondStage.sameAt": "aac8f691ce0b29a0e1261e865925db2c3393600dc110c319e174a9846b7b997e",
     "Spot.SecondStage.setKey": "e2cc848dd1dac883b0e4fbb64506e8c18377db90f8bf07e75fe57c1fd57207a2",
     "Spot.SecondStage.setName": "e7f5949f4e67cb37754c031e892f8ff2c77d1deb1f5bc062017a2f64a90c0490",
+    "Spot.SecondStage.slice": "bd797b5b5d30be0bbeb3cd9e5878246dd5dc32e5ddb005d7db2fb8625af9d381",
+    "Spot.SecondStage.sources": "9df6ee7ca97e03b084939349a744854d0de013bde30067425ef09eb5fcb98f94",
+    "Spot.SecondStage.statementReads": "917dda5adac55f5207fc4d05560c57350126650bebea0efa4e44db152db341a0",
     "Spot.SecondStage.stmtCodes": "500a5c4936f964f2ec972f6013736cd7ae50f06ec38fa3cfe741a4c00f0ac920",
+    "Spot.SecondStage.stmtFailures": "91e588f2d2ba80b0dc9395c4b43b128e64351040b5500e0f3a7cdf5c65cefc6a",
     "Spot.SecondStage.tablesOk": "fb96c39d69cc9f7e7513a4ed6154d1370b26b7fbaaed1f836cf60d6fea7dc6c4",
     "Spot.SecondStage.templatePorts": "bbd1d4511fc5262b050ecc1bfe019761a300d1305abecd6c31698a1854847f59",
+    "Spot.SecondStage.templates": "5e5e3231049239aaa65589a95ed0f6fcb4cdae6a2032f490b8124b04509e5c51",
     "Spot.SecondStage.valuesOk": "7da23455d2b9fcd9daaa21d39edbf48cd0345d5432ca6d80a60faa579b550335",
+    "Spot.SecondStage.verifiedOf": "c58ebc23f2f825adb3547ce7327a657c89aa9adf41c51159ef85fffc17b59d6b",
     "Spot.SecondStage.verifiedOk": "a2ddfaba649f666d0093f2cfc6f8b94ede1a8e84edbd5f43513dd33b640113b8",
     "Spot.SecondStage.wireOf": "2d602594a2796bc10ace23c500db17039ea639fe23fa7723dc515b25729402be",
+    "Spot.SecondStage.wireRuns": "4aa94520ce77532848423dde0fa50c4522d2504077c484c0a678d5863fbc9aae",
     "Spot.SecondStage.wiredRead": "2b840d0e2ad6bbb1d31c91bee439fcae47a1723ec768874918cc23bc4b0751eb",
     "Spot.SecondStage.wiredRow": "38c0af8ab11aed382e6052b73c2b54b4fa1e09ed014731f845b40997c3c3687a",
+    "Spot.SecondStage.wiresOf": "b71033d6ef0283edf0d49bb045e6e38c6c0cd680c3e2ec1fb8427f76fe20024a",
     "Spot.SecondStage.wiresOk": "4c940c22ca7c50790a1c0998bcf6e84078563789e44c798e81496aff3ab21c5e",
     "Spot.SecondStage.writerOf": "837083fb53c08ad61a6e4297a7bbd6b76916b394791faf7482cf0ca44a5eeb3e"
    }
   },
   "Spot.Select": {
-   "digest": "90bf38825e4c5f7236715bf41f704e543cae139071d8240afd189f5856b61a53",
+   "digest": "2bd9657c70d04669aab97ab6eb7a87fc3c99c5a0b646bca30c56b1a83441f95e",
    "definitions": {
     "Spot.Select.Counts": "2e33b2798b55b40b4b75a8ad1872035306d6a5171c82830a7982e4286890d3ed",
+    "Spot.Select.Counts.casesOn": "fb36615dfd6a99e925cfc58f86b43378bd4138e7ee42063c9ef7a6d72522b52a",
     "Spot.Select.Counts.each": "6662fd5b99a8dce5d39f1b90444f95bf2e5609777cda116202bcd6fb3a15a84f",
+    "Spot.Select.Counts.ofJson?": "3988092be50260da731ee34ace6c185bf6e8bdde07251c0b80e3fb041990641b",
+    "Spot.Select.Counts.over": "78c8f56b2ed0f5c98defd035d9f98b90b5ea8208537248ffb65915ef8683a945",
     "Spot.Select.Counts.per": "f476bbbb49ff3c41c00471c34f8964b74705f083ca8a25ce335d212b2626da73",
+    "Spot.Select.Counts.rec": "a0c82e28a45669cc3ce4e7926690b86ca80d78206ec5caa6ce79894d01544279",
+    "Spot.Select.FIXED": "af37b8c6ab952a27cd52bb71551bbe8955534b8242b120966303d13041a0d937",
     "Spot.Select.Rule": "b412c70dec7bdac784c61c096734e393dc21cb485f975dc37a70e91b6258e34a",
     "Spot.Select.Rule.all": "8d5ec3b22e40854cfe773a9f080b729244cc8f6e933efd28414a84b54de04e4a",
     "Spot.Select.Rule.casesOn": "a1273bfb35a693b33b0897656fe57f3a9292cb8fe789873100732ace8a9233e6",
     "Spot.Select.Rule.ctorIdx": "85e38848e6358e5467ed7af567160f0e9d25c49e17b5a29da9b103cf32f51562",
     "Spot.Select.Rule.law": "af04f464c89da336f50a1b744e513d2c1eaedc7947fd94c55d1c2bb0b0ca46de",
     "Spot.Select.Rule.lawOver": "410bc0a1ac100752e20b034c7dd241c36527244f630e2e01e08726f5b8863d35",
+    "Spot.Select.Rule.ofJson": "2e4c31985be5fc4aca64d2983e3164fd098fc3255b5c44fdc0dcba1ab49f0542",
     "Spot.Select.Rule.over": "5c68cd6852f0d08b9f99b94988bbb4dacf40b90e3b52d2b43dfc6a37ce6f73e1",
     "Spot.Select.Rule.rec": "dd02fb0216952bff99e435447b8ef31bd58db23b403211317503e5ff5e82138d",
     "Spot.Select.Rule.tableOver": "d9fd0ec66dc476a738529f93cf15591c9f54ca6e15d97607c1825625c1c641f4",
     "Spot.Select.Rule.twoStage": "b78da5379058d42cc74963db9a8c2be18efef9cdefcdfa8804577ff68965500e",
     "Spot.Select.cellObj": "f922afb9208d9e88ab81d3e10af1654a79c8240978f67ba9a4afecbbced92d1c",
+    "Spot.Select.grain?": "50b6c51015076978158959b34ac158c03a1643c348a854bb239a5084b43ba16d",
     "Spot.Select.parseDesign": "86dc56daf98efc47d02553adcdbac8ecafe0cc30160f0075121df9193d95e097",
     "Spot.Select.parseRate": "7928f239ed399dfb87ee43f70881838921e398d8f4dae20951048d366b8e814d",
     "Spot.Select.parseStrataRate": "0789a937086824062e83f975a9389c34425b5f70e9d273dc7eefcbf66524cab9",
+    "Spot.Select.rate?": "16ec23916e45223b1e30d145c79553d13965cb6c17fe3498d1997f366a428790",
+    "Spot.Select.replayCells": "227de036b2ca3f08df84267b8f5a1d19f4d63aff7dac8cde76e24f585b2bdcc5",
+    "Spot.Select.replayLaw?": "e07b6b670c0075a02101d3b8358c877c68dab34fddea9d3d1df9db57dc3bbc89",
+    "Spot.Select.resolve": "1890d8a5d21a055e1dc584f409bc513f35078d9a296fb6a9a8a22703c4ca7730",
     "Spot.Select.secondLaw": "188e997d8f123192b27d148afb46d00a41450be1e2c20862ea1a22739e922c63",
     "Spot.Select.secondProblem": "0cd1beb3f8acc5d9de6bdd996650b81a6f2a340863f384b34efa62cb2c605ba7",
     "Spot.Select.select": "37c079d53f5b0fcd128e1b82bdb0e6736c1c4947aba564936134c951c5738c21",
     "Spot.Select.selectSecond": "efec5299579f880c15dbf965e4a6c9d55910b06ed47b26f56358fc1b0ee8639b",
     "Spot.Select.strataSizes": "1f268bbd851d388888435eb61dea2c816a13059dfce51a0ae5b9f79ed17a0702",
+    "Spot.Select.templateIds": "0a813242f3c3dc2ca1713bafdcafb30f5bf9acd2b03d94b82053b198692497f0",
     "Spot.Select.textOver": "b247eab471f6e1357ab5fbaa359d256dafff9ea7ff8055f566cf8a3086ab3ab9",
     "_private.Spot.Select.0.Spot.Select.digits": "87c7fd438f54182c0bfd410dfa239a6895f4b1277de9965eeadc010b2e051d8f",
     "_private.Spot.Select.0.Spot.Select.inRange": "3e8302bc5b8fbb76dd7598526ed2b694ba338d5ff9c22327ee43c8a0fc13c05d",
     "_private.Spot.Select.0.Spot.Select.split1": "93d235224ab77c221cd0d830d327962ca2647f734f774bce82e1ac16b4639df7"
+   }
+  },
+  "Spot.Service": {
+   "digest": "f89c0e871e6d8769e7e9a3f74a09aa92fe9883137d4a6f08f67347ba7423e262",
+   "definitions": {
+    "Spot.Service.RECORD_KEYS": "4229a8ec69e9fbe88f16e427bdfa6adeb9a5b4ea055ad03d19575c0c92ea5a07",
+    "Spot.Service.Value": "3b582e14cba8460165c39218f521e4c33a44efb33be581a26394907794c73138",
+    "Spot.Service.Value.name": "6b21261d14f13fbc18bb2ce413222e2a5282064b56e7b8ed3b567af974a162fc",
+    "Spot.Service.Value.registered": "60e34c3f6f23c05df4ae6c4654ac00d65b17ffd7ed68d7bef42777c3c712bf53",
+    "Spot.Service.checkPublic": "54567cbeaad93c4e76bf6389c13e37bdeb7d9afb64f14be32da530340fb8b2f3",
+    "Spot.Service.checkVerdicts": "c3bd8005552c745ccf7730d93918ebb319d64789f879ac368b9a53b784117d63",
+    "Spot.Service.firsts": "4e2cfe65d2b9c7e899fb02590cdf7f339b76e8e5acb90cb2e7e59bc1c5dd8e50",
+    "Spot.Service.layout": "2c2e7b717333c2f66842f4ab8f57b01638e8a5f510dc1f5792f02ece35c36a37",
+    "Spot.Service.pyStr": "6a953c0af541c0d185d38f95bfa3b376803d93e4d70b87715d1e2d7964cd2cab",
+    "Spot.Service.setOf": "6e3608651a8020d8b05bf0bdab22f632ca5e0bb6790573d126fe2f9f13e71f03"
    }
   },
   "Spot.Slots": {
@@ -58624,20 +59002,80 @@
    }
   },
   "VStarRecursive.Sampled": {
-   "digest": "f6a66dd422175274dc446036dd7e00c6367a1706b4d1889ed2857f783a20f312",
+   "digest": "dab3cc2936947dcecedb0c55ef8bbe4dfe41ae48140975a372f2af16434851c3",
    "definitions": {
-    "VStar.Recursive.Sampled.Evidence": "9e5a16253407eec1c6ca0f36164f8936716429deb7d7398f3515df84d530f8d0",
+    "VStar.Recursive.Sampled.Evidence": "4babfe0fba23a4c4a426bd95c5c4a1fa03b68bf4eb147169808392a31b5aac66",
+    "VStar.Recursive.Sampled.FORMS": "9399a31485a9a1fb8a95f57e9b973a76b22539ccc2d278c759827bc4b51152d0",
+    "VStar.Recursive.Sampled.MISMATCH": "5ff6011f0216b151091c2282880dbc80e3343f314293807b6d8ebdd8779f6661",
     "VStar.Recursive.Sampled.ONE_STAGE": "38de5ee291b3ce3bc8d92944644a4311dc9b5c9c7af11099f319cedb5e1c63c4",
     "VStar.Recursive.Sampled.PROTOCOL": "864b6227a733d9017c62194051f38742936289e55ac9dca64a27de2a06d978f2",
-    "VStar.Recursive.Sampled.Params": "4a41405c6894c50695c5a28cacf9dd13151b5a0e63fdde476bd29c7c29f9d492",
+    "VStar.Recursive.Sampled.Params": "9d31692eabac8286f9e7b5f581b62c0f1c257a09ddfe44fc3f60b933b7eb70e8",
     "VStar.Recursive.Sampled.RECURSIVE": "0e0f5176c046495c1e5c505a4aafca31c82848dd35b65af82d5b2b79a1a02fbf",
     "VStar.Recursive.Sampled.RECURSIVE_REFUSED": "11e0467fabbb68135f583a0660be4cc54e90d443fc814905dde6fe6acfca12e4",
     "VStar.Recursive.Sampled.V1_REFUSED": "59c5948429cf3e265f187e70dbee4275d48d3930cd2e0ac425d84341cd5b3631",
-    "VStar.Recursive.Sampled.checkBlobs": "72fc3297ca9d99dfb22def633f245cab42c28d288cfc9b8fc17127cd0e47871b",
-    "VStar.Recursive.Sampled.evidenceOf": "d546a38acabac0eeef32e780cfbe60b3bb7ab7e5a3ef1a2f8e566747abf8a013",
-    "VStar.Recursive.Sampled.paramsOfJson": "dd435d4ac37f6c4cdbe5094596095ab0a23f02d7647191d6a8352a8ea289d3bd",
+    "VStar.Recursive.Sampled.checkBlobs": "594cfb012d6e8e239ca3aca46b5f4df2101f2f7f0398fa153fed6f0f14ba1a85",
+    "VStar.Recursive.Sampled.evidenceOf": "bf889d67f19b0fbd8681f435e3c0c73e18ada80c8e3fc2b7b0c7f28f84ea6d26",
+    "VStar.Recursive.Sampled.formOf": "85001d691597658553c2485b47c3366f02133b4d863c97642b0e0e211e7f0518",
+    "VStar.Recursive.Sampled.paramsOfJson": "e62a84806c6446415266d9070cfbe779117e3c986dfb795f0f7a2838330416be",
     "VStar.Recursive.Sampled.protocol": "4cc3d013094fddfff0ab5a07b45af785c60e32f5d68a462a562ddadae3950d03",
-    "_private.VStarRecursive.Sampled.0.VStar.Recursive.Sampled.split": "57f3dbade984377ba3211a61a3f62f588bdaea4ee60b941e1fc5d1e08a180d24"
+    "_private.VStarRecursive.Sampled.0.VStar.Recursive.Sampled.split": "6f5a9d55e1b9752883dd3a7371fbd18300afb4e21c400eb0e94eca27e78e087f"
+   }
+  },
+  "VStarRecursive.SampledTwo": {
+   "digest": "96edd9a3ca9bfbc9a1f17c2b832e010de78a7b233c84e38d526cab058730ef8c",
+   "definitions": {
+    "VStar.Recursive.SampledTwo.Evidence": "96c574c2a9826fdc813f4ac345b597cd310cd3f49f8725963e51885064aeac17",
+    "VStar.Recursive.SampledTwo.Evidence.coins": "30b0317573e2138d49363fc0a443377797c783c636c52ad96877ade277803fcb",
+    "VStar.Recursive.SampledTwo.Evidence.interior": "7db31d25f8aacc97179d43d22dff2feea64db86091100cbe3a502c315f785156",
+    "VStar.Recursive.SampledTwo.Evidence.received": "c8ee26f6d02c864ea042ab9f00a07392f0dd1539a8a1b2856c22d04223e6b42b",
+    "VStar.Recursive.SampledTwo.Evidence.record": "dd51f595f35aca6d322fa6a5a0f3185d687b7369087e39bdc5cc32bcc5a9265b",
+    "VStar.Recursive.SampledTwo.Evidence.source": "b39a0caff6fe1e96a6d04827b3dd44f211fabe2c0b220f75c954cf9bddad46e4",
+    "VStar.Recursive.SampledTwo.Evidence.statements": "a8e204678cac5267943057a026f139cf1f039205093bb6d4d52c4ed5face116a",
+    "VStar.Recursive.SampledTwo.Evidence.stmts": "35a6514835267de8383238b050967bc0edbc7c0e200ae28b0372a828df170480",
+    "VStar.Recursive.SampledTwo.FORM": "4721d9d96cad8f9796720c2a119c15de9b49bbe76139336ec64c38d53469ca9b",
+    "VStar.Recursive.SampledTwo.INTERIOR_SHOWN": "b744f56c3403a49c95ec8166f85af1b3f879f27a515a8e5bdf7eb99070230c0a",
+    "VStar.Recursive.SampledTwo.MEMBER_CIRCUIT": "f46ca0ac1bbc08a6ece1d0d250706050c064fcfcee7f40dc95fd442d186fcdf4",
+    "VStar.Recursive.SampledTwo.ONE_DEFINITION": "46f7587b590a3b0b4adad8942c56ab10ed063c026914c0f3dc396681ef43c9df",
+    "VStar.Recursive.SampledTwo.ONE_KEY": "3b613361aaeddfc66d321e6a4ce3f04a7873cd410d0b2949d6eb67dd86d07600",
+    "VStar.Recursive.SampledTwo.OUTPUTS_REFUSED": "5b485ba58da95c35bf196779c66ed3b1a9bf111a87e02fb1a45b141664eb20bc",
+    "VStar.Recursive.SampledTwo.Params": "223bf200bada1ed396942b0a081a5a2faf49aa822076c2d9176e95776fe274fa",
+    "VStar.Recursive.SampledTwo.Params.audit": "19e3798d72e4ded75abe97ce743b9772d4dd91bc2132945c487cd10eba569a54",
+    "VStar.Recursive.SampledTwo.Params.boundary": "c3b0c5aa381b69030bd5f2c26967324c028480495816ceaa6ce25b6f14ab8424",
+    "VStar.Recursive.SampledTwo.Params.challenger": "8345db0ac670cd178cedf87405dbc5efe58c438a137dda64f83c5d6fe0b21a47",
+    "VStar.Recursive.SampledTwo.Params.circuits": "4b7408119aa22f8ee8061c0144d1b7e64cd1dac1d45a8acce06fdcf7ba1ef910",
+    "VStar.Recursive.SampledTwo.Params.declared": "192cd029f3d14de0499f0862b3276c703cc6fd5fe1be81461b191e9294f6fd41",
+    "VStar.Recursive.SampledTwo.Params.delta": "f35221e884d18567abe441db24a5a866868061d2b07212a674f810ce04c3d2e4",
+    "VStar.Recursive.SampledTwo.Params.interior": "935c865d08ef58752a70f5463e6b6c29b718ef23098f5c21af7736e5499c2989",
+    "VStar.Recursive.SampledTwo.Params.interiorValues": "f058d46daf10cd3b5c642c878977baededc9ba104d2fb8bfa2007e42ea518080",
+    "VStar.Recursive.SampledTwo.Params.members": "acc0203fbbd29db89d047556a69d132b98944bba2aa2efd33cbadf60a183dd69",
+    "VStar.Recursive.SampledTwo.Params.replay": "91e8b3abbeb24645af757da9bd801290fedb3de685689b9ad95c36a39fdcd055",
+    "VStar.Recursive.SampledTwo.Params.rule": "55edf867ae6de01f42fdca8002a1bd8260b24d8a1488fd7fd4c44c1bc94153af",
+    "VStar.Recursive.SampledTwo.Params.values": "461db0c0957f8edbe3cd600e548714d646dc83bcfad05bd838d0c1eba56e0693",
+    "VStar.Recursive.SampledTwo.SOURCE_READ": "976a3eb6525a279ac3a9ddc40897820059e6c4bd532b658e09b4660c14255939",
+    "VStar.Recursive.SampledTwo.STAGE_BYTES": "0422c2bf656d2cf5de798d0defb677d8239eca77b393ab384d8397b614981bce",
+    "VStar.Recursive.SampledTwo.STAGE_PAST": "6c09b5d219cee2b7ca0223ec787fdbe4df685c8d8d84b2eb1b0a1d43b66490f2",
+    "VStar.Recursive.SampledTwo.TWO_STAGE": "c167a0cc11861420ebae374ef44753f1f9163dbcd972bb8abf316bf604e0b0c3",
+    "VStar.Recursive.SampledTwo.checkBlobs": "b7f92dbdad88d26f549826006d729b057d952a82df054db0ec6f4e03634ebb19",
+    "VStar.Recursive.SampledTwo.checkBlobsAt": "12deb4da7579f74525f65ab848c08b6b8a70ec29f4e34d5c8bc0523b0e6c3abe",
+    "VStar.Recursive.SampledTwo.checkBlobsAtWith": "f056a70744f67e453dbc76dd6d989531c0e68e423c1ba6567ee6f68ebb024c68",
+    "VStar.Recursive.SampledTwo.evidenceOf": "4549e6e18005617375f9da2c2fddf02a3522db6e7465bbddeda737356a877634",
+    "VStar.Recursive.SampledTwo.finishWith": "affe14981bf556a98916ea2f74c4914a0d32ee22cec934261b5917de4351cbec",
+    "VStar.Recursive.SampledTwo.inputAt": "35b625c3972eaf20a4300eec0ed6784c130a6775fe99e064622c474918857432",
+    "VStar.Recursive.SampledTwo.inputOf": "c1ad8c06a0284ec4d9ad6609ca8f5136740e519e2328368357d565901f677f87",
+    "VStar.Recursive.SampledTwo.interiorShown": "b1686aeb559e7191aad958903084f068875730ad10933a17b2cf556ef9b22008",
+    "VStar.Recursive.SampledTwo.interiorUnshown": "87ec7ac3431e3f0c1836d84886f6cfc3fe4f457a3d74f96cfe29c9b5a61d9939",
+    "VStar.Recursive.SampledTwo.paramsAt": "b256c16d7b9187b1033b60eac6152a2a1a59f3ee5a6d7f56567499ce840bf18b",
+    "VStar.Recursive.SampledTwo.paramsOfJson": "dfc572f9b8ad6bd1a88ff2a944a939d58997da30aaec08882765bc9ae0f9f419",
+    "VStar.Recursive.SampledTwo.portsOf": "3733a9c0d2466d3f7c335d94084290a6d95238510fc0d788f7b01193c9a16121",
+    "VStar.Recursive.SampledTwo.prepare": "f44e74feb354480768b3f3604283b3878798899638c4ee4b5f1bb13e936d3e39",
+    "VStar.Recursive.SampledTwo.rootsSplit": "3386df8432c8d9732d8258639a477bb8626738be290b2b86a0930b0ededf5d56",
+    "VStar.Recursive.SampledTwo.sourceRead": "9276abf3383f29af945a08d76eccc6d35e1e740e7071e3185dcbb13ab1528531",
+    "VStar.Recursive.SampledTwo.split": "a7d9ce56c38314ddde92a538f4c4498ac027239c0acf4dbb59e3f551ff0118ec",
+    "VStar.Recursive.SampledTwo.stagesFit": "2b214439a3e7f8c07e11ebdd402aa51898302a7415e95003c058459f3e579174",
+    "VStar.Recursive.SampledTwo.stamped": "5795162a99b6d26e2ecaedf883ab59b0046a450fd60d4a450db030f395ace64e",
+    "VStar.Recursive.SampledTwo.valuesOf": "82f56dc6c343cc6be89a351464c326add64442a8c7c2cd4e303b154af7cb9d7f",
+    "_private.VStarRecursive.SampledTwo.0.VStar.Recursive.SampledTwo.keysAre": "726ede5fb9c3c8b7d190f7bf1d407ade3527f62a90e0f3e384a7a44c9ef0aa35",
+    "_private.VStarRecursive.SampledTwo.0.VStar.Recursive.SampledTwo.without": "8c0f6492cab0cb2f4779b3404edd3098dea75d8eb655321763b0f95521f01976"
    }
   }
  },

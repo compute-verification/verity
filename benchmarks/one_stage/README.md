@@ -23,7 +23,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
   `window_audit.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
-  row's files the run's record holds only the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing
+  row's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
   of a request, and no file of the row's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`window_audit.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
@@ -95,7 +95,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `demos/vllm/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `adapters/vllm/tools/served_run/commit.sh` (the vLLM served run's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run) and its replay on CPU. The row dir stays on the
   node, the only copy of its bundle. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.

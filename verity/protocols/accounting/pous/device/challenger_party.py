@@ -29,8 +29,9 @@ are the challenger's, the setup's salt and the session's:
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 
 The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`Challenger`) and the prover
-(`challenger_session.Prover`). Their messages and codec, the request, the ids and the prover's side are PoUS's
-(`challenger_session`), which this device imports and which never imports it. The challenger takes its coin tree's hiding
+(`verity.protocols.accounting.pous.prover.challenger_prover.Prover`), each declaring its own role in its `PROTOCOL`.
+Their messages and codec, the request and the ids are PoUS's (`challenger_session`), which this device imports and which
+never imports it. The challenger takes its coin tree's hiding
 key and each round's salt from its host's coins too. `serve` is its party, stepped over the session's stream by PoUS's
 loop (`challenger_session.run`) on the clock and coins it is given: it reads its clock once before each index it sends
 and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
@@ -43,8 +44,8 @@ side (`main`): it reads one JSON line on stdin, a salt request or the session's 
 `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log (`sessions`) and salt log
 (`salts`) are in `DIR`. Each session it completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the
 file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which
-PoUB's verifier on the same host builds its registration (`verity.protocols.accounting.poub.verifier.p2_party --pous-record`),
-never from a file the prover sends.
+PoUB's verifier on the same host builds its registration
+(`verity.protocols.accounting.poub.verifier.p2_parties --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
@@ -77,13 +78,11 @@ from verity.protocols.accounting.pous.device.challenger_session import (
     WARMUPS,
     Frames,
     Polled,
-    Prover,
     coin_session_id,
     deployed_request,
     run,
     session_id,
     setup_of,
-    start_prover,
 )
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
@@ -272,8 +271,7 @@ def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Pat
     return Start(params, {"signer": signer, "log": sessions, "salts": salts})
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover},
-                       {CHALLENGER: start, PROVER: start_prover})
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger}, {CHALLENGER: start})
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,

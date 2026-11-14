@@ -5,12 +5,12 @@
 #
 #   BANDWIDTH_CMD='bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 #
-# One remote bandwidth session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
+# One PoUB session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
 # only ever read), each pass one engine step's weight reads from it through kernels' staging decode on the card, its
 # receipts sketched from the rows the decode reads (`benchmarks/pous/p2_v1/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
-# never a process on this node: the `p2_party --listen` that the auditor device's gate starts for BW_PARTY, reached at
+# never a process on this node: the `p2_parties --listen` that the auditor device's gate starts for BW_PARTY, reached at
 # BW_PARTY_HOST; it holds its own docket, which the store's must be (BW_REGISTRATION, the tracked one). The gate
 # kills the party once the session's minutes run out, and BW_PARTY asks for BW_PARTY_MIN of them (`bw_party --fixture --minutes`,
 # default 40, the lease's; the gate takes 1 to 180), unless the key's forced command fixes its own: a session that

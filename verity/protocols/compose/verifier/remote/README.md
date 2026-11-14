@@ -52,7 +52,7 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| SPOT ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage, recursive or two-stage by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../accounting/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../../policy/inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `NciCheck.Protocol.protocol` (`inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
@@ -417,7 +417,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
   the proof check (`verity verify proof verify --zk`) itself; v1, which takes the verdicts as
-  evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused. Where v2 accepts, its session
+  evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused, and the two-stage form is read and
+  checked, then refused last while its switch is off. Where v2 accepts, its session
   is in V5's event (`Verity.Sampled.checkBlobs_event`), which is coupled to it (`Verity.Sampled.CouplingTarget`).
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
@@ -547,16 +548,18 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 ## The demo
 
-**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, and
-the vLLM demo runs both halves on one served run, PoUW's as a development run:
+**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. The remote demo
+is `demos/remote.toml` (`demos/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The lifecycle
+workload is the only code that steps through the whole remote composite, and the vLLM served run runs both halves on one
+served run, PoUW's as a development run:
 
-- `verity demo lifecycle` (`demos/lifecycle/README.md`): the remote composite stepped through one monitoring period
-  on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
-  period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for Flock, and
-  its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
-  check`. It runs; nothing about it is proved.
+- the lifecycle workload (`tools/verity/cli/tests/lifecycle/README.md`), beside `verity run`'s tests: the remote composite
+  stepped through one monitoring period on CPU in about 2 s: hardware registration, registration, declarations, live
+  samples, each declaration's verdict and the period's accounting, with every deviation it lists refused by name. Its
+  prover is a labelled stand-in for Flock, and its verdict is the composition's Python mirror over per-declaration
+  stand-ins for its subprotocols, not `remote check`. It runs; nothing about it is proved.
 
-- `verity demo vllm` (`demos/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+- the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
   challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a

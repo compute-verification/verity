@@ -22,11 +22,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, kernels
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import signature_of, statics_of
-from verity.definitions.numerics import dense_rows as DR
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.numerics import kernel_registry as KR
-from verity.definitions.numerics import rows
-from verity.definitions.registry import b1, hopper
+from verity_vllm.definitions.numerics import dense_rows as DR
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics import kernel_registry as KR
+from verity_vllm.definitions.numerics import rows
+from verity_vllm.definitions.registry import b1, hopper
 
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 

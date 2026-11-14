@@ -1,12 +1,12 @@
 """Onsite's real subprotocols' cases for the composition's difftest, each with the answer its Python verifier gives it
-(`reference.Recorded`), all on one store: the committed 9-block `C*` of the remote bandwidth audit's fixture
+(`reference.Recorded`), all on one store: the committed 9-block `C*` of PoUB's fixture
 (`remote_bandwidth/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
 (`pous.period.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
 honest, under a prover that answers every other round with zeros, the honest audit's case committed to a setup with
 another salt (refused by the setup tie), and an honest run on another store (`OTHER_STORE`, accepted, which onsite's
 store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`, its sessions over a socket pair against
 `remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them, held to the auditor's session
-`p2_party.SESSION`, the only one whose case the replay takes) honest, under a prover whose receipts skip a unit's reads,
+`p2_parties.SESSION`, the only one whose case the replay takes) honest, under a prover whose receipts skip a unit's reads,
 and the honest session's log stopped before its last window is verified; and of each, its honest case with params or
 evidence that don't decode. A P2 case is recorded as the composition hands it, without its `store_root`: onsite reads
 the store off its commitment's registration."""
@@ -24,7 +24,8 @@ from verity.protocols.accounting.pous.verifier import period as pous
 from verity.protocols.accounting.pous.verifier import run as RUN
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
-from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_lean, p2_party
+from verity.protocols.accounting.poub.prover import p2_prover
+from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_lean, p2_parties
 from verity.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -39,7 +40,7 @@ OTHER_STORE = "other-store"
 """PoUS's honest run on `OTHER_POUS_STORE`, accepted: the one that meets PoUB-P2's case on two stores."""
 
 
-def _committed(T) -> p2.Store:
+def _committed(T) -> p2_prover.Store:
     """The committed `C*` (`fixtures/p2-store.json`), registered for P2 on its PoUS setup at `T`'s node."""
     doc = json.loads((BANDWIDTH / "tests/fixtures/p2-store.json").read_text())
     data = (BANDWIDTH / "tests/fixtures/p2-c-star.bin").read_bytes()
@@ -49,10 +50,10 @@ def _committed(T) -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
+    return p2_prover.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
 
 
-def _held(store: p2.Store) -> pous.EncodedStore:
+def _held(store: p2_prover.Store) -> pous.EncodedStore:
     """PoUS's store for the `C*` that P2's `store` registers: its setup published at that `C*`'s commitment, salt and
     root."""
     reg, q = store.registration, store.registration.params
@@ -136,8 +137,8 @@ def build(tmp: Path) -> None:
             def case(self, doc) -> None:
                 kept.append(doc)
 
-        proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store, p2_party.SESSION),
-                               auditor=p2_party.SESSION)
+        proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store, p2_parties.SESSION),
+                               auditor=p2_parties.SESSION)
         assert proved == answer and len(kept) == 1, answer
         assert p2_case.same_store(kept[0], honest.case) is None
         return _served(kept[0]), p2_case.answer(kept[0], answer)

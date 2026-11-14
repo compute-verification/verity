@@ -15,6 +15,7 @@ from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device import wipe_challenger as WC
+from verity.protocols.accounting.pous.prover import challenger_prover as CPR
 from verity.protocols.accounting.pous.prover import wipe_prover as WR
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
@@ -42,12 +43,13 @@ def keyed(monkeypatch):
 
 
 def test_every_party_of_both_protocols_has_a_start():
-    assert set(CP.PROTOCOL.starts) == {CS.CHALLENGER, CS.PROVER}
+    assert set(CP.PROTOCOL.starts) == {CS.CHALLENGER}
+    assert set(CPR.PROTOCOL.starts) == {CS.PROVER}
     assert set(WC.PROTOCOL.starts) == {WPS.CHALLENGER}
     assert set(WR.PROTOCOL.starts) == {WPS.PROVER}
 
 
-@pytest.mark.parametrize("start", [CP.start, CS.start_prover, WC.start, WR.start])
+@pytest.mark.parametrize("start", [CP.start, CPR.start, WC.start, WR.start])
 def test_a_start_that_reads_the_served_store_or_the_card_raises_its_goal(start, tmp_path):
     with pytest.raises(NotImplementedError, match=CS.ONSITE_GOAL):
         start(CONFIG, {}, tmp_path)

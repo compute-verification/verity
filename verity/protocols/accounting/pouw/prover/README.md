@@ -15,7 +15,7 @@ module's `__all__`. Four modules of `schemes/` state none, and six lists are sho
 `circuit.live`, `circuit.ncp2`, `circuit.pc8`, `circuit.plan` and `schemes.pearl_c4`): each by names the module only
 imports, which a test, a sidecar or a benchmark reads through it, and `circuit.live` by one name and
 `schemes.pearl_c4` by two that are retired terms. The package is stated over the
-verifier's parameters: it imports `verity.circuits`, `verity.definitions`, `verity.commitments`,
+verifier's parameters: it imports `verity.circuits`, `verity_vllm.definitions`, `verity.commitments`,
 `verity.protocols.accounting.pouw.verifier` and SPOT's verifier (`verity.protocols.proofs.spot.verifier`, for a window's Program and
 sampling design), with `verity.errors`, and nothing else of the workspace, except that `serving/` also imports SPOT's
 device code, torch and `verity_flock` (inside functions, and torch at import in `serving/h1/receipts.py`). It reads no environment variable outside `kernels/`, and nothing under
@@ -42,6 +42,10 @@ device code, torch and `verity_flock` (inside functions, and torch at import in 
   standalone `.cu` bench to include.
 - `served_zk/`: a served Pearl-C window's rows committed as hm96-sha512 leaves in the ZK statement's format, and that
   window registered, sampled, proved and judged by PoUW's verifier.
+- `filler/`: the DRAM-free filler, int8 MMAs on operands derived from a round's coins whose receipt a host recomputes
+  bit for bit: `dcap.cu` (the decode step's proxy beside it), `pfill.cuh` (the proved filler) with its host build and
+  its Python twin `pfill_ref.py`, `lfill.cuh` (the lane filler), `flin.cuh` (the fused filler) and `dfill_ref.py`. Its
+  scorer, arms and drivers are in `benchmarks/pouw/filler/`.
 
 The SASS gate is `sass_gate.py`: no shipped kernel computes a value the verifier's scalar model can't replay. Its pins
 are `sass_pins.json`, whose numeric pin is built from `ieee_pin.cu` and changes only with ptxas; the listings and probes

@@ -9,7 +9,6 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
 public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
-public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape

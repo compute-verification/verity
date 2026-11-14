@@ -90,8 +90,8 @@ def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None =
     Refused unless the combine selects every id. ``pad``: the size class's tokens, the last row and id repeated to it
     first, as `Span.padded` pads `pieces`' cells by whole tokens."""
     import torch
-    from verity.definitions.registry.b1 import NEG_INF_BF16
-    from verity.definitions.registry.dead_free import CHUNK
+    from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
+    from verity_vllm.definitions.registry.dead_free import CHUNK
     x = logits.view(torch.int16) if logits.dtype == torch.bfloat16 else logits
     n, V = x.shape
     ids = torch.as_tensor(ids, device=x.device).to(torch.int64)
@@ -135,8 +135,8 @@ def _greedy_rows(x: Any, ids: Any, template: str) -> dict[str, dict[str, Any]]:
     import torch
 
     from verity.circuits.codec import descriptor_id
-    from verity.definitions.registry import greedy_stages as GS
-    from verity.definitions.registry.b1 import NEG_INF_BF16
+    from verity_vllm.definitions.registry import greedy_stages as GS
+    from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
     n, V = x.shape
     head, _, rest = template.partition("{")
     statics = dict(kv.split("=", 1) for kv in rest.rstrip("}").split(",")) if rest else {}

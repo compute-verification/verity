@@ -5,7 +5,7 @@ every boundary, the endpoint), and the 20 template-argument strings `generate_im
 from __future__ import annotations
 
 import pytest
-from verity.definitions.numerics import deepgemm_schedule as S
+from verity_vllm.definitions.numerics import deepgemm_schedule as S
 
 SMS = 132
 #: (name, K, N) of every FP8 linear the deepgemm capture runs (DeepSeek-V4-Pro's and GLM-5.3's TP8 shapes)

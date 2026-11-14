@@ -52,7 +52,7 @@ without stopping the others.
 GO needs every phase's words compared with 0 mismatches and 0 unresolved (a non-finite logit accumulator; these operands keep every
 logit finite), the reference with 0 disagreements wherever it ran (every instance of the score, compress, fill and inv_rope cases
 unless --quick, a sample of the logits), deterministic reruns (the prefill logits on the words they write, `logits_rerun`), and the
-checks above.  The score and head twins, and the word steps every twin here runs on, are `verity.definitions.numerics.dsv4_indexer_twin`'s,
+checks above.  The score and head twins, and the word steps every twin here runs on, are `verity_vllm.definitions.numerics.dsv4_indexer_twin`'s,
 the replay's row kernels for those two Definitions.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
@@ -82,9 +82,9 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
-from verity.definitions.registry import dsa
-from verity.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry import dsv4_indexer as I
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -647,7 +647,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity.definitions.registry import dsa
+    from verity_vllm.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     cooperative = bool(current_platform.has_device_capability(90) and not current_platform.is_device_capability_family(120))
