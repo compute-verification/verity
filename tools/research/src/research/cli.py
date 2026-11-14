@@ -122,7 +122,9 @@ tree other runs of the commit share), `--cwd clone` (or `clone/SUB`) in a privat
 outside the run dir and removed when the workload exits (research/clone.py), an absolute --cwd as given; job.json run.cwd /
 run.cwd_basis record it.  A `--cwd source` workload that builds Lean waits for the tree's lock (research/treelock.py, job.json
 run.lean_tree_lock), so two Lean builds never share a `.lake` at once.  It exits with the workload's status; with
---require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
+--require-result, a zero exit and a missing or invalid result.json exits 65 instead.  So a workload shell script that pipes
+without `pipefail`, which exits with the pipe's last command's status, is refused (exit 2) unless --allow-pipe (research/pipefail.py).
+Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
 (exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
 eviction that frees it (runs.disk_floor_refusal).
