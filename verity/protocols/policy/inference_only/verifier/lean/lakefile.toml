@@ -1,4 +1,4 @@
-# The NCI policy's check, the verifier's side: given a declaration (a descriptor v1 Program and its baseline θ) and a
+# The inference-only policy's check, the verifier's side: given a declaration (a descriptor v1 Program and its baseline θ) and a
 # declared division into isolation units, decide `InferenceOnly.CompliesRate Γ α` for that division
 # (`security/Definitions/InferenceOnly.lean`). It reads the Program with the circuit format's decoder (`Circuits.Program`, in
 # `core_circuits`), required by path,
