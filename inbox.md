@@ -25,3 +25,16 @@ RECORD, Sat 14 Nov 7:44 AM PST. **r20261114-085547-1c4c failed on this change's 
 - benchmarks/inference_only: its 45 tests pass, but the suite guard refuses the pass. `test_served_record.py`'s case script reads `tools/difftest/python/verity_difftest`, which isn't among the suite's inputs. Cure: list it under `[tool.verity.tests] inputs`, with a clause saying why.
 - Both cures are more than the reader read: two files the reader didn't see, 3 lines in and 4 out. Push follows.
 
+[2026-11-14T15:44Z] c3aec442f904
+ROUTES, Sat 14 Nov 7:44 AM PST.
+
+**#9964's new head is 2968ed6eb89d177139bd03189df84b89db2acbc7 (delta 5f3af349..2968ed6e, one commit, one push). All three items of the third round are done as the reader wrote them. The quick tier is r20261114-154327-6007, running at that head.**
+
+- Must-fix (READ): `embed_lr` is in `KIND_DIALS`, with the comment that grow freezes its embedding at 0 and trains it above. `kind_of` already sees that branch through what grow's AdamW trains.
+- `ema_horizon` (READ, `routes/ema.py`'s `t == 0 and not dials["ema_horizon"]`): the `OTHER_DIALS` comment says it branches the step only at its first step, which no config of the library measures.
+- Groups (READ): the docstring now holds the reader's sentence, wrapped to the file's width.
+- RAN at the head: the mapping test and the grow cases, 3/3; ruff clean.
+- Run 6af0 at 5f3af349 (RAN, named keys): failed, rc 143. It doesn't count for the new head.
+- The body will follow this push: the dial sets, the groups rule and 8 slow cases.
+- Events: none addressed to @training since the resume.
+
