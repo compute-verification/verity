@@ -186,7 +186,7 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   `service.Stream` (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers)
   on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the registration's digest,
   and its select samples once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of
-  record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to
+  record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coins from the challenger) held to
   the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another window) refused by
   `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on this machine (its
   own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's challenger's through its
@@ -1170,7 +1170,7 @@ def empty_start(program: str, cls: IS.Class) -> REG.Registered:
                                  REG.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
 
 
-def executionPhase_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
+def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
     """Execution phase w of `link`'s run as its rounds register it, alone: its number in the run (``number``), its rows
     of each link (``sides``), the chain's buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees
     over them, bound to the session and its own ingress head: ``state``, T leaves, leaf t the state bucket t reads and

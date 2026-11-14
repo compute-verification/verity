@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.PearlPlus.Draw
+public import Proofs.Pouw.PearlPlus.Sample
 public import Proofs.Pouw.PearlPlus.Debit
 public import Proofs.Pouw.PearlC.Cap.SaltDead
 public import Proofs.Pouw.PearlC.Records
@@ -11,7 +11,7 @@ public import Proofs.Pouw.PearlC.Records
 The bound the game reads is `TileGood`'s first conjunct, `capOK` of `pearlCTilesDevRev1 devH100` at the deployed
 semantics and `ρ = 1/400`: the tile's replayed inert work (`tileDebitRev1`: its flagged atom-words, its later promotions
 into a +0 total, its forming and its words' mends) on its rows that pass the rules and all its columns is at most
-`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Draw` puts a sampled tile with good words in
+`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Sample` puts a sampled tile with good words in
 `goodDeclTiles` within the bound and in `overCapTiles` over it. The credit does: the tolerant audit's deduction grows
 with the samples on `overCapTiles`, and a passed tile within the bound keeps those to the samples the check finds over
 its own bound.
@@ -146,14 +146,14 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
 
 theorem tile_nodup {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} (h : p.tile? tid = some (pos, rows, cols)) :
     rows.Nodup ∧ cols.Nodup := by
-  obtain ⟨hp, x, hx, -, hg⟩ := Draw.tile?_some h
-  have h1 : (Draw.grid p.scheme p.records[pos])[x]? = some (rows, cols) := by
-    rw [List.getElem?_eq_getElem hx, ← getElem!_pos (Draw.grid p.scheme p.records[pos]) x hx, hg]
-  rw [Draw.grid, Draw.tiles_getElem?] at h1
+  obtain ⟨hp, x, hx, -, hg⟩ := Sample.tile?_some h
+  have h1 : (Sample.grid p.scheme p.records[pos])[x]? = some (rows, cols) := by
+    rw [List.getElem?_eq_getElem hx, ← getElem!_pos (Sample.grid p.scheme p.records[pos]) x hx, hg]
+  rw [Sample.grid, Sample.tiles_getElem?] at h1
   split at h1
   · simp only [Option.some.injEq, Prod.mk.injEq] at h1
     obtain ⟨rfl, rfl⟩ := h1
-    exact ⟨Draw.block_nodup _ _ _, Draw.block_nodup _ _ _⟩
+    exact ⟨Sample.block_nodup _ _ _, Sample.block_nodup _ _ _⟩
   · cases h1
 
 theorem rows_band {L : Pouw.PearlC.Layout} {g i i' : ℕ} (hi : i ∈ (auditTiling 64 64 L).rows g)
@@ -207,7 +207,7 @@ theorem rowsFailure_filler {r : UnitRecord} {rows cols : List ℕ} {ops : Words.
   dsimp only [Id.run, bind, pure] at h
   split at h
   · rename_i r' heq
-    have hs := Draw.forIn_some ?_ heq
+    have hs := Sample.forIn_some ?_ heq
     · obtain ⟨m, rfl⟩ := hs
       cases h
     · intro a
@@ -215,7 +215,7 @@ theorem rowsFailure_filler {r : UnitRecord} {rows cols : List ℕ} {ops : Words.
       repeat' split
       all_goals first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩
   · rename_i heq
-    have hall := Draw.forIn_none _ _ ?_ heq
+    have hall := Sample.forIn_none _ _ ?_ heq
     rotate_left
     · intro a
       try dsimp only
@@ -240,7 +240,7 @@ theorem rowsFailure_excluded {r : UnitRecord} {rows cols : List ℕ} {ops : Word
   dsimp only [Id.run, bind, pure] at h
   split at h
   · rename_i r' heq
-    have hs := Draw.forIn_some ?_ heq
+    have hs := Sample.forIn_some ?_ heq
     · obtain ⟨m, rfl⟩ := hs
       cases h
     · intro a
@@ -248,7 +248,7 @@ theorem rowsFailure_excluded {r : UnitRecord} {rows cols : List ℕ} {ops : Word
       repeat' split
       all_goals first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩
   · rename_i heq
-    have hall := Draw.forIn_none _ _ ?_ heq
+    have hall := Sample.forIn_none _ _ ?_ heq
     rotate_left
     · intro a
       try dsimp only
@@ -303,7 +303,7 @@ theorem formV1_stats {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h 
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   rw [← Array.forIn_toList] at hr
-  have := Draw.forIn_inv_idx (fun n (o : Words.Formed) => o.x.size = n ∧ o.rho.size = n ∧ o.alpha.size = n ∧
+  have := Sample.forIn_inv_idx (fun n (o : Words.Formed) => o.x.size = n ∧ o.rho.size = n ∧ o.alpha.size = n ∧
       o.beta.size = n ∧ ∀ j < n, o.x[j]! = (rows.zip eRows).toList[j]!.1 ∧
         ∃ s, Words.s5Stats o.x[j]! = .ok (s, o.rho[j]!, o.alpha[j]!, o.beta[j]!)) _ _ 0 _ _
     ⟨rfl, rfl, rfl, rfl, fun j hj => absurd hj (Nat.not_lt_zero _)⟩ ?_ hr
@@ -326,13 +326,13 @@ theorem formV1_stats {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h 
     refine ⟨_, rfl, by simp [hx], by simp [hrho], by simp [halpha], by simp [hbeta], fun j hj => ?_⟩
     simp only [Nat.zero_add] at hx hrho halpha hbeta hall hj ha ⊢
     rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | hj
-    · rw [Draw.push_get!_lt _ _ (by omega), Draw.push_get!_lt _ _ (by omega), Draw.push_get!_lt _ _ (by omega),
-        Draw.push_get!_lt _ _ (by omega)]
+    · rw [Sample.push_get!_lt _ _ (by omega), Sample.push_get!_lt _ _ (by omega), Sample.push_get!_lt _ _ (by omega),
+        Sample.push_get!_lt _ _ (by omega)]
       exact hall j hj
-    · have g1 : (s.x.push x)[j]! = x := by rw [hj, ← hx]; exact Draw.push_get!_eq _ _
-      have g2 : (s.rho.push rho)[j]! = rho := by rw [hj, ← hrho]; exact Draw.push_get!_eq _ _
-      have g3 : (s.alpha.push alpha)[j]! = alpha := by rw [hj, ← halpha]; exact Draw.push_get!_eq _ _
-      have g4 : (s.beta.push beta)[j]! = beta := by rw [hj, ← hbeta]; exact Draw.push_get!_eq _ _
+    · have g1 : (s.x.push x)[j]! = x := by rw [hj, ← hx]; exact Sample.push_get!_eq _ _
+      have g2 : (s.rho.push rho)[j]! = rho := by rw [hj, ← hrho]; exact Sample.push_get!_eq _ _
+      have g3 : (s.alpha.push alpha)[j]! = alpha := by rw [hj, ← halpha]; exact Sample.push_get!_eq _ _
+      have g4 : (s.beta.push beta)[j]! = beta := by rw [hj, ← hbeta]; exact Sample.push_get!_eq _ _
       rw [g1, g2, g3, g4]
       refine ⟨?_, fst, hst⟩
       rw [List.getElem!_eq_getElem?_getD, hj, ha]
@@ -1309,9 +1309,9 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
   obtain ⟨rfl, rfl, rfl⟩ := htile'
   try dsimp only at hrest
   obtain ⟨-, -, -, -, -, -, hform, -, hchk, hcapC, -⟩ := hrest
-  obtain ⟨hp, -⟩ := Draw.tile?_some htile
+  obtain ⟨hp, -⟩ := Sample.tile?_some htile
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
-  obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
+  obtain ⟨-, -, hkept0, hkept⟩ := Sample.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
   obtain ⟨hKmax, hK128⟩ := Assembly.record_domain htile (.inl hpass)
   obtain ⟨wn', hwn, henc, -⟩ := Assembly.formed_ok hform
   rw [Assembly.noiseOf_eq htile, ← hk, ← hwid] at hwn
@@ -1347,8 +1347,8 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
     intro x hx
     have him := hrowsm _ (List.getElem_mem hx)
     obtain ⟨hparse, s', hst⟩ := Cap.encode_stats (by simp) henc x hx
-    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Draw.rowBytesOf_eq] at hparse
-    obtain ⟨hsz, hwords⟩ := Draw.parseRow_wordBytes hparse
+    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Sample.rowBytesOf_eq] at hparse
+    obtain ⟨hsz, hwords⟩ := Sample.parseRow_wordBytes hparse
     have hW : ∀ l < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k,
         (ops.a.x[x]!)[l]! = c.act rows[x] l ∧ c.act rows[x] l < 2 ^ 32 ∧ (wordQ (c.act rows[x] l)).isSome := by
       intro l hl
@@ -1371,8 +1371,8 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
       ∃ s', Words.s5Stats ops.b.x[z]! = .ok (s', ops.b.rho[z]!, ops.b.alpha[z]!, ops.b.beta[z]!) := by
     intro z hz
     obtain ⟨hparse, s', hst⟩ := Cap.encode_stats_b (by simp) henc z hz
-    rw [getElem!_pos _ z (by simpa using hz), List.getElem_map, Draw.rowBytesOf_eq] at hparse
-    obtain ⟨hsz, hwords⟩ := Draw.parseRow_wordBytes hparse
+    rw [getElem!_pos _ z (by simpa using hz), List.getElem_map, Sample.rowBytesOf_eq] at hparse
+    obtain ⟨hsz, hwords⟩ := Sample.parseRow_wordBytes hparse
     refine ⟨hsz, fun l hl => ?_, s', hst⟩
     have h32 := hwt cols[z] (List.getElem_mem hz) l hl
     obtain ⟨hxl, hfin⟩ := hwords l hl
@@ -1392,7 +1392,7 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
     constructor
     · rintro ⟨hi, hc⟩
       obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
-      exact ⟨hi, (hrow x hx).2.2.2.1 (Draw.rowsFailure_credited hchk hx (banded_row hc))⟩
+      exact ⟨hi, (hrow x hx).2.2.2.1 (Sample.rowsFailure_credited hchk hx (banded_row hc))⟩
     · rintro ⟨hi, hok⟩
       obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
       have hlt : rows[x] < p.records[pos]!.realRows := by
