@@ -71,8 +71,8 @@ from typing import Any
 
 import numpy as np
 from verity.circuits import requirement
-from verity.protocols.poub.verifier import audit, codec
-from verity.protocols.poub.verifier.memory_map import (
+from verity.protocols.accounting.poub.verifier import audit, codec
+from verity.protocols.accounting.poub.verifier.memory_map import (
     Change,
     Header,
     MemoryMapError,
