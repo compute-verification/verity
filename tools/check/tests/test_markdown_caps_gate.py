@@ -1,4 +1,4 @@
-"""`gates/markdown_caps.py`, drive's warn gate for the Markdown caps: it applies `tests/test_repository.py`'s caps and fixes,
+"""`gates/markdown_caps.py`, drive's warn gate for the Markdown size limits: it applies `tests/test_repository.py`'s limits and fixes,
 read at BASE, to each `.md` file that changed, at its size in TOP."""
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 GATE = ROOT / "tools/check/gates/markdown_caps.py"
-CAPS = ROOT / "tests/test_repository.py"
+LIMITS = ROOT / "tests/test_repository.py"
 
 
 def _repository():
-    spec = importlib.util.spec_from_file_location("repository_invariants", CAPS)
+    spec = importlib.util.spec_from_file_location("repository_invariants", LIMITS)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -44,15 +44,15 @@ def _gate(repo: Path, base: str, top: str) -> tuple[int, dict]:
     return r.returncode, json.loads(r.stdout) if r.returncode in (0, 1) else {"stderr": r.stderr}
 
 
-def test_the_gate_applies_the_caps_and_fixes_of_test_repository_to_each_changed_markdown_file(tmp_path):
-    """Its caps are test_repository's own (`markdown_cap`), on every kind of file that has one, either side of the cap."""
+def test_the_gate_applies_the_limits_and_fixes_of_test_repository_to_each_changed_markdown_file(tmp_path):
+    """Its limits are test_repository's own (`markdown_cap`), on every kind of file that has one, either side of the limit."""
     rep = _repository()
     skill, split = ".agents/skills/x/SKILL.md", next(iter(rep.SPLIT_DOCUMENT_DIRS)) + "entry.md"
     sizes = {"README.md": rep.MD_SIZE_CAP, "a/README.md": rep.MD_SIZE_CAP + 1, "a/PROTOCOL.md": rep.MD_SIZE_CAP + 1,
              "b/PROTOCOL.md": rep.PROTOCOL_SIZE_CAP + 2, skill: rep.SKILL_SIZE_CAP + 3, split: rep.MD_SIZE_CAP + 4,
              "big.txt": rep.MD_SIZE_CAP * 2, "kept.md": rep.MD_SIZE_CAP + 5, "gone.md": rep.MD_SIZE_CAP + 6}
     _git(tmp_path, "init", "-q", "-b", "main")
-    base = _commit(tmp_path, {"tests/test_repository.py": CAPS.read_text(), "kept.md": "k" * sizes["kept.md"],
+    base = _commit(tmp_path, {"tests/test_repository.py": LIMITS.read_text(), "kept.md": "k" * sizes["kept.md"],
                               "gone.md": "g" * sizes["gone.md"]})
     top = _commit(tmp_path, {**{p: "x" * n for p, n in sizes.items() if p not in ("kept.md", "gone.md")}, "gone.md": None})
     rc, doc = _gate(tmp_path, base, top)
@@ -63,10 +63,10 @@ def test_the_gate_applies_the_caps_and_fixes_of_test_repository_to_each_changed_
     assert rc == 1 and sorted(f["path"] for f in doc["failures"]) == sorted(over) == sorted(
         ["a/README.md", "b/PROTOCOL.md", skill, split])
     for f in doc["failures"]:
-        p, cap = f["path"], rep.markdown_cap(f["path"])
-        assert f["why"] == (f"{p} is {sizes[p]} bytes at {top[:12]}, over its {cap}-byte limit (tests/test_repository.py), and "
+        p, limit = f["path"], rep.markdown_cap(f["path"])
+        assert f["why"] == (f"{p} is {sizes[p]} bytes at {top[:12]}, over its {limit}-byte limit (tests/test_repository.py), and "
                             f"is new at {base[:12]} below")
-        assert f["fix"] == [f"trim {p} to {cap} bytes or fewer ({sizes[p] - cap} over): "
+        assert f["fix"] == [f"trim {p} to {limit} bytes or fewer ({sizes[p] - limit} over): "
                             + rep.markdown_over_cap(p, sizes[p]).split("; ", 1)[1]]
     rc, doc = _gate(tmp_path, base, base)
     assert rc == 0 and doc["files"] == doc["failures"] == []
@@ -79,56 +79,56 @@ def _merge(repo: Path, tip: str, head: str, n: int) -> str:
 
 
 def test_a_queue_merge_is_judged_against_the_tip_it_merged_onto(tmp_path):
-    """A file over its cap in a member below fails only the merge that grows it; one that leaves it alone or shrinks it
+    """A file over its limit in a member below fails only the merge that grows it; one that leaves it alone or shrinks it
     passes, the shrink with a note."""
     rep = _repository()
-    cap, lines = rep.MD_SIZE_CAP, [f"line {i}\n" for i in range(10)]
+    limit, lines = rep.MD_SIZE_CAP, [f"line {i}\n" for i in range(10)]
     def doc(at, text):
         return "".join(text if i == at else line for i, line in enumerate(lines))
     _git(tmp_path, "init", "-q", "-b", "main")
-    main = _commit(tmp_path, {"tests/test_repository.py": CAPS.read_text(), "doc.md": doc(None, ""), "b.md": "b\n"})
+    main = _commit(tmp_path, {"tests/test_repository.py": LIMITS.read_text(), "doc.md": doc(None, ""), "b.md": "b\n"})
     heads = {}
-    for n, files in {1: {"doc.md": doc(1, "x" * cap + "\n")}, 2: {"b.md": "b, longer\n"}, 3: {"doc.md": doc(8, "y" * 9 + "\n")},
+    for n, files in {1: {"doc.md": doc(1, "x" * limit + "\n")}, 2: {"b.md": "b, longer\n"}, 3: {"doc.md": doc(8, "y" * 9 + "\n")},
                      4: {"doc.md": doc(5, "l\n")}}.items():
         _git(tmp_path, "checkout", "-q", "--detach", main)
         heads[n] = _commit(tmp_path, files)
-    member = _merge(tmp_path, main, heads[1], 1)                    # over its cap, below every PR judged here
-    big = len(doc(1, "x" * cap + "\n"))
+    member = _merge(tmp_path, main, heads[1], 1)                    # over its limit, below every PR judged here
+    big = len(doc(1, "x" * limit + "\n"))
     assert _gate(tmp_path, main, member)[0] == 1
     rc, got = _gate(tmp_path, main, _merge(tmp_path, member, heads[2], 2))
     assert rc == 0 and got["below"] == member and [f["path"] for f in got["files"]] == ["b.md"] and got["notes"] == []
     rc, got = _gate(tmp_path, main, grown := _merge(tmp_path, member, heads[3], 3))
-    assert rc == 1 and got["failures"][0]["why"] == (f"doc.md is {big + 3} bytes at {grown[:12]}, over its {cap}-byte limit "
+    assert rc == 1 and got["failures"][0]["why"] == (f"doc.md is {big + 3} bytes at {grown[:12]}, over its {limit}-byte limit "
                                                      f"(tests/test_repository.py), and was {big} bytes at {member[:12]} below")
     rc, got = _gate(tmp_path, main, _merge(tmp_path, member, heads[4], 4))
     assert rc == 0 and got["failures"] == [] and got["notes"] == [
-        f"doc.md is {big - 5} bytes, over its {cap}-byte limit, but was {big} bytes at {member[:12]} below: not this change's"]
+        f"doc.md is {big - 5} bytes, over its {limit}-byte limit, but was {big} bytes at {member[:12]} below: not this change's"]
 
 
 def test_a_head_is_judged_against_its_merge_base_so_a_file_over_on_base_fails_only_growth(tmp_path):
     rep = _repository()
-    cap = rep.MD_SIZE_CAP
+    limit = rep.MD_SIZE_CAP
     _git(tmp_path, "init", "-q", "-b", "main")
-    base = _commit(tmp_path, {"tests/test_repository.py": CAPS.read_text(), "AGENTS.md": "a" * (cap + 10)})
-    head = _commit(tmp_path, {"AGENTS.md": "a" * (cap + 4)})
+    base = _commit(tmp_path, {"tests/test_repository.py": LIMITS.read_text(), "AGENTS.md": "a" * (limit + 10)})
+    head = _commit(tmp_path, {"AGENTS.md": "a" * (limit + 4)})
     rc, got = _gate(tmp_path, base, head)
     assert rc == 0 and got["below"] == base and len(got["notes"]) == 1
-    assert _gate(tmp_path, base, _commit(tmp_path, {"AGENTS.md": "a" * (cap + 11)}))[0] == 1
+    assert _gate(tmp_path, base, _commit(tmp_path, {"AGENTS.md": "a" * (limit + 11)}))[0] == 1
 
 
-def test_the_caps_are_read_at_base_so_a_change_cannot_raise_its_own(tmp_path):
+def test_the_limits_are_read_at_base_so_a_change_cannot_raise_its_own(tmp_path):
     rep = _repository()
     _git(tmp_path, "init", "-q", "-b", "main")
-    base = _commit(tmp_path, {"tests/test_repository.py": CAPS.read_text()})
-    raised = CAPS.read_text().replace("MD_SIZE_CAP = 48 * 1024", "MD_SIZE_CAP = 96 * 1024")
-    assert raised != CAPS.read_text()
+    base = _commit(tmp_path, {"tests/test_repository.py": LIMITS.read_text()})
+    raised = LIMITS.read_text().replace("MD_SIZE_CAP = 48 * 1024", "MD_SIZE_CAP = 96 * 1024")
+    assert raised != LIMITS.read_text()
     top = _commit(tmp_path, {"tests/test_repository.py": raised, "AGENTS.md": "a" * (rep.MD_SIZE_CAP + 206)})
     rc, doc = _gate(tmp_path, base, top)
     assert rc == 1 and [(f["path"], f["cap"]) for f in doc["failures"]] == [("AGENTS.md", rep.MD_SIZE_CAP)]
     assert _gate(tmp_path, top, top)[0] == 0
 
 
-def test_a_base_without_the_caps_is_unable_to_judge(tmp_path):
+def test_a_base_without_the_limits_is_unable_to_judge(tmp_path):
     _git(tmp_path, "init", "-q", "-b", "main")
     base = _commit(tmp_path, {"a.txt": "a\n"})
     rc, doc = _gate(tmp_path, base, _commit(tmp_path, {"a.md": "a\n"}))

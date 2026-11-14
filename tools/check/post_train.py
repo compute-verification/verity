@@ -193,7 +193,7 @@ def moved(report: Path) -> list[str] | None:
 
 def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: Path | None = None) -> str:
     """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), then each
-    fast row of record the neutrality tier's ``report`` names (`moved`), then why there is nothing to read.  A skip (a check
+    fast workload of record the neutrality tier's ``report`` names (`moved`), then why there is nothing to read.  A skip (a check
     `fixtures.toml` retires on a row) is neither.  A run cut off before its end (``cut``: `timeout`, `cancelled`) is
     `regression inconclusive:<cut>`, whatever it wrote."""
     if cut:
