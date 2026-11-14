@@ -17,9 +17,9 @@ state and side channel (`Fits`):
 
 * `periodHeld`, `periodHeldDeployed`: the honest period (`honestRun` on `honestDevice`, one tick a round) and the honest
   strategy against `sidAudit`, a 32-byte session id with nothing else in it, at the deployed budget
-  `(RING_D, RING_Q, RING_L)`; `periodHeld_accepted`, `periodHeldDeployed_accepted`: the same against an audit that
-  accepts (`acceptedAudit`: one trusted key, the honest `C*` and a run on what setup published), under `PrimeP16448`,
-  or two of the store's key-stream inputs (`storeStrings`) collide.
+  `(RING_D, RING_Q, RING_L)`; `periodHeld_certified`, `periodHeldDeployed_certified`: the same against the closed
+  `certifiedAudit`, whose setup and 105-round block-0 session accept and whose trusted device holds that signed session,
+  or two strings that this audit hashes collide.
 * `periodCapacity`: the same, on the honest period whose capacity verdict is the verifier's whole decision outside a
   break (`verdictRun`), as `PeriodCapacity` takes the joint run's wiring.
 * `obligationHeld`: the same, with the store's tags the snapshot's indices (`tag = id`) and the other tags' keys among
@@ -43,6 +43,11 @@ open Pous.EndToEnd.SecurityProofs.Honest
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
+
+/-- `ByteArray`'s `==` is its arrays', which is lawful. -/
+local instance instLawfulBEqByteArray_certified : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
 theorem zero_mem_ticks : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
   simp [honestRun, periodRun, Accounting.Window.ticks, K]
@@ -88,8 +93,9 @@ noncomputable def certifiedCommitment : SetupProtocol.Commitment :=
 noncomputable def certifiedPublic : SetupProtocol.Public :=
   ⟨P2.Params.deployed.blocks,
     PousCheck.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState,
-    (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedSalt
-      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))).getD .empty,
+    (Merkle.root (PousCheck.Properties.SecurityProofs.Accepts.vkRun certifiedSalt certifiedSetupState
+      (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt))
+      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.segPayload) P2.Params.deployed.segments).2).getD .empty,
     certifiedSalt⟩
 
 noncomputable def certifiedPrivateKey : Lms.PrivateKey :=
@@ -187,16 +193,18 @@ theorem certified_run_accepts :
       exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
         (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _)
     ?_ (beq_self_eq_true _) (beq_self_eq_true _)
-    (by simp [honestCommitment]) (beq_self_eq_true _)
+    (by simp [certifiedRecord, honestCommitment]) (beq_self_eq_true _)
     (beq_self_eq_true _) (beq_self_eq_true _) ?_
   · show (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedSalt
       (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) == some certifiedPublic.root) = true
-    rw [PousCheck.Properties.SecurityProofs.Accepts.root_setup]
+    rw [certifiedPublic, PousCheck.Properties.SecurityProofs.Accepts.honest_leaves,
+      PousCheck.Properties.SecurityProofs.Accepts.root_setup]
     exact beq_self_eq_true _
   · exact MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of
-      (p := Lms.deployed) (m := certifiedRecordMessage) (by simp [MemoryChallenger.SCHEMES]) (by simp)
+      (p := Lms.deployed) (m := certifiedRecordMessage)
+      (by simp [certifiedRecord, MemoryChallenger.SCHEMES]) (by simp [certifiedRecord])
       certifiedRecordMessage_spec hv (commitment_beq_self _) rfl
-      (by simp [honestRounds, honestCommitment])
+      (by simp [certifiedRecord, honestRounds, honestCommitment])
       (rounds_honest certifiedPublic.root
         (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
 
@@ -215,56 +223,194 @@ def PlayCollision (P : Audits Unit Unit) : Prop :=
   ∃ ω, ∃ x ∈ playStrings P ω, ∃ y ∈ playStrings P ω,
     x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
-/-- **An audit of one accepted play**: the verifier's one trusted key `key`, the 32-byte session id `honestSid`, the
-commitment `c`, the store `C`, setup's public output `pub`, the row digests `digests` and the session `r`, the same on
-every coin. -/
-def acceptedAudit (key : ByteArray) (c : PousCheck.SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) :
-    Audits Unit Unit where
-  trusted := [key]
-  sid := Pous.EndToEnd.SecurityProofs.Honest.honestSid
-  commitment _ := c
-  store _ := C
-  pub _ := pub
-  digests _ := digests
-  W _ _ := false
-  session _ := r
-  device _ := ⟨fun _ => []⟩
+theorem certifiedStore_shaped
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    Shaped certifiedStore := by
+  refine ⟨by simp [certifiedStore, PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size], ?_⟩
+  intro s hs
+  have hs8 : s < 8 := by
+    simpa [certifiedStore, PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size] using hs
+  have hseg : certifiedStore[s] =
+      PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) s := by
+    exact PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_get _ s (by simpa [certifiedStore] using hs)
+  rw [hseg]
+  refine ⟨PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size _ _, fun v hv => ?_⟩
+  rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_get]
+  obtain ⟨k, t, -, hkey⟩ := hk s v hs8 (by
+    have := PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size (keyPrefix certifiedSalt) s
+    omega)
+  rw [PousCheck.Properties.SecurityProofs.Accepts.honestBlock_eq hkey,
+    PousCheck.Prim.beOfNat_size]
+  rfl
 
-/-- **`periodHeld`'s honest lemma at an accepted play**: under `PrimeP16448`, at the salt `zeros 24`, there is an audit
-whose trusted list is one key and whose store is the honest `C*` of eight segments, against which the honest period
-and strategy meet the device model at the deployed budget and the instantiation, the certificate fits, and the audit
-accepts (setup accepts `C*` and `Run.check` a run on what it published, `setup_run_accept_sid_or_collision`), or
-two different store key-stream inputs of the salt (`storeStrings`) have one SHA-512 digest. -/
-theorem periodHeld_accepted (hP : Pous.P2.Assumptions.PrimeP16448) :
-    (∃ P : Audits Unit Unit, P.trusted ≠ [] ∧ (∀ o, (P.store o).size = 8) ∧
-        DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy ∧
-        Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧ ∃ ω, P.Accepts ω) ∨
-      ∃ x ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
-        ∃ y ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
-          x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
-  rcases PousCheck.Properties.SecurityProofs.Accepts.setup_run_accept_sid_or_collision hP
-      (Pous.EndToEnd.SecurityProofs.Honest.zeros_size 24) with ⟨c, C, pub, -, hC, hs, key, r, h⟩ | hcol
-  · have h' := periodHeld_honest honestRun
-      (acceptedAudit key c C pub
-        (PousCheck.Properties.SecurityProofs.Accepts.setupDigests (PousCheck.Prim.zeros 24)) r)
-      RING_D RING_Q RING_L 1 (Pous.EndToEnd.SecurityProofs.Honest.zeros_size 32)
-      fun _ => ⟨0, zero_mem_ticks, le_rfl⟩
-    obtain ⟨x⟩ := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).nonemptyΩ
-    exact Or.inl ⟨_, List.cons_ne_nil _ _, fun _ => hC, h'.1, h'.2, honest_fits honestRun rfl,
-      ((), (), x, default, default), hs, h⟩
-  · exact Or.inr hcol
+theorem certifiedBlock_eq
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    certifiedBlock =
+      PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0 := by
+  have hflat := Pous.EndToEnd.SecurityProofs.flat_getElem? (certifiedStore_shaped hk) 0 0 (by decide)
+  have hseg : certifiedStore[0]? =
+      some (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) 0) := by
+    rw [Array.getElem?_eq_getElem (by simpa [certifiedStore] using
+      PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size (keyPrefix certifiedSalt))]
+    congr 1
+    exact PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_get _ 0 (by
+      simpa [certifiedStore] using
+        PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size (keyPrefix certifiedSalt))
+  have hblock :
+      (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) 0)[0]? =
+        some (PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0) := by
+    rw [Array.getElem?_eq_getElem (by
+      rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
+      decide)]
+    congr 1
+    exact PousCheck.Properties.SecurityProofs.Accepts.honestSegment_get _ _ _ (by
+      rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
+      decide)
+  simp only [Nat.zero_mul, Nat.zero_add, hseg, Option.bind_some, hblock] at hflat
+  rw [certifiedBlock, getElem!_of_some hflat]
 
-/-- **`periodHeldDeployed`'s honest lemma at an accepted play**: `periodHeld_accepted`, its budget being the deployed
-one. -/
-theorem periodHeldDeployed_accepted (hP : Pous.P2.Assumptions.PrimeP16448) :
-    (∃ P : Audits Unit Unit, P.trusted ≠ [] ∧ (∀ o, (P.store o).size = 8) ∧
-        DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy ∧
-        Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧ ∃ ω, P.Accepts ω) ∨
-      ∃ x ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
-        ∃ y ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
-          x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y :=
-  periodHeld_accepted hP
+theorem certifiedBlock_size
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    certifiedBlock.size = P2.Params.deployed.blockBytes := by
+  rw [certifiedBlock_eq hk]
+  obtain ⟨k, t, -, hkey⟩ := hk 0 0 (by decide) (by decide)
+  rw [PousCheck.Properties.SecurityProofs.Accepts.honestBlock_eq hkey, PousCheck.Prim.beOfNat_size]
+  rfl
+
+theorem certifiedBlock_digest
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    MemoryChallenger.blockDigest certifiedBlock =
+      PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) 0 := by
+  rw [certifiedBlock_eq hk, PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
+    PousCheck.Properties.SecurityProofs.Accepts.digestTable_row
+      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _)
+      P2.Params.deployed.blocks 0 (by decide)]
+  rfl
+
+def certifiedObserved : MemoryChallenger.Properties.Observed := ⟨0, 0, certifiedBlock⟩
+
+theorem honest_recorded_prefix
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    ∀ n, n ≤ 105 →
+      (List.replicate n certifiedObserved).foldl
+          (MemoryChallenger.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
+            P2.Params.deployed.blockBytes) ⟨#[], none⟩ =
+        ⟨(Array.range n).map
+            (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
+          if n = 105 then some MemoryChallenger.COMPLETE else none⟩
+  | 0, _ => rfl
+  | n + 1, hn => by
+      rw [List.replicate_succ', List.foldl_append, honest_recorded_prefix hk n (by omega)]
+      simp only [List.foldl_singleton]
+      have hn105 : n ≠ 105 := by omega
+      simp only [hn105, ↓reduceIte]
+      by_cases hlast : n + 1 = 105
+      · simp [MemoryChallenger.Recorded.round, certifiedObserved, certifiedBlock_size hk,
+          honestCoins, certifiedBlock_digest hk, honestRound, Array.range_succ, hlast]
+      · simp [MemoryChallenger.Recorded.round, certifiedObserved, certifiedBlock_size hk,
+          honestCoins, certifiedBlock_digest hk, honestRound, Array.range_succ, hlast]
+
+theorem honestChallengerRun_recorded
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    (honestChallengerRun certifiedPublic.root certifiedBlock).recorded =
+      ⟨honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
+        some MemoryChallenger.COMPLETE⟩ := by
+  unfold MemoryChallenger.Properties.Run.recorded honestChallengerRun
+  simpa [certifiedObserved, honestRounds] using honest_recorded_prefix hk 105 le_rfl
+
+theorem certified_signed
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
+    (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    {m : ByteArray} (hm : MemoryChallenger.Properties.sessionMessage (certifiedAudit.session ω).signed = some m) :
+    MemoryChallenger.Properties.Signed (certifiedAudit.device ω) certifiedPrivateKey.publicKey m := by
+  let run := honestChallengerRun certifiedPublic.root certifiedBlock
+  refine ⟨run, ?_, MemoryChallenger.COMPLETE, certifiedRecordMessage, ?_, ?_, ?_⟩
+  · simp [certifiedAudit, run]
+  · simpa [run] using congrArg MemoryChallenger.Recorded.ended (honestChallengerRun_recorded hk)
+  · have hr := honestChallengerRun_recorded hk
+    change MemoryChallenger.message (honestCommitment certifiedPublic.root) MemoryChallenger.COMPLETE
+      run.recorded.rounds = .ok certifiedRecordMessage
+    rw [show run.recorded = ⟨honestRounds
+      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
+        some MemoryChallenger.COMPLETE⟩ from hr]
+    exact certifiedRecordMessage_spec
+  · simp only [certifiedAudit, certifiedRecord, MemoryChallenger.Properties.sessionMessage,
+      MemoryChallenger.SignedSession.message, certifiedRecordMessage_spec, bind, Except.bind,
+      Except.toOption] at hm
+    cases he : MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16)
+        honestSid certifiedRecordMessage with
+    | error e => simp [he] at hm
+    | ok x =>
+      simp [he] at hm
+      subst x
+      exact he
+
+theorem playCollision_of_run {P : Audits Unit Unit}
+    {ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
+    (h : ∃ x ∈ MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+        blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1)),
+      ∃ y ∈ MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+        blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1)),
+        x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) :
+    PlayCollision P := by
+  rcases h with ⟨x, hx, y, hy, hne, heq⟩
+  exact ⟨ω, x, by simp [playStrings, hx], y, by simp [playStrings, hy], hne, heq⟩
+
+theorem playCollision_of_table {P : Audits Unit Unit}
+    {ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
+    (h : TableBreak (P.pub (ω.1, ω.2.1)) (P.digests (ω.1, ω.2.1)) (P.store (ω.1, ω.2.1))) :
+    PlayCollision P := by
+  rcases h with ⟨x, hx, y, hy, hne, heq⟩
+  exact ⟨ω, x, by simp [playStrings, hx], y, by simp [playStrings, hy], hne, heq⟩
+
+theorem certified_not_break
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
+    (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (hcol : ¬ PlayCollision certifiedAudit) :
+    ¬ certifiedAudit.Break ω := by
+  intro h
+  rcases h with hrun | htable
+  · rcases hrun with hhash | hforge
+    · exact hcol (playCollision_of_run hhash)
+    · rcases hforge with ⟨p, m, hp, hkey, hm, hv, hnot⟩
+      exact hnot (certified_signed hk ω hm)
+  · exact hcol (playCollision_of_table htable)
+
+/-- **`periodHeld`'s closed certified honest instance**: the honest period and strategy meet the device model at the
+literal deployed budget, the instantiation and fit; and `certifiedAudit` has an accepted play outside its own bounded
+collision event. The session challenges block 0 in each of its 105 rounds. Nothing ties that session to the ring
+game's draw at the coin, because no premise asks it. -/
+theorem periodHeld_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
+    DeviceModel honestRun certifiedAudit honestStrategy RING_D RING_Q RING_L 1 ∧
+      Instantiates certifiedAudit honestStrategy ∧
+      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
+      ((∃ ω, certifiedAudit.Accepts ω ∧ ¬ certifiedAudit.Break ω) ∨ PlayCollision certifiedAudit) := by
+  have hmodel := periodHeld_honest honestRun certifiedAudit RING_D RING_Q RING_L 1
+    (by simpa [certifiedAudit, honestSid] using zeros_size 32)
+    fun _ => ⟨0, zero_mem_ticks, le_rfl⟩
+  refine ⟨hmodel.1, hmodel.2, honest_fits honestRun rfl, ?_⟩
+  obtain ⟨x⟩ := (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).nonemptyΩ
+  let ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
+    ((), (), x, default, default)
+  rcases PousCheck.Properties.SecurityProofs.Accepts.keysOk_or_collision (keyPrefix certifiedSalt)
+      (PousCheck.Properties.SecurityProofs.Accepts.pad128_size _) with hk | hstore
+  · by_cases hcollision : PlayCollision certifiedAudit
+    · exact Or.inr hcollision
+    · refine Or.inl ⟨ω, ?_, certified_not_break hk ω hcollision⟩
+      simpa [Pous.Period.Audits.Accepts, certifiedAudit] using
+        And.intro (certified_setup_accepts hP hk) certified_run_accepts
+  · rcases hstore with ⟨a, ha, b, hb, hab, heq⟩
+    refine Or.inr ⟨ω, a, ?_, b, ?_, hab, heq⟩
+    · simp [playStrings, certifiedAudit, certifiedCommitment, ha]
+    · simp [playStrings, certifiedAudit, certifiedCommitment, hb]
+
+/-- **`periodHeldDeployed`'s certified honest instance**: `periodHeld_certified`, at the deployed budget. -/
+theorem periodHeldDeployed_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
+    DeviceModel honestRun certifiedAudit honestStrategy RING_D RING_Q RING_L 1 ∧
+      Instantiates certifiedAudit honestStrategy ∧
+      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
+      ((∃ ω, certifiedAudit.Accepts ω ∧ ¬ certifiedAudit.Break ω) ∨ PlayCollision certifiedAudit) :=
+  periodHeld_certified hP
 
 /-- **`periodCapacity`'s honest lemma at one instance**: on the honest period whose capacity verdict is the verifier's
 whole decision outside a break, the device model, the instantiation, the certificate's fit and the verdict's wiring
