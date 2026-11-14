@@ -355,7 +355,8 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
     if bursts == "stated":
-        node = ledger.Node.stated(disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
+        node = ledger.Node.stated(timing.RTX_PRO_6000_NODE, disk_bytes_per_s=disk_bytes_per_s,
+                                  link_bytes_per_s=link_bytes_per_s)
         out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
                 "link_burst_bytes": node.link_burst_bytes}
     return out
@@ -424,7 +425,8 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
     """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
     (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
     Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
-    return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
+    return shares_of(line_of_record(V.recorded_inputs(session, registration, figures=timing.RTX_PRO_6000_NODE,
+                                                      host_bytes=host_bytes,
                                                       rates=V.recorded_rates(session, registration, **rates),
                                                       clock=clock, transcript=transcript), lean))
 

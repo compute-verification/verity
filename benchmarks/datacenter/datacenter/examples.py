@@ -5,8 +5,8 @@ two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
 `Accounting.Device`'s one Python mirror, `verity.protocols.accounting.poub.verifier.timing`: a GPU's S_chip, read and write
 rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket, so the node sums to
-`ledger.Node.stated()`. Beside them: each GPU's memory and its rate for each kind of work (`logical.work`: tensor-core
-multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
+`ledger.Node.stated(timing.RTX_PRO_6000_NODE)`. Beside them: each GPU's memory and its rate for each kind of work
+(`logical.work`: tensor-core multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
 operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times 32 lanes), each socket's host DRAM
 (half the node's online memory) and each PCIe link at PCIe 5.0 x16's rate. A capacity not measured yet is `math.inf`,
 the upper bound that claims nothing; the residuals are declared.

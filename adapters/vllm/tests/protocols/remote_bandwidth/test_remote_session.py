@@ -29,7 +29,7 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.poub.verifier import audit, memory_map
+from verity.protocols.accounting.poub.verifier import audit, memory_map, timing
 from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
@@ -96,8 +96,8 @@ def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.
     on its stdin."""
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), delta=2.0 ** -40,
-                              jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=timing.RTX_PRO_6000_NODE, source=os.urandom(32),
+                              delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
         yield v
     finally:
         with contextlib.suppress(OSError):

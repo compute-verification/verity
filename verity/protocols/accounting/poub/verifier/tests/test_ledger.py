@@ -30,14 +30,17 @@ from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
+FIGURES = timing.RTX_PRO_6000_NODE
 
 
 def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, link: float = 0.0,
          bursts: tuple[int, int, int] = (0, 0, 0)) -> ledger.Node:
     """A node sized to the small store: `timing`'s R, `chip_blocks` blocks on chip, the given ceilings, and bursts of
     the given blocks (rebuild, disk, link)."""
-    return ledger.Node(timing.SPEC_BYTES_PER_S, timing.READ_BYTES_PER_S, chip_blocks * B,
-                       {codec.FALLBACK.field.name: squarings}, disk_bytes_per_s=disk, link_bytes_per_s=link,
+    f = FIGURES
+    return ledger.Node(f.spec_bytes_per_s, f.read_bytes_per_s, chip_blocks * B, {codec.FALLBACK.field.name: squarings},
+                       f.sha512_per_s, f.gpu_write_bytes_per_s, f.host_write_bytes_per_s,
+                       disk_bytes_per_s=disk, link_bytes_per_s=link,
                        rebuild_burst_bytes=bursts[0] * B, disk_burst_bytes=bursts[1] * B,
                        link_burst_bytes=bursts[2] * B)
 
@@ -363,11 +366,11 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
     `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
-    n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
+    n = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
         timing.CHIP_BYTES, 4.32e9, timing.LINK_WINDOW_BYTES)
-    assert (ledger.Node.stated().disk_burst_bytes, ledger.Node.stated().link_burst_bytes) == (0, 0)
-    m = ledger.Node.stated(disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
+    assert (ledger.Node.stated(FIGURES).disk_burst_bytes, ledger.Node.stated(FIGURES).link_burst_bytes) == (0, 0)
+    m = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
     assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20
     with pytest.raises(ValueError, match="link_burst_bytes"):
         dataclasses.replace(n, link_burst_bytes=-1.0)
@@ -380,13 +383,13 @@ def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
-    assert n.sketch_outside == ledger.Node.stated().sketch_outside == timing.SKETCH_OUTSIDE == 2 ** 20
+    assert n.sketch_outside == ledger.Node.stated(FIGURES).sketch_outside == timing.SKETCH_OUTSIDE == 2 ** 20
     assert n.to_json()["sketch_outside"] == 2 ** 20
     c = ledger.compressions(r, n)
     assert c == math.ceil(n.sha512_per_s * r.span_ns / 1e9)
     assert ledger.sketch(r, n) == float(timing.sketch_failure(2 ** 20 * c, r.passes, r.rows, blocks=r.blocks,
                                                               outside=1))
-    assert ledger.Node.stated(sketch_outside=1).to_json()["sketch_outside"] == 1
+    assert ledger.Node.stated(FIGURES, sketch_outside=1).to_json()["sketch_outside"] == 1
     near = dataclasses.replace(n, sketch_outside=1)
     assert ledger.sketch(r, near) == float(timing.sketch_failure(c, r.passes, r.rows, blocks=r.blocks, outside=1))
     assert ledger.memory(r, n)[0].delta - ledger.memory(r, near)[0].delta == pytest.approx(
@@ -399,7 +402,7 @@ def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
 def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, `timing`'s in `Node.stated`
     and by default, each a positive finite rate, and no DPU's."""
-    for n in (ledger.Node.stated(), ledger.Node.stated(reported_read_bytes_per_s=2e13), node()):
+    for n in (ledger.Node.stated(FIGURES), ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13), node()):
         assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
             timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597e12, 819.2e9)
         assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597e12, 819.2e9)
@@ -407,7 +410,7 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     for name in ("gpu_write_bytes_per_s", "host_write_bytes_per_s"):
         for bad in (0.0, -1.0, math.inf):
             with pytest.raises(ValueError, match=name):
-                dataclasses.replace(ledger.Node.stated(), **{name: bad})
+                dataclasses.replace(ledger.Node.stated(FIGURES), **{name: bad})
 
 
 def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> None:
@@ -415,7 +418,7 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
     read rate at spec and measured and its on-chip bytes, `timing`'s.  A reported read raises the node's R and no
     tier's; a node built by hand states none, and a tier is a `Tier` of whole devices, positive rates and whole
     bytes."""
-    n = ledger.Node.stated()
+    n = ledger.Node.stated(FIGURES)
     assert n.tiers == {
         "hbm": ledger.Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
                            timing.GPU_CHIP_BYTES),
@@ -423,7 +426,7 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
     assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.5952e12
     assert sum(t.devices * t.read_bytes_per_s for t in n.tiers.values()) == n.read_bytes_per_s == 12.9188e12
     assert sum(t.devices * t.chip_bytes for t in n.tiers.values()) == n.chip_bytes == 3_105_652_736
-    fast = ledger.Node.stated(reported_read_bytes_per_s=2e13)
+    fast = ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13)
     assert fast.tiers == n.tiers and fast.spec_bytes_per_s == fast.read_bytes_per_s == 2e13
     assert node().tiers == {} and "tiers" not in n.to_json()
     with pytest.raises(TypeError):

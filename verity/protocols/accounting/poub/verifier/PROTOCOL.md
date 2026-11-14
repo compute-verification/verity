@@ -159,7 +159,8 @@ term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower rea
 bytes read (0.066 read as 0.0057 at the slowest calibration still accepted). The measured reading takes each
 tier's fastest measured read: 1,539 GB/s a GPU (an honest session's, `timing.GPU_READ_BYTES_PER_S`) and
 606.8 GB/s of host DRAM (`timing.HOST_READ_BYTES_PER_S`), which
-`verity/protocols/accounting/poub/verifier/session/verifier.py`'s ledgers take as `timing.READ_BYTES_PER_S`. \(R\) is the rate of plain, incompressible reads,
+`verity/protocols/accounting/poub/verifier/session/verifier.py`'s ledgers take from the node's figures its caller hands
+in (`timing.Figures`; the measured node's, `timing.RTX_PRO_6000_NODE`, sums them to `timing.READ_BYTES_PER_S`). \(R\) is the rate of plain, incompressible reads,
 which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
 (7.55 TB/s against 1.536 TB/s plain), but the encoded store reads at 1.515 TB/s under a
 compressible allocation, since the hardware compresses 128-byte units, one codec word, and no encoded word is constant

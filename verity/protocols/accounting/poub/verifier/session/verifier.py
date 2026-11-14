@@ -143,12 +143,6 @@ from verity.protocols.proofs.spot.device.challenger import Verify
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
-#: One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`).
-GPU_HBM_BYTES = 96 * 2 ** 30
-HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
-DISK_BYTES_PER_S = 4.4e9
-"""The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
-how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
 UNRECORDED_SLACK_LOG2 = 41
@@ -338,7 +332,7 @@ def summed(windows: list[dict], *, hbm_bytes: int, block_bytes: int, delta: floa
             "windows": windows}
 
 
-def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_bytes: int = 0) -> dict:
+def recorded_memory(session: dict, *, chip_bytes: int, host_bytes: int = 0) -> dict:
     """An accepted session's memory line in both forms, from its record in `verifier.json` (`Verifier.session`'s),
     for one written before the average form (`averaged`): each window's mean held per pass is its read weights over its
     passes, and its registered receipts over its passes less its least host tier for HBM, exact while every pass reads
@@ -476,13 +470,13 @@ def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.
     return out
 
 
-def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
+def ingress_bursts(ingress_bytes_per_s: float, figures: timing.Figures) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
-    `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
-    ceiling (the charge up to `disk_bytes_per_s`), and one link burst (`timing.LINK_WINDOW_BYTES`) when the charge is
-    above that, the boundary links charged too."""
-    disk = min(ingress_bytes_per_s, disk_bytes_per_s)
-    n = ledger.Node.stated(disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
+    `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts on the node of `figures`: one rebuild batch in flight (S_chip),
+    one second at the disks' ceiling (the charge up to `figures.disk_bytes_per_s`), and one link burst
+    (`figures.link_window_bytes`) when the charge is above that, the boundary links charged too."""
+    disk = min(ingress_bytes_per_s, figures.disk_bytes_per_s)
+    n = ledger.Node.stated(figures, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
     return n.rebuild_burst_bytes + n.disk_burst_bytes + n.link_burst_bytes
 
 
@@ -533,24 +527,26 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
-def recorded_chip_bytes(mem: dict) -> int:
-    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `timing.CHIP_BYTES` where that is
+def recorded_chip_bytes(mem: dict, chip_bytes: int) -> int:
+    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `chip_bytes` where that is
     larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
-    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under `timing.HOST_CHIP_BYTES`."""
-    return max(mem["chip_bytes"], timing.CHIP_BYTES)
+    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under the host's figure."""
+    return max(mem["chip_bytes"], chip_bytes)
 
 
-def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
+def recorded_paced(session: dict, registration: dict, *, figures: timing.Figures, host_bytes: int,
+                   ingress_bytes_per_s: float = 0.0) -> dict:
     """An accepted paced session's line (`paced_line`) from its record in `verifier.json`, against its HBM and
-    `host_bytes`, its S_chip at least the auditor's (`recorded_chip_bytes`), with `ingress_bytes_per_s` of other routes
-    into node memory charged, and their bursts (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
+    `host_bytes`, its S_chip at least the auditor's (`recorded_chip_bytes` at `figures.chip_bytes`), with
+    `ingress_bytes_per_s` of other routes into node memory charged, and their bursts (`ingress_bursts`); the pooled
+    wrong receipts are the recorded line's."""
     lg, mem = session["ledger"], session["ledger"]["memory"]
     b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
     return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
                       blocks=registration["blocks"],
                       rebuild_per_ns=line.number(lg["inputs"]["squarings_per_s"]) / codec.encode_squarings / line.NS,
-                      chip_bytes=recorded_chip_bytes(mem), block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
-                      burst_bytes=ingress_bursts(ingress_bytes_per_s),
+                      chip_bytes=recorded_chip_bytes(mem, figures.chip_bytes), block_bytes=b,
+                      node_bytes=mem["hbm_bytes"] + host_bytes, burst_bytes=ingress_bursts(ingress_bytes_per_s, figures),
                       ingress_per_ns=line.number(ingress_bytes_per_s) / b / line.NS)
 
 
@@ -602,14 +598,15 @@ def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) 
     return [line.Seen(g.released_ns, g.last_ns, g.least, g.weights, g.hbm, g.host) for g in gs]
 
 
-def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates, clock: str = "record",
-                    transcript: dict | None = None) -> dict:
+def recorded_inputs(session: dict, registration: dict, *, figures: timing.Figures, host_bytes: int, rates: line.Rates,
+                    clock: str = "record", transcript: dict | None = None) -> dict:
     """An accepted paced session's line's inputs in the line's record form (`line.record_inputs_json`, the Lean
     verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
     passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
     each window beside it (`record_seen`, on the clock its `windows_seen` read: `clock` record, the verifier's, which
     the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
-    (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`); with `transcript`, the
+    (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes` at `figures.chip_bytes`); with
+    `transcript`, the
     session's (`lean_verifier.DifftestCase`'s file), from which the Lean makes the record itself. Refused unless the
     record is of `registration` (`wire.registration_json`'s form), which the inputs name as the Lean reads one, so
     that the line refuses a record not of it too (`line.unregistered`)."""
@@ -620,14 +617,16 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     return line.record_inputs_json(
         record, registration=lv.registration_json(wire.registration_of(registration)), samples=session["samples"],
         seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
-        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=recorded_chip_bytes(mem),
+        per=session["pace"]["groups"], block_bytes=mem["block_bytes"],
+        chip_bytes=recorded_chip_bytes(mem, figures.chip_bytes),
         node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates, clock=clock, session=transcript)
 
 
-def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
+def recorded_line(session: dict, registration: dict, *, figures: timing.Figures, host_bytes: int,
+                  rates: line.Rates) -> line.Line:
     """An accepted paced session's line in both forms (`line.line_of_record`, exact) of its `recorded_inputs`."""
-    return line.line_of_record(**line.of_record_json(recorded_inputs(session, registration, host_bytes=host_bytes,
-                                                                     rates=rates)))
+    return line.line_of_record(**line.of_record_json(recorded_inputs(
+        session, registration, figures=figures, host_bytes=host_bytes, rates=rates)))
 
 
 class RealClock:
@@ -941,7 +940,8 @@ class Pair:
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
-                 registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
+                 figures: timing.Figures, registry: audit.Registry | None = None, hbm_bytes: int | None = None,
+                 host_bytes: int = 0,
                  ingress_bytes_per_s: float = 0.0, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
@@ -955,7 +955,9 @@ class Verifier:
         self.binding = binding
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
-        self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
+        self.figures = figures
+        self.hbm_bytes = figures.hbm_bytes if hbm_bytes is None else hbm_bytes
+        self.host_bytes, self.regions, self.deferred = host_bytes, None, False
         self.appending = True
         self.ingress_bytes_per_s = ingress_bytes_per_s
         self.disk_bytes_per_s, self.link_bytes_per_s = disk_bytes_per_s, link_bytes_per_s
@@ -1392,7 +1394,7 @@ class Verifier:
                         rebuild_per_ns=line.number(inputs["squarings_per_s"]) / record.codec.encode_squarings / line.NS,
                         chip_bytes=inputs["chip_bytes"], block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
-                        burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
+                        burst_bytes=ingress_bursts(self.ingress_bytes_per_s, self.figures),
                         ingress_per_ns=line.number(self.ingress_bytes_per_s) / record.block_bytes / line.NS)
                 except ValueError as e:
                     out["ledger"]["paced"] = {"refused": str(e)}
@@ -1448,7 +1450,8 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
+        stated = ledger.Node.stated(self.figures, reported_read_bytes_per_s=reported,
+                                    disk_bytes_per_s=self.disk_bytes_per_s,
                                     link_bytes_per_s=self.link_bytes_per_s, disk_burst_bytes=self.disk_burst_bytes,
                                     link_burst_bytes=self.link_burst_bytes)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
@@ -1531,10 +1534,13 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
         tmp.replace(path)
 
 
-def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
-    """The verifier's process on `argv` (the command line's by default). A served or gate session's signatures are
-    checked with `verify`, and `--challenger serve` starts the challenger's process `serve`, which the process's entry
-    hands in (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse the run."""
+def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: Verify | None = None,
+         serve: Sequence[str] | None = None) -> int:
+    """The verifier's process on `argv` (the command line's by default), for the node of `figures`. A served or gate
+    session's signatures are checked with `verify`, and `--challenger serve` starts the challenger's process `serve`,
+    which the process's entry hands in with the figures
+    (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`): without them, those two refuse
+    the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
@@ -1558,8 +1564,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     ap.add_argument("--registry", type=Path,
                     help="the verifier's registrations, kept across its processes (`audit.Registry`): a node with a "
                          "live registration there is refused (default: this process's own)")
-    ap.add_argument("--hbm-bytes", type=int, default=HBM_BYTES,
-                    help="the node's HBM, the memory line's capacity (default: its GPUs' at 96 GiB each)")
+    ap.add_argument("--hbm-bytes", type=int,
+                    help="the node's HBM, the memory line's capacity (default: its GPUs', `figures.hbm_bytes`)")
     ap.add_argument("--host-bytes", type=int, default=0,
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
@@ -1570,7 +1576,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link burst, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
+                    help="one link burst, charged with the links (default: `figures.link_window_bytes`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1635,8 +1641,9 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                          "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
                          "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
                          "of ROLE")
-    ap.add_argument("--engines", type=int, default=timing.GPUS,
-                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
+    ap.add_argument("--engines", type=int,
+                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order (default: the "
+                         "node's GPUs, `figures.gpus`)")
     ap.add_argument("--arena-blocks", type=int, metavar="A",
                     help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
                          "past the arenas are host filler")
@@ -1644,10 +1651,13 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                     help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
                          "verifier's threads recomputing it at the same time")
     a = ap.parse_args(argv)
+    a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
+    a.engines = figures.gpus if a.engines is None else a.engines
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
-        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
-            {"paced": recorded_paced(s, v["registration"], host_bytes=a.host_bytes,
+        print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
+                                                                  host_bytes=a.host_bytes)} | (
+            {"paced": recorded_paced(s, v["registration"], figures=figures, host_bytes=a.host_bytes,
                                      ingress_bytes_per_s=a.ingress_bytes_per_s)} if s.get("pace") else {})
                           for s in v["sessions"] if s["accepted"]], indent=1))
         return 0
@@ -1712,8 +1722,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     # saves this process's registry over the file.
     registry = load_registry(a.registry)
     conn = wire.Conn(sock)
-    v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
-                 delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
+    v = Verifier(conn, figures=figures, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6),
+                 samples=a.samples, delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,
                  lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
@@ -1796,7 +1806,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     return 0
 
 
-__all__ = ["AVERAGE", "GPU_HBM_BYTES", "HBM_BYTES", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
+__all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
            "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
            "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",

@@ -1,8 +1,9 @@
 """PoUB's session verifier as a process: `verity/protocols/accounting/poub/verifier/session/verifier.py`'s `main`, on this command line, handed
-what a verifier imports none of (it reads no `verity.ml` code beyond its frozen edges): the LMS verify a served or gate
-session's signatures are checked with (`lms_verify`), and the challenger's own process `--challenger serve` starts for a
-session (`SERVE`). Its usage is `verifier.py`'s. live_verifier's host runs it under `python3 -I`, which puts neither
-the repository nor a venv on the path, so it puts the repository's root there first."""
+what a verifier imports none of (it reads no `verity.ml` code beyond its frozen edges): the node's figures
+(`timing.RTX_PRO_6000_NODE`, the measured node's), the LMS verify a served or gate session's signatures are checked with
+(`lms_verify`), and the challenger's own process `--challenger serve` starts for a session (`SERVE`). Its usage is
+`verifier.py`'s. live_verifier's host runs it under `python3 -I`, which puts neither the repository nor a venv on the
+path, so it puts the repository's root there first."""
 from __future__ import annotations
 
 import sys
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[6]))
 
 from verity.commitments.crypto import lms
 from verity.commitments.scheme import DIGEST_BYTES
+from verity.protocols.accounting.poub.verifier import timing
 from verity.protocols.accounting.poub.verifier.session import verifier
 from verity.protocols.proofs.spot.device import challenger as Ch
 
@@ -30,7 +32,8 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    return verifier.main(argv, verify=lms_verify, serve=(sys.executable, str(SERVE)))
+    return verifier.main(argv, figures=timing.RTX_PRO_6000_NODE, verify=lms_verify,
+                         serve=(sys.executable, str(SERVE)))
 
 
 __all__ = ["lms_verify", "main"]

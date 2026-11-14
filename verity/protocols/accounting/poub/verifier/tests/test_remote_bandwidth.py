@@ -36,6 +36,7 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
+FIGURES = timing.RTX_PRO_6000_NODE
 
 
 def payload(j: int) -> bytes:
@@ -1034,26 +1035,26 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
     The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.57–5.60%.  The 20 s option at 11,091
     openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at
     2,773."""
-    s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9)
+    s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9, FIGURES)
     assert 789.0e9 < store < 789.1e9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
     assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
     idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
     for rtt in (1, 20):
-        g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
+        g = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s)
         assert g.worst.sample < 0.001 and 0.00895 < g.worst.gamma < 0.00928
         assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
         assert g.horizon < 1e-4 and 0.0066 < g.gamma_horizon < 0.0068
-        spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+        spec = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s,
                              capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
         assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
         assert 0.058 < spec.gamma < 0.0586
-        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
-                            read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
+        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS,
+                            samples=s, read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
         assert hbm.timing > idle and 0.0557 < hbm.gamma < 0.0561
-        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
+        twenty = timing.stated(store, 20 * timing.S, 30, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=11_091).worst
         assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0137
-        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
+        one = timing.stated(store, timing.S, 600, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=2_773).worst
         assert one.sample < 0.01 < 0.09 < one.gamma
 
 
@@ -1067,7 +1068,7 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     assert {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()} == timing.SQUARINGS_PER_S
     assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
     gpu = 94 * 10 ** 9
-    host = timing.spanning(gpu) - 8 * gpu
+    host = timing.spanning(gpu, FIGURES) - 8 * gpu
     assert host / timing.HOST_READ_BYTES_PER_S == pytest.approx(gpu / timing.GPU_READ_BYTES_PER_S)
 
 
@@ -1110,7 +1111,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
         assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
     k = 94 * 10 ** 9 // codec.BLOCK_BYTES
     assert 40.98 < audit.named_bits(k) / k < 41.0 and audit.named_bits(k) < 64 * k
-    k = timing.spanning(94 * 10 ** 9) // codec.BLOCK_BYTES
+    k = timing.spanning(94 * 10 ** 9, FIGURES) // codec.BLOCK_BYTES
     assert 37.92 < audit.named_bits(k) / k < 37.93
     for bad in (-1, 1.0, True):
         with pytest.raises(ValueError, match="nonnegative integers"):
@@ -1133,10 +1134,11 @@ def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
     is μ_chip, λ and μ_rebuild alone, about 380 GB over the node's every tier."""
-    assert 380.4e9 < timing.store_floor() < 380.6e9 and 458.3e9 < timing.store_floor(50 * timing.US) < 458.5e9
+    assert 380.4e9 < timing.store_floor(figures=FIGURES) < 380.6e9
+    assert 458.3e9 < timing.store_floor(50 * timing.US, figures=FIGURES) < 458.5e9
     for scale, over in ((0.98, True), (1.02, False)):
-        g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
-                          samples=555 * 1200)
+        g = timing.stated(round(scale * timing.store_floor(50 * timing.US, figures=FIGURES)), 1200 * timing.S, 1,
+                          figures=FIGURES, rtt_ns=timing.MS, samples=555 * 1200)
         assert (g.worst.gamma > 0.01) is over
 
 
