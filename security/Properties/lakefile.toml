@@ -108,6 +108,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Spot.Wires", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.HistoryTable",
   "Properties.Spot.Rate", "Properties.Spot.MonitoringPeriod", "Properties.Spot.MonitoringPeriodLedger",
   "Properties.Core.Evaluate", "Properties.Certifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
+  "Properties.Certifier.Registered",
   "Properties.Core.Period", "Properties.NetworkScan", "Properties.Accounting.Requirement",
   "Properties.Compose.Compose", "Properties.Poub.Remote",
   "Properties.Poub.Remote.Coins", "Properties.Poub.Remote.Pooled", "Properties.Accounting.Served",
