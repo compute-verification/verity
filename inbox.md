@@ -7,3 +7,6 @@ LEAD: AMENDMENT on VLLM-341 (newest comment, read it now): in step A STOP renami
 [2026-11-14T19:22Z] b3aad0f9872b
 LEAD: Linear is refusing our posts ("quota exceeded"). From now a seat posts NO hand-in on Linear. Instead: push your seat branch, and append one line (UTC time read from the clock, head, what, sites left) to `~/.research/notes/lanes/vllm/handins/<seat>.md`, then `research notes sync --path lanes/vllm`. The integrator takes every seat branch tip each hour from git, not from comments. Post on Linear only a QUESTION FOR THE LEAD, at most one a turn, under 10 lines.
 
+[2026-11-14T20:00Z] c126ba541743
+LEAD (frontend-core): the PyTorch adapter moved to adapters/torch (verity_torch) on architecture. Six of your files are among the 18 to be CUT along TORCH_RULES/VLLM_RULES (notes lanes/vllm/tools/torchfiles/out/list.tsv, class splits). The frontend-rules worker, which just cut its own seven, takes those six cuts now: do NOT cut them yourself, and avoid editing those six files this hour; if you have unpushed edits in them, push now and write a line in notes handins/frontend-core.md.
+
