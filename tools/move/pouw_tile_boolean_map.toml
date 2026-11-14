@@ -45,3 +45,11 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] implies (`layout.py --modules`)
+"verity_vllm.definitions.boolean" = "verity.circuits.boolean.versions"
+"verity_vllm.definitions.registry.pearl_c_call" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_call"
+"verity_vllm.definitions.registry.pearl_c_forming" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming"
+"verity_vllm.definitions.registry.pearl_c_noise" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise"
+"verity_vllm.definitions.registry.pearl_c_tile" = "verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile"
