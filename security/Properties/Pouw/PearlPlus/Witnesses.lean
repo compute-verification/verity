@@ -56,20 +56,20 @@ def noCallsPass : Pass := default
 def capScheme : Scheme := { kMin := 128, tileM := 1, tileN := 1 }
 
 /-- One 1 × 128 × 1 call, its one tile `[0] × [0]`: its A row real, both rows kept whole and credited. -/
-def capRecord : UnitRecord := { matmul := ⟨0, 1, 128, 1, 0⟩, realRows := 1, kKept := 128 }
+def inertBoundRecord : UnitRecord := { matmul := ⟨0, 1, 128, 1, 0⟩, realRows := 1, kKept := 128 }
 
 /-- One formed row of 128 words: each word 1.0 and each code E4M3 1.0, with ρ = α = β = 1.0. At β = 1.0 the flat E′ code
 c_β is E4M3 44's, so the support's two ends from f32(α·x) = 1.0 differ and no element is salt-dead. -/
 def capSide : Words.Formed :=
   ⟨#[Array.replicate 128 0x38], #[0x3F800000], #[0x3F800000], #[0x3F800000], #[#[]], #[Array.replicate 128 0x3F800000]⟩
 
-/-- `capRecord`'s tile formed: both rows `capSide`. -/
-def capOps : Words.Ops := ⟨capSide, capSide, #[], #[]⟩
+/-- `inertBoundRecord`'s tile formed: both rows `capSide`. -/
+def inertBoundOps : Words.Ops := ⟨capSide, capSide, #[], #[]⟩
 
 /-- `capSide` with 32 codes, less than one promotion group of 128, so the inert-work replay refuses its words. -/
 def shortSide : Words.Formed := { capSide with codes := #[Array.replicate 32 0x38] }
 
-/-- `capRecord`'s tile with `shortSide`'s codes. -/
+/-- `inertBoundRecord`'s tile with `shortSide`'s codes. -/
 def shortOps : Words.Ops := ⟨shortSide, shortSide, #[], #[]⟩
 
 /-! ## One honest pass
@@ -159,7 +159,7 @@ def honestRun (draws : Nat) : Input := { coins := honestCoins, manifests := [hon
 
 One tile of a test instance of the scheme (`capScheme`, a manifest's `"instance": {"k_min": 128, "tile": [1, 1]}`): one
 1 × 128 call of A against its weight's 1 × 128 B, each element a BF16 value sampled from a standard normal, proved by the
-honest prover (`clear_audit.Prover`) and declared by it (`clear_work.declare`: `capRecord`, no row excluded), whose tile
+honest prover (`clear_audit.Prover`) and declared by it (`clear_work.declare`: `inertBoundRecord`, no row excluded), whose tile
 `clear_audit.Verifier` and `clear_work.check_opened` pass. Every hm96 salt is zero and the epoch's coins are
 `honestPass`'s; each tree holds one leaf, so every opening's path is empty. The bytes are the Python's, written as
 big-endian numerals, which the kernel reads as numbers (a hex string it would decode character by character), and the
@@ -193,13 +193,13 @@ def testRecordsRoot : ByteArray :=
 def testTranscriptRoot : ByteArray :=
   beBytes 64 [0xe9844401a7849666a6eec250fe3fedf13753cb1bdc8b24f3e9480f2fab4071bbaf8a6121f0006cd8ed269ef1564d42c6b922b666512df2bf5f80d02356124476]
 
-/-- The test pass: `capRecord`'s one call. -/
+/-- The test pass: `inertBoundRecord`'s one call. -/
 def testPass : Pass where
   scheme := capScheme
   salt := testSalt
   weightRoots := [(0, testRootB)]
   weightsRoot := testWeightsRoot
-  records := [capRecord]
+  records := [inertBoundRecord]
   rootsA := [testRootA]
   transcriptRoot := testTranscriptRoot
   count := 1

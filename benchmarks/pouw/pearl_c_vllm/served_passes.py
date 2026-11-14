@@ -61,7 +61,7 @@ pass ends (``done`` once all have), with the node it ran on and, on the device, 
 replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
 retained none, and any once the verifier's coin is flipped (``DIR/coin.json``).
 
-``volunteer-needed`` prints ``yes`` and the over-cap rule (`over_cap_rule`) where the verdict a pipeline calls (``run``,
+``volunteer-needed`` prints ``yes`` and the over-cap rule (`over_inert_bound_rule`) where the verdict a pipeline calls (``run``,
 the default: ``verify``'s, `verify_run.verify_passes`; ``pass``: `verify_run.verify`, a pass at a time) rejects a run on
 a sampled tile with a credited row or tile over its debit cap under ``--over-cap`` (default: the verdict's own rule), and
 ``no`` and the rule where it credits such a row nothing instead.  The pipelines (`served_pearlplus.sh`,
@@ -182,7 +182,7 @@ VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "vol
 DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
 #: Pearl+'s rules for a sampled tile with a credited row or tile over its debit cap (``verify --over-cap``, `verify_run`'s
 #: ``over_cap``): the verdict rejects the run, or credits the row nothing; ``volunteer`` is the prover's under the first
-OVER_CAP = ("reject", "uncredited")
+OVER_INERT_BOUND = ("reject", "uncredited")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
@@ -469,7 +469,7 @@ def volunteer(args: argparse.Namespace) -> int:
     return 0 if doc["ok"] else 1
 
 
-def over_cap_rule(verdict, rule: str | None = None) -> str:
+def over_inert_bound_rule(verdict, rule: str | None = None) -> str:
     """The rule `verdict` (`verify_run.verify_passes` or `verify_run.verify`) takes on a sampled tile with a credited row or
     tile over its debit cap, given ``over_cap=rule`` where `rule` isn't None: its ``over_cap`` default, or ``reject``
     where it takes no ``over_cap``, a verdict without it having that one rule."""
@@ -477,10 +477,10 @@ def over_cap_rule(verdict, rule: str | None = None) -> str:
     if took is None:
         if rule is not None:
             raise ValueError(f"verify_run.{verdict.__name__} takes no over_cap (its one rule is reject), so no --over-cap")
-        return OVER_CAP[0]
+        return OVER_INERT_BOUND[0]
     rule = took.default if rule is None else rule
-    if rule not in OVER_CAP:
-        raise ValueError(f"verify_run.{verdict.__name__}'s over-cap rule {rule!r} is none of {', '.join(OVER_CAP)}")
+    if rule not in OVER_INERT_BOUND:
+        raise ValueError(f"verify_run.{verdict.__name__}'s over-cap rule {rule!r} is none of {', '.join(OVER_INERT_BOUND)}")
     return rule
 
 
@@ -490,11 +490,11 @@ def volunteer_needed(args: argparse.Namespace) -> int:
 
     verdict = VR.verify_passes if args.verdict == "run" else VR.verify
     try:
-        rule = over_cap_rule(verdict, args.over_cap)
+        rule = over_inert_bound_rule(verdict, args.over_cap)
     except ValueError as e:
         print(f"volunteer-needed FAIL: {e}", file=sys.stderr, flush=True)
         return 2
-    print("yes" if rule == OVER_CAP[0] else "no", rule, flush=True)
+    print("yes" if rule == OVER_INERT_BOUND[0] else "no", rule, flush=True)
     return 0
 
 
@@ -576,7 +576,7 @@ def verify(args: argparse.Namespace) -> int:
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
                                     dropped=dropped, record=record, draw=draw,
-                                    over_cap=over_cap_rule(VR.verify_passes, args.over_cap),
+                                    over_cap=over_inert_bound_rule(VR.verify_passes, args.over_cap),
                                     test_instance=args.test_instance))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
@@ -605,7 +605,7 @@ def arm(args: argparse.Namespace) -> int:
 
 
 def lean_argv(exe: Path, coins: Path, draws: int, record: Path, manifests: list[Path], tie: Path | None,
-              over_cap: str = OVER_CAP[1], test_instance: bool = False, of_record: bool = False) -> list[str]:
+              over_cap: str = OVER_INERT_BOUND[1], test_instance: bool = False, of_record: bool = False) -> list[str]:
     """``pouw-pearlplus``'s command line on the run's retained passes (`manifests`, in order), the epoch's coin commitment,
     the samples, the verifier's coin record, which pins the Lean's source to the one the Python drew, the over-cap rule and
     test instance the Python ran under, the window record W (`tie`) the passes are held to where there is one, and
@@ -674,7 +674,7 @@ def lean(args: argparse.Namespace) -> int:
     except (OSError, TypeError, ValueError) as e:
         return done(f"the epoch's coins can't be read: {type(e).__name__}: {e}", 2)
     rec["argv"] = lean_argv(exe, passes / "coins.json", doc["draws"], record, paths,
-                            Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_CAP[0]),
+                            Path(doc["tie_record"]) if doc.get("tie_record") else None, doc.get("over_cap", OVER_INERT_BOUND[0]),
                             doc.get("test_instance", False), of_record=live)
     try:
         p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
@@ -849,7 +849,7 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--device-check", type=int, metavar="N",
                    help="with --device, replay every Nth tile on the CPU too (default volunteer_pass.CROSS_CHECK)")
     n = sub.add_parser("volunteer-needed")
-    n.add_argument("--over-cap", choices=OVER_CAP, help="the rule verify is to take (default: the verdict's own)")
+    n.add_argument("--over-cap", choices=OVER_INERT_BOUND, help="the rule verify is to take (default: the verdict's own)")
     n.add_argument("--verdict", choices=("run", "pass"), default="run",
                    help="run: verify's (verify_run.verify_passes); pass: verify_run.verify's, a pass at a time")
     r = sub.add_parser("retain")
@@ -877,7 +877,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
-    v.add_argument("--over-cap", choices=OVER_CAP, help="the rule on a drawn tile over its inert-work bound: uncredited "
+    v.add_argument("--over-cap", choices=OVER_INERT_BOUND, help="the rule on a drawn tile over its inert-work bound: uncredited "
                    "credits it nothing, reject rejects the run (default: verify_run.verify_passes' own, uncredited)")
     v.add_argument("--test-instance", action="store_true", help="the passes are a test instance's: their tile may be "
                    "other than 64 x 64, and the verdict credits nothing")

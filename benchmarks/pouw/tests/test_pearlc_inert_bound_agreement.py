@@ -1,7 +1,7 @@
-"""The hidden inert-work bound (`circuit.cap`'s `Pc8TileCap` at `cap.row_rho`'s ρr, the template `cap.served` serves)
-and the clear path's (`clear_work.cap_failure`) on the same tile of the H100 record: one verdict on every tile, accepted
+"""The hidden inert-work bound (`circuit.inert_bound`'s `Pc8TileCap` at `inert_bound.row_rho`'s ρr, the template `inert_bound.served` serves)
+and the clear path's (`clear_work.inert_bound_failure`) on the same tile of the H100 record: one verdict on every tile, accepted
 and refused, under -h3's bound on a row (4ρ at its census k = 256, ρ at k = 1,024) and -h0's bound on the tile alone.
-The clear path's forming term (`pearl_c_debit.forming_elements`) reads each row's forming, here α = β = 1 and x = 0,
+The clear path's forming term (`pearl_c_inert_work.inert_elements`) reads each row's forming, here α = β = 1 and x = 0,
 which has no salt-dead element, and the tiles have no atom block that every word of a row flags, so it is 0, as the
 circuit's is on no salt-dead bits."""
 from __future__ import annotations
@@ -17,8 +17,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
 import clear_work as CW
-import test_circuit_cap as T
-from verity.protocols.accounting.pouw.prover.circuit import cap
+import test_circuit_inert_bound as T
+from verity.protocols.accounting.pouw.prover.circuit import inert_bound
 from verity.circuits.evaluation import evaluate
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape, Tile
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
@@ -54,11 +54,11 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
     credited = set(record.credited(tile)[0])
     ok = [i in credited for i in range(tm)]
     pa, pb = T._peel_rows(k, TILE)
-    cert = [cap.certificates(ac[i], bc[j], d.name) for i in range(tm) for j in range(tn)]
+    cert = [inert_bound.certificates(ac[i], bc[j], d.name) for i in range(tm) for j in range(tn)]
     flat = lambda rows: [x for r in rows for x in r]  # noqa: E731
-    hidden = evaluate(cap.templates(k, d.name, TILE, N, row_rho=cap.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
+    hidden = evaluate(inert_bound.templates(k, d.name, TILE, N, row_rho=inert_bound.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
                       flat(pa), flat(pb), [int(o) for o in ok], [0] * (tm * k // 32), flat(cert))[-1]
-    reason = CW.cap_failure(scheme, record, tile, SimpleNamespace(
+    reason = CW.inert_bound_failure(scheme, record, tile, SimpleNamespace(
         a=SimpleNamespace(codes=ac, alpha=[ONE] * tm, x=[[0] * k] * tm, beta=[ONE] * tm), b=SimpleNamespace(codes=bc)))
     return bool(hidden), reason is None, reason
 

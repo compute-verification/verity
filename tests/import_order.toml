@@ -543,8 +543,8 @@ reaches = [
 loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/__init__.py",
     "verity/protocols/accounting/pouw/prover/circuit/anchors.py",
-    "verity/protocols/accounting/pouw/prover/circuit/cap.circuit-check.py",
-    "verity/protocols/accounting/pouw/prover/circuit/cap.py",
+    "verity/protocols/accounting/pouw/prover/circuit/inert_bound.circuit-check.py",
+    "verity/protocols/accounting/pouw/prover/circuit/inert_bound.py",
     "verity/protocols/accounting/pouw/prover/circuit/compile.py",
     "verity/protocols/accounting/pouw/prover/circuit/eps1_reference.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1tile.py",

@@ -8,10 +8,10 @@ public import Proofs.Pouw.PearlC.TileValues
 /-!
 # Pearl+'s bridge, part (c), the debit's keys: `key` is the value order, `least` a threshold, `carried` the rounded add
 
-`Rule.wordDebit` replays a word's later promotions on keys rather than on values: `Rule.key` writes a finite FP32 word as
+`Rule.wordInertWork` replays a word's later promotions on keys rather than on values: `Rule.key` writes a finite FP32 word as
 an integer in [−TOP, TOP] in value order (±0 one key), `Rule.least` bisects for the least key at which a monotone predicate
 holds, and `Rule.carried x w` is the key of RN(x's value + w's value). `keyVal` is a key's value; the three statements
-here are what the debit's replay (`Debit`) reads of them.
+here are what the debit's replay (`InertWork`) reads of them.
 -/
 
 @[expose] public section

@@ -9,9 +9,9 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 `TileCheck.ComputesWords` reads a protocol's ticket and useful words and its weight rule, and a tile rule's tiling and
 row rule. It never reads credit, cap or `W_ref`, so it moves between protocols and tile rules that agree on those
 (`TileCheck.ComputesWords.transfer`). Rev1 (`pearlCProtocolDevRev1`, `pearlCTilesDevRev1`) and its caps per row
-(`pearlCProtocolDevRev1RowCapAt`, `pearlCTilesDevRev1RowCapAt`) change only credit, cap and `W_ref`, so the H100's words
+(`pearlCProtocolDevRev1RowInertBoundAt`, `pearlCTilesDevRev1RowInertBoundAt`) change only credit, cap and `W_ref`, so the H100's words
 theorem holds at them as it is: `tileCheck8_computesWords_h100Rev1` at the protocol and tiles `TTOutTilePearlCH100Rev1`
-reads, and `tileCheck8_computesWords_h100Rev1RowCapAt` at those of the `-h3` sampled g.
+reads, and `tileCheck8_computesWords_h100Rev1RowInertBoundAt` at those of the `-h3` sampled g.
 -/
 
 @[expose] public section
@@ -56,12 +56,12 @@ theorem tileCheck8_computesWords_h100Rev1 (ρ : ℚ)
 
 /-- **L3's words for the plain `pc8` Program at the H100's record under rev1, with the tile cap `ρ` and the row cap
 `ρr`**: `tileCheck8_computesWords_h100` again, since the caps per row change only the cap. -/
-theorem tileCheck8_computesWords_h100Rev1RowCapAt (ρ ρr : ℚ)
+theorem tileCheck8_computesWords_h100Rev1RowInertBoundAt (ρ ρr : ℚ)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r) :
     (tileCheck8 coreOps hopperE4m3K32 noise).ComputesWords
-      (pearlCProtocolDevRev1RowCapAt devH100 (pc8Sem coreOps hopperE4m3K32 noise) ρ ρr)
-      (pearlCTilesDevRev1RowCapAt devH100 (pc8Sem coreOps hopperE4m3K32 noise) ρ ρr) (fun L => pearlCDomainDev devH100 L ∧
+      (pearlCProtocolDevRev1RowInertBoundAt devH100 (pc8Sem coreOps hopperE4m3K32 noise) ρ ρr)
+      (pearlCTilesDevRev1RowInertBoundAt devH100 (pc8Sem coreOps hopperE4m3K32 noise) ρ ρr) (fun L => pearlCDomainDev devH100 L ∧
         ∀ u < L.N, tileSide (L.shape u).m ∣ (L.shape u).m ∧ tileSide (L.shape u).n ∣ (L.shape u).n) :=
   (tileCheck8_computesWords_h100 Costs.adopted ρ noise).transfer (fun _ h => h) rfl rfl rfl rfl rfl
 

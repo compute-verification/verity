@@ -42,16 +42,16 @@ open Lean PouwCommit Words
 
 /-- The rule on an opened tile over its inert-work bound (`verify_run`'s ``over_cap``, `served_passes.py verify
 --over-cap`): `uncredited` credits it nothing and goes on (CMP-311 option A, the default); `reject` rejects the run. -/
-inductive OverCap where
+inductive OverInertBound where
   | uncredited
   | reject
   deriving BEq, DecidableEq, Repr, Inhabited
 
-def OverCap.name : OverCap → String
+def OverInertBound.name : OverInertBound → String
   | .uncredited => "uncredited"
   | .reject => "reject"
 
-def OverCap.ofName? : String → Option OverCap
+def OverInertBound.ofName? : String → Option OverInertBound
   | "uncredited" => some .uncredited
   | "reject" => some .reject
   | _ => none
@@ -68,7 +68,7 @@ structure Input where
   draws : Nat
   source : Option ByteArray := none
   held : Option CoinRecord := none
-  overCap : OverCap := .uncredited
+  overInertBound : OverInertBound := .uncredited
   /-- The passes are a test instance's (`verify_passes`' ``test_instance``): their `k_min` and tile may be other than
   `K_MIN` and `TILE × TILE`, and the verdict credits nothing. -/
   testInstance : Bool := false
@@ -96,20 +96,20 @@ structure TileVerdict where
 def TileVerdict.reason (v : TileVerdict) : Option String :=
   match v.outcome with
   | .pass => none
-  | .overCap why | .fail why => some why
+  | .overInertBound why | .fail why => some why
 
 /-- Whether the tile is accepted under `m`: it passes, or it is over its bound and `m` credits it nothing. -/
-def TileVerdict.ok (m : OverCap) (v : TileVerdict) : Bool :=
+def TileVerdict.ok (m : OverInertBound) (v : TileVerdict) : Bool :=
   match v.outcome with
   | .pass => true
-  | .overCap _ => m == .uncredited
+  | .overInertBound _ => m == .uncredited
   | .fail _ => false
 
 /-- X_O: how many of the plan's samples landed on a tile over its inert-work bound. -/
-def overCapDraws (pl : Plan) (vs : List TileVerdict) : Nat :=
+def overInertBoundDraws (pl : Plan) (vs : List TileVerdict) : Nat :=
   pl.picks.countP fun (i, tid) => (vs.find? fun v => v.pass == i && v.tile == tid).any fun v =>
     match v.outcome with
-    | .overCap _ => true
+    | .overInertBound _ => true
     | _ => false
 
 structure RunAnswer where
@@ -119,7 +119,7 @@ structure RunAnswer where
   plan : Option Plan := none
   verdicts : List TileVerdict := []
   work : Option Credit := none
-  overCap : OverCap := .uncredited
+  overInertBound : OverInertBound := .uncredited
   tie : Option Tied := none
 
 /-- `verify_passes` after the tie: the record, the source, the sample's holds and the tiles to open. -/
@@ -200,15 +200,15 @@ def testCredit (testInstance : Bool) (c : Credit) : Credit :=
 /-- `verify_passes`: the run's verdict. -/
 def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : RunAnswer :=
   match plan i with
-  | .error r => { accept := false, reason := some r.reason, refused := r.refused, overCap := i.overCap, tie := r.tie }
+  | .error r => { accept := false, reason := some r.reason, refused := r.refused, overInertBound := i.overInertBound, tie := r.tie }
   | .ok pl =>
     let vs := replay pl opener
     let bad := vs.filterMap fun v =>
-      if v.ok i.overCap then none else v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
+      if v.ok i.overInertBound then none else v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
     if bad.isEmpty then
-      { accept := true, plan := some pl, verdicts := vs, overCap := i.overCap, tie := pl.tie,
-        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overCapDraws pl vs) DELTA)) }
-    else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overCap := i.overCap,
+      { accept := true, plan := some pl, verdicts := vs, overInertBound := i.overInertBound, tie := pl.tie,
+        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl vs) DELTA)) }
+    else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overInertBound := i.overInertBound,
            tie := pl.tie }
 
 end PouwCheck.PearlPlus

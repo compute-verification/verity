@@ -1,7 +1,7 @@
 """Pearl-C's Python accounting is the Lean's on every pinned FP8 price twin (`harness/price_twins.json`) and on the H100's
-rev1 pins, as exact rationals: the gap, the credit, and the debit cap the verifier's tile rule admits (`clear_work.tile_cap`).
+rev1 pins, as exact rationals: the gap, the credit, and the debit cap the verifier's tile rule admits (`clear_work.tile_inert_bound`).
 The verifier must admit no more than the rule its guarantee is proved for, rev1's (`DeviceRev1.lean`: `creditDevRev1`,
-`tileDebitRev1`, `wrefDevRev1K`), so a credit or cap that drifts from it fails here, as the first promotion add of every
+`tileInertWorkRev1`, `wrefDevRev1K`), so a credit or cap that drifts from it fails here, as the first promotion add of every
 word did before rev1.  A pinned twin of a statement this file doesn't price (a hot start's, Pearl-C4's) fails too, until it
 has a Python counterpart here."""
 
@@ -18,7 +18,7 @@ import pytest
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.accounting.pouw.prover.schemes import get
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
@@ -59,7 +59,7 @@ def cast_offset(twin: dict) -> Fraction:
 def gamma(s: C.PearlC, n: int, c: Fraction, reading: str, kind: str) -> Fraction:
     """The gap at n³ from the scheme's W_ref and credit, as the Lean states it per reading: the unit's or a tile's least credit
     over `wrefDevRev1K d c`.  A tile's credit is (1 − ρ)·credit·share whatever the cap reads, so a chain-cap tile's gap is
-    the forming-credited one; the chain cap's unit (v2's `DeviceChainCap`) reads the debit against ρ·`chainCreditDev`."""
+    the forming-credited one; the chain cap's unit (v2's `DeviceChainInertBound`) reads the debit against ρ·`chainCreditDev`."""
     sh = Shape(n, n, n)
     w, credit, rho = s.wref(sh) + c * n * n, Fraction(s.credit_of(sh)), s.cap
     if reading == "forming-credited" or (reading == "chain-cap" and kind == "tile"):
@@ -93,9 +93,9 @@ def test_gamma_is_the_pinned_twins(twin):
 
 @pytest.mark.parametrize("twin", [t for t in CUBES if t["reading"] == "forming-credited"],
                          ids=lambda t: t["pin"].removeprefix("Pouw.PearlC."))
-def test_credit_and_cap_are_the_pinned_twins(twin):
+def test_credit_and_inert_bound_are_the_pinned_twins(twin):
     """The Lean's credit, solved from the pinned gap alone, is `credit_of`; the unit's cap ρ·credit is its cells' and a
-    tile's cap is ρ·credit·tileShare, `tile_cap`'s on v1 (v2 has no debit rule, so its tile cap is the cells' credit)."""
+    tile's cap is ρ·credit·tileShare, `tile_inert_bound`'s on v1 (v2 has no debit rule, so its tile cap is the cells' credit)."""
     s, n, c = scheme_of(twin), twin["shape"], cast_offset(twin)
     sh, rho = Shape(n, n, n), s.cap
     credit = lean_credit(Fraction(twin["gamma"]), n, rho, Fraction(s.prices.forming_a_only), c)
@@ -105,7 +105,7 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
     rows, cols = 2, 3
     share = Fraction(rows * cols, n * n)
     if s.device.g:
-        debit, cap = CW.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows)
+        debit, cap = CW.tile_inert_bound(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows)
         assert cap == rho * credit * share
         assert debit >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
     else:
@@ -141,13 +141,13 @@ def test_h100_gamma_is_rev1s_pin(pin, n):
                                                       Fraction(s.prices.forming_a_only), Fraction(0))
 
 
-def test_the_zero_word_debits_every_later_promotion():
-    """`tile_cap`'s inert work holds `tileDebitRev1`'s later +0 promotions, a zero word's k/(32·G) − 1, and its forming
+def test_the_zero_word_counts_every_later_promotion_as_inert_work():
+    """`tile_inert_bound`'s inert work holds `tileInertWorkRev1`'s later +0 promotions, a zero word's k/(32·G) − 1, and its forming
     elements: every atom of a zero word is flagged, so each of the row's k elements is inert, its |cols|/n share."""
     s, k = scheme_of(next(t for t in TWINS if t["statement"] == "pearl-c-sm120/v1")), 1024
     record = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, k)
-    atoms, zeros = D.chain_debit([[0] * k], [[0] * k], s.device)
+    atoms, zeros = D.chain_inert_work([[0] * k], [[0] * k], s.device)
     assert zeros == k // s.device.window - 1
-    assert atoms == k // 32 and D.tile_debit([[0] * k], [[0] * k], [(ONE, [0] * k, ONE)], s.device) == (atoms, zeros, k)
-    assert CW.tile_cap(s, record, [[0] * k], [[0] * k], [(ONE, [0] * k, ONE)])[0] == D.debit_units(
+    assert atoms == k // 32 and D.tile_inert_work([[0] * k], [[0] * k], [(ONE, [0] * k, ONE)], s.device) == (atoms, zeros, k)
+    assert CW.tile_inert_bound(s, record, [[0] * k], [[0] * k], [(ONE, [0] * k, ONE)])[0] == D.inert_work_units(
         atoms, Fraction(k, 16), s.prices, s.device, zeros=zeros)

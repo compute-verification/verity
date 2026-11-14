@@ -2415,6 +2415,33 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/pearl_c_vllm/served_debit.py": "benchmarks/pouw/pearl_c_vllm/served_inert_work.py",
+        "benchmarks/pouw/tests/test_pearlc_cap_agreement.py": "benchmarks/pouw/tests/test_pearlc_inert_bound_agreement.py",
+        "security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCap.lean": "security/Definitions/Pouw/Assumptions/PearlC/DeviceChainInertBound.lean",
+        "security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCapKernel.lean": "security/Definitions/Pouw/Assumptions/PearlC/DeviceChainInertBoundKernel.lean",
+        "security/Definitions/Pouw/Assumptions/PearlC/HonestCap.lean": "security/Definitions/Pouw/Assumptions/PearlC/HonestInertBound.lean",
+        "security/Proofs/Pouw/PearlC/Cap.lean": "security/Proofs/Pouw/PearlC/InertBound.lean",
+        "security/Proofs/Pouw/PearlC/Cap/": "security/Proofs/Pouw/PearlC/InertBound/",
+        "security/Proofs/Pouw/PearlC/CapLoopGap.lean": "security/Proofs/Pouw/PearlC/InertBoundLoopGap.lean",
+        "security/Proofs/Pouw/PearlC/ChainCapKernelGap.lean": "security/Proofs/Pouw/PearlC/ChainInertBoundKernelGap.lean",
+        "security/Proofs/Pouw/PearlC/ChainCapLoopGap.lean": "security/Proofs/Pouw/PearlC/ChainInertBoundLoopGap.lean",
+        "security/Proofs/Pouw/PearlC/DeviceCapGap.lean": "security/Proofs/Pouw/PearlC/DeviceInertBoundGap.lean",
+        "security/Proofs/Pouw/PearlC/DeviceCapRev1Gap.lean": "security/Proofs/Pouw/PearlC/DeviceInertBoundRev1Gap.lean",
+        "security/Proofs/Pouw/PearlC/DeviceChainCapGap.lean": "security/Proofs/Pouw/PearlC/DeviceChainInertBoundGap.lean",
+        "security/Proofs/Pouw/PearlC/DeviceSm120CapRev1Gap.lean": "security/Proofs/Pouw/PearlC/DeviceSm120InertBoundRev1Gap.lean",
+        "security/Proofs/Pouw/PearlC/RowCapAtGap.lean": "security/Proofs/Pouw/PearlC/RowInertBoundAtGap.lean",
+        "security/Proofs/Pouw/PearlC/TileCapRev1Gap.lean": "security/Proofs/Pouw/PearlC/TileInertBoundRev1Gap.lean",
+        "security/Proofs/Pouw/PearlPlus/Debit.lean": "security/Proofs/Pouw/PearlPlus/InertWork.lean",
+        "verity/protocols/accounting/pouw/prover/circuit/cap.circuit-check.py": "verity/protocols/accounting/pouw/prover/circuit/inert_bound.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/circuit/cap.py": "verity/protocols/accounting/pouw/prover/circuit/inert_bound.py",
+        "verity/protocols/accounting/pouw/prover/schemes/pearl_c_debit.py": "verity/protocols/accounting/pouw/prover/schemes/pearl_c_inert_work.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_cap_lean.py": "verity/protocols/accounting/pouw/verifier/tests/test_inert_bound_lean.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_cap.py": "verity/protocols/accounting/pouw/verifier/tests/test_circuit_inert_bound.py",
+        "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_debit.py": "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_inert_work.py"
+      }
     }
   ]
 }

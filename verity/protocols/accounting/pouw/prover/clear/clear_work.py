@@ -23,12 +23,12 @@ package's as `verity.protocols.accounting.pouw.prover.clear.clear_work`, the bar
   - filler rows are zero;
   - every opened row is zero past |K| (F7);
   - credited rows pass the per-row rules, and excluded rows fail them;
-  - the inert work replayed over the credited words (`pearl_c_debit`), their flagged atom-words, later +0 promotions and
+  - the inert work replayed over the credited words (`pearl_c_inert_work`), their flagged atom-words, later +0 promotions and
     P3's forming elements (fs·|cols|/n each), is at most the inert-work share ρ times the credited cells' credit, their
-    share of the unit's `creditDevRev1` (F1; `tile_cap`);
-  - under a hashing format with the row bound (-h3, `row_cap`), so is each credited A row's inert work over the credited columns,
+    share of the unit's `creditDevRev1` (F1; `tile_inert_bound`);
+  - under a hashing format with the row bound (-h3, `row_inert_bound`), so is each credited A row's inert work over the credited columns,
     at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)), and at most 4ρ at Pearl-C's census ks below k_min
-    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`), the tile's bound staying ρ.
+    (`row_inert_share_multiple`, `pearlCTilesDevRev1RowInertBoundAt`), the tile's bound staying ρ.
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **Voluntary rows.**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
@@ -53,7 +53,7 @@ package's as `verity.protocols.accounting.pouw.prover.clear.clear_work`, the bar
   - `audit` checks the splits through `split_check`, the pinned rule that computes S (`split_channels`, with its
     tie-break and budget), which lives with the model integration.
 * **Other row formats.** A scheme with its own row encoding, per-row rules and count of inert work (`pearl_c4`) brings
-  `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's. Every
+  `parse_row(row, k)`, `row_passes(words)` and `tile_inert_bound(record, ops, rows, cols)`; Pearl-C v1's are this module's. Every
   scheme brings its `cap`.
 """
 
@@ -79,7 +79,7 @@ from verity.protocols.accounting.pouw.verifier.audit import Epoch, opened_value
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Shape, Tile, tagged
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120, Prices
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import ALIGN, BAND, Split, UnitRecord, records_root
@@ -137,7 +137,7 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
 class DrawWref:
     """The `W_ref` a Lean statement's sample weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
     statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GGapSampled`,
-    `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
+    `HonestTileInertBoundRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
     columns, so a sample by another price record's `wref` attains the statement's gap only on a layout of one (n, k): on a
     served step's four linears the per-linear ratios differ.  `tile_weight` counts credited cells
     only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows
@@ -152,9 +152,9 @@ class DrawWref:
 
 
 #: The statement Pearl-C v1's served gap and ε cite on sm_120 at its inert-work bound 1/1,000 (`ServedMixedRev1Gap`, `Completeness`'s
-#: `HonestTileCapRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
+#: `HonestTileInertBoundRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
 #: 8953/1000 (the credited cast 8 and the A-only forming's measured 1.047, rounded up to qa = 2).
-SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1Cap1000", SM120.name, SM120.cap,
+SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1InertShare1000", SM120.name, SM120.cap,
                                 replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2),
                                 Fraction(218, 25) - Fraction(8953, 1000))
 DRAW_WREF = {(SM120.name, SM120.prices, SM120.cap): SM120_LOOP_CAST_8P72}
@@ -212,17 +212,17 @@ def row_passes(words: Sequence[int]) -> bool:
     return P.f32_of_bits(rho) * P.f32_of_bits(alpha) >= P.SIGMA_MIN and C.live_row(words)
 
 
-def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]],
+def tile_inert_bound(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]],
              formed: Sequence[tuple[int, Sequence[int], int]]) -> tuple[Fraction, Fraction]:
     """(inert work, its bound) over credited words given as their A′ and B̃ code rows, ``formed`` each A row's forming (α, x, β): the
-    replayed inert work, rev1's `tileDebitRev1` (`pearl_c_debit.tile_debit`), and its bound, the inert-work share ρ
+    replayed inert work, rev1's `tileInertWorkRev1` (`pearl_c_inert_work.tile_inert_work`), and its bound, the inert-work share ρ
     times the credited cells' credit, the unit's `creditDevRev1` at |K| times their share |rows|·|cols|/(m·n) (the
     per-tile statement's `tileShare`, `pearlCTilesDevRev1`).  A row's own terms (its forming and A′·F_B) so count once
     across its row band, a |cols|/n share in each tile, not whole in every tile: an inert forming element is
-    fs·|cols|/n (`tileDebitDev`), so the test is ρ⁻¹·(n·D + fs·|cols|·E) ≤ `credit_of(1, |K|, n)`·|rows|·|cols|."""
+    fs·|cols|/n (`tileInertWorkDev`), so the test is ρ⁻¹·(n·D + fs·|cols|·E) ≤ `credit_of(1, |K|, n)`·|rows|·|cols|."""
     d, n = scheme.device, record.matmul.shape.n
-    atoms, zeros, elements = D.tile_debit(a_codes, b_codes, formed, d)
-    debit = D.debit_units(atoms, Fraction(len(b_codes) * elements, n), scheme.prices, d, zeros=zeros)
+    atoms, zeros, elements = D.tile_inert_work(a_codes, b_codes, formed, d)
+    debit = D.inert_work_units(atoms, Fraction(len(b_codes) * elements, n), scheme.prices, d, zeros=zeros)
     return debit, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
@@ -234,9 +234,9 @@ def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequenc
 def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
                  ops: C.Ops | None) -> str | None:
     """The tile rule on an opened tile whose openings and digest have passed: None, or the reason it fails (its rows,
-    `rows_failure`, then its inert-work bound, `cap_failure`)."""
+    `rows_failure`, then its inert-work bound, `inert_bound_failure`)."""
     return (rows_failure(scheme, record, tile, a_rows, b_rows, ops)
-            or cap_failure(scheme, record, tile, ops, getattr(scheme, "r1_tolerance", 0)))
+            or inert_bound_failure(scheme, record, tile, ops, getattr(scheme, "r1_tolerance", 0)))
 
 
 def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
@@ -251,7 +251,7 @@ def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
     kinds += [("B", j, row, "excluded" if j in eb else "voluntary" if j in vb else "credited")
               for j, row in zip(tile.cols, b_rows, strict=True)]
     pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
-    ratio = getattr(scheme, "row_debit_ratio", None)
+    ratio = getattr(scheme, "row_inert_work_ratio", None)
     tol = getattr(scheme, "r1_tolerance", 0)
 
     def r1(side: str, index: int, credited: bool) -> bool:
@@ -284,50 +284,50 @@ def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
     return None
 
 
-def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops: C.Ops | None, tol: float | Fraction = 0
+def inert_bound_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops: C.Ops | None, tol: float | Fraction = 0
                 ) -> str | None:
     """`check_opened`'s inert-work bound on the tile's credited words: None, or the reason the tile's inert work or (under a row-bounded
-    format) a credited row's is over its bound.  The hidden path's is `circuit.cap`'s (`cap.served`)."""
+    format) a credited row's is over its bound.  The hidden path's is `circuit.inert_bound`'s (`cap.served`)."""
     k = record.matmul.shape.k
     rows, cols = record.credited(tile)
     if rows and cols:
         bound = 1 + Fraction(tol)
-        debit, cap = _debit_cap(scheme, record, tile, ops, rows, cols)
+        debit, cap = _inert_work_and_bound(scheme, record, tile, ops, rows, cols)
         if debit > cap * bound:
             return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
-        widen = row_cap_multiple(scheme, k)
-        for i in rows if row_cap(scheme) else ():
-            debit, cap = _debit_cap(scheme, record, tile, ops, [i], cols)
+        widen = row_inert_share_multiple(scheme, k)
+        for i in rows if row_inert_bound(scheme) else ():
+            debit, cap = _inert_work_and_bound(scheme, record, tile, ops, [i], cols)
             if debit > cap * widen * bound:
                 return (f"A row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap * widen):.0f} (the row "
                         f"cap: {'' if widen == 1 else f'{widen}'}ρ·its credited cells' credit)")
     return None
 
 
-def row_cap(scheme: C.PearlC) -> bool:
-    """Whether the scheme's hashing format bounds every credited row's inert work as well as the tile's (`HashFormat.row_cap`,
-    -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's inert work over the tile's credited columns at
-    most ρ times its cells' share of the credit, or `row_cap_multiple`·ρ (`pearlCTilesDevRev1RowCapAt`)."""
+def row_inert_bound(scheme: C.PearlC) -> bool:
+    """Whether the scheme's hashing format bounds every credited row's inert work as well as the tile's (`HashFormat.row_inert_bound`,
+    -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowInertBound`, each row's inert work over the tile's credited columns at
+    most ρ times its cells' share of the credit, or `row_inert_share_multiple`·ρ (`pearlCTilesDevRev1RowInertBoundAt`)."""
     hashing = getattr(scheme, "hashing", None)
-    return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_cap
+    return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_inert_bound
 
 
-def row_cap_multiple(scheme: C.PearlC, k: int) -> Fraction:
-    """A credited row's inert-work bound at depth ``k`` over the tile's ρ: the scheme's `row_cap_at(k)`/ρ, 4 at Pearl-C's census ks
-    (`pearl_c.CENSUS_ROW_CAP`), and 1 for a scheme without one."""
-    at = getattr(scheme, "row_cap_at", None)
+def row_inert_share_multiple(scheme: C.PearlC, k: int) -> Fraction:
+    """A credited row's inert-work bound at depth ``k`` over the tile's ρ: the scheme's `row_inert_share_at(k)`/ρ, 4 at Pearl-C's census ks
+    (`pearl_c.CENSUS_ROW_INERT_SHARE_MULTIPLE`), and 1 for a scheme without one."""
+    at = getattr(scheme, "row_inert_share_at", None)
     return Fraction(1) if at is None else Fraction(at(k)) / Fraction(scheme.cap)
 
 
-def _debit_cap(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
+def _inert_work_and_bound(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
                ) -> tuple[Fraction, Fraction]:
-    """(inert work, its bound) over the words of the tile's rows × cols: the scheme's `tile_cap` when it brings one, else this
+    """(inert work, its bound) over the words of the tile's rows × cols: the scheme's `tile_inert_bound` when it brings one, else this
     module's on the A′ and B̃ code rows and the A rows' forming."""
     pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
-    if hasattr(scheme, "tile_cap"):
-        return scheme.tile_cap(record, ops, [pos_a[i] for i in rows], [pos_b[j] for j in cols])
+    if hasattr(scheme, "tile_inert_bound"):
+        return scheme.tile_inert_bound(record, ops, [pos_a[i] for i in rows], [pos_b[j] for j in cols])
     a = [pos_a[i] for i in rows]
-    return tile_cap(scheme, record, [ops.a.codes[p] for p in a], [ops.b.codes[pos_b[j]] for j in cols],
+    return tile_inert_bound(scheme, record, [ops.a.codes[p] for p in a], [ops.b.codes[pos_b[j]] for j in cols],
                     [(ops.a.alpha[p], ops.a.x[p], ops.a.beta[p]) for p in a])
 
 
@@ -540,7 +540,7 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
     no tile's credited inert work passes its bound, for `declare`.  The prover knows the salt when it forms and commits, so it
     replays every tile's count of inert work as the verifier will.  For a tile over the bound it gives up the credited row whose removal
     leaves the least inert work over the bound, and repeats while the tile is over and the count limits allow; a tile the limits
-    leave over the bound stays so, and fails if sampled.  Under the row bound (`row_cap`) a credited A row over its own bound goes
+    leave over the bound stays so, and fails if sampled.  Under the row bound (`row_inert_bound`) a credited A row over its own bound goes
     first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight.  R1's rows aren't given up
     here: `records` are `declare`'s on the transcript, which excludes them.  By the band rule a row given up takes its
     band's or block's credit (`UnitRecord.credited`), so at the deployed 64 × 64 tile the first row given up leaves the
@@ -568,22 +568,22 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
                     rows, cols = cur.credited(tile)
                     if not (rows and cols):
                         break
-                    widen = row_cap_multiple(scheme, u.shape.k)
-                    over = [(d - c * widen, i) for i in (rows if row_cap(scheme) else ())
-                            for d, c in (_debit_cap(scheme, cur, tile, ops, [i], cols),) if d > c * widen * tol]
+                    widen = row_inert_share_multiple(scheme, u.shape.k)
+                    over = [(d - c * widen, i) for i in (rows if row_inert_bound(scheme) else ())
+                            for d, c in (_inert_work_and_bound(scheme, cur, tile, ops, [i], cols),) if d > c * widen * tol]
                     if over and len(va[u.index]) < voluntary_cap(u.shape.m):
                         va[u.index].add(max(over)[1])
                         changed = True
                         continue
-                    debit, cap = _debit_cap(scheme, cur, tile, ops, rows, cols)
+                    debit, cap = _inert_work_and_bound(scheme, cur, tile, ops, rows, cols)
                     if debit <= cap * tol:
                         break
                     options = []
                     if len(va[u.index]) < voluntary_cap(u.shape.m):
-                        options += [("A", i, _debit_cap(scheme, cur, tile, ops, [x for x in rows if x != i], cols))
+                        options += [("A", i, _inert_work_and_bound(scheme, cur, tile, ops, [x for x in rows if x != i], cols))
                                     for i in rows if len(rows) > 1]
                     if len(vb[u.weight]) < voluntary_cap(u.shape.n):
-                        options += [("B", j, _debit_cap(scheme, cur, tile, ops, rows, [x for x in cols if x != j]))
+                        options += [("B", j, _inert_work_and_bound(scheme, cur, tile, ops, rows, [x for x in cols if x != j]))
                                     for j in cols if len(cols) > 1]
                     if not options:
                         break
@@ -599,10 +599,10 @@ def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
     inert work and bounds times `scale`, so a word's inert work is an integer."""
     import numpy as np
 
-    if hasattr(scheme, "tile_cap"):
+    if hasattr(scheme, "tile_inert_bound"):
         raise ValueError(f"{scheme.name} brings its own debit, not one additive over a tile's words")
-    au = D.debit_units(1, 0, scheme.prices, scheme.device, zeros=0)
-    fa = D.debit_units(0, 0, scheme.prices, scheme.device, zeros=1)
+    au = D.inert_work_units(1, 0, scheme.prices, scheme.device, zeros=0)
+    fa = D.inert_work_units(0, 0, scheme.prices, scheme.device, zeros=1)
     scale = lcm(au.denominator, fa.denominator)
     units = []
     for p, r in enumerate(records):
@@ -611,13 +611,13 @@ def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
         for t, tile in enumerate(scheme.tiles(r.matmul.shape)):
             atoms, zeros = words[(p, t)]
             tiles.append((t, tile, int(au * scale) * np.asarray(atoms, np.int64) + int(fa * scale) * np.asarray(zeros, np.int64)))
-        units.append((p, r, cell, cell * row_cap_multiple(scheme, r.matmul.shape.k), tiles))
+        units.append((p, r, cell, cell * row_inert_share_multiple(scheme, r.matmul.shape.k), tiles))
     return scale, 1 + Fraction(getattr(scheme, "r1_tolerance", 0)), units
 
 
 def over_words(scheme: C.PearlC, records: Sequence[UnitRecord],
                words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]) -> list[dict]:
-    """`cap_failure` on every tile from its words' counts (`volunteer_words`' ``words``): each tile whose credited inert work is
+    """`inert_bound_failure` on every tile from its words' counts (`volunteer_words`' ``words``): each tile whose credited inert work is
     over its bound, or (under the row bound) one of whose credited A rows is, with the tile's inert work and bound and each such row's."""
     import numpy as np
 
@@ -632,7 +632,7 @@ def over_words(scheme: C.PearlC, records: Sequence[UnitRecord],
             w = words_t[np.ix_(pos_a, pos_b)]
             debit, cap = Fraction(int(w.sum()), scale), cell * len(rows) * len(cols) / scale
             over = [(tile.rows[x], Fraction(int(d), scale), row_cell * len(cols) / scale) for x, d in zip(pos_a, w.sum(axis=1))
-                    if row_cap(scheme) and int(d) > row_cell * len(cols) * tol]
+                    if row_inert_bound(scheme) and int(d) > row_cell * len(cols) * tol]
             if over or debit > cap * tol:
                 out.append({"record": p, "tile": t, "debit": debit, "cap": cap, "rows": over})
     return out
@@ -642,14 +642,14 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
                     words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]
                     ) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
     """`volunteer` for a scheme whose inert work is additive over a tile's words (Pearl-C's chain term:
-    `pearl_c_debit.chain_debit`'s counts, priced linearly by `debit_units`, and no `tile_cap` of its own), from each
+    `pearl_c_inert_work.chain_inert_work`'s counts, priced linearly by `inert_work_units`, and no `tile_inert_bound` of its own), from each
     tile's counts word by word.  P3's forming term is not additive over words (an element is inert when every word of
     its row flags its block), so neither this nor `over_words` reads it: a tile it leaves within its inert-work bound
-    can still be over `tile_cap`'s.
+    can still be over `tile_inert_bound`'s.
     ``words[(p, t)]`` is (flagged atoms, later +0 promotions) over the rows x columns of tile t of record p, in
-    `scheme.tiles`' order (`fast_tile.word_debits` on the tile's A′ and B̃ codes).  Returns (voluntary A rows by matmul
+    `scheme.tiles`' order (`fast_tile.words_inert_work` on the tile's A′ and B̃ codes).  Returns (voluntary A rows by matmul
     index, voluntary B rows by weight), for `declare`; `over_words` on the records with them is what the limits leave over.
-    - Under the row bound (`row_cap`) a unit's A rows over their own bounds go first, the row furthest over summed over the
+    - Under the row bound (`row_inert_bound`) a unit's A rows over their own bounds go first, the row furthest over summed over the
       unit's tiles first, one a band of 64 (the band rule leaves the rest of its band no credit), up to ⌈m/64⌉, which
       covers every band unless the records already spent it.  A row the A count leaves over then gives up, one at a
       time, the B row whose word
@@ -660,7 +660,7 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
     import numpy as np
 
     _, tol, units = _word_units(scheme, records, words)
-    capped = row_cap(scheme)
+    capped = row_inert_bound(scheme)
     va: dict[int, set[int]] = {r.matmul.index: set(r.voluntary_a) for r in records}
     vb: dict[int, set[int]] = {}
     for r in records:

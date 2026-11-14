@@ -1,9 +1,9 @@
 """The honest debit of a served pass at its scheme's cap ρ: a seeded, stratified sample of a retained pass's tiles (the
 transcript `verify_run.py` reads), each opened from the pass's files and held to `Verifier.check_tile` and the tile rule
 (`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
-(`clear_work._debit_cap`: ρ times the credited cells' credit) recorded.  CPU only.
+(`clear_work._inert_work_and_bound`: ρ times the credited cells' credit) recorded.  CPU only.
 
-  python benchmarks/pouw/pearl_c_vllm/served_debit.py RUN_DIR/prefill/manifest.json RUN_DIR/decode/manifest.json \\
+  python benchmarks/pouw/pearl_c_vllm/served_inert_work.py RUN_DIR/prefill/manifest.json RUN_DIR/decode/manifest.json \\
       --tiles 128 64 [--seed S] [--jobs J] [--out DIR]
 
 - **Strata** are a pass's matmul shapes (m, k, n).  Each gets its `--tiles` N: its matmuls in a seeded random order,
@@ -12,10 +12,10 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
 - **Per tile:** the verdict at the scheme's cap; the debit and the cap of its credited cells and their ratio (over 1 is a
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
-  later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.tile_debit`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``forming_elements``, each
+  later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_inert_work.tile_inert_work`, rev1's
+  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``inert_elements``, each
   fs·|cols|/n of inert work).  Under a format with the row cap (-h3) the rule also caps each
-  credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
+  credited A row (`clear_work.row_inert_bound`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
   its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
@@ -26,8 +26,8 @@ and otherwise by ``--draws`` work-weighted samples, never pooled.  ``<out>/input
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
 derived from ``--fresh-source`` (recorded OS randomness taken after the pass, fixed in the command), so that the trials
-are independent samples of the input's rate itself (`HonestTileCapRate`'s oracle, salt and sample, the activations fixed) and
-Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestCap.lean`'s
+are independent samples of the input's rate itself (`HonestTileInertBoundRate`'s oracle, salt and sample, the activations fixed) and
+Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestInertBound.lean`'s
 fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
 
 A tile is replayed on `fast_tile`'s batch forms (``--scalar``: the scalar reference only), every ``--cross-check``-th tile
@@ -47,7 +47,7 @@ with one BLAS thread a worker (``--jobs`` defaults to the CPUs this process may 
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
          PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
-       exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
+       exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_inert_work.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
 
 A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of that node's queue cores (Llama-3.1-8B's
@@ -93,7 +93,7 @@ from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
-CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
+INERT_SHARES = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
 FRESH = "verity/pouw/fp8-served-table-fresh-trials/v1"
 
@@ -111,23 +111,23 @@ class _Kept(CW._TileRuleView):
 
 
 _SEEN: list = []
-_DEBIT_CAP = CW._debit_cap
+_INERT_WORK_AND_BOUND = CW._inert_work_and_bound
 
 
 def _recorded(*args, **kwargs):
-    out = _DEBIT_CAP(*args, **kwargs)
+    out = _INERT_WORK_AND_BOUND(*args, **kwargs)
     _SEEN.append((out, len(_CHAINS)))
     return out
 
 
 _CHAINS: list = []
-_TILE_DEBIT = CW.D.tile_debit
-#: the debit's implementation `_tile_debit_recorded` calls: the scalar reference, or `fast_tile`'s batch form
-_IMPL = {"tile_debit": _TILE_DEBIT}
+_TILE_INERT_WORK = CW.D.tile_inert_work
+#: the debit's implementation `_tile_inert_work_recorded` calls: the scalar reference, or `fast_tile`'s batch form
+_IMPL = {"tile_inert_work": _TILE_INERT_WORK}
 
 
-def _tile_debit_recorded(*args, **kwargs):
-    out = _IMPL["tile_debit"](*args, **kwargs)
+def _tile_inert_work_recorded(*args, **kwargs):
+    out = _IMPL["tile_inert_work"](*args, **kwargs)
     _CHAINS.append(out)
     return out
 
@@ -231,12 +231,12 @@ def one(item) -> dict:
     every = _JOB.get("cross_check", 0)
     if _JOB.get("undo") is not None and every and (item if isinstance(item, int) else item[2]) % every == 0:
         _JOB["undo"]()
-        _IMPL["tile_debit"] = _TILE_DEBIT
+        _IMPL["tile_inert_work"] = _TILE_INERT_WORK
         try:
             ref = _measure(item)
         finally:
             _JOB["undo"] = FT.install(_JOB["scheme"], debit=False)
-            _IMPL["tile_debit"] = FT.tile_debit
+            _IMPL["tile_inert_work"] = FT.tile_inert_work
         diff = {k: [out.get(k), ref.get(k)] for k in set(out) | set(ref) if k not in ("seconds", "replay") and out.get(k) != ref.get(k)}
         out["cross_checked"] = True
         if diff:
@@ -260,7 +260,7 @@ def _openings_ok(job: dict, opened) -> bool:
 
 def _measure(item) -> dict:
     """A tile id: the tile as the audit checks it under the pass's salt.  A fresh trial (tile id, matmul, sample, salt): the
-    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileCapRate` samples one: the noise,
+    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileInertBoundRate` samples one: the noise,
     the encoding and the tile rule (admissibility is the work sampling design's, `_TileRuleView`'s), with no digest (the prover committed
     to none under this salt)."""
     j = _JOB
@@ -272,7 +272,7 @@ def _measure(item) -> dict:
     s = u.shape
     out = {"tile": tid, "matmul": ref.matmul, "m": s.m, "k": s.k, "n": s.n, "row0": ref.tile.rows[0], "rows": len(ref.tile.rows),
            "col0": ref.tile.cols[0], "cols": len(ref.tile.cols), "manifest_sha256": j["sha256"],
-           "replay": "scalar" if j.get("undo") is None or _IMPL["tile_debit"] is _TILE_DEBIT else "batch"}
+           "replay": "scalar" if j.get("undo") is None or _IMPL["tile_inert_work"] is _TILE_INERT_WORK else "batch"}
     opened, h = j["prover"].open(epoch, tid), commitment_hash(scheme)
     a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
     if fresh is not None:
@@ -303,12 +303,12 @@ def _measure(item) -> dict:
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
         # the tile rule's first (debit, cap) is the tile's; under the row cap (-h3) one per credited A row follows it
-        tile, chains = _SEEN[0] if _SEEN else (_DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
+        tile, chains = _SEEN[0] if _SEEN else (_INERT_WORK_AND_BOUND(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
         out.update(tile_numbers(scheme, *tile))
         if chains:
             out["atoms"], out["later_zero_promotions"], out["forming_elements"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
-            widen = CW.row_cap_multiple(scheme, u.shape.k)
+            widen = CW.row_inert_share_multiple(scheme, u.shape.k)
             out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
@@ -316,7 +316,7 @@ def _measure(item) -> dict:
 
 def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
     """The tile rule's (debit, cap) as a tile's line records them: their ratio, and the debit's share of the credited cells'
-    credit, the cap over ρ.  That credit is `clear_work.tile_cap`'s `creditDevRev1` share, so the first promotion add is
+    credit, the cap over ρ.  That credit is `clear_work.tile_inert_bound`'s `creditDevRev1` share, so the first promotion add is
     out of it once; taking it out again would overstate every share."""
     credit = cap / scheme.cap
     return {"debit": float(debit), "cap": float(cap), "ratio": float(debit / cap), "share": float(debit / credit),
@@ -331,7 +331,7 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
         by.setdefault(f"m{t['m']}-k{t['k']}-n{t['n']}", []).append(t)
     total_tiles = sum(st["tiles"] for st in strata.values())
     total_macs = sum(st["credited_macs"] for st in strata.values())
-    out_strata, est_tiles, est_macs = {}, {c: 0.0 for c in CAPS}, {c: 0.0 for c in CAPS}
+    out_strata, est_tiles, est_macs = {}, {c: 0.0 for c in INERT_SHARES}, {c: 0.0 for c in INERT_SHARES}
     for name, st in sorted(strata.items()):
         got = by.get(name, [])
         row = {k: st[k] for k in ("m", "k", "n", "tiles", "credited_macs")} | {"matmuls": len(st["matmuls"]), "sampled": len(got)}
@@ -339,9 +339,9 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             sh = [t["share"] for t in got]
             macs = sum(t["macs"] for t in got)
             row.update(share_max=max(sh), share_median=statistics.median(sh), worst_tile=max(got, key=lambda t: t["share"])["tile"],
-                       over={c: sum(t["share"] > float(r) for t in got) for c, r in CAPS.items()},
-                       over_macs={c: sum(t["macs"] for t in got if t["share"] > float(r)) / macs for c, r in CAPS.items()})
-            for c in CAPS:
+                       over={c: sum(t["share"] > float(r) for t in got) for c, r in INERT_SHARES.items()},
+                       over_macs={c: sum(t["macs"] for t in got if t["share"] > float(r)) / macs for c, r in INERT_SHARES.items()})
+            for c in INERT_SHARES:
                 est_tiles[c] += st["tiles"] / total_tiles * row["over"][c] / len(got)
                 est_macs[c] += st["credited_macs"] / total_macs * row["over_macs"][c]
         out_strata[name] = row
@@ -352,7 +352,7 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             "sampled": len(tiles), "measured": n, "openings_failed": sum(not t["openings_ok"] for t in tiles),
             "rejected_at_scheme_cap": sum(not t["ok"] for t in tiles if t["openings_ok"]),
             "reasons": sorted({t["reason"] for t in tiles if t.get("reason")}),
-            "over": {c: sum(t["share"] > float(r) for t in measured) for c, r in CAPS.items()},
+            "over": {c: sum(t["share"] > float(r) for t in measured) for c, r in INERT_SHARES.items()},
             "tile_share_over": est_tiles, "mac_share_over": est_macs,
             "upper95_if_none_over": 1 - 0.05 ** (1 / n) if n else None,
             "share_max": worst["share"] if worst else None, "ratio_max": worst["ratio"] if worst else None,
@@ -434,7 +434,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     _JOB.update(job, cross_check=opts.get("cross_check", 0), undo=None)
     if not opts.get("scalar"):
         _JOB["undo"] = FT.install(job["scheme"], debit=False)
-        _IMPL["tile_debit"] = FT.tile_debit
+        _IMPL["tile_inert_work"] = FT.tile_inert_work
     gc.collect()
     # the workers share the parent's tile enumeration copy-on-write; frozen, no collection in them touches its pages
     gc.freeze()
@@ -460,7 +460,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
         gc.unfreeze()
         if _JOB.get("undo") is not None:
             _JOB["undo"]()
-        _IMPL["tile_debit"] = _TILE_DEBIT
+        _IMPL["tile_inert_work"] = _TILE_INERT_WORK
     if failed:
         raise RuntimeError(f"{label}: the batch replay differs from the scalar reference on tiles {failed}")
     return got
@@ -495,7 +495,7 @@ def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[
     each under a salt of its own, both derived from `source` (recorded OS randomness taken after the pass, so independent
     of its activations) under a domain naming the table and a context naming the input.  Sample d is `key.uniform(W, d)`
     over the tiles' cumulative credited cells, as `clear_work.draw` maps it: within one input every cell weighs the
-    same `W_ref`, so the sample is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
+    same `W_ref`, so the sample is exactly proportional to `TR.Wref`, as `HonestTileInertBoundRate`'s tickets are."""
     ctx = {"manifest": job["sha256"], "matmul": row["matmul"]}
     ids = list(row["area"])
     cumulative = list(accumulate(row["area"][t] for t in ids))
@@ -693,19 +693,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
-        CW._debit_cap, CW.D.tile_debit = _recorded, _tile_debit_recorded
+        CW._inert_work_and_bound, CW.D.tile_inert_work = _recorded, _tile_inert_work_recorded
         try:
             rows = [r for path, label in zip(a.manifests, labels)
                     for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir, opts, label)]
         finally:
-            CW._debit_cap, CW.D.tile_debit = _DEBIT_CAP, _TILE_DEBIT
+            CW._inert_work_and_bound, CW.D.tile_inert_work = _INERT_WORK_AND_BOUND, _TILE_INERT_WORK
         return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir, fresh)
-    CW._debit_cap, CW.D.tile_debit = _recorded, _tile_debit_recorded
+    CW._inert_work_and_bound, CW.D.tile_inert_work = _recorded, _tile_inert_work_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir, opts, label) for path, per, label in zip(a.manifests, a.tiles, labels)]
     finally:
-        CW._debit_cap, CW.D.tile_debit = _DEBIT_CAP, _TILE_DEBIT
-    summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in CAPS.items()}, "passes": passes}
+        CW._inert_work_and_bound, CW.D.tile_inert_work = _INERT_WORK_AND_BOUND, _TILE_INERT_WORK
+    summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in INERT_SHARES.items()}, "passes": passes}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")
     ok = all(x["measured"] > 0 and x["openings_failed"] == 0 for x in passes)

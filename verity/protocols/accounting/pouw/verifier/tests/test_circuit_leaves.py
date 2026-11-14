@@ -21,7 +21,7 @@ from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_S
                                         sha512_row_v2_digest)
 from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import cap, pc4, pc8, rowk
+from verity.protocols.accounting.pouw.prover.circuit import inert_bound, pc4, pc8, rowk
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 PINNED = json.loads(V.OUT.read_text())
@@ -78,14 +78,14 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
         assert L.commit(row, role, words, y) == L.INST.commit_string(L.KEY, x, y), n
 
 
-def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_row():
-    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `cap.PORTS`, and the
+def test_every_per_call_row_but_ok_the_tile_the_inert_bounds_and_the_cuts_is_a_row_seg_row():
+    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `inert_bound.PORTS`, and the
     row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly the rows with a schema, and the row-seg ones are the per-call
     rows (role X) but ok, the tile
     digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,
     each registered row (role W) and the cap's chunk digests and strip row (64 words, one whole block, so a unit that reads
     or writes one hashes a block before its last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
-    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, rowk.PORTS4,
+    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, inert_bound.PORTS, rowk.PORTS4,
                                       rowk.PORTS8)
             for unit in ports.values() for row, role, _ in unit["rows"]}
     assert used == set(L.ROW_SCHEMA)
@@ -145,7 +145,7 @@ def test_advice_is_in_no_read_set():
         assert not set(unit["advice"]) & bound and all(isinstance(p, str) for p in unit["advice"]), role
     reads = {"ac": 2, "pa": 2, "bc": 3, "pb": 3}
     tile = pc8.PORTS["tile"]
-    assert L.statement_rows({**tile, "advice": cap.ADVICE}, 128, reads) == L.statement_rows(tile, 128, reads)
+    assert L.statement_rows({**tile, "advice": inert_bound.ADVICE}, 128, reads) == L.statement_rows(tile, 128, reads)
     for unit in ({**tile, "advice": ("pa",)}, {**pc8.PORTS["row_a"], "advice": ("fa",)}, {**tile, "advice": (0,)}):
         with pytest.raises(ValueError, match="no committed row and no public input region"):
             L.statement_rows(unit, 128, reads)

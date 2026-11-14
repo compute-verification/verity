@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceCapGap
+public import Proofs.Pouw.PearlC.DeviceInertBoundGap
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
@@ -12,7 +12,7 @@ import Proofs.Pouw.PearlC.DeviceRev1Gap
 # v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (staged)
 
 The gap's price rule computes g at the issue-bound FP32 add (8.00) and at the measured in-loop one (8.376), and publishes the
-larger. Each theorem here is the twin of a `DeviceCapGap` instance at `Prices.sm120Loop` in place of `Prices.sm120`,
+larger. Each theorem here is the twin of a `DeviceInertBoundGap` instance at `Prices.sm120Loop` in place of `Prices.sm120`,
 with the same hypotheses otherwise and the same general theorem.
 * **v2 at the cap 1/1,000**, at any record with `G = 0`: `522517/139900000` (0.37349%) at 8192³ and `3000127/829300000`
   (0.36177%) at 16384³, per unit and per audit tile.
@@ -32,8 +32,8 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v2 at the cap 1/1,000, 8192³**, at sm_120's in-loop prices (an upper bound): `g = 522517/139900000` (0.37349%).
-Twin of `pearlCGapUnpromotedCap1000_8192`. -/
-theorem pearlCGapUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+Twin of `pearlCGapUnpromotedInertShare1000_8192`. -/
+theorem pearlCGapUnpromotedInertShare1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutPearlCDev CM d sem (1 / 1000)) :
     GGap CM (pearlCProtocolDev d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((522517 / 139900000 : ℚ) : ℝ) δPearlC :=
@@ -42,8 +42,8 @@ theorem pearlCGapUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [Decidabl
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000, 16384³**, at sm_120's in-loop prices (an upper bound): `g = 3000127/829300000` (0.36177%).
-Twin of `pearlCGapUnpromotedCap1000_16384`. -/
-theorem pearlCGapUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+Twin of `pearlCGapUnpromotedInertShare1000_16384`. -/
+theorem pearlCGapUnpromotedInertShare1000Loop_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutPearlCDev CM d sem (1 / 1000)) :
     GGap CM (pearlCProtocolDev d sem (1 / 1000)) (pearlCDomainDevAt d sh16384) ((3000127 / 829300000 : ℚ) : ℝ) δPearlC :=
@@ -52,8 +52,8 @@ theorem pearlCGapUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [Decidab
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000 per audit tile, 8192³**, at sm_120's in-loop prices (an upper bound): `GGapSampled` at
-`g = 522517/139900000`. Twin of `pearlCSampledUnpromotedCap1000_8192`. -/
-theorem pearlCSampledUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+`g = 522517/139900000`. Twin of `pearlCSampledUnpromotedInertShare1000_8192`. -/
+theorem pearlCSampledUnpromotedInertShare1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDev d sem (1 / 1000)) (pearlCTilesDev d sem (1 / 1000)) (pearlCDomainDevAt d sh8192)
@@ -64,8 +64,8 @@ theorem pearlCSampledUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [Deci
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000 per audit tile, 16384³**, at sm_120's in-loop prices (an upper bound): `GGapSampled` at
-`g = 3000127/829300000`. Twin of `pearlCSampledUnpromotedCap1000_16384`. -/
-theorem pearlCSampledUnpromotedCap1000Loop_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+`g = 3000127/829300000`. Twin of `pearlCSampledUnpromotedInertShare1000_16384`. -/
+theorem pearlCSampledUnpromotedInertShare1000Loop_16384 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutTilePearlCDev CM d sem (1 / 1000)) :
     GGapSampled CM (pearlCProtocolDev d sem (1 / 1000)) (pearlCTilesDev d sem (1 / 1000)) (pearlCDomainDevAt d sh16384)

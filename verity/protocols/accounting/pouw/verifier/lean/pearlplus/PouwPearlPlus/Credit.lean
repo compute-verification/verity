@@ -56,7 +56,7 @@ structure Credit where
   macs : Nat
   rho : Rat
   epsilon : Rat
-  overCapDraws : Nat
+  overInertBoundDraws : Nat
 
 /-- `credit_at_assumption(passes, t, δ, over)`: `over` is X_O, how many of the t samples landed on a tile over its inert-work
 bound. -/
@@ -76,7 +76,7 @@ def creditAtAssumption (passes : List Pass) (t over : Nat) (delta : Rat) : Credi
         tiles := tiles + (cells.filter (· != 0)).length
         units := units.push ((r.kKept : Rat) / ticket, (total : Rat) * ticket)
   let eps := epsilon t over delta
-  let rho := mkRat Rule.CAP_NUM Rule.CAP_DEN
+  let rho := mkRat Rule.INERT_BOUND_NUM Rule.INERT_BOUND_DEN
   let mut budget := eps * units.foldl (fun s (_, w) => s + w) 0
   let mut wrong : Rat := 0
   for (ratio, w) in units.qsort (fun a b => b.1 < a.1) do
@@ -84,6 +84,6 @@ def creditAtAssumption (passes : List Pass) (t over : Nat) (delta : Rat) : Credi
     wrong := wrong + take * ratio
     budget := budget - take
   let credited := ((1 - rho) * max ((macs : Rat) - wrong) 0).floor.toNat
-  return { credited, creditedTiles := tiles, macs, rho, epsilon := eps, overCapDraws := over }
+  return { credited, creditedTiles := tiles, macs, rho, epsilon := eps, overInertBoundDraws := over }
 
 end PouwCheck.PearlPlus

@@ -42,8 +42,8 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   sm_120 program fits `W_ref` under this `CM` is the kernel's measured claim, not part of this assumption. At W1
   (`TTOutFp4Sm120W1`, `Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) `CM` is the term
   `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt`.
-- **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitDebit`), whose executable reference is
-  `pearl_c4.tile_debit` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
+- **The credit.** `creditFp4` less the unit's replayed debit (`Fp4Sem.unitInertWork`), whose executable reference is
+  `pearl_c4.tile_inert_work` (`9363e5012`). The debit has D-24's 2:4 row windows (`Fp4Dev.rowWin24`), F1′ (the base
   split's expected saving per row window under the exact noise distribution, `Fp4Dev.f1Row`, B̃'s at 10 times), the chain's
   firings whose lone skip leaves the word unchanged (`Fp4Skip.fp4PureFlags`), the positions whose A′ and B̃ codes are
   both salt-dead, the forming elements that are salt-dead or needed by no word, the sub-grid blocks

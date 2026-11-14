@@ -50,26 +50,26 @@ theorem creditDev_nonneg (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf : 0
 section
 variable {Q R S : Type}
 
-theorem unitDebitRev1_ge (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
+theorem unitInertWorkRev1_ge (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (act : Codes) :
-    debitDev d (sem.unitDebitDev d H s U u act) ≤ sem.unitDebitRev1 d H s U u act := by
-  unfold PearlCSem.unitDebitRev1
+    inertWorkDev d (sem.unitInertWorkDev d H s U u act) ≤ sem.unitInertWorkRev1 d H s U u act := by
+  unfold PearlCSem.unitInertWorkRev1
   have : (0 : ℚ) ≤ d.prices.add * ∑ i, ∑ j, (laterZeroPromos d (sem.unitChain H s U u act).1
       (sem.unitChain H s U u act).2 i j : ℚ) := by positivity
   linarith
 
-theorem unitDebitRev1_nonneg (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
-    (U : Workload) (u : ℕ) (act : Codes) : 0 ≤ sem.unitDebitRev1 d H s U u act := by
-  have h0 : 0 ≤ debitDev d (sem.unitDebitDev d H s U u act) := by
-    unfold debitDev
+theorem unitInertWorkRev1_nonneg (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
+    (U : Workload) (u : ℕ) (act : Codes) : 0 ≤ sem.unitInertWorkRev1 d H s U u act := by
+  have h0 : 0 ≤ inertWorkDev d (sem.unitInertWorkDev d H s U u act) := by
+    unfold inertWorkDev
     split_ifs <;> positivity
-  linarith [unitDebitRev1_ge sem d hadd H s U u act]
+  linarith [unitInertWorkRev1_ge sem d hadd H s U u act]
 
-theorem tileDebitRev1_ge (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
+theorem tileInertWorkRev1_ge (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) :
-    sem.tileDebitDev d H s U u rows cols act ≤ sem.tileDebitRev1 d H s U u rows cols act := by
+    sem.tileInertWorkDev d H s U u rows cols act ≤ sem.tileInertWorkRev1 d H s U u rows cols act := by
   classical
-  unfold PearlCSem.tileDebitRev1
+  unfold PearlCSem.tileInertWorkRev1
   simp only
   have : (0 : ℚ) ≤ d.prices.add * ∑ e ∈ (univ : Finset (Fin (U.layout.shape u).m × Fin (U.layout.shape u).n)).filter
       (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
@@ -103,19 +103,19 @@ theorem rev1_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
     rw [mem_filter] at hu ⊢
     obtain ⟨hu, c, hc, hact, hcap, hw⟩ := hu
     refine ⟨hu, c, hc, hact, ?_, hw⟩
-    have h1 : sem.unitDebitRev1 d H s U u c.act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
-    show debitDev d (sem.unitDebitDev d H s U u c.act) ≤ ρ * creditDev d (U.layout.shape u)
+    have h1 : sem.unitInertWorkRev1 d H s U u c.act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+    show inertWorkDev d (sem.unitInertWorkDev d H s U u c.act) ≤ ρ * creditDev d (U.layout.shape u)
     have := mul_le_mul_of_nonneg_left (creditDevRev1_le d hadd (U.layout.shape u)) hρ0
-    linarith [unitDebitRev1_ge sem d hadd H s U u c.act]
+    linarith [unitInertWorkRev1_ge sem d hadd H s U u c.act]
   calc ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s τ,
           (pearlCProtocolDevRev1 d sem ρ).credit H s U u (actOf τ u)
       ≤ ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s τ,
           (pearlCProtocolDev d sem ρ).credit H s U u (actOf τ u) := by
         refine sum_le_sum fun u _ => ?_
-        show ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s U u (actOf τ u) : ℚ) : ℝ) ≤
-          ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u (actOf τ u)) : ℚ) : ℝ)
+        show ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s U u (actOf τ u) : ℚ) : ℝ) ≤
+          ((creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u (actOf τ u)) : ℚ) : ℝ)
         have h1 := creditDevRev1_le d hadd (U.layout.shape u)
-        have h2 := unitDebitRev1_ge sem d hadd H s U u (actOf τ u)
+        have h2 := unitInertWorkRev1_ge sem d hadd H s U u (actOf τ u)
         exact_mod_cast (by linarith)
     _ ≤ ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ) U H s τ, (pearlCProtocolDev d sem ρ).credit H s U u (actOf τ u) := by
         refine sum_le_sum_of_subset_of_nonneg hsub fun u hu _ => ?_
@@ -124,10 +124,10 @@ theorem rev1_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ)
         obtain ⟨_, c, hc, _, hcap, _⟩ := hu
         have hact : actOf τ u = c.act := by simp [actOf, hc]
         rw [hact]
-        have h1 : debitDev d (sem.unitDebitDev d H s U u c.act) ≤ ρ * creditDev d (U.layout.shape u) := hcap
+        have h1 : inertWorkDev d (sem.unitInertWorkDev d H s U u c.act) ≤ ρ * creditDev d (U.layout.shape u) := hcap
         have h2 := creditDev_nonneg d hadd hbf (U.layout.shape u)
-        show (0 : ℝ) ≤ ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u c.act) : ℚ) : ℝ)
-        have : (0 : ℚ) ≤ creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u c.act) := by
+        show (0 : ℝ) ≤ ((creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u c.act) : ℚ) : ℝ)
+        have : (0 : ℚ) ≤ creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u c.act) := by
           nlinarith
         exact_mod_cast this
 
@@ -158,11 +158,11 @@ theorem rev1_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ :
     rw [mem_filter] at hg ⊢
     obtain ⟨hg, c, hc, hcap, hw⟩ := hg
     refine ⟨hg, c, hc, ?_, hw⟩
-    have h1 : sem.tileDebitRev1 d H s U (tl.unit g) (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g))
+    have h1 : sem.tileInertWorkRev1 d H s U (tl.unit g) (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g))
         (tl.cols g) c.act ≤ ρ * creditDevRev1 d (U.layout.shape (tl.unit g)) *
           tileShare (U.layout.shape (tl.unit g)) (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g))
             (tl.cols g) := hcap
-    show sem.tileDebitDev d H s U (tl.unit g) (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g))
+    show sem.tileInertWorkDev d H s U (tl.unit g) (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g))
         (tl.cols g) c.act ≤ ρ * creditDev d (U.layout.shape (tl.unit g)) *
           tileShare (U.layout.shape (tl.unit g)) (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g))
             (tl.cols g)
@@ -170,7 +170,7 @@ theorem rev1_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ :
       (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g)) (tl.cols g)
     have := mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left
       (creditDevRev1_le d hadd (U.layout.shape (tl.unit g))) hρ0) hsh
-    linarith [tileDebitRev1_ge sem d hadd H s U (tl.unit g)
+    linarith [tileInertWorkRev1_ge sem d hadd H s U (tl.unit g)
       (sem.passRows (U.layout.shape (tl.unit g)) c.act (tl.rows g)) (tl.cols g) c.act]
   calc ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) U H s τ,
           (pearlCTilesDevRev1 d sem ρ).credit H s U g (actOf τ (tl.unit g))
@@ -218,17 +218,17 @@ theorem pearlCGapDevRev1At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
         (pearlCProtocolDevRev1 d sem ρ).actOK (U.layout.shape u) act →
-        (pearlCProtocolDevRev1 d sem ρ).capOK H s' U u act →
+        (pearlCProtocolDevRev1 d sem ρ).inertBoundOK H s' U u act →
           (pearlCProtocolDevRev1 d sem ρ).Wref U.layout u ≤
             (ω : ℝ) * (pearlCProtocolDevRev1 d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+    have hc : sem.unitInertWorkRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
     show (wrefDevRev1 d (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
+      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s' U u act : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditDevRev1 d s) ≤ ω * (creditDevRev1 d s - sem.unitDebitRev1 d H s' U u act) :=
+    have : ω * ((1 - ρ) * creditDevRev1 d s) ≤ ω * (creditDevRev1 d s - sem.unitInertWorkRev1 d H s' U u act) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) δPearlC
@@ -247,7 +247,7 @@ theorem pearlCSampledDevRev1At {Q R S : Type} [Fintype Q] [DecidableEq Q] [Finty
       δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDevAt d s) →
       ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevRev1 d sem ρ).tiling U.layout).NT, ∀ act : Codes,
-        (pearlCTilesDevRev1 d sem ρ).capOK H s' U g act →
+        (pearlCTilesDevRev1 d sem ρ).inertBoundOK H s' U g act →
         (pearlCTilesDevRev1 d sem ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTilesDevRev1 d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg

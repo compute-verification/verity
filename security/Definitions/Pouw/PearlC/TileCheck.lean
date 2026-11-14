@@ -35,7 +35,7 @@ prover supplies it.
 
 The cap, `TileGood`'s first conjunct, reads only the committed activations; its weight rows, the second, are the check's
 own last conjunct; the words read the circuit's outputs. So L3 is the cap and the words (`TileCheck.Computes`,
-`TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
+`TileCheck.ComputesInertBound`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
 of its own (L7). `δPearlC` stays TT_OUT's, and a proof system's error stays in its `δzk` (`GGapHidden`).
 
@@ -113,10 +113,10 @@ def TileCheck.Computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRul
 debit or cap yet (the replay shortcut), so its check leaves the activations' debit free: this holds of it
 only once a cap unit returns the cap's verdict on a public wire, as under hiding it must, since the verifier never sees
 the activations. -/
-def TileCheck.ComputesCap (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :
+def TileCheck.ComputesInertBound (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :
     Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S) (g : ℕ), g < (TR.tiling U.layout).NT → ∀ (c : Commit) X,
-    TC.Accepts P TR H s U g c X → TR.capOK H s U g c.act
+    TC.Accepts P TR H s U g c X → TR.inertBoundOK H s U g c.act
 
 /-- **L3's words**: an accepted tile's checked words have the reference values on its credited rows, unless the
 registered values fail to bind the circuit's words. -/

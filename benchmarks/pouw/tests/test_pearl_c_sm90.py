@@ -200,8 +200,8 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 
-def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypatch):
-    """`Debit.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
+def test_the_resident_inert_work_body_is_words_launches_with_nothing_copied(monkeypatch):
+    """`InertWork.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
     chunk's rows in the one copy put before it), and after its first call nothing else: no copy, synchronization or
     allocation, so `Dev.timed` times the count's kernels alone."""
     class Dev:
@@ -234,7 +234,7 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
     rng = np.random.default_rng(7)
     a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
     budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
-    w, r = deb.Debit(b"", budget), deb.Debit(b"", budget)
+    w, r = deb.InertWork(b"", budget), deb.InertWork(b"", budget)
     w.words(a, b)
     body = r.resident(a, b)
     put = [e for e in r.dev.log if e[0] == "cuMemcpyHtoD_v2"]
