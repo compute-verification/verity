@@ -89,3 +89,33 @@ Tests, by file [ran, locally]:
 - tests/test_boundaries is red on the place listing, regenerated at the close.
 TIMER: none
 
+[2026-11-14T20:30Z] b5955b67e143
+NETSEATS2, push 1 of this turn: LOAD leaves the certifier manifest. The commit is 5d478462cec2f698c08d2ae35c900e245b1907ac. The collect head after the push is 6f26856db0c87c5766ac75a4d91afce459575846. [ran]
+
+The machine was new: uptime 0 min, and the worktree was gone. Nothing was lost, since 073c78f3d59e was pushed. [ran]
+
+Readers of the LOAD message name [read]:
+- device_party.py: the one sender, in `SENDS` and in `hand_out_run`, through `Opened.load`. Its `open_session` raises NotImplementedError, so nothing reaches that send. It decides nothing.
+- The manifest's two tests, test_network_certifier_parties.py and test_network_certifier_device_party.py. Also MAX_LOAD, which only the bounds test reads.
+- demos/onsite_served/config.toml lists the channel's messages. I regenerated it with its generator, `served_table.configuration` and `K.render`, at its own commit; one line changed.
+- A pin over the configuration's text: test_run.py's `UNCAPPED_ONSITE`, the onsite configuration's digest, which I recomputed with `K.digest` over the test's own `config()`.
+- No reader in device_needs.py.
+- ROWSPROTO2's `ROWS_MANIFEST` (inference_only/verifier/parties.py) has no channels.
+- No Lean mirrors the manifest: `NetworkCheck.Certificate.parametersManifest` is the schedule's parameters. Nothing for SCANLEAN2.
+- main has no LOAD.
+- No reader decides on the load, so I did not stop.
+
+Statements, before and after [read: the diff]:
+- parties.py: the docstring's table line and the bullet for the `load` message go. So do `LOAD`, `MAX_LOAD`, its Schema and both names in `__all__`. The channel to the verifier is now out-record, certificate, registration, deployment, groups.
+- device_party.py: "hands out the run's deployment and load" becomes "the run's deployment". `Opened` is the deployment alone. `hand_out_run` sends DEPLOYMENT only.
+- test_run.py's comment on `UNCAPPED_ONSITE`: "the onsite configuration's hash before the network certifier's response cap and its lengths rows' form were parameters" becomes "with neither the network certifier's response cap nor its lengths rows' form set". The old wording is no longer true, because the hash is not the old one. The value is 1cd21b01…e17a.
+- `test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes` passes unchanged. [ran]
+
+Crossing the move: STAMPS2's `Move by tools/move/certifier_programs_map.toml` (e97a534ec82) came onto the collect branch while I worked. I crossed it with `restack.py --move-commit e97a534ec82 --onto origin/cursor/na-architecture-b51f`, which came out clean (161a10f4b214), then fast-forwarded to it. A plain merge of the collect head after that was clean. I resolved no files by hand. Everything compiles. [ran]
+
+Tests [ran]:
+- The manifest's two tests, test_auditor_warden, test_onsite_served, test_run and test_inference_only_parties: 346 passed and 1 failed. The failure is `test_the_served_window_runs_once_with_every_piece_s_hooks`, which fails at the base too: its key variables H1_KEY_SHA512 and WIPE_KEY_SHA512 come back redacted in this environment.
+- After the last merge, the manifest's tests, test_auditor_warden and test_run: 306 passed.
+
+TIMER: none
+
