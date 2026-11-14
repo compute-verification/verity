@@ -5,7 +5,7 @@ public import Definitions.Accounting.Assumptions.RemoteHeld
 import Mathlib.Basic.ENNReal.Real
 
 /-!
-# The remote audit over PoUS's P2 store: its codec's work and the squaring ceiling at P2 (trusted; drafted)
+# PoUB over PoUS's P2 store: its codec's work and the squaring ceiling at P2 (trusted; drafted)
 
 The remote bandwidth audit's P2 mode (`verity/core/protocols/remote_bandwidth/p2.py`, its `PROTOCOL.md` §11) audits
 PoUS's `C*`: the weights `W` encoded under P2 (`p2-16448/v4`, `p = 2^16448 − 21065`), a block 2,056 bytes, and a

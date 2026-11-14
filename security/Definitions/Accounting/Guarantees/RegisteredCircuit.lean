@@ -10,8 +10,8 @@ property, any prover, and an accepted audit at the deployed parameters (sketch r
 append-coin rule), except with probability `δ_G` the prover system read, from the appended blocks of `W`'s values each
 pass's step reads, `W`'s credited bits there less an explicit share `ε` of the store. It is a layer-1 bound in decision
 111's sense (a cryptographic lower bound on the prover system, parametric in the system's resources a pass); which device
-held what (the node's boundary, HBM against host DRAM) is attribution, stated apart. It composes the stacked remote
-audit in its deployed sketch form (`StackedRunConservationSketchDeployed`), on a layout the prover may steer after
+held what (the node's boundary, HBM against host DRAM) is attribution, stated apart. It composes stacked
+PoUB in its deployed sketch form (`StackedRunConservationSketchDeployed`), on a layout the prover may steer after
 the coins, with the carriers' cost read from the property's caps (`Gates.Property`, under
 `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`) and the audit linked to `W`'s placed
 requirement (A1's
@@ -60,7 +60,7 @@ the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the qu
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, samples a fresh one. Each append's blocks are read within `L` windows of the window
-`joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
+`joined x t` it joined (`RateSketch.LifetimeCapped`, PoUB's `lifetime`). PoUB's `L` is a life
 of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`),
 with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
 nominal length.

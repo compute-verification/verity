@@ -109,7 +109,7 @@ def TiedAccepted (ties : List Tie) (ev : List Case) (o : Outcome Keyed Keyed) (p
 /-- **What `holdTies` accepts is `TiedAccepted`**: the outcome it holds accepted, unchanged, and every tie's components
 named one value. At remote (`Core.Remote.protocol`, `holdTies [Core.Remote.windows]` over its `checkSame`) every window
 of PoUW's period names the policy's record as its Commit record; at onsite (`Core.Onsite.protocol`, `holdTies
-Core.Onsite.ties`) so does every window of its period, and PoUS and the remote bandwidth audit's P2 session are on one
+Core.Onsite.ties`) so does every window of its period, and PoUS and PoUB's P2 session are on one
 store. -/
 def AcceptTied : Prop :=
   ∀ (ties : List Tie) (ev : List Case) (o : Outcome Keyed Keyed) (pub prof : Keyed),

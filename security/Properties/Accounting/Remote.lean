@@ -4,7 +4,7 @@ public import RemoteAudit
 public import RemoteAudit.Session
 
 /-!
-# The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)
+# PoUB's verifier: what its Lean verdicts mean (`RemoteAudit`)
 
 The properties of `RemoteAudit` (`verity/core/protocols/remote_bandwidth/lean/`, the verifier's definition, which
 `audit.py` is held to by the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They

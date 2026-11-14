@@ -433,7 +433,7 @@ def _built(package: Path, exe: str) -> Path:
 
 @pytest.fixture(scope="module")
 def case_exe() -> Path:
-    """`remote-audit-p2-protocol`, built in the remote audit's package."""
+    """`remote-audit-p2-protocol`, built in PoUB's package."""
     return _built(p2_lean.PACKAGE, p2_case.EXE)
 
 

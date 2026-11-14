@@ -3,9 +3,9 @@ module
 public import Definitions.Accounting.Remote.Held
 
 /-!
-# What devices outside the node compute for it, and what enters it, over a remote audit session (trusted)
+# What devices outside the node compute for it, and what enters it, over a PoUB session (trusted)
 
-A remote audit session's trace (`Accounting.Remote.Held.Trace`) says where each registered block is on the node, tick
+A PoUB session's trace (`Accounting.Remote.Held.Trace`) says where each registered block is on the node, tick
 by tick on the verifier's clock. `Outside T` is the same session's record of the computation off the node for it, at
 each outcome `ω` and tick `t`:
 
@@ -32,14 +32,14 @@ check: each uplink's certified ingress over the span is the verifier's own frame
 
 namespace Accounting.Remote.Held
 
-/-- What devices outside the node compute for it during a remote audit session whose node memory is the trace `T`. -/
+/-- What devices outside the node compute for it during a PoUB session whose node memory is the trace `T`. -/
 structure Outside {Ω : Type} (T : Trace Ω) where
   /-- the registered blocks a device outside the node computes on for it at tick `t` -/
   blocks : Ω → ℕ → Finset (Fin T.blocks)
   /-- the registered blocks whose receipts a device outside the node computes on for it at tick `t` -/
   receipts : Ω → ℕ → Finset (Fin T.blocks)
 
-/-- What enters the node over its uplinks during a remote audit session, over coins `Ω`. -/
+/-- What enters the node over its uplinks during a PoUB session, over coins `Ω`. -/
 structure Ingress (Ω : Type) where
   /-- the bits other than the verifier's messages that enter the node over its uplinks at tick `t` -/
   entered : Ω → ℕ → ℕ

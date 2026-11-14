@@ -1350,7 +1350,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
   `RemoteRunConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
   `RemoteRunConservationDeployed` (whole-block receipts). `RemoteMonitoringPeriodConservation` is the whole-block
-  statement at every parameter, read as a run of the remote audit. They take n windows of P passes, one sample of 2,773
+  statement at every parameter, read as a run of PoUB. They take n windows of P passes, one sample of 2,773
   a window and no clock; a paced session's groups, the receipts it samples a group and its timing term are not shown to
   be an instance. The one deployed statement on a paced session's record is the memory line's,
   `Properties.RemoteAudit.Line.LineHeld`. The conservation statements' openings are

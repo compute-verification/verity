@@ -38,9 +38,9 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The remote audit's compositions, from their routes
+# PoUB's compositions, from their routes
 
-Statements about a run of the remote audit (`Accounting.Remote.Run`), each at the coins flipped (a per-run reading): the
+Statements about a run of PoUB (`Accounting.Remote.Run`), each at the coins flipped (a per-run reading): the
 routes it composes are bounds at each outcome, taken as hypotheses, and the statement bounds the probability, over the
 audit's coins, that the audit accepts and the bound fails, by the routes' errors summed.
 
