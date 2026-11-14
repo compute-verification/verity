@@ -116,6 +116,7 @@ import fcntl
 import fnmatch
 import gzip
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -183,6 +184,16 @@ UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
 COMPOSE_SUMS = "private/compose/inputs.sha256"
+COMPOSE_ENV = "private/compose/compose.env"
+"""The hand-off's settings, the prover's bytes, which `served_verdicts.sh compose` reads (`compose_settings`)."""
+COMPOSE_SETTINGS = ("K", "PRODUCT", "PEARLPLUS_TIE", "COMPOSITE", "ALPHA", "GAMMA", "SERVED_NODE", "SERVED_DIR",
+                    "COMPOSE_NODE", "COMPOSE_TREE", "AUDITED_ON", "SAMPLED_AUDIT", "STEPS")
+"""The settings a hand-off may set: served_verdicts.sh's COMPOSES, in its order, which `tests/test_host.py` holds it to."""
+ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+ENV_VALUE = re.compile(r"([A-Za-z0-9._/:+@=,-]|\\,)*")
+"""A setting's value as handoff's `printf %q` writes it, each character as itself but a comma (`\\,`), or `''` for an
+empty one: served_verdicts.sh's ENV_VALUE, which `tests/test_host.py` holds it to."""
+COMPOSE_ENV_BYTES = 1 << 16
 COMPOSE_MINUTES = 180
 COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
@@ -895,11 +906,34 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
     return out
 
 
+def compose_settings(body: bytes) -> dict[str, str]:
+    """A hand-off's `COMPOSE_ENV` read as data, as served_verdicts.sh's `read_env` reads it: the settings by name, each
+    line NAME=VALUE (NAME up to its first `=`), NAME one of `COMPOSE_SETTINGS` and set once, VALUE `''` or of
+    `ENV_VALUE`, a last line without its newline read too; else refused, naming the line and never quoting it."""
+    if len(body) > COMPOSE_ENV_BYTES:
+        raise Refused(f"the hand-off's {COMPOSE_ENV} is over {COMPOSE_ENV_BYTES} bytes")
+    lines = body.decode("latin-1").split("\n")
+    got: dict[str, str] = {}
+    for i, line in enumerate(lines[:-1] if lines[-1] == "" else lines, 1):
+        name, eq, value = line.partition("=")
+        why = ("is not NAME=VALUE" if not eq else "names no setting" if not ENV_NAME.fullmatch(name)
+               else "sets no setting of a hand-off" if name not in COMPOSE_SETTINGS
+               else f"sets {name} a second time" if name in got
+               else f"sets {name} to a value of other characters than A-Za-z0-9._/:+@=,-"
+               if value != "''" and not ENV_VALUE.fullmatch(value) else None)
+        if why:
+            raise Refused(f"the hand-off's {COMPOSE_ENV}, which the compose reads as data and never runs: its line {i} "
+                          f"{why}")
+        got[name] = "" if value == "''" else value.replace("\\,", ",")
+    return got
+
+
 def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, str]:
     """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
     the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
     served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
-    past `cap` in all; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum."""
+    past `cap` in all, or it is `COMPOSE_ENV` and not settings `compose_settings` reads; and after, when a file the sums
+    list is missing, one isn't listed, or one isn't its listed sum."""
     d.mkdir(mode=0o700, parents=True)
     got: dict[str, str] = {}
     total = 0
@@ -923,6 +957,9 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 f.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 h = hashlib.sha256()
                 fin = t.extractfile(m)
+                if name == COMPOSE_ENV:
+                    compose_settings(body := fin.read(COMPOSE_ENV_BYTES + 1))
+                    fin = io.BytesIO(body)
                 with open(f, "wb", opener=lambda p, fl: os.open(p, fl, 0o600)) as fout:
                     while chunk := fin.read(1 << 24):
                         h.update(chunk)

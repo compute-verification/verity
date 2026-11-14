@@ -964,6 +964,65 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
     assert oct((tmp_path / "ok").stat().st_mode & 0o777) == "0o700"
 
 
+@pytest.mark.parametrize("line, why", [
+    ("K=$(touch {ran})", "its line 1 sets K to a value of other characters"),
+    ("K=`touch {ran}`", "its line 1 sets K to a value of other characters"),
+    ("K=7; touch {ran}", "its line 1 sets K to a value of other characters"),
+    ("K=7 touch {ran}", "its line 1 sets K to a value of other characters"),
+    ("K=7\r", "its line 1 sets K to a value of other characters"),
+    ("touch {ran}", "its line 1 is not NAME=VALUE"),
+    ("", "its line 1 is not NAME=VALUE"),
+    ("$(touch {ran})=7", "its line 1 names no setting"),
+    ("ONSITE_PIECES=x", "its line 1 sets no setting of a hand-off"),
+    ("K=7\nK=8", "its line 2 sets K a second time"),
+    ("K=7\nPRODUCT=x\nSTEPS=0\\,3\nGAMMA=$(touch {ran})", "its line 4 sets GAMMA to a value of other characters"),
+])
+def test_a_hand_off_whose_settings_are_not_data_is_refused_before_they_are_written_and_runs_nothing(
+        composer, tmp_path, line, why):
+    """A hand-off's compose.env is the prover's bytes, which the compose's script reads on this host: `receive`
+    refuses one that isn't NAME=VALUE lines of the hand-off's settings in handoff's characters before writing it, so a
+    `$(...)` in it reaches no shell; nothing composes, and the command it carries never ran."""
+    ran = tmp_path / "ran"
+    handed = tar_of({**HANDED, H.COMPOSE_ENV: f"{line.format(ran=ran)}\n".encode()})
+    (rc, out), seen = compose(composer, handed)
+    said = refused((rc, out))
+    assert f"{H.COMPOSE_ENV}, which the compose reads as data and never runs: {why}" in said, said
+    assert str(ran) not in said and "env" not in seen and not seen["scratch"].exists() and not ran.exists()
+    d = tmp_path / "serve"
+    with pytest.raises(H.Refused, match="reads as data"):
+        H.receive(io.BytesIO(handed), d)
+    assert not (d / H.COMPOSE_ENV).exists() and not ran.exists()
+
+
+def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp_path):
+    """The served node's compose.env as handoff writes it (`printf '%s=%q\\n'`: a comma as `\\,`, an empty value as
+    `''`), its last line with or without a newline, is received whole and reads as the settings it was written from."""
+    settings = {"K": "7", "PRODUCT": "remote", "STEPS": "0,3", "AUDITED_ON": "", "SERVED_DIR": "/workspace/research/r-1",
+                "ALPHA": "0.25", "GAMMA": "1e-3", "COMPOSE_TREE": "a+b@c:d=e"}
+    body = subprocess.run(["bash", "-c", 'printf "%s=%q\\n" "$@"', "_", *(x for kv in settings.items() for x in kv)],
+                          capture_output=True, check=True).stdout
+    assert b"STEPS=0\\,3\n" in body and b"AUDITED_ON=''\n" in body
+    for i, b in enumerate((body, body.rstrip(b"\n"))):
+        got = H.receive(io.BytesIO(tar_of({**HANDED, H.COMPOSE_ENV: b})), tmp_path / f"ok{i}")
+        assert (tmp_path / f"ok{i}" / H.COMPOSE_ENV).read_bytes() == b and H.COMPOSE_ENV in got
+        assert H.compose_settings(b) == settings
+    assert H.compose_settings(b"") == {}
+    with pytest.raises(H.Refused, match="over 65536 bytes"):
+        H.compose_settings(b"K=7\n" * 20000)
+
+
+def test_the_settings_rule_is_the_compose_scripts():
+    """`COMPOSE_SETTINGS` is served_verdicts.sh's COMPOSES, and `ENV_NAME` and `ENV_VALUE` its read_env's patterns once
+    it states them: one edited alone fails here, so the gate refuses no hand-off the script reads and passes none it
+    refuses."""
+    sh = (ROOT / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    (composes,) = re.findall(r'^COMPOSES="([^"]*)"$', sh, re.M)
+    assert tuple(composes.split()) == H.COMPOSE_SETTINGS, "make COMPOSE_SETTINGS served_verdicts.sh's COMPOSES"
+    value = re.findall(r"^ENV_VALUE='\^(.*)\$'$", sh, re.M)
+    assert value in ([], [H.ENV_VALUE.pattern]), "make ENV_VALUE served_verdicts.sh's, without its ^ and $"
+    assert not value or f"$_n =~ ^{H.ENV_NAME.pattern}$" in sh, "make ENV_NAME read_env's name pattern"
+
+
 def witness_rule(source: str) -> tuple[dict[str, list], str]:
     """A module's witness tables, each in the order it is written, and its `witness` without the docstring, as syntax."""
     body = ast.parse(source).body
