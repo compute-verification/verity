@@ -637,6 +637,11 @@ def test_the_default_check_needs_the_artifact_to_hold_the_paths_files_and_be_pre
     R.keep(d, root=root, owner="@x", expires=PAST, priority="low", preserved=art, now=clock, node=NODE)
     check = R.store_check(str(vault_store), clock)
     assert check(art, d) == VERIFIED
+    (d / "link").symlink_to(tmp_path / "elsewhere")
+    os.mkfifo(d / "fifo")
+    assert check(art, d) == VERIFIED, "a link or a fifo holds no bytes, and custody never stores one"
+    (d / "link").unlink()
+    (d / "fifo").unlink()
     (d / "late.bin").write_bytes(b"l")
     assert check(art, d) == R.Stored("uncovered", "1 file(s) under it are not in the artifact at their size, e.g. late.bin")
     (d / "late.bin").unlink()
@@ -668,21 +673,55 @@ def test_without_a_remote_the_check_trusts_the_catalogs_verified_replica(tmp_pat
     assert found.state == "unreachable" and "no verified remote replica recorded in the local catalog" in found.why
 
 
-def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault_store, monkeypatch):
+def test_a_run_dir_whose_record_custody_trimmed_goes_seven_days_after_custody_verified_it(tmp_path, vault_store, monkeypatch):
     """Custody marks a run dir preserved while its run record only lists an undeclared file over the cap (custody.select); those
-    bytes are on no remote, so gc keeps the dir."""
+    bytes are on no remote, so they are the run's only copy, as a never-stored run's are: gc lists the dir with the date they go,
+    7 d after custody verified the run, and deletes it then only under --unpreserved-runs."""
     root = tmp_path / "ws"
-    d = run_dir(root, "research/runs/r1", extra={"work/big.bin": b"t" * UNIT})
     monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
     st = LocalStore(vault_store)
-    art = CU.put_run_record(st, d, "r1")
-    assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]
-    (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
-    assert CU.marker_problem(d) is None, "custody vouches for the dir"
-    plan = run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(vault_store)))
-    assert d.exists() and (d / "work/big.bin").exists()
-    assert by_path(plan)["research/runs/r1"]["reason"] == (f"preserved {art} is not verified on the remote: 1 file(s) under it are not "
-                                                         "in the artifact at their size, e.g. work/big.bin")
+    dirs = {}
+    for name, verified in (("young", "2026-09-28T00:00:00Z"), ("old", "2026-09-21T00:00:00Z")):
+        d = dirs[name] = run_dir(root, f"research/runs/{name}", verified=verified, extra={"work/big.bin": b"t" * UNIT})
+        art = CU.put_run_record(st, d, name)
+        assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]
+        (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
+        assert CU.marker_problem(d) is None, "custody vouches for the dir"
+    lack = "1 file(s) under it are not in the artifact at their size, e.g. work/big.bin"
+
+    def gc(**kw):
+        return run_gc(root, Disk(20 * UNIT, 18 * UNIT, []), apply=True, force=True, low_pct=0, remote_check=R.store_check(str(vault_store)),
+                      **kw)
+
+    plan = gc()
+    young, old = (by_path(plan)[f"research/runs/{n}"] for n in ("young", "old"))
+    assert dirs["young"].exists() and dirs["old"].exists() and plan["stored"]["uncovered"] == 2
+    art = R.implicit(dirs["young"], "research/runs/young")["preserved"]
+    assert young["reason"] == (f"its run record {art} lacks what custody did not store ({lack}): that goes 2026-10-05T00:00:00Z, 7 d "
+                               "after custody verified the run, under --unpreserved-runs")
+    assert old["reason"].endswith(f"({lack}), 7 d after custody verified the run, which only --unpreserved-runs deletes")
+
+    plan = gc(unpreserved=True)
+    assert dirs["young"].exists() and not dirs["old"].exists()
+    assert by_path(plan)["research/runs/young"]["reason"].endswith("that goes 2026-10-05T00:00:00Z, 7 d after custody verified the run")
+    gone = by_path(plan)["research/runs/old"]
+    assert (gone["action"], gone["stored"], gone["error"]) == ("delete", "uncovered", None)
+    assert gone["reason"].endswith(f"but for what custody did not store ({lack}), 7 d after custody verified the run")
+
+
+def test_an_uncovered_run_whose_remote_copy_is_wrong_is_kept_for_that(tmp_path, vault_store):
+    """The seven days take only what custody did not store: where the remote doesn't hold the rest, its answer keeps the path."""
+    root = tmp_path / "ws"
+    d = data(root, "research/runs/r1")
+    st = LocalStore(vault_store)
+    art = st.put_artifact("run-record/v1", {"run_id": "r1"}, tree=d)
+    assert st.push(art, preserve=True)["preserved"]
+    (d / "late.bin").write_bytes(b"l")
+    check = R.store_check(str(vault_store), clock)
+    assert check(art, d).state == "uncovered"
+    aged(tmp_path / "vault", art, days=0)
+    (tmp_path / "vault" / "objects" / "sha256" / hashlib.sha256(b"x" * UNIT).hexdigest()).unlink()
+    assert check(art, d).state == "mismatch"
 
 
 # ---- the command line -----------------------------------------------------------------------------------------------------------------
