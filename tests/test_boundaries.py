@@ -215,9 +215,7 @@ RUNTIME = ("verity.runtime.channels", "verity.runtime.process", "verity.runtime.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
 #: Files of ``RUNTIME_FREE``, outside its tests, that import the runtime all the same, each with its owner and what it
 #: imports.  It only shrinks.
-RUNTIME_IMPORTERS: dict[str, str] = {
-    "verity/protocols/accounting/pouw/verifier/parties.py": "compute-accounting: the challenge source's ask (`sources.ASKS`)",
-}
+RUNTIME_IMPORTERS: dict[str, str] = {}
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
