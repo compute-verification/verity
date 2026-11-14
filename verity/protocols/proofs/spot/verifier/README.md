@@ -285,6 +285,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
+- `window_place`: `of`, `family` and `run`, the place a registration record's window names in its window's session, the
+  family of challenges of that place and the root the session opens on; a stream holds a sample's challenger source
+  to that family.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
@@ -517,10 +520,12 @@ commitment, and concatenates them, with no stretch. A rerun's extension opens on
 sampled once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the sample's coins
 are exactly those released after the commitment, every one read; the stream's digest says `"coins": "challenger"`.
-`Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
-session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
-registration's run (`register`'s `window_root`, never one the evidence names), run from a commit the host's
-pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
+`Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{ledger, main, pins, segment, session}`, which is
+`draw_coins`'s: one object for the stream's check and a component's), and the run takes the commitment and the roots
+from the session the auditor's ledger opens for the registration's run (`register`'s `window_root`, never one the
+evidence names) under the challenger key the stream is made with (`Stream(key=)`, never one the evidence names: evidence
+that carries a key is refused), run from a commit the host's pins log records on the verifier's copy of main's
+first-parent line (`pinned_session`; `Stream(main=)`, which the copy the evidence carries must be), and refuses the select step (code `coins`) unless the
 session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
 salt or path before it closed) and the bytes the sample read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
