@@ -243,7 +243,7 @@ the `ok` port (`PortsOk`) and registered served roots asked only of a session `P
 and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
-    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.WindowDesign sess out)
+    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.ExecutionPhaseDesign sess out)
     (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     (checkedOnLayer sess out ok P).SoundAt δ := by
