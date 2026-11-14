@@ -60,7 +60,7 @@ EXCLUDED_FILES = re.compile(r"(^test_.*\.py|^conftest\.py|Difftest.*\.lean|TestM
 FIX = "see AGENTS.md 'One vocabulary' and this module's docstring"
 
 #: The concepts held to one canonical object each.
-CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", "Coins", "CoinTree", "Draw", "Law", "Stmt",
+CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", "Coins", "CoinTree", "Draw", "SamplingDesign", "Stmt",
             "Statement", "Witness", "Digest", "Commitment", "Merkle", "Collision", "Device", "InteractiveDevice", "Dag",
             "Transcript", "Hash", "Signature",
             "Site", "Layout", "Hardware", "Machine", "Node", "Card", "Link", "Registration", "Registry", "Period",
@@ -99,14 +99,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
-    "Law": (f"{CORE}Draw.lean::Verity.Law", f"{COMMITMENTS}Draw.lean::Flock.Draw.Law",
-            "verity/protocols/proofs/spot/verifier/service.py::Law"),
+    "SamplingDesign": (f"{CORE}Draw.lean::Verity.SamplingDesign", f"{COMMITMENTS}Draw.lean::Flock.Draw.SamplingDesign",
+            "verity/protocols/proofs/spot/verifier/service.py::SamplingDesign"),
     "Layout": (),
     "Ledger": (),
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": ("verity/circuits/private_circuits/universal.py::Netlist",),
+    "Netlist": (),  # nothing in scope declares it
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
@@ -154,7 +154,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/protocols/accounting/certifier/verifier/certificate.py::Certificate":
         ("verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/protocols/proofs/spot/verifier/service.py::Law": (f"{COMMITMENTS}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
+    "verity/protocols/proofs/spot/verifier/service.py::SamplingDesign": (f"{COMMITMENTS}Draw.lean::Flock.Draw.SamplingDesign", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/commitments/crypto/lms.py::Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
@@ -531,7 +531,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `Flock.Stmt`: becomes its spec (one block R1CS statement) (lean)",
     "security/Definitions/Flock/Statement.lean::FlockSoundness.Model.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
-    "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
+    "security/Definitions/InferenceOnly/Cover.lean::InferenceOnly.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
     "security/Definitions/Certifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
@@ -716,10 +716,10 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
-    "benchmarks/rho/rho/circuits.py::Circuit":
+    "benchmarks/slowdown/slowdown/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
-    "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
-    "benchmarks/rho/rho/theorem.py::Partition":
+    "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
+    "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
@@ -843,8 +843,8 @@ KNOWN: dict[str, str] = {
     "verity/protocols/accounting/pouw/prover/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/verifier/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
-    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
-        "duplicate of `Flock.Draw.Law`: becomes it (deleted) (compute-accounting)",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.SamplingDesign":
+        "duplicate of `Flock.Draw.SamplingDesign`: becomes it (deleted) (compute-accounting)",
     "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
         "duplicate of the execution block (no canonical yet): becomes a reading of it: the execution block's record (compute-accounting)",
     "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
@@ -1104,7 +1104,7 @@ inductive Dag | leaf
 end
 opaque Hash : Type
 end Pouw
-class inductive Law (α : Type) : Type
+class inductive SamplingDesign (α : Type) : Type
 def Transcript {α : Type} (x : α) : Sort 1 := PUnit
 def Witness : Nat → Type := fun _ => Unit
 structure CoinsFor where
@@ -1116,7 +1116,7 @@ opaque Witness.Node : Nat
 """
     assert [(c, h.key, h.line) for c, h in lean_definitions(src)[0]] == [
         ("Coins", "Pouw.Coins", 4), ("Prog", "Pouw.Prog", 6), ("Digest", "Pouw.Foo.Digest", 8), ("Op", "Pouw.Op", 11),
-        ("Dag", "Pouw.Dag", 14), ("Hash", "Pouw.Hash", 16), ("Law", "Law", 18), ("Transcript", "Transcript", 19),
+        ("Dag", "Pouw.Dag", 14), ("Hash", "Pouw.Hash", 16), ("SamplingDesign", "SamplingDesign", 18), ("Transcript", "Transcript", 19),
         ("Witness", "Witness", 20), ("Collision", "Sha512.Collision", 24)]
 
 

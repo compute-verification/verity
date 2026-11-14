@@ -20,6 +20,7 @@ from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.commitments.randomness import derive
 
@@ -33,13 +34,13 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
 
 
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None, mark_source=None,
-               server: bytes = SERVER) -> sw.WipeMemoryChallenger:
-    return sw.WipeMemoryChallenger(SECRET, server, SESSION, p or params(),
+               server: bytes = SERVER) -> WC.WipeMemoryChallenger:
+    return WC.WipeMemoryChallenger(SECRET, server, SESSION, p or params(),
                                    signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
                                    clock=clock or Clock(1_000_000), coin_secret=b"coins", mark_source=mark_source)
 
 
-def run(c: sw.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
+def run(c: WC.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
         spend=lambda b: 20_000) -> sw.SignedWipe:
     prover = WS.Prover(c.params)
     for start, data in c.fill(100):
@@ -148,7 +149,7 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-DEFAULT_CLOCK = sw.WipeMemoryChallenger.__init__.__kwdefaults__["clock"]
+DEFAULT_CLOCK = WC.WipeMemoryChallenger.__init__.__kwdefaults__["clock"]
 """`WipeMemoryChallenger`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
 
 
@@ -159,7 +160,7 @@ def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypa
     monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
     assert sw.raw_clock_ns() == 7 and asked == [("ns", sw.time.CLOCK_MONOTONIC_RAW)]
     assert DEFAULT_CLOCK is sw.raw_clock_ns
-    assert WP.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_run.run.__kwdefaults__["clock"] is sw.raw_clock_ns
+    assert WC.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_run.run.__kwdefaults__["clock"] is sw.raw_clock_ns
     monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 1e-9)
     assert challenger(clock=sw.raw_clock_ns).clock is sw.raw_clock_ns
     monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 4e-3)
@@ -183,7 +184,7 @@ class Reads:
         return self.now
 
 
-def stream(c: sw.WipeMemoryChallenger, how: str, sent: list) -> None:
+def stream(c: WC.WipeMemoryChallenger, how: str, sent: list) -> None:
     """The whole fill, by `fill` or by `fill_by`, each thing streamed noted in `sent`."""
     if how == "fill":
         for first, _ in c.fill(100):

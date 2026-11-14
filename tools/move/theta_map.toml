@@ -60,7 +60,7 @@ words = { "NciCheck.Baseline" = "NciCheck.Theta", "BaselineProvenance" = "ThetaP
 # their tests read as such.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
-           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+           "tools/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
 patterns = ['"why": "[\d,]+ [^"\n]*"']

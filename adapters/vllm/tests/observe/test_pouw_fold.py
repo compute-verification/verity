@@ -195,7 +195,7 @@ def test_the_match_capture_installs_its_workloads_target_executors(linears, monk
 
     monkeypatch.setattr(verifier, "coins", random.Random(5).randbytes)
 
-    from verity_vllm.pipeline import m1_capture
+    from verity_vllm.pipeline import match_capture as m1_capture
     wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:rows-sha512"]}, "protocols_config": {"pouw": {}}}
     model, args = Model(), SimpleNamespace(target=None)
     protocols, entries = m1_capture.capture_protocols(wl, args, model)

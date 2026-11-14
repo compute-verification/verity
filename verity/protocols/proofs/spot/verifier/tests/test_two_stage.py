@@ -105,10 +105,10 @@ def _ports(program: Program, query, names, n: int | Mapping[str, int]) -> dict:
                 "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, leaves[v], RUN)} for v in names}
 
 
-def _record(program: Program, query, names, n: int | Mapping[str, int], law, window, previous) -> dict:
+def _record(program: Program, query, names, n: int | Mapping[str, int], sampling_design, window, previous) -> dict:
     ports = _ports(program, query, names, n)
     roots = [{"port": v, "root": f"{i + 1:02x}" * 64, **ports[v]} for i, v in enumerate(names)]
-    return R.record(program, query, law, S.SCHEME, roots, window, previous=previous)
+    return R.record(program, query, sampling_design, S.SCHEME, roots, window, previous=previous)
 
 
 def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
@@ -213,7 +213,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     ireg = stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, D.proved(first.draw)))
     assert ireg.order == reg.order and ireg.receipt["received"] == "1" and stream.log[-1] == ireg.record
     second = stream.select(ireg)
-    assert second.replay_sample == first and second.law == S.second_law(first.units, (N_RHO,), (K,))
+    assert second.replay_sample == first and second.law == S.second_sampling_design(first.units, (N_RHO,), (K,))
     assert [u // N_RHO for u in second.units] == list(range(Q))
     assert stream.deliver(second, [SESSION]) is None
     statements = stream.statements(second)
@@ -253,7 +253,7 @@ def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prov
     59/60 (the same profile at Q = 2), is refused when the rule is made."""
     def run(n, q):
         stream = _stream(_spec(RULE))
-        assert S.selection_law(stream.spec.selection, n) == {"law": "subset", "k": q}
+        assert S.selection_sampling_design(stream.spec.selection, n) == {"law": "subset", "k": q}
         reg = stream.register(*_boundary(n, q=q))
         first = stream.select(reg)
         assert len(first.units) == q
@@ -667,7 +667,7 @@ def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
     ireg = stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest, D.proved(first.draw)))
     assert reg.returned == 3 * 16 and ireg.returned is None
     assert _window_boundary(_window_stream()).returned == 3 * 16
-    spec = S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
+    spec = S.Spec(VALUES[:2], S.SamplingDesign("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
                   PUBLIC, b"two-stage-test")
     one = FC.Stream(spec, BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
     assert one.register(*_boundary()).returned is None
@@ -1131,7 +1131,7 @@ def test_the_interior_registration_is_in_the_boundary_registrations_window_or_th
 
 
 def test_a_one_stage_stream_has_no_interior_registration():
-    spec = S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
+    spec = S.Spec(VALUES[:2], S.SamplingDesign("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
                   PUBLIC, b"two-stage-test")
     stream = FC.Stream(spec, BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
     reg = stream.register(*_boundary())
@@ -1159,7 +1159,7 @@ def test_the_stream_holds_the_design_to_its_replay_block():
     with pytest.raises(ValueError, match="one round"):
         _stream(rounds=2)
     with pytest.raises(ValueError, match="only a two-stage stream"):
-        FC.Stream(S.Spec(VALUES[:2], S.Law("rate:1/2"), _spec().check, PUBLIC, b"t"), PAIR, replay=BLOCK, budget=2,
+        FC.Stream(S.Spec(VALUES[:2], S.SamplingDesign("rate:1/2"), _spec().check, PUBLIC, b"t"), PAIR, replay=BLOCK, budget=2,
                   delta=DELTA, challenger="challenger-test", clock=Clock())
 
 
@@ -1180,8 +1180,8 @@ def test_the_rule_and_the_spec_state_one_form():
     with pytest.raises(ValueError, match="interior values"):
         _spec(values=VALUES[:2])
     with pytest.raises(ValueError, match="one-stage selection has none"):
-        _spec(selection=S.Law("rate:1/2"))
-    assert S.selection_law(RULE, N) == {"law": "subset", "k": Q}
+        _spec(selection=S.SamplingDesign("rate:1/2"))
+    assert S.selection_sampling_design(RULE, N) == {"law": "subset", "k": Q}
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
 
@@ -1206,25 +1206,25 @@ def test_the_second_stage_samples_k_in_each_cell():
     """One stratum per cell, template by template and in each by sampled replay block, tiling the interior in order,
     each of the work sampling design's floor its count (cells' counts aren't in proportion to their sizes, as the stratified sampling design's
     are); a cell smaller than the rule's count is proved whole, and counts proving every cell whole are refused."""
-    law = S.second_law([1, 3], (4,), (2,))
-    assert law == {"law": "work", "k": 1,
+    sampling_design = S.second_sampling_design([1, 3], (4,), (2,))
+    assert sampling_design == {"law": "work", "k": 1,
                    "strata": [{"template": "1/0", "units": [[0, 4]], "work": 1, "floor": 2, "k": 2},
                               {"template": "3/0", "units": [[4, 8]], "work": 1, "floor": 2, "k": 2}]}
-    assert D.strata_problem(law, 8) is None
+    assert D.strata_problem(sampling_design, 8) is None
     obj = S.select_second([1, 3], (4,), (2,), random.Random(5).randbytes)
     assert obj["population"] == 8 and len(obj["units"]) == 4
     assert sorted(u // 4 for u in obj["units"]) == [0, 0, 1, 1]
-    law = S.second_law([1, 3], (3, 1), (2, 1))
-    assert [(s["template"], s["units"], s["k"]) for s in law["strata"]] == [
+    sampling_design = S.second_sampling_design([1, 3], (3, 1), (2, 1))
+    assert [(s["template"], s["units"], s["k"]) for s in sampling_design["strata"]] == [
         ("1/0", [[0, 3]], 2), ("3/0", [[3, 6]], 2), ("1/1", [[6, 7]], 1), ("3/1", [[7, 8]], 1)]
-    assert D.strata_problem(law, 8) is None
+    assert D.strata_problem(sampling_design, 8) is None
     obj = S.select_second([1, 3], (3, 1), (2, 1), random.Random(6).randbytes)
     assert obj["population"] == 8 and {6, 7} <= set(obj["units"]) and len(obj["units"]) == 6
     for ns, ks in (((10, 1), (1, 1)), ((1, 9, 2), (1, 3, 2)), ((5, 5), (1, 4))):
-        law = S.second_law([0, 2, 5], ns, ks)
-        assert D.strata_problem(law, 3 * sum(ns)) is None
+        sampling_design = S.second_sampling_design([0, 2, 5], ns, ks)
+        assert D.strata_problem(sampling_design, 3 * sum(ns)) is None
         stratified = {"law": "stratified", "k": 3 * sum(ks),
-                      "strata": [{v: s[v] for v in ("template", "units", "k")} for s in law["strata"]]}
+                      "strata": [{v: s[v] for v in ("template", "units", "k")} for s in sampling_design["strata"]]}
         assert "k is not the rule's" in D.strata_problem(stratified, 3 * sum(ns))
         obj = S.select_second([0, 2, 5], ns, ks, random.Random(7).randbytes)
         assert len(obj["units"]) == 3 * sum(ks)
@@ -1382,7 +1382,7 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert stream.interior_program(Q).root.id == interior.root.id
     ireg = stream.register_interiors(first, *_window_interior(interior, reg.digest, first))
     second = stream.select(ireg)
-    assert second.law == S.second_law(first.units, (2, 1), (1, 1))
+    assert second.law == S.second_sampling_design(first.units, (2, 1), (1, 1))
     assert [s["units"] for s in second.law["strata"]] == [[[0, 2]], [[2, 4]], [[4, 5]], [[5, 6]]]
     assert sorted(u // 2 for u in second.units if u < 4) == [0, 1] and {4, 5} <= set(second.units)
     assert stream.deliver(second, [SESSION]) is None
@@ -1565,7 +1565,7 @@ def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
                              proofs=_circuits())
         assert runs.pop()["interior"]["params"]["proofs"] == (tampered if tamper else _circuits()) and not runs
         assert not out.accepted and ("run" in stream.records[0]["audit"]["checks"]) is tamper
-    stream = FC.Stream(S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
+    stream = FC.Stream(S.Spec(VALUES[:2], S.SamplingDesign("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
                                                                       proof_deadline=60.0), PUBLIC, b"two-stage-test"),
                        BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
     draw = stream.select(stream.register(*_boundary()))
@@ -1593,7 +1593,7 @@ def test_a_sample_is_read_on_the_family_of_the_place_its_records_window_names():
     assert stream.family(stream.select(stream.register(*_boundary()))) == FC.LABEL
 
     def one(**kwargs) -> S.Stream:
-        return FC.Stream(S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
+        return FC.Stream(S.Spec(VALUES[:2], S.SamplingDesign("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
                                                                      proof_deadline=60.0), PUBLIC, b"two-stage-test"),
                          BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(), **kwargs)
     record, ports = _boundary(prompt=4, outputs=4, stopped=True, population="stop")

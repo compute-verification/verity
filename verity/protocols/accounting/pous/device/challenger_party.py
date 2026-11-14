@@ -254,7 +254,8 @@ class Challenger:
             return [_read_clock()]
         self.session = R.ChallengePhaseRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
-                Finish({"session": self.session.to_json(), "session_id": self.sid.hex()}, kind="private")]
+                Finish({"public_key": self.signer.public_key.hex(), "session": self.session.to_json(),
+                        "session_id": self.sid.hex()}, kind="private")]
 
 
 def _challenger() -> Challenger:
@@ -264,11 +265,11 @@ def _challenger() -> Challenger:
 def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
     """The challenger's start on the auditor's host (`ProtocolDef.starts`): the session's request
     (`challenger_session.deployed_request`), and in its state directory its key, refused unless the configuration pins it
-    for PoUS (`onsite.signer`), its session log and its salt log."""
-    params = deployed_request(configuration, bound)
+    for PoUS (`onsite.signer`), its session log and its salt log. The key is checked first, so a wrong one is refused
+    before any other input is read."""
     signer = onsite.signer(state, onsite.pin(configuration, CHALLENGER, COMPONENT))
     salts, sessions = _logs(state)
-    return Start(params, {"signer": signer, "log": sessions, "salts": salts})
+    return Start(deployed_request(configuration, bound), {"signer": signer, "log": sessions, "salts": salts})
 
 
 PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger}, {CHALLENGER: start})

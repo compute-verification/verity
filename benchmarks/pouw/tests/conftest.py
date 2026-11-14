@@ -23,9 +23,8 @@ from types import ModuleType
 import pytest
 
 POUW = Path(__file__).resolve().parents[1]
-#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the package the environment installs,
-#: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
-NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
+#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests and the package the environment installs
+NOT_SCRIPTS = frozenset({"tests", "exact_kit"})
 #: PoUW's prover's kernels, where the directories `MOVED` of ``benchmarks/pouw/`` went: this suite still takes their
 #: scripts, by the same names (``gpu_kit/sass_gate.py``)
 KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"

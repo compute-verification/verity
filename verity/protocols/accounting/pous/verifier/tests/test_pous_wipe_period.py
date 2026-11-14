@@ -40,6 +40,7 @@ from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier.period import decided_by
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 
@@ -208,7 +209,7 @@ def _split(params: sw.WipeParams, prover: WS.Prover, signer, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
+            got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
                                 clock=Clock(10 ** 9, 1))
 
     t = threading.Thread(target=side)
@@ -529,6 +530,26 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
     with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory challenger on auditor"):
         wipe_run.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of)
     assert not started and not (tmp_path / "out").exists()
+
+
+def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypatch) -> None:
+    """`run`, whoever calls it: a party on another host than the node with `trusted_sha512` unset is refused before
+    its session starts, so no caller's session is ever judged under the key it came with. The same party under a pin,
+    and an unpinned one on the node itself, reach their sessions."""
+    started = []
+
+    def session(party, *args, **kw):
+        started.append(party.host)
+        raise ConnectionError("the session started")
+    monkeypatch.setattr(wipe_run, "session", session)
+    there, here = Side("auditor", ("true",)), Side("n0", ("true",))
+    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory challenger on auditor"):
+        wipe_run.run("n0", SMALL, party=there)
+    assert not started
+    for party, pin in ((there, "ab" * 64), (here, None)):
+        with pytest.raises(ConnectionError, match="the session started"):
+            wipe_run.run("n0", SMALL, party=party, trusted_sha512=pin)
+    assert started == ["auditor", "n0"]
 
 
 def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path, monkeypatch) -> None:
