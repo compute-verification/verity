@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # A single-GPU Commit of record with its sealed replay bundle, the TP1 counterpart of a5_glm53_commit.sh's deferred TP Commit:
-# Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, the demo's workload, its file in adapters/vllm/tools/served_run/workloads/, which
+# Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, the served run's workload, its file in adapters/vllm/tools/served_run/workloads/, which
 # the integration finds through VERITY_WORKLOADS: the B4 I256/O32 rtxpro6000 workload, prompt lengths 151, 8, 256 and 87), its Build and
-# Match of record and a deferred config-run Commit in one workload dir, then the Commit's C2 replay on CPU. `verity demo vllm commit`
-# (run.sh) starts it where placement.toml's [run.commit] says, with the node's VENV, CUDA_HOME, HF_HOME and LLAMA_ROOT and the workload's
+# Match of record and a deferred config-run Commit in one workload dir, then the Commit's C2 replay on CPU. `run.sh commit`
+# starts it where placement.toml's [run.commit] says, with the node's VENV, CUDA_HOME, HF_HOME and LLAMA_ROOT and the workload's
 # ROW, ROLE, REPO and REV as its environment. Needs on the node: those, the taps of record under /workspace/cp (cli.MACHINE) and
 # gpu-lease; the workload leases a GPU only for its Match capture and its Commit's engine (GPU_LEASE, pipeline.gpu_lease).
 # A single-GPU workload defers its replay only as a config run (row_stages.SingleRow.commit_cmd), and leaves one bundle,
@@ -21,7 +21,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 . "$(dirname "${BASH_SOURCE[0]}")/published.sh" || exit 2
 for v in ROW ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT; do
-  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`verity demo vllm commit\` (adapters/vllm/tools/served_run/run.sh)"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh commit\`"; exit 2; }
 done
 TREE=$PWD
 ROOT=$LLAMA_ROOT

@@ -31,7 +31,7 @@ bound=True)`), with d kept beside it and given to `decode_token_layer`.  Under t
 pick its encoding (all zeros, or another block's) and write the token-layer that decodes from it, holding nothing for
 it; under the bound key a chosen encoding decodes to a token-layer with the digest it was decoded under only by a
 search over SHA-512.  The bound key is the store codec's for block slot · LAYERS + layer.  `kv.cu` takes it as each
-token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and `benchmarks/vllm_encoded/paged.cu`'s paths), gated
+token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and `verity/protocols/accounting/poub/prover/word_codec/paged.cu`'s paths), gated
 against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py` takes the seed's key only.
 
 The derivation is `benchmarks/codec_tensor/wide.py`'s under a domain of its own, at the fields

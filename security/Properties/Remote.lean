@@ -145,7 +145,7 @@ def StageHeld (k : Case) : Prop :=
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier ∧
     Properties.Spot.CallerHeld c.record p.base.verifier) ∨
   (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
-    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
+    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr (.inl q)) ∧
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier ∧
     Properties.Spot.CallerHeld c.record q.base.verifier)
 

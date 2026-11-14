@@ -580,7 +580,8 @@ class FusedAdamW(_TrainRule):
 
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False,
                    deterministic: bool = False, structure: bool = False) -> RuleSet:
-    """The default rules that target ATen ops (`rules.TORCH_RULES`) and the default families, with the training rules: views of
+    """The default rules that target ATen ops (`rules.TORCH_RULES`) and no family (each registered family claims a program only in
+    profile mode, and a training step derives in reference mode), with the training rules: views of
     static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
     comparison, mask, integer, conversion, lookup, order-statistic and copy rules after. `min_view_leaves` is 0 by default:
@@ -603,7 +604,6 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     (`Matmul()`) and each flash attention op its head Definition at a stand-in block size (`training_attention.STAND_IN`), with
     neither setting read (``training-cc<major>.<minor>-structure``)."""
     from verity_torch.frontend.rules import TORCH_RULES
-    from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES
 
     if structure and (cc is None or tf32 or deterministic):
         raise ValueError("training_rules: a structure derivation is of a step at a cc, and reads no setting of its kernels")
@@ -618,7 +618,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "") + (
         "-deterministic" if deterministic else "") + ("-structure" if structure else "")
     attention = [FlashSdpa(cc, structure), FlashSdpaBackward(cc, deterministic, structure)] if cc else []
-    return RuleSet(name, first + attention + list(TORCH_RULES) + last, list(DEFAULT_FAMILIES))
+    return RuleSet(name, first + attention + list(TORCH_RULES) + last)
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
