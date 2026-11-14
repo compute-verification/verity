@@ -32,7 +32,7 @@ from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.circuits.program import REGISTRATION, Program, input_prim
 from verity_vllm.definitions.registry import fa2_train as FT
 from verity_vllm.definitions.registry import fa2_train_bwd as FTB
-from verity_vllm.program.frontend.train_step import primitives
+from verity_torch.frontend.train_step import primitives
 
 aten = torch.ops.aten
 #: training's slowdown code as the grader calls it (`load_slowdown_code`'s namespace), standing in: the ops it says compute

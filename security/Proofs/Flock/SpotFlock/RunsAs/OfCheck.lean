@@ -21,18 +21,28 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
+/-- **No input the form's check builds has a statement of only its part's sampled proof blocks**: every interior
+registration of an input `inputAt` builds at the check's arguments is one `NoSampledOnly` holds of, so round 2's check
+the run makes (`SecondStage.checkAny`) is the `SecondStage.check` the two-stage guarantees read. -/
+def SampledNoneOf (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ : ByteArray)
+    (e : VStar.Recursive.SampledTwo.Evidence) (bs : _root_.Core.Blobs) : Prop :=
+  ∀ c₂ ξ₂ r i it, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) → i.interior = some it →
+    NoSampledOnly i it
+
 /-- **The form's check, accepting, accepted a two-stage run**: at parameters whose rule is two-stage, an accept of
 `checkBlobsAtWith form` is at the switch on, and the run of record `inputAt` built the input of is an accepted
-two-stage run of `Run.run` with the form allowed (`AcceptedTwo`), whose first stage's bytes run no further than what it
-read (`sourceRead`). -/
+two-stage run of `Run.run` with the form allowed (`AcceptedTwo`) where no input it builds has a statement of only its
+part's sampled proof blocks (`SampledNoneOf`), whose first stage's bytes run no further than what it read
+(`sourceRead`). -/
 theorem acceptedTwo_of_check {form : Bool} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
+    (hsn : SampledNoneOf p c ξ e bs)
     (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     form = true ∧ ∃ c₂ ξ₂ r i it run, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧
       AcceptedTwo i it run ∧ VStar.Recursive.SampledTwo.sourceRead ξ run = .ok () := by
   obtain ⟨hf, c₂, ξ₂, r, i, run, hin, hrun, hsr, -, hj, -⟩ := VStar.Recursive.SampledTwo.accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
-  exact ⟨hf, c₂, ξ₂, r, _, _, run, hin, ⟨hrun, str_of_jeq (jeq_symm hj), hp, rfl⟩, hsr⟩
+  exact ⟨hf, c₂, ξ₂, r, _, _, run, hin, ⟨hrun, str_of_jeq (jeq_symm hj), hp, rfl, hsn _ _ _ _ _ hin rfl⟩, hsr⟩
 
 end SpotFlock.RunsAs

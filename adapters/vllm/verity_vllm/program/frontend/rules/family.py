@@ -38,7 +38,7 @@ from verity.circuits.refs import (
 from verity.circuits.types import Array, RecordType, Type, Value
 from verity.circuits.types import Tuple as TupleT
 
-from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
+from verity_torch.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
 

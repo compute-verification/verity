@@ -15,7 +15,7 @@ from verity_vllm.definitions.registry import dense as DN
 from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     vllm_ruleset,

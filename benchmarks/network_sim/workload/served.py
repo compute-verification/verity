@@ -1,6 +1,6 @@
 """A served workload: verity_vllm's serving Program for a truncated SmolLM2 checkpoint, built and evaluated on CPU.
 
-`verity_vllm.program.frontend.derive.derive_report` derives the Program from `derive_examples.GreedyServe`, the vLLM-style
+`verity_torch.frontend.derive.derive_report` derives the Program from `derive_examples.GreedyServe`, the vLLM-style
 module (merged QKV and gate_up linears, vLLM's kernel interface, a per-layer KV cache) that serves one request: a prefill
 of `prompt` tokens, then `steps` greedy decode steps. In profile mode (`b1-eager`) every node is bound to the registered
 Definition of the kernel vLLM runs, and the derivation claims the registered family `Serve_v1` (`registry.b1.Serve`)
@@ -75,7 +75,7 @@ def _module(cfg: Config, device: str | None = None):
 
 def _derive(cfg: Config):
     import torch
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     prompt = torch.empty(cfg.prompt, dtype=torch.int32, device="meta")
     rep = derive_report(_module(cfg, "meta"), (prompt,), mode="profile", profile=PROFILE, config=cfg.registry(), name="Serve")
     if not rep.ok:

@@ -33,9 +33,9 @@ from verity_vllm.definitions.registry.fp8 import weight_blocks
 from verity_vllm.definitions.registry.prims import F32, I32
 
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.derive import Alloc
+from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,

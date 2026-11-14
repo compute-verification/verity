@@ -11,8 +11,8 @@ from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array, Value
 from verity_vllm.definitions.registry import dsa_topk
 
-from verity_vllm.program import inputs as IN
-from verity_vllm.program.frontend.registration import RunInputs
+from verity_torch import inputs as IN
+from verity_torch.frontend.registration import RunInputs
 
 ROOT = Path(__file__).resolve().parents[4]
 FIX = "serve it canonically"
@@ -22,7 +22,7 @@ ALLOWED_CAP = 1
 
 #: where each `ALLOWED` entry is still made or read, so an entry nothing makes is stale
 MADE_AT = {
-    "run.survey_hole": ("adapters/vllm/verity_vllm/program/frontend/rules/training_survey.py", '"survey_hole"'),
+    "run.survey_hole": ("adapters/torch/verity_torch/frontend/rules/training_survey.py", '"survey_hole"'),
 }
 PACKAGE = ROOT / "adapters/vllm/verity_vllm"
 

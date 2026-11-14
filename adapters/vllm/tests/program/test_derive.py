@@ -1,4 +1,4 @@
-"""Derivation mode (`verity_vllm.program.frontend.derive`): unannotated modules -> Program | Unsupported.
+"""Derivation mode (`verity_torch.frontend.derive`): unannotated modules -> Program | Unsupported.
 
 S1 reference mode (MLP; evaluated vs torch CPU f32 and vs the primitives' own sequential semantics), S2 profile mode
 (a vLLM-style decoder layer at B0 dims vs the hand-built TA1 layer), S3 (a greedy serving loop vs `Serve_v1`), and the
@@ -26,8 +26,8 @@ from verity_vllm.definitions.registry import stop_check as SC
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.frontend.correspond import compare_bodies
-from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
+from verity_torch.frontend.correspond import compare_bodies
+from verity_torch.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.family import DecoderLayerT
 

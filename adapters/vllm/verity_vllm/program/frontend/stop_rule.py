@@ -145,7 +145,7 @@ def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
     """Under `derive`'s config ``stop``, `check` over the traced source's returned values, which must be one (the request's
     outputs), as the Program's last Call and check (`Ctx.check`), which no fx node lowers; a config it can't read refuses at
     fx node ``at``."""
-    from verity_vllm.program.frontend.outcomes import refuse
+    from verity_torch.frontend.outcomes import refuse
     if (config := ctx.config.get("stop")) is None:
         return
     try:

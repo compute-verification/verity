@@ -143,7 +143,7 @@ def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
     pytest.importorskip("torch")
     import torch
 
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
@@ -187,7 +187,7 @@ def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: 
     import torch
     from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
@@ -375,7 +375,7 @@ def test_collective_record_names_own_and_peer_operands_at_worlds_2_4_and_8(W, ki
 
     import torch
 
-    from verity_vllm.program.frontend import emit as E
+    from verity_torch.frontend import emit as E
     for rank in range(W):
         g = torch.fx.Graph()
         parts = [g.placeholder(f"p{r}") for r in range(W)]

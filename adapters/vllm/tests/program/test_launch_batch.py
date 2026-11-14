@@ -23,7 +23,7 @@ from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.compilations import COMPILATIONS
-from verity_vllm.program.frontend.outcomes import Refuse
+from verity_torch.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.target_profile import TargetProfile

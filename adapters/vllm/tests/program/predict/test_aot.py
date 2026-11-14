@@ -20,8 +20,8 @@ from tests.program.predict.test_predict import (
     _row_phi,
 )
 from verity_vllm.config import UsageError
-from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE
-from verity_vllm.correspondence.runtime import correspondence_digest
+from verity_torch.correspondence.runtime import SCHEMA as CORRESPONDENCE
+from verity_torch.correspondence.runtime import correspondence_digest
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import build_program

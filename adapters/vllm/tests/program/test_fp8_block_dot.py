@@ -40,7 +40,7 @@ from verity_vllm.observe.fold.patterns.fp8 import (
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import Alloc
+from verity_torch.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     observe_target_profile,

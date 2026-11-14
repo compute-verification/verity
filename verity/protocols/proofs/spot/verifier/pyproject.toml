@@ -25,7 +25,7 @@ untraced = [
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
-          "security/Proofs/Flock/Soundness/Audit/Law.lean",
+          "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
           "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
           "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoCount.lean",

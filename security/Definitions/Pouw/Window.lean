@@ -25,8 +25,8 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
 * `Game`, `Strategy`, `prob`, `avg` and `prCoin`, core's (`Verity.Game`): a public-coin interaction with live coins, a
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
   and probability;
-* `Law`, a sampling design over units, and its escape (`L.escape B`), the probability that its sample misses a set, both core's
-  (`Verity.Law`, `Definitions.Core.Draw`); `Law.prod`, the calls' laws each sampled on its own coins, the product distribution that
+* `SamplingDesign`, a sampling design over units, and its escape (`L.escape B`), the probability that its sample misses a set, both core's
+  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' laws each sampled on its own coins, the product distribution that
   distinct contexts give (M1);
 * `auditReg`: the registration, then the coin of the sampling design at that registration, then the session on its sample (C1);
 * `WUnit`, `slice`, `seqCalls`, `windowSession`: a window's units (a call and a unit of that call), a call's share of a
@@ -83,20 +83,20 @@ noncomputable def thenExp {f : α → Game β} (F : (a : α) → Strategy (f a) 
 
 /-! ## Sampling designs and the audit whose sample depends on the registration -/
 
-export Verity (Law)
+export Verity (SamplingDesign)
 
 /-- **The audit whose sample depends on the registration** (C1): the prover registers `R`; the verifier samples by `L R`;
 the session on the sampled proof blocks runs against `R`. Output: the verdict and the sample. -/
-def auditReg {Reg U : Type} (L : Reg → Law U) (session : Finset U → Reg → Game Bool) : Game (Bool × Finset U) :=
+def auditReg {Reg U : Type} (L : Reg → SamplingDesign U) (session : Finset U → Reg → Game Bool) : Game (Bool × Finset U) :=
   .send Reg fun R => .coin (L R).Ω fun ω => (session ((L R).draw ω) R).map fun ok => (ok, (L R).draw ω)
 
 /-- A prover's state after registering `R`: its session strategy for every sample. -/
-abbrev Cont {Reg U : Type} (L : Reg → Law U) (session : Finset U → Reg → Game Bool) (R : Reg) :=
+abbrev Cont {Reg U : Type} (L : Reg → SamplingDesign U) (session : Finset U → Reg → Game Bool) (R : Reg) :=
   ∀ ω : (L R).Ω, Strategy (session ((L R).draw ω) R)
 
 section Audit
 
-variable {Reg U : Type} {L : Reg → Law U} {session : Finset U → Reg → Game Bool}
+variable {Reg U : Type} {L : Reg → SamplingDesign U} {session : Finset U → Reg → Game Bool}
 
 /-- The registration of an audit strategy. -/
 def reg (σ : Strategy (auditReg L session)) : Reg := σ.1
@@ -180,7 +180,7 @@ section Window
 variable {C : ℕ} {n : Fin C → ℕ}
 
 /-- **The product distribution** (M1): each call samples by its own sampling design, on its own coins. -/
-def Law.prod (L : (c : Fin C) → Law (Fin (n c))) : Law (WUnit n) where
+def SamplingDesign.prod (L : (c : Fin C) → SamplingDesign (Fin (n c))) : SamplingDesign (WUnit n) where
   Ω := (c : Fin C) → (L c).Ω
   draw ω := Finset.univ.sigma fun c => (L c).draw (ω c)
 
@@ -270,7 +270,7 @@ against the window's committed transcript, is at most `δlink_c(R, τ)`, a funct
 transcript is a function of the prover's state at registration, so it is the same for every call and every sample. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
 its seed reads are the committed transcript's, fixed before the sample. -/
-def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n))
+def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → SamplingDesign (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
     (c : Fin C) (δlink : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
@@ -289,7 +289,7 @@ the term at whichever call holds the unit a rule picks, so it is one window-leve
 gap (4)'s knowledge bound `κ + coll(R, τ)`. At one oracle no count bounds it: a state that holds a collision of the
 oracle makes it about 1. It is bounded on average over the oracle, at the sessions' counted queries, for one oracle
 program's run at each oracle (`CollCounted`). -/
-noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
+noncomputable def coll {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess c S R) → ℝ≥0∞) (R : Reg)
     (τ : Cont Lw (windowSession sess) R) : ℝ≥0∞ :=
@@ -315,7 +315,7 @@ before the random-oracle claim discharges it, it is restated with gap (4)'s sess
 over an oracle strategy of the window's game, one `QTree` per prover move, with `H` only in the verdict, so the plays
 and their count can depend on `H` only through queries (the
 recheck's (c)). -/
-def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
+def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → SamplingDesign (WUnit n))
     (sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (H : O) → (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess H c S R) → ℝ≥0∞)
     (qs : (H : O) → Strategy (auditReg (Lw H) (windowSession (sess H))) → ℕ) (f : ℕ → ℝ≥0∞) : Prop :=
@@ -328,9 +328,9 @@ escape of every unit set in `𝓑` under the sampling design the verifier runs a
 transcript's incorrect proof blocks, when they're in `𝓑`. For the keyed sample this is the pseudorandomness of the keyed streams at
 the context `digest(R)` (A4, `prf/sha-512`), from a fresh uniform source (A5), with a distinct context for every call
 (M1), on every family. For the service's sample it holds at `η = 0` on the copy-closed sets (`CopyClosed`). -/
-def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fin C) → Law (Fin (n c)))
+def EscapesWithin {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n)) (L : Reg → (c : Fin C) → SamplingDesign (Fin (n c)))
     (𝓑 : Finset (WUnit n) → Prop) (η : ℝ≥0∞) : Prop :=
-  ∀ R B, 𝓑 B → (Lw R).escape B ≤ (Law.prod (L R)).escape B + η
+  ∀ R B, 𝓑 B → (Lw R).escape B ≤ (SamplingDesign.prod (L R)).escape B + η
 
 /-- **What the served pass committed**, as the window's units read it, fixed before the window's registration:
 * `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
@@ -380,7 +380,7 @@ when the window's Program reads the `-h3` leaf in gates (`tile_read`) and `windo
 requires: then the
 outputs' half is that Program's opening of the `-h3` root, and the inputs' half is Flock's `AnchorsSound` (`δ_in`,
 `Proofs/Flock/Soundness/Audit/OneStage.lean`), each a binding term at the window's state. -/
-def ServedTie {Reg Tr : Type} (Lw : Reg → Law (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
+def ServedTie {Reg Tr : Type} (Lw : Reg → SamplingDesign (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos)
     (δin : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
   ∀ σ : Strategy (auditReg Lw (windowSession sess)),
@@ -416,7 +416,7 @@ def chunk {N : ℕ} (cap : ℕ) (D : Finset (Fin N)) (σ : ℕ) : Finset (Fin N)
 
 /-- **The service's sample**: a uniform permutation's `K`-subset, each sampled tile a unit of the one session that holds its
 rank. -/
-def serviceLaw (N K cap : ℕ) : Law (WUnit fun _ : Fin (sessions K cap) => N) where
+def serviceLaw (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K cap) => N) where
   Ω := Equiv.Perm (Fin N)
   draw π := Finset.univ.sigma fun σ => chunk cap (subsetDraw K π) σ.val
 
@@ -424,7 +424,7 @@ def serviceLaw (N K cap : ℕ) : Law (WUnit fun _ : Fin (sessions K cap) => N) w
 def share (K cap σ : ℕ) : ℕ := min cap (K - σ * cap)
 
 /-- **Session `σ`'s own sampling design**: a uniform `share K cap σ`-subset of the `N` tiles, on coins of its own. -/
-def sessionLaw (N K cap σ : ℕ) : Law (Fin N) where
+def sessionLaw (N K cap σ : ℕ) : SamplingDesign (Fin N) where
   Ω := Equiv.Perm (Fin N)
   draw π := subsetDraw (share K cap σ) π
 

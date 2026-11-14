@@ -1,5 +1,5 @@
 """Export a wrapper around the ACTUAL pinned vLLM model class and derive it with
-`verity_vllm.program.frontend.derive` + the per-op vLLM bindings. Wrappers (`vllm_meta.make_wrapper`): `step` (one engine step, M tokens at
+`verity_torch.frontend.derive` + the per-op vLLM bindings. Wrappers (`vllm_meta.make_wrapper`): `step` (one engine step, M tokens at
 pos0), `request` (prefill LP + T decode steps, flat), `padded` (the fixed padded rectangle prefill | decode 1..D_MAX with liveness
 values). Writes the derive report (provenance: every rule application), the program's descriptor + digest, a per-spec histogram,
 the instance sequence (comparator input), and the inputs trace.
@@ -49,9 +49,9 @@ from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
     same_module_path,
     write_tp_links,
 )
-from verity_vllm.program.frontend.boolean import derived
+from verity_torch.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
-from verity_vllm.program.prune import BATCHED, registered_form
+from verity_torch.prune import BATCHED, registered_form
 from verity_vllm.records import schema_ids as SID
 
 __all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
@@ -76,13 +76,13 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py", "verity_vllm/program/frontend/rules/vllm_bindings/fused_norm.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/int8.py", "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py", "verity_vllm/program/frontend/rules/vllm_bindings/observations.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/operands.py", "verity_vllm/program/frontend/rules/vllm_bindings/pins.py",
+                         "verity_torch/frontend/rules/bindings/operands.py", "verity_vllm/program/frontend/rules/vllm_bindings/pins.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
+                         "verity_torch/frontend/rules/bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
-                         "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py",
-                         "verity_vllm/program/frontend/derive_context.py", "verity_vllm/program/frontend/target_profile.py",
-                         "verity_vllm/program/frontend/rules/common.py", "verity_vllm/program/frontend/value_types.py",
+                         "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_torch/frontend/derive.py",
+                         "verity_torch/frontend/derive_context.py", "verity_vllm/program/frontend/target_profile.py",
+                         "verity_torch/frontend/rules/common.py", "verity_torch/frontend/value_types.py",
                          "verity_vllm/program/frontend/targets.py",
                          # the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/definitions/registry/b1_tp2.py",
@@ -95,7 +95,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
-                         "verity_vllm/program/frontend/report.py", "verity_vllm/program/frontend/relabel.py",
+                         "verity_torch/frontend/report.py", "verity_vllm/program/frontend/relabel.py",
                          "verity_vllm/pipeline/tp/emit_ranks.py", "verity_vllm/pipeline/tp/links.py")
 
 
@@ -122,7 +122,7 @@ def construction_version(rules, root: str | None = None) -> dict:
             b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
         h.update(rel.encode() + b"\0" + b + b"\0")
-    return {"schema": SID.CONSTRUCTION_VERSION_SCHEMA, "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
+    return {"schema": SID.CONSTRUCTION_VERSION_SCHEMA, "mechanism": "torch.export(strict=False) on meta + verity_torch.frontend.derive (profile mode)",
             "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha256": h.hexdigest(), "files": files}
 
 
@@ -304,7 +304,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
-        from verity_vllm.program.frontend.derive import derive_report
+        from verity_torch.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
                                                             observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()
@@ -447,8 +447,8 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
 
-    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS
-    from verity_vllm.correspondence.runtime import correspondence_digest
+    from verity_torch.correspondence.runtime import NAMESPACE as CORR_NS
+    from verity_torch.correspondence.runtime import correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
@@ -585,7 +585,7 @@ def _write_manifest(out: str, res: dict) -> None:
          "target": res.get("target"), "artifact": res.get("artifact"),
          "declared": declared.get("declared") if declared else None, "derived": declared.get("derived") if declared else None,
          "observed": {"attention_impls": res.get("attention_impls_observed"), "export_facts": res.get("export_facts")},
-         "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_vllm.program.frontend.derive (profile mode)",
+         "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_torch.frontend.derive (profile mode)",
                           "export": res.get("export"), "derive_secs": res.get("derive_secs"), "wall_secs_total": res.get("wall_secs_total"),
                           "max_rss_mb": res.get("max_rss_mb"), "cuda_available": res.get("cuda_available"), "param_device": res.get("param_device"),
                           "real_inference": False, "weights_loaded": False},

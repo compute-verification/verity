@@ -8,7 +8,7 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 import VCVio.Prelude.Core
@@ -164,7 +164,7 @@ theorem flock_inputs_sound
 /-- **The Flock audit's count curve, at the oracle layer**: `δ(K) = miss K + 2^-205`. -/
 theorem flock_oracle_count
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
-    (L : Law n) (K : ℕ) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    (L : SamplingDesign n) (K : ℕ) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (reg σ)).card) (audit L _ (flockSession plan)) σ ≤
       L.miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   P.oracle_count (P.flock_session_sound plan hlow) K σ
@@ -173,18 +173,18 @@ theorem flock_oracle_count
 theorem flock_oracle_count_subset
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
     {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n)
-    (σ : Strategy (audit (Law.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
+    (σ : Strategy (audit (SamplingDesign.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (reg σ)).card)
-        (audit (Law.subset n k hk) _ (flockSession plan)) σ ≤
+        (audit (SamplingDesign.subset n k hk) _ (flockSession plan)) σ ≤
       ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
-  have := P.flock_oracle_count plan hlow (Law.subset n k hk) K σ
-  rwa [Law.subset_miss hk hK] at this
+  have := P.flock_oracle_count plan hlow (SamplingDesign.subset n k hk) K σ
+  rwa [SamplingDesign.subset_miss hk hK] at this
 
 /-- **Sampled proof blocks of the Flock audit** are correct up to `2^-205`, even for a consumer who looks
 after the sample. -/
 theorem flock_oracle_sampled
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
-    (L : Law n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    (L : SamplingDesign n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ (flockSession plan)) σ ≤
       ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   P.oracle_sampled (P.flock_session_sound plan hlow) σ
@@ -194,7 +194,7 @@ audit accepts with a wrong wire of `T` with probability at most the largest miss
 `T`'s cone, plus `2^-205` for the sampled proof blocks and `2^-205` for the input unit. -/
 theorem flock_oracle_cone
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
-    {a : Fin C.N → Bool} (hin : InputsLoweringSound plan a) (L : Law n) (T : Finset (Fin C.N))
+    {a : Fin C.N → Bool} (hin : InputsLoweringSound plan a) (L : SamplingDesign n) (T : Finset (Fin C.N))
     (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ ∃ t ∈ T, t ∈ P.committed ∧ reg σ t ≠ C.eval a t)
         (audit L _ (flockSession plan)) σ ≤

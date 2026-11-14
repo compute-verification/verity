@@ -47,7 +47,7 @@ def build(tmp_path_factory):
     row, the LM head over the last), derived in the registered compiler's form (`dead_free`) and written as the Build writes a request
     Program dir; its manifest and instance sequence."""
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
 
     with torch.device("meta"):
         m = ex.GreedyServe(C, 1, vllm_rows=True)

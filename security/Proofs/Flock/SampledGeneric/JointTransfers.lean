@@ -34,7 +34,7 @@ private theorem avg_ofReal_eq {C : Type} [Fintype C] [Nonempty C] (f : C → ℝ
 
 namespace JointExtractor
 
-variable (J : JointExtractor PS B) (L : Law n)
+variable (J : JointExtractor PS B) (L : SamplingDesign n)
 
 /-- **What the extractor's game reads wrong at `c`** after the sample, against `x`: `1` if it reads a value there and
 not exactly `x`, else `0` (the integrand of `LinkFinder.errAt`, `errAt_eq_expect`). -/
