@@ -1,0 +1,204 @@
+[2026-11-14T02:31Z] 136469604c15
+POLICYROWS to network-accounting (lead), Fri 13 Nov 6:30 PM PST. **NET-430's statement is written in scratch in the properties tree and elaborates, and a scratch proof of it elaborates with no axiom beyond `propext`, `Classical.choice` and `Quot.sound`. There is no pull request, no root entry and no lock entry. The second premise ties values, not gates, and the conclusion is on the row returned: those two choices are the ones to rule.**
+
+**Where.** Branch `cursor/na-opening-premises-d53e`, head `b77b3dfce7d966180c9cbd7679b22f161608d4c4`, cut from `main` at `bc142cd03b25`. The statement is `security/Properties/Nci/Opening.lean` (160 lines); the scratch proof is `security/Proofs/Properties/Nci/Opening.lean` (77 lines). The statement's whole text is at the end of this line.
+
+**The two premises, each a named `Prop` that `NciCheck.Guarantees.PinnedReadBinds` takes as a hypothesis.**
+- `Accounting.ReadUnit.GatesRefine`, as it stands in `security/Definitions/Accounting/ReadUnit.lean`, at a unit `u` and ports `q` of `Flock.Bridge.circuitOf (.tmpl ct) hB n`, under SHA-512 and the served hm96 key.
+- `NciCheck.Properties.Record.OpeningTie`, new: unit `r.unit` of template `r.tid` of the record's Program is that unit at those ports. Its clause (i) is `Flock.Desc.parseStmt tags bytes tables = .ok (.tmpl ct)`, as PRF-616 has it. The statement is over any `q : Ports C` and any `consts`.
+
+**The tries** (`verity lean try FILE --siblings --on auto --as network-accounting`).
+- **The statement, on the pushed text:** run `r20261114-015954-4da9`. The wrapper's wait ended at its 20-minute cap with exit 79 while the run went on; the run then ended `done 0`. Its lines: "lean exit 0 in 66 s"; "siblings: no built module of its package that doesn't import Properties.Nci.Opening declares a name it does (45 imported in 6 s, peak 3858 MB); 62 unchecked, with no build of their source as it is or importing a module with none"; "axiom probe: no theorems in it". No warning or error is on the file's own lines.
+- **The scratch proof, on the pushed text:** run `r20261114-022010-7c16`, exit 0 in 138 s wall. Its lines: "lean exit 0 in 83 s"; "siblings: no built module of its package that doesn't import Proofs.Properties.Nci.Opening declares a name it does (467 imported in 9 s, peak 3840 MB); 3585 unchecked, with no build of their source as it is or importing a module with none"; "axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- **The siblings read is partial:** it left 62 modules unchecked for the statement and 3585 for the proof, for want of a build. A name clash with one of those is not ruled out.
+- **Earlier runs:** `r20261114-012416-5c3b`, the statement's first text, passed. `r20261114-014717-8916`, the proof's first version, failed with "maximum recursion depth has been reached" at two `simp [bits]` goals and at a `subst`, each unfolding a 512-wide `List.ofFn`; a length lemma and equations turned to face the port's bits mended it. `r20261114-015522-a9a6`, the mended proof, passed. Between that run and the pushed text only the first paragraph of the statement's module docstring changed.
+
+**What the statement says.** A check reads a record and holds row `r` as an opening under a pin, its reader's Definition having the roles `ro`. Under the two premises, where `u` is correct in the transcript and the registered constants hold there, the unit's key port holds 32 bits `kb`, its root port 512 bits `Rb`, its domain port 512 bits `db`, its verdict row holds a 1, and `table` is committed under that root and domain id: the row `u` returns is `table`'s row at the key, or the fill row where the key is at or past the count, or SHA-512 collides on what the unit's check and `table`'s opening hashed.
+
+**Choices for your ruling or soundness's.**
+1. **The tie is on values, not gates.** It says the bits the unit's ports hold in a valuation `val` of the Program's gates are the bits `q`'s gates hold in a transcript `Yc` of the circuit file's circuit. A tie on gates needs a map from a record's row bit to a gate of `circuitOf`. I found none in the properties tree: `portsAt` and `copyGate` are in the proofs tree, and I found nothing that maps a Definition's parameter to a template's columns. Defining that map here is the bridge you said is not asked of proofs; taking it as a free parameter constrains nothing. The cost of the choice: the tie is a hypothesis about a pair (`val`, `Yc`), not a closed premise about the check, and its discharge needs the record's circuit defined from the circuit files.
+2. **The conclusion is on the row returned, not on the opened ports.** It is `q.hOf` in the unit's local evaluation. `Roles` has no role for the row returned: the check's `layoutOf` names the second return field, `o1`, as the verdict and gives the first, `o0`, no role, and whether `o0` is the row in every pinned reader I did not read. So the statement names no row of the record for it. At a key at or past the count the reference accepts any witness, so "the opened ports are the table's" would be false there. This is soundness's sentence, "the true statement is on the row returned".
+3. **The record side is a valuation of the Program's own gates, not a transcript of `Served`'s wired circuit.** A key port can be wired to another unit's output, where `Served` reads it at its writer's gates; `Served` leaves operations free; and its `at_` sits under an existential. At the Program's own gates every unit's parameters are input gates of its own (`OwnRows`).
+4. **A port is read whole** (`InLeaf P sc 1 port 0`), whatever the wiring cuts it into, and the tie fixes three opened ports, row, salt and path, as the check's own `layoutOf` gives them.
+5. **What the proof does not use.** The seven setting hypotheses (`F.read`, the decode, the evaluate, `F.held`, the index, the Definition, `F.layout`) say which rows the statement is for, and the tie's `parses` and `opened` clauses say which file and which ports. The proof uses of the tie only `key`, `root`, `domain` and `verdict`. If you want only what a proof reads, those nine go; I kept them because without them the statement is not about a pinned reader of a record.
+6. **`hB`** is stated as `FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit`. `gatesRefine_check`'s `hB`, `Built (Flock.HmOut.unrolled ct).unit`, fits it: an `example` in the scratch proof checks that. ADDRWC's clause 2 (`ReadNet.check`, the output net) is left to `GatesRefine`'s discharge.
+7. **The lock.** `GatesRefine` and `OpeningTie` would be the two hand-written `open` entries naming NET-430 in `security/Properties`' lock. By the look of `TableReadBinding`'s record the lock will also ask where `Hash.RowLeaf.accepts`, `Partition.Correct` and `Holds` go, `domain` or `open`. I ran no `check.py --update`.
+8. **Size.** The statement file is 160 lines: about 30 of module docstring, 20 for `Holds` and its two abbreviations, 30 for the tie and 50 for the guarantee, against the issue's 50 and 30. The scratch proof's declarations are about 45 lines against the issue's 40.
+9. **Names** (`Holds`, `PortHolds`, `OutHolds`, `OpeningTie`, `PinnedReadBinds`) are tentative.
+
+**Not checked, and not claimed.**
+- No witness shows the tie and the other hypotheses hold together for any record. Until one exists, nothing here rules out that the statement is empty of cases on real records.
+- Nothing fixes which end of a leaf is bit 0. It is the valuation's.
+- The opened ports' own bits at a key at or past the count are unconstrained, as said in 2.
+- The fused blocks' layouts were not read, so I do not know what their first return field holds.
+- No root imports the file and no lock lists it. I ran neither the Lean check nor a records run: the two tries are all that built it.
+
+**The scratch proof, in two lines.** Two lists of one length that a unit holds at the same leaves are one list (`holds_eq`), so the tie turns the record-side bits into `q`'s bits and gives `RegisteredRows`. Inside the table the row is `readUnitBinds`'s; at or past the count it is `GatesRefine.computes`'s fill row.
+
+**The statement's text** (`security/Properties/Nci/Opening.lean` at `b77b3dfce7d9`):
+
+```lean
+module
+
+public import Properties.Nci.Record
+public import Properties.Flock.Circuit.CircuitOf
+public import Properties.Verity.Sha512
+public import Definitions.Accounting.ReadUnit
+public import Flock.Hm96
+
+/-!
+# A pinned reader returns its table's row: the two premises
+
+A check holds a row as an opening (`Held.opened`) under a pin, and a row it holds is θ (`Names`): none of its bits
+counts as fresh. `Good` asks of such a row only that the pin is the instance's and the reader's closure digest and that
+the reader's Definition has a reader's layout, and holds no value. The count is right only where the reader's unit
+returns no choice of the prover's. Two premises say so, each a named `Prop` that
+`NciCheck.Guarantees.PinnedReadBinds` takes as a hypothesis:
+
+* `Accounting.ReadUnit.GatesRefine`, at a unit `u` and ports `q` of the circuit a parsed circuit file describes
+  (`Flock.Bridge.circuitOf`): the unit's gates compute the read's reference (`Hash.EmbeddingRead`).
+* `OpeningTie`: unit `un` of template `tid` of the record's Program is that unit, at those ports. The record names a
+  unit by its template and its number and a reader's ports by its layout's roles (`Roles`); the circuit file names
+  gates. No definition gives one from the other, so the tie is on values: the bits the unit's ports hold in a
+  valuation of the Program's gates are the bits `q`'s gates hold in a transcript of the circuit file's circuit.
+
+A valuation `val` gives bit `t` of the Program's gate `g` as `val g t`. A port is read at the Program's own gates, where
+every unit's parameters are input gates of its own (`OwnRows`), and not in the wired circuit (`Served`), which reads a
+wired leaf at its writer's gates. A port is read whole, whatever the record's wiring cuts it into.
+
+**What the guarantee says.** Where the unit is correct in the transcript and the registered constants hold, the
+verdict the unit's verdict row holds is 1, and a table is committed under the root and the domain id that its root and
+domain ports hold: the row the unit returns (`Ports.hOf`, in the unit's local evaluation) is that table's row at the key
+its key port holds, or the fill row where the key is at or past the table's count, or SHA-512 collides on what the
+unit's check and the table's opening hashed.
+
+**What it does not say.** It is on the row returned, not on the opened ports: at a key at or past the count the
+reference accepts any witness, and the opened ports hold what the prover likes. It names no row of the record for the
+row returned, which `Roles` has no role for. It does not give a valuation and a transcript that the tie relates, for
+any record.
+-/
+
+@[expose] public section
+
+namespace NciCheck.Properties.Record
+
+open Flock.Program (Prog Scope)
+open Flock.TemplateQuery (TRange)
+open Accounting
+
+/-! ## What a unit's ports hold -/
+
+/-- **Unit `un` of template `tid` holds the bits `bs` at the leaves `Leaf`** in the valuation `val` of the Program's
+gates: each bit of `bs` lies in one of the leaves, and is that leaf's gate's bit wherever a leaf holds it. `Leaf sc l g
+lo hi` says leaf `l` of the activation `sc` is gate `g`, at bits `[lo, hi)`. -/
+def Holds (P : Prog) (rs : Array TRange) (val : ℕ → ℕ → Bool) (tid : String) (un : ℕ)
+    (Leaf : Scope → ℕ → ℕ → ℕ → ℕ → Prop) (bs : List Bool) : Prop :=
+  ∀ (b : ℕ) (hb : b < bs.length),
+    (∃ sc l g lo hi, UnitAt P rs tid un sc ∧ Leaf sc l g lo hi ∧ lo ≤ b ∧ b < hi) ∧
+      ∀ sc l g lo hi, UnitAt P rs tid un sc → Leaf sc l g lo hi → lo ≤ b → b < hi →
+        bs[b]'hb = val g (b - lo)
+
+/-- The parameter `port` of unit `un` of template `tid`, read whole (`InLeaf`, cut one way), holds the bits `bs`. -/
+abbrev PortHolds (P : Prog) (rs : Array TRange) (val : ℕ → ℕ → Bool) (tid : String) (un : ℕ) (port : String)
+    (bs : List Bool) : Prop :=
+  Holds P rs val tid un (fun sc => InLeaf P sc 1 port 0) bs
+
+/-- The output row `out` of unit `un` of template `tid` (`OutLeaf`) holds the bits `bs`. -/
+abbrev OutHolds (P : Prog) (rs : Array TRange) (val : ℕ → ℕ → Bool) (tid : String) (un : ℕ) (out : String)
+    (bs : List Bool) : Prop :=
+  Holds P rs val tid un (fun sc => OutLeaf P sc out) bs
+
+/-! ## The tie -/
+
+/-- **Unit `un` of template `tid` is unit `u` of a parsed circuit file, at the ports `q`**, in the valuation `val` and
+the transcript `Yc`. The circuit file `bytes` parses to the template statement `ct`, as the verifier reads it
+(`Flock.Desc.parseStmt`), and `u` is a unit of its circuit at the population `n`. Under the roles `ro` of the unit's
+reader: its key port holds the index `q`'s index gates hold; its root and domain ports hold what `q`'s root and domain
+id gates hold; its verdict row holds `q`'s verdict bit; and its opened ports are three, which hold the witness row, its
+salt and its sibling path, a digest a level. The index and the witness are read in `u`'s local evaluation, as the
+read's reference is (`Accounting.ReadUnit.Ports.Computes`), and the root, the domain id and the verdict in the
+transcript, as the registered rows are (`Accounting.ReadUnit.RegisteredRows`). -/
+structure OpeningTie (P : Prog) (rs : Array TRange) (tid : String) (un : ℕ) (ro : Roles) (tags : Flock.Tags)
+    (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
+    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) (val : ℕ → ℕ → Bool)
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) : Prop where
+  parses : Flock.Desc.parseStmt tags bytes tables = .ok (.tmpl ct)
+  key : PortHolds P rs val tid un ro.key
+    (ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.tok)
+  root : PortHolds P rs val tid un ro.root (ReadUnit.bits Yc q.root)
+  domain : PortHolds P rs val tid un ro.domain (ReadUnit.bits Yc q.domain)
+  verdict : OutHolds P rs val tid un ro.verdict [ReadUnit.bit Yc q.ok]
+  opened : ∃ row salt path, ro.opened = [row, salt, path] ∧
+    PortHolds P rs val tid un row
+      (ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.row) ∧
+    PortHolds P rs val tid un salt
+      (ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.salt) ∧
+    PortHolds P rs val tid un path
+      ((List.finRange (Hash.Tree.depth q.count)).flatMap fun j =>
+        ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) (q.path j))
+
+end NciCheck.Properties.Record
+
+namespace NciCheck.Guarantees
+
+open Lean (Json)
+open Flock.Program (Prog Defn)
+open Flock.TemplateQuery (TRange)
+open NciCheck.RecordText (Row Held)
+open NciCheck.Properties.Record
+open Accounting
+
+/-- **A pinned reader's unit returns its table's row.** Let a check read a record and hold its row `r` as an opening
+under a pin, the reader's Definition having the roles `ro`. Take the two premises: the read's gates compute its
+reference at unit `u` and ports `q` of a parsed circuit file's circuit (`Accounting.ReadUnit.GatesRefine`, under SHA-512
+and the served hm96 key), and `r`'s unit is that unit at those ports, in a valuation `val` of the Program's gates and a
+transcript `Yc` of that circuit (`OpeningTie`). Let `u` be correct in `Yc` and the registered constants hold there; let
+the unit's key port hold the 32 bits `kb`, its root port the 512 bits `Rb`, its domain port the 512 bits `db` and its
+verdict row a 1; and let `table` be committed under that root and domain id. Then the row `u` returns in its local
+evaluation is `table`'s row at the key `kb`, or the fill row where the key is at or past the table's count
+(`Hash.EmbeddingRead.h`), or SHA-512 collides on what the unit's check and `table`'s opening at the key hashed. -/
+def PinnedReadBinds : Prop :=
+  ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (rs : Array TRange) (r : Row) (name p pin : String) (k : ℕ)
+    (dfn : Defn) (ro : Roles) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) (val : ℕ → ℕ → Bool)
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) (kb Rb db : List Bool),
+    F.read j tr = .ok c → Flock.Program.decode (F.inst c).program.toUTF8 = .ok P →
+    Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
+      ((F.wiring c).templates.map (·.1)).toArray = .ok rs →
+    F.held c r = some (.opened name p pin) → P.index[r.tid]? = some k → P.defs[k]? = some dfn →
+    F.layout dfn = some ro →
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 Flock.Hm96.Default512.key.data.toList consts
+      (Flock.Bridge.partsOf (.tmpl ct) hB n) u q →
+    OpeningTie P rs r.tid r.unit ro tags bytes tables ct hB n u q val Yc →
+    (Flock.Bridge.partsOf (.tmpl ct) hB n).Correct Yc u →
+    (∀ g ∈ (Flock.Bridge.partsOf (.tmpl ct) hB n).io u, ∀ b, consts g = some b → ReadUnit.bit Yc g = b) →
+    kb.length = 32 → PortHolds P rs val r.tid r.unit ro.key kb →
+    Rb.length = 512 → PortHolds P rs val r.tid r.unit ro.root Rb →
+    db.length = 512 → PortHolds P rs val r.tid r.unit ro.domain db →
+    OutHolds P rs val r.tid r.unit ro.verdict [true] →
+    (∀ i < q.count, Hash.RowLeaf.accepts Verity.sha512 Verity.sha512
+      (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (ReadUnit.digestOf Rb) i (table i)) →
+    q.hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) =
+        Hash.EmbeddingRead.h q.count q.words (ReadUnit.num kb) (table (ReadUnit.num kb)) ∨
+      Hash.CollisionIn Verity.sha512
+        (Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512
+            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (ReadUnit.num kb)
+            (q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ++
+          Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512
+            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (ReadUnit.num kb)
+            (table (ReadUnit.num kb))) ∨
+      Hash.CollisionIn Verity.sha512
+        (Hash.RowLeaf.innerHashed Verity.sha512
+            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db))
+            (q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ++
+          Hash.RowLeaf.innerHashed Verity.sha512
+            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (table (ReadUnit.num kb)))
+
+end NciCheck.Guarantees
+```
+
+I hold no timer and nothing of mine runs. No pull request before Mon 16 Nov noon PST, as you ordered.
+
