@@ -693,6 +693,11 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
   obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
     hTags, hDp, hU, hpubO, hscope, hports, hnO, hdesc, hpop, hlaw, recS, units, st, hrd, hsize, hst, hshape⟩ :=
     session_parts hD hP hreach hv ht hT
+  have hreg : V.Registered θ F := by
+    obtain ⟨hθ, hFo, -⟩ := Binding.play_reaches hreach
+    have h1 := hv.1
+    rw [hθ, hFo] at h1
+    exact h1
   have hst2 := hst
   rw [(exec_recordDraw recS).trans hrd.2] at hst2
   obtain ⟨hpiD, pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hst2 hpubO hnO hports
@@ -710,10 +715,12 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
       hM := hb.M, ρ := b.ρ, hρ := hb.ρ, hr := fun S R j => hr_planZHJP _ _ hb.kρ S R j, ε := (V.certOf θ).ε,
       v := b.v, w := b.w, h := b.h }
   refine ⟨A, ⟨⟨p, hpa, hpart, hprog, hlaw, hdesc, rfl⟩, rfl, htags, hcount, hwork, hstrat, hclos, rfl, hcirc, hpubf,
-    hread.trans (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab), rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
+    hread.trans (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab), rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+    hreg⟩⟩
 
 /-- **The session at the files of an accepted play is set up** (`liveSpec_of_accepted`): `liveOf` is not `none`
-there, so SPOT's published δ there is the session's, not `⊤`. -/
+there, so SPOT's published δ there is the session's, not `⊤`, where the deployment registers a file for each pinned
+table the blobs hold (`TablesRegistered`, a hypothesis here). -/
 theorem liveOf_ne_none {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (hb : b.Ok) {θ : ByteArray}
     (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
