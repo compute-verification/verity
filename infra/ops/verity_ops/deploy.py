@@ -41,8 +41,9 @@ Daniel and infra's lead hold, never the research key the relays use), so drift r
 `--login vy-admin`: the same node, reached as that user instead of the one its registry entry names.
 
 `install` takes files only from a commit that an origin branch holds (a branch, a PR's head, `main`; never the working tree), so
-every installed byte is in a pushed commit. Each file is written beside the old one and renamed over it with the old one's owner
-and mode (a running script keeps its inode; a new file gets the entry's `mode`, else the repository's), and the old one is linked
+every installed byte is in a pushed commit, and refuses a commit whose deploy.toml copies as it is a file this code makes from
+the register of machines (one from before templates holds a list of addresses) or names a template as a `src`. Each file is
+written beside the old one and renamed over it with the old one's owner and mode (a running script keeps its inode; a new file gets the entry's `mode`, else the repository's), and the old one is linked
 under `.deploy-prev/` in its directory. A tree with `whole = true` is never changed file by file: its `path` is a link, every
 file of it at the commit is written into a new directory under `.deploy-tree/` beside the link, and one rename then points the
 link at it. So what resolves the link once when it starts (`readlink -e`) runs one commit's tree from start to end, whatever is
@@ -1264,6 +1265,18 @@ def accept(node: Node, e: Entry, sources: list[str], commit: str, ref: str, by: 
     return json.loads(r.stdout)
 
 
+def copied(node: Node, own: dict[str, Node], only: list[str]) -> None:
+    """Refused when REF's deploy.toml (`node`, as it reads) copies as it is a file this code's own deploy.toml (`own`) makes
+    from the register of machines: a commit from before templates holds a list of addresses, which its install would write
+    over the node's, and no shrink rule reads a copied file. (A commit whose template is a `src` doesn't load at all.)"""
+    made = {e.path for nd in own.values() for e in nd.entries if e.register}
+    if bad := sorted(e.path for e in node.entries if e.path in made and e.src and not e.register and not e.hold
+                     and (not only or e.path in only or e.src in only)):
+        raise Refused(f"its deploy.toml copies {', '.join(bad)} to {node.name} as it is, and this code makes it from the "
+                      "register of machines: an install from a commit before that change writes that commit's addresses "
+                      "over the node's list. Nothing changed; install from a commit that has the change (origin/main)")
+
+
 def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: bool = False, repo: Path = REPO,
             allow_shrink: bool = False, part: str = "all") -> dict:
     """Install `node`'s entries (or those whose path or repo path is in `only`) from `ref` and restart what they name (the
@@ -1570,7 +1583,13 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
                            capture_output=True, text=True)
         if r.returncode:
             print(f"research deploy: git fetch in {repo} failed, so REF may be stale: {r.stderr.strip()[-300:]}", file=sys.stderr)
-    nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
+    try:
+        nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
+        if ns.cmd == "install" and manifest == MANIFEST and ns.node in nodes:
+            copied(nodes[ns.node], load(MANIFEST), ns.paths)
+    except (ValueError, Refused) as e:
+        print(f"research deploy: {ns.ref if manifest == MANIFEST else manifest}: {e}", file=sys.stderr)
+        return 3
     if not ns.no_fetch and any(e.register for nd in nodes.values() for e in nd.entries) and (why := stale_register()):
         print(f"research deploy: {why}", file=sys.stderr)
     run = run or ssh_runner(login=getattr(ns, "login", None))

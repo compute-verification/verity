@@ -930,3 +930,37 @@ def test_the_verifiers_file_is_held_while_its_template_gives_no_peer_its_address
     entries = [e for n in ("vy-auditor-1", "vy-auditor-2") for e in deploy.load()[n].entries if e.path == "/etc/vy/verifier.json"]
     assert len(entries) == 2 and all(e.register and e.src == src for e in entries)
     assert all("addresses" in p for p in peers.values()) or all(e.hold for e in entries)
+
+
+def test_an_install_from_a_ref_whose_manifest_copies_a_file_this_code_makes_from_the_register_is_refused(fleet, monkeypatch, capsys):
+    """An install reads REF's deploy.toml. One from before templates copies the list of addresses as it is, over the node's,
+    and no shrink rule reads a copied file; one whose template is a `src` would copy the template: each is refused, exit 3,
+    before the node is read. A REF with the present shape installs as before."""
+    repo, tmp = fleet["repo"], fleet["tmp"]
+    manifest = repo / "deploy.toml"
+    monkeypatch.setattr(deploy, "MANIFEST", manifest)
+    monkeypatch.setattr(deploy, "SRC", repo)
+    now = fleet["manifest"].read_text()
+    copies = now.replace('template = "src/peers"\nregister = true\nby = "research deploy, from the template and the register of '
+                         'machines"\naccept = "/NODE/ssh/k.pub"\n', 'src = "src/peers.list"\n')
+    as_src = now.replace('template = "src/peers"\nregister = true\nby = "research deploy, from the template and the register of '
+                         'machines"\n', 'src = "src/peers"\nregister = true\n')
+    assert copies != now != as_src
+    old = _commit(repo, {"deploy.toml": copies, "src/peers.list": LIST}, "before templates").strip()
+    early = _commit(repo, {"deploy.toml": as_src}, "the template as a src").strip()
+    _commit(repo, {"deploy.toml": now}, "templates")
+    _git(repo, "push", "-q", "origin", "main")
+    fleet["calls"].clear()
+
+    def main(*argv: str) -> int:
+        return deploy.main([*argv, "--no-fetch"], run=fleet["run"], manifest=manifest, repo=repo)
+
+    for paths in ((), ("/NODE/etc/peers",)):
+        assert main("install", "a", "--by", "lane-x", "--apply", "--ref", old, *paths) == 3
+        assert (f"research deploy: {old}: its deploy.toml copies /NODE/etc/peers to a as it is, and this code makes it from the "
+                "register of machines") in capsys.readouterr().err
+    assert main("install", "a", "--by", "lane-x", "--apply", "--ref", early) == 3
+    assert "'/NODE/etc/peers' is made from the register: name its template `template`" in capsys.readouterr().err
+    assert fleet["calls"] == [] and not (tmp / "a" / "etc" / "peers").exists()
+    assert main("install", "a", "--by", "lane-x", "--ref", "origin/main") == 0
+    assert "would install /NODE/etc/peers  <- src/peers" in capsys.readouterr().out
