@@ -2,160 +2,109 @@ module
 
 public import Properties.Nci.Record
 public import Properties.Flock.Circuit.CircuitOf
-public import Properties.Verity.Sha512
 public import Definitions.Accounting.ReadUnit
-public import Flock.Hm96
+public import Spot.Bits
 
 /-!
-# A pinned reader returns its table's row: the two premises
+# A reader's ports as gates of its circuit file
 
-A check holds a row as an opening (`Held.opened`) under a pin, and a row it holds is θ (`Names`): none of its bits
-counts as fresh. `Good` asks of such a row only that the pin is the instance's and the reader's closure digest and that
-the reader's Definition has a reader's layout, and holds no value. The count is right only where the reader's unit
-returns no choice of the prover's. Two premises say so, each a named `Prop` that
-`NciCheck.Guarantees.PinnedReadBinds` takes as a hypothesis:
+A check holds a row as an opening (`Held.opened`) under a pin, by the roles of its reader's Definition (`Roles`): which
+parameter is the key, which the root, the domain id and the opened rows, and which output row is the verdict. The
+record names a unit by its template and its number, and a port by its parameter's name. The circuit a session checks
+is the one its circuit file describes (`Flock.Bridge.circuitOf`), and it names gates. This module gives the gates from
+the names, by the one map from a Definition's parameters to a file's gates, `Spot.Bits`:
 
-* `Accounting.ReadUnit.GatesRefine`, at a unit `u` and ports `q` of the circuit a parsed circuit file describes
-  (`Flock.Bridge.circuitOf`): the unit's gates compute the read's reference (`Hash.EmbeddingRead`).
-* `OpeningTie`: unit `un` of template `tid` of the record's Program is that unit, at those ports. The record names a
-  unit by its template and its number and a reader's ports by its layout's roles (`Roles`); the circuit file names
-  gates. No definition gives one from the other, so the tie is on values: the bits the unit's ports hold in a
-  valuation of the Program's gates are the bits `q`'s gates hold in a transcript of the circuit file's circuit.
+* `rowGate`, `outRowGate`: the file's gate on a bit of a parameter, and of an output row, of one of its units.
+  `Spot.Bits.fieldBit` finds the bit's instance, port and bit among the unit's ports, where the file's rows are the
+  Definition's parameters in order, each on its packed 16-bit words, and `Spot.Bits.inGate` and `outGate` give the
+  key program's gate there. The key program has the circuit's gates, gate for gate.
+* `laidOutAs`: whether the file is laid out as that Definition's template, as `Spot.Bits.check` decides it, and its
+  unit is the record's.
+* `portsOf`: a read unit's gates (`Accounting.ReadUnit.Ports`) at the roles: the gates of the key, the root, the
+  domain id and the three opened parameters, of the output row the unit returns and of the first bit of its verdict's
+  row. None where a bit of one of them has no gate.
 
-A valuation `val` gives bit `t` of the Program's gate `g` as `val g t`. A port is read at the Program's own gates, where
-every unit's parameters are input gates of its own (`OwnRows`), and not in the wired circuit (`Served`), which reads a
-wired leaf at its writer's gates. A port is read whole, whatever the record's wiring cuts it into.
-
-**What the guarantee says.** Where the unit is correct in the transcript and the registered constants hold, the
-verdict the unit's verdict row holds is 1, and a table is committed under the root and the domain id that its root and
-domain ports hold: the row the unit returns (`Ports.hOf`, in the unit's local evaluation) is that table's row at the key
-its key port holds, or the fill row where the key is at or past the table's count, or SHA-512 collides on what the
-unit's check and the table's opening hashed.
-
-**What it does not say.** It is on the row returned, not on the opened ports: at a key at or past the count the
-reference accepts any witness, and the opened ports hold what the prover likes. It names no row of the record for the
-row returned, which `Roles` has no role for. It does not give a valuation and a transcript that the tie relates, for
-any record.
+**What they do not say.** `rowGate` reads no row of the file: that an input port's gate holds the bit the registered
+row commits is the proof block's. `portsOf` reads `rowGate` and `outRowGate` alone, so its gates are a unit's ports
+only where `laidOutAs` holds. Which output row a reader returns is no role of `Roles`: `portsOf` takes its name, and
+the table's count, its row's words and its leaves' positions, which the reader's template fixes.
 -/
 
 @[expose] public section
 
 namespace NciCheck.Properties.Record
 
-open Flock.Program (Prog Scope)
-open Flock.TemplateQuery (TRange)
+open Flock.Program (Prog Defn)
 open Accounting
 
-/-! ## What a unit's ports hold -/
+/-- **A Definition's parameters with their words**, in order: each parameter's name and its packed 16-bit words
+(`Spot.Bits.wordsOf`), as a template instance's input rows hold them. -/
+def paramWords (d : Defn) : List (String × ℕ) := d.params.toList.map fun p => (p.1, Spot.Bits.wordsOf p.2)
 
-/-- **Unit `un` of template `tid` holds the bits `bs` at the leaves `Leaf`** in the valuation `val` of the Program's
-gates: each bit of `bs` lies in one of the leaves, and is that leaf's gate's bit wherever a leaf holds it. `Leaf sc l g
-lo hi` says leaf `l` of the activation `sc` is gate `g`, at bits `[lo, hi)`. -/
-def Holds (P : Prog) (rs : Array TRange) (val : ℕ → ℕ → Bool) (tid : String) (un : ℕ)
-    (Leaf : Scope → ℕ → ℕ → ℕ → ℕ → Prop) (bs : List Bool) : Prop :=
-  ∀ (b : ℕ) (hb : b < bs.length),
-    (∃ sc l g lo hi, UnitAt P rs tid un sc ∧ Leaf sc l g lo hi ∧ lo ≤ b ∧ b < hi) ∧
-      ∀ sc l g lo hi, UnitAt P rs tid un sc → Leaf sc l g lo hi → lo ≤ b → b < hi →
-        bs[b]'hb = val g (b - lo)
+/-- **A Definition's output rows with their words**, in order: return field `f` is the row `o<f>`, as a record names
+it, on its packed 16-bit words. -/
+def outWords (d : Defn) : List (String × ℕ) :=
+  (Spot.Bits.fieldsOf d.ret).zipIdx.map fun tf => (s!"o{tf.2}", Spot.Bits.wordsOf tf.1)
 
-/-- The parameter `port` of unit `un` of template `tid`, read whole (`InLeaf`, cut one way), holds the bits `bs`. -/
-abbrev PortHolds (P : Prog) (rs : Array TRange) (val : ℕ → ℕ → Bool) (tid : String) (un : ℕ) (port : String)
-    (bs : List Bool) : Prop :=
-  Holds P rs val tid un (fun sc => InLeaf P sc 1 port 0) bs
+/-- **The gate on bit `b` of parameter `port` of unit `un`**, in the circuit of `n` units of the file `c`, laid out as
+the Definition `d`'s template: the bit's instance, port and bit among the unit's input ports (`Spot.Bits.fieldBit`),
+and the key program's gate there (`Spot.Bits.inGate`). None where `d` has no such parameter, the bit is past it, or
+the port's bit is the zero. -/
+def rowGate (c : Flock.Circuit) (d : Defn) (n un : ℕ) (port : String) (b : ℕ) : Option ℕ :=
+  (Spot.Bits.fieldBit c (paramWords d) port b).bind fun kpt => Spot.Bits.inGate c n un kpt.1 kpt.2.1 kpt.2.2
 
-/-- The output row `out` of unit `un` of template `tid` (`OutLeaf`) holds the bits `bs`. -/
-abbrev OutHolds (P : Prog) (rs : Array TRange) (val : ℕ → ℕ → Bool) (tid : String) (un : ℕ) (out : String)
-    (bs : List Bool) : Prop :=
-  Holds P rs val tid un (fun sc => OutLeaf P sc out) bs
+/-- **The gate on bit `b` of output row `out` of unit `un`**, in the circuit of `n` units of the file `c`, laid out as
+the Definition `d`'s template: the bit's instance, leaf and bit among the unit's returned outputs
+(`Spot.Bits.fieldBit`), and the key program's gate there (`Spot.Bits.outGate`), a computed row's. -/
+def outRowGate (c : Flock.Circuit) (d : Defn) (n un : ℕ) (out : String) (b : ℕ) : Option ℕ :=
+  (Spot.Bits.fieldBit c (outWords d) out b).bind fun kjt => Spot.Bits.outGate c n un kjt.1 kjt.2.1 kjt.2.2
 
-/-! ## The tie -/
+/-- **Whether the templated file `ct` is laid out as template `tid` of the Program `P`, and its unit `u` is the
+record's unit `un`.** `Spot.Bits.check` gives no reason against the circuit the file unrolls to: its rows are the
+Definition's parameters in order and its unit's ports read them. A unit of the file is the record's unit of the same
+number. -/
+def laidOutAs (ct : Flock.Circuit) (P : Prog) (tid : String) (u un : ℕ) : Bool :=
+  (Spot.Bits.check (Flock.Desc.tmpl ct).unroll P tid).isNone && u == un
 
-/-- **Unit `un` of template `tid` is unit `u` of a parsed circuit file, at the ports `q`**, in the valuation `val` and
-the transcript `Yc`. The circuit file `bytes` parses to the template statement `ct`, as the verifier reads it
-(`Flock.Desc.parseStmt`), and `u` is a unit of its circuit at the population `n`. Under the roles `ro` of the unit's
-reader: its key port holds the index `q`'s index gates hold; its root and domain ports hold what `q`'s root and domain
-id gates hold; its verdict row holds `q`'s verdict bit; and its opened ports are three, which hold the witness row, its
-salt and its sibling path, a digest a level. The index and the witness are read in `u`'s local evaluation, as the
-read's reference is (`Accounting.ReadUnit.Ports.Computes`), and the root, the domain id and the verdict in the
-transcript, as the registered rows are (`Accounting.ReadUnit.RegisteredRows`). -/
-structure OpeningTie (P : Prog) (rs : Array TRange) (tid : String) (un : ℕ) (ro : Roles) (tags : Flock.Tags)
-    (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
-    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ) (u : Fin n)
-    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) (val : ℕ → ℕ → Bool)
-    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) : Prop where
-  parses : Flock.Desc.parseStmt tags bytes tables = .ok (.tmpl ct)
-  key : PortHolds P rs val tid un ro.key
-    (ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.tok)
-  root : PortHolds P rs val tid un ro.root (ReadUnit.bits Yc q.root)
-  domain : PortHolds P rs val tid un ro.domain (ReadUnit.bits Yc q.domain)
-  verdict : OutHolds P rs val tid un ro.verdict [ReadUnit.bit Yc q.ok]
-  opened : ∃ row salt path, ro.opened = [row, salt, path] ∧
-    PortHolds P rs val tid un row
-      (ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.row) ∧
-    PortHolds P rs val tid un salt
-      (ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.salt) ∧
-    PortHolds P rs val tid un path
-      ((List.finRange (Hash.Tree.depth q.count)).flatMap fun j =>
-        ReadUnit.bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) (q.path j))
+open Classical in
+/-- **The first `k` gates of `gate`, as gates of a circuit of `N` gates**: none where one of them is none or no gate of
+the circuit. -/
+noncomputable def gatesOf (N k : ℕ) (gate : ℕ → Option ℕ) : Option (Fin k → Fin N) :=
+  if h : ∀ i : Fin k, ∃ g : Fin N, gate i.val = some g.val then some fun i => Classical.choose (h i) else none
+
+/-- **A read unit's gates at the roles `ro`**, in a circuit `C` whose gate on bit `b` of parameter `p` is `inG p b`
+and on bit `b` of output row `o` is `outG o b`, for a table of `count` rows of `words` 16-bit words whose leaves sit at
+`position`. The index is the key parameter's first 32 bits, the root and the domain id are the root and domain
+parameters' 512; the opened parameters are three, in order the witness row, its salt and its path, a digest a level;
+the row returned is the output row `out`'s; and the verdict is the first bit of the verdict's row. None where the
+opened parameters are not three, or a bit of one of these has no gate. -/
+noncomputable def portsAtGates (C : Verity.Circuit) (inG outG : String → ℕ → Option ℕ) (ro : Roles) (out : String)
+    (count words : ℕ) (position : ℕ → ℕ) : Option (ReadUnit.Ports C) :=
+  if ro.opened.length = 3 then
+    (gatesOf C.N 32 (inG ro.key)).bind fun (tok : Fin 32 → Fin C.N) =>
+    (gatesOf C.N 512 (inG ro.root)).bind fun (root : Fin 512 → Fin C.N) =>
+    (gatesOf C.N 512 (inG ro.domain)).bind fun (domain : Fin 512 → Fin C.N) =>
+    (gatesOf C.N (16 * words) (inG (ro.opened.getD 0 ""))).bind fun (rowG : Fin (16 * words) → Fin C.N) =>
+    (gatesOf C.N (8 * Hash.Hm96.SALT_BYTES) (inG (ro.opened.getD 1 ""))).bind
+      fun (saltG : Fin (8 * Hash.Hm96.SALT_BYTES) → Fin C.N) =>
+    (gatesOf C.N (Hash.Tree.depth count * 512) (inG (ro.opened.getD 2 ""))).bind
+      fun (pathG : Fin (Hash.Tree.depth count * 512) → Fin C.N) =>
+    (gatesOf C.N (16 * words) (outG out)).bind fun (hG : Fin (16 * words) → Fin C.N) =>
+    (gatesOf C.N 1 (outG ro.verdict)).map fun (okG : Fin 1 → Fin C.N) =>
+      ({ count := count, words := words, position := position, tok := tok, root := root, domain := domain,
+         row := rowG, salt := saltG,
+         path := fun (l : Fin (Hash.Tree.depth count)) (i : Fin 512) =>
+           pathG ⟨512 * l.val + i.val, by have := l.isLt; have := i.isLt; omega⟩,
+         h := hG, ok := okG ⟨0, Nat.one_pos⟩ } : ReadUnit.Ports C)
+  else none
+
+/-- **The read unit's gates of unit `un` of the templated file `ct`**, at the roles `ro` of the Definition `d` and the
+output row `out`, in the circuit of `n` units the file describes: `portsAtGates` at `rowGate` and `outRowGate` of the
+circuit the file unrolls to. -/
+noncomputable def portsOf (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (d : Defn) (un : ℕ) (ro : Roles) (out : String) (count words : ℕ) (position : ℕ → ℕ) :
+    Option (ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) :=
+  portsAtGates (Flock.Bridge.circuitOf (.tmpl ct) hB n) (rowGate (Flock.Desc.tmpl ct).unroll d n un)
+    (outRowGate (Flock.Desc.tmpl ct).unroll d n un) ro out count words position
 
 end NciCheck.Properties.Record
-
-namespace NciCheck.Guarantees
-
-open Lean (Json)
-open Flock.Program (Prog Defn)
-open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row Held)
-open NciCheck.Properties.Record
-open Accounting
-
-/-- **A pinned reader's unit returns its table's row.** Let a check read a record and hold its row `r` as an opening
-under a pin, the reader's Definition having the roles `ro`. Take the two premises: the read's gates compute its
-reference at unit `u` and ports `q` of a parsed circuit file's circuit (`Accounting.ReadUnit.GatesRefine`, under SHA-512
-and the served hm96 key), and `r`'s unit is that unit at those ports, in a valuation `val` of the Program's gates and a
-transcript `Yc` of that circuit (`OpeningTie`). Let `u` be correct in `Yc` and the registered constants hold there; let
-the unit's key port hold the 32 bits `kb`, its root port the 512 bits `Rb`, its domain port the 512 bits `db` and its
-verdict row a 1; and let `table` be committed under that root and domain id. Then the row `u` returns in its local
-evaluation is `table`'s row at the key `kb`, or the fill row where the key is at or past the table's count
-(`Hash.EmbeddingRead.h`), or SHA-512 collides on what the unit's check and `table`'s opening at the key hashed. -/
-def PinnedReadBinds : Prop :=
-  ∀ (F : Form) (c : F.Case) (j tr : Json), F.read j tr = .ok c →
-  ∀ (P : Prog) (rs : Array TRange) (r : Row) (name p pin : String) (k : ℕ)
-    (dfn : Defn) (ro : Roles) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
-    (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
-    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
-    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) (val : ℕ → ℕ → Bool)
-    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) (kb Rb db : List Bool),
-    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P →
-    Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
-      ((F.wiring c).templates.map (·.1)).toArray = .ok rs →
-    F.held c r = some (.opened name p pin) → P.index[r.tid]? = some k → P.defs[k]? = some dfn →
-    F.layout dfn = some ro →
-    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 Flock.Hm96.Default512.key.data.toList consts
-      (Flock.Bridge.partsOf (.tmpl ct) hB n) u q →
-    OpeningTie P rs r.tid r.unit ro tags bytes tables ct hB n u q val Yc →
-    (Flock.Bridge.partsOf (.tmpl ct) hB n).Correct Yc u →
-    (∀ g ∈ (Flock.Bridge.partsOf (.tmpl ct) hB n).io u, ∀ b, consts g = some b → ReadUnit.bit Yc g = b) →
-    kb.length = 32 → PortHolds P rs val r.tid r.unit ro.key kb →
-    Rb.length = 512 → PortHolds P rs val r.tid r.unit ro.root Rb →
-    db.length = 512 → PortHolds P rs val r.tid r.unit ro.domain db →
-    OutHolds P rs val r.tid r.unit ro.verdict [true] →
-    (∀ i < q.count, Hash.RowLeaf.accepts Verity.sha512 Verity.sha512
-      (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (ReadUnit.digestOf Rb) i (table i)) →
-    q.hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) =
-        Hash.EmbeddingRead.h q.count q.words (ReadUnit.num kb) (table (ReadUnit.num kb)) ∨
-      Hash.CollisionIn Verity.sha512
-        (Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512
-            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (ReadUnit.num kb)
-            (q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ++
-          Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512
-            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (ReadUnit.num kb)
-            (table (ReadUnit.num kb))) ∨
-      Hash.CollisionIn Verity.sha512
-        (Hash.RowLeaf.innerHashed Verity.sha512
-            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db))
-            (q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ++
-          Hash.RowLeaf.innerHashed Verity.sha512
-            (q.verifier Flock.Hm96.Default512.key.data.toList (ReadUnit.digestOf db)) (table (ReadUnit.num kb)))
-
-end NciCheck.Guarantees
