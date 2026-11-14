@@ -1136,43 +1136,54 @@ class LakeArtifacts:
         a build refused for the code its sources run. The log says how many compiled modules `indexable` refused and
         names the first few with its words. Only what
         the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s."""
+        n, said, read = 0, {}, {}
+        for pkg in sorted(reports):
+            say = said.setdefault(pkg, []).append
+            if not isinstance(rep := reports[pkg], dict) or rep.get("sandbox") is not True:
+                say(f"lean-audit: {pkg}: its report doesn't say it was built in the sandbox, so none of its modules go "
+                    "into the artifact cache")
+                continue
+            if any(str(f).startswith("sampled:") for f in rep.get("failures") or ()):
+                say(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
+                    "none of the modules compiled on top of it go into the artifact cache")
+                continue
+            ws = MK.workspace(pkg)
+            if isinstance(ws, str):
+                continue
+            keyed, owners, own = MK.keys(pkg, MK.policy_roots(pkg)), {}, set()
+            at = tuple(b) if isinstance(b := rep.get("bound"), list) and len(b) == 2 and all(
+                isinstance(s, str) for s in b) else None
+            with ThreadPoolExecutor(max_workers=8) as ex:
+                built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners, at, own), keyed)))
+            if at:
+                say(f"lean-audit: {pkg}: {len(own)} setup.json of this build, which read its tree at {at[0]}, name a "
+                    f"path under the tree's own ({at[1]}), each read as it is")
+            if isinstance(only := rep.get("compiled"), list):
+                built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
+                         else "not compiled by this run: Lake didn't say it built it" for m, b in built.items()}
+            refusals = {m: b for m, b in built.items() if isinstance(b, Unindexable)}
+            need, todo = set(), [m for m, b in built.items() if not isinstance(b, str) or m in refusals]
+            while todo:
+                if (m := todo.pop()) not in need:
+                    need.add(m)
+                    todo += MK.loads(m, keyed)
+            if refused := runs_code(pkg) if need else None:
+                say(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
+                    "its modules go into the artifact cache")
+            outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
+                                   {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
+                                    for a, (_, d) in b[2].items()})
+            read[pkg] = keyed, built, need, refused, refusals, outs
+        # Every package's build is read above with no lock: its own tree, which the caller holds, and nothing of the store.
+        # One hold has every read and write of the index and the prune, so no other writer comes between two packages of
+        # one `put`; what reading a package had to say is logged there, before its entries, in the packages' order
         with self._lock():
-            n = 0
-            for pkg in sorted(reports):
-                if not isinstance(rep := reports[pkg], dict) or rep.get("sandbox") is not True:
-                    log(f"lean-audit: {pkg}: its report doesn't say it was built in the sandbox, so none of its modules go "
-                        "into the artifact cache")
+            for pkg, lines in said.items():
+                for line in lines:
+                    log(line)
+                if pkg not in read:
                     continue
-                if any(str(f).startswith("sampled:") for f in rep.get("failures") or ()):
-                    log(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
-                        "none of the modules compiled on top of it go into the artifact cache")
-                    continue
-                ws = MK.workspace(pkg)
-                if isinstance(ws, str):
-                    continue
-                keyed, owners, own = MK.keys(pkg, MK.policy_roots(pkg)), {}, set()
-                at = tuple(b) if isinstance(b := rep.get("bound"), list) and len(b) == 2 and all(
-                    isinstance(s, str) for s in b) else None
-                with ThreadPoolExecutor(max_workers=8) as ex:
-                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners, at, own), keyed)))
-                if at:
-                    log(f"lean-audit: {pkg}: {len(own)} setup.json of this build, which read its tree at {at[0]}, name a "
-                        f"path under the tree's own ({at[1]}), each read as it is")
-                if isinstance(only := rep.get("compiled"), list):
-                    built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
-                             else "not compiled by this run: Lake didn't say it built it" for m, b in built.items()}
-                refusals = {m: b for m, b in built.items() if isinstance(b, Unindexable)}
-                need, todo = set(), [m for m, b in built.items() if not isinstance(b, str) or m in refusals]
-                while todo:
-                    if (m := todo.pop()) not in need:
-                        need.add(m)
-                        todo += MK.loads(m, keyed)
-                if refused := runs_code(pkg) if need else None:
-                    log(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
-                        "its modules go into the artifact cache")
-                outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
-                                       {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
-                                        for a, (_, d) in b[2].items()})
+                keyed, built, need, refused, refusals, outs = read[pkg]
                 indexed, recorded = set(), 0
                 for mod, k in keyed.items():
                     if mod not in need:

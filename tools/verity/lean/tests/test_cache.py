@@ -965,6 +965,172 @@ def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_t
     assert not (store / MK.UNSTORED).exists()
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_put_reads_its_build_before_it_takes_the_store_s_lock_and_the_index_under_it(tmp_path, monkeypatch):
+    """A `put` reads its own build (the workspace, each module's key, what Lake left of each module, its sources for
+    code that runs while they compile, its outputs' digests) before it takes the store's lock, and the index only with
+    it. So of two builds that end together on one node, the second has read its whole build while the first holds the
+    lock: here the first waits, with the lock and nothing written, until the second asks for it. And the second decides
+    from the index as it is once it holds the lock: it compiled `Dep` over a `Dep.Word` its run didn't compile, which
+    the first indexed after the second read its build, and `Dep` goes in. Read with the build, the index would have
+    had no `Dep.Word`, and `Dep` would be recorded as loading a module that is not indexed."""
+    LC, LA = (_load(f"two_puts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    one, two = (pair(tmp_path / n)[1] for n in ("first", "second"))
+    for pkg in (one, two):
+        subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
+    first, second = LA.LakeArtifacts(store), LA.LakeArtifacts(store)
+    holds, asks = threading.Event(), threading.Event()
+    me, lock = threading.current_thread(), LA.LakeArtifacts._lock
+    read: list[str] = []
+    seen: list[tuple[int, set[str], bool]] = []
+
+    def held():
+        f = lock(first)
+        holds.set()
+        asks.wait()
+        return f
+
+    def asked():
+        if not asks.is_set():
+            seen.append((len(read), set(read), (store / MK.INDEX).exists()))
+            asks.set()
+        return lock(second)
+
+    def noting(what: str, real, mine=lambda: threading.current_thread() is me):
+        """``real``, which reads a build, noted in `read` once it returns when the second `put` called it."""
+        def noted(*a):
+            got = real(*a)
+            if mine():
+                read.append(what)
+            return got
+        return noted
+
+    first._lock, second._lock = held, asked
+    second._built = noting("_built", LA.LakeArtifacts._built, lambda: True)       # on the threads of its pool
+    for of, what in ((MK, "workspace"), (MK, "keys"), (LA, "runs_code"), (MK, "read_digests")):
+        monkeypatch.setattr(of, what, noting(what, getattr(of, what)))
+    new: dict[str, int] = {}
+    said: list[str] = []
+
+    def put_first() -> None:
+        try:
+            new["first"] = first.put({one: {"sandbox": True, "compiled": ["Dep.Word"]}}, log=said.append)
+        finally:
+            holds.set()
+
+    other = threading.Thread(target=put_first, daemon=True)
+    other.start()
+    holds.wait()
+    try:
+        new["second"] = second.put({two: {"sandbox": True, "compiled": ["Dep"]}}, log=said.append)
+    finally:
+        asks.set()
+    other.join()
+    [(n, names, indexed)] = seen
+    assert names == {"workspace", "keys", "_built", "runs_code", "read_digests"} and not indexed, \
+        "the second had read its build when it asked for the lock, which the first held with nothing written"
+    assert read[n:] == [], "and with the lock it reads nothing more of its build"
+    assert new == {"first": 1, "second": 1} and said == [], "`Dep.Word` is indexed by the time the second holds the lock"
+    assert sorted(json.loads(f.read_text())["module"] for f in (store / MK.INDEX).glob("*.json")) == ["Dep", "Dep.Word"]
+    assert not (store / MK.UNSTORED).exists()
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_put_holds_the_store_s_lock_once_so_nothing_another_put_writes_lands_between_its_packages(tmp_path):
+    """One `put` takes the store's lock once, for the entries of every package and the prune, so the entries of a package
+    and of the package that loads it go in with no other writer between them. Here the first `put` has `dep` and `top`,
+    which loads it, and waits, with the lock and nothing written, until the second asks for it. The second has its own
+    build of a `dep` and a `top` from another source, so every entry it writes is new. Were the first to let go of the
+    lock between its packages, the second would get it there: the first asks again only once the second has ended.
+    It never asks again, and every entry of the second, of either of its packages, comes after the first's last."""
+    LC, LA = (_load(f"one_hold_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    trees = {who: pair(tmp_path / who) for who in ("first", "second")}
+    (trees["second"][1] / "Dep" / "Word.lean").write_text(PAIR["dep/Dep/Word.lean"].replace("word {n}", "mot {n}"))
+    for top, _ in trees.values():
+        subprocess.run(LC.in_sandbox(top, ["lake", "build"]), cwd=top, check=True, capture_output=True, env=LC.lake_env())
+    puts = {who: LA.LakeArtifacts(store) for who in trees}
+    holds, asks, ended = threading.Event(), threading.Event(), threading.Event()
+    lock = LA.LakeArtifacts._lock
+    wrote: list[tuple[str, str]] = []
+    seen: list[bool] = []
+
+    def held():
+        if holds.is_set():
+            ended.wait()
+            return lock(puts["first"])
+        f = lock(puts["first"])
+        holds.set()
+        asks.wait()
+        return f
+
+    def asked():
+        if not asks.is_set():
+            seen.append((store / MK.INDEX).exists())
+            asks.set()
+        return lock(puts["second"])
+
+    def noting(who: str, index):
+        """``index`` (a `put`'s `_index`), each entry it wrote or kept noted in `wrote` as ``who``'s."""
+        def noted(mod: str, *a):
+            if (got := index(mod, *a)) is not None:
+                wrote.append((who, mod))
+            return got
+        return noted
+
+    puts["first"]._lock, puts["second"]._lock = held, asked
+    for who, la in puts.items():
+        la._index = noting(who, la._index)
+    new: dict[str, int] = {}
+    said: list[str] = []
+
+    def put(who: str) -> None:
+        top, dep = trees[who]
+        new[who] = puts[who].put({dep: {"sandbox": True}, top: {"sandbox": True}}, log=said.append)
+
+    def put_first() -> None:
+        try:
+            put("first")
+        finally:
+            holds.set()
+
+    other = threading.Thread(target=put_first, daemon=True)
+    other.start()
+    holds.wait()
+    try:
+        put("second")
+    finally:
+        asks.set()
+        ended.set()
+    other.join()
+    assert seen == [False], "the second asked for the lock while the first held it with nothing written"
+    mods = ["Dep.Word", "Dep", "Dep.Word", "Dep", "Top"]                # `dep`'s, then `top`'s, which reads `dep`'s again
+    assert wrote == [(who, m) for who in ("first", "second") for m in mods], \
+        "the second's entries, of both its packages, all come after the first's, of both its packages"
+    assert new == {"first": 3, "second": 3} and said == []
+    assert sorted(json.loads(f.read_text())["module"] for f in (store / MK.INDEX).glob("*.json")) \
+        == ["Dep", "Dep", "Dep.Word", "Dep.Word", "Top", "Top"]
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_put_says_what_it_found_of_each_package_in_the_packages_order(tmp_path):
+    """`put` reads every package's build before it writes an entry of any, and its log is still each package's lines in
+    the packages' order: what it found reading a later package (a report that doesn't say the sandbox) comes after what
+    it found indexing an earlier one (`Top`, whose source no longer imports the `Dep` Lake handed its compile)."""
+    LC, LA = (_load(f"lines_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    top, _ = pair(tmp_path)
+    subprocess.run(LC.in_sandbox(top, ["lake", "build"]), cwd=top, check=True, capture_output=True, env=LC.lake_env())
+    (top / "Top.lean").write_text('def Top.says : String := "no import"\n')
+    said: list[str] = []
+    LA.LakeArtifacts(tmp_path / "artifacts").put({top: {"sandbox": True}, tmp_path / "unbuilt": {}}, log=said.append)
+    assert [line.split(", ")[0] for line in said] == [
+        f"lean-audit: {top}: 1 modules this run compiled can't be indexed (`indexable`)",
+        f"lean-audit: {tmp_path / 'unbuilt'}: its report doesn't say it was built in the sandbox"]
+
+
 #: the smallest shape whose key reads a module for its code that Lake doesn't hand its compile (`module_keys.indexable`):
 #: `Fold.Protocol` imports `Fold.Deployed` by a `public import` and by a private `meta import`, which `keys` folds into one
 #: `public meta import`, and `Fold.Deployed` imports `Fold.Sizes` privately; `Fold` imports `Fold.Protocol`
