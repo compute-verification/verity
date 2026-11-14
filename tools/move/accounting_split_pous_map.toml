@@ -33,8 +33,6 @@
 "Definitions/Accounting/Guarantees/Responder" = "Definitions/Pous/Guarantees/Responder"
 "Definitions.Accounting.Guarantees.Memory" = "Definitions.Pous.Guarantees.Memory"
 "Definitions/Accounting/Guarantees/Memory" = "Definitions/Pous/Guarantees/Memory"
-"Definitions.Accounting.Guarantees.Tag" = "Definitions.Pous.Guarantees.Tag"
-"Definitions/Accounting/Guarantees/Tag" = "Definitions/Pous/Guarantees/Tag"
 "Definitions.Accounting.Responder" = "Definitions.Pous.Responder"
 "Definitions/Accounting/Responder" = "Definitions/Pous/Responder"
 "Definitions.Accounting.Memory" = "Definitions.Pous.Memory"
