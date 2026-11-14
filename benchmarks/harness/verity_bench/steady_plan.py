@@ -325,7 +325,7 @@ class SteadyCompletion:
         if record not in self._labelled:
             self._labelled[record] = labelled_rows(store, record)
         for found in sorted(self._labelled[record], key=lambda found: found.run, reverse=True):
-            if found.row is None or found.files is None:
+            if found.row is None:
                 whys.append(f"{found.run} (labelled `{record}`): {steady.CANNOT_TELL}: {found.held}")
                 continue
             if found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers:
