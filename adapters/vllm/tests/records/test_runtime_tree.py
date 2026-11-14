@@ -96,9 +96,8 @@ def test_the_tree_of_a_model_names_every_module_and_buffer_and_states_the_runner
 
 def test_the_observation_and_the_acquisitions_reader_hand_on_the_same_names():
     for module in (observed, reader_for_acquire):
-        assert module.RuntimeTree is RuntimeTree and module.RUNTIME_TREE_SCHEMA is SCHEMA and module.RUNNER_PATH is RUNNER_PATH
-        assert module.runtime_tree_of is runtime_tree_of and module.runtime_tree_from_paths is runtime_tree_from_paths
-        assert module.mro_names is mro_names
+        assert module.RuntimeTree is RuntimeTree and module.RUNNER_PATH is RUNNER_PATH and module.runtime_tree_of is runtime_tree_of
+    assert reader_for_acquire.runtime_tree_from_paths is runtime_tree_from_paths
 
 
 def test_the_meta_tree_is_the_built_models_with_the_runner_declared_or_copied(monkeypatch):

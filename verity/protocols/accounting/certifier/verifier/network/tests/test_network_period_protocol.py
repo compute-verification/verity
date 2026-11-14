@@ -192,8 +192,9 @@ def test_a_bad_response_cap_is_refused(server):
 
 
 def test_a_schedule_with_connection_rows_is_refused_by_name(server):
-    """A schedule with lengths rows, of either form, with content rows or without, is one the network certifier
-    builds (`WardenParams`), and the period check reads it and refuses it by name at the parameters, Lean as the
+    """A schedule with lengths rows, of either form, with content rows or without, and with request words, is one
+    the network certifier builds (`WardenParams`), and the period check reads it and refuses it by name at the
+    parameters, Lean as the
     mirror: the check reads no connection rows' registration, so it accepts no period under one. The check refuses
     it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, accepted
     under the honest one: no parameters `params` reads reach it."""
@@ -213,8 +214,9 @@ def test_a_schedule_with_connection_rows_is_refused_by_name(server):
 
 
 def test_bad_lengths_rows_and_content_rows_are_refused_as_the_schedules(server):
-    """A schedule whose lengths rows or content rows `WardenParams` refuses (`PC.bad_lengths`) is refused at the
-    parameters as no schedule, by Lean as by the mirror, and not by the name a schedule with connection rows is."""
+    """A schedule whose lengths rows, content rows or request words `WardenParams` refuses (`PC.bad_lengths`) is
+    refused at the parameters as no schedule, by Lean as by the mirror, and not by the name a schedule with
+    connection rows is."""
     case = build("rows-honest", 0, small=True)
     for params in PC.bad_lengths(case["params"]):
         bad = case | {"params": params}
@@ -829,18 +831,18 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
                                  "above", "below")), seen
 
 
-def test_the_rows_forms_caps_are_the_schedules(server):
-    """The rows form's `cells` are the schedule's caps (`Schedule.caps`, `WardenParams.caps`): `egress_cells` for each
-    of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules and
-    cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for caps that miss its connections; no caps, one
-    connection short or over, and a cap below `egress_cells` are refused as parameters by Lean and the mirror alike;
-    and a schedule of 4 lanes over a 32-bucket link-window, 5 egress cells a connection, charges 384 bits for each over
-    one link-window (Lean's `#guard`)."""
+def test_the_rows_forms_cells_are_the_schedules(server):
+    """The rows form's `cells` are the schedule's own (`Schedule.rowsCells`, `WardenParams.rows_cells`): `egress_cells`
+    for each of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules
+    and cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no
+    cells, one connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the
+    mirror alike; and a schedule of 4 lanes over a link's 32-bucket execution phase, 5 egress cells a connection,
+    charges 384 bits for each over one such phase (Lean's `#guard`)."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, out = PC.params(case["params"]), reference(case)
         s = p.schedule
-        assert list(p.cells) == s.caps(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
+        assert list(p.cells) == s.rows_cells(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
         term = s.lanes * p.windows * s.window * clog2(s.egress_cells + 1)
         assert out["verdict"] == ACCEPT and term > 0, (n, out)
         assert (out["public"]["schedules"], out["public"]["cells"]) == (term, term), (n, out["public"])
@@ -853,14 +855,14 @@ def test_the_rows_forms_caps_are_the_schedules(server):
             assert verdict == REJECT and json.loads(got)["reason"].startswith("params: cells:"), (n, bad, got)
     four = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
                         ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
-    assert len(four.caps(1)) == 128 and sum(clog2(c + 1) for c in four.caps(1)) == 384
+    assert len(four.rows_cells(1)) == 128 and sum(clog2(c + 1) for c in four.rows_cells(1)) == 384
 
 
 def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
     """The rows form refuses a period whose `lanes · windows · window` connections, the k-th at ordinal k + 1, aren't
     distinct u32s, or whose cell's B bytes aren't under 2^32 (`rowsWf`): its frames could not name every connection or
     every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
-    before its caps, which a period that long could never list, by Lean and the mirror alike, and the honest period's
+    before its cells, which a period that long could never list, by Lean and the mirror alike, and the honest period's
     schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
     mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
     fragment = "rows format: a frame's ordinal and payload length are u32s"

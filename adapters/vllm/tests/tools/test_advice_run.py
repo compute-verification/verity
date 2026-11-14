@@ -6,12 +6,18 @@ registration reads it."""
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import importlib.util
+import json
 import random
 import sys
 from pathlib import Path
 
 import pytest
+
+from verity_vllm import llm as L
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+from verity_vllm.program.predict.phi import Phi
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_run.py"
 _spec = importlib.util.spec_from_file_location("advice_run", SCRIPT)
@@ -81,12 +87,6 @@ def test_the_runs_target_states_what_the_engine_ran():
 def _class_g_phi(execution: str | None = None, effective: dict | None = None, max_model_len: int = 131072):
     """The φ a class-G run at ``execution`` and a launch of ``max_model_len`` registers, as `tools/advice_compile.py` reads what
     it records (its engine's keyword arguments, its target, its execution), the built engine reading back ``effective``."""
-    import json
-
-    from verity_vllm import llm as L
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import Phi
-
     spec = importlib.util.spec_from_file_location("advice_compile", SCRIPT.parent / "advice_compile.py")
     assert spec is not None and spec.loader is not None
     AC = importlib.util.module_from_spec(spec)
@@ -108,8 +108,6 @@ def _class_g_phi(execution: str | None = None, effective: dict | None = None, ma
 def test_a_class_g_runs_registration_is_in_class_g():
     """A class-G run's registration is a φ without batch invariance that class G admits, eager or compiled (at its breakable
     graphs, whose capture sizes its Build pads to); a compiled run without them is refused."""
-    import dataclasses
-
     from verity_vllm.program.predict.common import Unexpressible, graph_capture_sizes
     from verity_vllm.program.predict.domain import check_phi
     from verity_vllm.program.predict.dsa import Net

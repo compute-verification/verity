@@ -4,11 +4,11 @@ resolved another scheduler is refused by name. The flag serves with the Commit o
 from __future__ import annotations
 
 import json
-import sys
 from types import SimpleNamespace
 
 import pytest
 
+from tests import fake_vllm
 from tests.pipeline import predicted
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_openai as so
@@ -92,9 +92,7 @@ def test_under_the_flag_the_served_target_declares_async_scheduling_and_lag_1(mo
     """``serve.json``'s target (`serve_seal.target_of`), which a served window's φ is read from, declares async scheduling under
     the flag, so the Programs predicted for it are specialized for LAG 1 by declaration; without the flag it declares none,
     as every serve.json before the flag."""
-    envs = SimpleNamespace(VLLM_BATCH_INVARIANT=True)
-    monkeypatch.setitem(sys.modules, "vllm", SimpleNamespace(envs=envs))
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    fake_vllm.install(monkeypatch)["vllm.envs"].VLLM_BATCH_INVARIANT = True
     monkeypatch.setattr(TargetProfile, "from_device", classmethod(lambda cls: cls.default().with_overrides(num_sms=132)))
     off, on = SS.target_of(), SS.target_of(async_scheduling=True)
     assert "async_scheduling" not in off["target"] and on["target"]["async_scheduling"] is True

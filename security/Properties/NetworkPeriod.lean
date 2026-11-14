@@ -164,8 +164,8 @@ def RowsCircuitHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsCircuitHeldAt p c
 
-/-- What `RowsStateEmpty` says of a period its check accepted: in the rows form, each link-window's scan's
-registration opens row 0 of its state to the empty state (`stateEmpty`). -/
+/-- What `RowsStateEmpty` says of a period its check accepted: in the rows form, the scan's registration of
+each execution phase's transfer blocks opens row 0 of its state to the empty state (`stateEmpty`). -/
 def RowsStateEmptyAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateEmpty s reg = true
@@ -175,13 +175,13 @@ def RowsStateEmptyOf (chk : Params → Commitment → Evidence → Core.Outcome 
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsStateEmptyAt p c
 
-/-- **The rows form accepts no link-window whose scan's state's row 0 is not the empty state.** If the check accepts
-a period in the rows form, each link-window's scan's registration opens leaf 0 of its state, its first state entry's
-root and domain, to a row of zero u16 words under the salt and the path it states (`stateEmpty`). With
-`RowsStateTied`, whose `stateTied` holds the scan's units' reads of that state to the chain (`stateRead`: unit `t`
-reads row `t` and registers row `t + 1`), every row a slot's Program reads is the empty state or one the scan's
-transition computed from the row before it: row 0, which no unit computes and the Programs anchored at bucket 0
-read, is not the prover's word. -/
+/-- **The rows form accepts no execution phase's transfer blocks whose scan's state's row 0 is not the empty state.** If
+the check accepts a period in the rows form, the scan's registration of each execution phase's transfer blocks opens
+leaf 0 of its state, its first state entry's root and domain, to a row of zero u16 words under the salt and the path it
+states (`stateEmpty`). With `RowsStateTied`, whose `stateTied` holds the scan's units' reads of that state to the chain
+(`stateRead`: unit `t` reads row `t` and registers row `t + 1`), every row a slot's Program reads is the empty state or
+one the scan's transition computed from the row before it: row 0, which no unit computes and the Programs anchored at
+bucket 0 read, is not the prover's word. -/
 def RowsStateEmpty : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateEmptyAt p c

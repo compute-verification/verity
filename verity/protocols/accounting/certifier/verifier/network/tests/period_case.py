@@ -300,8 +300,8 @@ def rows_wf_refusal(s: WardenParams, windows: int) -> str:
 
 def connection_rows(s: WardenParams) -> bool:
     """`Schedule.connectionRows`: whether the schedule registers connection rows, its lengths rows, which a schedule
-    with content rows has too."""
-    return s.lengths is not None or s.content is not None
+    with content rows has too, as one with request words has content rows. Each is asked, as the Lean asks it."""
+    return s.lengths is not None or s.content is not None or s.request_words is not None
 
 
 def _classes(j) -> tuple[tuple[int, ...], ...]:
@@ -313,10 +313,14 @@ def _classes(j) -> tuple[tuple[int, ...], ...]:
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
-    `WardenParams` holds it: its response cap, its lengths rows' form and its content rows' classes."""
+    `WardenParams` holds it. `request_words` is the JSON `true` or it is refused: `WardenParams` reads `None` as
+    unset, and `scheduleOf` refuses a key that is there and not `true`."""
     keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
-    values = {k: _classes(j[k]) if k == "content" else _nat(j[k], "schedule") for k in keys}
+    if "request_words" in keys and j["request_words"] is not True:
+        raise D.Reject("schedule: request_words is true, for a schedule with request words, or unset")
+    values = {k: _classes(j[k]) if k == "content" else j[k] if k == "request_words" else _nat(j[k], "schedule")
+              for k in keys}
     try:
         s = WardenParams(**values)
     except ValueError as e:
@@ -735,10 +739,10 @@ def params(j) -> Params:
         raise D.Reject("windows: a period has at least one link-window")
     if schedule is not None and not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
-    if schedule is not None and list(cells) != schedule.caps(windows):
-        raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
+    if schedule is not None and list(cells) != schedule.rows_cells(windows):
+        raise D.Reject(f"cells: the rows form's cells are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
-                       f"schedule can carry (Schedule.caps), not these {len(cells)}")
+                       f"schedule can carry (Schedule.rowsCells), not these {len(cells)}")
     circuit = None
     if "circuit" in j and not DIGEST.fullmatch(circuit := _of(j["circuit"], str, "circuit")):
         raise D.Reject("circuit: not a SHA-512 digest")
@@ -1206,7 +1210,8 @@ UNPINNED = "the scan's start is not the empty state"
 
 
 def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
-    """`stateCheck`'s refusal of a link-window's scan: none when its state is tied (`_state_tied`)."""
+    """`stateCheck`'s refusal of the scan of an execution phase's transfer blocks: none when its state is tied
+    (`_state_tied`)."""
     if not _state_tied(p, audits, reg):
         return UNSTATED if _state_read(p, reg) else MISREAD
     return None
@@ -1726,19 +1731,19 @@ WINDOW_PROGRAM = "stand-in/window"
 #: execution phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
-#: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
-#: root and domain: bucket t's `sin` at leaf t + 1 (the leaf its own `o1` registers), its `o1` at leaf t (over the
-#: state before it) or t + 2, the start unit's `o0` at leaf 1, a run over other units, the two buckets' ports' runs
-#: swapped, the reads or a port's run missing or under another name, a field no natural, or the reads of a scan
-#: with no start unit, bucket 0 unit 0 and nothing registered at leaf 0 (`older`)
+#: How `rows-state-misindexed` puts the state reads of its transfer blocks' scan off the chain while its state stays
+#: tied by root and domain: bucket t's `sin` at leaf t + 1 (the leaf its own `o1` registers), its `o1` at leaf t (over
+#: the state before it) or t + 2, the start unit's `o0` at leaf 1, a run over other units, the two buckets' ports' runs
+#: swapped, the reads or a port's run missing or under another name, a field no natural, or the reads of a scan with no
+#: start unit, bucket 0 unit 0 and nothing registered at leaf 0 (`older`)
 MISREADS = ("sin-leaf", "o1-leaf", "o0-leaf", "units", "swapped", "missing", "untyped", "older")
-#: How `rows-start-unpinned` leaves its link-window's scan's start unheld while its state's reads and tie hold: the
-#: start entry's root a row the prover chose, opened as committed; the opening missing or under another name, its
+#: How `rows-start-unpinned` leaves the start of its transfer blocks' scan unheld while its state's reads and tie hold:
+#: the start entry's root a row the prover chose, opened as committed; the opening missing or under another name, its
 #: salt another, its words another count; no start entry, one under another name or key, one in `roots` and none in
 #: `registered`, a second at another root; or a field of another type
 UNPINS = ("row", "missing", "salt", "words", "entry", "renamed", "roots", "extra", "untyped")
-#: How `rows-start-carried` makes its period more than the run's first link-window alone: its link-windows later ones
-#: of the run, or more link-windows after the first
+#: How `rows-start-carried` makes its period more than the run's first execution phase alone: its execution phases
+#: later ones of the run, or more execution phases after the first
 CARRIES = ("later", "more")
 #: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
@@ -2078,7 +2083,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unpin = rp.choice(UNPINS) if m == "start-unpinned" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
-    # each audit's `SCAN_STATE`, the state tree of the link-window tied to it
+    # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it
     trees = {i: _state_tree(rp, sched.window) for i in range(n_audits)} if rows else {}
     states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
               for i, x in trees.items()}
@@ -2431,7 +2436,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
-        case_params |= {"cells": bound.caps(n_windows), "circuit": circuit, "scan": scan,
+        case_params |= {"cells": bound.rows_cells(n_windows), "circuit": circuit, "scan": scan,
                         "schedule": schedule_json(bound)}
         if unhold == "params":
             case_params["circuit"] = r.choice([hashlib.sha512(b"another class circuit").hexdigest(), program, *untied])
@@ -2444,7 +2449,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
         if rows:
-            case_params["cells"] = bound.caps(case_params["windows"])
+            case_params["cells"] = bound.rows_cells(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
             "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
@@ -2495,11 +2500,11 @@ def _bad_params(p: dict, n: int) -> list:
 
 
 def bad_cells(p: dict) -> list[dict]:
-    """Rows-form parameters whose `cells` aren't the schedule's caps (`Schedule.caps`), each one change to `p`: none,
-    one connection short, one more, and one cap below `egress_cells`."""
-    caps = p["cells"]
-    return [p | {"cells": []}, p | {"cells": caps[1:]}, p | {"cells": [*caps, caps[0]]},
-            p | {"cells": [caps[0] - 1, *caps[1:]]}]
+    """Rows-form parameters whose `cells` aren't the schedule's (`Schedule.rowsCells`), each one change to `p`: none,
+    one connection short, one more, and one below `egress_cells`."""
+    cells = p["cells"]
+    return [p | {"cells": []}, p | {"cells": cells[1:]}, p | {"cells": [*cells, cells[0]]},
+            p | {"cells": [cells[0] - 1, *cells[1:]]}]
 
 
 def _bad_caps(s: dict, p: dict) -> list[dict]:
@@ -2518,14 +2523,23 @@ def _lengths_schedule(s: dict) -> dict:
                 "egress_cells": min(s["egress_cells"], s["slots"] * s["window"])}
 
 
+def _words_schedule(s: dict) -> dict:
+    """A schedule with lengths rows `s` (`_lengths_schedule`) with request words: content rows under the lengths
+    rows' form 2, `max_tokens_cap` 1 below at least two egress cells, which a connection of a window of two buckets
+    or more still ends within, and a cell that holds an id request's `max_tokens`."""
+    return s | {"cell_bytes": max(s["cell_bytes"], CAPPED_CELL), "egress_cells": max(s["egress_cells"], 2),
+                "lengths": 2, "content": [[2, 2]], "max_tokens_cap": 1, "request_words": True}
+
+
 def connection_rows_params(p: dict) -> list[dict]:
     """Rows-form parameters whose schedule has connection rows, each one change to `p`'s uncapped schedule
-    (`_lengths_schedule`): lengths rows of each form, and content rows of the form's classes with them. Each is a
-    schedule `scheduleOf` reads, as `WardenParams` builds it, and one the check refuses by name (`CONNECTION_ROWS`)."""
+    (`_lengths_schedule`): lengths rows of each form, content rows of the form's classes with them, and request
+    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `WardenParams` builds it, and
+    one the check refuses by name (`CONNECTION_ROWS`)."""
     s = _lengths_schedule(p["schedule"])
     return [p | {"schedule": s | rows} for rows in (
         {"lengths": 1}, {"lengths": 2}, {"lengths": 1, "content": [[2, 2, 1]]}, {"lengths": 2, "content": [[2, 2]]},
-        {"lengths": 2, "content": [[2, 4], [4, 2]]})]
+        {"lengths": 2, "content": [[2, 4], [4, 2]]})] + [p | {"schedule": _words_schedule(s)}]
 
 
 def bad_lengths(p: dict) -> list[dict]:
@@ -2535,8 +2549,10 @@ def bad_lengths(p: dict) -> list[dict]:
     cell that doesn't hold an id request's first prompt id, and a slot stride of more releases than a lengths row
     has slots. Content rows: without lengths rows, of no class, of the other form's numbers, of a size that is no
     power of two, of more ids than a response row has, of more prompt ids than a request has bytes, of no row or of
-    more rows than the lengths table has slots, and classes that are no list of lists of naturals."""
+    more rows than the lengths table has slots, and classes that are no list of lists of naturals. Request words
+    (`_words_schedule`): not `true`, under form 1, without content rows, and without `max_tokens_cap`."""
     s = _lengths_schedule(p["schedule"])
+    words = _words_schedule(s)
     one, two = s | {"lengths": 1}, s | {"lengths": 2}
     slots = s["window"] // s["every"] * WardenParams(**one).stride_releases
     past = 1 << (s["ingress_cells"] * (s["cell_bytes"] - HEADER.size)).bit_length()
@@ -2547,7 +2563,10 @@ def bad_lengths(p: dict) -> list[dict]:
             (s, [[2, 2]]), (two, []), (two, [[2, 2, 1]]), (one, [[2, 2]]), (two, [[3, 2]]), (two, [[2, 1]]),
             (two, [[2, 2 * content_rows.most_ids()]]), (two, [[past, 2]]), (one, [[2, 2, 0]]),
             (one, [[2, 2, slots + 1]]), (two, "x"), (two, [2, 2]), (two, [[True, 2]]), (two, [[2, -1]]),
-            (two, [[2]]), (one, [[2, 2, 1, 1]]))]
+            (two, [[2]]), (one, [[2, 2, 1, 1]]))] + [
+        words | {"request_words": v} for v in (False, 1, "true", None)] + [
+        words | {"lengths": 1, "content": [[2, 2, 1]]}, {k: v for k, v in words.items() if k != "content"},
+        {k: v for k, v in words.items() if k != "max_tokens_cap"}]
     return [p | {"schedule": schedule} for schedule in schedules]
 
 

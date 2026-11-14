@@ -293,8 +293,7 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. The period check is not in the public tree, because it reads the inference-only
-policy's layout check, which is withheld.
+and the bound `K` it publishes. The period check reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 
@@ -2147,10 +2146,10 @@ a slot in a size class of at most 262,144 bits, so one block returns a row of at
 (`connection_rows.check_slots`), and `WardenParams` refuses a schedule with lengths rows whose slot stride releases
 more, naming the longest stride that fits. The prover's side (`blocks`) builds each row's arguments, outputs and
 registered reads from the network certifier's opening and refuses request rows that give another row than the signed
-one. The period check reads a schedule with lengths rows, and with content rows, as `WardenParams` builds it and at
-its digest, and refuses it by name in its parameters and in its check (`NetworkCheck.Period.connectionRowsRefusal`):
-it accepts periods under schedules without lengths rows only, since nothing yet ties the request row to the compute
-side's committed values or reads the block's verdict and failures.
+one. The period check reads a schedule with lengths rows, with content rows and with request words, as `WardenParams`
+builds it and at its digest, and refuses it by name in its parameters and in its check
+(`NetworkCheck.Period.connectionRowsRefusal`): it accepts periods under schedules without lengths rows only, since
+nothing yet ties the request row to the compute side's committed values or reads the block's verdict and failures.
 
 **The content rows** (`WardenParams.content`, with lengths rows only, none by default; `content_rows`) are three
 rows of a released connection that hold what it carried: its request (u32 bytes, the bytes, zeros to its class's
