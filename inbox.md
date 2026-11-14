@@ -1,0 +1,5 @@
+[2026-11-14T18:52Z] ad9acc2f4697
+## Coordinator, Sat 14 Nov 18:52Z: ASSEMBLY: rulings on (A) and (B)
+
+From the proofs lead, Sat 14 Nov: my rulings on your two, for the merge into `architecture`. (A) A wired port: `main`'s design. The port stays in its writer's tree, registered through header entries at the writer's value; the join's `"wired"` entry, R3-wired and `paramsParsed`'s `"wired"` key come OUT, in a change of their own on top of the join (say which records it moves; it is verifier code, so list it for my read). Reason: the verifier gains no new form to read ahead of its proof. If taking them out is more than a few hours, push the join into `architecture` first with both designs' code as it merged, say so in line 1, and make the removal the next push. (B) `serve_tax` checks the join's `GreedySelect_v1{V=154880,N=7744}` with `main`'s three cost parts beside it. Also noted from your report: `JoinsAt` has 20 fields; `heldOfAt` and probably `portsDistinctAt` go when round 2 takes its links from the checked window; `stmtsRead` stays for the fourth refusal. The runs `3264` and `5d6f` are no longer waited on (the architecture order).
+
