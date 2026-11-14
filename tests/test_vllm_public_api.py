@@ -94,10 +94,10 @@ PUBLIC = {
                                  "port's fields, and each carried request's, held to window_advice.follows",
     "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
                                           "and b.egress rows by size class, a class's layout, record and files (Layout, "
-                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
+                                          "record, reopen), which verity/protocols/proofs/spot/device/two_stage.py registers",
     "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
                                           "computes where a response ends, and a stop class's stop record "
-                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
+                                          "(stop_registration, stop_record), which verity/protocols/proofs/spot/device/two_stage.py "
                                           "registers under the verifier's own rule",
     "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
                                              "scheduler that commits each window's finished requests by class "
@@ -109,13 +109,13 @@ PUBLIC = {
     "verity_vllm.pipeline.boundary_logits": "I1: a two-stage window's select inputs at serve: rank 0's hook on the sampler "
                                             "(SamplerHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
-                                            "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
+                                            "benchmarks/serve_tax's plugin installs and verity/protocols/proofs/spot/device/two_stage.py "
                                             "opens (load)",
     "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
                                           "(interior, register), the block parameters it registers as values, the "
                                           "verifier's (Supply) and the replay's own (Operand), and the challenger's "
                                           "copies of them (span_values, link_words, link_schemas, sources, history), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
+                                          "verity/protocols/proofs/spot/device/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "

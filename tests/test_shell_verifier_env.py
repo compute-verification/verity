@@ -42,7 +42,7 @@ ALLOWED = frozenset({
 #: (script, another tool's `verify` as the script writes it): what the script sets the command's first word to. An entry
 #: whose command its script doesn't hold lets nothing through.
 OTHER_TOOLS = {
-    ("benchmarks/prove_path/run.sh",
+    ("verity/protocols/proofs/spot/prover/audit/prove_path.sh",
      '$WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier'
      " | tee $O/$name/verify.json || return 1"): '"$PY -m verity_vllm.pipeline.cli weights-tie"',
 }

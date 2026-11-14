@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
 from test_service import (DELTA, PAIR, QUERY, RUN, SESSION, Clock, _lean, _ports, _refused, _spec)
 

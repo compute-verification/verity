@@ -40,7 +40,7 @@ python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.j
 (two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
-window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
+window itself, which `verity/protocols/proofs/spot/prover/audit/prove_bundle.sh` proves the bundle against, is the registered fixture
 `benchmarks/one_stage/tests/fixtures/bundle-window` (its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v2`)
@@ -94,7 +94,7 @@ stratum of their own (all 160 of one, 2 of another's 4): its bound is 2 of 164 a
 `verity_e2e_demo/report.py` renders block records and a measurements file (`verity/demo-a-measurements/v1`) through
 `demo_a.template`; its module docstring is the contract. A report with an unfilled number is refused; only a draft
 (`render(..., draft=True)`, never the command) shows `⟨NAME⟩`. Part 3 is circuit size in AND gates, with no FLOP figure or
-price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling_plan/demo_a.py --spans week`), filled
+price; its H and B are one recorded run of proofs' planner (`verity/protocols/proofs/spot/prover/cost/demo_a.py --spans week`), filled
 together with `PLANNER`. A measurements file with `sections` or `proved` renders the H200 report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is the
 sampled-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every sampled

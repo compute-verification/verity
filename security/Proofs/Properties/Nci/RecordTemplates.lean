@@ -51,6 +51,8 @@ theorem finish_wiring {f : Front} {pin : String → Option String} {c : Case} (h
           · cases h
           · split at h
             · cases h
+            split at h
+            · cases h
             · split at h
               · cases h
               · cases h
@@ -62,11 +64,11 @@ end NciCheck.Record.SecurityProofs
 namespace NciCheck.Properties.Record.SecurityProofs
 
 open Lean (Json)
-open Flock.Program (Prog Scope Defn)
+open Flock.Program (Prog Scope Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
-open NciCheck.RecordText (Tmpl tmplOf templatesOf fieldsOf outerOf)
+open NciCheck.RecordText (Tmpl tmplOf templatesOf outerOf)
 open NciCheck.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
   finish_text front_text finish_wiring)
 open NciCheck.Record.SecurityProofs.Json (bind_ok mapM_ok)

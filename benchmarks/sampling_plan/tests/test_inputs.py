@@ -5,9 +5,9 @@ plan reads the one cap."""
 
 from __future__ import annotations
 
-import h200 as H
-import int8_llama as P
-import transformer as X
+from verity.protocols.proofs.spot.prover.cost import h200 as H
+from verity.protocols.proofs.spot.prover.cost import int8_llama as P
+from verity.protocols.proofs.spot.prover.cost import transformer as X
 from inputs import K_MAX, block_k_log, cap
 
 COORD_ROWS = (2, 4, 4)
