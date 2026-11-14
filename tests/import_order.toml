@@ -80,7 +80,7 @@ reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never
 [[distribution]]
 directory = "verity/protocols/accounting/pous/prover/p2"
 owner = "memory-accounting"
-reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by the vLLM adapter and by its harness in `benchmarks/`"
+reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by PoUS's `weight_store` (whose tensors are its `tensors.py`), the vLLM adapter and its harness in `benchmarks/`"
 
 [[distribution]]
 directory = "verity/protocols/compose/device/live_challenger"
@@ -855,7 +855,6 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
-    "verity/protocols/accounting/pous/prover/wipe_on_node.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",
