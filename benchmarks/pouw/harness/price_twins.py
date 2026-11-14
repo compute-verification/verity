@@ -4,8 +4,8 @@ anyone typing it. A row's `gamma` field is that gap.
 
 A twin is one guarantee: the GGap statement of a device record at a cast (FP8 v1 and v2), or the value lemma of the
 gap's function (v1-hot, v2-hot, Pearl-C4 v1 and v2). The Lean store's pins keep their names from before the gap's rename
-(`pearlCGamma…`, `gammaHot…`, `gammaFp4…`, stating `εPearlC`), so both spellings are read, and `_short` gives one key for
-both. Its key is
+(`pearlCGamma…`, `gammaHot…`, `gammaFp4…`, stating `εPearlC`) and the inert share's (`…Cap1000_…`), so both spellings
+are read, and `_short` gives one key for both. Its key is
 
   statement   the panel line and version it is the gap for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
   path        the priced path, as `verity.protocols.accounting.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
@@ -145,10 +145,11 @@ def _statement(name: str, pin: dict, defs: dict[str, str]) -> tuple[str, bool]:
 
 def _short(name: str) -> str:
     """A pin's name before its lift, in today's spelling: `Pouw.SecurityProofs.PearlC.GapX`, `Pouw.PearlC.pearlCGapX` and
-    the store's `Pouw.PearlC.pearlCGammaX` are all `pearlCGapX`, and the store's `gammaHotX` and `gammaFp4X` are `gapHotX`
-    and `gapFp4X`."""
+    the store's `Pouw.PearlC.pearlCGammaX` are all `pearlCGapX`, the store's `gammaHotX` and `gammaFp4X` are `gapHotX`
+    and `gapFp4X`, and the store's `…Cap1000_…` is `…InertShare1000_…`."""
     short = re.sub(r"^Pouw\.SecurityProofs\.PearlC\.(?=Gap|Gamma|Sampled)", "pearlC", name).removeprefix("Pouw.PearlC.")
-    return re.sub(r"^pearlCGamma", "pearlCGap", re.sub(r"^gamma(?=Hot|Fp4)", "gap", short))
+    short = re.sub(r"^pearlCGamma", "pearlCGap", re.sub(r"^gamma(?=Hot|Fp4)", "gap", short))
+    return re.sub(r"Cap1000(?=_)", "InertShare1000", short)
 
 
 def parse(name: str, pin: dict, defs: dict[str, str] | None = None) -> dict | None:
