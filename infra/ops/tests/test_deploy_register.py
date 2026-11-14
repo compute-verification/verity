@@ -516,7 +516,7 @@ RECORD_SPOILED = {   # what the record directory's user puts at the record, and 
 }
 
 
-@pytest.mark.parametrize("route", ["the key's step", "an install", "a restart's record"])
+@pytest.mark.parametrize("route", ["the key's step", "an install", "a restart's record", "the attic"])
 @pytest.mark.parametrize("case", RECORD_SPOILED)
 def test_the_record_is_appended_by_root_never_through_a_link_and_only_to_a_regular_file_of_its_own(fleet, capsys, case, route):
     """The record's directory and the record are the research user's, and root appends to it: a link there would have root
@@ -528,6 +528,7 @@ def test_the_record_is_appended_by_root_never_through_a_link_and_only_to_a_regul
     deploy_d.mkdir(parents=True)
     away.mkdir()
     (away / "f").write_text("another file\n")
+    (tmp / "a" / "etc" / "stray").write_text("a stray\n")
     spoil, why = RECORD_SPOILED[case]
     spoil(deploy_d, away)
     before = _entries(tmp / "a", away)
@@ -535,6 +536,9 @@ def test_the_record_is_appended_by_root_never_through_a_link_and_only_to_a_regul
         req = {"record": str(deploy_d / "record.jsonl"), "lines": [{"unit": "u", "restart": "restarted"}]}
         r = subprocess.run([sys.executable, "-c", deploy.RECORD], input=json.dumps(req).encode(), capture_output=True)
         assert (r.returncode, why.replace("/NODE/", f"{tmp}/a/") in r.stderr.decode()) == (3, True)
+    elif route == "the attic":
+        assert _main(fleet, "attic", "a", "--by", "lane-x", "--apply", "/NODE/etc/stray") == 3
+        assert f"research deploy: a: {why}" in capsys.readouterr().err
     else:
         path = "/NODE/etc/peers" if route == "the key's step" else "/NODE/etc/conf.json"
         assert _main(fleet, "install", "a", "--by", "lane-x", "--apply", path) == 3
@@ -542,17 +546,28 @@ def test_the_record_is_appended_by_root_never_through_a_link_and_only_to_a_regul
     assert _entries(tmp / "a", away) == before
 
 
+def test_the_probe_reads_the_record_only_when_it_is_a_regular_file(fleet):
+    """The probe reads the record as the login, which may be vy-admin, from a directory the research user owns: a link there to
+    a device that never ends (here /dev/urandom) would hold drift forever or break it. It is passed by, unread."""
+    deploy_d = fleet["tmp"] / "a" / "research" / "deploy"
+    deploy_d.mkdir(parents=True)
+    (deploy_d / "record.jsonl").symlink_to("/dev/urandom")
+    assert _read(fleet)["state"] == "missing"
+
+
 def test_the_keys_line_is_written_only_as_the_user_whose_home_holds_the_directory_and_the_key_is_read_beside_it(fleet, tmp_path):
-    """A directory root owns (one renamed onto the name, say) would leave the child root, and one another user owns would have
-    the line written as that user: each is refused before the child starts. The key is read in the directory, by its
-    descriptor, never by a path of its own."""
-    ssh = fleet["tmp"] / "a" / "ssh"
+    """A directory root owns (one renamed onto the name, say, or root's own home and directory) would leave the child root, and
+    one another user owns would have the line written as that user: each is refused before the child starts. The key is read
+    in the directory, by its descriptor, never by a path of its own."""
+    home = fleet["tmp"] / "a"
+    ssh = home / "ssh"
     keys = (ssh / "authorized_keys").read_bytes()
-    for uid in (0, ssh.stat().st_uid + 1):
+    for uid, also_home in ((0, False), (ssh.stat().st_uid + 1, False), (0, True)):
+        inos = {ssh.stat().st_ino, *([home.stat().st_ino] if also_home else [])}
         owner = ("import os as _o\n_fstat = _o.fstat\n"
-                 f"def _f(fd, _ino={ssh.stat().st_ino}):\n    st = _fstat(fd)\n"
+                 f"def _f(fd, _inos={inos}):\n    st = _fstat(fd)\n"
                  f"    return _o.stat_result((st.st_mode, st.st_ino, st.st_dev, st.st_nlink, {uid}, *st[5:10])) "
-                 "if st.st_ino == _ino else st\n_o.fstat = _f\n")
+                 "if st.st_ino in _inos else st\n_o.fstat = _f\n")
         r, calls = _accept(fleet, tmp_path, owner)
         assert r.returncode == 3 and f"{ssh} is owned by uid {uid}, not by the user whose home" in r.stderr.decode()
         assert not [c for c in calls if c[1] in ("setgroups", "setgid", "setuid")] and (ssh / "authorized_keys").read_bytes() == keys
