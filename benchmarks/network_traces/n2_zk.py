@@ -1,32 +1,23 @@
-"""N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on a certifier-serve run: each
-execution phase committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's
-`Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`, both ends'
-head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by
-`LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the
-verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
+"""N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on an active network certifier's
+run: each execution phase committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof
+system's `Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`,
+both ends' head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
+decided by `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
+the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
 comparison to each verdict, which decides nothing.
 
-    python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
-    python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
-      --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
     python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
-      [--draw K]
+      [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K]
 
-* **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
-  `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
-  against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
-  Or, with ``--warden-run``, an active network certifier's run (`warden_serve.py`'s, or the gate's
+* **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
   ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
   certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
-  declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
-  head failing its signed digest alone.
+  declared or charged), a certifier rehearsal's run refused by name.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
-  still the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the
-  certifier certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and
-  the proof block's output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each
-  member's proofs refuse
-  (`expected`).
+  still the network certifier's, its head failing its signed digest alone. The prover's references
+  (`head_check.reference_parts`, and the proof block's output word by the gates' references, `LinkWindows.outputs`) say
+  beforehand which windows each member's proofs refuse (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
   committed, then K of them sampled on the verifier's own coins (`LinkWindows.period_draw`), and only those
   registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
@@ -59,17 +50,13 @@ comparison to each verdict, which decides nothing.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import functools
 import gc
 import hashlib
 import json
 import os
-import secrets
-import shutil
 import socket
 import sys
-import tempfile
 import time
 from dataclasses import asdict, replace
 from fractions import Fraction
@@ -81,23 +68,21 @@ ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
-import active_replay as ar  # noqa: E402
-from certifier_key import signer  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.service import LinkWindows  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
+#: the stream's δ, by default
+DELTA = 2.0 ** -40
 #: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the sample of record's
 OTHER = "other_subset"
-ROUNDS = ("honest", "tampered", "extra", "late")
+ROUNDS = ("honest", "tampered")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
@@ -109,6 +94,10 @@ RECEIVED = {"registration.json": "the registration record", "draw.json": "the st
 
 def log(msg: str) -> None:
     print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def _no_coins(n: int) -> bytes:
+    raise AssertionError("Selection All draws every link-window and reads no coins")
 
 
 #: the verifier's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
@@ -131,18 +120,6 @@ def _record_lean_runs(PF) -> None:
 
 # --- the run's execution phases ---------------------------------------------------------------------------------------
 
-def link(run: Path) -> tuple[LinkWindows, dict]:
-    """The run's link and its plan, as `certifier_serve.check` builds them."""
-    plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json", "deployment.json"))
-    setup = ar.Setup(report)
-    profile = plan.get("occupancy") or {}
-    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, RF.read_public(dep["certifier_key"]),
-                     dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
-                     proof_deadline=RC.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
-                     served=cs.served_profile(plan))
-    return lw, plan
-
-
 def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
     """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
@@ -155,24 +132,15 @@ def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
     return lw, {"windows": dep["windows"], "syncs": [], "warden_run": dep["run_id"]}, certified, refused
 
 
-def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> SimpleNamespace:
-    """Every execution phase of the run with both certified records, as the prover holds it before it registers: its
-    opening (fresh salts), the root it commits (`LinkWindows.root`), the proof block's arguments under that root (None
-    where the proof block takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and
-    the proof block's output word by the gates' references (`LinkWindows.outputs`); and the certifier's certificates,
-    which the verifier receives from the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of
-    the certified ones. ``expect``: the verdict the verifier should reach on an honest proof of the opening.
-    With ``warden``, ``run`` is an active network certifier's run (`warden_link`), its records and certificates the
-    network certifier's own and no sync declared.
-
-    With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
-    check takes it: each execution phase registered (``digest``), selected (Selection All) and decided before the next
-    by `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
-    if warden:
-        lw, plan, certified, refused = warden_link(run)
-    else:
-        lw, plan = link(run)
-        certified, refused = cs.read_certified(run / "certified.jsonl")
+def link_windows(run: Path, edit=None) -> SimpleNamespace:
+    """Every execution phase of the active network certifier's run (`warden_link`) with both certified records, as the
+    prover holds it before it registers: its opening (fresh salts), the root it commits (`LinkWindows.root`), the proof
+    block's arguments under that root (None where the proof block takes no instance), each end's head check's failed
+    parts (`head_check.reference_parts`) and the proof block's output word by the gates' references
+    (`LinkWindows.outputs`); and the network certifier's certificates, which the verifier receives from it, no sync
+    declared. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
+    verdict the verifier should reach on an honest proof of the opening."""
+    lw, plan, certified, refused = warden_link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     out = []
     for w in range(plan["windows"]):
@@ -194,18 +162,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
-    if clock is not None:
-        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
-        previous = None
-        for x in out:
-            reg = lw.register(st, lw.registration(x.opening, previous))
-            previous = x.digest = reg.digest
-            draw = st.select(reg)
-            outcome = st.deliver(draw, [lw.session(x.opening, draw)]) or lw.unproved_outcome(st, draw, x.opening, syncs)
-            x.host = {"accepted": outcome.accepted, "codes": list(outcome.verdict.codes), "public": dict(outcome.public)}
-        rd.network = lw.network_verdict(st, plan["windows"])
-    return rd
+    return SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
 
 
 def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
@@ -230,16 +187,10 @@ def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedR
 
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
-    exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
-    (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
-    extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
-    faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
-    `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
-    refuses one window or more."""
+    exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress
+    head (every window's, ``rd.every``) fails its signed digest alone, the warden link's counts being its schedule's.
+    The ingress heads fail nothing."""
     xs = rd.windows
-    if name == "late":
-        return not xs and any(w == 0 for *_, w in rd.issuer_refused)
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
         return False
@@ -248,12 +199,8 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     eg = [x.failed["egress"] for x in xs]
     if name in ("honest", OTHER):
         return all(x.expect for x in xs)
-    if name == "tampered":
-        signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
-        want = ["signed"] if signed else ["counts", "signed"]
-        return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
-    allowed = {"extra": ([], ["counts"])}[name]
-    return all(f in allowed for f in eg) and allowed[1] in eg
+    want = ["signed"]
+    return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
 
 
 def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
@@ -279,70 +226,6 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 #: blobs are fields of the ``wit`` row (``fields``): a head of 157 + L + 4T bytes ends off a 16-byte boundary,
 #: and the instance holds its salt after it, never its zero-padded last chunk.
 public_pieces = functools.partial(LS.public_pieces, fields=True)
-
-
-# --- a run on an injected clock ---------------------------------------------------------------------------------------
-
-async def _endpoint(reader, writer):
-    """A streaming completions endpoint that answers at once: `max_tokens` chunk events and `[DONE]`, chunked."""
-    import re
-
-    head = await reader.readuntil(b"\r\n\r\n")
-    body = json.loads(await reader.readexactly(int(re.search(rb"content-length: (\d+)", head, re.I).group(1))))
-    events = [b'data: {"choices":[{"text":" t%d"}]}\n\n' % k for k in range(body["max_tokens"])] + [b"data: [DONE]\n\n"]
-    writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n"
-                 + b"".join(b"%x\r\n%s\r\n" % (len(p), p) for p in events) + b"0\r\n\r\n")
-    await writer.drain()
-    writer.close()
-
-
-def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifier, challenger, session: bytes,
-                 strategy: str) -> None:
-    setup = ar.Setup(report)
-    run.mkdir(parents=True)
-    (run / "plan.json").write_text(json.dumps(plan))
-    (run / "calibration.json").write_text(json.dumps(report))
-    shim = plan if strategy == "honest" else ar.adversary_plan(plan, setup, strategy)
-
-    async def after(proxies, clock):
-        record = cs.deployment(proxies[0], setup, plan["windows"], session=session, n2_link=cs.N2_LINK,
-                               link=("127.0.0.1", 0), reveal=("127.0.0.1", 0), origin_unix=0.0, url=url)
-        (run / "deployment.json").write_text(json.dumps(record, indent=1))
-
-    publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, session), cs.N2_LINK, threaded=False)
-    ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
-                   proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
-
-
-def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra", "late"),
-            height: int = 6) -> dict:
-    """certifier-serve's run on an injected clock against `_endpoint`, one per strategy under `out`, with fresh LMS keys
-    of `height` in a scratch directory that is removed. Returns the plan."""
-    keys = Path(tempfile.mkdtemp(prefix="n2-zk-keys-"))
-    challenger = signer(keys / "challenger", height)
-    session = secrets.token_bytes(32)
-
-    async def go():
-        endpoint = await asyncio.start_server(_endpoint, "127.0.0.1", 0)
-        upstream = endpoint.sockets[0].getsockname()[:2]
-        url = "http://%s:%d" % upstream
-        probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", tokens), 2, clock=lambda: 0.0)
-        report, plan = cs.served_plan(probed, requests)
-        for strategy in strategies:
-            certifier = signer(keys / strategy, height)
-            try:
-                await asyncio.to_thread(_virtual_run, out / strategy, plan, report, url, upstream, certifier, challenger,
-                                        session, strategy)
-            finally:
-                certifier.close()
-        endpoint.close()
-        return plan
-
-    try:
-        return asyncio.run(go())
-    finally:
-        challenger.close()
-        shutil.rmtree(keys)
 
 
 # --- the statement ----------------------------------------------------------------------------------------------------
@@ -482,7 +365,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root is
     committed first, then `coins` sample K of the windows, and only those are registered, proved and
     decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
-    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the sample of
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `DELTA`), on the sample of
     record: the Lean verifier's (``--lean``) sample on the coins the period flip read (`service.lean_draw`),
     which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
     on the session once the sample has read them, and the result's ``segment`` is what they released. ``forge``, a
@@ -490,8 +373,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     object listing them (`other_subset`), which is what ``period.json`` then holds."""
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
-    stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
-                       coins=cs._no_coins, clock=time.monotonic)
+    stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or DELTA, challenger="n2-zk",
+                       coins=_no_coins, clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
     env = {**zk_server_env(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}
@@ -607,32 +490,25 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    warden = a.warden_run is not None
-    run = Path(a.warden_run if warden else a.run)
-    summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
-                     "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
+    run = Path(a.warden_run)
+    summary: dict = {"run": str(run), "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
-    members = {"honest": link_windows(run, warden=warden),
-               "tampered": link_windows(run, edit=every_count if a.draw else one_count, warden=warden)}
+    members = {"honest": link_windows(run), "tampered": link_windows(run, edit=every_count if a.draw else one_count)}
     members["tampered"].every = bool(a.draw)
     n = len(members["honest"].windows)
     if a.draw and not 1 <= a.draw <= n:
         raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {n} of the link's {n} windows")
     if a.draw and a.draw < n:
-        members[OTHER] = link_windows(run, warden=warden)
+        members[OTHER] = link_windows(run)
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
-        "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": cs.DELTA,
+        "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": DELTA,
         "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
                   "verifier of record (spot verifier.coins), read only after the period's commitment; not "
                   "the auditor's challenger's"}})
-    if warden:
-        summary["warden_run"] = members["honest"].plan["warden_run"]
-        summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
-                                      "link's charge is 0",
-                             "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
-    for name in ("extra", "late"):
-        if getattr(a, name):
-            members[name] = link_windows(Path(getattr(a, name)))
+    summary["warden_run"] = members["honest"].plan["warden_run"]
+    summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the link's "
+                                  "charge is 0",
+                         "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
     members = {k: v for k, v in members.items() if k in a.rounds or k == OTHER}
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
@@ -715,18 +591,10 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="n2_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    v = sub.add_parser("virtual", help="certifier-serve's honest, extra and late runs on an injected clock, stub endpoint")
-    v.add_argument("--out", required=True, type=Path)
-    v.add_argument("--requests", type=int, default=40)
-    v.add_argument("--tokens", type=int, default=4)
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
-    run = p.add_mutually_exclusive_group(required=True)
-    run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (warden_serve.py's, or the gate's "
-                     "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
-    p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
-    p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
+    p.add_argument("--warden-run", type=Path, required=True, help="an active network certifier's run (warden_serve.py's, "
+                   "or the gate's warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")
@@ -744,15 +612,8 @@ def main(argv=None) -> int:
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
-    if a.command == "virtual":
-        plan = virtual(a.out, a.requests, a.tokens)
-        log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
-        return 0
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
-    if a.warden_run is not None and (a.extra or a.late):
-        raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
-                         "tampered")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     return prove(a)

@@ -1,12 +1,4 @@
-"""chain_record's steps that read no prover: custody holds each gate run's files to its end.json; certs accepts a virtual
-certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
-window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
-certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
-each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, each
-kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it, and each
-window's sync the Lean's read of the clock openings, which leaves no window one beside a reference that signs a changed
-clock certificate;
-the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
+"""chain_record's steps that read no prover: custody holds each gate run's files to its end.json; the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled sample within the sample's bound but never one whose incorrect
 window was sampled; the sample's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a network certifier run's files, and refuses a sample and a
@@ -32,7 +24,6 @@ import importlib.util
 import json
 import math
 import os
-import shutil
 import subprocess
 import sys
 from fractions import Fraction
@@ -41,7 +32,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
@@ -58,147 +48,6 @@ def _load(name: str):
 
 
 cr, n2 = _load("chain_record"), _load("n2_zk")
-
-
-class _Clocked(n2.cs.CertifyingPublisher):
-    """`CertifyingPublisher` handed each egress record with its window's declared sync, as `ServedProxy` hands it (the
-    virtual run's proxy hands none), so the run keeps `clocks.jsonl`."""
-
-    def __init__(self, out, *args, **kwargs):
-        super().__init__(out, *args, **kwargs)
-        plan = json.loads((out / "plan.json").read_text())
-        self.syncs = [n2.cs.ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-
-    def __call__(self, record, params, sync=None):
-        super().__call__(record, params, self.syncs[record.window])
-
-
-@pytest.fixture(scope="module")
-def honest(tmp_path_factory):
-    out = tmp_path_factory.mktemp("chain")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(n2.cs, "CertifyingPublisher", _Clocked)
-        n2.virtual(out, requests=8, tokens=4, strategies=("honest",))
-    _keep(out / "honest", out / "honest" / "client")
-    return out / "honest"
-
-
-def _keep(run: Path, client: Path) -> Path:
-    """The client's kept files as `keep_certificates` writes them: each certificate's public part with its session."""
-    session = json.loads((run / "deployment.json").read_text())["session"]
-    certified, _ = n2.cs.read_certified(run / "certified.jsonl")
-    line = lambda c: json.dumps({"session": session} | n2.cs.certificate_json(c)) + "\n"
-    client.mkdir(exist_ok=True)
-    (client / "certificates.jsonl").write_text("".join(line(r.certificate) for r in certified.values()))
-    (client / "clocks.jsonl").write_text("".join(line(c.certificate)
-                                                 for c in n2.cs.read_clocks(run / "clocks.jsonl")))
-    return client
-
-
-def _corrupt(src: Path, dst: Path, name: str, line: int) -> None:
-    shutil.copytree(src, dst)
-    rows = (dst / name).read_text().splitlines()
-    doc = json.loads(rows[line])
-    cert = doc.get("certificate", doc)
-    cert["signature"] = cert["signature"][:-2] + ("00" if cert["signature"][-2:] != "00" else "11")
-    rows[line] = json.dumps(doc)
-    (dst / name).write_text("\n".join(rows) + "\n")
-
-
-def test_certs_accepts_the_kept_files(honest):
-    got = cr.certs(honest, honest / "client")
-    assert got["verdict"] == "accepted", got.get("why")
-    assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
-    assert got["window_buckets"] == json.loads((honest / "calibration.json").read_text())["grid"]["window_buckets"]
-    assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
-    assert got["client_check"]["by"] == "lean" and not got["client_check"]["refused"]
-    assert got["clocks_by"] == "lean" and got["clocks_refused"] == 0
-    assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
-    assert got["signed_are_declared"] and not got["key"]["deployed"]
-    assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
-
-
-def test_certs_refuses_a_changed_signature(honest, tmp_path):
-    _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
-    got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
-    assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"] - 1
-    assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", False)]
-    assert not got["client_check"]["records_are_the_clients"]
-    _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
-    got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
-    assert got["verdict"] == "refused" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
-    assert got["clocks_refused"] == 1
-    _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
-    got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
-    assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"]
-    assert "its signature doesn't verify" in got["client_check"]["refused"][0]
-
-
-class _Accepting(audit.Audit):
-    """A reference audit that accepts every link-window it is asked about."""
-
-    def check_link(self, link, records, frames, syncs, *args, **kwargs):
-        return [audit.Verdict(link, w, None) for w in range(len(syncs))]
-
-    def check_ingress_link(self, link, records, windows, *args, **kwargs):
-        return [audit.Verdict(link, w, None) for w in range(windows)]
-
-
-def test_a_certified_record_is_the_lean_audits_and_a_reference_that_accepts_it_doesnt_certify_it(honest, tmp_path,
-                                                                                                 monkeypatch):
-    """The certs step's verdict on a record is the Lean's (`NetworkCheck.Records`' ``verdicts-no-grid``): beside a
-    reference that accepts everything, the record whose signature is changed is still refused, its row naming the
-    reference's accept, and every other window is certified."""
-    monkeypatch.setattr(n2.cs, "Audit", lambda: lean_audit.Audit(python=_Accepting()))
-    _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
-    got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
-    assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", True)]
-    assert got["certified_windows"] == got["windows"] - 1 and got["verdict"] == "refused"
-
-
-def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doesnt_keep_it(honest, tmp_path,
-                                                                                            monkeypatch):
-    """The client check's refusals are the Lean's (`NetworkCheck.TransferBlocks.refusals`): beside a reference that keeps
-    every certificate, the window whose kept certificate's signature is changed is refused whole, each of its
-    certificates and its clock certificate as a disagreement, and the step refuses."""
-    monkeypatch.setattr(audit, "certificate_refusals",
-                        lambda key, s, link, w, xs, ks, seen=(): ([None] * len(xs), [None] * len(ks)))
-    _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
-    got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
-    cc = got["client_check"]
-    assert cc["by"] == "lean" and len(cc["refused"]) == 3 and all("disagree" in r for r in cc["refused"])
-    assert cc["certificates"] == 2 * got["windows"] - 2 and got["verdict"] == "refused"
-
-
-class _SigningAll:
-    """A reference clock source that takes every opening's sync, refusing none."""
-
-    def __init__(self, key, session, openings):
-        self.refused, self.split, self.openings = (), (), openings
-        self.codes = (None,) * len(openings)
-
-    def syncs(self, link):
-        return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
-
-
-def test_a_windows_sync_is_the_lean_openings_and_a_reference_that_signs_a_forged_one_doesnt_sign_it(honest, tmp_path,
-                                                                                                   monkeypatch):
-    """Each window's sync is the Lean's read of the clock openings (`NetworkCheck.Period.signedSyncs`): beside a
-    reference that takes every opening's sync, a run whose window-0 clock signature is changed has no sync, every
-    window is refused as the two's disagreement, and the step refuses."""
-    monkeypatch.setattr(lean_audit, "SignedClocks", _SigningAll)
-    assert cr.certs(honest, honest / "client")["verdict"] == "accepted"
-    _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
-    got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
-    assert got["clocks_by"] == "lean" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
-    assert got["clocks_refused"] == got["clock_certificates"] and all("disagree" in r["why"] for r in got["rows"])
-    assert got["verdict"] == "refused"
-
-
-def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
-    (tmp_path / "c").mkdir()
-    shutil.copy(honest / "client" / "certificates.jsonl", tmp_path / "c")
-    assert cr.certs(honest, tmp_path / "c")["verdict"] == "refused"
 
 
 def test_custody(tmp_path):

@@ -1,7 +1,6 @@
 """No request value reaches a job's $OUT, which custody uploads. Each script's copy into $OUT runs on stand-in records,
-with a prompt planted in every file a request's values are in (the endpoint's requests.jsonl, advice_trace.jsonl,
-windows.jsonl and served rows, a rehearsal's plan.json, probe.json, io.json and out-witness.jsonl, a network certifier
-rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
+with a prompt planted in every file a request's values are in (a rehearsal's plan.json, probe.json, io.json and
+out-witness.jsonl, a network certifier rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
 fields."""
 from __future__ import annotations
 
@@ -44,14 +43,6 @@ def published(out: Path) -> list[str]:
     return sorted(files)
 
 
-ENDPOINT = {
-    "requests.jsonl": [{"http_id": "cmpl-0", "engine_id": "e0", "user": "u0", "prompt_ids": PROMPT, "streamed_ids": [7]}],
-    "advice_trace.jsonl": [{"kind": "arrive", "request": "e0", "prompt_ids": PROMPT}],
-    "windows.jsonl": [{"window": 0, "run_root": "ab", "rows": 3, "requests": [{"engine_id": "e0", "user": "u-918273"}]}],
-    "served_rows/w0.json": {"window": 0, "rows": [[0, 0, 3, PROMPT[0]]], "salts": ["00"]},
-    "serve.json": {"engine": {"engine_kwargs": {"max_model_len": 32}}, "run_id": "certifier-x"},
-    "summary.json": {"served": 1, "refused": 0, "requests": 1, "steps": 4, "windows": 1, "unfinished": 0},
-}
 REHEARSAL = {
     "plan.json": {"windows": 2, "requests": [{"session": "s0", "id_request": {"prompt": PROMPT, "max_tokens": 4}}]},
     "probe.json": {"body": {"prompt": PROMPT}, "responses": [{"prompt_tokens": 3, "last": PROMPT[1]}]},
@@ -66,32 +57,6 @@ REHEARSAL = {
 }
 
 
-def test_demo_chain_keeps_the_endpoints_records_in_keep_and_publishes_serve_and_summary(tmp_path):
-    ep, out = tmp_path / "keep" / "endpoint", tmp_path / "out"
-    put(ep, ENDPOINT)
-    out.mkdir()
-    copy = block("demo_chain.sh", '  mkdir -p "$OUT/endpoint-records"', '    || log "demo-chain: research keep')
-    got = run(copy, EP=ep, OUT=out, KEEP=ep.parent, PY="true")
-    assert got.returncode == 0, got.stderr
-    assert published(out) == ["endpoint-records/serve.json", "endpoint-records/summary.json", "job.log"]
-    assert sorted(p.name for p in ep.iterdir()) == sorted({n.split("/")[0] for n in ENDPOINT})
-
-
-def test_demo_chain_refuses_a_keep_inside_the_run_dir_or_the_tree_and_makes_it_private(tmp_path):
-    keep = block("demo_chain.sh", "KEEP=$(realpath -m", 'mkdir -p "$G/out" "$EP"')
-    run_dir, src, out = tmp_path / "runs" / "r1", tmp_path / "src", tmp_path / "runs" / "r1" / "out"
-    for d in (run_dir, src, out):
-        d.mkdir(parents=True, exist_ok=True)
-    env = dict(RESEARCH_RUN_DIR=run_dir, SRC=src, OUT=out, G=tmp_path / "scratch" / "gates" / "g")
-    for inside in (run_dir / "keep", out / "keep", src / "keep"):
-        got = run(keep, DC_KEEP=inside, **env)
-        assert got.returncode == 2 and not inside.exists(), inside
-    got = run(keep + 'echo "$EP"', DC_KEEP=tmp_path / "private" / "r1", **env)
-    assert got.returncode == 0, got.stderr
-    assert Path(got.stdout.strip()) == (tmp_path / "private" / "r1" / "endpoint").resolve()
-    assert all((tmp_path / "private" / "r1" / d).stat().st_mode & 0o777 == 0o700 for d in ("", "endpoint"))
-
-
 def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
     g, out = tmp_path / "G", tmp_path / "OUT"
     put(g / "g1" / "certifier-x", {"end.json": {"files": {}}, "request.json": {"args": ["--requests", "24"]},
@@ -104,14 +69,17 @@ def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
         "out/honest/out-records.jsonl", "out/honest/check.json", "out/honest/client/certificates.jsonl"))
 
 
-def test_n2_zk_publishes_the_runs_public_files_and_none_of_their_request_values(tmp_path):
-    runs, out = tmp_path / "runs", tmp_path / "OUT"
-    put(runs, REHEARSAL)
-    (out / "runs").mkdir(parents=True)
-    got = run(block("n2_zk.sh", '(cd "$RUNS" && find', "  -print0"), RUNS=runs, OUT=out)
+def test_n2_zk_publishes_a_warden_runs_public_files_and_not_its_traffic_or_responses(tmp_path):
+    r, out = tmp_path / "run", tmp_path / "OUT"
+    public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
+              "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
+              "warden.json": {"process": {}}}
+    put(r, {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
+            "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
+    out.mkdir()
+    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/run"', "done"), RUN=r, OUT=out)
     assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"runs/{f}" for f in (
-        "calibration.json", "honest/deployment.json", "honest/certified.jsonl", "honest/check.json"))
+    assert published(out) == sorted(f"run/{f}" for f in public)
 
 
 def test_scan_zk_publishes_a_warden_rehearsals_public_files_and_not_its_traffic_or_responses(tmp_path):

@@ -1,8 +1,8 @@
 """warden-chain: the network chain's reads of an active network certifier's run (`warden_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
-rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
-the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network
-certifier path none of its records enters the chain.
+rehearsal's. A certifier rehearsal's run (whose records come through `active.Proxy` in front of the endpoint, under a
+certifier key with salted clock certificates) is refused by name (`PROXY`): on the network certifier path none of its
+records enters the chain.
 
 * `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and
   session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
@@ -16,7 +16,7 @@ certifier path none of its records enters the chain.
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
   `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
-* `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
+* `io`: the certified I/O, read off the records' cells alone, in a certifier rehearsal's certified I/O's keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
@@ -43,9 +43,9 @@ from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
 from verity.commitments.crypto import lms
 
-PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
+PROXY = ("a certifier rehearsal's run (its records through active.Proxy in front of the endpoint): "
          "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
-#: what only a certifier rehearsal's run holds (`certifier_serve.py rehearse`'s, per strategy under ``out/``)
+#: what only a certifier rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")

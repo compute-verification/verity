@@ -99,10 +99,15 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
 
 @pytest.fixture(scope="module")
 def certifier_run(tmp_path_factory):
-    """A certifier rehearsal's run (`n2_zk.virtual`: certifier-serve's records through its proxy)."""
-    out = tmp_path_factory.mktemp("certifier")
-    n2.virtual(out, requests=4, tokens=2, strategies=("honest",))
-    return out / "honest"
+    """A certifier rehearsal's run as a fetched one holds it: its plan and calibration, and a deployment.json naming the
+    certifier's key and links, which no active network certifier's does."""
+    run = tmp_path_factory.mktemp("certifier") / "honest"
+    run.mkdir()
+    docs = {"plan.json": {"windows": 2}, "calibration.json": {"grid": {}},
+            "deployment.json": {"certifier_key": "00", "links": {"n2": "served"}, "session": "00" * 32, "run_id": "r"}}
+    for name, doc in docs.items():
+        (run / name).write_text(json.dumps(doc))
+    return run
 
 
 def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
@@ -119,10 +124,6 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     shutil.copyfile(certifier_run / "deployment.json", run / "witness" / "deployment.json")
     with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a warden's"):
         WC.certificates(run)
-    run = gate_run(tmp_path / "extra")
-    with pytest.raises(SystemExit, match="--extra and --late are certifier-serve's runs"):
-        n2.main(["prove", "--warden-run", str(run), "--extra", str(certifier_run), "--dry", "--out",
-                 str(tmp_path / "n2x")])
 
 
 def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
@@ -211,8 +212,8 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
     refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
             f"the endpoint's report names no warden run: {proxy}")
-    certifier_certs = cr.certs(certifier_run, certifier_run)
-    refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
+    refused("certs", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
+            f"the certificates step's input names no warden run: {proxy}")
     steps.endpoint = steps.tie = None
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"

@@ -1,10 +1,9 @@
-"""n2_zk's execution phases on certifier-serve's runs on an injected clock (`n2_zk.virtual`, a stub endpoint): every
-honest execution phase's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the
-prover, fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late
-run's on their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the
-prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the witness pieces the public
-circuit holds. ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers
-or proves (`n2_zk.prove` does, on a node)."""
+"""n2_zk's execution phases on an active network certifier's synthetic run (`test_warden_chain.gate_run`): every
+honest execution phase's output word is verdict 1 and deadline 1, and window 0's egress head one count off, committed
+by the prover, fails on its signed digest alone. The verifier's own ``pub`` row, from public fields and the
+certificates alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
+witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is refused, naming the rule
+(`n2_zk.ONE_SESSION`). Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -27,21 +26,19 @@ def _load():
 
 
 n2 = _load()
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_warden_chain import gate_run  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def runs(tmp_path_factory):
-    out = tmp_path_factory.mktemp("n2zk")
-    plan = n2.virtual(out, requests=8, tokens=4)
-    return {"plan": plan, "honest": n2.link_windows(out / "honest"),
-            "tampered": n2.link_windows(out / "honest", edit=n2.one_count),
-            "extra": n2.link_windows(out / "extra"), "late": n2.link_windows(out / "late")}
+    run = gate_run(tmp_path_factory.mktemp("n2zk"))
+    return {"honest": n2.link_windows(run), "tampered": n2.link_windows(run, edit=n2.one_count)}
 
 
 def test_each_round_refuses_what_its_references_say(runs):
     honest = runs["honest"]
-    assert len(honest.windows) == runs["plan"]["windows"] >= 2 and not honest.issuer_refused
-    assert honest.lw.head_key(0)[2] == 1 and honest.lw.head_key(1)[2] == 0
+    assert len(honest.windows) == honest.plan["windows"] >= 2 and not honest.issuer_refused
     assert all(x.word == 0b11 and x.expect == 1 for x in honest.windows)
     for name in n2.ROUNDS:
         assert n2.expected(name, runs[name]), name
@@ -91,7 +88,7 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
 
 def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
-    argv = ["prove", "--run", "r", "--out", "o", "--dry"]
+    argv = ["prove", "--warden-run", "r", "--out", "o", "--dry"]
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
     with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
         n2.main([*argv, "--jobs", "2"])
