@@ -412,6 +412,30 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 
+_CIR_293 = "CIR-293: the shared primitives move below both adapters after the close"
+
+#: Single imports of a module neither PUBLIC nor KNOWN: (file, module) -> why it stands. Move the import and delete it.
+KNOWN_SITES = {
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py", "verity_vllm.definitions.registry.layer_norm"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
+    ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _CIR_293,
+}
+
 
 @dataclass(frozen=True)
 class Site:
@@ -548,7 +572,7 @@ def test_outside_code_imports_only_public_names_and_known_modules():
             if s.name is not None and s.name not in exported(s.module):
                 bad.append(f"{s.file}:{s.line}: {s.name} is not in {s.module}.__all__ (import a listed name, or list it there "
                            "if it is part of that interface)")
-        elif s.module not in KNOWN:
+        elif s.module not in KNOWN and (s.file, s.module) not in KNOWN_SITES:
             public = ", ".join(sorted(PUBLIC))
             bad.append(f"{s.file}:{s.line}: imports {s.module}, which is not a public interface of {PACKAGE}: import from one of "
                        f"{public} (or grow the interface the import needs, with __all__ and annotations, and add it to PUBLIC in "
@@ -563,9 +587,12 @@ def test_the_allowlists_are_exact():
     private = {(s.module, s.name) for s in sites() if s.name is not None and s.name.startswith("_")}
     gone = sorted(KNOWN - reached)
     gone_private = sorted(KNOWN_PRIVATE - private)
-    assert not (gone or gone_private), ("nothing outside the integration imports these any more; delete them from tests/"
-                                        "test_vllm_public_api.py:\n" + "\n".join([*(f'    "{m}",' for m in gone),
-                                                                                *(f"    {p!r}," for p in gone_private)]))
+    gone_sites = sorted(set(KNOWN_SITES) - {(s.file, s.module) for s in sites()})
+    assert not (gone or gone_private or gone_sites), (
+        "nothing outside the integration imports these any more; delete them from tests/test_vllm_public_api.py:\n"
+        + "\n".join([*(f'    "{m}",' for m in gone), *(f"    {p!r}," for p in gone_private),
+                     *(f"    {p!r}: ...," for p in gone_sites)]))
+    assert not {m for _, m in KNOWN_SITES} & (KNOWN | set(PUBLIC)), "a KNOWN_SITES module is KNOWN or PUBLIC: delete its sites"
     assert not KNOWN & set(PUBLIC), f"a public module is not also KNOWN: delete {sorted(KNOWN & set(PUBLIC))} from KNOWN"
 
 
