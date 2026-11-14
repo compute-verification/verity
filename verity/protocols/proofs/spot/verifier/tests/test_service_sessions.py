@@ -1,4 +1,4 @@
-"""One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R registrations open, a
+"""One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R dockets open, a
 session opens once after its last covered sample, the first covered round's proof deadline spans it, every covered sample's
 outcome binds the same delivered session, and each round's audit record reads only its own proof blocks and roots."""
 
@@ -150,7 +150,7 @@ def test_an_undelivered_session_ends_late_at_its_first_rounds_deadline():
 
 
 def test_open_registrations_are_bounded_by_rounds_and_the_budget():
-    """Never more than `rounds` registrations open, nor more than the budget's failures left, so a failed session
+    """Never more than `rounds` dockets open, nor more than the budget's failures left, so a failed session
     never takes a stream past its budget."""
     stream = _stream(rounds=2, budget=4)
     _drawn(stream, 2)

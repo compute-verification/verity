@@ -13,6 +13,11 @@ passed, so it says the session was otherwise accepted. The honest session under 
 `Flock.KsScope`'s own tests run its check functions on Lean values, and `verity-verify-proof ks-form` runs the check alone; these are
 the tests that `verify --zk`'s verdict calls them. Each verify sets up an m = 25 table (about 10 s), so they are slow.
 
+`ks-form` then holds the public file's header and rows as a session's setup takes them, with no session
+(`Flock.PortRoots.headerOf`), which the per-member form's run reads for every member's files (`members.flock_form`):
+it passes the honest files, and refuses the honest public file with a header naming ``public_inputs`` (the circuit's
+META names none), with a row changed, and with another ``frame``, ``row_key_sha512`` or ``schemas`` entry.
+
 The sessions are a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a
 missing fixture fails these tests rather than skipping them."""
 from __future__ import annotations
@@ -27,7 +32,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits import partition_object as PO
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
 VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "prover" / "agreement"
@@ -47,6 +52,11 @@ N = 4
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               "verity/flock-circuit/tmpl")
 FORM = ": a statement form the soundness proof does not cover"
+#: `Flock.PortRoots.INPUTS_WHY` and `HEADER_WHY`
+INPUTS_WHY = "a public file whose header names public_inputs at a circuit whose META names none"
+HEADER_WHY = "a public file whose rows are not its header's"
+#: `Flock.HmOut.checkPublic`'s refusal of another frame or row key
+NOT_FRAMED = "the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key"
 
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
@@ -163,6 +173,41 @@ def test_the_v2_audit_refuses_a_circuit_with_a_public_input_port(tmp_path):
     assert refused is None, refused
     (f,) = got
     assert (f.accepted, f.why, f.units) == (False, f"setup: {CHECK_OWN}", ()), f
+
+
+def _public(fx: Path, at: Path, header=None, rows=None) -> Path:
+    """The honest case's public file written to ``at``, its header changed by ``header`` and its rows through
+    ``rows``."""
+    line, body = (fx / "honest" / f"pub-{N}.bin").read_bytes().split(b"\n", 1)
+    h = json.loads(line)
+    if header is not None:
+        header(h)
+    at.write_bytes(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+                   + (body if rows is None else rows(body)))
+    return at
+
+
+def test_the_form_check_holds_the_public_files_header_and_rows_with_no_session(fx, tmp_path):
+    """`members.flock_form`, the executable's ``ks-form``, on the honest circuit: the honest public file passes, as
+    written and with its header rewritten; a header naming ``public_inputs``, a changed row, and another frame, row
+    key or schema are each refused with `Flock.PortRoots.headerOf`'s reason."""
+    circuit = fx / "honest" / "stage" / "circuit.txt"
+
+    def form(k: str, **change) -> str | None:
+        return M.flock_form(circuit, _public(fx, tmp_path / k, **change), [])
+
+    assert M.flock_form(circuit, fx / "honest" / f"pub-{N}.bin", []) is None
+    assert form("rewritten") is None
+    assert form("inputs", header=lambda h: h.update(public_inputs=[])) == f"refused: {INPUTS_WHY}{FORM}"
+    row = form("row", rows=lambda body: bytes([body[0] ^ 1]) + body[1:])
+    assert row is not None and row.startswith(f"refused: {HEADER_WHY} (row ") and row.endswith(
+        f": the rows' b || c do not hash to the header's frame-v3-sha512 root){FORM}"), row
+    assert form("frame", header=lambda h: h["frame_v3"].update(frame="frame-v3")) == (
+        f"refused: {HEADER_WHY} ({NOT_FRAMED}){FORM}")
+    assert form("row-key", header=lambda h: h["frame_v3"].update(row_key_sha512="00" * 64)) == (
+        f"refused: {HEADER_WHY} ({NOT_FRAMED}){FORM}")
+    assert form("schema", header=lambda h: h["frame_v3"]["schemas"].update(r0="hm96-sha512/row/v1")) == (
+        f"refused: {HEADER_WHY} (row r0: schema is not hm96-sha512/row/v2){FORM}")
 
 
 @pytest.mark.parametrize("statement", WRONG_TAGS)

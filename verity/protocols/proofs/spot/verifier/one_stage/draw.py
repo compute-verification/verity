@@ -1,4 +1,4 @@
-"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after registration and before the session.
+"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after docket and before the session.
 
     {"law": "subset", "population": N, "k": K, "units": [<ascending proof block indices>]}
     {"law": "bernoulli", "population": N, "p": "NUM/DEN", "units": [...]}
@@ -9,7 +9,7 @@ This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw
 auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `verity-verify-proof draw` reads them too
 (`--stream`, `--stream-file`), and without them refuses any sample that reads coins: the verifier has no randomness of
 its own. Nothing here samples, and no sample is derived from a commitment. `check_draw` holds a sample to the
-registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
+docket and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
 the sample.
 
 **The stratified sampling design**: one stratum per template, a uniform k_s-subset sampled
@@ -37,7 +37,7 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
   over the credited W, which a per-template work that over-credits any unit breaks.
 
 **The rate sampling designs** (`parse_rate` and `parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
-selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a registration's
+selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a docket's
 N proof blocks `rate:NUM/DEN` or `rate:NUM/DEN:T` is `subset:K` at K = `rate_count`, ceil(q N) rounded up to a multiple of the T
 tables. `stratified-rate:NUM/DEN` is the stratified sampling design at the K its strata need (`strat_k`: the most any stratum of
 n_s proof blocks needs for `stratum_k` to reach ceil(q n_s), at most N), so every stratum samples at least q of its proof blocks
@@ -56,7 +56,6 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.proofs.spot.verifier.profile import work_k
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
@@ -92,7 +91,7 @@ def parse_design(text: str) -> dict[str, Any]:
 def parse_rate(text: Any) -> tuple[int, int, int] | None:
     """The rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` as `(NUM, DEN, T)`: a public rate NUM/DEN with 0 < NUM <= DEN over
     T >= 1 tables (one when it names none), numbers in ASCII digits; None for any other text. A selection rule states it
-    (`service.Law`), and over a registration's N proof blocks it is `subset:K` at K = `rate_count` (`service.selection_law`)."""
+    (`service.Law`), and over a docket's N proof blocks it is `subset:K` at K = `rate_count` (`service.selection_law`)."""
     if not isinstance(text, str):
         return None
     kind, _, arg = text.partition(":")
@@ -214,6 +213,12 @@ def _size(ranges: Sequence[Sequence[int]]) -> int:
 def total_work(strata: Sequence[Mapping[str, Any]]) -> int:
     """A work sampling design's population work, W = sum_s w_s n_s."""
     return sum(s["work"] * _size(s["units"]) for s in strata)
+
+
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
+    `floor` and at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],

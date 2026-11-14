@@ -17,7 +17,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   <= 35: 4096 coordinates at K = 2048, 2048 at K = 8192), so a template's units are staged as consecutive chunks (`--chunk`
   caps them lower), each a member: its own input set on the template's circuit, and a public file naming its global unit
   indices. The verifier derives each port's frame domain itself from META's row schemas and the member's set (Flock's
-  set-bound domains), holds the public files to the registration, and the leaf layer is the SHA-512 of the canonical map
+  set-bound domains), holds the public files to the docket, and the leaf layer is the SHA-512 of the canonical map
   from member to the SHA-512 of its public file.
 * **One sample, the stratified sampling design** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
   verifier's Lean `verity-verify-proof draw --program --partition --stratified K` over its own program and partition object. Each
@@ -122,7 +122,7 @@ def stage_template(K: int, n: int, base: int, bound: dict, out: Path, chunk: int
 
 
 def statement_checks(m: dict, rec: dict, want: dict) -> dict:
-    """What member m's public file and META bind, against the registration and the verifier's own derivation."""
+    """What member m's public file and META bind, against the docket and the verifier's own derivation."""
     meta, header, fv = m["st"]["meta"], m["header"], m["header"]["frame_v3"]
     ok = {"scheme": header.get("scheme") == a0.SCHEME, "pin": header.get("circuit_sha512") == m["st"]["pin"],
           "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": rec["partition"]},
@@ -184,7 +184,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "unit_log": m["st"]["meta"].get("unit_log"), "pin": m["st"]["pin"],
                            "class": m["st"]["class"], "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the sample
+    # one docket, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]

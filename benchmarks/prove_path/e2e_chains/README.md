@@ -1,6 +1,6 @@
 # E2E chains per protocol
 
-The detail behind `benchmarks/prove_path/README.md`'s "What an accepted plain audit means": the status of every
+The detail behind `verity/protocols/proofs/spot/prover/audit/README.md`'s "What an accepted plain audit means": the status of every
 protocol's end-to-end chain, and the premises locked statements take from `Proofs/`. The page keeps 2a's and 2b's
 chains; this file keeps the rest, which changes with each status update.
 

@@ -200,7 +200,7 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
 
 
 def test_the_proof_system_samples_from_the_challengers_coins_after_the_receipt():
-    """`Stream.select` with the coins as its `coins`, committed to the registration's digest after its receipt: the
+    """`Stream.select` with the coins as its `coins`, committed to the docket's digest after its receipt: the
     sample both verifiers agree on, from bytes the verifier replays from the record. Without the commitment the
     select reads no coin."""
     from test_service import _ports, _record, _stream
@@ -229,20 +229,20 @@ COIN_CODES = {"second-root": "family"}
 
 def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
-    the challenger's `coins` and its registration under `window_root`, sampled after the registration's digest, its proof
+    the challenger's `coins` and its docket under `window_root`, sampled after the docket's digest, its proof
     delivered, and its outcome run with the case's evidence (`coins_reason`'s, which is `draw_coins`'s: the auditor's
     ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the session's
     files) on a stream that holds the challenger's key and that copy of main's history, which this gives each case's
     stream (`Stream.key`, `Stream.main`): the honest one; a
     segment that skips a coin opened after the digest, one with a wrong opening, one that
-    adds another registration's coins in front; no evidence, empty evidence; a registration without its window root; a
+    adds another docket's coins in front; no evidence, empty evidence; a docket without its window root; a
     session whose pin isn't on the verifier's copy of main (`pinned_session`), the evidence carrying that copy; a family
     in which the client opened a coin after another root once it had read the sample (the run's `family`); another
     case's segment, a family the stream did not read; honest evidence on a stream that holds another key than the one
     the session is signed under, on one that holds none, and on one whose copy of main's history is not the evidence's;
     honest evidence that names a key of its own, the form the reader took before the key was the stream's; and coins a
     session of another window released after the same digest. Each case's
-    registration has a family of its own (`positions/<case>`, `positions` coins), since a family's coins follow one.
+    docket has a family of its own (`positions/<case>`, `positions` coins), since a family's coins follow one.
     -> ({case: (its stream, its outcome, its audit record)}, {case: its segment})."""
     import test_remote
     from test_service import SESSION, _lean
@@ -317,7 +317,7 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
 def test_the_lean_run_refuses_a_sample_whose_coins_the_challenger_did_not_release_after_the_registration(
         tmp_path, signer, monkeypatch):
     """On a stream sampling from the challenger (which its digest names), every outcome's run
-    by the verifier (`Run.run`) checks the sample's coins: with their evidence for the registration's window
+    by the verifier (`Run.run`) checks the sample's coins: with their evidence for the docket's window
     (`window_root`) it accepts the honest sample, and it rejects, failing `run` with the select step's `coins`, each of
     `coin_outcomes`' other cases (a prover picking the window among them, or the family), but for the family holding a
     second root, which it rejects with the select step's `family`. A sampler beside the challenger's coins, and
@@ -410,17 +410,17 @@ class Redraws(T.ChallengerCoins):
 
 def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_refused_for_its_family(
         tmp_path, signer, monkeypatch):
-    """A second registration in one family of one window's withheld session is refused by both verifiers. The
-    session's client (`Redraws`) registers six proof blocks, commits the family's coins to that registration's digest
+    """A second docket in one family of one window's withheld session is refused by both verifiers. The
+    session's client (`Redraws`) registers six proof blocks, commits the family's coins to that docket's digest
     and reads its sample: a withheld session answers each open with the coin's raw bytes, so the client holds the
     sample before it sends anything more. It then registers the same six proof blocks again, each time on a stream of
     its own with an empty log and under roots of other bytes (a fresh commitment's), so under another digest, and
     commits the family's next coins to that digest, until a sample leaves out a proof block of the first one. The
-    verifier is handed the last registration alone: its record, its segment and the session's signed files, whose log
+    verifier is handed the last docket alone: its record, its segment and the session's signed files, whose log
     lists every earlier digest's coins before its own. The coins after the last digest are consecutive in the family
     and all read, and the family's log shows the earlier roots: `coins_reason` refuses for that (`FAMILY_ROOT`), and
     the outcome is a reject whose run the Lean (`Run.run`) refused at its select under the code `family`. So is the
-    first registration's, whose coins are the family's first: the family holds later roots. One-stage v2's read of the
+    first docket's, whose coins are the family's first: the family holds later roots. One-stage v2's read of the
     same log at the parameters' family (`draw_coins`, `OneStage.coinsOf`'s) refuses every one of them alike. The
     honest client takes no second commitment in the family (`ChallengerCoins.commit`)."""
     import test_remote

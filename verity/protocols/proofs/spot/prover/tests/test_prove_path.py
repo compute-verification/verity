@@ -4,7 +4,7 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
   refused the same way.
-* The advice is fixed before the sample: `advice_before_draw` holds the registration the verifier opens the advice under to the
+* The advice is fixed before the sample: `advice_before_draw` holds the docket the verifier opens the advice under to the
   one the sample's receipt names, and refuses the advice re-committed after the coins.
 * On the stand-in: each rank's window over the compiler's Programs for the advice is held to the verifier's own from the
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
@@ -29,7 +29,7 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
 * A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
   advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`).
 * The per-expert fused cut over a block-FP8 MoE layer's committed step (adapters/vllm's `tests.pipeline.served_experts`, no
-  engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' registration
+  engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' docket
   and the checkpoint, is the window the row driver's in-Commit hook commits over the same step (`_same_commitment`), a
   stand-in `source1` accepts; it is refused without the tables or the checkpoint, and a TP rank's window is handed both."""
 from __future__ import annotations
@@ -195,7 +195,7 @@ class Listing:
 
 def test_the_transfer_gates_are_in_the_compilers_registered_digest(monkeypatch):
     """I2's digest covers the templates it lists as holding transfer gates, and `Capped` passes the list and its digest on, so a
-    registration under a compiler proving other units whole names another compiler."""
+    docket under a compiler proving other units whole names another compiler."""
     monkeypatch.setattr("verity_vllm.program.predict.score.code_version", lambda: "c0de")
     r = SimpleNamespace(phi=SimpleNamespace(to_json=lambda: {"model": "m"}), default_seed=0, cap_bits=PP.CAP_BITS)
     bare, listing = (PP.I2Compiler(r, {}, "/nonexistent", transfer_gates=tg) for tg in ((), ("RoPEHead_v1{D=64}",)))
@@ -293,7 +293,7 @@ STOPPED = ("no_proof_released", "lean_refused", "read_refused")
 
 def _summary(sample: list[int], before: bool = True) -> dict:
     """What a5's summary of an audit of one member of 8 units says of its sample, ``sample``, and of the checks before
-    it: each passed, but the registration's where not ``before``."""
+    it: each passed, but the docket's where not ``before``."""
     return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": sample,
             "checks_before_draw": {"registration": before, "source": True}}
 
@@ -656,7 +656,7 @@ def test_the_advices_negatives_are_each_refused_by_name(tp):
 
 @pytest.mark.slow
 def test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused(tp):
-    """With the receipt the stream writes on receiving the honest registration, the honest registration holds; the same advice
+    """With the receipt the stream writes on receiving the honest docket, the honest docket holds; the same advice
     committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
     compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
     rec = _registered(tp["honest"] / "rank0")
@@ -668,7 +668,7 @@ def test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_r
 
 @pytest.mark.slow
 def test_a_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit(tp):
-    """The forged window's registration holds to the verifier's window and its own public bodies, as the honest one does: its
+    """The forged window's docket holds to the verifier's window and its own public bodies, as the honest one does: its
     rows, commit strings and roots agree with the flipped word. Its rows differ from the honest window's in exactly one bit."""
     _c, _b, _o, mine, held = _mine(tp, "forged", 0)
     d = tp["forged"] / "rank0"
@@ -1295,7 +1295,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
 
 def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
                                                                                                          capsys):
-    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
+    """A served window's docket fixes `engine.served_seed.DEFAULT_SEED`, as vllm's registered compiler does: a run
     whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
     by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
@@ -1508,14 +1508,14 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
 
 
 def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
-    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
+    """``weights-registration --deployment-record FILE`` writes the committer's docket also as the first record of the
     serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
-    that registers each rooted weight parameter's entry as the registration states it, by name, and names the unrooted
+    that registers each rooted weight parameter's entry as the docket states it, by name, and names the unrooted
     ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
     names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
     name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
     given (its Lean's `isTheta`). Without the flag no such record is
-    written; a registration with a value that is no weight parameter gives none, and a name under a weight's with a
+    written; a docket with a value that is no weight parameter gives none, and a name under a weight's with a
     suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
     whole, never written without the name."""
     import functools
@@ -1617,7 +1617,7 @@ def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():
 
 
 def test_a_served_compiler_lists_its_models_transfer_gates_of_record_beside_the_servers(tmp_path, monkeypatch, capsys):
-    """Its inner digest covers the server's registered one and the model's gates of record, so a registration under the server's
+    """Its inner digest covers the server's registered one and the model's gates of record, so a docket under the server's
     compiler alone is refused before any commit (its advice tree's domain is another compiler's too), and one `verity-vllm
     advice` makes under the name and digest `compiler` prints passes; ``--transfer-gate`` only restates the list."""
     from verity_vllm.pipeline import advice as ADV
@@ -1648,7 +1648,7 @@ def test_a_served_compiler_lists_its_models_transfer_gates_of_record_beside_the_
 @pytest.mark.parametrize("gates", [(), ("SiluMul_v2{I=8192}",), ("RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}")],
                          ids=["none", "another", "the-records-and-another"])
 def test_a_served_window_registered_under_another_gate_list_than_its_models_of_record_is_refused(tmp_path, monkeypatch, gates):
-    """The verifier's served compiler lists the model's gates of record whatever it is told (`served_gates`), so a registration
+    """The verifier's served compiler lists the model's gates of record whatever it is told (`served_gates`), so a docket
     under any other list names another compiler and is refused before any commit, and the verifier refuses to run under that
     list instead."""
     s = _served(tmp_path, monkeypatch, gates=gates)
@@ -1686,7 +1686,7 @@ def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path
     ({"published": "cc" * 64}, ["run_root"]),
 ], ids=["compiler-without-the-cap", "vllm-v1-root", "store-not-rows-sha512", "another-commits-root"])
 def test_a_served_window_is_refused_before_any_commit_by_name(tmp_path, monkeypatch, kw, codes):
-    """A registration whose compiler carries no cap (the inner compiler, so its advice tree's domain is another too), a published
+    """A docket whose compiler carries no cap (the inner compiler, so its advice tree's domain is another too), a published
     root of 32 bytes, a row dir whose store isn't rows-sha512, or a published root that isn't the row dir's."""
     s = _served(tmp_path, monkeypatch, **kw)
     _c, _r, bound, _o = PP.compiled(s.a)
@@ -1754,7 +1754,7 @@ def _carried(tmp_path: Path, monkeypatch, w1: WA.Advice, w0: WA.Advice = W0) -> 
 
 def test_a_served_window_s_carried_requests_follow_from_the_last_window_s_close(tmp_path, monkeypatch):
     """The verifier reads a served window's advice as `window_advice`'s, so a window may carry requests in, and holds them to
-    the close of the window before it, opened under that window's registration: each carried request at its field in each of
+    the close of the window before it, opened under that window's docket: each carried request at its field in each of
     that window's edge ports (`edge.carried`)."""
     c = _carried(tmp_path, monkeypatch, W1)
     assert PP.serve_window(str(c.s.run), 1).last.window == 0 and PP.serve_window(str(c.s.run), 0).last is None
@@ -1784,7 +1784,7 @@ def test_a_served_window_whose_carried_request_doesnt_follow_from_the_last_close
 
 
 def test_a_served_window_follows_only_an_opening_of_the_last_window_s_registered_root(tmp_path, monkeypatch):
-    """The window before is read only through an opening of the root its registration binds: another salt opens no registered
+    """The window before is read only through an opening of the root its docket binds: another salt opens no registered
     root, and a window that carries requests in with no window before it is refused for its first."""
     c = _carried(tmp_path, monkeypatch, W1)
     last = c.s.run / "advice" / "w0" / "private" / "opening.json"
@@ -1964,7 +1964,7 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
 
 
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's registration of the window, and ``--h1-key``, window-commit's
+    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-key``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
     without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
     window-circuit, which holds no key (not ``key``), reads the same tables."""
@@ -1995,7 +1995,7 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
 
 def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():
     """`window_design`: window-commit's ``--law`` is the rate the window's audit states to its stream, and the window is
-    committed under the sampling design that rate names over the circuit's own proof blocks, so its registration is under
+    committed under the sampling design that rate names over the circuit's own proof blocks, so its docket is under
     the design the stream holds it to: a subset design under a rate, one K for every stratum under a stratified rate, at
     1 where the rate's denominator is no smaller than the largest stratum. A fixed count, which no stream takes, is
     refused by name."""
@@ -2057,7 +2057,7 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
 
 @pytest.fixture(scope="module")
 def fused(tmp_path_factory) -> dict:
-    """A block-FP8 MoE layer's committed step with the per-expert tables' registration, the checkpoint and the fused cut's
+    """A block-FP8 MoE layer's committed step with the per-expert tables' docket, the checkpoint and the fused cut's
     partition; over that one step, the row driver's window (``hook``: the in-Commit hook's, ``served``) and a serve-openai
     window's sealed row dir (``served``), which names no Programs."""
     pytest.importorskip("torch")
@@ -2107,7 +2107,7 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
     """`commit1` on the sealed served window, the per-expert tables read under the committer's key and the expert weights
     composed from the checkpoint (the window's bundle carries none), against the in-Commit hook's window over the same
     committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
-    its registration walks them at each write, so it runs where VERITY_SLOW=1 asks: by name in the nightly cold check, and in
+    its docket walks them at each write, so it runs where VERITY_SLOW=1 asks: by name in the nightly cold check, and in
     no candidate's check (`OPT_IN`).  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
     this command's own window maker, on a sealed window that names no Programs, committing other rows, tables or weights
     than the Commit's own window of the step.  A copy of the window with one bit of one row flipped is refused."""
@@ -2135,7 +2135,7 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
 @pytest.mark.slow
 @OPT_IN
 def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint(fused, tmp_path):
-    """Each refusal by name and before any registration is written (seconds once the templates are built, over a minute
+    """Each refusal by name and before any docket is written (seconds once the templates are built, over a minute
     alone): only a sealed window shows that it brings neither the tables nor the expert weights, so that `commit1` refuses
     the cut unless it is handed both.  It takes the fixture's minutes, so it runs where the test above does (`OPT_IN`)."""
     compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))

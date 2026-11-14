@@ -17,7 +17,7 @@ at a time, in four records:
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
    window-domain rule (`verity.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
-   the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.registration``).
+   the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.docket``).
 4. **On a sample, the openings**: a sampled member's private rows and salts as Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the ZK server.
 
@@ -871,7 +871,8 @@ FREE_KINDS = ("peer", "weights", "table", "advice")
 @dataclass(frozen=True)
 class Free:
     """Template ``reader``'s units ``[at, at + units)`` read rows ``[c0, c0 + C)`` of their ``port`` (``cut``, its every row
-    by default) that no declaration fills, named by their ``kind`` (`FREE_KINDS`)."""
+    when absent) that no declaration fills, named by their ``kind`` (`FREE_KINDS`). The rows are the port's at the
+    record's own cut of it (``cuts``), so a range within a port is whole rows of that cut."""
     reader: str
     port: str
     at: int
@@ -1245,8 +1246,9 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         _words, k = port(f.reader, f.port, f.doc())
         units(f.reader, f.at, f.units, f.doc())
         c0, c = f.cut if f.cut is not None else (0, k)
-        if f.kind not in FREE_KINDS or c0 < 0 or c < 1 or c0 + c > k:
-            raise ValueError(f"free rows {f.doc()}: of a kind of {FREE_KINDS}, rows [c0, c0 + C) of its port's {k}")
+        if f.kind not in FREE_KINDS or c0 < 0 or c < 1 or c0 + c > k or f.cut == (0, k):
+            raise ValueError(f"free rows {f.doc()}: of a kind of {FREE_KINDS}, rows [c0, c0 + C) of its port's {k} at the "
+                             "record's cut, and no cut where they are the whole port")
         rects.append((f.reader, f.port, f.at, f.at + f.units, c0, c0 + c, f.doc()))
     _disjoint(rects, "inputs")
     if free or ranks is not None:
@@ -2808,7 +2810,7 @@ class Window:
               kind: str = "served", index_salt: bytes | None = None, previous: str | None = None) -> dict[str, Any]:
         """The window's files (`rows.write`, its prover-only ``index.json`` the labels, bound by their hiding leaf under
         ``index_salt``) and ``circuit.json``, the registration core's record made by ``registrar`` (core's
-        ``one_stage.registration``), chained after ``previous`` (the digest of the prover's last record; None for its
+        ``one_stage.docket``), chained after ``previous`` (the digest of the prover's last record; None for its
         first), its window naming ``provenance``, the circuit record's SHA-512, the advice binding and
         each registered value's root by parameter (``registered_roots``, which `input_count` holds to the verifier's pins);
         with the circuit's values (`Registered.values`), a ``verity/registration/v2`` record registering each by its
