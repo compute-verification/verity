@@ -2059,16 +2059,17 @@ def composite_answer(public: Path, product: str) -> tuple[dict[str, Any] | None,
     """``product``'s Lean check's answer as `composite.py` wrote it to its public output under ``public`` (a directory
     per composite run, `served_composite.sh`'s $OUT/composite), in the block record's form (`block_record.answer_of`:
     the protocol, the verdict, the refusal's public name as the reason, and the composite's commitment), and where it was
-    read; or None and why there is no answer to take: no composite of one of the product's checks (`block_record.CHECKS`)
-    or more than one, one whose Lean gave no answer, or one composed as a development check, which claims no record."""
+    read; or None and why there is no answer to take: a composite.json that doesn't parse, no composite of one of the
+    product's checks (`block_record.CHECKS`) or more than one, one whose Lean gave no answer, or one composed as a
+    development check, which claims no record."""
     from verity_e2e_demo import block_record as BR
 
     found = []
-    for d in sorted(p for p in public.iterdir() if p.is_dir()) if public.is_dir() else []:
+    for d in sorted(p for p in public.iterdir() if (p / "composite.json").is_file()) if public.is_dir() else []:
         try:
             doc = json.loads((d / "composite.json").read_text())
-        except (OSError, ValueError):
-            continue
+        except ValueError as e:
+            return None, f"{d.name}/composite.json doesn't parse, so no composite's answer is taken: {e}"
         if isinstance(doc, dict) and doc.get("product") in BR.CHECKS[product]:
             found.append((d, doc))
     if len(found) != 1:

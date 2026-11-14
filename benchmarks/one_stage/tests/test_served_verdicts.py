@@ -917,6 +917,19 @@ def _composite(public: Path, x: str, product: str, verdict: str | None, **more) 
                                                            "verdict": out, "exceptions": [], "cases": [], **more}))
 
 
+def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_one_is_no_composite(tmp_path):
+    """A composite.json that doesn't parse gives no Lean answer, saying so, rather than being passed over for another
+    composite; a directory holding none (the run's other output) is no composite at all."""
+    c = tmp_path / "composite"
+    _composite(c, "remote", "verity/remote/v0", "accept")
+    (c / "logs").mkdir()
+    assert S.composite_answer(c, "remote")[0]["verdict"] == "accept"
+    (c / "remote-v1").mkdir()
+    (c / "remote-v1" / "composite.json").write_text("{")
+    answer, why = S.composite_answer(c, "remote")
+    assert answer is None and why.startswith("remote-v1/composite.json doesn't parse"), why
+
+
 @pytest.mark.parametrize("composites, pouw, composed, rc, lean", [
     ({}, "accept", "pending", 2, "0 composites of the remote check (verity/remote/v0, verity/remote/v1) in {c}, not one"),
     ({"remote": ("verity/remote/v0", "accept")}, "accept", "accept", 0,
