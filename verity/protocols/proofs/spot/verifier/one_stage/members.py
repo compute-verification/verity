@@ -20,8 +20,8 @@ Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `pro
 member names wires (its ``wired``, each a `Spot.Wires` wire's record but its ``reader``, which is the member), the
 members' wiring passes the wiring's own check (`wiring_refusal`, `Spot.Wires.check` in its closed form, each member a
 template of its units and every row of its public file both a row it reads by and one it is read at) and each sampled
-unit's wired rows hold their writers' strings (`wired_why`, `Spot.Wires.Summary.drawnOk`), else `WIRES_SAMPLED`
-refuses before `MULTI_REFUSED` (`run_reason`). The wiring is the verifier's parameter; no statement may read it as the
+proof block's wired rows hold their writers' strings (`wired_why`, `Spot.Wires.Summary.drawnOk`), else
+`WIRES_SAMPLED` refuses before `MULTI_REFUSED` (`run_reason`). The wiring is the verifier's parameter; no statement may read it as the
 policy's wiring until a check ties the two.
 
 Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
