@@ -92,9 +92,11 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-# security's list: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
-# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 221, "security/Properties": 184, "verity/protocols/proofs/flock/verifier": 7}
+# security's list: Flock.SecurityProofs.SpotExfilTwo, SpotKSTwo and SpotOneWaitTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
+# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
+# Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
+# restated at the deployed session its domain hypothesis fixes
+UNWITNESSED = {"security": 223, "security/Properties": 184, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():

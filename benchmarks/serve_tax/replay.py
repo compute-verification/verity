@@ -13,7 +13,10 @@ cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``-
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
 the scheduler's ``schedule``), and where it arrived after schedules that held every request back, after as many
 (``after_empty``); the scheduler decides the rest as it did while serving, and a step it has in flight when the last
-request finishes is taken as serving took it. Where the arm served with other vLLM general
+request finishes is taken as serving took it. Of a request's served sampling the engine is given the temperature, top-p,
+top-k, seed, length and ignore-EOS (`params`); a window with a request served at another value than vLLM's own in any other
+field (min-p, a penalty, a stop, a logit bias: from the request or from the checkpoint's generation config) is refused
+(`unapplied`), since its replay would sample without it. Where the arm served with other vLLM general
 plugins (the canonical DSA top-k: ``canonical-topk``, ``two-stage``, ``prod-record``), the replay's processes load them
 too, under the arm's environment (`served_under`), and ``--private`` is where they keep what the arm keeps on the node
 (the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
@@ -58,10 +61,29 @@ def served_ids(arm_dir: Path, tag: str) -> dict[str, dict]:
     return kept
 
 
+#: the sampling fields a served request's arrival holds (`verity_vllm.engine.step_trace.SAMPLING`) that the replay does
+#: not give its engine (`params`), each with the values at which vLLM's sampler does nothing for it (vLLM's own
+#: defaults): a request served at another is refused (`unapplied`). The server puts a field there from the request or,
+#: where the request leaves it out, from the checkpoint's generation config, so a window can hold one no client sent.
+UNAPPLIED = {"min_p": (0, 0.0), "presence_penalty": (0, 0.0), "frequency_penalty": (0, 0.0), "repetition_penalty": (1, 1.0),
+             "min_tokens": (0,), "logit_bias": ({},), "n": (1,), "stop": ([], ""), "stop_token_ids": ([],)}
+
+
+def unapplied(sampling: dict) -> dict:
+    """The fields of a served request's ``sampling`` that a replay would sample it without (`UNAPPLIED`), each with its
+    served value. ``stop_token_ids`` counts only for a request that decodes past its end of text (``ignore_eos``): for
+    one that stops there vLLM itself adds the checkpoint's other end-of-text ids to the field, in the replay's engine
+    as in the served one."""
+    return {k: sampling[k] for k, neutral in UNAPPLIED.items()
+            if sampling.get(k) is not None and sampling[k] not in neutral
+            and (k != "stop_token_ids" or sampling.get("ignore_eos"))}
+
+
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
     step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
-    pass whose client kept none, the ones the arm's server kept (`served_ids`)."""
+    pass whose client kept none, the ones the arm's server kept (`served_ids`). A request served with a sampling field
+    the replay does not apply is refused (`unapplied`)."""
     rep_dir = arm_dir / load / f"rep-{rep}"
     tag = json.loads((rep_dir / "meta.json").read_text())["tag"]
     kept = None if (rep_dir / "client.jsonl").is_file() else served_ids(arm_dir, tag)
@@ -101,6 +123,10 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
             prompt, served = kept[rid]["prompt_ids"], kept[rid]["output_ids"]
         else:
             raise SystemExit(f"{rid} arrived in the window and the server kept no ids for it: it did not finish there")
+        if off := unapplied(a["sampling"]):
+            raise SystemExit(f"{rid} was served with {off}, which the replay does not give its engine (replay.params): it "
+                             f"would be sampled without and its tokens would differ. A window whose requests leave these "
+                             f"at vLLM's own values replays; to replay this one, have params pass the field")
         reqs.append({"engine_id": rid, "before_step": a["before_step"] - first, "after_empty": a.get("after_empty", 0),
                      "prompt_ids": prompt, "max_tokens": a["sampling"].get("max_tokens"), "sampling": a["sampling"],
                      "served": served})

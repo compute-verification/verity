@@ -4527,8 +4527,7 @@
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
-   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
-   "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"
+   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"]
   },
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
@@ -4836,6 +4835,9 @@
    "honest": ["NetTiming.Witness.Ingress_honest"],
    "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial",
    "kind": "acceptance"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "nontrivial": "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5443,6 +5445,11 @@
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
+   "type_hash": "4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f",
+   "missing": "nontrivial",
+   "why": "the lemma on main shows the conclusion failing at a session without tables, not at the deployed session the guarantee's domain hypothesis fixes, so the guarantee is not witnessed as nontrivial at its own instance until the lemma is restated there"
+  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
   "Flock.SecurityProofs.SpotExfilTwo": {
@@ -5457,6 +5464,11 @@
   },
   "Flock.SecurityProofs.SpotKSTwo": {
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372",
    "missing": "honest",
    "why": "honest instance needs a built two-stage layout and frame"
   },
@@ -13314,6 +13326,24 @@
    },
    "type_hash": "791097081f3e7b50579e4ab8db33f0a47fda4245185e1d8516ab0ad01ead91c2"
   },
+  "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.CompiledTwo.OneWaitTwoXAt FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool)",
+    "      List.nil Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart Claims.Witness.SamplingGeneric.toyTwo",
+    "      Claims.Witness.silentP 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9fcae30504dd02d8369e243d98a93d0b3c6b4acd3b803d76becf4a46e2bda05e"
+  },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerZK : Claims.SamplingGeneric.CompilerZK"],
@@ -16591,24 +16621,6 @@
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
   },
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial :",
-    "  Not",
-    "    (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKServer.Loop.noTables Claims.ZKServer.Loop.noVals",
-    "      (Claims.ZKServer.Loop.leakL (Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.NT)) Claims.ZKServer.Loop.noReal",
-    "      Claims.ZKServer.Loop.noWk (fun x x_1 => True) 2)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4506aaf50fe9d724a2ecc5ccff7ae1a40d56f6a54eaa63d3409e35ea9944a3d2"
-  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed"],
@@ -16690,6 +16702,18 @@
     "reads": []
    },
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SpotOneWaitTwo : Flock.Guarantees.SpotOneWaitTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["SpotFlock.Built"],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"],
+    "reads": []
+   },
+   "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372"
   },
   "Flock.SecurityProofs.StreamStopBudget": {
    "owner": "@network-accounting",
@@ -28709,7 +28733,8 @@
    "Pouw.Guarantees.Lead.Nontrivial": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.nontrivial; that guarantee is unlisted and the lead gets no new Lean",
    "Pouw.Guarantees.Lead.NontrivialTail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.nontrivialTail; that guarantee is unlisted and the lead gets no new Lean",
    "Pouw.Guarantees.Lead.TailAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.tailAt; that guarantee is unlisted and the lead gets no new Lean",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
+   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -29656,11 +29681,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV2": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29669,11 +29694,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29689,10 +29714,10 @@
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29839,9 +29864,9 @@
     "∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets d P δ) F → instLENat.le (NetTiming.faultyBits C P F) β": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
     "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -51978,12 +52003,6 @@
     "FlockSoundness.Discharge.ZkHidden.ZkTab.table": "6f20306952c62b0ee0a1af2e4276fbe303cd768c3902a140754e4b2f40aa2747"
    }
   },
-  "Proofs.Flock.Claims.ZK.NonVacuous": {
-   "digest": "468bd4762d92aca19aa8c4dce88fe740aab90a219a01c7bb7d84408806f587e0",
-   "definitions": {
-    "Claims.ZKMal.witMsg": "ca5489c145ec1db67e2961ff54bae441d7e6f3c0603bfcd19119fe5c63f63911"
-   }
-  },
   "Proofs.Flock.Claims.ZK.OneTape": {
    "digest": "7f8eebcf22964d014e6223d0ef180f9ccec077a98cd6d813d804a48e568f0dfc",
    "definitions": {
@@ -53685,6 +53704,14 @@
     "Flock.Guarantees.SpotKSTwo": "920013bcf254c576602bfeb1df3942c6b725046ba3f6891145ef4975ec111656"
    }
   },
+  "Proofs.Flock.SamplingGeneric.OneWait": {
+   "digest": "b5f4244478e93e51ea07c03b2c6b463fd4599d73b4a170b7e0b6e311bdbdd5cd",
+   "definitions": {
+    "Claims.SamplingGeneric.Arg.oneWait": "df569a960fdc793ad4cce5bc194d72e7bdcaf7e430d58de6c0b43b965d77be91",
+    "Claims.SamplingGeneric.Compiled.oneWait": "fec07a11f379a50ecd880dd76743c4551f6601113b89dc06558992402fca439c",
+    "Claims.SamplingGeneric.CompiledTwo.oneWait": "5de96ec89d5d3b4dc3e650eb061a6ce50e4303297515f67db5db0664f62b1941"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.OpensTwo": {
    "digest": "3b04380d4516b54b6847950f2087aa97237b215dce937da5db38264cc635989f",
    "definitions": {
@@ -53760,6 +53787,18 @@
    "digest": "459744ddd4daa1419bac132b2e39b3cdac17fba17c6932b2263642e9ce700cd7",
    "definitions": {
     "Claims.SamplingGeneric.Compiled.runCalls": "bc66b6c7f196ab9080fc0cd99f62cd480457bf06a13e102ed8ec89be9bf6cc51"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOneWaitAt": {
+   "digest": "83a313f338ad9f470f502f3c4530cae2739feeda52c7346450a18f12a2f74f97",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.εclsOneWait": "9a099a82e81a12e079edb3610636315ca94acf016581c641fa0957b642996a65"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOneWaitKS": {
+   "digest": "79e5ac293ce06ff9865f5436f1462e3d7178908753c122d1b3b86f60a1ad1566",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.OneWaitTwoXAt": "e1b6c8db409445ad622c3894562dcadbc6693be228a465edbb9f3e0b12fd2b2d"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoReg": {
@@ -53916,10 +53955,9 @@
    }
   },
   "Proofs.Flock.SessionLoop.Leak": {
-   "digest": "841b149912da2e88b62c251001128c0e806be26b38fdfc9144e8e939b9173373",
+   "digest": "b006b305b23a7b8f74c2cdc07a6e50790151df083a4bd9b84c53da7733a0decb",
    "definitions": {
-    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d",
-    "Claims.ZKServer.Loop.leakL": "a7fdd5ffefdec54ad40305a1741d46f3d4e125ea34ccacdc21cd39c6ed78a9ce"
+    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d"
    }
   },
   "Proofs.Flock.SessionLoop.Level0SrcSat": {
@@ -54028,17 +54066,6 @@
     "Claims.ZKServer.Loop.tapeL₀": "b03609278486f0b28e924abccdbeaf10bf2c443b8af5983f60c4f55924d82123",
     "Claims.ZKServer.Loop.tapeRel": "48b8729493eef3c04c5a01c688090bd4d1319bdddddfa86e619c80630e892542",
     "Claims.ZKServer.Loop.tapeWk": "e10ebd23253fc1e3b3e6a9c40b58f4eed799a5aa8c801a51e23f6edf9042532a"
-   }
-  },
-  "Proofs.Flock.SessionLoop.ZkAnyNontrivial": {
-   "digest": "f41582d29993e7845a9e6017a9f107899b2d423ff46f66eb138ff9869ba723ad",
-   "definitions": {
-    "Claims.ZKServer.Loop.NT": "bd4adb1e9c5a4b03874622e36e24826368b973bca1778d6e811b86081a2f21c3",
-    "Claims.ZKServer.Loop.constRel": "99d08792904a28e4834c36dd1a91cfa076776209d0ad41c2f020b39a2a0714a4",
-    "Claims.ZKServer.Loop.noReal": "0e7b6d955ea32ea3ff3a979982f5566f8d92f7ff06dcb78cc25e1c7a37afc253",
-    "Claims.ZKServer.Loop.noTables": "0cb04796bf0048e9dc32287254a280be0c7a0df0c287edf7691360da01b48d43",
-    "Claims.ZKServer.Loop.noVals": "177ca5a2a097553bdc0cf48243a3861ad08eecb53583b09d57c0c335d8526e6b",
-    "Claims.ZKServer.Loop.noWk": "af81cbf8063345139740a15c63b960b72994a7153b9d6cb557fcb87e3f4f2887"
    }
   },
   "Proofs.Flock.SoundAtBridge.Served": {
@@ -57451,6 +57478,15 @@
     "SpotFlock.firstStmt": "fafb584e0a2c568b30ab13fbe2f44719657f4697c9e4bf12cbab32633614e50d",
     "SpotFlock.layoutAt": "5b0c77307dd095a88117c27581770ac315c6d9b38fa62e30c246364e8a9c7a24",
     "SpotFlock.pickAny": "7035d3477e163a89b58e7da0fe0d14f1fe02bff0bfc9e443e5fb84baabf5037b"
+   }
+  },
+  "Proofs.Flock.SpotFlock.OneWaitTwo": {
+   "digest": "f55b00a5f3509a32d2bda47e4063fd03befdde9f66012b64243f32af269a4d27",
+   "definitions": {
+    "Flock.Guarantees.SpotOneWaitTwo": "efb747c3393fa9f6421697c439014164765079215946f894a4a0aa2753778bd6",
+    "SpotFlock.clsAt": "8baa83e71da053175c1e9012326514a7d08fa078bda83ed521d50f06576f45a8",
+    "SpotFlock.needsAt": "9d0a96c3ea5034412f28e09d7a9c12dca45a5bc685ddfa603e9747786a79925b",
+    "SpotFlock.εoneWaitAt": "daaa5bc874ffc04705e66e32826f8c0cec3b7987f16d461d9e416b61e05b5f22"
    }
   },
   "Proofs.Flock.SpotFlock.Opens": {
