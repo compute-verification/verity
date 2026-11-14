@@ -79,4 +79,4 @@ def identifier_bytes(scheme: PoUWScheme | str, epoch: Epoch) -> bytes:
     return _canonical(identifier_v1(scheme, epoch))
 
 
-__all__ = ["CERTIFIED_SALT_BYTES", "FORMAT", "SALT_BYTES", "identifier_bytes", "identifier_v1", "workload_bytes", "workload_digest", "workload_json"]
+__all__ = ["CERTIFIED_SALT_BYTES", "FORMAT", "SALT_BYTES", "SCHEMES", "identifier_bytes", "identifier_v1", "workload_bytes", "workload_digest", "workload_json"]

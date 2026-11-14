@@ -2,13 +2,19 @@ module
 
 public import Aesop.BuiltinRules
 public import Flock.HmRow
-public import Proofs.Flock.Soundness.Discharge.Exec
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
+public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+public import Proofs.Flock.Soundness.Discharge.Exec
 
 /-!
 # The statement flock-verify sets up for one table, under either tag

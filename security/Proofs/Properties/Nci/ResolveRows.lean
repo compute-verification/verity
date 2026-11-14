@@ -101,7 +101,7 @@ theorem rs_root_batch (P : Prog) (n j : ℕ) (h : ((P.defs[P.root]!).body.nodes[
         j / (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).outLeaves)) := by
     rw [h1]
     show (if (P.defs[((P.defs[P.root]!).body.nodes[n]!).fn]!).prim = true then _ else _) = _
-    rw [if_pos hp]
+    rw [ite_eq_left hp]
     rfl
   rw [h2, hol, Nat.div_one, Nat.zero_add]
 
@@ -184,6 +184,38 @@ theorem node_of_gate (P : Prog) (hl : Walk.LaidOut P P.root) (hp : (P.defs[P.roo
     exact ⟨rfl, by omega⟩
   · have := hmono (n' + 1) n (by omega) (by omega)
     omega
+
+/-- **The reference a member reads a leaf of its parameter at is a reference of the node's argument**: member `m`
+of root node `k`, a call or a batch that is no input node, reads leaf `t` of its parameter `i` at a reference within
+the node's argument `i`. -/
+theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hown : Record.ownRows P = true) {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) :
+    argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
+      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
+  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec k hk
+  rcases hf with hf | hf
+  · rw [argIdx_call hf]
+    have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
+    have hbp := (hc.2 hcp).1
+    have hup := BodiesOk.up_ok _ _ hc hno i (by rw [hbp, ← hno.1]; exact hi) t (by rw [hbp]; exact ht) m hm
+    rw [hf] at hup
+    exact hup
+  · rw [argIdx_batch hf]
+    have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
+      refine batch_dims hown (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
+      · refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
+        rw [getElem!_pos _ k hk]
+        exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
+      · rw [getElem!_pos _ i hi]
+        exact Array.getElem_mem hi
+    have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by rw [hf, hd]; exact ht)
+    rw [hf] at hop
+    exact hop
 
 section
 variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
@@ -270,27 +302,7 @@ theorem unit_leaf {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
         (P.defs[P.root]!).body.offsets[n]! + ((P.defs[P.root]!).body.nodes[n]!).out.leaves ∧
       ∀ g, resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g →
         g = (P.defs[P.root]!).body.offsets[n]! + j := by
-  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec k hk
-  have hx : argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
-      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
-    rcases hf with hf | hf
-    · rw [argIdx_call hf]
-      have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
-      have hbp := (hc.2 hcp).1
-      have hup := BodiesOk.up_ok _ _ hc hno i (by rw [hbp, ← hno.1]; exact hi) t (by rw [hbp]; exact ht) m hm
-      rw [hf] at hup
-      exact hup
-    · rw [argIdx_batch hf]
-      have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
-        refine batch_dims hown (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
-        · refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
-          rw [getElem!_pos _ k hk]
-          exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
-        · rw [getElem!_pos _ i hi]
-          exact Array.getElem_mem hi
-      have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by rw [hf, hd]; exact ht)
-      rw [hf] at hop
-      exact hop
+  have hx := argIdx_lt bytes P hdec hown hk hu hf hm hi ht
   obtain ⟨n, j, hleaf, hn, hj, ho, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
   exact ⟨n, j, hleaf, hn, hj, ho, fun g hg => run_two (rs_unit P d off k m i t hf) hstep _ hg⟩
 
