@@ -1,7 +1,9 @@
 """`compiled-merge` on arms whose records leave a block out: a treatment run with no Commit record, a Commit record without its
 openings, coverage, value correspondence or compiled source, a process whose versions identify no generated kernels or list none
 by name, and a round's verdict without run roots.  A block that is absent, null, empty or zero reads alike: the merge tests
-each for its truth.  Torch-free: the arms' records are written here; the pairing and its refusals are `test_compiled_merge.py`."""
+each for its truth.  Last, the refusals of arms that are not one pair: a process of another compilation setting, an arm of no runs,
+a control that is not compiled, and runs of other tokens.  Torch-free: the arms' records are written here; the pairing and its
+refusals by taps and kernels are `test_compiled_merge.py`."""
 from __future__ import annotations
 
 import copy
@@ -146,3 +148,63 @@ def test_an_arm_that_lists_no_kernel_by_name_leaves_the_others_kernels_as_the_di
     assert rc == 0 and summary["problems"] == [] and (generated["identified"], generated["kernel_set_equal"]) == (True, True)
     names = sorted(KERNELS["kernels"])
     assert generated["kernel_diff"] == {"only_control": [], "only_treatment": [], "same_name_different_source": []} | {only: names}
+
+
+@pytest.mark.parametrize("arm", ["control", "treatment"])
+def test_a_later_process_of_another_compilation_setting_is_refused_by_its_name(tmp_path: Path, arm: str) -> None:
+    """Every process of both arms reports the first treatment process's compilation settings; one that does not is named."""
+    arms = {"control": [process("off"), process("off")], "treatment": [process("served", "aa"), process("served", "bb")]}
+    arms[arm][1]["versions"]["compilation"]["cudagraph_mode"] = "FULL"
+    rc, summary, verdict = merge(tmp_path, arms["control"], arms["treatment"])
+    assert rc == 3 and summary["commit_pass"] is False and summary["compilation_settings_equal"] is True
+    assert summary["problems"] == [f"compilation setting differs in {arm}1: cudagraph_mode: 'FULL' vs 'PIECEWISE'"]
+    assert verdict["first_fail_reason"] == summary["problems"][0]
+
+
+def test_a_control_of_other_compilation_settings_than_the_treatment_s_is_refused(tmp_path: Path) -> None:
+    control = process("off")
+    control["versions"]["compilation"]["cudagraph_mode"] = "FULL"
+    rc, summary, _ = merge(tmp_path, [control], [process("served", "aa")])
+    assert rc == 3 and summary["commit_pass"] is False and summary["compilation_settings_equal"] is False
+    assert summary["problems"] == ["compilation setting differs: cudagraph_mode: control 'FULL' vs treatment 'PIECEWISE'"]
+
+
+@pytest.mark.parametrize("eager", [True, None, ABSENT])
+def test_a_control_that_is_not_compiled_is_refused(tmp_path: Path, eager: Any) -> None:
+    """A control that does not report `enforce_eager` false is not compiled, beside its settings differing from the treatment's."""
+    control = process("off")
+    stand_in(control["versions"]["compilation"], "enforce_eager", eager)
+    shown = None if eager is ABSENT else eager
+    rc, summary, _ = merge(tmp_path, [control], [process("served", "aa")])
+    assert rc == 3 and summary["commit_pass"] is False
+    assert summary["problems"] == [f"compilation setting differs: enforce_eager: control {shown!r} vs treatment False",
+                                   f"control is not compiled (enforce_eager={shown!r})"]
+
+
+@pytest.mark.parametrize("empty", [("control",), ("treatment",), ("control", "treatment")])
+def test_an_arm_of_no_runs_is_refused_and_pairs_nothing(tmp_path: Path, empty: tuple[str, ...]) -> None:
+    """An arm of no runs is refused by name, and its tokens are none: two arms of no runs did not generate the same tokens."""
+    arms = {"control": process("off"), "treatment": process("served", "aa")}
+    for arm in empty:
+        arms[arm]["runs"] = []
+    rc, summary, verdict = merge(tmp_path, [arms["control"]], [arms["treatment"]])
+    tokens = dict.fromkeys(("control", "treatment"), "['tttttttttttt']") | dict.fromkeys(empty, "[]")
+    assert rc == 3 and summary["commit_pass"] is False and summary["pairs"] == 0 and summary["per_pair"] == []
+    assert summary["problems"] == [*(f"{arm}: no runs" for arm in empty),
+                                   f"generated tokens differ across arms/runs: control {tokens['control']} treatment {tokens['treatment']}"]
+    assert verdict["first_fail_reason"] == f"{empty[0]}: no runs" and summary["tokens_equal"] is False
+
+
+@pytest.mark.parametrize("control, treatment", [(["t"], ["u"]), (["t", "u"], ["t", "t"]), (["t", "u"], ["u", "t"])])
+def test_runs_of_other_tokens_across_or_within_the_arms_are_refused(tmp_path: Path, control: list[str], treatment: list[str]) -> None:
+    """The arms' runs pass only when every one generated the same tokens, across the two arms and within each."""
+    arms: dict[str, list[dict[str, Any]]] = {"control": [], "treatment": []}
+    for arm, letters in (("control", control), ("treatment", treatment)):
+        for i, letter in enumerate(letters):
+            records = process("off") if arm == "control" else process("served", f"{i:02x}")
+            records["runs"][0]["tokens_digest"] = letter * 16
+            arms[arm].append(records)
+    rc, summary, _ = merge(tmp_path, arms["control"], arms["treatment"])
+    assert rc == 3 and summary["commit_pass"] is False and summary["tokens_equal"] is False
+    assert summary["problems"] == [f"generated tokens differ across arms/runs: control {sorted({x * 12 for x in control})} "
+                                   f"treatment {sorted({x * 12 for x in treatment})}"]
