@@ -79,7 +79,7 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let outputs := strs (getD j "outputs")
   let rec_ := getD j "record"
   let v := p.verifier
-  let qd ← IO.ofExcept (← timed "queryDigest" v.query Registration.queryDigest isOk)
+  let qd ← IO.ofExcept (← timed "queryDigest" v.query Docket.queryDigest isOk)
   let _ ← timed "checkPublic" rec_ (fun r => Service.checkPublic r (Json.str v.scheme) qd values declared)
     (fun c => match c with | .ok c => c.codes.isEmpty | .error _ => false)
   let n := (nat? (getD rec_ "population")).getD 0
@@ -87,7 +87,7 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
     | throw (IO.userError "the rule's rate law refuses the population")
   let samplingDesign ← IO.ofExcept (rule'.samplingDesignOver n)
   let v := { v with samplingDesign }
-  let _ ← timed "registration" rec_ (fun r => Registration.check r v) (·.isEmpty)
+  let _ ← timed "registration" rec_ (fun r => Docket.check r v) (·.isEmpty)
   let _ ← timed "partition.evaluate" v.program (fun pr => Partition.evaluate pr v.query) isOk
     (fun r => match r with | .ok rs => [("ranges", toJson rs.size)] | .error _ => [])
   let _ ← timed "partition.unitGates" v.program (fun pr => Partition.unitGates pr v.query) isOk

@@ -1,6 +1,6 @@
 module
 
-public import Spot.Registration
+public import Spot.Docket
 public import Proofs.Flock.Claims.Sampling.Code
 public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Proofs.Flock.Claims.Sampling.Select.DrawDesign
@@ -35,7 +35,7 @@ open Lean (Json)
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
 rule and the challenger's closure map. -/
 structure Reg where
-  verifier : Spot.Registration.Verifier
+  verifier : Spot.Docket.Verifier
   rule : Spot.Select.Rule
   closure : Option (Array (Int × Array Int))
 

@@ -3135,6 +3135,21 @@
     },
     {
       "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/Docket.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/engine/int8_kscale_gpu.py": "benchmarks/ppl/int8_kscale_gpu.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/verifier/continuous.py": "verity/protocols/accounting/pous/device/continuous.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py": "verity/protocols/accounting/poub/prover/node_store/interface.py",
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/plan.py": "verity/protocols/accounting/poub/prover/node_store/plan.py",
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py": "verity/protocols/accounting/poub/prover/node_store/memory_map.py",

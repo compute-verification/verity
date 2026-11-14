@@ -18,10 +18,9 @@ registered steps, the arms in `specs/`, the window lists, the models and the loc
 model or locked point edits only its own file. `tests/test_run.py` fails on a table here.
 
 **What a caller may import** is each module's `__all__`. The directory is no package: its modules import each other by
-bare name (`import steps`) with the directory on `sys.path`, and a caller outside it does the same. Today that is the
-vLLM adapter's int8 tests: `adapters/vllm/tests/engine/ppl_oracle.py` runs `steps.int8_linear` through `matmul.MM` and
-`gates.Gates` as their oracle, and `int8_kscale_gpu.py` builds the calibration windows with `windows` from
-`methodology.CALIBRATION`. Read as data and not imported: the arms in `specs/`, which a design in the design registry
+bare name (`import steps`) with the directory on `sys.path`, and a caller outside it does the same. Today none does:
+`int8_kscale_gpu.py`, here, calibrates the vLLM adapter's int8 attention K scales on the calibration windows it builds
+with `windows` from `methodology.CALIBRATION`, with the adapter's directory on `sys.path` (its run line). Read as data and not imported: the arms in `specs/`, which a design in the design registry
 names; the C4 shard `datasets.json` pins, which other jobs send as their input; and `pins/glm-5.3.json`, which
 `benchmarks/spot_proved/node_record.sh` checks a node's checkpoint against. **What it never does:** it reports no
 perplexity for a run whose gates fail, `run.py eval` scores no window list, context or seed but `methodology.py`'s,

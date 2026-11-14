@@ -3,4 +3,4 @@ each. Its Lean is `lean/` (the Lake package `core_memory_challenger`), whose dif
 `memory_challenger`; its timed audit's process is `timed_audit`, a client of a responder's wire whose verdict PoUS's
 Lean check (`pous_check`'s `pous-timed-audit`) is held to. `challenger_party` is its party on the challenger host, over
 the messages and ids PoUS holds (`challenger_session`); `wipe_challenger` is the streamed wipe's, over `wipe_parties`'s
-messages."""
+messages. `continuous` is the continuous audit's memory challenger."""

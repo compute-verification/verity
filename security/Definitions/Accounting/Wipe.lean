@@ -9,9 +9,9 @@ import Mathlib.Basic.ENNReal.Real
 # The streamed-label wipe on the device model (trusted)
 
 The wipe that opens a server-time block (`Verity.Wipe`, `Definitions.Core.Blocks`) when it is PoUS's streamed-label
-wipe (`Pous.StreamedWipe`; `verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe"), as `verity/wipe/v0`
-runs it: the memory challenger streams `n` labels of 512 bits into the device's store, then reveals `k` spot reads one
-at a time and reads each label back under a deadline.
+wipe (`Pous.StreamedWipe`; `verity/protocols/accounting/pous/verifier/PROTOCOL.md`, "The streamed-label wipe"), as
+`verity/wipe/v0` runs it: the memory challenger streams `n` labels of 512 bits into the device's store, then reveals `k`
+spot reads one at a time and reads each label back under a deadline.
 
 * **The labels** (`Labels n`): the table of `n` labels of 512 bits. The deployed labels are SHA-512's PRF of a key the
   challenger samples and keeps (`prf/sha-512`): `prf K` for a uniform key `K`.
