@@ -430,12 +430,12 @@ SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
         CHALLENGER: Piece("sampled-proofs", CHALLENGER, GATE, "the gate: the auditor's live challenger, whose coins "
-                          "draw the proof blocks after the window's commitment"),
+                          "sample the proof blocks after the window's commitment"),
         ZK_SERVER: Piece("sampled-proofs", ZK_SERVER, SERVED_WINDOW, "the Lean ZK server every outer proof goes through, "
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
-                       "and sealed, its registration before the draw, and the drawn proof blocks proved in Flock --zk; "
-                       "the draw on the live challenger when its gate is bound, else on a local development session's "
+                       "and sealed, its registration before the sample, and the sampled proof blocks proved in Flock --zk; "
+                       "the sample on the live challenger when its gate is bound, else on a local development session's "
                        "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
                         "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
