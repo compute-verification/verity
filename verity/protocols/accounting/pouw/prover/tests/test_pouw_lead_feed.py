@@ -109,7 +109,7 @@ def test_g_keep_and_its_digits():
 
 
 class Script:
-    """A coin source that answers each request with the next scripted bytes, of exactly the length asked for."""
+    """A `rand` that answers each request with the next scripted bytes, of exactly the length asked for."""
 
     def __init__(self, *chunks: bytes) -> None:
         self.chunks = list(chunks)
