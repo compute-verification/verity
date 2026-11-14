@@ -12,7 +12,8 @@ two fan-in reads never reach the same value, so a root of `t` in `R` gives `d �
 induction down the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of fresh inputs, so `R` holds
 at most `E` of them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircuit that reads fewer than
 `d − E` values of `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read
-(at most `e` each) or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
+(at most `e` each) or to a lookup (at most `eLk` each), with a lookup costing a read of its token
+(`threaded_of_layered`).
 -/
 
 @[expose] public section
