@@ -1,0 +1,1 @@
+sc-max	census:SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"},G=64}	1	session

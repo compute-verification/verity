@@ -1,0 +1,2 @@
+kw-max	census:SparseMlaHeadKeysWire_v1{NVIS=64,W=64,C=8}	1	session
+hv-max	census:SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},G=64,C=7}	1	session
