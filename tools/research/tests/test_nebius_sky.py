@@ -743,8 +743,11 @@ def _submit(tmp_path, template, **shell):
     """submit.sh for `template` from this checkout, in a shell that holds the store's own key pair, with stand-ins on PATH for what
     reaches a network: `sky` records each call's arguments and the store's variables in its environment (where the SkyPilot client
     reads a `--secret NAME` from, and what it sends an API server on this port), `python3` records `research pods ...` and runs
-    anything else, and `curl` says the API server answers.  `shell` adds to the environment; None takes a variable out.  Returns
-    the finished process, the `sky` calls and the `research pods` calls."""
+    anything else, and `curl` says the API server answers.  The shell holds RESEARCH_AT_CHECKOUT, as the tests' own environment
+    does (conftest.py), and `python3` runs no `research` without it: the one submit.sh starts is then this checkout's, where a
+    checkout behind origin/main would run origin/main's from a worktree it registers in this repository and leaves registered.  `shell`
+    adds to the environment; None takes a variable out.  Returns the finished process, the `sky` calls and the `research pods`
+    calls."""
     import os
     import shutil
     import subprocess
@@ -766,12 +769,16 @@ def _submit(tmp_path, template, **shell):
         "    print('http://127.0.0.1:46580')\n")
     stand_ins = {"sky": f'exec "{sys.executable}" "{tmp_path / "sky.py"}" "$@"',
                  "python3": 'if [ "$1 $2 $3" = "-m research pods" ]; then shift 2; echo "$*" >> "$PODS_CALLS"; exit 0; fi\n'
+                            'if [ "$1 $2" = "-m research" ] && [ -z "$RESEARCH_AT_CHECKOUT" ]; then\n'
+                            '  echo "python3 stand-in: RESEARCH_AT_CHECKOUT is unset, so this could run origin/main\'s research: '
+                            'set it in _submit\'s env" >&2; exit 97; fi\n'
                             f'exec "{sys.executable}" "$@"',
                  "curl": "exit 0", "ssh": "exit 0", "rsync": "exit 0", "uv": "exit 0"}
     for name, body in stand_ins.items():
         (bin_dir / name).write_text(f"#!/bin/bash\n{body}\n")
         (bin_dir / name).chmod(0o755)
     env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "VY_INFRA_REMOTE": str(tmp_path / "no-remote"),
+           "RESEARCH_AT_CHECKOUT": "1",
            "SKY_CALLS": str(calls), "PODS_CALLS": str(tmp_path / "pods-calls"), "RESEARCH_STORE_CONFIG": str(tmp_path / "absent.toml"),
            "R2_ENDPOINT": "https://" + "0" * 32 + ".r2.cloudflarestorage.com", "R2_BUCKET": "bkt", **STORE_PAIR, **shell}
     r = subprocess.run(["bash", str(SKY / "submit.sh"), template, "job-1", "--allow-stale", "--env", "NAME=n"], capture_output=True, text=True,
@@ -1236,11 +1243,13 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
     `artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
-    without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why."""
+    without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why.  A commit from before the registry
+    moved to the root holds it under `fixtures/` (the older commit here), and its fixtures are kept like a newer one's."""
     import subprocess
     git_dir = tmp_path / "verity.git"
     work = tmp_path / "work"
     (work / "fixtures").mkdir(parents=True)
+    root, before = Path("artifacts.json"), Path("fixtures", "artifacts.json")
 
     def git(*a, date=0):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a], cwd=work, check=True, capture_output=True,
@@ -1248,9 +1257,10 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
 
     subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
     git("init", "-q")
-    for n, reg in enumerate(({"art:old": "a"}, {"art:new": "b", "previous": {"art:new": ["art:gone"]}})):
-        (work / "artifacts.json").write_text(json.dumps(reg))
-        git("add", ".")
+    for n, (place, reg) in enumerate(((before, {"art:old": "a"}), (root, {"art:new": "b", "previous": {"art:new": ["art:gone"]}}))):
+        (work / before).unlink(missing_ok=True)
+        (work / place).write_text(json.dumps(reg))
+        git("add", "-A", ".")
         git("commit", "-q", "-m", str(n), date=n)
         git("push", "-q", str(git_dir), f"HEAD:refs/research/src/c{n}")
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
@@ -1316,7 +1326,7 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     assert gate() == 0
 
 
-CLEAN_UP_UNITS = ("store_evict.service", "store_evict_research.service", "retention_gc.service")
+CLEAN_UP_UNITS = ("store_evict.service", "store_evict_research.service", "retention_gc.service", "launcher_copies_gc.service")
 
 
 def _copies(tmp_path: Path) -> dict[str, Path]:
@@ -1432,6 +1442,68 @@ def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
                          ({"VY_GC_UNPRESERVED_RUNS": ""}, []), ({"VY_GC_UNPRESERVED_RUNS": "--force"}, [])):
         r = subprocess.run(["sh", "-c", script], env={**env, **extra}, capture_output=True, text=True)
         assert r.returncode == 0 and json.loads(w["out"].read_text())["argv"] == ["retention", "gc", "--apply", *flags], (extra, r.stderr)
+
+
+def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and_only_while_it_says_which_it_needs(tmp_path):
+    """Root's runs root on vy-nebius-cpu-7 holds the checker's copy of every run it launches, which the node's collector can't
+    read and gives no record. Its own unit runs there alone, as root, with --launcher-copies over that directory: the flag that
+    gives the copies their record is the one that holds the forced pass to them, so the unit deletes nothing else there. A pass deletes
+    by what the remote says and keeps the copies the checker lists, so it refuses, running nothing, without a list written in
+    the last 15 minutes (a checker that is down or doesn't write one would have every copy look unneeded), without the store
+    key to ask the remote with, and without main's copy of the code."""
+    import shlex
+    import subprocess
+    import tomllib
+    unit, timer = (SKY / "launcher_copies_gc.service").read_text(), (SKY / "launcher_copies_gc.timer").read_text()
+    files = {f["path"]: f for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"]}
+    for u, path in (("launcher_copies_gc.service", "vy-launcher-copies-gc.service"), ("launcher_copies_gc.timer", "vy-launcher-copies-gc.timer")):
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-launcher-copies-gc.timer"]
+        assert f["nodes"] == ["vy-nebius-cpu-7"] and f["owner"] == "infra"
+    assert "User=" not in unit, "root's: the directory is root's, and so is the store key"
+    assert "OnUnitActiveSec=1h\n" in timer and "Environment=VY_LAUNCHER_RUNS=/workspace/research/root-runs\n" in unit
+    line = re.search(r"^ExecStart=(.*)$", unit, re.M)[1]
+    assert "${" not in line and "%" not in line, "systemd would expand it before the shell reads it"
+    argv = shlex.split(line)
+    assert argv[:2] == ["/bin/sh", "-c"] and len(argv) == 3
+
+    w = _copies(tmp_path)
+    runs, named, key = tmp_path / "root-runs", tmp_path / "named-runs", tmp_path / "r2.env"
+    named.mkdir()
+    (named / "runs").write_text("r20261001-000000-aaaa\n")
+    key.write_text(f"FAKE_OUT={w['out']}\n")
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(w["link"]), "VY_LAUNCHER_RUNS": str(runs),
+           "VY_LAUNCHER_NAMED": str(named), "VY_LAUNCHER_STORE_ENV": str(key)}
+
+    def gc(**extra):
+        return subprocess.run(["sh", "-c", argv[2]], env={**env, **extra}, capture_output=True, text=True)
+
+    r = gc()
+    assert r.returncode == 0 and f"vy-launcher-copies-gc: research from {w['v1']}\n" in r.stderr, r.stderr
+    ran = json.loads(w["out"].read_text())                # written where the key file's variable says: the pass exported it
+    assert (ran["from"], ran["pythonpath"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]))
+    assert ran["argv"] == ["retention", "gc", "--root", str(runs), "--launcher-copies", "--force", "--low-pct", "0", "--max-paths", "100",
+                           "--jobs-dir", str(named), "--apply"]
+    assert "--launcher-copies" in ran["argv"] and "--unpreserved-runs" not in ran["argv"], (
+        "forced over a whole runs root, the pass takes every expired record there unless --launcher-copies holds it to the copies")
+    w["out"].unlink()
+
+    def refused(why: str, **extra) -> None:
+        r = gc(**extra)
+        assert r.returncode == 1 and why in r.stderr and r.stderr.rstrip().endswith("nothing was deleted"), r.stderr
+        assert not w["out"].exists(), "nothing ran"
+
+    os.utime(named / "runs", (0, 0))
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").unlink()
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").mkdir()
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").rmdir()
+    (named / "runs").write_text("")
+    refused("no store key at VY_LAUNCHER_STORE_ENV", VY_LAUNCHER_STORE_ENV=str(tmp_path / "absent.env"))
+    refused("no research package at VY_RESEARCH_TOOL", VY_RESEARCH_TOOL=str(tmp_path / "copy" / "absent"))
+    assert gc().returncode == 0 and w["out"].exists(), "an empty list written just now is a list: the checker needs none"
 
 
 @pytest.mark.parametrize("unit", ["the eviction", "the collector"])

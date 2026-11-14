@@ -13,13 +13,15 @@ docstring says what it holds.
   tensor-parallel stages (`tp`). Otherwise it is run, as those commands.
 - **Loads:** `verity.circuits` and `verity.definitions`; the integration's `program`, `records`, `observe`, `query`,
   `engine`, `config`, `settings` and `log`, and `check.program_ops` and `check.replay`; numpy, and torch inside the
-  sampled replay. Two commands' `main` still read `pipeline.gc_tuning.tune` inside the function; the layering list holds
-  them.
+  sampled replay. The `main` of `global_match` and of `batch_decomp` imports `gc_tuning.tune` inside the function, so
+  the collector is tuned when a command runs and not when a module is imported.
 
 What the integration's other packages import, module by module; each module lists these names in its `__all__`.
-`Options` and `main` of `global_match`, `batch_decomp` and `program_dag`, which the command line takes from a
-command's module. `derived_shape` of `derived_index`, which `batch_decomp` hands on under the same name.
-`cross_rank_check`, `commit_binding`, `load_recorder` and `own_producers_from_record` of `rank_match`.
-`ROUTED_FAMILIES`, `pick_strata`, `check_picks`, `fold_pairs`, `coverage_of_unreplayable`, `routed_expected`,
-`is_embedding_site`, `spec_key` and `words` of `xrank_collectives`. `program_compare` is a command too and declares no
-`__all__` yet. No file outside the integration imports this package.
+`Options` and `main` of `global_match`, `batch_decomp`, `program_compare` and `program_dag`, which the command line
+takes from a command's module. `derived_shape` of `derived_index`, which `batch_decomp` hands on under the same name.
+`cross_rank_check`, `commit_binding`, `load_recorder`, `own_producers_from_record` and `same_module_path` of
+`rank_match`; the last says when two module paths name one module, and `pipeline.tp.links` hands it on under the same
+name. `ROUTED_FAMILIES`, `pick_strata`, `check_picks`, `fold_pairs`, `coverage_of_unreplayable`, `routed_expected`,
+`is_embedding_site`, `spec_key` and `words` of `xrank_collectives`. `MODELLED_ENGINE` and `compilation_facts` of
+`declaration`: the engine conditions a workload Program models and the facts of a declared compilation block, which
+`pipeline.global_program` hands on under the same names. No file outside the integration imports this package.
