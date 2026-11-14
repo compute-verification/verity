@@ -10,23 +10,25 @@ reference answers (`challenger.audited_session`, or ``{"refused": why}``). One l
 ledger's sessions, entries, periods and declarations, its bytes and longest line, and the reference's seconds on it,
 one replay (`python_s`), with the signatures it verified (`verifies`).
 
-The ledger is one lane's, two-step, in the bodies the auditor's challenger service writes: each session a reserve, an open binding it
-and an end naming its record's leaf, one after another, half an hour apart; a declaration before each UTC day's first
-session; and the sessions in periods of `--period` sessions (by default one period holding them all), each a
-period-open before its first reserve and a period-close after its last end. A period's close lists each of its
+The ledger is one lane's, two-step, in the bodies the auditor's challenger service writes: each session a reserve, an
+open binding it and an end naming its record's leaf, one after another, half an hour apart; a declaration before each
+UTC day's first session; and the sessions in periods of `--period` sessions (by default one period holding them all),
+each a period-open before its first reserve and a period-close after its last end. A period's close lists each of its
 sessions with its root, so one period's sessions are bounded by a ledger line's most characters
 (`challenger.MAX_LEDGER_LINE`): past it the reference refuses the ledger and the row says so.
 
 The key signs at the ledger's leaves alone: its tree holds the real one-time keys there and, in place of each subtree's
-root beside them, a digest standing in for keys never made, which a verifier can't tell from a whole key (a whole key at
-the deployed parameters takes a core about a quarter of an hour to make).
+root beside them, a digest standing in for keys never made, which a verifier can't tell from a whole key (a whole key
+at the deployed parameters is 2^20 one-time keys, made before it signs once).
 
 `--table OUT` reads OUT's inputs.jsonl and ledger_replay.jsonl (`ledger_replay.sh`) and writes one row a size on stdout:
-the compiled replay's seconds, the reference's, and how the compiled replay's time splits: each entry's parse, its
+the compiled replay's seconds, the reference's, and how the compiled replay's time splits: each entry's reading, its
 line's SHA-512, its message, its LMS verification, and the rest (`rest_s`), which holds the replay's searches and each
-entry's checks of its body. `searches_s` is the searches made apart from the replay (`Main.lean`'s `searches`),
-`share` each part's share of the replay, and `reading_s` the parts of an entry's reading (`entries_s`). With three sizes or more it fits the rest to ``c + a S + b S²`` by least
-squares and gives ``b S²``'s share of the replay at each size: a fit, not a measurement.
+entry's checks of its body. The parts are made apart from the replay, so they need not sum to it, and the rest can be
+below zero. `searches_s` is the searches made apart from the replay (`Main.lean`'s `searches`), `share` each part's
+share of the replay, and `reading_s` the parts of an entry's reading (`entries_s`). With three sizes or more it fits
+the rest to ``c + a S + b S²`` by least squares and gives ``b S²``'s share of the replay at each size: a fit, not a
+measurement.
 """
 from __future__ import annotations
 
