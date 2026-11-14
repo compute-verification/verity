@@ -62,8 +62,8 @@ Files:
   the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
   largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
   no time are listed with their reasons.
-- `cover_count.py (COVER | art:ID) [--form listed] [--check]`: how many of a request's block types have no statement
-  the Lean verifier accepted, from its request cover record (below).
+- `cover_count.py (COVER | art:ID) [--card CARD] [--form listed] [--check]`: how many of a request's block types have
+  no statement the Lean verifier accepted, from its request cover record (below).
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
   `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
@@ -91,17 +91,19 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
 
 ## The request cover record
 
-`cover.json` (schema `circuits/request-cover/v7`) is one served request's block types, each with how many blocks it
-holds, whether it is on the card, the outcome of staging and verifying it in its listed form (`bound_outcome`, its run in
-`bound_runs`) and, for a type whose listed form was not run, the run of its Boolean version (`beside_extras`), with each
-run's Lean verdicts and their two controls. It lives in the evidence store, never in the tree. `cover_count.py`
-recounts it from those entries, refuses it when the recount and its stored totals disagree, and prints the types with
-none accepted, by family, ending in a line that starts with their count:
+`cover.json` (schema `circuits/request-cover/v7`, or v8, which names the card it is of under `card`) is one served
+request's block types, each with how many blocks it holds, whether it is on the card, the outcome of staging and
+verifying it in its listed form (`bound_outcome`, its run in `bound_runs`) and, for a type whose listed form was not
+run, the run of its Boolean version (`beside_extras`), with each run's Lean verdicts and their two controls. It lives
+in the evidence store, never in the tree. `cover_count.py` recounts it from those entries, refuses it when the recount
+and its stored totals disagree, and prints the types with none accepted, by family, ending in a line that starts with
+their count:
 
 ~~~text
 uv run -q python benchmarks/served_units/cover_count.py art:ID              # the Boolean version counted where the listed form has none
 uv run -q python benchmarks/served_units/cover_count.py art:ID --form listed # the listed form only
 uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # exit 1 unless every type has one
+uv run -q python benchmarks/served_units/cover_count.py art:ID --card benchmarks/sampling_plan/glm53_blocks.json  # exit 2 unless its types are the card's
 ~~~
 
 ## Interface

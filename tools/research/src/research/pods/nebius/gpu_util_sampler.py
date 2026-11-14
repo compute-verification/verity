@@ -21,7 +21,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 INTERVAL = float(os.environ.get("UTIL_INTERVAL_S", "10"))
@@ -130,7 +130,7 @@ def base(prev_cpu: tuple[int, int]) -> tuple[dict, tuple[int, int]]:
     cur = cpu_times()
     dt, di = cur[0] - prev_cpu[0], cur[1] - prev_cpu[1]
     mem = {l.split(":")[0]: int(l.split()[1]) for l in Path("/proc/meminfo").read_text().splitlines()[:5]}
-    return {"t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    return {"t": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "cpu_busy": round(1 - di / dt, 4) if dt > 0 else None,
             "load1": float(Path("/proc/loadavg").read_text().split()[0]),
             "mem_used_gib": round((mem["MemTotal"] - mem["MemAvailable"]) / 2**20, 1),

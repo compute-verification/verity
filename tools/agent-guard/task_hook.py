@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
 
 from settings import record_event
@@ -52,6 +53,22 @@ def holders(text: str | None = None) -> dict[str, str]:
         print(f"task_hook: the registry is unreadable, so no agent holds a handle ({type(e).__name__}: {e})", file=sys.stderr)
         return {}
     return {a: h.get("handle", "?") for h in reg.get("handles") or [] for a in AGENT_ID.findall(str(h.get("holder", "")))}
+
+
+#: `infra/cursor/launch_coordinator.py`'s NAMESPACE, which the guard can't import: a coordinator it launches for a handle
+#: is `bc-` and uuid5 of it and `HANDLE/GENERATION`
+COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")
+#: the generations of a handle's coordinator whose ids are a lead's
+LEAD_GENERATIONS = range(1, 51)
+
+
+def leads() -> set[str]:
+    """Every lead's agent id: each `holder` of the registry, and the id `launch_coordinator.py` gives each handle it
+    registers at each generation in LEAD_GENERATIONS. A registry that can't be read raises: the caller decides."""
+    text = REGISTRY.read_text()
+    handles = [h.get("handle") for h in json.loads(text).get("handles") or []]
+    return set(holders(text)) | {f"bc-{uuid.uuid5(COORDINATORS, f'{h}/{g}')}" for h in handles if isinstance(h, str) and h
+                                 for g in LEAD_GENERATIONS}
 
 
 def task_input(event: dict):

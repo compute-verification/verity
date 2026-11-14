@@ -1,6 +1,10 @@
-"""cover_count.py (COVER | art:ID) [--form boolean|listed] [--check]: how many of a request's block types have no
-statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
-`circuits/request-cover/v7`).
+"""cover_count.py (COVER | art:ID) [--card CARD] [--form boolean|listed] [--check]: how many of a request's block types
+have no statement the Lean verifier accepted, recounted from a request cover record (`cover.json`, schema
+`circuits/request-cover/v7`, or v8: v7 with `card`, the card it is of, by its `source`, `path` and `tree`).
+
+`--card CARD` holds the record to a sampling plan's card (`benchmarks/sampling_plan/glm53_blocks.json`): the record's
+on-card types must be exactly the card's `definitions`, else it is refused (exit 2), naming up to five types on each
+side.
 
 COVER is a path to the record; an `art:` id is fetched with `research data fetch ART --to DIR` into a temporary
 directory. The count comes from the record's entries alone: `blocks` (a block type of the request each, counted when
@@ -31,12 +35,14 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-KNOWN_SCHEMAS = ("circuits/request-cover/v7",)
+KNOWN_SCHEMAS = ("circuits/request-cover/v7", "circuits/request-cover/v8")
 ROOT = Path(__file__).resolve().parents[2]
 #: a block type's family, as `fifth_pass.by_family` names it: its Definition's name without the version
 FAMILY = re.compile(r"(\w+?)_v\d+\{")
 #: what `bound_shares` rounds a share to
 SHARE_DIGITS = 6
+#: how many types `--card` names on each side of a mismatch
+NAMED = 5
 
 
 class RecordError(Exception):
@@ -76,6 +82,23 @@ def accepted(r: dict, where: str) -> bool:
     return took and refused
 
 
+def held_to_card(c: dict, card_path: Path) -> None:
+    """The record's on-card types against the card's `definitions`, named up to `NAMED` on each side."""
+    card = set(json.loads(card_path.read_text())["definitions"])
+    record = {b["block"] for b in c["blocks"] if b["on_card"]}
+    if record == card:
+        return
+
+    def names(side: set) -> str:
+        shown = sorted(side)[:NAMED]
+        return ", ".join(shown) + (f" and {len(side) - len(shown)} more" if len(side) > len(shown) else "")
+
+    sides = [f"{len(s)} {what}: {names(s)}" for s, what in ((card - record, "on the card and not in the record"),
+                                                           (record - card, "in the record and not on the card")) if s]
+    raise RecordError(f"the record's {len(record)} on-card types are not {card_path}'s {len(card)} definitions; "
+                      + "; ".join(sides))
+
+
 def family(block: str) -> str:
     m = FAMILY.match(block)
     return m[1] if m else block
@@ -85,6 +108,8 @@ def count(c: dict, form: str) -> dict:
     """The recount: every on-card type with whether it is accepted in each form, held to the record's stored totals."""
     if c.get("schema") not in KNOWN_SCHEMAS:
         raise RecordError(f"schema {c.get('schema')!r} is not one this command knows ({', '.join(KNOWN_SCHEMAS)})")
+    if c["schema"] != KNOWN_SCHEMAS[0] and not (c.get("card") or {}).get("source"):
+        raise RecordError(f"a {c['schema']} record names its card's source under card.source")
     on = [b for b in c["blocks"] if b["on_card"]]
     runs = c["bound_runs"]["types"]
     total = sum(b["blocks"] for b in on)
@@ -178,7 +203,8 @@ def report(c: dict, recount: dict, form: str) -> tuple[list[str], int]:
     listed = [t for t in types if t["listed"]]
     boolean = [t for t in types if t["boolean_only"]]
     none = [t for t in types if not t["accepted"]]
-    out = [f"record: {c['schema']}, tree {c.get('tree')}",
+    card = c.get("card")
+    out = [f"record: {c['schema']}, tree {c.get('tree')}" + (f", of the card {card['source']}" if card else ""),
            f"on the card: {len(types)} types, {total:,} blocks",
            line("accepted in the listed form", listed),
            line("accepted on the Boolean version only", boolean)
@@ -199,6 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cover", help="a cover.json, or an art: id to fetch")
+    ap.add_argument("--card", type=Path, help="a sampling plan's card the record's on-card types must be exactly")
     ap.add_argument("--form", choices=("boolean", "listed"), default="boolean",
                     help="listed: count only a type's listed form; boolean (default): its Boolean version too")
     ap.add_argument("--check", action="store_true", help="exit 1 when the count is not 0")
@@ -207,6 +234,8 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory() as tmp:
             path = fetch(a.cover, Path(tmp)) if a.cover.startswith("art:") else Path(a.cover)
             c = json.loads(path.read_text())
+        if a.card:
+            held_to_card(c, a.card)
         out, n = report(c, count(c, a.form), a.form)
     except RecordError as e:
         print(f"cover_count: {e}", file=sys.stderr)
