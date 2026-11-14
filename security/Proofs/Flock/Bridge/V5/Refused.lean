@@ -35,18 +35,16 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# `SampledKSLiveV5`'s shared-row file hypotheses, read off `verify --zk`'s acceptance
+# `SampledKSLiveV5R`'s roots guard, read off `verify --zk`'s acceptance
 
-`verify --zk` admits a shared-row public file only in the form `SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`):
-the circuit's public input ports parse (`HmIn.parse`), the file loads over them (`HmIn.loadPublic`) with its tables,
-and no two ports' roots over those tables are one root under different domains (`KsScope.collidesT`). Those are V5's
-hypotheses `HmIn.parse` and `HmIn.loadPublic`, and `RootFixesDomainL` at the file's leaf map, the guard of V5's bound
+`verify --zk` refuses a public file two of whose ports' published roots are one root under different published domains
+(`Flock.PortRoots.collidesPub`), with or without shared rows. Each port's published root (`PortRoots.pubRoot`) is over
+its published domain and its table's rows, or one row per unit, at its schema: the root `rootsOfL` gives it at the
+public file's leaf map. So the refusal is `RootFixesDomainL` at that leaf map, the guard of V5's bound
 `SampledKSLiveV5R` (V5 itself pays for it with `ecr/sha-512` at the roots finder).
 
-* `fixesL_of_collidesT_false`: `collidesT = false` is `RootFixesDomainL` at the tables' leaf map (`LeafMap.ofTables`):
-  the roots `collidesT` computes, each port's at its schema over its table's rows, are `rootsOfL`'s.
-* `v5Files_of_sharedOk`: a file `KsScope.SharedOk` admits gives those three file hypotheses, at every `n`.
-* `v5Files_of_check`: `KsScope.checkOf` passing at a shared-row file gives them, at the circuit it checked.
+* `rootsOfL_ofPublic_getD`: `rootsOfL` at `LeafMap.ofPublic` over the file's population is `pubRoot`'s.
+* `fixesL_of_collidesPub_false`: `collidesPub = false` is `RootFixesDomainL` there.
 -/
 
 @[expose] public section
@@ -55,40 +53,25 @@ namespace Flock.Bridge
 
 open Properties.NetworkCertifier.Bytes (bs bs_inj)
 
-theorem rootsOfL_ofTables_getD (c : Flock.Circuit) (pub : Flock.Public) (t : Flock.Tables) {q : ℕ}
-    (hq : q < c.ports.size) :
-    (rootsOfL c (LeafMap.ofTables c pub t)).getD q [] = bs (Flock.KsScope.rootT c pub t q) := by
-  simp [rootsOfL, List.getD_eq_getElem?_getD, hq]
-  rfl
+/-- **The verifier's published roots are `rootsOfL`'s at the public file's leaf map**: port `q`'s published root
+(`Flock.PortRoots.pubRoot`) is `rootsOfL`'s at `LeafMap.ofPublic` over the file's population. -/
+theorem rootsOfL_ofPublic_getD (c : Flock.Circuit) (pub : Flock.Public) {q : ℕ} (hq : q < c.ports.size) :
+    (rootsOfL c (LeafMap.ofPublic c pub pub.n)).getD q [] = bs (Flock.PortRoots.pubRoot c pub q) := by
+  have hg : (rootsOfL c (LeafMap.ofPublic c pub pub.n)).getD q [] = bs (Flock.FV3.root
+      ((LeafMap.ofPublic c pub pub.n).dom q) (leavesL c (LeafMap.ofPublic c pub pub.n) q) Sha512.hash) := by
+    simp [rootsOfL, List.getD_eq_getElem?_getD, hq]
+  rw [hg]
+  unfold Flock.PortRoots.pubRoot Flock.PortRoots.pubRootWith Flock.PortRoots.countOf Flock.PortRoots.digOf
+    LeafMap.ofPublic leavesL
+  cases pub.tables <;> rfl
 
-/-- **No colliding pair over a file's tables fixes each root's domain**: `RootFixesDomainL` at the tables' leaf map. -/
-theorem fixesL_of_collidesT_false {c : Flock.Circuit} {pub : Flock.Public} {t : Flock.Tables}
-    (h : Flock.KsScope.collidesT c pub t = false) : RootFixesDomainL c (LeafMap.ofTables c pub t) := by
+/-- **No colliding pair in the verifier's published roots fixes each root's domain**: `RootFixesDomainL` at the public
+file's leaf map over its population, with or without shared rows. -/
+theorem fixesL_of_collidesPub_false {c : Flock.Circuit} {pub : Flock.Public}
+    (h : Flock.PortRoots.collidesPub c pub = false) : RootFixesDomainL c (LeafMap.ofPublic c pub pub.n) := by
   intro q q' hlt hq he
-  rw [rootsOfL_ofTables_getD c pub t (hlt.trans hq), rootsOfL_ofTables_getD c pub t hq] at he
-  exact Flock.KsScope.domOf_eq_of_collidesT_false h hlt hq (bs_inj he)
-
-/-- **`KsScope`'s shared-row form is V5's**: the public input ports parse, the file loads over them with its tables,
-and `RootFixesDomainL` holds at its leaf map, at every `n`. -/
-theorem v5Files_of_sharedOk {tags : Flock.Tags} {c : Flock.Circuit} {pf : ByteArray}
-    (h : Flock.KsScope.SharedOk tags c pf) :
-    ∃ pi pub t, Flock.HmIn.parse c = .ok pi ∧ Flock.HmIn.loadPublic tags c pi pf = .ok pub ∧ pub.tables = some t ∧
-      ∀ n, RootFixesDomainL c (LeafMap.ofPublic c pub n) := by
-  obtain ⟨pi, pub, t, hp, hl, ht, hc⟩ := h
-  exact ⟨pi, pub, t, hp, hl, ht, fun n => by rw [LeafMap.ofPublic_some n ht]; exact fixesL_of_collidesT_false hc⟩
-
-/-- **`verify --zk`'s form check at a shared-row file gives V5's file hypotheses**: when `KsScope.checkOf` passes at a
-circuit (a templated statement's carrying its template) and the public file as `HmOut.loadPublic` loads it has tables,
-V5's `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` hold at that circuit. -/
-theorem v5Files_of_check {tags : Flock.Tags} {pf : ByteArray} {count : ℕ} {draw : Option Lean.Json}
-    {c : Flock.Circuit} {pub : Flock.Public} {t : Flock.Tables}
-    (h : Flock.KsScope.checkOf (.ok c) tags pf count draw = .ok ()) (hpub : Flock.HmOut.loadPublic tags c pf = .ok pub)
-    (ht : pub.tables = some t) :
-    ∃ pi pub' t', Flock.HmIn.parse c = .ok pi ∧ Flock.HmIn.loadPublic tags c pi pf = .ok pub' ∧
-      pub'.tables = some t' ∧ ∀ n, RootFixesDomainL c (LeafMap.ofPublic c pub' n) := by
-  obtain ⟨-, -, hf, -⟩ := Flock.KsScope.checkOf_ok h rfl hpub
-  rcases hf with hn | hok
-  · rw [ht] at hn; cases hn
-  · exact v5Files_of_sharedOk hok
+  rw [rootsOfL_ofPublic_getD c pub (hlt.trans hq), rootsOfL_ofPublic_getD c pub hq] at he
+  rw [LeafMap.ofPublic_dom]
+  exact Flock.PortRoots.idOf_eq_of_collidesPub_false h hlt hq (bs_inj he)
 
 end Flock.Bridge

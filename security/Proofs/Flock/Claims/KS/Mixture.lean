@@ -40,6 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 import Std.Tactic.BVDecide.Normalize.Prop
+public import Proofs.Flock.Claims.Bridge.Live
 
 /-!
 # One table's salted session after `Commit`, under a live strategy

@@ -4,9 +4,9 @@
 # B200: the legacy mma.sync forms, premise (M′); group 0, int8, must build, and group 1 is dropped if it doesn't).
 #
 #   research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=tensor -- bash benchmarks/pouw/tensor_kinds/run.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/tensor_kinds/run.sh
 #   research run --on MACHINE --project verity --source /workspace --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=ada --env TK_ARCH=89 -- bash benchmarks/pouw/tensor_kinds/run.sh
+#     --env GPU_LEASE_WHO=LANE --env TK_ARCH=89 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #   research run --on MACHINE --project verity --cwd source --mem-gb 8 \
 #     --env GPU_LEASE_WHO=LANE --env TK_ARCH=100 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #

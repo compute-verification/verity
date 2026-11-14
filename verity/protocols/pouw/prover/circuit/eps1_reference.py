@@ -1,14 +1,14 @@
 """`eps1-sm120-h1fx1` on words: a non-registered reference for the first EPS1 design, sm_120's H1 + fx1.
 
 The one registered `eps1-sm120-h1fx1` is `h1tile`'s compile-pass scheme (`compile.SCHEMES`); the design is one across
-schemes, so there is one registration.  This module is kept only as that design on words and on sampled proofs' primitives
+schemes, so there is one registration.  This module is kept only as that design on words and on SPOT's primitives
 (`circuit.segment`): a second, independent implementation that `h1tile`'s gates are tested against (`test_h1tile_matches_eps1`),
 and the home of the scheme's attack catalog (`test_eps1_attacks`).  Nothing registers it, and `circuit.traced_as` does not
 reach it.
 
 PoUW is a compile pass over the served Program, not an executor: a matmul `A·Bᵀ` keeps serving its exact
 s8 product, and PoUW adds, around it, a per-call seed, the noise the seed derives, a committed receipt and one spot check.
-Everything else is sampled proofs': hm96 leaves, the live sampling coin, one audit, one ε.
+Everything else is SPOT's: hm96 leaves, the live sampling coin, one audit, one ε.
 
 **The seed**, with its call-index binding:
 
@@ -62,12 +62,15 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.circuits.defs import bind
-from verity.definitions.ops import s8 as OS8
-from verity.definitions.ops import prims as P
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import SpecializedDefinition, bind
+from verity.circuits.program import Program
 from verity.commitments import domains
+from verity.definitions.ops import prims as P
+from verity.definitions.ops import s8 as OS8
 
 from verity.protocols.pouw.verifier.protocol import DomainError
+
 from . import segment as SG
 
 #: the scheme's id and the kind `circuit.SCHEMES` records for it (its silicon target)
@@ -80,8 +83,8 @@ TAG = domains.POUW_EPS1_SEED.encode()
 RECEIPT_TAG = domains.POUW_RECEIPT.encode()
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
-#: the per-dot work the TS conjecture credits is open until proofs link TS to EndToEnd (§5 item 3)
-LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd (proofs; compute accounting writes the statement)"
+#: the per-dot work the TS conjecture credits is open until a theorem links TS to EndToEnd
+LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd"
 
 M32 = SG.M32
 
@@ -178,7 +181,7 @@ def noise(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -
 _TAIL = ((2, "fresh", (-127, 127), (-64, 64)), (1, "fresh", (-128, 127), (-64, 64)))
 
 
-def arm(k: int):
+def arm(k: int) -> SpecializedDefinition:
     """H1's served noised arm as the s8 family: `S8Dot_v1{K, L=32, NOISE "weight", LIMBS "byteclamp", COMMIT "prefix"}`, whose
     committed prefix words `T_0 .. T_{KS-1}` are the receipt the fx1 fold reads (`ops.s8`).  A pure exact s8 matmul:
     its noise, coin and limbs are input values."""
@@ -188,7 +191,7 @@ def arm(k: int):
                 TAIL=_TAIL, TDOT=P.BlackwellS8ImmaDot32, NOISE="weight", LIMBS="byteclamp", COMMIT="prefix")
 
 
-def check(ks: int):
+def check(ks: int) -> SpecializedDefinition:
     """H1 + fx1's spot check, `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`): a thread's
     whole call against its receipt, every absorbed word recomputed, no prefix word a witness."""
     if ks < 2:
@@ -202,7 +205,7 @@ def templates(shape: Shape) -> dict[str, Any]:
     return {"arm": arm(shape.k), "fold": SG.PouwFx1Absorb, "check": check(shape.ks)}
 
 
-def unit(shape: Shape):
+def unit(shape: Shape) -> SpecializedDefinition:
     """The sampled proof block: a thread's whole call under `PouwCallCheck_v1` (a unit is a whole dot product)."""
     shape.check()
     return check(shape.ks)
@@ -212,7 +215,7 @@ def unit(shape: Shape):
 
 def work_ref(shape: Shape) -> dict[str, int]:
     """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the execution phase's totals.
-    The sample law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
+    The sampling design weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
     shape.check()
     per_dot = OS8.counts({"N": 1, "K": shape.k, "TAIL": _TAIL})["served_macs"]  # = K
     entries = 4 * 8  # 32 accumulator words a thread (4 row slots × 8 column slots)
@@ -270,7 +273,7 @@ def _onehot(n: int, i: int) -> list[int]:
 
 @dataclass(frozen=True)
 class Eps1Traced:
-    """What sampled proofs traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
+    """What SPOT traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
     the spot check that is the sampled proof block, the work table and the empty closure, each from the shape alone.  The verifier
     builds these itself and never takes the prover's."""
 
@@ -295,14 +298,11 @@ class Eps1Traced:
         return noise(the_seed, receipt, self.shape, tile, ctid)
 
     def digest(self) -> str:
-        from verity.circuits.codec import program_digest
-        from verity.circuits.program import Program
-
         return program_digest(Program(self.check))
 
 
 def traced_as(m: int, k: int, n: int) -> Eps1Traced:
-    """The circuit sampled proofs traces for one H1 + fx1 call of shape m × k → n, the verifier's own (never a prover's)."""
+    """The circuit SPOT traces for one H1 + fx1 call of shape m × k → n, the verifier's own (never a prover's)."""
     shape = Shape(m, k, n)
     shape.check()
     return Eps1Traced(SCHEME, shape, arm(k), check(shape.ks), work_ref(shape), closure(shape))

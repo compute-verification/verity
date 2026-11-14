@@ -1,7 +1,7 @@
 """a0's session on the challenger (`a0.session` under FLOCK_CHALLENGER=1): a session on the keyed coin tree (`--zk`, or a
 plain one under FC_COINS=tree) starts a challenger of its own, its server takes the tree from it (`--tree-from`), and the
 challenger's end and audit of the server's records come back as ``live["challenger"]``; a failed one refuses the session.
-Any other session starts none. A session's prover (`a0.prover_env`) runs `prove --zk` itself unless it is given Lean's
+Any other session starts none, and so does one whose caller names the challenger (``tree_from``). A session's prover (`a0.prover_env`) runs `prove --zk` itself unless it is given Lean's
 `flock-firewall`, which puts it behind the ZK server's send check. The server and prover are a stand-in for
 `flock-circuit`, the challenger `verity_flock.challengers`' calls."""
 from __future__ import annotations
@@ -58,9 +58,9 @@ def run(tmp_path, monkeypatch):
     for k in ("FC_COINS", *ENV):
         monkeypatch.delenv(k, raising=False)
 
-    def go(name, zk=False, env=None):
+    def go(name, zk=False, env=None, **more):
         out = tmp_path / name
-        record, live = a0.session(str(bin_), st, 4, "subset:2", 0, out, zk=zk, env=env)
+        record, live = a0.session(str(bin_), st, 4, "subset:2", 0, out, zk=zk, env=env, **more)
         return out, record, live
 
     return go, calls, ends
@@ -98,6 +98,19 @@ def test_any_other_session_starts_no_challenger(run, monkeypatch, flag, zk, env)
     _, record, live = go("s", zk=zk, env=env)
     assert calls == {"start": [], "end": []}
     assert "--tree-from" not in record["argv"] and "challenger" not in live
+
+
+def test_a_session_on_its_callers_challenger_starts_none_of_its_own(run, monkeypatch):
+    """With ``tree_from`` the server takes its tree from the challenger its caller names, under FLOCK_CHALLENGER=1 too:
+    no challenger is started or audited here, and the session's ``live`` carries none."""
+    go, calls, _ = run
+    monkeypatch.setenv("FLOCK_CHALLENGER", "1")
+    _, record, live = go("s", zk=True, tree_from=["--tree-from", "127.0.0.1:2", "--tree-secret-file", "relay-secret"])
+    assert calls == {"start": [], "end": []}
+    argv = record["argv"]
+    assert argv[argv.index("--tree-from") + 1] == "127.0.0.1:2"
+    assert argv[argv.index("--tree-secret-file") + 1] == "relay-secret"
+    assert live["accepted"] is True and "challenger" not in live
 
 
 def test_a_session_proves_itself_unless_given_the_zk_server(run, monkeypatch):

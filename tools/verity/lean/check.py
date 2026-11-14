@@ -11,7 +11,8 @@ For each package it reads the facts from the roots' `.olean` files as data (`Fac
 environment extension loaded, so none of the package's code runs) and replays the audited modules through the kernel
 (`Replay.lean`). A heavy package's build on a large machine also replays its modules as Lake builds them, in batches keyed
 on private copies of the files they read (`Pipeline`); the replay after the build reuses those whose files are unchanged,
-and is the one that judges. The audits of `UNREAD_FACTS` that replay also write what each constant of their roots mentions
+and is the one that judges. It first checks the modules `replay-first.json` lists for the package, each in a step of its
+own at its stated threads, and reuses them the same way (`replay_in_steps`). The audits of `UNREAD_FACTS` that replay also write what each constant of their roots mentions
 (`Unread.lean`, `unread_facts`), which `unread.py`'s ratchet on wholly unread modules reads.
 
 It judges what it read against the package's policy and records, `lean-audit.json`. README.md is the outline: "What it
@@ -106,6 +107,12 @@ SETUP = threading.Lock()
 _INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+#: where a sandboxed build reads its tree (`sandbox.sh --at`, `fixed`). Lean writes a source's absolute path into the
+#: module's `.olean.server` with each message its compile logged, and its `.olean.private` points past that string, so
+#: only a build that reads every tree at one path gives one source one set of bytes, in every tree and on every node
+FIXED = Path("/var/tmp/verity")
+#: `--tree`: the tree the audited packages are in, which a build binds at `FIXED` (default: this file's checkout)
+TREE = ROOT
 #: the controls' own packages; `--all` does not audit them as the repository's
 FIXTURES = HERE / "tests" / "fixtures"
 #: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
@@ -4631,10 +4638,12 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     while this runs. In the sandbox each of the build's `.lake` directories (`writable`) gets an overlay whose upper layer
     is under ``work``/`sampled` (`in_overlay`); there the sampled modules' outputs and Lake's files beside them
     (`SAMPLED_BESIDE`) are removed, and `lake build +M...` compiles them (``jobs``: the build's `env` prefix, without the
-    staged cache, so Lake restores nothing), into the upper layer at the build's own path. Every output (`SAMPLED_OUTPUTS`)
+    staged cache, so Lake restores nothing), into the upper layer at the build's own path, read at `FIXED` as the build
+    read it (`bound`). Every output (`SAMPLED_OUTPUTS`)
     must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
-    Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
+    Lean keeps a message's file in `olean.server`, so a build at another path, one from before builds were bound at
+    `FIXED` or one of a package outside `TREE`, differs there. A failure names the module
     and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), which
     a records run has Lake compile before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
     in the upper layers; a pass removes them. Without the sandbox there is no overlay, so nothing is recompiled and the
@@ -4685,10 +4694,11 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
         return [Failure("sampled", None, f"sampled: {out[0]} resolves outside the .lake directories the recompile "
                                          f"overlays ({', '.join(map(str, lakes))}), so it can't be recompiled")], rep
     top.mkdir(parents=True)
-    (listing := top / "remove.txt").write_text("".join(f"{f.resolve()}\n" for f in gone))
+    at = bound([pkg / ".lake", *lakes])
+    (listing := top / "remove.txt").write_text("".join(f"{fixed(f) if at else f.resolve()}\n" for f in gone))
     log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile")
     rc, text = run(in_overlay(layers, ["bash", "-c", 'while IFS= read -r f; do rm -f -- "$f" || exit; done < "$0"; exec "$@"',
-                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)]),
+                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)], at),
                    pkg, work / "sampled.log")
     for t in layers.values():
         _remove_tree(t / "work")
@@ -4745,19 +4755,37 @@ def _remove_tree(d: Path) -> None:
     shutil.rmtree(d, ignore_errors=True)
 
 
-def in_overlay(layers: dict[Path, Path], argv: list[str]) -> list[str]:
+def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:
+    """`sandbox.sh`'s `--at` for a build that writes the `.lake` directories ``lakes``: ``tree`` (default `TREE`) at
+    `FIXED`, when each of them is in it. A package outside it (a control's fixture, one given by a path of its own) gets
+    none and compiles at its own path: its place under `FIXED` would be no function of the tree."""
+    tree = (tree or TREE).resolve()
+    return ["--at", str(FIXED), str(tree)] if all(d.resolve().is_relative_to(tree) for d in lakes) else []
+
+
+def fixed(path: Path, tree: Path | None = None) -> Path:
+    """``path``, in ``tree`` (default `TREE`), as a build bound at `FIXED` names it: its directory resolved, as the tree
+    is, and its own name kept (a package's `.lake/packages` may be a link out of the tree)."""
+    return FIXED / (path.parent.resolve() / path.name).relative_to((tree or TREE).resolve())
+
+
+def in_overlay(layers: dict[Path, Path], argv: list[str], at: Iterable[str] = ()) -> list[str]:
     """``argv`` in the build sandbox with an overlay over each directory of ``layers`` ({directory: its layers'
     directory}, `sandbox.sh`'s `--overlay`): it reads each directory as it is and writes only into its layers, so the
-    directory itself, which other processes read meanwhile, never changes."""
+    directory itself, which other processes read meanwhile, never changes. ``at``: `bound`'s words, with which ``argv``
+    reads the tree, overlays included, at `FIXED`."""
     return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"),
-            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), "--", *argv]
+            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), *at, "--", *argv]
 
 
-def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
+def in_sandbox(pkg: Path, argv: list[str], at: Iterable[str] = ()) -> list[str]:
     """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
-    (``argv`` as is where there is no sandbox)."""
+    (``argv`` as is where there is no sandbox). A build passes ``at``, `bound`'s words for those directories, and reads
+    the tree at `FIXED`; the report's `bound` is read from the same words (`audit`). A step that compiles nothing passes
+    none and stays at the package's own path, where its caller opens the files its output names."""
     ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, writable(pkg)), "--", *argv] \
+        if sandboxed() else argv
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -4996,18 +5024,46 @@ REPLAY_TIMEOUT = 4 * 3600
 CLOSURE_TIMEOUT = 24 * 3600
 
 
+#: {(module, its parts' digests): `olean_graph.canonical` of those parts}, for each module `replay_digest` read in full
+_GRAPHS: dict[tuple[str, str], str | None] = {}
+_GRAPHS_LOCK = threading.Lock()
+
+
+def replay_digest(m: str, parts: list[Path], digest, og, mk) -> str:
+    """What module ``m``'s replay key reads of its `.olean` files ``parts``: each part's ``digest``, or, when its
+    `olean.server` holds its source's path (a message's file, which Lean writes as the absolute path it compiled), the
+    parts' object graph with that path left out (``og``: `olean_graph.canonical`, under `graph:`; ``mk``: `module_keys`,
+    for the path), which the module compiled in another tree shares."""
+    plain = ",".join(digest(p) for p in parts)
+    server = next((p for p in parts if p.name.endswith(".olean.server")), None)
+    if server is None:
+        return plain
+    with _GRAPHS_LOCK:
+        known = (m, plain) in _GRAPHS
+        graph = _GRAPHS.get((m, plain))
+    if not known:
+        source = mk.path_of(m, ".lean").as_posix()
+        graph = None
+        if f"/{source}".encode() in server.read_bytes():
+            graph = og.canonical({"olean" + p.name.rpartition(".olean")[2]: p for p in parts}, source)
+        with _GRAPHS_LOCK:
+            _GRAPHS[(m, plain)] = graph
+    return f"graph:{graph}" if graph else plain
+
+
 def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
-    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part), and the name and key of
-    each module it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's
-    name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built.
-    ``digest`` hashes a file in place of `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a
-    seal's copies, which `Replay.lean` reads in step)."""
-    graph, digest = facts["graph"], digest or sha256
+    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part, `replay_digest`), and
+    the name and key of each module it imports, so it covers the `.olean` files of everything it imports, transitively, each
+    under its module's name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the
+    package is built, and so does one whose parts differ only in where its source was. ``digest`` hashes a file in place of
+    `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
+    in step)."""
+    graph, digest, og, mk = facts["graph"], digest or sha256, sibling("olean_graph"), sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
-        digests = dict(zip(files, ex.map(lambda ps: ",".join(digest(p) for p in ps), files.values())))
+        digests = dict(zip(files, ex.map(lambda m: replay_digest(m, files[m], digest, og, mk), files)))
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
     for root in graph:
@@ -5107,7 +5163,7 @@ def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
 
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
                 closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True,
-                prefix: tuple[str, ...] = (), held: bool = False) -> tuple[list[str], dict]:
+                prefix: tuple[str, ...] = (), held: bool = False, threads: int | None = None) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
     (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
     stored there when the replay passes. With ``closure``, the replay also checks every module of the import closure, the
@@ -5116,7 +5172,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     (a seal's or a batch's mapped search path) and ``digest`` (`Sealed.digest` or `Pipeline.digest`) make the replay read
     private copies rather than the live `.lake`, so no dependent's build can change what the kernel replays or what its
     key is keyed on. ``prefix`` goes before the command and ``held`` says the caller holds `_HEAVY_REPLAY` already
-    (`Pipeline`'s batches). ``store`` is false for an unsealed audit (a control, a stubbed test),
+    (`Pipeline`'s batches). ``threads`` is how many declarations this replay checks at once (a listed module's own step,
+    `replay_in_steps`): `lean`'s `-j`, the one count the pool of its tasks is sized from, which is the machine's without
+    it whatever `LEAN_NUM_THREADS` says. ``store`` is false for an unsealed audit (a control, a stubbed test),
     whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
     can never poison a sealed run."""
     found = work / "replay.json"
@@ -5125,10 +5183,14 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     def passed(m):
         return m in keys and (replay_cache / f"{keys[m]}.json").is_file()
     n = replay_threads(pkg)
+    alone = n is not None and not held                 # a heavy replay runs alone, whatever threads a step states
+    n = n if threads is None else threads
     _peak.bytes = 0
     lean = ["lake", "env", "lean"] if search is None else ["env", f"LEAN_PATH={os.pathsep.join(search)}", "lean"]
+    if threads is not None:
+        lean += ["-j", str(threads)]
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
-    with _HEAVY_REPLAY if n is not None and not held else contextlib.nullcontext():
+    with _HEAVY_REPLAY if alone else contextlib.nullcontext():
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
@@ -5171,6 +5233,116 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     return fails, stats
 
 
+#: beside this file: the modules a package's replay checks first, each in a step of its own (`replay_first`)
+REPLAY_FIRST = "replay-first.json"
+REPLAY_FIRST_SCHEMA = "lean-replay-first/v1"
+
+
+def replay_first(pkg: Path, path: Path | None = None) -> list[dict]:
+    """``pkg``'s entries of `REPLAY_FIRST` (``path``; the tool's own by default), in the file's order: each the `module`
+    its replay checks in a step of its own, the `threads` that step runs at, and `why`, the rule that lists it.
+
+    `Replay.lean` sends each declaration to the kernel as a task of its own, so the declarations of one module that each
+    hold much memory in the kernel are held side by side, as many as `lean` runs tasks at once (the machine's count
+    unless its `-j` states one), whatever order their file checks them in when it is built. Such a module is listed here
+    with the threads at which its declarations fit, which its step states to `lean` (`replay_step`).
+
+    The file is `{"schema": REPLAY_FIRST_SCHEMA, "packages": {a package's path from the repository's root: [entry, ...]}}`.
+    It is one of the auditor's files, so a change to it changes every package's audit key (`lean_audit.tool_files`) and no
+    replay key (`replay_keys`). A package outside the repository has no entry, and neither has any package where the file
+    is absent (a copy of this directory elsewhere). RuntimeError, with what to fix, on a file that reads otherwise."""
+    path = TOOL / REPLAY_FIRST if path is None else path
+    at = pkg.resolve()
+    if not path.is_file() or not at.is_relative_to(ROOT):
+        return []
+    try:
+        doc = json.loads(path.read_text())
+        entries = doc["packages"].get(at.relative_to(ROOT).as_posix(), [])
+        ok = doc["schema"] == REPLAY_FIRST_SCHEMA and len({e["module"] for e in entries}) == len(entries) and all(
+            set(e) == {"module", "threads", "why"} and isinstance(e["module"], str) and type(e["threads"]) is int
+            and e["threads"] >= 1 and isinstance(e["why"], str) and e["why"].strip() for e in entries)
+    except (OSError, ValueError, LookupError, TypeError, AttributeError) as e:
+        ok, entries = False, f"{type(e).__name__}: {e}"
+    if not ok:
+        raise RuntimeError(f'{path} does not read as {{"schema": "{REPLAY_FIRST_SCHEMA}", "packages": {{a package\'s path: '
+                           f'[{{"module": a module, named once, "threads": 1 or more, "why": its rule}}, ...]}}}}'
+                           f"{': ' + entries if isinstance(entries, str) else ''}; write it so")
+    return entries
+
+
+def replay_plan(modules: list[str], first: list[dict], passed, threads: int) -> list[tuple[list[str], int]]:
+    """The steps of a package's replay, each (the modules it checks, its threads): one step for each entry of ``first``
+    (`replay_first`) that names one of ``modules``, the package's audited modules, which has not ``passed``, in the
+    list's order, alone, at its stated threads and never more than ``threads``, the replay's own; then one step for
+    every other module that has not passed, at ``threads``. An entry that names no audited module plans nothing. A pure
+    function: the tests run it."""
+    own = set(modules)
+    steps = [([e["module"]], max(1, min(e["threads"], threads))) for e in first
+             if e["module"] in own and not passed(e["module"])]
+    listed = {m for mods, _ in steps for m in mods}
+    return [*steps, ([m for m in modules if m not in listed and not passed(m)], threads)]
+
+
+def imported_by(graph: dict, modules: list[str]) -> dict:
+    """``graph`` (a facts document's: {module: its `.olean` and imports}) cut down to ``modules`` and what they import."""
+    cut, todo = {}, list(modules)
+    while todo:
+        if (m := todo.pop()) not in cut:
+            cut[m] = graph[m]
+            todo.extend(graph[m]["imports"])
+    return cut
+
+
+def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
+                    closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True
+                    ) -> tuple[list[str], dict]:
+    """`replay_step` on the package, after one step for each module `replay_first` lists that has not passed
+    (`replay_plan`): a `replay_step` that checks that module alone, at its stated threads, on the modules it imports as an
+    import loads them, and stores it in the replay cache under its key when the kernel accepts it. A module's key is a
+    function of its files and of the files of everything it imports (`replay_keys`), so it is the same in that step as
+    in the whole replay, and no key is new. The step's verdict is dropped, as a `Pipeline` batch's is: the last step,
+    `replay_step` as it runs without a list, reuses a module only where the key it computes is in the cache and checks
+    the rest, so it covers the same modules, reads the same files and gives the same failures and axioms as one step
+    does. A listed step only moves when a module is checked and at how many threads.
+
+    The steps need a cache to carry their verdicts: an audit that has none, or may not write it (``store``), runs the one
+    step, and its stats say so (`first`). The stats are the last step's, with each module a listed step stored counted as
+    checked rather than reused, the highest peak of any step (`peak_gib`), and the listed steps (`first`: each with its
+    module, threads, seconds, peak, phases, whether it was stored, and its failures but for the axioms it does not
+    compare)."""
+    def last():
+        return replay_step(pkg, policy, facts, toolchain, work, replay_cache, closure, search, digest, store)
+    try:
+        first = replay_first(pkg)
+    except RuntimeError as e:
+        return [Failure("lean", None, f"lean: {e}")], {"checked": 0, "reused": 0}
+    if not first:
+        return last()
+    if replay_cache is None or not store:
+        fails, stats = last()
+        return fails, stats | {"first": "not used: this audit has no replay cache it may write, so one step checks every "
+                                        "module"}
+    keys = replay_keys(facts, toolchain, digest)
+    def passed(m):
+        return (replay_cache / f"{keys[m]}.json").is_file()
+    threads = replay_threads(pkg) or int(lake_env()["LEAN_NUM_THREADS"])
+    steps = []
+    for i, (mods, n) in enumerate(replay_plan(facts["modules"], first, passed, threads)[:-1]):
+        at = work / "replay-first" / str(i)
+        shutil.rmtree(at, ignore_errors=True)
+        at.mkdir(parents=True)
+        s = time.monotonic()
+        fails, stats = replay_step(pkg, policy, {"graph": imported_by(facts["graph"], mods), "modules": mods, "axioms": []},
+                                   toolchain, at, replay_cache, False, search, digest, store, threads=n)
+        steps.append({"module": mods[0], "threads": n, "seconds": round(time.monotonic() - s, 1),
+                      "peak_gib": stats["peak_gib"], "phases": stats["phases"], "stored": passed(mods[0]),
+                      "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]})
+    fails, stats = last()
+    stored = sum(s["stored"] for s in steps)
+    return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
+                           "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
+
+
 #: a pipelined batch starts only with this much memory free (`free_gib`): about a heavy replay's peak (44 to 138 GiB in
 #: the lock runs measured) and room for the build beside it
 PIPELINE_FREE_GIB = 160
@@ -5207,7 +5379,9 @@ class Pipeline:
     accepted, under its key. Its verdict is
     dropped: the final `replay_step`, unchanged, reuses a module only where a key it computes from the files after the
     build is in the cache, and checks the rest, so it covers the same modules, reads the same files and fails the same
-    way as without the pipeline.
+    way as without the pipeline. A batch leaves to the final replay each module `replay_first` lists that has not
+    passed, which that replay checks in a step of its own at its stated threads (`replay_in_steps`), and each module that
+    imports one, whose closure would check it at the batch's.
 
     The build runs the package's code, which may rewrite any file under the `.lake` directories it writes (`writable`)
     while a batch reads it. So a batch reads none of them where the build can reach: each `.olean` file it needs from one
@@ -5298,6 +5472,11 @@ class Pipeline:
             keys = replay_keys(facts, self.toolchain, self.digest)
             def passed(m):
                 return (self.replay_cache / f"{keys[m]}.json").is_file()
+            first = {m for m in (e["module"] for e in replay_first(self.pkg)) if m in facts["graph"] and not passed(m)}
+            if left := [m for m in mods if first and not first.isdisjoint(imported_by(facts["graph"], [m]))]:
+                mods = [m for m in mods if m not in left]
+                facts = {**facts, "graph": imported_by(facts["graph"], mods), "modules": mods}
+                rec["left"] = len(left)
             if all(map(passed, mods)) and not (self.closure and closure_plan(facts, passed)[0]):
                 rec["checked"] = 0                              # `Replay.lean` would only load what it reuses
                 return
@@ -5648,7 +5827,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     pipe = None
     if build:
         rep["sandbox"] = sandboxed()
-        (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"]}))
+        at = bound(writable(pkg)) if rep["sandbox"] else []
+        rep["bound"] = at[1:] or None
+        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")}))
         n = build_threads(pkg)
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
@@ -5667,10 +5848,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
             for step, argv in (("setup", None), ("stage", None),
-                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts])
+                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts], at)
                                                           if (ts := plugin_targets(pkg)) else [])),
-                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
-                               ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"], at)),
+                               ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])],
+                                                          at))):
                 if step == "stage":
                     if cache:
                         # it takes traces from this build and from those of the path dependencies this run doesn't audit
@@ -5771,7 +5953,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     def final_replay(*args):
         if pipe:
             pipe.wait()
-        return replay_step(*args)
+        return replay_in_steps(*args)
     try:
         facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none", sealed=sealed)
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
@@ -6190,7 +6372,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS, DEV_CACHE
+    global TOOL, ARTIFACTS, DEV_CACHE, TREE
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -6239,6 +6421,9 @@ def main(argv: list[str]) -> int:
                     "suite runs them, when the auditor changes)")
     ap.add_argument("--repo", type=Path, default=ROOT, help="the checkout a test's `generate` reads as {repo} (default: the "
                     "one this file is in)")
+    ap.add_argument("--tree", type=Path, default=ROOT, help="the tree the packages are in (default: the checkout this file "
+                    f"is in): a sandboxed build of a package in it reads it at {FIXED}, so its bytes don't depend on where "
+                    "the tree is; a package outside it is built at its own path")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
                     "recorded run, else a temporary directory)")
     ap.add_argument("--facts", choices=("all", "named", "none"), default="all", help="the facts documents kept beside the "
@@ -6291,6 +6476,7 @@ def main(argv: list[str]) -> int:
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    TREE = a.tree
     DEV_CACHE = a.dev_cache
     lifts = None
     if a.lift:
@@ -6409,7 +6595,8 @@ def main(argv: list[str]) -> int:
                          f"{len(rep['guarantees'])} guarantees; {rep['seconds']}" +
                          (f"; peak GiB {rep['peak_gib']}" if rep.get("peak_gib") else ""))
             if "sandbox" in rep:
-                head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
+                head += ("; built WITHOUT a sandbox (unshare unavailable here)" if not rep["sandbox"] else
+                         "; built in the sandbox" + ("" if rep.get("bound") else ", not bound: outside --tree"))
             if "inline_debt" in rep:
                 head += f"; inline debt {rep['inline_debt'][0]} ({rep['inline_debt'][1]} premises)"
             print(head + ("; unowned" if rep.get("unowned") else ""), flush=True)

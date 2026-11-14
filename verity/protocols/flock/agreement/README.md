@@ -47,7 +47,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
-| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`) |
+| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`, `programBound`) |
 | the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.Firewall` and `Flock/Firewall/` |
 
 `verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
@@ -93,7 +93,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ~~~text
 cd verity/protocols/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
-    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] --session DIR...
+    [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] --session DIR...
 flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
@@ -104,7 +104,9 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   and agreement tools.
 - `--program`, `--partition` and `--registered` are the verifier's own copies of the program, the partition object and
   the registered reads. Without `--program` every session is refused: a verifier that can't read the Program can't know
-  what it verifies.
+  what it verifies. `--interface` is the window's registered circuit record (`verity/window-circuit/v1`, its program the
+  partition object's), whose declared registered ports a `--registered` file that binds ports must register and never
+  bind (`Flock.RegBound`); such a file is refused without it.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
   and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
@@ -113,6 +115,12 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   Under `--upstream-plain`, upstream's builds' form, which no soundness theorem covers, it refuses every session before
   it reads a file; only `agree` reads that form (Agreement with upstream, below).
 
+The refusal of a session without `--program` (`programHeld`) is that a Program was handed, and compares nothing. A
+handed Program is held to the circuit when its digest is META's `program_sha512`: any other is refused in every mode
+where META binds a `verity/partition/v1` partition (`programBound`), and under `--plain-tables` whatever partition META
+binds (`programP`). Otherwise, under the provisional unit cover, which binds no Program descriptor to compare with, the
+session is not refused for it, and its verdict says the Program was not held.
+
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
 are accepted. A verdict names the public file it checked the session against by the SHA-512 of its header's canonical JSON
@@ -120,7 +128,26 @@ are accepted. A verdict names the public file it checked the session against by 
 `--registered` file by the SHA-512 of its canonical JSON (`registered_sha512`), a sampled session's sample (`unit_draw`,
 its record's) and the number of tables it set the session up as (`session_tables`: `--session-tables J`, else 1), so a
 caller holds a statement of the session to the files, sample and tables that were checked, never to ones the prover
-names.
+names. With `--program` a verdict names the Program's digest as `program_sha512` only when the Program is held to the
+circuit, so that field alone is the circuit's Program. Otherwise the digest is `program_handed_sha512`, and
+`program_note` says the Program was handed and not held to the circuit, why, and that the registered-read refusals
+(`Registered.checkProgram`, `Registered.checkCover`) read the handed Program only (`ProvedScope.programFields`).
+
+`verify-members [--archive DIR] --program F` is `verify` for each member of a run in one process, the run's program
+read once (`Flock.VerifyMembers`, whose module text is its contract). Standard input holds a line a member, the JSON
+array of `verify`'s arguments for it. For each, in order, it prints the lines `verify` prints for that member alone,
+byte for byte, then `MEMBER {"exit", "index"}` with the exit status `verify` ends with on those arguments, and reads the
+next line only then. Standard error is flushed before a member's `MEMBER` line is written, so a caller that writes a
+line only once the one before it is answered finds there, at each `MEMBER` line, what `verify` writes for that member
+after what it wrote for the members before.
+
+A member's check is `verify` (`verifyMember_eq`), and nothing crosses from one member to the next
+but the kept program's digest and readings, which a member receives only where its own `--program` holds the kept
+bytes: another program is read anew. It exits 0 iff every member's status is 0, and 2 before any member without a
+program it can read. A caller takes as refused every session of a member with no `MEMBER` line, and every session of
+an answered member with no `VERDICT` line of its own. The process opens no connection and writes no file, so it may be
+started before a member's session exists and kept while later sessions run
+(`verity/protocols/flock/prover/tests/test_lean_verify_members.py`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read

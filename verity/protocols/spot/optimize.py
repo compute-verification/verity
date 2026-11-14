@@ -18,7 +18,7 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
 committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
 one-stage design (`two_stage_design` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
@@ -170,7 +170,7 @@ class ReplayGrain:
 
 
 @dataclass(frozen=True)
-class Commitment:
+class TensorCommit:
     """One tensor committed at serve time by one scale, whatever the sample: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
@@ -212,7 +212,7 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
-    serve: tuple[Commitment, ...] = ()
+    serve: tuple[TensorCommit, ...] = ()
     replay: Mapping[str, ReplayGrain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
@@ -251,7 +251,7 @@ class CostModel:
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
 
-    def committed(self, s: Commitment) -> float:
+    def committed(self, s: TensorCommit) -> float:
         return s.cost if s.cost is not None else 8 * self.commit_per_bit * s.nbytes
 
     def serve_cost(self) -> float:
@@ -842,7 +842,7 @@ def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
     its measured cost), and at decode its bytes, its chain and, when it gates the step, its chain's latency at `latency`
     a dependent compression (latency-bound).  Committed once, the cheapest copy is kept: the saving is the others' bytes
     and prefill cost, and at decode their latency less the kept copy's chain where it has to gate in their place."""
-    by: dict[str, list[Commitment]] = {}
+    by: dict[str, list[TensorCommit]] = {}
     for s in costs.serve:
         by.setdefault(s.tensor, []).append(s)
     rows = []
@@ -1186,7 +1186,7 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     `Properties.Spot.TwoStageCheckServedSound`, whose `N` is `fanout`).  `fanout`, F, is the replay grain's fan-out
     (`partition.fanout`): the requests reading in a replay block serve at most F S bits together, so S is read as F S.
     F is 1 when every replay block is closed, each recomputing from its own inputs any value another computed while
-    serving; the patterns' form reads each request in one replay block, so it refuses F > 1.  The sets' form
+    serving; the patterns' form is priced only at closed replay blocks, so it refuses F > 1.  The sets' form
     counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
     becomes Σ_m C(n, m) w^m 2^{min(m b, S)} <= 1 + Light + 2^S Heavy (`_capped`), by min(Σ_g x_g, S) <= Σ_g min(x_g, S),
     and each sum over nonempty T is also at most 2^S (∏_v (1 + w_v) − 1), so a wholly incorrect replay block of N proof
@@ -1201,8 +1201,8 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     if (served is None and union) or (served is not None and not served >= 0):
         raise ValueError("a served-output cap is at least 0 bits, and the patterns' form needs one")
     if not fanout >= 1 or (union and fanout > 1):
-        raise ValueError(f"a fan-out is at least 1, and the patterns' form reads each request in one replay block, so it "
-                         f"needs fan-out 1, not {fanout}")
+        raise ValueError(f"a fan-out is at least 1, and the patterns' form is priced only where no replay block reads "
+                         f"a value another computed, so it needs fan-out 1, not {fanout}")
     served = None if served is None else served * fanout
     strata = _strata(cells, k)
     groups: dict[tuple[float, float], float] = {}
@@ -1590,9 +1590,9 @@ def two_stage_counts(row: Mapping, names: Sequence[str]) -> dict:
     return {"sampled": int(row["registration_sample"]), "k": {name: int(k[i]) for i, name in enumerate(names)}}
 
 
-__all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+__all__ = ["Candidate", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
            "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
-           "TemplateCost",
+           "TemplateCost", "TensorCommit",
            "CHORDS", "Cell", "KAPPAS", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target",
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",

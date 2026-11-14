@@ -72,7 +72,6 @@ ALLOWLIST = {
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
-    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -370,7 +369,6 @@ def test_tracked_data_within_budget() -> None:
 #: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
 #: outputs or archives matches.
 IGNORED_TRACKED = frozenset({
-    "adapters/vllm/tests/acquire/fixtures/served_llama.tar.gz",
     "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
     "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
 })

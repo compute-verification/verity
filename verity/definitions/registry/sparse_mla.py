@@ -322,21 +322,45 @@ def SparseMlaHeadEnd(B, S, l, o):
     return head_end(word_steps(B), S.INV, l, o)
 
 
-def head_chain(row) -> list[tuple[object, int]]:
+def chain_cols(DV: int, cols: int | None) -> int:
+    """The columns of each column block a chain of a row of DV output columns ends in: DV (one block) for whole key blocks
+    (``cols`` None), else ``cols``, refused unless it divides DV."""
+    if cols is None:
+        return DV
+    if cols < 1 or DV % cols:
+        raise ValueError(f"a chain's values units of {cols} columns are not DV={DV} columns in whole blocks")
+    return cols
+
+
+def block_units(S, cols: int | None, nvis: int, first: bool, n: int) -> list[tuple[object, int]]:
+    """``n`` key blocks of ``nvis`` keys (``first``: each its chain's first visited) of a row of statics ``S`` as a chain's
+    units, each Definition bound and how many of it: the blocks whole (`SparseMlaHeadBlock_v1`), or with ``cols`` each one's
+    `SparseMlaHeadScores_v1` and its DV / cols `SparseMlaHeadValues_v1{G = cols}`, one a column block."""
+    blk = {k: S[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
+    if cols is None:
+        return [(bind(SparseMlaHeadBlock, NVIS=nvis, FIRST=first, **blk), n)]
+    G = chain_cols(int(S["DV"]), cols)
+    return [(bind(SparseMlaHeadScores, NVIS=nvis, FIRST=first, **blk), n),
+            (bind(SparseMlaHeadValues, NVIS=nvis, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=G), n * (int(S["DV"]) // G))]
+
+
+def head_chain(row, cols: int | None = None) -> list[tuple[object, int]]:
     """The units a `SparseMla_v1` binding ``row`` is cut into, each Definition bound and how many of it: per head, its first
     visited block (`SparseMlaHeadBlock_v1`, FIRST, NVIS its keys), each later block (NVIS = BN) and its end
-    (`SparseMlaHeadEnd_v1`).  What `serving_templates` stages a row as, and what circuit-check holds to the block in its
-    place."""
+    (`SparseMlaHeadEnd_v1`).  With ``cols``, each key block is its scores unit and its values units of ``cols`` columns
+    (`block_units`), and the head ends on each column block (`SparseMlaHeadEnd_v1{DV = cols}` on the last scores unit's lanes
+    and that column block's last values unit's O).  What `serving_templates` stages a row as; the chain of whole blocks is
+    what circuit-check holds to the block in its place."""
     if getattr(row, "defn", None) is not SparseMla:
         raise ValueError(f"head_chain cuts a SparseMla_v1 binding, not {row!r}")
     S = row.bindings
-    blk = {k: S[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
     (lo, hi), *rest = visits(int(S["T"]), int(S["BN"]))
-    NH = int(S["NH"])
-    out = [(bind(SparseMlaHeadBlock, NVIS=hi - lo, FIRST=True, **blk), NH)]
+    NH, DV = int(S["NH"]), int(S["DV"])
+    G = chain_cols(DV, cols)
+    out = block_units(S, cols, hi - lo, True, NH)
     if rest:
-        out.append((bind(SparseMlaHeadBlock, NVIS=int(S["BN"]), FIRST=False, **blk), NH * len(rest)))
-    return out + [(bind(SparseMlaHeadEnd, DV=S["DV"], INV=S["INV"]), NH)]
+        out += block_units(S, cols, int(S["BN"]), False, NH * len(rest))
+    return out + [(bind(SparseMlaHeadEnd, DV=G, INV=S["INV"]), NH * (DV // G))]
 
 
 def _mla_type(S, bf16=BF16):

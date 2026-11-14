@@ -896,6 +896,78 @@ def test_positions_and_inputs():
                 f(short, _roots(c))
 
 
+# -- the tiles as an annotation ----------------------------------------------------------------------------------------------
+
+TILED = {
+    **{n: (b, None) for n, (b, _s) in FAMILIES.items()},
+    "two-calls-grouped": (lambda: Program(bind(TWICE)), [0, 0]),
+    "reduced-layer-grouped": (lambda: _layer(REDUCED), lambda s: 0),
+    "grid": (lambda: Program(bind(GRID, N=4)), None),
+}
+
+
+@compiles
+@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.slow) if "bits" in n else n for n in sorted(TILED)])
+def test_tiles_are_compiles_annotation(name):
+    """`tiles` is `compile`'s Find and Tile alone: the same sites, units, seed groups, cover and grind, and the same seed
+    inputs, with no compiled Program, and the served Program it reads is the one given."""
+    build, groups = TILED[name]
+    served = build()
+    t, c = C.tiles(served, SCHEME, groups), C.compile(served, SCHEME, groups)
+    assert type(t) is C.Tiles and not hasattr(t, "program") and t.served is served
+    assert (t.sites, t.group_of, t.groups, t.cover, t.grind, t.units, t.boolean) == \
+        (c.sites, c.group_of, c.groups, c.cover, c.grind, c.units, c.boolean)
+    roots = _roots(c)
+    assert t.positions(3) == c.positions(3)
+    assert t.seeds(SALT, roots, 3) == c.seeds(SALT, roots, 3)
+    assert t.inputs(SALT, roots, 3) == c.inputs(SALT, roots, 3)
+
+
+def _tiles_refused(code, program, scheme=SCHEME, groups=None):
+    with pytest.raises(C.CompileError) as e:
+        C.tiles(program, scheme, groups)
+    assert e.value.code == code, str(e.value)
+    return e.value
+
+
+TILES_REFUSED = {
+    **{code: (lambda f=f: Program(bind(f())), SCHEME, None) for code, f in REFUSED.items() if code not in ("name", "width")},
+    "edited-arm": (lambda: Program(bind(S8.S8Dot, **S8.SMOKE_EDITED)), SCHEME, None),
+    "scheme": (lambda: Program(bind(TWICE)), "no-such-scheme", None),
+    "span": (lambda: Program(bind(CHAINED)), SCHEME, [0, 0]),
+}
+
+
+@pytest.mark.parametrize("code", sorted(TILES_REFUSED))
+def test_tiles_refused(code):
+    """`tiles` refuses by the rules that read the served Program alone, with `compile`'s codes (`test_refused`)."""
+    build, scheme, groups = TILES_REFUSED[code]
+    if code == "coin-read" and SEEDS:
+        with pytest.raises(PORTS.PortError):
+            build()
+        return
+    _tiles_refused(code, build(), scheme, groups)
+
+
+def test_tiles_refuse_what_reads_the_served_program():
+    """The seed groups' rules and an uncovered matmul step read the served Program, so `tiles` refuses them as `compile`
+    does: a unit factory's wrong signature, a group under the scheme's cover or over the grind term, and P·V's steps."""
+    _tiles_refused("scheme", Program(bind(TWICE)), WRONG)
+    assert "covers 1 units" in str(_tiles_refused("cover", Program(bind(TWICE)), COVER2))
+    assert "grind term" in str(_tiles_refused("cover", Program(bind(HEADS, H=4, N=2))))
+    assert "AmpereBF16TcDot16" in str(_tiles_refused("uncovered", Program(bind(ATTN_HEADS, H=2)), QK_OPEN))
+
+
+@compiles
+@pytest.mark.parametrize("code", ["name", "width"])
+def test_tiles_take_what_only_replace_refuses(code):
+    """A parameter named as a seed input and a rest past the width rule are refused by what Replace builds, so the served
+    Program's tiles are still its annotation."""
+    served = Program(bind(REFUSED[code]()))
+    assert len(C.tiles(served, SCHEME).units) == 1
+    _refused(code, served)
+
+
 def test_seed_reads_every_field():
     """seed_j and σ_R each move with every field, and no σ_R is a seed_j (σ_R's tag is its own)."""
     d = [hashlib.sha512(bytes([i])).digest() for i in range(6)]
