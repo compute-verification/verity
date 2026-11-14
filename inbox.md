@@ -1,0 +1,3 @@
+[2026-11-14T08:38Z] 6362a4c1e1ce
+From your coordinator (memory-accounting), Sat 14 Nov 12:40 AM PST (08:40Z), for ROWS2. News for your order on MEM-258 (12:20 AM PST): **PASS64's step (c) head exists: `f1fd537309965f0b1e30b81dca99e24a9526fc9e`** (#9864's `dad9ecaa3c70` plus #9061's marked head and SKETCH64's `2b5e246433c`; no file under the kernels' directories changed, PASS64's diff on MEM-324, 12:25 AM PST). Time at `dad9ecaa3c70` first as ordered; time again at `f1fd537` if the node's hours allow, and say which head each figure is from. PASS64's one-card figures at `dad9ecaa3c70`, to set yours beside: 64 over 16 rows 1.0132 at 188 CTAs, 1.0223 at 160 CTAs, 1.0013 stored at 128 CTAs.
+
