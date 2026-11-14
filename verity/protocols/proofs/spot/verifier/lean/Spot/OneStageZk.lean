@@ -62,10 +62,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   read it (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either
   form), and on parameters that name members with evidence that names statements `checkBlobsAt` is
   `checkMembersAt`; parameters of one form with evidence of the other reject. Its parameters' `proofs` is exactly
-  `{"members"}` (`membersOf`), an object from each member's name to exactly
+  `{"members"}` or `{"members", "wiring"}`: `members` (`membersOf`) an object from each member's name to exactly
   `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
   statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and
-  its circuit's units a proof block. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
+  its circuit's units a proof block; `wiring` (`wiringOf`) the members' wiring, SPOT's (`Spot.Wires.Wiring`), refused
+  where SPOT's check refuses it, a parameter and so fixed before any coin. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
@@ -86,7 +87,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   restricted to its units (`Member.sizes`: the parameters fix each stratum's size in a member, and nothing the prover
   sends moves a unit between strata), and its public file's units are exactly its member's, in order
   (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
-  evidence's `proved_units` (`membersRun_proved`). The registration is held to the members before any statement's
+  evidence's `proved_units` (`membersRun_proved`). Then, where the parameters name a wiring, every wired row of every
+  unit of `proved_units` is its writer's output row (`wiresHeld`, `membersRun_wires`): each template of the wiring is
+  one range of the verifier's partition holding exactly its units, and the row's `b ‖ c` in its member's public file
+  is the writer's row's in the writer's member's (`Spot.Wires.Summary.drawnOk`). The registration is held to the members before any statement's
   session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
   exactly one member's, the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no
   member's or two members' refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is
@@ -105,6 +109,7 @@ public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
 public import Spot.FilePart
+public import Spot.WiresDrawn
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -113,6 +118,7 @@ meta import Spot.OneStage
 meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
+meta import Spot.WiresDrawn
 meta import Flock
 meta import Flock.JsonParse
 meta import Std.Data.HashMap
@@ -183,11 +189,13 @@ structure Member where
   own : Own
 
 /-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
-its members, `own` then holding the program and the partition every member's statement reads and no file. -/
+its members, `own` then holding the program and the partition every member's statement reads and no file, and the
+members' wiring where the parameters name one, with SPOT's summary of it (`wiringOf`). -/
 structure Params where
   base : OneStage.Params
   own : Own
   members : Option (Array Member)
+  wiring : Option (Spot.Wires.Wiring × Spot.Wires.Summary) := none
 
 structure RunFiles where
   name : String
@@ -825,21 +833,43 @@ def statementsOf (pr : Json) : V (Array StatementFiles) := do
 /-- A digest in the place of a file's the per-member form's parameters name none of (`membersParamsOfJson`). -/
 private def NO_FILE : String := "".pushn '0' 128
 
-/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` (`membersOf`, on the program and the
-partition every member's statement reads), and everything else as the one statement's parameters hold it
-(`paramsOfJson`, read at `proofs` of no file): `own` is that program and partition, with no file. -/
+/-- **The members' wiring**: SPOT's wiring (`Spot.Wires.Wiring.ofJson`: `templates`, `cuts`, `wires` and optionally
+`order`, the `wires` piece's), each template a template descriptor id of the verifier's partition, and SPOT's
+summary of it, a refusal where SPOT's check refuses it (`Spot.Wires.check`). It is a parameter, so it is fixed before
+any coin, and the check reads it alone. -/
+def wiringOf (j : Json) : V (Spot.Wires.Wiring × Spot.Wires.Summary) := do
+  let W ← (Spot.Wires.Wiring.ofJson j).mapError (s!"proofs: wiring: {·}")
+  match Spot.Wires.check W with
+  | .ok S => pure (W, S)
+  | .error r =>
+    throw s!"proofs: wiring: SPOT's check refuses it ({r.code.name}{(r.wire.map (s!", wire {·}")).getD ""})"
+
+/-- The keys of the per-member form's `proofs`: its members, and its members' wiring where it names one. -/
+def MEMBERS_KEYS : List (Array String) := [#["members"], #["members", "wiring"]]
+
+/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` or `{"members", "wiring"}` (`membersOf`, on
+the program and the partition every member's statement reads; `wiringOf`), and everything else as the one statement's
+parameters hold it (`paramsOfJson`, read at `proofs` of no file): `own` is that program and partition, with no
+file. -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
-  exactly pr #["members"] "proofs"
+  if !MEMBERS_KEYS.any (keys? pr == some ·) then
+    throw "the keys of proofs are not members, or members and wiring"
   let one := Json.mkObj [("circuit", Json.str NO_FILE), ("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsOfJson (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with circuit := "", pub := "" }
-  pure { p with own, members := some (← membersOf own (getD pr "members")) }
+  let members ← membersOf own (getD pr "members")
+  let wiring ← match field? pr "wiring" with
+    | some w => some <$> wiringOf w
+    | none => pure none
+  pure { p with own, members := some members, wiring }
 
-/-- **The parameters in either form**: the per-member form's where `proofs` is exactly `{"members"}`, else the one
-statement's. `protocol` reads `paramsOfJson`, which refuses the per-member form's. -/
+/-- **The parameters in either form**: the per-member form's where `proofs`' keys are its (`MEMBERS_KEYS`), else the
+one statement's. `protocol` reads `paramsOfJson`, which refuses the per-member form's. -/
 def paramsEitherOfJson (j : Json) : V Params :=
-  if (field? j "proofs").bind keys? == some #["members"] then membersParamsOfJson j else paramsOfJson j
+  match (field? j "proofs").bind keys? with
+  | some ks => if MEMBERS_KEYS.contains ks then membersParamsOfJson j else paramsOfJson j
+  | none => paramsOfJson j
 
 /-- **The per-member form's evidence**: `proofs` exactly `{"statements"}` (`statementsOf`), and everything else as the
 one statement's evidence holds it (`evidenceOf`, read at `proofs` of the statements' sessions in order), so its
@@ -1350,15 +1380,80 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   laidHeld ms c.record
   classHeld ms
 
+/-- The refusal of a template of the wiring that is not one range of the verifier's partition holding exactly its
+units (`wiresHeld`). -/
+def WIRES_TEMPLATE : String :=
+  "wiring: a template of the wiring is not one range of the verifier's partition holding exactly its units: a " ++
+    "template's unit u is the population's unit first + u"
+
+/-- The refusal of a sampled unit's wired row that is not its writer's output row (`wiresHeld`). -/
+def WIRES_DRAWN : String :=
+  "wiring: a sampled unit's wired row is not its writer's output row: its b || c in its member's public file is " ++
+    "not the writer's row's in the writer's member's"
+
+/-- Row `r` of a port cut into `k` rows, by its name among the circuit's ports: the port's own name uncut, else
+`port#r`. -/
+def rowName (port : String) (r k : Nat) : String := if k == 1 then port else s!"{port}#{r}"
+
+/-- The member holding the population's unit `g`, and `g`'s slot in its public file: members laid over the population
+(`laidHeld`) are each one range, so the slot is `g` less the member's first unit. -/
+def memberAt (ms : Array Member) (g : Nat) : Option (Member × Nat) :=
+  (ms.find? fun m => decide (m.first ≤ g) && decide (g < m.first + m.count)).map fun m => (m, g - m.first)
+
+/-- A member's circuit and public file as its sessions' verdicts parse them (`Flock.ProvedScope.circuitOf`,
+`Flock.ProvedScope.publicOf`), from the blobs its parameters name. -/
+def Member.loaded (m : Member) (bs : Core.Blobs) : V (Flock.Circuit × Flock.Public) := do
+  let a ← statementOf m.own (fun _ => pure ()) bs
+  let tags := Flock.Witness.zkTags a.I
+  let c ← Flock.ProvedScope.circuitOf tags a.I.circuitFile a.I.tables
+  pure (c, ← Flock.ProvedScope.publicOf tags c a.I.publicFile)
+
+/-- **The sampled units' wires held to the members' public files**, where the parameters name a wiring (`wiringOf`):
+each template of the wiring is one range of the verifier's partition (`Partition.evaluate` on the verifier's program
+and query) of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
+every wired row of every sampled unit (`drawn`, the evidence's `proved_units`, which v1's check holds to the sample)
+is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's check on the sampled units by
+`Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's slot and the port the row
+names (`rowName`), is the writer's output row's in the writer's member's (else `WIRES_DRAWN`). It reads the public
+files of the members a sampled unit or one of its writers is in, and no session. -/
+def wiresHeld (p : Params) (ms : Array Member) (drawn : Array Nat) (bs : Core.Blobs) : V Unit := do
+  let some (W, S) := p.wiring | pure ()
+  let rs ← Partition.evaluate (← Program.parse p.own.program) (getD p.own.partition "query")
+  let spans ← W.templates.mapM fun (tid, t) =>
+    match (rs.filter (·.template == tid)).toList with
+    | [r] => if r.count == t.units then pure (tid, r.first, r.count) else throw WIRES_TEMPLATE
+    | _ => throw WIRES_TEMPLATE
+  let at? : String → Int → Option (Member × Nat) := fun tid u => do
+    let (_, lo, n) ← spans.find? (·.1 == tid)
+    if decide (0 ≤ u) && decide (u < (n : Int)) then memberAt ms (lo + u.toNat) else none
+  let sampled := drawn.toList.filterMap fun g =>
+    (spans.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (tid, lo, _) => (tid, g - lo)
+  let need := sampled.flatMap fun (tid, u) => match S.rowsAt tid u with
+    | [] => []
+    | rws => ((at? tid u).toList ++ rws.filterMap fun (_, (wt, wu, _)) => at? wt wu).map (·.1.name)
+  let files ← (ms.toList.filter (need.contains ·.name)).mapM fun m => do pure (m.name, ← m.loaded bs)
+  let bc : String → Int → String → Option ByteArray := fun tid u row => do
+    let (m, i) ← at? tid u
+    let (c, pub) ← files.lookup m.name
+    let k ← c.ports.findIdx? (·.name == row)
+    let d := pub.digest i k c.ports.size
+    if d.isEmpty then none else some d
+  let same := fun ((tid, u, port, r) : String × Nat × String × Nat) ((wt, wu, out) : String × Int × String) =>
+    match bc tid u (rowName port r (W.cutsOf tid port)), bc wt wu out with
+    | some a, some b => a == b
+    | _, _ => false
+  if !S.drawnOk same sampled then throw WIRES_DRAWN
+
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
 member's (`rootsOf`), then every member's files and each statement's session on the blobs, at its member's slice of
-the registration (`Member.slice`, `runMembers`). -/
+the registration (`Member.slice`, `runMembers`), then the sampled units' wires (`wiresHeld`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
   rootsOf ms c.record >>= fun roots =>
-  runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
+  runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs >>= fun r =>
+  wiresHeld p ms e.base.provedUnits bs >>= fun _ => pure r
 
 /-- **Where the per-member form's run returns, every member's files are held, sampled or not**: at the roots
 `rootsOf` gives each member, each member of the parameters has its statement read and its files pass what a session's
@@ -1370,7 +1465,8 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
-  exact ⟨roots, hr, runMembers_files h⟩
+  obtain ⟨_, hrun, _⟩ := Flock.HmNets.bind_ok h
+  exact ⟨roots, hr, runMembers_files hrun⟩
 
 /-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
 evidence's `proved_units`** (`runMembers_proved`), which the record's checks hold to the sample (`Record.checks`'
@@ -1381,7 +1477,23 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
-  exact runMembers_proved h hall
+  obtain ⟨r', hrun, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, _, h⟩ := Flock.HmNets.bind_ok h
+  cases h
+  exact runMembers_proved hrun hall
+
+/-- **Where the per-member form's run returns, the sampled units' wires held** (`wiresHeld`): with a wiring, each of
+its templates is one range of the verifier's partition and every wired row of a sampled unit is its writer's output
+row in the members' public files. -/
+theorem membersRun_wires {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
+    wiresHeld p ms e.base.provedUnits bs = .ok () := by
+  unfold membersRun at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hw, _⟩ := Flock.HmNets.bind_ok h
+  exact hw
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
@@ -1472,6 +1584,17 @@ def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
 
 /-- **Parsed parameters name no members**: whatever `paramsOfJson` returns is of the one statement's form. -/
 theorem paramsOfJson_members {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : p.members = none := by
+  unfold paramsOfJson at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals try contradiction
+  all_goals try (rename_i ht _ _ _ _; simp [throw, throwThe, MonadExceptOf.throw] at ht; done)
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  rfl
+
+/-- **Parsed parameters name no wiring**: whatever `paramsOfJson` returns is of the one statement's form. -/
+theorem paramsOfJson_wiring {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : p.wiring = none := by
   unfold paramsOfJson at h
   simp only [bind, Except.bind] at h
   repeat' split at h
