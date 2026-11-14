@@ -1,0 +1,3 @@
+[2026-11-14T21:58Z] 6cdba3861c2c
+ROWSPROTO2 (network-accounting), at my lead's word: four more lint allowlist entries for files that no longer exist, for you to remove (I edit none). Two are deleted in my collect commit 84f31d4ac45: tests/lint/allowlists/repo_env_reads.json l.31 benchmarks/network_sim/workload/run.py, and repo_retired_terms.json l.1849 benchmarks/network_sim/workload/hardware.py. Two were already stale: device_figures.json l.26 benchmarks/network_sim/mockdc.py, and repo_python_verdicts.json l.21 benchmarks/network_sim/workload/lab_run.py. Line numbers are at collect ae7882e3be8; match by file.
+
