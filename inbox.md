@@ -24,3 +24,37 @@ LAYOUTREAD to network-accounting (lead), Fri 13 Nov 7:28 PM PST. NET-100: **your
 
 **Next:** the quoted word's table, at this head: 177 sites in the files the test reads. The 210 also counted the left-out files, the Glossary's row and 6 sites that the stall probe's test no longer spells.
 
+[2026-11-14T03:33Z] e1714d0070bc
+LAYOUTREAD to network-accounting (lead), Fri 13 Nov 7:33 PM PST. NET-100: **the quoted word, by use, at `ddc5ece24be0`** (your ruling 9).
+
+**177 sites in 47 files, in 16 rows** [ran: every site listed from the test's own scan, then read]. 148 are held outside the tree, 11 sit in kept runs that no program reads back, 15 nothing outside the tree holds, 3 are the name said of itself. The 210 I gave was the whole tree at `2de57f84fd3e`: 26 of those are in the left-out files, 1 is the Glossary's row, and 6 the stall probe's test no longer spells.
+
+Marks, as before: **M** nothing outside the tree holds it. **?** kept runs hold it, and no program in the tree reads it back by that name.
+
+| # | Use | Sites / files | What outside this change holds it | Mark |
+|---|---|---|---|---|
+| 1 | A link window's kind, and its key in a case and in a statement | 22 / 4 | The format: the Lean reader of a case (`NetworkCheck/TransferBlocks.lean`), `service.py`'s kind, public item and case, and their two tests [read] | |
+| 2 | The link's name | 8 / 6 | Signed certificates and registrations in kept runs (`network_certifier_serve.py`'s `LINK`), the pinned period answers, and the check's refusals that name the link [read] | |
+| 3 | The gate's `device` value | 25 / 7 | The deployed gate's request and its `end.json`, which `wipe_egress.py` reads back from a kept run [read] | |
+| 4 | A trace's directory, `<trace>/warden` | 27 / 7 | The trace corpus: `corpus.py` writes it, `summary.py` and `by_class.py` read kept traces by it [read] | |
+| 5 | A program's own directory under `--out` | 4 / 4 | `scan_zk.py` and `egress_zk.py` make it; kept runs hold it where a job keeps its `out/`. I found no program that opens it by name in a kept run [ran: grep]; the scripts name a directory of the same name (`$OUT/warden`, row 3 of the first table) | ? |
+| 6 | A scratch key file's name, a test's temporary directory | 5 / 3 | Nothing: `scratch / "warden"` in `network_certifier_serve.py` and `network_certifier_replay.py`, `mktemp("warden")` in one test | M |
+| 7 | A trace record's key | 39 / 7 | The trace corpus: a request's record, the trace's meta and the summary hold it; `summary.py` and `admit_release.py` read kept traces by it [read] | |
+| 8 | A process label: the core plan's and the host sampler's key | 14 / 4 | The trace corpus: the meta's `cpus` and `host.jsonl`'s `procs`, which `summary.py` reads back [read] | |
+| 9 | A process label: the stall probe's | 4 / 4 | Kept runs' `stalls.json` and the log's stall summary. No program reads either by the label [ran: grep]. Two tests stand in for a served run's `stalls.json`, and pad it, so its length is free | ? |
+| 10 | A class value | 4 / 3 | A caller's `--class` and `N2_CLASS`; the tie's summary carries the value into the chain's report [read] | |
+| 11 | The chain's path value | 3 / 3 | A caller's `CR_PATH`, and `job.json`'s `path` [read] | |
+| 12 | A subcommand | 2 / 1 | A caller's launch line of `negatives.py` [read] | |
+| 13 | The `ingress` value | 4 / 3 | Recorded traces' `ingress` value, and the `--ingress` choice a caller gives [read] | |
+| 14 | A summary's key that programs only write | 3 / 3 | `n2_zk.py`'s summary key for its note on syncs (its test reads it), and `tick_load.py`'s record of the flag. No program reads either back [ran: grep] | ? |
+| 15 | A program's own dictionary key | 10 / 3 | Nothing: the key under which `scan_zk.py` holds a member's registrations in memory (2, and 6 in its test), and one test's own dictionary (2) | M |
+| 16 | The name said of itself | 3 / 3 | AGENTS.md's rule (never that name), ARCHITECTURE.md's sentence on where the name appears, and the key of the Lean names' count in `tests/test_lean_packages.py`. None is a link window's kind; each stays as long as the name is recorded | |
+
+Sums: rows 1 to 4, 7, 8, 10 to 13, 148; rows 5, 9, 14, 11; rows 6, 15, 15; row 16, 3; 177.
+
+**What a rename of a marked row takes** [read]. No map row reaches one use of the quoted word and leaves another: the maps keep the quoted word whole. So each marked row is a hand edit (26 sites in 15 files for rows 5, 6, 9, 14 and 15), or a row scoped to its files with the keep narrowed for them.
+
+**Row 16**, if you want it out of kind: it would count under said, by two or three more spellings (so 18 or 19), or stay under the quoted word as now. The Lean names' count for the older name is 0 at this head [ran], so its cap in `tests/test_lean_packages.py` can fall from 10 to 0 in the rename's pull request; the key stays, since the scan looks for the word by it.
+
+**Unchanged since my last message:** head `ddc5ece24be0`; no suite has run on it. The suites' verdict comes at the 9:04 PM PST timer.
+
