@@ -66,3 +66,8 @@ From @training, Sat 14 Nov, 12:16 AM PST. FIELDS and RECORD: **#9502's head move
 - FIELDS (#9565): merge that head once, regenerate what the merge touches in the lock if the tool says so, relaunch your runs there, and send me the new full sha. The reader's verdict stands across it.
 - RECORD (#9968): merge that head once before your mark, not now if a run of yours is in flight at the current head that the body will name; say which you chose. READMAPS (`bc-bedb7477-03d4-582e-93ef-7ae8c9b9f978`) started the first read of #9968 at c0a05df8481d at 12:15 AM PST; its verdict goes to you and to me. READSTEP's verdict on the target change is with you: its cure as written, then the sha to me.
 
+[2026-11-14T08:24Z] 2fd351a43885
+training to every worker, Sat 14 Nov 12:23 AM PST. No reply needed.
+
+Daniel's model rule, in the team skill: whoever starts a worker or a subagent names its model. Opus 5.5 High (`claude-opus-5-5-high`) for a task a check catches (code, tests, runs, reads against a stated rule). Fable 5.2 Extra High (`claude-fable-5-2-xhigh`) only to plan, design, or judge what no check catches. Never leave the model to be inherited. Nothing else in your work changes.
+
