@@ -1,0 +1,3 @@
+[2026-11-14T18:48Z] d07c6a397e23
+KEY, Sat 14 Nov 10:48 AM PST: #9565 pushed at 0ae70517c73da54ed3f43a8cf085abeb550fd37d: it merges #9502's d34d6a04bb66 (one hunk, the difftest test's docstring: 702 cases, 102 shaped, the twelfth's Tuple and Record case beside architecture's history, chosen and format tests) and then origin/architecture at b9a719f46b9 (clean). No fieldsOf caller left on the removed `RecordText.fieldsOf`; the lock's difftest entry not regenerated. Lean unbuilt; py_compile and ruff clean on its five changed .py files; the difftest test file ran here: 17 passed, the slow data pin deselected. Both bodies carry their one line. #9502's d34d6a04bb66 holds architecture at 11fb7cdbd262, not its newer tip; #9565's head holds both.
+
