@@ -62,6 +62,8 @@ DECLARED: dict[str, str] = {
     "RESEARCH_MACHINES_D": "the machine registry's directory, in place of the notes' machines.d",
     # runs and the machines they run on
     "RESEARCH_REPO": "the repository research acts on, in place of the working directory's",
+    "RESEARCH_CHECKOUT": "the checkout `research` compares with origin/main before it runs main's copy (default .)",
+    "RESEARCH_AT_CHECKOUT": "set: `research` runs the checkout's own copy, never origin/main's",
     "RESEARCH_RUNS": "the local run registry's directory",
     "RESEARCH_MACHINES": "the machines file (default ~/.research/machines.toml)",
     "RESEARCH_SHIP": "stream: a run's source ships as an archive stream instead of through git",
@@ -72,6 +74,10 @@ DECLARED: dict[str, str] = {
     "RESEARCH_CGROUP_DIR": "the cgroup memory admission reads, in place of the process's own",
     "RESEARCH_PROC_ROOT": "/proc, for a test's stand-in",
     "RESEARCH_RAMLOCK_DIR": "the directory of live memory reservations",
+    "RESEARCH_CPU_CLAIMS_DIR": "the directory of `cpu-hold`'s core claims",
+    "RESEARCH_CPU_ROOT": "the CPU topology `cpu-hold` reads, in place of /sys/devices/system/cpu",
+    "NODE_SLOT_ONLY_FILE": "the node's deployed slot-only rule, in place of its installed path",
+    "NODE_TOOL_RULES_FILE": "the node's deployed tool rules, in place of their installed path",
     "RESEARCH_SEED_RULES": "a seed rules file the telemetry tests load",
     "AUDITOR_FILE": "the file that marks a machine as an auditor's",
     "RUNS_VIA_SLOT_FILE": "the file that marks a machine whose runs take a check slot",
@@ -104,6 +110,13 @@ DECLARED: dict[str, str] = {
     "RESEARCH_LEASE_EXPIRES": "when this process's machine lease expires",
     "LEASE_DIR": "the machine lease's directory",
     "VY_N2": "node 2's ssh host",
+    "WAKE_ENV": "the control pod's env file a wake reads the Nebius key from",
+    "WAKE_GUARD_STATE": "the budget guard's state a wake reads",
+    "WAKE_MACHINES_D": "the machine registry a wake reads",
+    "NEBIUS_BIN": "the Nebius CLI a wake runs",
+    # read by the node scripts that run alone, and by their tests
+    "VY_BUNDLE_SIZES": "the pacer's learned bundle sizes",
+    "VY_PROVER_CPUS": "the CPUs node 1's prover runs on",
     # infra's control pod
     "AGENT_WATCH_OFFSET": "the agent watch relay's offset file (default ~/agent-watch/offset)",
     "AGENT_WATCH_ON_POD": "set: the relay runs on the guard host itself, so it reads without ssh",
