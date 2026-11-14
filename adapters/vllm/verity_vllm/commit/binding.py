@@ -451,7 +451,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
                 hdr["engine_step_rebased_rows"] = hdr.get("engine_step_rebased_rows", 0) + 1
             engine_step = None
         for rid in (req_field if isinstance(req_field, list) and not (len(req_field) == 2 and all(isinstance(x, int) for x in req_field)) else expand(req_field, all_req, "r0")):
-            rid = declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))   # workload id | index -> r<i>
+            rid = declared.get(str(rid), f"r{rid}" if str(rid).isdecimal() else str(rid))   # workload id | index -> r<i>
             if not MF.REQ_RE.match(rid):                                   # a request the workload does not declare (e.g. a bare UUID)
                 raise ValueError(f"required manifest {path}: request id {rid!r} is not r<k> and not declared in requests_declared: refused")
             arrive = int((arrivals or {}).get(rid, 0))                     # gprog reading: manifest step is request-relative; map step = engine step

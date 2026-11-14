@@ -168,7 +168,7 @@ class RowId:
             pfx = _ROW_INT_PREFIX.get(name)
             if pfx is None:
                 vals[name] = tok
-            elif tok.startswith(pfx) and tok[len(pfx):].isdigit():
+            elif tok.startswith(pfx) and tok[len(pfx):].isdecimal():
                 vals[name] = int(tok[len(pfx):])
             else:
                 raise ValueError(f"row id {row!r}: field {name} is {tok!r}, expected {pfx}<N>")

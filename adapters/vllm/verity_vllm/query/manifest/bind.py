@@ -126,7 +126,7 @@ def _engine_steps(r: Mapping[str, Any], arrivals: Mapping[str, int] | None, decl
 def _request(r: Mapping[str, Any], declared: Mapping[str, str]) -> str:
     """The row's request as the engine names it (`r<i>`): a declared request id through `declared`, a bare index prefixed."""
     rid = r.get("request_id")
-    return declared.get(str(rid), f"r{rid}" if str(rid).isdigit() else str(rid))
+    return declared.get(str(rid), f"r{rid}" if str(rid).isdecimal() else str(rid))
 
 
 def _on_rank(r: Mapping[str, Any], rank: int | None) -> bool:
@@ -267,7 +267,7 @@ class Binder:
             op, label = split_name(name)
             if op in self.aliases:
                 op, k = self.aliases[op]
-            if "/" not in name or (label.isdigit() and "/" not in op):
+            if "/" not in name or (label.isdecimal() and "/" not in op):
                 slot = int(label) if "/" in name else 0
                 if slot in slots[(op, k)]:
                     out[i] = (op, "", k, "unbound")

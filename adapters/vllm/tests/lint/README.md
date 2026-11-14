@@ -33,6 +33,13 @@ failure message carries its fix.
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
  can't read, or puts a default where a value was, shrinks the evidence a verdict is decided on and leaves no trace of it.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
+- **Decimal reads** (`test_isdecimal.py`, no allowlist): in `verity_vllm/`, a string is asked whether it is a number
+ with `str.isdecimal`, never with `str.isdigit` or `str.isnumeric`. `int` reads the decimal digits and no other digit
+ (`"²".isdigit()` is true, and `int("²")` raises), so a line that asks `isdigit` and then calls `int` raises `int`'s
+ bare `ValueError` where it has an answer of its own for "no number", and a line that calls no `int` takes `²` for a
+ number. `bytes` has no `isdecimal`: a place that reads bytes asks their latin-1 text
+ (`b.decode("latin-1").isdecimal()`), which answers as `b.isdigit()` does. `tests/test_decimal_reads.py` holds one case
+ for each kind of place: one that refuses by name, one that answers None, one that sorts, one that reads bytes.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **vLLM's surface** (`test_vllm_surface.py`, list `vllm_surface.py`): every vLLM module the library imports whole, and
