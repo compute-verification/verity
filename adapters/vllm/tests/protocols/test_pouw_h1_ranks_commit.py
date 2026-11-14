@@ -141,7 +141,7 @@ def _verdict(holder):
 def _reasons(run):
     """The served calls' refusals were the window's coins the auditor device's: the in-process coins' refusal comes first
     (`pouw_h1.H1Run.gated`), and the stand-in's coins are in-process."""
-    run.coin_source = PH.CHALLENGER
+    run.coins_from = PH.CHALLENGER
     return {g.get("reason") for g in run.gated().values()}
 
 

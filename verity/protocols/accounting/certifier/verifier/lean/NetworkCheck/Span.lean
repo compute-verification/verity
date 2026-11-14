@@ -478,8 +478,8 @@ which registers `key`, and `out0` is the certifier's other half, to the outside.
 def guardSite (key : String) : Json :=
   Core.Site.toJson ⟨[],
     [{ id := "node0", kind := .host }, { id := "cert0", kind := .certifier, owner := .auditor, key }],
-    [{ id := "eth0", ends := ("node0", "cert0"), β := 100, latency := 1 },
-     { id := "out0", ends := ("cert0", Core.Site.outside), β := 100, latency := 1 }]⟩
+    [{ id := "eth0", ends := ("node0", "cert0"), β := some 100, latency := 1 },
+     { id := "out0", ends := ("cert0", Core.Site.outside), β := some 100, latency := 1 }]⟩
 
 /-- `guardParams`, read with more keys or other values. -/
 def guardParamsWith (more : List (String × Json)) : V Params := do

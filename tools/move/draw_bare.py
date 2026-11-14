@@ -193,16 +193,13 @@ def lean_declares(f: str, module: str = "") -> set[str]:
     return (out | set(module.split("."))) & WORDS
 
 
-def py_tree(f: str) -> ast.AST | None:
-    try:
-        return ast.parse(text(f))
-    except SyntaxError:
-        return None
+def py_tree(f: str) -> ast.AST:
+    return ast.parse(text(f), filename=f)
 
 
 def py_declares(f: str) -> set[str]:
     out: set[str] = set()
-    for n in ast.walk(py_tree(f) or ast.Module(body=[], type_ignores=[])):
+    for n in ast.walk(py_tree(f)):
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             out.add(n.name)
         elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name):
@@ -216,7 +213,7 @@ def py_declares(f: str) -> set[str]:
 
 def py_imports(f: str) -> set[str]:
     out: set[str] = set()
-    for n in ast.walk(py_tree(f) or ast.Module(body=[], type_ignores=[])):
+    for n in ast.walk(py_tree(f)):
         if isinstance(n, ast.Import):
             out |= {a.name for a in n.names}
         elif isinstance(n, ast.ImportFrom) and n.module and not n.level:

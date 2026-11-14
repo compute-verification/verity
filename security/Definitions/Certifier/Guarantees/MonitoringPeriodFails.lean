@@ -105,7 +105,7 @@ def MonitoringPeriodLeakFails : Prop :=
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
     (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D.partition δ sw Pw β)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
     {Conn : Type} [Fintype Conn] (ρ : (Conn → Option ℕ) → Fin n → ℕ → Bool)
@@ -113,7 +113,7 @@ def MonitoringPeriodLeakFails : Prop :=
     {Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (rd : Par → (Fin n → List (Obs L K S)) → Conn → List (ℕ × CellView Cell))
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
@@ -141,7 +141,7 @@ def MonitoringPeriodLeakFails : Prop :=
               (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
               ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
           ((failPatterns bound j : ℕ) : ℕ∞) *
-            (Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
+            (Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
 /-- **The leak over a monitoring period, each failure charged as it happens.** `MonitoringPeriodLeakChecked`, where each
 window's operator and registered values may follow the network certifier's fail cells over the period (`op φ i` and
@@ -155,7 +155,7 @@ window's operator and registered values may follow the network certifier's fail 
     and each window's record is a sequence its registered Program accepts with a valid run (`AccSeqsChecked`), on a
     run with failed connections as on one with none;
   * **counted**: those whose run fails at most `j` connections, each below its bound, number at most
-    `(Σ_{i ≤ j} failPatterns bound i) · #Θ · windowsCount`. The factor is one at `j = 0` and `∏_c (bound c + 1)`,
+    `(Σ_{i ≤ j} failPatterns bound i) · #Θ · executionPhasesCount`. The factor is one at `j = 0` and `∏_c (bound c + 1)`,
     `MonitoringPeriodLeakAccepted`'s factor for the cells, at every connection.
 
 `Conn` is every connection slot of the period, over all its links, and `j` the period's failures: one factor for the
@@ -167,7 +167,7 @@ def MonitoringPeriodLeakFailsAtMost : Prop :=
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
     (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D.partition δ sw Pw β)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
     {Conn : Type} [Fintype Conn] (ρ : (Conn → Option ℕ) → Fin n → ℕ → Bool)
@@ -175,7 +175,7 @@ def MonitoringPeriodLeakFailsAtMost : Prop :=
     {Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (rd : Par → (Fin n → List (Obs L K S)) → Conn → List (ℕ × CellView Cell))
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
@@ -213,11 +213,11 @@ def MonitoringPeriodLeakFailsAtMost : Prop :=
                 (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)
                 ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
             ((∑ i ∈ Finset.range (j + 1), failPatterns bound i : ℕ) : ℕ∞) *
-              (Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
+              (Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞)))
 
 /-- **The charge a period's failures pay, as one that adds over periods.** Under weights `w` on the number of failed
 connections that sum to at most one (`KraftWeights`) and finitely many registered parameters `Θ`, a run that fails `j`
-connections is charged `log2 (failPatterns bound j · #Θ · windowsCount / w j)` bits. For every `T`, the secrets whose
+connections is charged `log2 (failPatterns bound j · #Θ · executionPhasesCount / w j)` bits. For every `T`, the secrets whose
 every window meets `ExecutionPhaseGoodChecked` and whose run is charged at most `log2 T` bits number at most `T`: the number of
 failures is the sender's choice, and the weight charges for it, so the charges of two periods add. -/
 def MonitoringPeriodLeakCharged : Prop :=
@@ -227,7 +227,7 @@ def MonitoringPeriodLeakCharged : Prop :=
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
     (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D.partition δ sw Pw β)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
     {Conn : Type} [Fintype Conn] (ρ : (Conn → Option ℕ) → Fin n → ℕ → Bool)
@@ -235,7 +235,7 @@ def MonitoringPeriodLeakCharged : Prop :=
     {Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (rd : Par → (Fin n → List (Obs L K S)) → Conn → List (ℕ × CellView Cell))
     (allows : Par → CertifierSchedule Conn → Prop) (hread : f.ReadsBy rd allows)
     (Θ : Finset Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv)
@@ -249,7 +249,7 @@ def MonitoringPeriodLeakCharged : Prop :=
         ((run tap (schedOf z, srvOf z)).2 i)) →
       {z | z ∈ Zs ∧ FailsBelow bound (failCell (schedOf z) (arr (srvOf z))) ∧
           ((failPatterns bound (failCount (failCell (schedOf z) (arr (srvOf z)))) *
-              (Θ.card * windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
+              (Θ.card * executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β) : ℕ) : ℚ≥0) ≤
             w (failCount (failCell (schedOf z) (arr (srvOf z)))) * (T : ℚ≥0) ∧
           ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
             (ρ (failCell (schedOf z) (arr (srvOf z))) i) tops (x z i) (wit z i)

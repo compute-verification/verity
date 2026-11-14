@@ -136,10 +136,10 @@ open Accounting.ReadUnit
 theorem TableReadBinding : Accounting.Guarantees.TableReadBinding := by
   intro V H t hcheck tags bytes tables ct hparse tu ht htu ho
   subst htu
-  intro n consts hone ι R hR Ω _ _ acc drawn tr cost ε hcom below hcr
+  intro n consts hone ι R hR Ω _ _ acc sampled tr cost ε hcom below hcr
   obtain ⟨run, hr, hφ, hout, hbind⟩ :=
     Gates.readUnitSampled_check (Ω := Ω) hparse ht hcheck ho (FlockSoundness.unrolled_built hparse) n
-  refine hbind consts hone R ?_ acc drawn tr cost ε hcom below (Claims.expectedCR_of_sample _ hcr)
+  refine hbind consts hone R ?_ acc sampled tr cost ε hcom below (Claims.expectedCR_of_sample _ hcr)
   intro i hi
   obtain ⟨j, hj, hp⟩ := hR i hi
   exact ⟨j, hj, hp.trans

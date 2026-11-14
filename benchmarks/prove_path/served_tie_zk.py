@@ -52,8 +52,8 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 import zk_drivers  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
-from verity.protocols.accounting.certifier.prover import served_tie as ST  # noqa: E402
+from verity_vllm.compiler import served_rows as SR  # noqa: E402
+from verity_vllm.compiler import served_tie as ST  # noqa: E402
 
 CLASSES = {
     "slice": dict(R=2, P=7, IW=6, L=4096, T=256, IB=8, PB=8),
@@ -63,10 +63,17 @@ CLASSES = {
 GS = {"slice": (7, 1), "9c10": (256, 8, 1), "served": (256, 16, 1)}
 OPENED = ("o0", "pub")
 NEGATIVES = ("start", "short", "id", "other")
+#: what a member's session reports of its proving, as its row keeps it
+TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
+          "dense_m", "units", "ands_per_vu", "prover", "gpu")
 
 
 def log(msg: str) -> None:
     print(f"STZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def _per(x, n: int):
+    return None if x is None else round(x / n, 3)
 
 
 ALL_PAIRS_MEASURED = {"9c10": 649_079}
@@ -282,7 +289,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
     verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -321,8 +328,8 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
             "audit": {k: result.get(k) for k in ("accepted", "complete", "wrong_units")},
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "timing": statement[name], "lean_verify_s": lv.get("verify_s"), "proof_bytes": proofs,
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)}}
+            "per_unit": {"prove_total_s": _per(timing.get("prove_total_s"), n), "proof_bytes": _per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": _per(lv.get("verify_s"), n)}}
 
 
 def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
