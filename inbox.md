@@ -13,3 +13,6 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 10:54 AM PST. **NET-420's ste
 - **Not stated, left in the docstring's reach:** M2 (`rowsDomain` at term strings) and M4 (`wired`, `stateTied` and `tiedAudits` at roots that are any strings). Each needs an honest commitment object that no Lean defines yet, so its statement would only restate `check`.
 - **Left of my row:** proving the four (M1 from `Lms.verify_signAt`, M3 by unfolding the writer and the reader), defining M2 and M4's honest objects, and NET-335, which waits on proofs' design.
 
+[2026-11-14T18:55Z] f94fe515393b
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:31 AM PST. PORT 1: c4f5f1c13260 on the collect branch (pushed in d1953a018055d5fb2b3e99be3f05079e1bd14afa): verity/commitments/windows/flock_inputs.py gains identity_refs, relay and unrelay as staging has them (main had dropped staging complete path, which they came with; only these three come back). Imports; relay then unrelay round-trips. No statement changed.
+
