@@ -19,6 +19,7 @@ from verity.definitions.registry import b1, dead_free, sampling_vocab, topp_word
 from verity.definitions.registry import sampling as SM
 
 from verity_vllm.check.match import split_selects
+from verity_vllm.errors import Refused
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
 from verity_vllm.observe.fold.patterns.sampling import (
     SCRATCH_TOPP_SELECT,
@@ -132,7 +133,7 @@ def test_a_declared_target_construction_still_holds_without_program_dirs():
     tp = DEFAULT_TARGET.with_overrides(sampler_construction=PLAIN)
     assert with_sampler_construction(_profile(TokenSelectGumbelTopP()), None).patterns[0].construction is None
     assert _fold_select(V, TokenSelectGumbelTopP(), tp) == bind(SM.GumbelTopPTokenSelect, V=V).id
-    with pytest.raises(SystemExit, match="not one of"):
+    with pytest.raises(Refused, match="not one of"):
         with_sampler_construction(_profile(TokenSelectGumbelTopP()), "plain")
 
 
