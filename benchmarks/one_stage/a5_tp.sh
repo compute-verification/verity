@@ -15,7 +15,8 @@
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
-#     sparse-mla:units is its --units, each key block served as its scores unit and its values units.
+#     sparse-mla:units is its --units, each key block served as its scores unit and its values units, which read the block's
+#     key rows from their writers' committed rows.
 #     The STANDIN entry topp is a5_topp.py: test_serving_rows_stages' window (GumbelTopPTokenSelectSharedGreedy rows cut into
 #     their stages, each stage on bits and each carried row wired to the unit that wrote it: at V = 64, split count 1's stats,
 #     probs and step blocks; A5_TOPP its other statics, a5_topp.py's arguments, e.g. '--v 128 --splits 1,2', or

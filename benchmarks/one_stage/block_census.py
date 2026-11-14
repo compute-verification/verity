@@ -6,8 +6,8 @@ A row's cut is its own Definition, or else a unit template for each slot of its 
 a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
-(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns, the way the
-served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
+(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
+writers, the way the served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
 row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
 split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
@@ -69,7 +69,8 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
     list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
     has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one).
-    A ``CHAINS`` row's options are its key blocks as scores and values units of `CHAIN_COLS` columns, then whole."""
+    A ``CHAINS`` row's options are its key blocks as scores and values units of `CHAIN_COLS` columns with their key rows'
+    writers, then whole."""
     base = spec_base(spec)
     if base in ST.PARTS:
         for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
