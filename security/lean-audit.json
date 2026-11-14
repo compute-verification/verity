@@ -60564,9 +60564,6 @@
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
- "four_names_except": {
-  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
- },
  "ids": {
   "Accounting.Assumptions.KeyBinding": "key-binding",
   "Accounting.Assumptions.WorkHardness": "rate-codec-work",
@@ -60597,5 +60594,8 @@
   "Verity.Assumptions.VerifierReadsLog": "honest-verifier",
   "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
   "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard"
+ },
+ "four_names_except": {
+  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
  }
 }
