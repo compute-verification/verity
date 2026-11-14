@@ -10,7 +10,8 @@
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof",
   "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck"
+  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck",
+  "NciCheck.RowsProtocolMain": "the inference-only-rows executable's entry point, one line; its command is Core.BlobProtocol.main of InferenceOnly.RowsProtocol.protocol, audited under CoreProtocol and NciCheck"
  },
  "runs": {
   "NciCheck.BaselineDifftestMain": {
@@ -149,6 +150,11 @@
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
    "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+  },
+  "NciCheck.RowsProtocol": {
+   "imports": ["Std", "CoreProtocol.Blobs", "Spot.OneStageZk", "Spot.FilePart", "NciCheck.Protocol", "NciCheck.RecordRows", "NciCheck.RecordChosen"],
+   "except": [],
+   "why": "the check of a circuit record in rows as a core protocol is code: the record's reading, the rule in rows and the count of what the prover chose (NciCheck.RecordRows, NciCheck.RecordChosen), v0's decoder of the run's registration record (NciCheck.Protocol), the core interface's blobs, and the reader SPOT's one-stage check reads a circuit file with and its count of a unit's rows (Spot.OneStageZk, Spot.FilePart); no Mathlib and nothing of Security"
   },
   "NciCheck.DefinitionDigest": {
    "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
