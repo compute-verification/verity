@@ -41,7 +41,8 @@ package's audit builds and reads it.
   its registration's parameters name. The copy of main's first-parent history they are read under is the first
   stage's evidence's own, as one-stage v2 reads its evidence's, and the second stage's must be the same copy
   (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix. The first stage's coin
-  evidence is never `null` (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins.
+  evidence is never `null` (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins. The statements are
+  fewer than `2^64` (`stmtsFit`, `STMTS_COUNT`), the most a list's 8-byte length word counts.
 * **check** (`checkBlobsAt`), in order:
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
@@ -281,8 +282,21 @@ theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
 def FIRST_COINS_NULL : String :=
   "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins"
 
-/-- The evidence (module docstring, **evidence**). -/
-def evidenceOf (b : ByteArray) : V Evidence := do
+/-- The refusal of evidence whose statements are too many for the word a list's length is written in
+(`stmtsFit`). -/
+def STMTS_COUNT : String :=
+  "the evidence holds 2^64 statements or more, past the 8-byte word a list of statements holds its length in"
+
+/-- **The statements' count fits a word** (`STMTS_COUNT`): `n` statements are fewer than `limit`. -/
+def stmtsFit (limit n : Nat) : V Unit :=
+  if limit ≤ n then .error STMTS_COUNT else .ok ()
+
+#guard (stmtsFit 2 1).toOption.isSome
+#guard (stmtsFit 2 2).toOption.isNone
+#guard (stmtsFit OneStageZk.WORD 0).toOption.isSome
+
+/-- The evidence's parse (module docstring, **evidence**), before its statements are counted (`evidenceOf`). -/
+def evidenceParsed (b : ByteArray) : V Evidence := do
   let j ← split (← Core.canonicalJson b) "evidence"
   keysAre j #["coins", "interior", "received", "record", "source", "statements"] "the evidence"
   if getD j "coins" matches .null then throw FIRST_COINS_NULL
@@ -295,6 +309,35 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let some statements := interior.statements | throw "the interior audit's evidence names no statements"
   pure { received, source, coins := getD j "coins", interior, statements, record := getD j "record",
          stmts }
+
+/-- The evidence (module docstring, **evidence**): `evidenceParsed`'s, its statements fewer than `2^64`
+(`stmtsFit` at `OneStageZk.WORD`). -/
+def evidenceOf (b : ByteArray) : V Evidence :=
+  match evidenceParsed b with
+  | .error err => .error err
+  | .ok e =>
+    match stmtsFit OneStageZk.WORD e.stmts.size with
+    | .error err => .error err
+    | .ok () => .ok e
+
+theorem stmtsFit_ok {limit n : Nat} (h : stmtsFit limit n = .ok ()) : n < limit := by
+  unfold stmtsFit at h
+  split at h
+  · cases h
+  · next hn => exact Nat.lt_of_not_le hn
+
+/-- **Evidence the form reads is `evidenceParsed`'s, of fewer than `2^64` statements.** -/
+theorem evidenceOf_ok {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) :
+    evidenceParsed b = .ok e ∧ e.stmts.size < 2 ^ 64 := by
+  unfold evidenceOf at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, stmtsFit_ok hw⟩
 
 /-- The ports of the registration `record`'s roots. -/
 def portsOf (record : Json) : Array String :=
