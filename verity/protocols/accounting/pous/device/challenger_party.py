@@ -100,12 +100,15 @@ class Refusal(RuntimeError):
 def field_bytes(request: Any, field: str, n: int) -> bytes:
     """`request[field]`, `n` bytes in hex; `Refusal` naming the field and its form otherwise."""
     value = request.get(field) if isinstance(request, Mapping) else None
+    why = f"the request's `{field}` is {n} bytes in hex"
+    if not isinstance(value, str):
+        raise Refusal(why)
     try:
-        out = bytes.fromhex(value) if isinstance(value, str) else b""
+        out = bytes.fromhex(value)
     except ValueError:
-        out = b""
+        raise Refusal(why) from None
     if len(out) != n:
-        raise Refusal(f"the request's `{field}` is {n} bytes in hex")
+        raise Refusal(why)
     return out
 
 

@@ -338,7 +338,7 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
         CS.salt(side, AUDIT, commitment)
     point = period.point_for(len(STORE), period.W, period.C0)
     wrong = run.Setup(point.params.blocks, commitment, b"\x02" * 64, bytes(24))
-    with pytest.raises(RuntimeError, match="the side on auditor-host refused: setup's published outputs \(`published`\) do not carry"):
+    with pytest.raises(RuntimeError, match=r"the side on auditor-host refused: setup's published outputs \(`published`\) do not carry"):
         side.talk(CS.request_of("n0", point, wrong.root, audit=AUDIT, published=wrong), lambda s: None)
     assert not (device / "seed").exists() and mc.SessionLog(device / "sessions").path.read_text() == f"{mc.SESSION_LOG}\n"
 
