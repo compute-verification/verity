@@ -24,8 +24,6 @@ LAKEFILES = ("lakefile.toml", "lakefile.lean")
 #: suites whose metadata names a Lake package that their tests only read, never build or run: suite name -> why
 READS_ONLY = {"verity/commitments/randomness": "holds Randomness's Lake package, which its tests never build",
     "verity/protocols/accounting/pous/verifier": "test_pous_trusted hashes Security's lakefiles against the lock; it starts no program",
-    "benchmarks/inference_only": "built.py reads the count's lakefile for its executable's name; the tests run the count's "
-                                 "Python reference and start no program",
 }
 
 

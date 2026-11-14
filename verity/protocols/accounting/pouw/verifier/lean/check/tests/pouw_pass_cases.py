@@ -1,7 +1,7 @@
-"""The pass and sample difftest's cases: `core_check.pass_epoch`'s arguments, ``{"coins", "raw": hex | null, "context",
+"""The pass and sample difftest's cases: `core_check.pass_epoch_twin`'s arguments, ``{"coins", "raw": hex | null, "context",
 "recorded", "reveal", "committed", "stream", "prover", "live"}`` (the four before ``live`` hex or null, ``live`` the
-verifier's `core_check.LIVE` inputs or null), `core_check.live_salt`'s, ``{"key", "ledger", "pins", "main", "session",
-"manifest"}``, and `core_check.draw`'s, ``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k",
+verifier's `core_check.LIVE` inputs or null), `core_check.live_salt_twin`'s, ``{"key", "ledger", "pins", "main", "session",
+"manifest"}``, and `core_check.draw_twin`'s, ``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k",
 "population", "units"}``.
 
 A pass case is an honest pass (a small workload, its weights' roots, an execution phase's coins committed under one of
@@ -583,7 +583,7 @@ LIVE_SALT_NAMES = ["not-object", "schema", "no-schema", "matmuls-form", "weights
 
 
 def live_salt_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `core_check.live_salt` case, ``{"key", "ledger", "pins", "main", "session", "manifest"}``: a live pass
+    """One `core_check.live_salt_twin` case, ``{"key", "ledger", "pins", "main", "session", "manifest"}``: a live pass
     (`honest_live`), then mutation `name`."""
     h = honest_live(rng, _live_manifest(rng))
     if name != "honest":
@@ -592,7 +592,7 @@ def live_salt_instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def live_salt_args(d: dict) -> tuple:
-    """`core_check.live_salt`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
+    """`core_check.live_salt_twin`'s arguments for case `d`, the challenger's signatures checked with `lms_verify`."""
     return d["key"], d["ledger"], d["pins"], d["main"], d["session"], d["manifest"], RC.lms_verify
 
 

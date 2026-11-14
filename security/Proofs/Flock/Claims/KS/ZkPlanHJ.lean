@@ -77,7 +77,7 @@ local notation "𝔽" => FlockLevel3.GF128
 reads them, `Hidden.Committed.netWidths`/`netKinds`, and its leaf is the default one), and the same padding constant, pads and inner code. -/
 theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
     (ht : I'.tags.typed = false) (y : DrawSetupZHJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
-    (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
+    (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) :
     y.table = zkTab L hz hk hlay := by
   obtain ⟨x, sch', tPad', hz', _, _, _, _, _, _, _⟩ := y
@@ -133,7 +133,7 @@ theorem setupZHJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
     (hshape : sts.forM Flock.Zk.shapeOk = .ok ()) (hok : DrawOkZKHJ I dj mPts S) (j : Fin (nTab I))
-    (hj : j.val < sts.size) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule sts[j.val].m = .ok (sch, tPad)) :
+    (hj : j.val < sts.size) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j),
       y.x.st = sts[j.val] ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hs
@@ -156,7 +156,7 @@ theorem tableZHJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) 
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
     (hshape : sts.forM Flock.Zk.shapeOk = .ok ()) (hok : DrawOkZKHJ I dj mPts S) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts)
     (j : Fin (nTab I)) (hj : j.val < sts.size) :
@@ -175,7 +175,7 @@ theorem planZHJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = true) (h
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts))
     (hshape : sts.forM Flock.Zk.shapeOk = .ok ()) (hok : DrawOkZKHJ I dj mPts S) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts) (R : Reg) :
     planZHJ (Reg := Reg) dj y₀ S R = tabsJ sts.size (zkTabs h0 L hz hk hlay) := by
