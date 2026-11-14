@@ -164,7 +164,7 @@ def write_node_window(st: Mapping[str, Any], request: Mapping[str, Any], tp: Map
     names free rows (`node_window_rows.check_free`); `commit` holds the ranks' ``circuit.json`` to it
     (`node_window_rows.rank_records`) before it returns, before the coin."""
     raise NotImplementedError("vllm/compiler-wires-period-pieces: no rank commits a node window yet: rank_rows picks no "
-                              "form, and node_window_rows' served_values and commit_rank_window are not built")
+                              "form, and node_window_rows.served_values is not built")
 
 
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
