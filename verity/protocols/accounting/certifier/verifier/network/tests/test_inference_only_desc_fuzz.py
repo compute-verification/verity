@@ -63,7 +63,7 @@ def _shared_reads(text: str) -> list[tuple[str, str, int]]:
 
 def test_the_shared_family_reads_several_nodes_through_one(tmp_path):
     """`desc_difftest_vectors.shared()`'s six declarations come right after `hand`, each read so and with its two
-    instances; of the 200 `shared` seeds, every one decodes, comes with IU assignments of its own, and most are read so,
+    instances; of the 200 `shared` seeds, every one decodes, comes with inference block assignments of its own, and most are read so,
     through a batch at the root or a call of one, by a primitive or a call, some gate reading four root nodes through
     the one."""
     data = fuzz.write(tmp_path)["desc_fuzz/programs.jsonl"]
