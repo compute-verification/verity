@@ -39,7 +39,6 @@ from verity.commitments.windows.interface import digest_words
 from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
@@ -174,7 +173,7 @@ def _span(seed: int, registration: int = 0) -> IR.Span:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), D.parse_design(f"subset:{Q}"),
+    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), S.D.parse_design(f"subset:{Q}"),
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
