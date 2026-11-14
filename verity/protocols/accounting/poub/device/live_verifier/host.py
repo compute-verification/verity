@@ -515,7 +515,7 @@ def gate_fetch(rest: list[str], host: Host, sink: BinaryIO) -> None:
 
 def gate_replay(rest: list[str], host: Host, *, by: str, busy: Callable[[], list[str]],
                 start: Callable[[str], None]) -> dict:
-    """Start the run's replay unit: refused while any unit runs, or before the run has ended."""
+    """Start the unit that replays the run: refused while any unit runs, or before the run has ended."""
     if len(rest) != 1:
         raise Refused("replay RUN")
     run = rest[0]

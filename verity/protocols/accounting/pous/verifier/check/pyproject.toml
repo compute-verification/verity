@@ -33,7 +33,7 @@ untraced = [
     "tests/test_timed_audit.py",
     "tests/test_verdict_difftest.py",
 ]
-# Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
+# Test-only: `lake` builds this package and, through its path requires, the core protocol interface and Flock's verifier's
 # Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the vectors are `p2_v1`'s
 # files, which the vector tests read. `interop.py` holds the Lean to the wire's Python reference (`p2_v1`'s package, `wire.py`
 # and `reference.py`, which pins the files) on the audit files. `timed_audit.py` holds the Lean to the
@@ -48,7 +48,7 @@ untraced = [
 # `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.circuits`' evaluator.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/pous", 
           "verity/protocols/accounting/pous/prover", "tools/difftest", 
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",

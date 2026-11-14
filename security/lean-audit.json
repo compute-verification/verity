@@ -1,18 +1,21 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {
   "Accounting.Assumptions.KeyBinding": {
+   "id": "key-binding",
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
   "Accounting.Assumptions.SketchHashRandom": {
+   "id": "random-oracle",
    "owner": "@memory-accounting",
    "digest": "6e79010bd69179335cf616b30f200eeb5bc8bc4d7b27f0df3201fb604b369355"
   },
   "Accounting.Assumptions.WorkHardness": {
+   "id": "rate-codec-work",
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
@@ -25,38 +28,47 @@
    "digest": "62a36c498a423d1faf10977b5259a7277dcd6a31dda7ee60c639ce1025984a5e"
   },
   "FlockSoundness.Assumptions.SHA512CRExpected": {
+   "id": "ecr/sha-512",
    "owner": "@proofs",
    "digest": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d"
   },
   "FlockSoundness.Assumptions.SHA512CRStrict": {
+   "id": "cr/sha-512",
    "owner": "@proofs",
    "digest": "3dff81602812a1e09dab93812f599b267e137d1b21dd6e6b47e3a815cc60d56f"
   },
   "FlockSoundness.Assumptions.UniformRandomBytes": {
+   "id": "uniform/io-getrandombytes",
    "owner": "@proofs",
    "digest": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19"
   },
   "FlockSoundness.Assumptions.UniformRandomBytesTest": {
+   "id": "uniform/io-getrandombytes",
    "owner": "@proofs",
    "digest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
   },
   "InferenceOnly.Cut.Assumptions.Exports": {
+   "id": "training-cut-exports",
    "owner": "@training",
    "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
   },
   "InferenceOnly.Cut.Assumptions.Hardness": {
+   "id": "training-cut-hardness",
    "owner": "@training",
    "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6"
   },
   "InferenceOnly.Formalism.Assumptions.CutCost": {
+   "id": "training-cut-cost",
    "owner": "@training",
    "digest": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4"
   },
   "InferenceOnly.Formalism.Assumptions.EfficiencyFloor": {
+   "id": "training-efficiency-floor",
    "owner": "@training",
    "digest": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e"
   },
   "InferenceOnly.Formalism.Assumptions.TokenWork": {
+   "id": "training-token-work",
    "owner": "@training",
    "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
   },
@@ -69,14 +81,17 @@
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
   },
   "Pouw.PearlC.GGapPerCoin": {
+   "id": "pouw-gamma-per-coin",
    "owner": "@memory-accounting",
    "digest": "cfa81de74fc83b3131a10e5f3f42ba4e7bf9f149b2c8a5ffb73817aaa4107c35"
   },
   "Verity.Assumptions.ChannelAuthentic": {
+   "id": "channel-authentic",
    "owner": "@memory-accounting",
    "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145"
   },
   "Verity.Assumptions.ImprintPathPrivate": {
+   "id": "imprint-path-private",
    "owner": "@memory-accounting",
    "digest": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722"
   },
@@ -676,6 +691,7 @@
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.Compose.SeedExtractedAt": {
+   "id": "random-oracle",
    "owner": "@compute-accounting",
    "digest": "0227aa9584d74d8b7759a40ae34facb0f0f97979caaefbcd8608c4d8a33ce0e8",
    "issue": "LEAN-186",
@@ -748,198 +764,231 @@
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.AcceptedLive": {
+   "id": "accounting-ts-accepted-live",
    "owner": "@proofs",
    "digest": "e5a4891075e9f3dfe8ceb86685685ffe4b4fc49af34341d02000f77ef3cc221f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.BindingForkAt": {
+   "id": "accounting-ts-proofs-sound",
    "owner": "@compute-accounting",
    "digest": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ExecutionPhaseDesign": {
+   "id": "accounting-ts-window-law",
    "owner": "@compute-accounting",
    "digest": "82c7183943f686a0469fc914e92dd11de924cfa5c7c9a663fa6ecd7f111f297c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.FacetCeilings": {
+   "id": "accounting-ts-facet-ceilings",
    "owner": "@compute-accounting",
    "digest": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.FanIn": {
+   "id": "accounting-ts-fan-in",
    "owner": "@compute-accounting",
    "digest": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.FillOpt": {
+   "id": "accounting-ts-fill-opt",
    "owner": "@compute-accounting",
    "digest": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.FoldOpt": {
+   "id": "accounting-ts-fold-opt",
    "owner": "@compute-accounting",
    "digest": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.FoldOptFoldedAt": {
+   "id": "accounting-ts-fold-opt",
    "owner": "@compute-accounting",
    "digest": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.GroupRealizes": {
+   "id": "accounting-ts-group-realizes",
    "owner": "@proofs",
    "digest": "a900a13f2e6272bba7fd0d8fcbf621ee549eea21b011e4fc6fafc54501306522",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.LuckAt": {
+   "id": "accounting-ts-luck",
    "owner": "@compute-accounting",
    "digest": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.NoSum": {
+   "id": "accounting-ts-nosum",
    "owner": "@compute-accounting",
    "digest": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.OkRealizes": {
+   "id": "accounting-ts-ok-realizes",
    "owner": "@proofs",
    "digest": "60d0762394b93ad63d26033020b2936174cf174b489553c80672c2d2ba8b8166",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.OperandHMu": {
+   "id": "accounting-ts-operand-h-mu",
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ProofSoundAt": {
+   "id": "accounting-ts-proofs-sound",
    "owner": "@compute-accounting",
    "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ProofsPin": {
+   "id": "accounting-ts-proofs-pin",
    "owner": "@compute-accounting",
    "digest": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ProofsSound": {
+   "id": "accounting-ts-proofs-sound",
    "owner": "@compute-accounting",
    "digest": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ReceiptLuckAt": {
+   "id": "accounting-ts-receipt-luck",
    "owner": "@compute-accounting",
    "digest": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.RightFixed": {
+   "id": "accounting-ts-right-fixed",
    "owner": "@compute-accounting",
    "digest": "0bb42a1edd93a51a2123ec06ceec56b614dfb5c73b386c15ed6651da5f2b0561",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ScalarRoute": {
+   "id": "accounting-ts-scalar-route",
    "owner": "@compute-accounting",
    "digest": "3319f1efdfaaf78f0d3ad36af4f8926bcaa01b60a04b6d6d9fa1e1c354f4ade7",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ServedChecksHold": {
+   "id": "accounting-ts-served-checks",
    "owner": "@compute-accounting",
    "digest": "d73b17ddfa5912fc753a8de1531e93d655cea7adafa6ce9ef92451b8885cbc46",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ServedRootsLinked": {
+   "id": "accounting-ts-served-roots-linked",
    "owner": "@proofs",
    "digest": "2d9d728ff361466e4697894752d724633f385ceaab322d9eb5a7b33069ab8c5b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetClock": {
+   "id": "accounting-sheet-clock",
    "owner": "@compute-accounting",
    "digest": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetDispatch": {
+   "id": "accounting-sheet-dispatch",
    "owner": "@compute-accounting",
    "digest": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetPipe": {
+   "id": "accounting-sheet-pipe",
    "owner": "@compute-accounting",
    "digest": "b795822742970c59fb96eb58e964dbedef97d1fc30e4aa896c891a06c44a0025",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetSemantics": {
+   "id": "accounting-sheet-semantics",
    "owner": "@compute-accounting",
    "digest": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetSmem": {
+   "id": "accounting-sheet-smem",
    "owner": "@compute-accounting",
    "digest": "c1e803adb4944e43b7673d0ef77d77499ba789363cfa0433e77043d1f5c1c9ef",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetTensor": {
+   "id": "accounting-sheet-tensor",
    "owner": "@compute-accounting",
    "digest": "82d340d8ceb6ba0b2680901a810078ba52a9dc2db6dada1ff31089133faf790b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SheetWords": {
+   "id": "accounting-sheet-words",
    "owner": "@compute-accounting",
    "digest": "9b88131e911d04f47323b4857a96bd7cb90b59dc3da75abc9617a100474d83b1",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.SideUnits": {
+   "id": "accounting-ts-side-units",
    "owner": "@compute-accounting",
    "digest": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.StageLuck": {
+   "id": "accounting-ts-stage-luck",
    "owner": "@compute-accounting",
    "digest": "3716a32c0e88ce832a829e45ee01c8957d2610e836c229dbfac1dd9c50fea60d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.UnitFixed": {
+   "id": "accounting-ts-unit-fixed",
    "owner": "@compute-accounting",
    "digest": "ef200f592030ee7b72ed3b8f6cb7d7557c0ab56bd6e7cd30b2c4d660748453d6",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.WholeLuckAt": {
+   "id": "accounting-ts-receipt-luck",
    "owner": "@compute-accounting",
    "digest": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.WordsWritten": {
+   "id": "accounting-ts-words-written",
    "owner": "@compute-accounting",
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7",
    "issue": "LEAN-186",
@@ -1036,6 +1085,7 @@
    "due": "2026-11-30"
   },
   "Accounting.Covered": {
+   "id": "certifier-coverage",
    "owner": "@network-accounting",
    "digest": "f96318a12fcb3f487d8805649ff57383d2000740fe3ee9bc6ab3a957bb5b9a5d",
    "issue": "LEAN-186",
@@ -1642,6 +1692,7 @@
    "due": "2026-11-30"
   },
   "Claims.ExpectedCR": {
+   "id": "ecr/sha-512",
    "owner": "@proofs",
    "digest": "83125752f67066703612e6c2f5f7f9a3da5f44b0db4f4072efface41ec981eaf",
    "issue": "LEAN-186",
@@ -1816,6 +1867,7 @@
    "due": "2026-11-30"
   },
   "Claims.StrictBirthday": {
+   "id": "cr/sha-512",
    "owner": "@proofs",
    "digest": "2524ac64f3909c7f4b0126db591da827d8cf49630cde77c96a9e21c75ed1fd1b",
    "issue": "LEAN-186",
@@ -1888,6 +1940,7 @@
    "due": "2026-11-30"
   },
   "Claims.ZKServer.Loop.Src": {
+   "id": "flock-zk-server-os-src",
    "owner": "@proofs",
    "digest": "1d5e4b1d63a9509aabc392614d2a4117d8d0df226d09a8ce96ec9f6a08ffb8f7",
    "issue": "LEAN-186",
@@ -2638,6 +2691,7 @@
    "due": "2026-11-30"
   },
   "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+   "id": "p2-ring-round-secure-wide",
    "owner": "@memory-accounting",
    "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921",
    "issue": "LEAN-186",
@@ -2716,6 +2770,7 @@
    "due": "2026-11-30"
   },
   "Pouw.Assumptions.HonestClock": {
+   "id": "honest-clock",
    "owner": "@compute-accounting",
    "digest": "5290855221f46a416a63e3d15ca9697041325ac4bd3b9423e143943e2e4c48fa",
    "issue": "LEAN-186",
@@ -2998,6 +3053,7 @@
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
+   "id": "tt-out-tile-pearl-c-h100-rev1",
    "owner": "@compute-accounting",
    "digest": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
    "issue": "LEAN-186",
@@ -3010,6 +3066,7 @@
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.W1CompleteH100": {
+   "id": "w1-complete-h100",
    "owner": "@compute-accounting",
    "digest": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
    "issue": "LEAN-186",
@@ -3166,6 +3223,7 @@
    "due": "2026-11-30"
   },
   "Verity.Assumptions.TrustedDevice": {
+   "id": "trusted-device",
    "owner": "@network-accounting",
    "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3",
    "issue": "LEAN-186",
@@ -3184,6 +3242,7 @@
    "due": "2026-11-17"
   },
   "Verity.Assumptions.ZkServerOwnUser": {
+   "id": "zk-server-own-user",
    "owner": "@proofs",
    "digest": "b1e9ef38e446427d01ef45ed0a790884ffdcc813bad242696f7b9405d81ce7d4",
    "issue": "LEAN-186",

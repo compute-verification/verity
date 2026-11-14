@@ -72,7 +72,7 @@ B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with
 (`clock.tensor` on those two cards, `memory.bandwidth` on all three). `store.dram` on the H200 and the B200 is of that
 kind too: what the shipped firmware gives a program, under the board's `store.dram_installed`. Each bounds a card only
 while it is the declared board and vBIOS, which the named assumptions `accounting-declared-device` and
-`accounting-sheet-clock` state (`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are
+`accounting-sheet-clock` state and no mark does. A host card's `store.l2`, `l1d` and `l1i` are
 likewise its guest's CPUID.
 
 ~~~python
