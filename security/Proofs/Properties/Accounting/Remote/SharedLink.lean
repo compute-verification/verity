@@ -10,9 +10,10 @@ import Proofs.Properties.Accounting.Remote.Window
 A run keeps, at any `g ≥ 1`, three facts of every sample taken and accepted window:
 
 * the sample is `draws` over its windows' plans, on the session's digest and coin `W + c`, and each window of it holds
-  its share (`passesBefore`). At `g ≥ 2` that is `SampleLink` (`LinkInv`, `linkInv_step`): the close that samples it gives
-  it (`sampleIsSubset`), and every later event keeps it, since a sampled window keeps its sample and plans (`Frz`). At
-  `g = 1` the sample is window `c`'s own (`DL1`, `Link1`, `link1_step`), the whole of it its share (`shareOf_all`).
+  its share (`passesBefore`). At `g ≥ 2` that is `SampleLink` (`LinkInv`, `linkInv_step`): the close that samples it
+  gives it (`sampleIsSubset`), and every later event keeps it, since a sampled window keeps its sample and plans
+  (`Frz`). At `g = 1` the sample is window `c`'s own (`DL1`, `Link1`, `link1_step`), the whole of it its share
+  (`shareOf_all`).
 * `SamplesIn`: each sampled window's samples are receipts of its plans (`close_samplesIn`, `samplesIn_of_link`), so its check
   reads only blocks below the store's extent at its sample (`sample_in_record`, `record_reads`).
 * `AcceptNow`: an accepted window is sampled, and its share is empty or `checkWindow` of it passes on the session's
@@ -726,8 +727,8 @@ theorem sampleLink_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Re
       · exact (h0 hc2).elim
 
 
-/-- With each sample linked, each sampled window's samples are receipts of its plans: its share of its sample's values, each
-a receipt of the sample's passes (`sampleIsSubset`), falls in its own passes. -/
+/-- With each sample linked, each sampled window's samples are receipts of its plans: its share of its sample's values,
+each a receipt of the sample's passes (`sampleIsSubset`), falls in its own passes. -/
 theorem samplesIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpre : Prefix s.windows)
     (hD : DP g s.params.windows s.windows) (hL : SampleLink g s) : SamplesIn s.windows := by
   have hs : ∀ u : Nat, s.windows[u]!.plans.size = s.windows[u]!.roots.size := sizes_all hI

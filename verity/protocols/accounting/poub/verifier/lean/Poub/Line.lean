@@ -262,9 +262,9 @@ def samplesOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) 
     (xs.foldl (fun a w => a + receipts w) 0, xs.foldl (fun a w => a + w.drawn) 0)
 
 /-- `ofSummary` of a record sampled `g` windows a coin (`Shared`): `ofSummary` at g = 1; above it the same groups, one a
-window, and the record's samples in place of its windows (`samplesOf`), refused unless each sample drew `min(s, U)` of its
-`U` receipts at the session's `samples` `s`, as `Shared.close`'s sample does, and has fewer than `RECEIPT_LIMIT` (2^64)
-receipts, as `receive` holds each window to: the memory model's sample reads at most `2^64 − 1` receipts a sample
+window, and the record's samples in place of its windows (`samplesOf`), refused unless each sample drew `min(s, U)` of
+its `U` receipts at the session's `samples` `s`, as `Shared.close`'s sample does, and has fewer than `RECEIPT_LIMIT`
+(2^64) receipts, as `receive` holds each window to: the memory model's sample reads at most `2^64 − 1` receipts a sample
 (`Properties.Poub.Line.receiptMax`), and a sample's windows' receipts, each below the limit, need not be. -/
 def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
     Except String (Array Group × Array (Nat × Nat)) :=
@@ -284,8 +284,8 @@ def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array S
                least := seen[t]!.least, weights := seen[t]!.weights, hbm := seen[t]!.hbm,
                host := seen[t]!.host } : Group), ds)
 
-/-- `lineOfRecord` of a record sampled `g` windows a coin: `line` at the groups and samples `ofSummaryAt` reads, its W the
-pooled bound of the record's samples; at g = 1 `lineOfRecord`'s. -/
+/-- `lineOfRecord` of a record sampled `g` windows a coin: `line` at the groups and samples `ofSummaryAt` reads, its W
+the pooled bound of the record's samples; at g = 1 `lineOfRecord`'s. -/
 def lineOfRecordAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen)
     (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
   match ofSummaryAt g sm samples seen with

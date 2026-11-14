@@ -46,10 +46,10 @@ The binding of table reads at a picked index (`Definitions.Poub.ReadUnit`), each
   row at its index in its local evaluation, or SHA-512 collides on what the two checks hashed
   (`Hash.SecurityProofs.EmbeddingReadBinding`). The local evaluation is the row the unit's own gates consume, and the
   transcript's where the row's gates are committed (`localEval_of_committed`).
-* `readUnitSampled`: over a run's coins, the run accepts with a sampled read that returns another row than its table's at
-  its index, where nothing its check and the table's check hashed collides, with probability at most the layer below's
-  bound: that the run accepts with a sampled read's unit wrong, or the read's registered rows failing, in the extractor's
-  transcript. A unit may hold several reads, and a read is sampled when its unit is.
+* `readUnitSampled`: over a run's coins, the run accepts with a sampled read that returns another row than its table's
+  at its index, where nothing its check and the table's check hashed collides, with probability at most the layer
+  below's bound: that the run accepts with a sampled read's unit wrong, or the read's registered rows failing, in the
+  extractor's transcript. A unit may hold several reads, and a read is sampled when its unit is.
 * `readUnitSampledCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
   (`Accounting.ReadUnit.Reads.finder`): the layer below's bound plus the finder's expected SHA-512 calls over `2^256`.
 -/

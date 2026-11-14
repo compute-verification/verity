@@ -29,9 +29,9 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
 * **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
   outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
-  0, on a schedule that runs each pass inside its window with each sample's receipts fixed (`HonestSchedule`), and at its
-  correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and there
-  the event is empty: the certifiers count nothing else entering and every line credits no more bits read than the
+  0, on a schedule that runs each pass inside its window with each sample's receipts fixed (`HonestSchedule`), and at
+  its correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and
+  there the event is empty: the certifiers count nothing else entering and every line credits no more bits read than the
   passes read (`lineHeld_honest`). Nontrivial: at a verifier that accepts everything and records one summary for every
   record, the bound fails on a node whose four passes read its one block once (`lineHeld_nontrivial`,
   `lineHeldAtSubprotocol_nontrivial`); and the line credits only what the passes read: on one record and summary its

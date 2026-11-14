@@ -33,12 +33,12 @@ The window (`verifyWindow`):
 
 The sample (`draws`):
 
-* `SampleIsSubset`: the window's samples are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the key
-  derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)` whose
-  index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the samples are distinct
-  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s distribution gives
-  the values (a uniform `k`-subset over independent uniform streams: `KeyedSample.subsetOn_escape_le`, a proofs unit,
-  under a uniform live coin, a premise) it gives the receipts.
+* `SampleIsSubset`: the window's samples are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the
+  key derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)`
+  whose index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the samples are distinct
+  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s distribution
+  gives the values (a uniform `k`-subset over independent uniform streams: `KeyedSample.subsetOn_escape_le`, a proofs
+  unit, under a uniform live coin, a premise) it gives the receipts.
 
 A pass's plan (`Plan.make?`, `Plan.changed`):
 

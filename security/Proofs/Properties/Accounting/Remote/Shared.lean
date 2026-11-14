@@ -16,16 +16,16 @@ each window below `W` of its sample or an earlier one (`sstep`). With sample `c`
 sample `c` or later is sampled, so no close has read `coins[W + c]` or above, and the run is the same on coins that
 agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilSampled`). And `Frozen`'s argument goes through
 with `Shared.close` (`frz_sclose`): under `DP` the windows a sample samples are unsampled before it, and it makes them final;
-it samples windows in order (`sclose_prefix`), so a sampled window's record is kept (`recordKeptAfterSample`). `liveUnder`
-is `Order`'s argument over `Shared.run g` (`srunL`): the event that samples window `t` is its sample's close, which keeps
-its record (`sdraw_keeps`), and with `t` unsampled so is its sample's first window (`undrawn_first`), which is what
-`OpeningsUnreadUntilSampled` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is sample 0, and coins that
-agree below `W` leave every window's openings coin free.
+it samples windows in order (`sclose_prefix`), so a sampled window's record is kept (`recordKeptAfterSample`).
+`liveUnder` is `Order`'s argument over `Shared.run g` (`srunL`): the event that samples window `t` is its sample's
+close, which keeps its record (`sdraw_keeps`), and with `t` unsampled so is its sample's first window (`undrawn_first`),
+which is what `OpeningsUnreadUntilSampled` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is sample
+0, and coins that agree below `W` leave every window's openings coin free.
 
 `acceptSamplesOpenable` is `Properties.Poub.acceptSamplesOpenable`'s argument across a sample's windows: each sampled
 `(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
-whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the sample is the receipts before window `k`
-plus its number there (`flatMap_split`, `sum_take_mid`).
+whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the sample is the receipts before window
+`k` plus its number there (`flatMap_split`, `sum_take_mid`).
 
 `*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `Poub.Shared.run_one`),
 and a sample of one window is `verifyWindow`'s (`acceptSamplesOpenable_one`).

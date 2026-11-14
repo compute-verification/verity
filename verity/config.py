@@ -23,8 +23,8 @@ deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run 
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
-sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
-parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
+sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s,
+its parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
 name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
 needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
@@ -391,8 +391,8 @@ def digest(cfg: Mapping[str, Any]) -> str:
 def new(workload: str, protocols: Sequence[str], components: Mapping[str, Component],
         workloads: Mapping[str, Workload], commit: str, machine: str = LOCAL) -> dict[str, Any]:
     """A configuration of ``protocols`` on ``workload`` that states only its choices: every declared party on
-    ``machine``, the declared channels, and the first default sampling design of a listed subprotocol that every listed subprotocol
-    runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
+    ``machine``, the declared channels, and the first default sampling design of a listed subprotocol that every listed
+    subprotocol runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
     if unknown := [n for n in protocols if n not in components]:
         raise Refused("unknown-protocol", f"{', '.join(unknown)} (known: {', '.join(components)})")
     if workload not in workloads:

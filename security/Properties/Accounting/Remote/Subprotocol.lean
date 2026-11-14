@@ -39,8 +39,8 @@ statement in `Properties.Accounting.Remote.SubprotocolDeployed`:
 `Plays` is the component's acceptance (`DecodedAccepted` unfolded at `Poub.Protocol.protocol`, whose decoders
 are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what picks out the record the line reads: the
 commitment decodes to the node's registration, and the parameters and the log to the node's session parameters and
-windows a sample and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a log
-that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
+windows a sample and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a
+log that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
 
 Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
 contributes. `AcceptIsVerifiedFor chk` and `PublishedEpsFor chk` are `AcceptIsVerified` and `PublishedEps` at a check

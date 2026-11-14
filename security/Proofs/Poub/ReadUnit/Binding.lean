@@ -7,10 +7,10 @@ public import Proofs.Core.Game.Expect
 /-!
 # A table read the read's template check accepts binds
 
-`Accounting.SecurityProofs.TableReadBinding` proves `Accounting.Guarantees.TableReadBinding` from `readUnitSampled_check`:
-the check's run puts the read's input `x` on column `x` and output `j` on `Layout.outCol`'s column, so a read at the
-template's columns (`portsAt`) is a read at the run's ports (`portsAt_eq`, `readPorts`). SHA-512's collision resistance
-at the reads' finder is the named assumption at its one coin (`expectedCR_of_sample`).
+`Accounting.SecurityProofs.TableReadBinding` proves `Accounting.Guarantees.TableReadBinding` from
+`readUnitSampled_check`: the check's run puts the read's input `x` on column `x` and output `j` on `Layout.outCol`'s
+column, so a read at the template's columns (`portsAt`) is a read at the run's ports (`portsAt_eq`, `readPorts`).
+SHA-512's collision resistance at the reads' finder is the named assumption at its one coin (`expectedCR_of_sample`).
 
 `gatesRefine_check` is the gate fact under it on its own: at every copy of a unit of a parsed templated statement whose
 template the check accepts and whose unit returns the circuit's outputs, with the unit's constant registered as `true`,
@@ -76,8 +76,8 @@ gate is committed. The root's and the domain id's gates are the copy's inputs, o
 nothing of them here.
 
 It names no probability, no acceptance and no hash's collision resistance. It is the gate premise
-`Accounting.SecurityProofs.readUnitSampledCR` takes of each read, which `readUnitSampled_check` discharges inside its own
-proof, here on its own and from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`),
+`Accounting.SecurityProofs.readUnitSampledCR` takes of each read, which `readUnitSampled_check` discharges inside its
+own proof, here on its own and from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`),
 stated at the template's columns through `portsAt_eq`. -/
 theorem gatesRefine_check {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} {tu : Flock.TmplUnit}

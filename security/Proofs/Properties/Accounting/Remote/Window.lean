@@ -15,8 +15,8 @@ it returned a bad value. The receipters' map only ever holds a pass's own receip
 opening under the receipter of its pass's seed. `checkOpening_none` reads checks 1–5 off `checkOpening`'s early returns.
 
 `forIn_findSome` reads such a loop exactly: its result is the first value over the list. So `checkWindow` is its first
-rejection in sample order (`checkWindow_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among the
-window's samples there (`checkWindow_extract`), and `checkWindowChunked`'s chunks, in order, cover the samples
+rejection in sample order (`checkWindow_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among
+the window's samples there (`checkWindow_extract`), and `checkWindowChunked`'s chunks, in order, cover the samples
 (`chunks_cover`): its first chunk that rejects holds the window's first rejection (`chunkedIsWhole`). A spawned task's
 value is its function's (`Task.spawn`'s definition), so the threads change nothing.
 -/

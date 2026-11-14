@@ -323,8 +323,8 @@ theorem keep_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (
     · cases he; exact keep_fail _ _ _ _
     · exact key s₀ (keep_refl _) he
 
-/-- Each window sampled in `ws` keeps its sample in `ws'`, and a window sampled in `ws'` but not in `ws` has every window
-before it sampled in `ws`. -/
+/-- Each window sampled in `ws` keeps its sample in `ws'`, and a window sampled in `ws'` but not in `ws` has every
+window before it sampled in `ws`. -/
 def Adv (ws ws' : Array Win) : Prop :=
   ws.size ≤ ws'.size ∧ (∀ t d, dr ws t = some d → dr ws' t = some d) ∧
     ∀ t, (dr ws' t).isSome → (dr ws t).isNone → ∀ j, j < t → (dr ws j).isSome

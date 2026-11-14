@@ -9,13 +9,13 @@ public import Properties.Verity.Sha512
 
 The memory-read session once its openings stay inside proofs. The auditor's session decides window `w` by
 `Poub.Span.checkSpan` on the span the prover sends: the sampled proof system's accepted one-stage statements, one
-opening unit a sample. `checkSpan` reads three rows of each unit, `pub`, `signs` and `o0`, none in the clear: it computes
-the `pub` and `signs` rows itself (`publicWords`, `signWords`) and takes the verdict word the prover sends, and holds
-each to the unit's `b ‖ c` in the accepted public file by opening it under a salt the prover sends (`rowBc`: hm96-sha512
-over the row's `sha512/row/v2` digest). So the statement reads those rows as committed rows opened by salt, as the
-session's and the setup's statements read their carried rows: it takes a premise for the opened rows (`RowsBind`: two
-rows that open to one `b ‖ c` are one row under one salt, or their SHA-512 inputs collide), and its bad event excludes a
-collision among the SHA-512 inputs those openings read (`spanInputs`).
+opening unit a sample. `checkSpan` reads three rows of each unit, `pub`, `signs` and `o0`, none in the clear: it
+computes the `pub` and `signs` rows itself (`publicWords`, `signWords`) and takes the verdict word the prover sends, and
+holds each to the unit's `b ‖ c` in the accepted public file by opening it under a salt the prover sends (`rowBc`:
+hm96-sha512 over the row's `sha512/row/v2` digest). So the statement reads those rows as committed rows opened by salt,
+as the session's and the setup's statements read their carried rows: it takes a premise for the opened rows (`RowsBind`:
+two rows that open to one `b ‖ c` are one row under one salt, or their SHA-512 inputs collide), and its bad event
+excludes a collision among the SHA-512 inputs those openings read (`spanInputs`).
 
 `SpanInProofsDeployed` says that a fixed extractor, rerunning any prover, recovers each sample's unit (its opening, and its
 rows and salts as the proof binds them) such that `checkWindow` accepts the openings, except when those SHA-512 inputs
@@ -86,9 +86,9 @@ def spanInputs (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Ar
 
 /-- **PoUB's read session proved in zero knowledge, as deployed: stated and unproved**; proofs'
 `IntegrityAllProvedCarried` (the period form of V5, every unit proved) closes it through `spanGives`. For the auditor `a`,
-the registration `reg`, window `w` and its samples `drawn`, a session verifier `V` that accepts only a span (`spanOf`) of
-at most `n` statements that `checkSpan` accepts, and the premise `RowsBind` for the rows it opens: a fixed extractor `E`
-recovers, by rerunning any prover, one unit a sample such that `checkWindow` accepts their openings, except when the
+the registration `reg`, window `w` and its samples `drawn`, a session verifier `V` that accepts only a span (`spanOf`)
+of at most `n` statements that `checkSpan` accepts, and the premise `RowsBind` for the rows it opens: a fixed extractor
+`E` recovers, by rerunning any prover, one unit a sample such that `checkWindow` accepts their openings, except when the
 SHA-512 inputs the span's openings read at those units hold a collision, `n · (εKs + εBind)` and `Claims.KS`'s collision
 term at `γ`. -/
 def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) : Prop :=

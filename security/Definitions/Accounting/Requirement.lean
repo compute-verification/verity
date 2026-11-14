@@ -6,9 +6,9 @@ public import Definitions.Core.Requirement
 /-!
 # A registered circuit's requirement (trusted)
 
-What a registered circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a kernel):
-the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in bits,
-in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
+What a registered circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a
+kernel): the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in
+bits, in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
 (`credited`); and when the audit's store and plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`), so that
 what the audit credits counts toward this requirement. Placed on devices
 (`Placement`), the execution's gates are also what PoUW credits and the bits they read from other devices
