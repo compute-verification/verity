@@ -21,7 +21,7 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
   `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
 * `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
-* `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
+* `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `incorrect` at every
   outcome, and no incorrect proof block (`bad`).
 -/
 
@@ -163,11 +163,11 @@ namespace OneWindow
 /-- The window's capacity. -/
 abbrev cap : Fin 1 → ℝ := fun _ => 2
 
-/-- No certificate is wrong. -/
+/-- No certificate is incorrect. -/
 abbrev right : Bool → Fin 1 → Prop := fun _ _ => False
 
-/-- Every certificate is wrong. -/
-abbrev wrong : Bool → Fin 1 → Prop := fun _ _ => True
+/-- Every certificate is incorrect. -/
+abbrev incorrect : Bool → Fin 1 → Prop := fun _ _ => True
 
 /-- No incorrect proof block. -/
 abbrev bad : Bool → Finset Empty := fun _ => ∅

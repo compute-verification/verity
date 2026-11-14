@@ -58,20 +58,20 @@ noncomputable abbrev stmt :=
 noncomputable abbrev part := Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
 
 /-- **The transcript a witness opens, on the committed files' circuit**: its first passing opening at each gate's claims
-position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.transcriptOf`). -/
-noncomputable def transcriptAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
+position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.traceOf`). -/
+noncomputable def traceAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
+    (Flock.Bridge.traceOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
 
 theorem extract_eq (τ : FlockSoundness.Game.Strategy A.game) :
-    A.extract τ = A.transcriptAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
+    A.extract τ = A.traceAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
   rfl
 
 end Live
 
 /-- **The openings `op` of the committed files `r` hold at their constants**: a gate `r` fixes to `b` opens to every
 value all of whose bits are `b`, as `Vocab.Opens` reads a constant. -/
-def ConstsOpen (r : Verity.WindowFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+def ConstsOpen (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ g b, r.consts g = some b → ∀ v : BitVec (r.circuit.w g), (∀ i : Fin (r.circuit.w g), v.getLsbD i.val = b) → op g v
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
@@ -130,7 +130,7 @@ theorem units_eq : A.fileRead.units = A.n :=
 `tr`, on the committed files `r` the session reads, fails the claim at the session's share under openings that hold
 wherever the deployed commitment opens and at the constants, is accepted by Flock's `--zk` verifier with probability at
 most the session's error at `t` calls, where the session's per-finder premises hold at `t`. -/
-theorem ks {r : Verity.WindowFiles} (hr : r = Verity.WindowFiles.one A.fileRead)
+theorem ks {r : Verity.ExecutionPhaseFiles} (hr : r = Verity.ExecutionPhaseFiles.one A.fileRead)
     (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (hop : A.OpensUnder r op) (hc : ConstsOpen r op)
     (tr : r.circuit.Trace) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
     (hF : A.FinderCR τ t) (hI : ¬ Accounting.IntegrityHolds r.parts op tr A.ε) :
@@ -146,11 +146,11 @@ theorem ks {r : Verity.WindowFiles} (hr : r = Verity.WindowFiles.one A.fileRead)
     have h := (Finset.mem_filter.1 hv).1
     rwa [Flock.Bridge.blocks_length_partOf A.P hns] at h
   have hcard : A.ε * A.n < (Fs.card : ℝ) := by
-    have h1 : (Accounting.unbound A.fileRead.parts op (A.transcriptAt w)).card ≤ Fs.card := by
+    have h1 : (Accounting.unbound A.fileRead.parts op (A.traceAt w)).card ≤ Fs.card := by
       rw [← Finset.card_image_of_injective _ Fin.val_injective]
       exact Finset.card_le_card (A.unbound_subset_faulty_part op hop hc w)
     have h2 : A.ε * (A.fileRead.units : ℝ) <
-        ((Accounting.unbound A.fileRead.parts op (A.transcriptAt w)).card : ℝ) := not_le.mp hI
+        ((Accounting.unbound A.fileRead.parts op (A.traceAt w)).card : ℝ) := not_le.mp hI
     calc A.ε * A.n = A.ε * (A.fileRead.units : ℝ) := by rw [A.units_eq]
       _ < _ := h2
       _ ≤ (Fs.card : ℝ) := by exact_mod_cast h1

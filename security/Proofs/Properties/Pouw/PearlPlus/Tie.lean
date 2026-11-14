@@ -18,7 +18,7 @@ about the run's passes and table alone.
   weight `wref(1, |K|, n) |cr| |cc| / n` by the lcm `L` of the denominators, so its integer ticket is
   `L |cr| |cc| cellTicket r` (`tileTickets_eq`). Every tile has a width `n > 0` (`Scheme.tiles` cuts no block of a width
   of 0, `n_pos_of_tile`), so `L > 0`, and the wrong share is the untied tiles' cells weighed by their cell tickets over
-  all tiles' (`wrong_eq`, `total_eq`).
+  all tiles' (`incorrect_eq`, `total_eq`).
 * **The fill is the most cells such a share holds.** Grouped by record, a unit of ticket weight of record `r` holds
   1 / `cellTicket r` cells (`cellUnits`, whose pairs are `unitsBy`'s). For any `l ≥ 0`,
   Σ ρ a ≤ l Σ a + Σ w (ρ − l)⁺ over units of weight `w`, count `ρ` a unit of weight and `a ≤ w` of it taken. Filling
@@ -412,8 +412,8 @@ theorem total_eq (R : Run) : (ticketTotal (tickets R.passes) : ℝ) = (ticketDen
   show (tileTickets R.passes c : ℝ) = _
   rw [tileTickets_real hc]
 
-theorem wrong_eq (R : Run) : (R.wrongWeight : ℝ) = (ticketDen R.passes : ℝ) * untiedSum R := by
-  unfold Run.wrongWeight untiedSum
+theorem incorrect_eq (R : Run) : (R.incorrectWeight : ℝ) = (ticketDen R.passes : ℝ) * untiedSum R := by
+  unfold Run.incorrectWeight untiedSum
   rw [sum_ite_fin (tickets R.passes) (TileTiedAtW R.w R.rounds R.passes R.table), tickets_eq', List.map_map,
     cast_sum_nat, ← sum_map_mul_left']
   congr 1
@@ -428,7 +428,7 @@ theorem wrong_eq (R : Run) : (R.wrongWeight : ℝ) = (ticketDen R.passes : ℝ) 
 
 /-- **The untied credited cells are at most an untied share's**: at most ε of the ticket weight is untied, so the untied
 tiles' cells at their cell tickets are at most ε of all tiles'. -/
-theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.wrongShare ≤ ε) : untiedSum R ≤ ε * ticketSum R := by
+theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.incorrectShare ≤ ε) : untiedSum R ≤ ε * ticketSum R := by
   have hAW : untiedSum R ≤ ticketSum R := by
     unfold untiedSum ticketSum
     exact sum_map_le' _ _ _ fun c _ => mul_le_mul_of_nonneg_left (Nat.cast_le.2 (untiedTileCells_le R c))
@@ -437,9 +437,9 @@ theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.wrongShare ≤ ε) : untiedSu
     unfold ticketSum
     exact sum_map_nonneg' _ _ fun c _ => mul_nonneg (Rat.cast_nonneg.2 (cellTicket_nonneg c.r)) (Nat.cast_nonneg _)
   have hD : (0 : ℝ) < ticketDen R.passes := by exact_mod_cast ticketDen_pos R.passes
-  have hs : R.wrongShare = ((ticketDen R.passes : ℝ) * untiedSum R) / ((ticketDen R.passes : ℝ) * ticketSum R) := by
-    unfold Run.wrongShare
-    rw [wrong_eq, total_eq]
+  have hs : R.incorrectShare = ((ticketDen R.passes : ℝ) * untiedSum R) / ((ticketDen R.passes : ℝ) * ticketSum R) := by
+    unfold Run.incorrectShare
+    rw [incorrect_eq, total_eq]
   rcases hW0.lt_or_eq with hWp | hWz
   · rw [hs, div_le_iff₀ (mul_pos hD hWp)] at hε
     have h : (ticketDen R.passes : ℝ) * untiedSum R ≤ (ticketDen R.passes : ℝ) * (ε * ticketSum R) := by

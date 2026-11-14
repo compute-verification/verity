@@ -61,15 +61,15 @@ theorem gapFromTTOut {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
   refine le_trans (Pouw.pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   intro x hwin
   unfold Wins at hwin
-  have hsum : ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), P.Wref U.layout u ≤
-      Ω * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u) := by
+  have hsum : ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2), P.Wref U.layout u ≤
+      Ω * ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u) := by
     rw [mul_sum]
     refine sum_le_sum fun u hu => ?_
     unfold correctSet at hu
     rw [mem_filter] at hu
     obtain ⟨hu, c, hc, hcor⟩ := hu
-    have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
+    have hact : actOf (A.trace U x.1 x.2) u = c.act := by simp [actOf, hc]
     rw [hact]
     exact hW U hU x.1 x.2 u (mem_range.mp hu) c.act hcor.1 hcor.2.1
   have hden : 1 - (1 - (1 - g₀) / Ω) = (1 - g₀) / Ω := by ring
@@ -160,7 +160,7 @@ def witnessSem : PearlCSem Unit Unit Unit where
 activations it is given (at least 0), `false` commits nothing. -/
 noncomputable def witnessCM (P : Protocol Unit Unit Unit) : CostModel Unit Unit Unit where
   Prog := Bool
-  run := fun b H U act _ s => if b then honestTranscript P H s U act else fun _ => none
+  run := fun b H U act _ s => if b then honestTrace P H s U act else fun _ => none
   cost := fun b H U act _ s => if b then ∑ u ∈ range U.layout.N, max (P.credit H s U u (act u)) 0 else 0
   calls := fun _ _ _ _ _ _ => 0
 
@@ -174,8 +174,8 @@ theorem creditOf_le_wref (c : Costs) (s : Shape) : creditOf Params.pi c s ≤ wr
   linarith
 
 theorem actOf_honest (P : Protocol Unit Unit Unit) (H : Unit → Unit) (s : Unit) (U : Workload) (act : ℕ → Codes) {u : ℕ}
-    (hu : u < U.layout.N) : actOf (honestTranscript P H s U act) u = act u := by
-  simp [actOf, honestTranscript, hu]
+    (hu : u < U.layout.N) : actOf (honestTrace P H s U act) u = act u := by
+  simp [actOf, honestTrace, hu]
 
 theorem witness_sum_le (P : Protocol Unit Unit Unit) (U : Workload) (H : Unit → Unit) (s : Unit) (b : Bool)
     (act : ℕ → Codes) (σ : State) :
@@ -364,7 +364,7 @@ theorem ttOutPearlCWitness :
       have hT' : T ≤ T / (1 - 1 / 400) := by
         rw [le_div_iff₀ (by norm_num)]
         nlinarith
-      unfold Adversary.transcript at hx
+      unfold Adversary.trace at hx
       linarith
   · refine ⟨by norm_num [witnessWorkload], ?_⟩
     intro u _
