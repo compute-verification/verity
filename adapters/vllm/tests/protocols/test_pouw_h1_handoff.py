@@ -125,12 +125,11 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
     host = _host(tmp_path, monkeypatch)
     run = _served(_remote())
     HO.suspend(run, tmp_path / "a")
-    a, _b = socket.socketpair()
+    a, b = socket.socketpair()
     run.owners[1][0] = None
     HO.suspend(run, tmp_path / "b")
-    with pytest.raises(ValueError, match="round 1's request or slot table, rebuilt, is not the one its root is over"):
+    with a, b, pytest.raises(ValueError, match="round 1's request or slot table, rebuilt, is not the one its root is over"):
         HO.resume(tmp_path / "b", a.fileno())
-    a.close()
     run.stray = torch.zeros(2, dtype=torch.int8)
     with pytest.raises(ValueError, match="tensor on cpu in the window's saved state"):
         HO.suspend(run, tmp_path / "d")
@@ -225,7 +224,7 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
                    pass_fds=(here.fileno(),))
     here.close()
     fd = holder.take()
-    with socket.socket(fileno=fd) as got:
+    with socket.socket(fileno=fd) as got, there:
         got.sendall(b"round 2")
         assert there.recv(7) == b"round 2"
 
