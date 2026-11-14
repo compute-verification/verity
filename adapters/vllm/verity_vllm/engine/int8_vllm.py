@@ -67,7 +67,7 @@ NAME = TargetProfile.INT8_EXACT_QUANTIZATION
 class Int8PlainLinearMethod(X.PlainGemm, LinearMethodBase):
     """One linear layer's plain arm (`engine.int8_exact`): `int8_experts.PlainGemm`'s ``apply`` and ``observe``."""
 
-    def __init__(self, prefix: str):
+    def __init__(self, prefix: str) -> None:
         X.PlainGemm.__init__(self, prefix)
 
     def create_weights(self, layer: torch.nn.Module, input_size_per_partition: int, output_partition_sizes: list[int],
