@@ -2105,7 +2105,8 @@ def test_a_windows_sampled_leaves_are_staged_only_in_a_lanes_shape_and_under_its
     why = CR.lanes_shape(off, shape, k)
     assert why is not None and refusal({"layout": off}) == f"K = {k}'s drawn leaves: {why}"
     assert CR.lanes_shape({"tile": PH.TILE}, shape, k) is None
-    records: list[dict[str, Any]] = [{}, {"draw": None}, {"draw": "a root"}, {"draw": {}}, {"draw": {"root": 7}}]
+    named: list[Any] = [None, "a root", {}, {"root": 7}]
+    records: list[dict[str, Any]] = [{}, *({"draw": sample} for sample in named)]
     for record in records:
         assert refusal({"layout": {"tile": PH.TILE}, **record}) == ("the window's record names no draw root, under "
                                                                      "which a leaf's partials are committed")
