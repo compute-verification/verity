@@ -2251,6 +2251,7 @@
         "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
         "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
         "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/SessionFits.lean": "security/Proofs/Properties/Verity/SampledTwo/AttachmentFits.lean",
         "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
         "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
       }
@@ -2540,6 +2541,24 @@
         "adapters/vllm/tests/protocols/test_pouw_lead_record.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_record.py",
         "adapters/vllm/tests/protocols/test_pouw_native.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_native.py",
         "adapters/vllm/tests/commit/test_lead_rows.py": "verity/protocols/accounting/pouw/prover/tests/test_lead_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier.lean": "security/Definitions/Certifier.lean",
+        "security/Definitions/NetworkCertifier/": "security/Definitions/Certifier/",
+        "security/Proofs/NetworkCertifier.lean": "security/Proofs/Certifier.lean",
+        "security/Proofs/NetworkCertifier/": "security/Proofs/Certifier/",
+        "security/Proofs/Properties/NetworkCertifier/": "security/Proofs/Properties/Certifier/",
+        "security/Properties/NetworkCertifier/": "security/Properties/Certifier/"
       }
     }
   ]

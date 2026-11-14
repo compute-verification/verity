@@ -175,7 +175,7 @@ def test_output_interpretation(ell):
         assert out[ell] == eos  # stop evidence: the live event ℓ samples and commits the EOS
         assert out[ell + 1:] == [0] * (D_MAX - ell)
     else:
-        assert out[D_MAX] == Y_RAW[D_MAX]  # length cap: slot D_MAX committed, never a semantic output
+        assert out[D_MAX] == Y_RAW[D_MAX]  # length bound: slot D_MAX committed, never a semantic output
     # well-formedness — theorems of the circuit, checked on its outputs
     assert all(live[g] <= live[g - 1] for g in range(1, D_MAX + 1))
     assert all(live[g] == (live[g - 1] and out[g] != eos) for g in range(1, D_MAX + 1) if live[g - 1] == 1)

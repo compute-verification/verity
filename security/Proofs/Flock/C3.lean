@@ -127,9 +127,10 @@ import Mathlib.Tactic.NormNum.RealSqrt
 discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'s statements over the verifier's list
 (`_hob`). Each piece has its own directory and namespace, and `README.md` beside this file is the gap list.
 
-* (a) `C3/Fork/`, `FlockC3.Fork`: candidate 3's table is sound in fork form (`holoForkSound_holoAt`), from the runs
-  (`holo_runs_sound`), which the oracle count (`holoTable_sound`, a1o, with a1s's `sparse_sound` and a1r's
-  `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound.
+* (a) `C3/Fork/`, `FlockC3.Fork`: candidate 3's table is sound on its runs (`holo_runs_sound`: two runs clash, one
+  opens R's level 0 off the word, or the bound), which the oracle count (`holoTable_sound`, a1o, with a1s's
+  `sparse_sound` and a1r's `regOpen_sound`) and the coupling (`holoTable_value_le_oracle`, a1l) bound; the inner term
+  at the word the prover's runs open reads it (`innerAtLeavesL_reg`, `C3/Fork/Extract.lean`).
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
   `holoTableCL_plays`), the honest family (`C3Family.honest`, n0), the fixed decoder at which n6 states the read
   facts (`C3/Compose/Decoder.lean`), and `SrcOK`'s decode fixed point where each stage plays on its steps to the

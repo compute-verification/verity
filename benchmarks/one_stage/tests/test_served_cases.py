@@ -77,13 +77,16 @@ INF = SC.INFERENCE_ONLY
 V1 = SC.V1
 SAMPLED = SC.SAMPLED
 UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
+#: the sampling design v2's one statement reads: a uniform sample of a fixed count
+SUBSET = {"k": 1, "law": "subset"}
 
 
-def v1_case(program, query, previous: str | None = None) -> dict:
-    """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``."""
+def v1_case(program, query, previous: str | None = None, design: dict | None = None) -> dict:
+    """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``, sampled by
+    ``design`` (one unit of each stratum when None)."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = {"law": "stratified", "k": 1}
+    law = design or {"law": "stratified", "k": 1}
     rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
@@ -478,9 +481,10 @@ def test_the_lean_check_refuses_a_tampered_inference_only_case(tmp_path, inferen
 def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path, capsys, v2_exe):
     """`sampled-proofs-one-stage-zk check` reads the toy's v2 case through its commitment and names the record's digest,
     the one `registration.digest` computes; the toy's v2 case holds no coins and no proofs, so it rejects, and that
-    rejection is the case's verdict (a failed proof is a visible failure, never a missing case)."""
+    rejection is the case's verdict (a failed proof is a visible failure, never a missing case). The case is sampled
+    by a subset design: v2 refuses any other at its parameters, before it reads the record."""
     program, query = toy()
-    v1 = v1_case(program, query)
+    v1 = v1_case(program, query, design=SUBSET)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--v2", "--v2-exe", v2_exe, "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
     assert rc == 0 and refused == [], out
@@ -493,9 +497,10 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
 def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
     """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
     the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
-    same form is refused by name at its params, the reason remote's composite would give for a v1 case."""
+    same form is refused by name at its params, the reason remote's composite would give for a v1 case. The case is
+    sampled by a subset design, as v2's one statement asks."""
     program, query = toy()
-    v1 = v1_case(program, query)
+    v1 = v1_case(program, query, design=SUBSET)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1), "--sampled-exe", sampled_exe)
     assert rc == 0 and refused == [], out

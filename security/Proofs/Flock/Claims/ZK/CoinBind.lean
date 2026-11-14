@@ -92,7 +92,6 @@ theorem walkPairs_coll_any : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
           obtain ⟨p, hp, hc⟩ := walkPairs_coll_any rest rest' (idx / 2) _ _ hlen' (Or.inr hr) heq
           exact ⟨p, Or.inr hp, hc⟩
         · refine ⟨_, Or.inl rfl, hin, ?_⟩
-          rw [← up_eq H E idx a s, ← up_eq H E idx a' s']
           exact hup
       · obtain ⟨p, hp, hc⟩ := walkPairs_coll_any rest rest' (idx / 2) _ _ hlen' (Or.inl hup) heq
         exact ⟨p, Or.inr hp, hc⟩

@@ -47,8 +47,8 @@ evaluations, since collisions exist, so neither is stated for all finders: each 
 from the prover it bounds. Neither is asked of every prover at once, which SHA-512 can't meet: a prover that hard-codes two
 openings of one commit string has finders that find a collision. A finder is a game with a
 fixed strategy, whose outcomes record the pair it outputs and the SHA-512 evaluations it made, `t` for each run of the
-prover. Its success is a collision because Merkle binding is proved (`Merkle.opening_binding`): two openings that verify
-under one cap and differ give two distinct inputs with one SHA-512 output.
+prover. Its success is a collision because Merkle binding is proved (`Merkle.openCollPair_spec`): from two openings that verify
+under one cap and differ, `Merkle.openCollPair` computes two distinct inputs with one SHA-512 output.
 
 **Teeth** (`Teeth.lean`). Both forms hold for every finder of an injective hash (`strict_of_injective`,
 `expected_of_injective`, the latter for a nonnegative cost), and both fail for a constant hash, at the finder that outputs
@@ -98,6 +98,9 @@ sense, ePrint 2024/1434), for the audit's value layer.
 - **Where it is used.** The link theorem takes it for the finders it builds from the prover it bounds (`LinkCR … R τ …`).
   `flock_batched_linkSoundE` gives the bound at each prover whose finders satisfy it, and `⊤` at any other
   (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s finders alone.
+- **What its cost counts.** A link finder's cost is its count of SHA-512 evaluations and nothing else. The compiled
+  link finder (`Exec.outCL`) also decodes each extracted table with the radius decoder (`Exec.candL`), which hashes
+  nothing: the decoder's running time is not bounded by that count.
 - **Why it is plausible:** `assumption-notes/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
@@ -460,8 +463,8 @@ before the session's first coin, not bounds state by state.
 `lean-audit.json` records each guarantee's statement (`guarantees`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten. A rewritten record is shown when it lands on `main`; nobody
 signs off and nothing waits on it. The
-guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
+guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms) and `execArith_correct`;
+none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
 and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and

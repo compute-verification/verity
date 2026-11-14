@@ -810,6 +810,58 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
     Registration.kept b c x = #[] ↔ c = #[] ∧ b = true := by
   cases b <;> simp [Registration.kept, addCode_ne_nil]
 
+/-- A `kept` term read only where `bad` is false, then an `if`: the two steps of R3's wired clause and R4. -/
+theorem step_kept_ite {P : Prop} (W Q : Prop) (j' j : Unit → Array String → Id (Array String)) (bad w b : Bool)
+    (y x : String) (hj : ∀ c, j () c = #[] ↔ c = #[] ∧ P)
+    (hdef : ∀ c, j' () c = if b = true then j () (addCode (Registration.kept (bad || w) c y) x)
+      else j () (Registration.kept (bad || w) c y))
+    (hw : w = true ↔ W) (hb : b = false ↔ Q) :
+    ∀ c, j' () c = #[] ↔ c = #[] ∧ (bad = false → W) ∧ Q ∧ P := by
+  intro c
+  rw [hdef]
+  have h := step_ite Q (fun _ c => if b = true then j () (addCode c x) else j () c) j b x hj (fun _ => rfl) hb
+    (Registration.kept (bad || w) c y)
+  refine h.trans ?_
+  rw [kept_nil, and_assoc]
+  refine and_congr Iff.rfl (and_congr ?_ Iff.rfl)
+  cases bad
+  · exact ⟨fun h _ => hw.1 h, fun h => hw.2 (h rfl)⟩
+  · exact ⟨fun _ h => absurd h (by decide), fun _ => rfl⟩
+
+/-- One port of the layout holds against the record's roots (`Registration.wiredOk`) exactly when, where it names the
+port it is wired to, the record has one root string under both names. -/
+theorem wiredOk_iff (rec : Json) (p : String) (want : Json) :
+    Registration.wiredOk (fun p => rootFor rec p) p want = true ↔ WiredIs rec p want := by
+  unfold Registration.wiredOk WiredIs
+  split
+  next q hw =>
+    constructor
+    · intro hok q' hq'
+      have hqq : q = q' := Json.str.inj (hw.symm.trans hq')
+      subst hqq
+      revert hok
+      split
+      next r h hp hq =>
+        split
+        next a b hr hh =>
+          intro hab
+          have hab' : a = b := eq_of_beq hab
+          subst hab'
+          exact ⟨r, h, a, hp, hq, hr, hh⟩
+        next => intro hf; exact absurd hf (by decide)
+      next => intro hf; exact absurd hf (by decide)
+    · intro hW
+      obtain ⟨r, h, s, hp, hq, hr, hh⟩ := hW q hw
+      simp [hp, hq, hr, hh]
+  next hne => exact ⟨fun _ q hq => absurd hq (hne q), fun _ => rfl⟩
+
+/-- R3's wired clause (`Registration.wiredHeld`) holds exactly when every port of the layout is `WiredIs`. -/
+theorem wiredHeld_iff (rec : Json) (ports : Array (String × Json)) :
+    Registration.wiredHeld (fun p => rootFor rec p) ports = true ↔ ∀ pw ∈ ports, WiredIs rec pw.1 pw.2 := by
+  unfold Registration.wiredHeld
+  rw [Array.all_eq_true']
+  exact forall_congr' fun pw => imp_congr_right fun _ => wiredOk_iff rec pw.1 pw.2
+
 /-- R6's pool codes (`Registration.poolMarks`) add none exactly when the window names the pool's reset, week and spent
 mark and no reset falls where the week's is spent before it. -/
 theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array Json) (c : Array String) :
@@ -948,7 +1000,12 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   have h10 := step_ite (jeq (getD rec "previous") previous = true) j10 j11 _ _ h11 (fun _ => rfl) (not_false_iff' _)
   have h9 := step_ite (jeq (getD rec "anchors") (.arr v.anchors) = true) j9 j10 _ _ h10 (fun _ => rfl)
     (not_false_iff' _)
-  have h8 := step_ite (R4 rec v) j8 j9 _ _ h9 (fun _ => rfl) (not_false_iff' _)
+  have h8 := step_kept_ite (∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2) (R4 rec v) j8 j9 _ _ _ _ _ h9 (fun _ => rfl)
+    (wiredHeld_iff rec v.ports) (not_false_iff' _)
+  have hbad : (roots.isEmpty || !roots.all (keys? · == some Registration.ROOT_KEYS)) = false ↔
+      (rootsOf rec ≠ #[] ∧ ∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) := by
+    simp only [Bool.or_eq_false_iff, Bool.not_eq_false', Array.all_eq_true', beq_iff_eq, Array.isEmpty_eq_false_iff]
+    exact Iff.rfl
   have h7 := step_forIn (fun pw => ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) j7 j8 v.ports _ h8 (fun _ => rfl)
     (by
       intro pw c
@@ -1111,18 +1168,19 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, h7r, h8, hrl⟩
+      h7', hwd, h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-        ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
+        ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7', hwd (hbad.2 hroots)⟩, h4', h5',
         ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩,
       hdecl, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => (h7r hv).2.1⟩
   · rintro ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-        ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩,
+        ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7', hwd⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩,
       hdecl, h6c, h6d, h6e, h6f, h6g, h6h, h6i, hpool⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
-      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => ⟨(h7r hv).1, hpool hv, (h7r hv).2.2⟩, h8, hrl⟩
+      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7',
+      fun _ => hwd, h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => ⟨(h7r hv).1, hpool hv, (h7r hv).2.2⟩,
+      h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

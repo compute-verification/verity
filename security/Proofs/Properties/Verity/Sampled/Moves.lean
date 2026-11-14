@@ -367,11 +367,11 @@ file v2 held to the registration (`publicHeld`). -/
 theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r pubB, e.sessions.size = 1 ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.publicHeld c.record pubB = .ok () ∧
       _root_.Spot.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -441,9 +441,9 @@ theorem sessionProofs_of {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.On
 theorem checkBlobsAt_verified {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record spec tabs rest proofs, V2Verified p e bs record spec tabs rest proofs := by
-  obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run hm h
   have hs := eq_single hsz
   rw [hs] at hrun
   obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, hstep, -⟩ := run_verified hrun
@@ -458,12 +458,12 @@ theorem sent_verified {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
     (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
-    (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) :
+    (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) (hm : p.members = none) :
     ∃ record spec tabs rest proofs, caseOf s = .ok (p, c, ev) ∧ sentRecord s = some record ∧
       sentProofs s = some proofs ∧ V2Verified p ev (_root_.Core.Blobs.ofArray s.blobs) record spec tabs rest proofs := by
   obtain ⟨hp, hc, hev, -, -, pub, prof, hck⟩ := hacc
   have hcs := caseOf_of hS hcase hp hc hev
-  obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified hck
+  obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified hm hck
   have hrec : sessionRecord ev (_root_.Core.Blobs.ofArray s.blobs) = some record := by
     obtain ⟨_, _, _, _, _, _, _, _, _, _, h, -⟩ := hv
     exact h

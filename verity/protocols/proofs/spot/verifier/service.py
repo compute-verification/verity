@@ -942,6 +942,13 @@ def _offsets(q: int, ns: Sequence[int]) -> list[int]:
     return [q * sum(ns[:t]) for t in range(len(ns))]
 
 
+def cell_parts(q: int, ids: Sequence[str], ns: Sequence[int]) -> tuple[SS.Part, ...]:
+    """The parts a replay block's cells give a sample of `q` replay blocks: the check's templates `ids`, in that order,
+    template t the q·n_t slots from q·Σ_{t'<t} n_t'. An interior registration's strata are these parts, each one range
+    (`interior-parts`). The Lean verifier's `Run.cellParts` is this."""
+    return tuple(SS.Part(t, q * sum(ns[:i]), ns[i] if i < len(ns) else 0) for i, t in enumerate(ids))
+
+
 def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> dict[str, Any]:
     """The second stage's sampling design over the interior's len(sample)·Σ n_t proof blocks, template-major: template
     t's being [off_t, off_t + Q·n_t), off_t = Q·Σ_{t'<t} n_t', and sampled replay block `sample[i]`'s instances of it
@@ -2093,8 +2100,10 @@ class Stream:
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
-        query, its population (`interior-population`: Q·n_rho), its window (`interior-window`: `window_root` is the
-        boundary registration's, or the root the verifier computes from the boundary registration's digest and the
+        query, its population (`interior-population`: Q·n_rho), its strata (`interior-parts`: those of the interior
+        program under the check's query are the parts the cells give, `cell_parts`, the check's templates in its order
+        and each one range; `ValueError` where the query doesn't apply to it), its window (`interior-window`:
+        `window_root` is the boundary registration's, or the root the verifier computes from its digest and the
         replay sample, `second_stage.interior_root`, so the second stage is sampled on one session with the first or
         on the session on that one root), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
@@ -2111,17 +2120,26 @@ class Stream:
         seed_salt = self._seed_salt_of(window_root)
 
         def checks() -> list[str] | None:
-            m = len(first.units) * self.n_rho
+            q, query = len(first.units), self.spec.check.query
+            m = q * self.n_rho
             v = self._public(record, interior=True)
             if v.ok and not (type(n := record.get("population")) is int and n == m):
-                v = _refuse("interior-population", {"population": n, "replay_sample": len(first.units),
-                                                    "n_rho": self.n_rho}).verdict
+                v = _refuse("interior-population", {"population": n, "replay_sample": q, "n_rho": self.n_rho}).verdict
+            program = self.interior_program(q) if v.ok else None
+            if program is not None:
+                try:
+                    strata = P.strata(program, query)
+                except (P.QueryRefused, ValueError) as e:
+                    raise ValueError(f"the check's query doesn't apply to the interior program: {e}") from None
+                cells = cell_parts(q, _check_ids(query) or (), self.cells)
+                if SS.parts(q, strata) != cells:
+                    v = _refuse("interior-parts", {"strata": [[t, [list(r) for r in rs]] for t, rs in strata],
+                                                   "cells": [[p.template, p.lo, p.n] for p in cells]}).verdict
             boundary = self._entries[first.registration.order].copies[8]
             if v.ok and window_root != boundary and (window_root is None or window_root != SS.interior_root(
                     first.registration.digest, D.proved(first.draw))):
                 v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
-            if v.ok:
-                program, query = self.interior_program(len(first.units)), self.spec.check.query
+            if v.ok and program is not None:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,

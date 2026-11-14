@@ -297,13 +297,16 @@ theorem stage_registered {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitmen
   · cases h
 
 /-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
-run of the verifier computed. -/
+run of the verifier computed, in either form: the one statement's run, or the per-member run. -/
 theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r : Spot.OneStageZk.Run,
       Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
-  replace h := (Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, -, -, hc⟩ := Spot.OneStageZk.checkMembersAt_accept h
+    exact ⟨r, hc⟩
   unfold Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h

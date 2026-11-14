@@ -19,7 +19,8 @@
     object must be over the verifier's program), and for a verifier that reads the registration log's declarations
     (Declared day), the program is the one circuit the log declares for the window's day;
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
-    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain; a port the layout wires to
+    another port's tree (`"wired"`) has that port's root (`R3-wired`);
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
   - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
@@ -263,7 +264,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
-    (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
+    (`{port: {"leaves", "domain"}}`, a port whose rows are the leaves of another port's tree naming that port too,
+    `"wired"`: R3 refuses a record whose roots under the two names differ, `R3-wired`), the digest of its copy of the
+    leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
@@ -318,9 +321,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
     or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
-    refuses the record when a member's fewest and most sampled proof blocks give different link points
-    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
-    sampling design are not well formed over the population."""
+    refuses the record when a member's fewest and most sampled proof blocks give different link points or some sample
+    that ends misses a member, its fewest none (`link_points.refused`), no sample under the sampling design ends
+    (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     log = list(log)
@@ -407,6 +410,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
+        # one tree at two names: a port its layout wires to another's tree has that port's root. Only as good as the
+        # layout's `wired` entries: a second check of what the second stage holds each session's read of a wired port to
+        for p, want in sorted(ports.items()):
+            q = want.get("wired")
+            if isinstance(q, str) and not (p in got and q in got and isinstance(got[p]["root"], str)
+                                           and got[p]["root"] == got[q]["root"]):
+                c.fail("R3-wired", {"port": p, "wired": q})
     # R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
     if rec["leaf_layer"] != leaf_layer:
         c.fail("R4-leaf-layer", {"registered": rec["leaf_layer"], "verifier": leaf_layer})
