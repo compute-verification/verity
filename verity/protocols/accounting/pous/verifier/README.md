@@ -189,7 +189,7 @@ past the published figure, which must reject), its `reads` the reads the wipe ex
 one on its own host. Its `trusted_sha512` pins the one memory-challenger key the verifier trusts, by the SHA-512 of its
 public key: a session signed under another key is rejected, and a challenger on its own host with no key pinned is
 refused before its session. That pin decides only what is accepted. The record's `trusted-device` holds only under a
-committed configuration (`tests/configurations.toml`), when the session's key is one its `[[pin]]` entries give the
+committed configuration (`tools/verity/cli/verity_cli/configurations.toml`), when the session's key is one its `[[pin]]` entries give the
 memory challenger for the wipe (`period.json`'s `deployment`: the configuration's hash and its pins), and otherwise
 reads rehearsal, no bound, whatever the host names say (`memory_challenger.trusted_device`, which PoUS's placement
 reads too); the placement's `kind` (`own-host`, `simulated`,

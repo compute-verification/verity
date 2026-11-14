@@ -614,7 +614,7 @@ PIN_FIELDS = ("key-sha512", "party", "protocol", "scheme")
 def deployment(doc: Mapping[str, Any]) -> dict[str, Any]:
     """`period.json`'s `deployment`, what `trusted-device`'s premise reads (`memory_challenger.trusted_device`):
     `configuration`, the hash of the configuration the run is under (`verity config hash`), and `pins`, that
-    configuration's `[[pin]]` entries, with `committed`, the hashes `tests/configurations.toml` commits. With none, the
+    configuration's `[[pin]]` entries, with `committed`, the hashes `tools/verity/cli/verity_cli/configurations.toml` commits. With none, the
     premise reads rehearsal; an unknown key or a malformed pin raises."""
     got = doc.get("deployment") or {}
     if unknown := set(got) - set(DEPLOYMENT):
