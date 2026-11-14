@@ -574,6 +574,29 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
+def test_a_pool_takes_runs_down_to_500000_free_inodes_and_none_under_it(tmp_path, monkeypatch):
+    """The pools' inode floor is 500,000 free inodes: one inode fewer and the pool takes no run, and the refusal names the floor. The probe is the launcher's own payload, run on a machine whose disk reports the free inodes set
+    here."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    src = tmp_path / "src"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'slots': [], 'waiters': []}\n")
+    machine = ("import os, sys\nreal = os.statvfs\n"
+               "def statvfs(p):\n    s = real(p)\n    if p != {disk!r}:\n        return s\n"
+               "    return os.statvfs_result((s.f_bsize, 4096, 10**9, 10**9, 10**9, 10**7, {free}, {free}, s.f_flag, s.f_namemax))\n"
+               "os.statvfs = statvfs\nexec(sys.stdin.read())\n")
+
+    def research_pool(free: int) -> dict:
+        probe = auto.payload(src, 4, None, ["research"])
+        r = subprocess.run([sys.executable, "-c", machine.format(disk=str(tmp_path), free=free)], input=probe,
+                           capture_output=True, check=True)
+        return json.loads(r.stdout)["research"]
+
+    assert research_pool(499_999) == {"error": f"disk: {tmp_path} has 499999 inodes free, under 500000"}
+    assert research_pool(500_000) == {"slots": [], "waiters": []}
+
+
 def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path, monkeypatch):
     """A pool's runs wait by the machine's own slot.py, so its line is read by that copy: a launcher's tree older or newer
     than the machine's copy would count the line by other rules than the ones that admit its waiters. A machine without a
@@ -1701,3 +1724,11 @@ def test_the_probe_reads_the_machines_a_machine_reaches_only_when_asked(tmp_path
     (tmp_path / "peers").write_text(f"# name, ssh options\n{CPU5} -i /k research@10.0.0.5\n\n{CPU1} research@10.0.0.1 # itself\nbare\n")
     assert read(peers=True)["peers"] == [CPU1, CPU5]
     assert "peers" not in read()
+
+
+def test_a_description_that_does_not_parse_gives_no_share_and_says_so(tmp_path, capsys):
+    (tmp_path / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (tmp_path / auto.DESCRIPTION).write_text("[shares\n")
+    assert auto.share_cpus(tmp_path) is None
+    assert f"research run: {tmp_path / auto.DESCRIPTION} unread, so verity has no share on vy-nebius-2 (TOMLDecodeError" in \
+        capsys.readouterr().err

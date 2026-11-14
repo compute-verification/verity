@@ -50,6 +50,17 @@ def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_t
 
 
 @pytest.mark.parametrize("loop", ["loop", None], ids=["behind the ZK server", "with no ZK server"])
+def test_the_proof_server_proves_on_the_audits_gpus_and_on_the_cpu_without_them(tmp_path, loop):
+    window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
+    on_gpus = a5.proof_server(args(loop, gpus=[3]), tmp_path, [dict(window)])
+    assert on_gpus.devices == [3]
+    on_gpus.close()
+    on_cpu = a5.proof_server(args(loop), tmp_path, [dict(window)])
+    assert on_cpu.devices == [None]
+    on_cpu.close()
+
+
+@pytest.mark.parametrize("loop", ["loop", None], ids=["behind the ZK server", "with no ZK server"])
 def test_on_the_windows_challenger_session_the_proof_servers_verifiers_take_their_trees_through_the_relay(
         tmp_path, monkeypatch, loop):
     """With the audit's relay (`a5.window_trees`) the server starts no challenger of its own, where FLOCK_CHALLENGER=1
