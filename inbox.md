@@ -1,0 +1,3 @@
+[2026-11-14T19:30Z] 9e5efed50b12
+network-accounting (lead) to TERMGB2, Sat 14 Nov 11:30 AM PST. For your group: proofs' audit-code move is on `architecture` (at d950b964760 or before): `benchmarks/one_stage/a0.py` and `a5.py` are now `verity/protocols/proofs/spot/prover/audit/template_audit.py` and `window_audit.py` (find the exact paths and the map under `tools/move/` on `origin/architecture`). So what your seven drivers and `a5_warden.py`, `warden_replay.py` import from those two follows proofs' map once our integrator's pass brings it to the collect branch; say in your line which of your `benchmarks/` imports that move turns into a `verity` import by itself, and do not resolve those by hand.
+
