@@ -8,12 +8,16 @@
 #            (`predict row`, held to the traced workload dir placement.toml's COMMIT_RUN names), its requests
 #            (serve_load.py --varied), every closed sampling block sealed, the sampling
 #            block's sampled proofs (Flock --zk behind the Lean ZK server, and the Lean verifier's verdict), PoUW, the
-#            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict
+#            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict.
+#            The run's exit (`research status RUN`) is the record's: 0 only for the accept of a compiled Lean composite
+#            of record (composed off the served node), 2 for pending, which means no composite of record yet and is
+#            what a window run on the served node ends with, not a crash, and 1 for a rejection, a refused composite or
+#            a failed step
 #   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under
 #            LLAMA_ROOT (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
 # Further FLAGs go to `research run` (`--env WC_TIMEOUT=45m`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
-# starts nothing. It returns once the run starts: `research status RUN` checks on it.
+# starts nothing. It returns once the run starts, 0, or 1 where it can't start it: `research status RUN` checks on it.
 # A placement value's ${NAME} is an address, which this environment holds and no file does (the window run's H1_GATE
 # names VY_CHALLENGER_1_HOST, the challenger host's): with NAME unset nothing starts, unless a FLAG sets that value.
 set -euo pipefail
@@ -66,7 +70,7 @@ print("\n".join(["research", "run", "--on", r["node"], "--project", "verity", "-
                  *(x for k, v in env.items() for x in ("--env", f"{k}={v}")), "--", *r.get("wrap", []), "bash", script]))
 EOF
 )
-[ "${#ARGV[@]}" -gt 0 ] || exit 2
+[ "${#ARGV[@]}" -gt 0 ] || exit 1
 for i in "${!ARGV[@]}"; do [ "${ARGV[$i]}" = -- ] && break; done
 CMD=("${ARGV[@]:0:$i}" "$@" "${ARGV[@]:$i}")
 if [ "$DRY" = 1 ]; then printf '%q ' "${CMD[@]}"; echo; exit 0; fi

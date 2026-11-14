@@ -25,8 +25,8 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   They have no number, so ``error``, ``at`` and every sum of this record hold none of them and each reads with them
   beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. A leg whose ``server``
   is not the block's is carried but not composed.
-* ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check`` or ``remote check``)'s
-  answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
+* ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check``, or ``remote check`` or
+  ``remote-v1 check``)'s answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
   (`Core.Verdict`: accept, reject or undecided), undecided when there is none; nothing here combines the legs' verdicts
   into another. The rest is what the product's legs say (`compose`): ``legs`` (each composed leg's own verdict), what is
   ``missing`` on the block's server and what ran ``elsewhere``; ``joint_horizon`` is `JOINT_HORIZON`'s error over this
@@ -69,8 +69,9 @@ NAMES_TERMS = ("bandwidth",)
 NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
 #: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
 NAMED_TERM = ("claim", "term", "value", "in_total", "status")
-#: the protocol each product's Lean check (`onsite check`, `remote check`) names in its answer, and `Core.Verdict`'s names
-CHECKS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
+#: the protocols each product's Lean checks name in their answers (`onsite check`; `remote check`, and `remote-v1 check`,
+#: remote's composite of record, whose work subprotocol is Pearl+'s), and `Core.Verdict`'s names
+CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v0", "verity/remote/v1")}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
@@ -229,9 +230,9 @@ def answer_of(answer: Mapping[str, Any] | None, product: str = "onsite") -> dict
     Raises ValueError for anything else: another protocol's answer, or a verdict that is not `Core.Verdict`'s."""
     if answer is None:
         return None
-    if answer.get("protocol") != CHECKS[product] or answer.get("verdict") not in VERDICTS:
-        raise ValueError(f"not an answer of the {product} check ({CHECKS[product]}) with a verdict of {VERDICTS}: "
-                         f"{dict(answer)}")
+    if answer.get("protocol") not in CHECKS[product] or answer.get("verdict") not in VERDICTS:
+        raise ValueError(f"not an answer of the {product} check ({', '.join(CHECKS[product])}) with a verdict of "
+                         f"{VERDICTS}: {dict(answer)}")
     return {k: answer.get(k) for k in ("protocol", "verdict", "reason", "commitment")}
 
 
