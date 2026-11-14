@@ -86,23 +86,25 @@ def _sha(b: bytes) -> str:
 
 
 @functools.cache
-def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
+def _sessionless_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
     and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
     tree) is one proof block (a subset of one, the least a subset sampling design samples), its proved unit, and it names no session,
-    and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
-    to make."""
+    and its params name the circuit and public files `BLOBS` hold. Its log is empty, or with `after` (a record's
+    canonical JSON) that one record, which its record is chained right after. Made once each: a challenger's signed
+    session is slow to make."""
     s, law = OS.SETUPS[i], {"k": 1, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
+    log = [json.loads(after)] if after else []
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
-                      OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
+                      OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
     ch, d, coins = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
-              "leaf_layer": OS.LEAF, "log": [], "partition": part, "ports": s.ports, "program": s.desc,
+              "leaf_layer": OS.LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc,
               "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": None}, "query": s.query,
               "registered": None, "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
     return params, rec, evidence
@@ -895,6 +897,96 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     assert p.returncode == 2 and {k: v for k, v in got.items() if k != "reason"} == {
         k: v for k, v in want.items() if k != "reason"}, (p.returncode, got, p.stderr)
     assert got["reason"].startswith(f"{R.SAMPLED_PROOFS.id} undecided") and R.PEARL_PLUS.id not in got["reason"], got
+
+
+NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+#: Pearl+'s refusal of params that name none of its keys (`PouwCheck.PearlPlus.Protocol`'s guard), with no digest
+PEARL_PLUS_PARAMS = "params: keys are not coins, draws, record"
+
+
+def _checked(exe: Path, tmp_path: Path, name: str, case: dict, blobs: list[Path]) -> tuple[int, dict]:
+    """``exe check`` (the core protocol command line) on ``case``'s params, commitment and evidence written under
+    ``tmp_path/name``, and the blobs: its exit and its answer."""
+    d = tmp_path / name
+    d.mkdir()
+    for f, data in (("params", canonical(case["params"]).encode()), ("commitment", bytes.fromhex(case["commitment"])),
+                    ("evidence", bytes.fromhex(case["evidence"]))):
+        (d / f).write_bytes(data)
+    p = subprocess.run([exe, "check", d / "params", d / "commitment", d / "evidence", *blobs], capture_output=True,
+                       text=True)
+    return p.returncode, json.loads(p.stdout)
+
+
+def _but_reason(answer: dict) -> dict:
+    return {k: v for k, v in answer.items() if k != "reason"}
+
+
+def _bare(c: dict) -> dict:
+    """A composite's entry as its subprotocol's own case: params, and commitment and evidence in hex."""
+    return {"params": c["params"], "commitment": c["root"].hex(), "evidence": c["evidence"].hex()}
+
+
+def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypatch):
+    """Remote's composite of record (`remote-v1`, `Core.Remote.V1`) and the inference-only policy's check
+    (`inference-only`, `NciCheck.Protocol`), each its compiled executable, on one small window on the CPU, held to the
+    Python reference on every field but the reason.
+
+    The window: W, a toy window record; sampled proofs' audit of a program that reads no registered value, its record R
+    chained right after W (`_sessionless_audit`: its sample is one proof block and it names no session, which SPOT
+    refuses at its challenger's coins); the policy on that audit's own registered circuit and record (`policy_on`), which its compiled check accepts as
+    its Python does; and a Pearl+ run whose commitment names R and W, as remote's `run` and `window` ties need, with
+    params Pearl+ refuses (no digest). Remote rejects, naming Pearl+ and SPOT and not the policy; dropping the policy
+    names it missing, and a policy whose α is far too small rejects in its check and in remote, which names it.
+
+    Remote never accepts on the CPU: SPOT accepts only a session `flock-verify` verifies, and Pearl+ only a served
+    run's retained passes on a live challenger sample (`test_remote_v1_on_a_served_pearl_plus_run`, opt-in). What this
+    catches that no cheaper test does: the compiled composite of record, which nothing else in the quick suites runs,
+    decoding and dispatching an honest policy, an audit and a tied Pearl+ commitment of one window, and binding
+    the composite's commitment over their digests; its build takes a few minutes cold."""
+    w = {"format": "verity/registration/v2", "registered": []}
+    params, rec, evidence = _sessionless_audit(0, canonical(w))
+    audit = as_component(R.SAMPLED_PROOFS, form_case(OS._json({"params": {**params, "delta": "1/2"}, "record": rec,
+                                                               "evidence": evidence})))
+    policy = policy_on(audit)
+    assert policy is not None
+    record = R.policy_record(policy["root"], policy["evidence"])[0]
+    assert R.policy_previous(policy["root"], policy["evidence"]) == [bytes.fromhex(OS.R.digest(w))]
+
+    blobs = [tmp_path / "circuit", tmp_path / "public"]
+    for b, data in zip(blobs, BLOBS):
+        b.write_bytes(data)
+    nci = D.build(NCI_PACKAGE, "inference-only")
+    rc, got = _checked(nci, tmp_path, "policy", _bare(policy), [])
+    want = R.INFERENCE_ONLY.answer(_bare(policy))
+    assert (rc, got) == (0, want) and got["verdict"] == R.ACCEPT, (rc, got, want)
+
+    run = canonical({"manifests": [{}], "record": record.hex(),
+                     "window": {"dropped": [], "record": w, "rounds": None}}).encode()
+    pearl = {"params": {}, "commitment": run.hex(), "evidence": canonical({"files": []}).encode().hex()}
+    monkeypatch.setitem(R.PEARL_PLUS.cases, "small", (pearl, R.P.outcome(R.PEARL_PLUS.id, R.REJECT, PEARL_PLUS_PARAMS)))
+    pearl = as_component(R.PEARL_PLUS, pearl)
+    assert R.run_record(run, b"") == [record] and R.run_window(run, b"") == [bytes.fromhex(OS.R.digest(w))]
+
+    v1 = D.build(REMOTE_PACKAGE, "remote-v1")
+    alpha = [1, 10 ** 9]
+    weak = {**policy, "params": {**policy["params"], "alpha": alpha}}
+    weak_answer = R.INFERENCE_ONLY.answer(_bare(weak))
+    rc, got = _checked(nci, tmp_path, "weak", _bare(weak), [])
+    assert (rc, weak_answer["verdict"]) == (1, R.REJECT) and _but_reason(got) == _but_reason(weak_answer), (got, weak_answer)
+    weak["digest"] = bytes.fromhex(weak_answer["commitment"]) if weak_answer["commitment"] else weak["root"]
+    for name, cases, verdicts, named in (
+            ("small", [policy, pearl, audit], [R.ACCEPT, R.REJECT, R.REJECT], [R.PEARL_PLUS.id, R.SAMPLED_PROOFS.id]),
+            ("no-policy", [pearl, audit], None, [f"{R.INFERENCE_ONLY.id} is missing"]),
+            ("weak-policy", [weak, pearl, audit], [R.REJECT, R.REJECT, R.REJECT],
+             [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id, R.SAMPLED_PROOFS.id])):
+        case = product_case(R.REMOTE_V1, cases)
+        if verdicts:
+            assert R.REMOTE_V1.verdicts(case) == verdicts, name
+        want = R.REMOTE_V1.answer(case)
+        rc, got = _checked(v1, tmp_path, name, case, blobs)
+        assert (rc, want["verdict"]) == (1, R.REJECT) and _but_reason(got) == _but_reason(want), (name, rc, got, want)
+        assert all(n in got["reason"] for n in named), (name, got["reason"])
+        assert name == "weak-policy" or f"{R.INFERENCE_ONLY.id} reject" not in got["reason"], (name, got["reason"])
 
 
 @pytest.mark.slow
