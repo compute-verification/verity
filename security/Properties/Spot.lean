@@ -311,8 +311,9 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
 
 /-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
 program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
-and most sampled proof blocks under it, over the samples that end, give different link points (`LinkPoints.refused`, which
-refuses a sampling design no sample of which ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
+fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
+ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]

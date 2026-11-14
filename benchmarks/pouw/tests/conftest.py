@@ -29,6 +29,10 @@ POUW = Path(__file__).resolve().parents[1]
 #: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the package the environment installs,
 #: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
 NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
+#: PoUW's prover's kernels, where the directories `MOVED` of ``benchmarks/pouw/`` went: this suite still takes their
+#: scripts, by the same names (``gpu_kit/sass_gate.py``)
+KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"
+MOVED = ("floored_gemm", "gpu_kit", "masked_gemm")
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
 #: derive and report)
 AHEAD = ("harness",)
@@ -36,7 +40,18 @@ AHEAD = ("harness",)
 
 def scripts() -> list[Path]:
     """Every script under ``benchmarks/pouw/``."""
-    return sorted(p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1]))
+    here = [p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1])]
+    return sorted(here + [p for d in MOVED for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"])
+
+
+def rel(path: Path) -> Path:
+    """`path` as `load` names it: under ``benchmarks/pouw/``, or under `KERNELS` for a directory of `MOVED`."""
+    return path.relative_to(KERNELS if path.is_relative_to(KERNELS) else POUW)
+
+
+def place(file: str | Path) -> Path:
+    """The file `load` reads for ``FILE``: ``benchmarks/pouw/FILE``, or under `KERNELS` for a directory of `MOVED`."""
+    return (KERNELS if Path(file).parts[0] in MOVED else POUW) / file
 
 
 def script_dirs() -> list[Path]:
@@ -78,7 +93,7 @@ def load(file: str) -> ModuleType:
     file under this name."""
     name = load_name(file)
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, POUW / file)
+        spec = importlib.util.spec_from_file_location(name, place(file))
         sys.modules[name] = module = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(module)

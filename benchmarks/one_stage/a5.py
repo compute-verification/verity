@@ -902,7 +902,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     history=hist, **tie(a), **declared(a)).to_json()
+                                     history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
+                                     **tie(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1444,9 +1445,11 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
     ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
-    v2's check of the form reads too, and of the pinned lookup ``tables`` the members' circuits look up, any member's.
-    The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
-    (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
+    v2's check of the form reads too, and of the pinned lookup ``tables`` the members' circuits look up, any member's,
+    each path once: a template's members share one circuit file, and v2 finds a blob by its digest (`Core.Blobs.get`).
+    The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 checks a case of this form by
+    `OneStageZk.checkMembersAt` (`members.case_check`); `proofs.members_parsed` is what its parsers read of the
+    case."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
@@ -1457,7 +1460,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
         raise ValueError("the statements' sessions, in the members' order by first unit, are not the evidence's sessions "
                          "in order: the sampled members' sessions ran in another order")
     evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
-    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+    return {"blobs": list(dict.fromkeys(str(b) for b in (*blobs, *tables))), "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": pm}}
 
 
@@ -1506,15 +1509,30 @@ def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
         return str(e)
 
 
+def link_members(members: Sequence[dict]) -> list[tuple[list[list[int]], int]]:
+    """The window's staged members as the registration's `link-points` reads them (`link_points.Member`): each its
+    units ``[base, base + n)`` and its circuit's units a proof block."""
+    return [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
+
+
+def per_member(members: Sequence[dict], zk: bool) -> bool:
+    """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, its sessions
+    `--zk`. Its registration's check reads the members (`link_members`), as v2's check of that case does
+    (`OneStageZk.membersParamsOfJson`); the one statement's form names none."""
+    return len(members) >= 2 and zk
+
+
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
     sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
-    `draw_ran_out`), or why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
-    Recorded here; a registration whose verifier names its members refuses (`Registration.check`)."""
+    `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
+    why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
+    Recorded here for every window; the registration's check refuses them where the audit's case is of the per-member
+    form (`per_member`)."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
-    ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
+    ms = link_members(members)
     try:
         if why := CC.law_problem(law, population):
             raise ValueError(why)
@@ -1564,16 +1582,18 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
 def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
-    the sample, its registered file, its units and its circuit's ``vus_per_block``, a sampled member's session, and
-    the tables every member's circuit looks up, sampled or not, one path a table: v2 holds each member's statement to
-    its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. None for a window
-    of one member, whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's
-    stage's challenger session, `stage_trees`); or why the audit has no per-member case."""
+    the sample, its circuit file its template's (the one its first member composed: a later member has no file of its
+    own unless it is sampled), its registered file, its units and its circuit's ``vus_per_block``, a sampled member's
+    session, and the tables every member's circuit looks up, sampled or not, one path a table: v2 holds each member's
+    statement to its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. A
+    template's tables are staged beside the circuit file its first member composed. None for a window of one member,
+    whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger
+    session, `stage_trees`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
         return None
-    if not zk:
+    if not per_member(members, zk):
         return "v2 verifies --zk sessions; this audit's are plain"
     sdirs = {got["mm"]["m"].key: got["sdir"] for got in done}
     out, tables = [], {}
@@ -1584,9 +1604,9 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
             return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
         sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
         reads = st.get("registered_file")
-        out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
+        out.append(PF.Member(m.key, PF.Proof(mm["circuit"], st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
-        tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+        tables.update((f.name, f) for f in looked_up_tables(mm["circuit"].parent) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 

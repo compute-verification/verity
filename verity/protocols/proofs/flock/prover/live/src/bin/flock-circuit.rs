@@ -14,6 +14,8 @@
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
 //!
+//! `--wide-leaf` (both sides, every command but `stacked`): the wide level-0 leaf's statement version (`flock_live::wide_leaf`).
+//!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
 //! frame-v3-sha512 roots and the pinned padding values before any session. Session: `Hello(Σ)`, `Commit(root_f = Σ, root)`, two verifier
@@ -35,7 +37,7 @@ use std::{
 
 use flock_core::{
     merkle::HashKind,
-    pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default}, verify_opening_batch_ligerito_mixed_with_grinding_zk},
+    pcs::{PcsParams, ligerito::LigeritoProfile, verify_opening_batch_ligerito_mixed_with_grinding_zk},
     proof::{R1csProofLigerito, bind_statement},
 };
 use flock_field::F128;
@@ -77,18 +79,31 @@ fn f128_bytes(v: &[F128]) -> Vec<u8> {
     v.iter().flat_map(|x| x.lo.to_le_bytes().into_iter().chain(x.hi.to_le_bytes())).collect()
 }
 
-fn domain(c: &Composite, rep: usize) -> Vec<u8> {
-    format!("{}{rep}", c.tags().domain).into_bytes()
+/// `--wide-leaf`: the wide level-0 leaf's statement version (`flock_live::wide_leaf`), pinned in the identity and the Hello
+/// (both sides must agree). A table of 2^32 to 2^35 bits then commits level 0 as `2^(m - 25)` lanes; a smaller one as it does
+/// without the flag, under the version's own names.
+fn wide_mode() -> bool {
+    flag("--wide-leaf")
 }
 
-/// A rep stream's transcript domain in a session of `tables` tables: [`domain`] for one; for several, the table's name and a
-/// `/` before the domain tag's final `rep` (`flock-circuit/fast100x2/circuit-00/rep0`).
+/// The statement's Ligerito profile: fast100's, or the wide version's.
+fn fast100() -> LigeritoProfile {
+    if wide_mode() { wide_leaf::LIGERITO } else { LigeritoProfile::Fast100 }
+}
+
+/// The statement's domain tag in the session's version. A statement the version does not have (the typed statement under
+/// `--wide-leaf`) is refused: [`identity`] asks first, so that is when the statement is built, before any session.
+fn domain_tag(c: &Composite) -> &'static str {
+    wide_leaf::domain(c.tags().domain, wide_mode()).unwrap_or_else(|e| refuse(e))
+}
+
+fn domain(c: &Composite, rep: usize) -> Vec<u8> {
+    rep_domain(domain_tag(c), 1, "", rep)
+}
+
+/// A rep stream's transcript domain in a session of `tables` tables (`rep_domain` under the statement's [`domain_tag`]).
 fn domain_of(c: &Composite, tables: usize, table: &str, rep: usize) -> Vec<u8> {
-    if tables <= 1 {
-        return domain(c, rep);
-    }
-    let base = c.tags().domain.strip_suffix("rep").expect("a statement's domain tag ends in `rep`");
-    format!("{base}{table}/rep{rep}").into_bytes()
+    rep_domain(domain_tag(c), tables, table, rep)
 }
 
 /// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
@@ -99,7 +114,7 @@ const MERKLE: HashKind = HashKind::Hm96Sha512;
 const MERKLE: HashKind = HashKind::Sha256;
 
 fn params(m: usize, lig: LigeritoProfile) -> PcsParams {
-    PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None, merkle_hash: MERKLE }
+    PcsParams { m, log_inv_rate: 1, log_batch_size: wide_leaf::log_batch_size(m, lig, wide_mode()), profile: lig, num_lanes: None, merkle_hash: MERKLE }
 }
 
 /// A statement's Merkle hash: [`MERKLE`], or plain SHA-512 leaves for a plain-leaf statement (`circuit::leaf_scheme_plain`).
@@ -164,7 +179,7 @@ fn plain_tree(st: &Stmt) -> bool {
 
 /// M1's pad layout for the statement: the algebraic phase's, then Ligerito level 0's (its OOD samples and lane rounds).
 fn zk_layout(st: &Stmt) -> Layout {
-    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    let lc = pcs_of(st, fast100()).ligerito_prover_config().expect("Ligerito config");
     Layout::new(st.m, st.c.k_log, lc.ood_samples[0], lc.initial_k)
 }
 
@@ -175,7 +190,7 @@ fn zk_queries0(m: usize) -> Result<usize, String> {
     if m <= 24 {
         return Err(format!("m = {m}: --zk needs m >= 25 (Ligerito level 0's padding outgrows its lanes at rate 1/2)"));
     }
-    let lc = params(m, LigeritoProfile::Fast100).ligerito_prover_config()?;
+    let lc = params(m, fast100()).ligerito_prover_config()?;
     let l = 1usize << lc.initial_log_msg_cols;
     let q = match m {
         25 => 277,
@@ -225,7 +240,7 @@ fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
 fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
     let tr = Instant::now();
-    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    let lc = pcs_of(st, fast100()).ligerito_prover_config().expect("Ligerito config");
     let (lanes, l, t) = ((1usize << lc.initial_k) + EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m));
     let draw = |stream: u64, lanes: usize, n: usize| -> Vec<Vec<F128>> {
         if zero { vec![vec![F128::ZERO; n]; lanes] } else { rng.f128s_lanes(stream, lanes, n) }
@@ -379,8 +394,9 @@ fn zk_identity(c: &Composite) -> Value {
            "ligerito_level0": "veil figs. 8-9: every lane padded by (W_n + c) mu with t_pad = 2 q_0 uniform coefficients (c = x); four padded \
                                uniform lanes, rep r folding its own pair 2r, 2r + 1 after its lane rounds (rho_0, rho_1 F128-independent); the ood \
                                value, the lane-round messages and the pair's sums padded; T' and ybar sent (uniform)",
-           "ligerito_level0_queries": "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; \
-                                       rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24",
+           "ligerito_level0_queries": wide_leaf::level0_queries(
+               "q_0 = 277, 242, 229 at m = 25, 26, 27, else the least q_0 >= fast100's with q_0 log2(1/(sqrt(rho') + 1/50)) >= 100; \
+                rho' = (L + 2 q_0) / 2L; refused below 100 bits and at m <= 24", wide_mode()),
            "refused_coins": ["beta = 0", "mask-slot weights of rank < 128 k over the claims so far", "rho_0, rho_1 dependent over F128",
                              "a zerocheck outer coin r_j = 1"],
            "not_yet_masked": []})
@@ -389,8 +405,9 @@ fn zk_identity(c: &Composite) -> Value {
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
+    domain_tag(c);
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
-    let mut id = json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": "fast100", "reps": 2,
+    let mut id = json!({"statement": c.statement(), "backend": "C-interactive", "proof_class": "NON_ZK_PROOF", "profile": wide_leaf::profile(wide_mode()), "reps": 2,
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            "outputs": "hidden: each output port an hm96-sha512/row/v1 row hashed in the circuit; the public file has no output word",
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
@@ -637,7 +654,7 @@ impl CircuitVerifier {
         let t = Instant::now();
         let (commitment, proof): (Commitment, R1csProofLigerito) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
         ph.decode_s = t.elapsed().as_secs_f64();
-        let pcs = pcs_of(st, LigeritoProfile::Fast100);
+        let pcs = pcs_of(st, fast100());
         if commitment.params != pcs {
             return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
         }
@@ -676,7 +693,7 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
                                                                  root: &[u8; 64], points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
                                                                  ch: &mut Ch)
     -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
-    let pcs = pcs_of(st, LigeritoProfile::Fast100);
+    let pcs = pcs_of(st, fast100());
     if commitment.params != pcs {
         return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
     }
@@ -779,6 +796,7 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let st = tabs[0].1;
     let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
     let mut cfg = SessionConfig::flock_128_r2(specs);
+    cfg.profile = wide_leaf::profile(wide_mode()).into();
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
     // M2 (--zk) and FC_COINS=tree: every coin committed at Hello and opened round by round; M0: the step-0 seed
     let names = tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>();
@@ -1421,7 +1439,7 @@ static LEVEL0_BUFS: Mutex<Vec<SaltBuf>> = Mutex::new(Vec::new());
 type Level0Shape = (usize, usize, usize, usize, bool, u8);
 
 fn level0_shape(st: &Stmt, plan: &Plan) -> Level0Shape {
-    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    let lc = pcs_of(st, fast100()).ligerito_prover_config().expect("Ligerito config");
     (st.m, (1usize << lc.initial_k) + flock_core::pcs::ligerito::zk::EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m),
      plan.zk_zero_pads, plan.zk_l0_tamper)
 }
@@ -1589,11 +1607,13 @@ fn firewall_on(st: &Stmt) -> bool {
     is_zk(st) && zk_server_asked()
 }
 
-/// The Lean verifier's name of the statement a ZK server session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
-/// this build's (the circuit's statement, with `+seed-injection` in a build whose identity pins `seed_injection`).
+/// The Lean verifier's name of the statement a ZK server session's `Hello` is set up under, in the session's version
+/// (`wide_leaf::lean_statement`): `FC_FIREWALL_STATEMENT`, else this build's (the circuit's statement, with
+/// `+seed-injection` in a build whose identity pins `seed_injection`); under `--wide-leaf` the statement's wide name, and a
+/// name or a build the wide version has none for is refused.
 fn lean_statement(st: &Stmt) -> String {
-    std::env::var("FC_FIREWALL_STATEMENT")
-        .unwrap_or_else(|_| format!("{}{}", st.c.statement(), if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" }))
+    let given = std::env::var("FC_FIREWALL_STATEMENT").ok();
+    wide_leaf::lean_statement(st.c.statement(), given.as_deref(), cfg!(feature = "seed-injection"), wide_mode()).unwrap_or_else(|e| refuse(e))
 }
 
 /// The verifier's own public file of `inst` (`Instances::public_file`), written where a Lean process `what` reads it.
@@ -2689,7 +2709,7 @@ fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &
     -> Result<([Vec<F128>; 2], [usize; 3]), String> {
     use flock_core::pcs::ligerito::zk::{lane_codeword, pad_codeword};
     use flock_field::F256;
-    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config()?;
+    let lc = pcs_of(st, fast100()).ligerito_prover_config()?;
     let (log_msg, lanes) = (lc.initial_log_msg_cols, 1usize << lc.initial_k);
     type M2 = [[F128; 2]; 2];
     let wmat = |rho: [F256; 2]| -> M2 { [[rho[0].c0, rho[1].c0], [rho[0].c1, rho[1].c1]] };
@@ -3051,7 +3071,7 @@ fn zkaudit(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     }
     let clear: Vec<Value> = total.iter().filter(|(k, _)| k.starts_with("CLEAR")).map(|(k, (_, b))| json!({"class": k, "bytes": b})).collect();
     let unattributed = total.get("UNATTRIBUTED").map(|x| x.1).unwrap_or(0);
-    let lc = flock_core::pcs::ligerito::zk::prover_config(pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().unwrap(), zk_queries0(st.m).unwrap());
+    let lc = flock_core::pcs::ligerito::zk::prover_config(pcs_of(st, fast100()).ligerito_prover_config().unwrap(), zk_queries0(st.m).unwrap());
     let ligerito = json!({"m": st.m, "t_pad0": zk_t_pad(st.m), "initial_k": lc.initial_k, "initial_log_msg_cols": lc.initial_log_msg_cols, "recursive_ks": lc.recursive_ks,
         "recursive_log_msg_cols": lc.recursive_log_msg_cols, "log_inv_rates": lc.log_inv_rates, "queries": lc.queries, "ood_samples": lc.ood_samples,
         "grinding_bits": lc.grinding_bits});
@@ -4131,7 +4151,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let reuse_tag = (plan.gpu && !plan.rep1_other_witness
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
-    let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
+    let lig = if plan.fast { LigeritoProfile::Fast } else { fast100() };
     // hm96-sha512 leaf salts, read from the OS: the level-0 tree is id 0 (both reps bind one root), every later tree a fresh
     // id (table j's from j << 32). The device takes the host's salts tree by tree, as a CPU proof does.
     let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
@@ -6114,7 +6134,7 @@ fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)
 /// `FC_HOST_WITNESS`, `FC_HOST_UNITS` and `FC_UNIT_WALK` reaches the session from this process's environment; `env` gives them).
 fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, String)], host_witness: bool) -> Value {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-    cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
+    cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] }).args(if wide_mode() { &["--wide-leaf"][..] } else { &[] })
         .args(["--instances", instances, "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                "--only", WORKER_SESSION])
         .args(extra)
@@ -7017,6 +7037,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
                 .arg("selftest")
                 .args(if zk_mode() { &["--zk"][..] } else { &[] })
+                .args(if wide_mode() { &["--wide-leaf"][..] } else { &[] })
                 .args(["--gpu", "--instances", &arg("--instances", ""), "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                        "--forged", &arg("--forged", "circuit-forged.txt"), "--only", name, "--record-dir", &arg("--record-dir", "")])
                 .output()
@@ -7526,6 +7547,9 @@ fn stacked_points(m: usize) -> Vec<Vec<F128>> {
 /// R1csProofLigerito)) with an empty zerocheck and lincheck: a circuit rep's container, as V* decodes it.
 fn stacked() {
     use flock_transcript::challenger::Challenger;
+    if wide_mode() {
+        refuse("stacked: --wide-leaf is the circuit statement's version; the stacked table's domain names fast100 alone".into());
+    }
     let (m, raw, z) = stacked_table(&arg("--table", "R.bin"));
     let pcs = PcsParams { merkle_hash: HashKind::Sha512, ..params(m, LigeritoProfile::Fast100) };
     let t0 = Instant::now();
@@ -7931,6 +7955,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths] | walk-twin --instances FILE --circuit FILE [--slots N]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] [--zk] [--wide-leaf] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths] | walk-twin --instances FILE --circuit FILE [--slots N]"),
     }
 }

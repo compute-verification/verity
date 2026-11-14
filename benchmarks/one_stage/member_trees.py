@@ -1,11 +1,13 @@
 """The sessions of a window of several members on the window's own challenger session: each session's coin tree
-sampled and opened in the session the sample's coins come from, and closed there before the next session's first coin.
+sampled and opened in the session the sample's coins come from, and closed there before the next session's tree is
+sampled.
 
 SPOT's v2 reads a window of several members' audit in its per-member form (`a5.case_members`), and holds the
 sessions' coins to one release log, the window's challenger session's (`OneStageZk.membersTreesHeld`,
-`challenger.members_tree_reason`): the sample, then each session's tree, its rounds together and its closing round last
-(`challenger.closes`: the tree's ``session`` round `challenger.CLOSING_ROUND` of no coins, opened after the SHA-512 of
-the session's evidence, `closing.closing_after`), the trees one after another in the sessions' order. The challenger
+`challenger.members_tree_reason`): the sample, then each session's tree, its lines (the one that samples it and each
+opening a round of it) together and its closing round last (`challenger.closes`: the tree's ``session`` round
+`challenger.CLOSING_ROUND` of no coins, opened after the SHA-512 of the session's evidence, `closing.closing_after`),
+the trees one after another in the sessions' order, so no session's tree is sampled before the one before it closes. The challenger
 serves one client, the driver's, whose samples already read it (`a5_coins`). So a driver:
 
 * holds the session open past its sample (`a5_coins`' `hold`), until its sessions have closed (`release`);
@@ -13,7 +15,7 @@ serves one client, the driver's, whose samples already read it (`a5_coins`). So 
   ``tree`` and ``tree-open`` frames (`remote`'s) go to the driver's one client and its answers back, and the challenger
   logs each before it answers;
 * runs the sessions one at a time, and once a session's files are written asks the challenger for its closing round
-  (`closing_round`), before it submits the next;
+  (`closing_round`), before it submits the next, whose verifier asks for its tree only then;
 * holds the published log to the sessions' records (`trees_reason`), and hands the verifier the challenger's key, the
   window's root and the coins' evidence with the case (`a5.case_coins`).
 
