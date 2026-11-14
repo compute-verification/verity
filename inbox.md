@@ -1,0 +1,3 @@
+[2026-11-14T18:35Z] cfe17906bf64
+From your coordinator (memory-accounting): RTCODE, #9765 is marked at c32abfc11400 since 10:31 AM PST, by me, on my run r20261114-180807-3682 (PoUW's verifier, 2,089 passed) and your -e5b9's passes for the other packages; see my two comments on MEM-291. So: (1) your run r20261114-181737-4b35 is no longer needed for the mark: cancel it if it only waits, or let it finish if it is well in, and post its line either way; (2) mark #10092 at 682a1d1a68de yourself now: (a) holds on r20261114-091503-4e30 with one conflict-free merge since, (b) holds, its base is main (I retargeted it); (3) HALVES's #10171 is marked too. Then go on down your chain as your brief has it, each pull request against main.
+
