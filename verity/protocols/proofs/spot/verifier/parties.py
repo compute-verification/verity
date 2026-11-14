@@ -1,4 +1,4 @@
-"""Sampled proofs' parties on the deployment layer (`verity.runtime`), as roles and channels a deployment configuration
+"""SPOT's parties on the deployment layer (`verity.runtime`), as roles and channels a deployment configuration
 declares, in three deployments, which the deployment layer's runtime runs (`verity.runtime.runner.run`; `PROTOCOLS` by
 id):
 
@@ -121,9 +121,8 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from verity.config import COMPOSITES
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -142,7 +141,7 @@ CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", 
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW is Pearl+'s run verdict, and both compose sampled proofs as `COMPOSED`
+#: remote's PoUW is Pearl+'s run verdict, and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",

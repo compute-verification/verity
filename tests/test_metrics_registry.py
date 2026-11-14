@@ -214,11 +214,11 @@ def test_an_axis_is_one_sentence() -> None:
 def test_a_row_whose_script_is_under_demos_sits_beside_it() -> None:
     row = {"id": "vllm/remote-demo-minutes", "title": "Remote demo run time", "owner": "vllm", "unit": "minutes",
            "axis": "Minutes from the first command to the verdict.", "better": "lower",
-           "command": "research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN VERDICT_RUN", "every": "7d"}
+           "command": "research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN VERDICT_RUN", "every": "7d"}
     assert _problems(row, {"vllm"}, "demos/vllm") == []
     assert _problems(row, {"vllm"}, "benchmarks/serve_tax") == [
-        "its command's script demos/vllm/minutes.py is not under benchmarks/serve_tax/: move the row to "
-        "demos/vllm/metrics.toml, beside its script"]
+        "its command's script benchmarks/demo_minutes/minutes.py is not under benchmarks/serve_tax/: move the row to "
+        "benchmarks/demo_minutes/metrics.toml, beside its script"]
 
 
 def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> None:

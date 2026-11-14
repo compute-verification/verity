@@ -23,7 +23,9 @@ chain is the default registration's: sketch-sha512, the default receipt kind, at
 `variants` holds every other: the same store registered under each other kind and `bind`, and sketch-sha512 at 64 rows
 (named "kind", "kind/bind" for receipts that bind the stub tiles' z, "sketch-sha512/rows64"), with the same nonce, so
 the same codec seed and blocks (none of them is in the seed's context) under another digest, so another window R, and
-other seeds, signs and roots.
+other seeds, signs and roots.  At 64 rows the signs are `SIGN_DOMAIN_WIDE`'s under a 512-bit key, at 16
+`SIGN_DOMAIN`'s under a 256-bit one (`receipts.sign_key`); `sketch.zero_seed` holds each row count's key and rows at a
+seed of 64 zero bytes.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from remote_bandwidth_fakes import Entropy
 
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.proofs.spot.device.challenger import live_domain, live_leaf
 
@@ -83,15 +86,15 @@ def _sha(b: bytes) -> str:
 
 
 @functools.cache
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     """The vectors' store, encoded once a process: its 21 blocks take about 6 s under the default codec."""
     payloads, salts = [payload(j) for j in range(BLOCKS)], payload_salts()
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
+    return audit_prover.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
 
 
 @functools.cache
-def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
+def registered(receipt: str, bind: bool, rows: int) -> audit_prover.Store:
     """`store()` registered under `receipt`, `bind` and `rows` with the same nonce: its codec seed, so its blocks, are
     `store()`'s."""
     st = store()
@@ -103,7 +106,7 @@ def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
     return out
 
 
-def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
+def chain(st: audit_prover.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
     """Window 0's challenge, opened after R, its three passes under the registration's receipt kind and `bind` (the
     stub tiles' z when it binds them), its openings coin, opened after the last pass's root, and the session's coins."""
     reg, blocks = st.registration, st.blocks
@@ -140,7 +143,7 @@ def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpe
     return challenge, passes, challenger.openings(0, previous), challenger
 
 
-def _passes(st: audit.Store, challenge: coins.LiveOpening, passes: list[dict]) -> dict:
+def _passes(st: audit_prover.Store, challenge: coins.LiveOpening, passes: list[dict]) -> dict:
     out = {"window": 0, "challenge": coins.coin(challenge).hex(), "passes": passes}
     return out | {"z_bytes": TILES.z_bytes} if st.registration.bind else out
 
@@ -154,6 +157,17 @@ def variant(kind: str, bind: bool, rows: int) -> dict:
             "coins_root": challenger.commitment.root.hex(), "window": challenger.window.hex(),
             "passes": _passes(st, challenge, passes),
             "openings": {"coin": coins.coin(opening).hex(), "draws": sampled(reg, opening)}}
+
+
+def zero_seed_signs() -> dict:
+    """The signs' key and rows at a seed of 64 zero bytes, at each row count: the key, row 0's first 16 bytes and the
+    last row's last 16."""
+    out = {}
+    for rows in receipts.ROWS:
+        signs = receipts.sign_bits(bytes(receipts.DIGEST_BYTES), rows)
+        out[str(rows)] = {"key": receipts.sign_key(bytes(receipts.DIGEST_BYTES), rows).value.hex(),
+                          "row_0": signs[0][:16].hex(), "row_last": signs[-1][-16:].hex()}
+    return out
 
 
 def sampled(reg: audit.Registration, opening: coins.LiveOpening) -> list[int]:
@@ -208,8 +222,9 @@ def generate() -> dict:
         "openings": {"coin": coins.coin(opening).hex(), "label": opening.label, "index": opening.index,
                      "position": c.position(opening.label, opening.index), "after": opening.after.hex(),
                      "units": sum(p.length for p in PLANS), "draws": sampled(reg, opening)},
-        "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
-                   "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS)},
+        "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "sign_domain_wide": receipts.SIGN_DOMAIN_WIDE,
+                   "wide_rows": receipts.WIDE_ROWS, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
+                   "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS), "zero_seed": zero_seed_signs()},
         "variants": {name(*v): variant(*v) for v in VARIANTS},
     }
 
