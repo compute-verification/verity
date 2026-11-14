@@ -707,7 +707,7 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
         if ask and sized and not any(s is None or (type(s) is int and s >= ask) for s, _ in read):
             most, where = max(sized, key=lambda x: x[0])
             return None, (f"no machine's slice holds this shard's {ask} GiB ask (the largest is {where}'s, {most} GiB): name "
-                          f"one whose slice (its user slice's memory.max) holds {ask} GiB with --on"), skipped
+                          f"one whose slice (`check.py --slots --json M...`'s slice_gib) holds {ask} GiB with --on"), skipped
         return None, "no machine's slots could be read", skipped
     _, name, room, why = min(ranked)
     lead = ("a check slot and a Lean check slot are free" if room else

@@ -131,7 +131,7 @@ def test_a_shard_of_lean_alone_asks_a_train_slot_and_neither_takes_nor_twins_on_
     assert CHECK.choose([N1, N2], {N1: small, N2: beside}, True)[0] == N1           # a light run takes the free small one
 
 
-#: two machines' train slots as plain data: cpu-10's 234 GiB user slice and cpu-8's 468 (`slot.slice_gib`), both mem=300
+#: two machines' train slots as plain data, both mem=300, with slices (`slot.slice_gib`) of 234 and 468 GiB
 SMALL, BIG = "vy-nebius-cpu-10", "vy-nebius-cpu-8"
 
 
@@ -163,7 +163,7 @@ def test_with_no_slice_that_holds_the_ask_the_refusal_names_it_and_the_largest_s
     got, why, skipped = CHECK.choose([SMALL, "vy-nebius-cpu-7", BIG], docs, True, CHECK.TRAIN_GB, 500)
     assert got is None and len(skipped) == 3
     assert why == (f"no machine's slice holds this shard's 500 GiB ask (the largest is {BIG}'s, 468 GiB): name one whose slice "
-                   "(its user slice's memory.max) holds 500 GiB with --on")
+                   "(`check.py --slots --json M...`'s slice_gib) holds 500 GiB with --on")
     docs["m4"] = {**sliced(None), "deadline_in_s": 0}                 # unlimited but skipped for its deadline: that reason stands
     got, why, skipped = CHECK.choose([*docs], docs, True, CHECK.TRAIN_GB, 500)
     assert got is None and why == "no machine's slots could be read" and skipped[-1].startswith("m4: its deadline")
