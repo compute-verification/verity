@@ -63,12 +63,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 
-from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
-from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.commitments.windows.interface import CIRCUIT  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
+from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.circuits.codec import canonical_json
+from verity.commitments.windows.interface import CIRCUIT
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 
