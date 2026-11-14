@@ -35,7 +35,7 @@ def slowdown(over: dict, tier: str) -> float:
     return S.slowdown(P | over, tier)
 
 
-def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
+def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
     """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
     (reference efficiency: ``evaluate`` at ``residual_mfu`` = MFU_0); the rest are counted multiplications, so
     D = 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
@@ -49,7 +49,7 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
     assert all(S.slowdown(P | {"residual": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
 
 
-def test_the_remote_dampener_at_the_defaults():
+def test_the_remote_slowdown_at_the_defaults():
     """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
     MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
     3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
