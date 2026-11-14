@@ -3,7 +3,7 @@ out of it, so no run record takes one; and a job's outputs, held outside the run
 passed them. Every job that publishes after a gate runs it on its way out, whatever the exit.
 
     python3 leak_guard.py RUN_DIR QUARANTINE [--gates DIR|TARBALL]... [--hold DIR [--release-to OUT]] [--budget-s S]
-        [--public GLOB]... [--declared FILE] [--report FILE] [--dry]
+        [--public GLOB]... [--declared FILE] [--keys [FILE]] [--report FILE] [--dry]
 
 A gate run is a directory holding witness/ under a --gates directory (a tarball, a gate's fetch, is unpacked under
 QUARANTINE for the guard alone and removed after), and its public files are the rest of it. Its pieces are each witness
@@ -20,22 +20,28 @@ members (tar, zip, and gzip, bzip2 or xz streams), except a file or member equal
 * it is a file the guard can't read through (`UNREAD`, a damaged archive, an archive inside another); or
 * with ``--public``, its record path matches no ``--public`` glob (fnmatch): a record that declares what is public holds
   nothing else, whatever it holds, so the counts and lengths no witness piece shows (a window's requests, steps and
-  outputs, its advice's bits) stay out by being undeclared.
+  outputs, its advice's bits) stay out by being undeclared; or
+* with ``--keys``, it lies under the record's ``out/`` (or in HOLD) and holds a key that released_keys.py's declared
+  lists (released_keys.json beside it, or FILE) don't name: a JSON file's keys are each declared public by name with
+  their kind, so a value of any length that no piece shows stays out by its key. The report's ``keys`` counts the
+  files checked by key, those whose lists are not written yet by step, those with no keys by extension and those
+  outside ``out/``, the report itself among them when it is written under ``out/``.
 The declared data (`DECLARED`, leak_guard.json beside this file) holds the witness file names (``names``: the gates'
 witness files whose names no other file has) and the allowlist (``allow``): each entry a piece's sha256, the name of the
 witness file it is cut from, the record paths it may lie in (fnmatch globs on the run-dir-relative path, an archive
 member's as ``ARCHIVE/MEMBER``) and why its bytes are public. An entry's sha256 ``*`` excuses every piece of its witness
 file in those records: for a record that observes what the witness file also records, in the same format, so that
 which pieces match changes with the values (the runner's resources.jsonl and the stall probe's cgroup counters). An
-entry's ``keys`` (key paths, an object's keys joined by ``/``) narrow it to the pieces cut wholly inside the witness
-file's JSON values at those paths: for a value that is public whatever it holds, such as the certifier's own CPU list,
-whose indented form any indented list of consecutive integers repeats. An entry is written only after its find was read
-by counts and digests (QUARANTINE/leak-guard.json), never by its bytes.
+entry excuses a piece by its witness file and its records, never by a key path, and one that names anything else is
+refused: a value other files repeat by chance is written in a form they don't (the certifier's CPUs,
+`active_replay.cpu_ranges`). An entry is written only after its find was read by counts and digests
+(QUARANTINE/leak-guard.json), never by its bytes.
 
 Each find is moved to QUARANTINE/files/ under its record path. QUARANTINE must lie outside RUN_DIR and is kept 0700;
 QUARANTINE/leak-guard.json names each find's pieces (sha256, the witness file and offset, distinct and printable bytes, the
-JSON key path at the find). The --report file and stdout hold counts and paths only (what each entry excused, by its
-index), never a piece's bytes or digest. --dry moves nothing (a published run read again).
+JSON key path at the find) and each key it holds that isn't declared, with the fix. The --report file and stdout hold
+counts and paths only (what each entry excused, by its index; how many of a file's keys aren't declared), never a
+piece's bytes or digest or an undeclared key's name. --dry moves nothing (a published run read again).
 
 **Holding.** With --hold, HOLD (outside RUN_DIR and OUT) holds the job's outputs until the guard has read them, and a held
 file's record path is its path under OUT (by default RUN_DIR/out). Once the guard has read every file, each held file that
@@ -57,7 +63,6 @@ from __future__ import annotations
 import argparse
 import bz2
 import fnmatch
-import functools
 import gzip
 import hashlib
 import importlib.util
@@ -65,7 +70,6 @@ import io
 import json
 import lzma
 import os
-import re
 import shutil
 import signal
 import subprocess
@@ -75,6 +79,8 @@ import time
 import zipfile
 import zlib
 from pathlib import Path
+
+import released_keys as RK
 
 #: the system python3 of an exit before chain_record's setup may have no numpy: `Finder` then scans in pure Python.
 #: numpy's import starts its BLAS threads, which start with SIGTERM blocked: a SIGTERM the kernel gave one of them would
@@ -280,14 +286,12 @@ def _hex(rows, upper: bool):
 
 class Pieces:
     """The gate runs' witness pieces as the needles they are searched as (`forms`), each with the witness file and offset
-    it is first cut from; in numpy one zero-padded row a needle, with no Python object a piece. `files` maps each witness
-    file's label to its path, which an allowlist entry's ``keys`` read."""
+    it is first cut from; in numpy one zero-padded row a needle, with no Python object a piece."""
 
     SPAN = TEXT
 
     def __init__(self):
         self.labels: list[str] = []
-        self.files: dict[str, Path] = {}
         self._parts: list[tuple] = []
         self.count = 0
 
@@ -422,7 +426,6 @@ def pieces(gates: list[Path], budget: Budget | None = None) -> tuple[Pieces, Pub
             if twins.get(f.name) == hashlib.sha256(b).hexdigest():
                 continue
             label = f"{g.name}/{f.relative_to(g).as_posix()}"
-            got.files[label] = f
             got.add(label, b, TEXT if _is_text(b) else BINARY)
     return got, public, pub_files
 
@@ -452,46 +455,19 @@ def public_pieces(found: set[bytes], pub_files: list[Path], budget: Budget | Non
 
 def load_declared(path: Path) -> tuple[set[str], list[dict]]:
     """The declared witness names and allowlist, each entry refused unless it names a sha256 (or ``*``), a witness
-    file's name, record globs and why, and its ``keys``, when it has them, are key paths."""
+    file's name, record globs and why, and nothing else: no entry excuses a piece by a key path."""
     doc = json.loads(path.read_text())
     if doc.get("schema") != DECLARED_SCHEMA:
         raise SystemExit(f"leak_guard: {path} is not {DECLARED_SCHEMA}")
     for i, e in enumerate(doc["allow"]):
-        sha, keys = e.get("sha256", ""), e.get("keys")
+        sha = e.get("sha256", "")
         if not ((sha == "*" or (len(sha) == 64 and set(sha) <= set("0123456789abcdef")))
                 and e.get("witness") and e.get("records") and e.get("why")
-                and (keys is None or (isinstance(keys, list) and keys
-                                      and all(isinstance(k, str) and "" not in k.split("/") for k in keys)))):
+                and set(e) == {"sha256", "witness", "records", "why"}):
             raise SystemExit(f"leak_guard: {path} entry {i} needs a sha256 (lower-case hex, or * for any piece of the "
-                             "witness file), the witness file's name, its records and why, and keys, if any, as a "
-                             "list of key paths (keys joined by /)")
+                             "witness file), the witness file's name, its records and why, and nothing else: a key "
+                             "that is public is declared in released_keys.json, not excused here")
     return set(doc["names"]), doc["allow"]
-
-
-_WS = re.compile(r"[ \t\n\r]*")
-
-
-def value_span(b: bytes, key: str) -> tuple[int, int] | None:
-    """The byte offsets [start, end) of the value at `key` (an object's keys joined by ``/``) in the JSON document `b`,
-    or None when it has no value there. A document that isn't JSON along the path raises ValueError, which ends the
-    guard, so chain_record.sh and certifier_piece withhold the record whole."""
-    s, dec = b.decode("latin-1"), json.JSONDecoder()
-    at = _WS.match(s).end()
-    for k in key.split("/"):
-        if s[at:at + 1] != "{":
-            return None
-        at = _WS.match(s, at + 1).end()
-        while s[at:at + 1] == '"':
-            name, at = dec.raw_decode(s, at)
-            at = _WS.match(s, _WS.match(s, at).end() + 1).end()
-            if name == k:
-                break
-            at = _WS.match(s, dec.raw_decode(s, at)[1]).end()
-            if s[at:at + 1] == ",":
-                at = _WS.match(s, at + 1).end()
-        else:
-            return None
-    return at, dec.raw_decode(s, at)[1]
 
 
 def _is_archive(head: bytes) -> bool:
@@ -602,14 +578,11 @@ def explain(b: bytes | None, nd: bytes, piece: bytes, origin: tuple[str, int], m
     return out
 
 
-def excused(entry: dict, piece: bytes, sha: str, origin: tuple[str, int], where: str, span) -> bool:
-    """Whether `entry` excuses `piece` (its sha256, the witness file and offset it is cut from) at record path `where`;
-    `span(label, key)` is `value_span` of a witness file, which the guard reads once."""
-    o = origin[1]
+def excused(entry: dict, sha: str, origin: tuple[str, int], where: str) -> bool:
+    """Whether `entry` excuses the piece of sha256 `sha`, cut from the witness file `origin` names, at record path
+    `where`."""
     return (entry["sha256"] in ("*", sha) and entry["witness"] == Path(origin[0]).name
-            and any(fnmatch.fnmatchcase(where, g) for g in entry["records"])
-            and ("keys" not in entry or any(s is not None and s[0] <= o and o + len(piece) <= s[1]
-                                            for s in (span(origin[0], k) for k in entry["keys"]))))
+            and any(fnmatch.fnmatchcase(where, g) for g in entry["records"]))
 
 
 def record_path(dest: Path, run: Path, hold: Path, p: Path) -> str:
@@ -619,16 +592,19 @@ def record_path(dest: Path, run: Path, hold: Path, p: Path) -> str:
 
 def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow: list[dict], dry: bool = False,
           hold: Path | None = None, release: Path | None = None, budget: Budget | None = None,
-          declared: list[str] | None = None) -> tuple[dict, dict]:
+          declared: list[str] | None = None, keys: RK.Declared | None = None,
+          report_at: str | None = None) -> tuple[dict, dict]:
     """The guard on `run` (and `hold`, its files bound for `release`), its finds moved under `quarantine` and the rest of
     `hold` released only after every file was read (unless `dry`): (the report, counts and paths only; the quarantine's,
     with each find's pieces). With `declared` (``--public``), a file whose record path matches none of its globs is a
-    find."""
+    find. With `keys` (``--keys``), so is a file under the record's ``out/`` (`release`, by default `run`/out) or in
+    `hold` with a key the lists don't declare, and the report, which is written to `report_at` under ``out/`` once
+    this returns, is read by key before anything moves: nothing is released beside a report of an undeclared key."""
     budget = budget or Budget()
     runs = gate_runs(gates)
     got, public, pub_files = pieces(runs, budget)
     finder = got.finish(budget)
-    span = functools.cache(lambda label, key: value_span(got.files[label].read_bytes(), key))
+    out, tally = release if release is not None else run / "out", RK.Tally(keys) if keys is not None else None
     files = [(p.relative_to(run).as_posix(), p, False) for p in _files(run)]
     held = [(record_path(release / p.relative_to(hold), run, hold, p), p, True) for p in _files(hold)] if hold else []
     there = {rel for rel, _, _ in files}
@@ -650,8 +626,7 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
             if piece in dropped:
                 continue
             sha, where, origin = hashlib.sha256(piece).hexdigest(), f"{rel}/{member}" if member else rel, got.origin(i)
-            if (k := next((k for k, e in enumerate(allow) if excused(e, piece, sha, origin, where, span)),
-                          None)) is not None:
+            if (k := next((k for k, e in enumerate(allow) if excused(e, sha, origin, where)), None)) is not None:
                 u = used.setdefault(k, (set(), set()))
                 u[0].add(piece)
                 u[1].add(where)
@@ -659,16 +634,44 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
                 bad.append((got.needle(i), piece, member, origin))
         n = len({x for _, x, _, _ in bad})
         undeclared = declared is not None and not any(fnmatch.fnmatchcase(rel, g) for g in declared)
+        at, unkeyed = None, 0
+        if tally is not None:
+            at = (p.relative_to(hold) if is_held else p.relative_to(out) if p.is_relative_to(out) else None)
+            if at is None:
+                tally.outside += 1
+            else:
+                budget.check(f"at {rel}'s keys")
+                unkeyed = tally.read(at.as_posix(), p)
         why = (["a witness path"] * bool(r.get("path")) + [f"a witness-named member, {r['named']}"] * bool(r["named"])
                + [r["unread"]] * bool(r["unread"]) + [f"{n} witness pieces"] * bool(n)
-               + ["not declared public (--public)"] * undeclared)
+               + ["not declared public (--public)"] * undeclared
+               + [f"{unkeyed} key{'s' * (unkeyed > 1)} not declared public (--keys)"] * bool(unkeyed))
         if not why:
             continue
         doc = {"path": rel, "bytes": size[p], "why": why, "pieces": n, **({"held": True} if is_held else {})}
         found.append((doc, p))
         b = p.read_bytes() if bad and bad[0][2] is None else None
         explained.append({**doc, "pieces_found": [explain(b if m is None else None, nd, x, o, m)
-                                                  for nd, x, m, o in bad[:EXPLAINED]]})
+                                                  for nd, x, m, o in bad[:EXPLAINED]],
+                          **({"keys_undeclared": tally.failed[at.as_posix()]} if unkeyed else {})})
+    report = {"schema": SCHEMA, "run": str(run), "quarantine": str(quarantine), "gate_runs": [g.name for g in runs],
+              "pieces": got.count, "public_dropped": len(dropped), "public_unparsed": counts["unparsed"],
+              "public_unreprinted": counts["unreprinted"], "files_scanned": len(files) + len(held),
+              "bytes_scanned": sum(size.values()), "public_files": skipped,
+              **({"hold": str(hold), "release": str(release), "held": len(held), "released": 0}
+                 if hold is not None else {}),
+              "excused": [{"entry": i, "witness": allow[i]["witness"], "pieces": len(x), "records": sorted(w)}
+                          for i, (x, w) in sorted(used.items())],
+              "found": [doc for doc, _ in found], "dry": dry, "verdict": "refused" if found else "clean"}
+    if tally is not None:
+        own = tally.claim(report_at) if report_at is not None else None
+        if report_at in tally.failed:
+            raise Refused(f"the guard's own report is bound for out/{report_at}: {tally.failed[report_at][0]['fix']}")
+        report["keys"] = tally.summary()
+        if own is not None and (bad := own.undeclared(json.dumps(report).encode())):
+            raise Refused(f"the guard's own report, bound for out/{report_at}, holds keys the list {own.name!r} of "
+                          f"{RK.DECLARED.name} doesn't declare ({', '.join(sorted(bad))}): declare each with its kind, "
+                          "or stop the guard writing it")
     released = 0
     if not dry:
         for doc, p in found:
@@ -689,16 +692,8 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
             else:
                 shutil.move(str(p), dest)
             released += 1
-    found = [doc for doc, _ in found]
-    report = {"schema": SCHEMA, "run": str(run), "quarantine": str(quarantine), "gate_runs": [g.name for g in runs],
-              "pieces": got.count, "public_dropped": len(dropped), "public_unparsed": counts["unparsed"],
-              "public_unreprinted": counts["unreprinted"], "files_scanned": len(files) + len(held),
-              "bytes_scanned": sum(size.values()), "public_files": skipped,
-              **({"hold": str(hold), "release": str(release), "held": len(held), "released": released}
-                 if hold is not None else {}),
-              "excused": [{"entry": i, "witness": allow[i]["witness"], "pieces": len(x), "records": sorted(w)}
-                          for i, (x, w) in sorted(used.items())],
-              "found": found, "dry": dry, "verdict": "refused" if found else "clean"}
+    if hold is not None:
+        report["released"] = released
     return report, {**report, "found": explained}
 
 
@@ -724,6 +719,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--budget-s", type=float, default=BUDGET_S)
     ap.add_argument("--public", action="append", metavar="GLOB")
     ap.add_argument("--declared", type=Path, default=DECLARED)
+    ap.add_argument("--keys", type=Path, nargs="?", const=RK.DECLARED, metavar="FILE",
+                    help="each file under the record's out/ holds only keys declared public by name (released_keys.py; "
+                         "FILE, by default its released_keys.json)")
     ap.add_argument("--report", type=Path)
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args(argv)
@@ -748,6 +746,13 @@ def main(argv: list[str] | None = None) -> int:
             return refuse(f"the hold {hold} lies inside the run dir {run} or {release}, or {release} inside it: "
                           "custody would take what it holds before the guard read it")
     names, allow = load_declared(a.declared)
+    try:
+        keys = RK.load(a.keys) if a.keys is not None else None
+    except RK.Malformed as e:
+        return refuse(str(e))
+    out = release if release is not None else run / "out"
+    report_at = (a.report.resolve().relative_to(out).as_posix()
+                 if keys is not None and a.report is not None and a.report.resolve().is_relative_to(out) else None)
     q.mkdir(parents=True, exist_ok=True)
     q.chmod(0o700)
     was = signal.signal(signal.SIGTERM, _ended)
@@ -761,12 +766,12 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 unpacked.append(unpack(g, q / f"gates-{os.getpid()}-{i}"))
                 gates.append(unpacked[-1])
-        report, held = guard(run, q, gates, names, allow, a.dry, hold, release, budget, a.public)
+        report, held = guard(run, q, gates, names, allow, a.dry, hold, release, budget, a.public, keys, report_at)
     except Ended as e:
         print(f"leak_guard: {e} ended the guard: nothing more released"
               + (f", what is left in {hold} stays out of the record" if hold else ""), file=sys.stderr, flush=True)
         return 143
-    except (Refused, OSError, tarfile.TarError, MemoryError) as e:
+    except (Refused, RK.Malformed, OSError, tarfile.TarError, MemoryError) as e:
         return refuse(f"{type(e).__name__}: {e}" + (f": nothing released, {hold} stays out of the record" if hold else ""))
     finally:
         signal.signal(signal.SIGTERM, was)
@@ -781,6 +786,7 @@ def main(argv: list[str] | None = None) -> int:
           f"{report['public_files']} of them public, for {report['pieces']} pieces of {len(report['gate_runs'])} gate "
           f"runs, {sum(e['pieces'] for e in report['excused'])} excused by the allowlist; {len(report['found'])} {moved}"
           + (f"; {report['released']} of {report['held']} held released to {release}" if hold else "")
+          + (f"; {RK.line(report['keys'])}" if keys is not None else "")
           + "".join(f"\n  {d['path']}: {'; '.join(d['why'])}" for d in report["found"]), flush=True)
     return 3 if report["found"] else 0
 
