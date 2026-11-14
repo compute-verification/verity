@@ -13,12 +13,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.definitions.registry import fp8_moe
 
     return [
-        # fused_moe_kernel's block FP8 expert GEMMs: GLM-5.3's served coordinates (w13 K = 6144, w2 K = 256 at TP8), and small ones
-        # that reach two tiles per scale block, two dot steps per tile, SWAP_AB and a partial last weight block
+        # fused_moe_kernel's block FP8 expert coordinates: GLM-5.3's served ones (w13 K = 6144, w2 K = 256 at TP8), and small ones
+        # over two scale blocks, w13's at two tiles per scale block and w2's under SWAP_AB
         ("MoeExpertFp8BlockCoordinate_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinate, K=6144, G=128, KB=32, SWAP=False)),
         ("MoeExpertFp8BlockCoordinateW_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateW, K=256, G=128, KB=32, SWAP=False)),
-        ("MoeExpertFp8BlockGemm_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockGemm, K=128, N=80, G=64, KB=32, SWAP=False)),
-        ("MoeExpertFp8BlockGemmW_v1", lambda: bind(fp8_moe.MoeExpertFp8BlockGemmW, K=64, N=48, G=32, KB=32, SWAP=True)),
+        ("MoeExpertFp8BlockCoordinate_v1/two-tiles", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinate, K=128, G=64, KB=32, SWAP=False)),
+        ("MoeExpertFp8BlockCoordinateW_v1/swap", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateW, K=64, G=32, KB=32, SWAP=True)),
         # the same with the e4m3 step as a static (cc 12.0's): Qwen3-235B-A22B-FP8's served coordinates at TP8 (w13 K = 4096, w2 K = 192,
         # G = 64), and two tiles per scale block over a whole and a partial weight block
         ("MoeExpertFp8BlockCoordinate_v3", lambda: bind(fp8_moe.MoeExpertFp8BlockCoordinateV3, K=4096, G=64, KB=32, SWAP=False,
