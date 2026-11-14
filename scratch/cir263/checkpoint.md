@@ -29,3 +29,4 @@
 - 2026-11-14T01:31Z DRAFTKERNELS: still waiting on r20261113-213643-9f06 (vy-nebius-cpu-1): 53 of 64 suites passed, none failed, verity-vllm among them; flock prover running.
 - 2026-11-14T01:33Z DRAFTKERNELS: r20261113-213643-9f06 cut at its limit (rc 143) with 53 of 64 suites passed, none failed. Launched at 08d6acdced, each read on its node: the ten suites never started r20261114-013209-983d; verity-flock r20261114-013250-e04e; gate, pins and retired terms r20261114-013321-78ad. Waiting on them.
 - 2026-11-14T01:50Z DRAFTKERNELS: r20261114-013321-78ad done: gate rc 0 (1 change passed, 0 failures), pins --stale rc 0, retired terms 40 passed with 5 Bookkeeping warnings on no file of this branch. verity-flock's launch r20261114-013250-e04e did not start (exit 75); its twin r20261114-013424-7b75 runs it. Waiting on it and r20261114-013209-983d.
+- 2026-11-14T01:51Z DRAFTKERNELS: research.carry at 08d6acdced launched, r20261114-015101-b9b2, read on its node.
