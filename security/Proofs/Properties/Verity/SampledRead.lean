@@ -22,8 +22,8 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
 * **v2's challenger** (`drawCoins_ok`, `trustedSessionOf_ok`, `sessionNamed_ok`, `sessionOf_ok`, `releasedRootsOf_ok`,
   `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
-* **What the read shows** (`fresh_readLog`, `countFresh_eq`, `chunks_flatten`): the read's coins of the sample's family
-  after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
+* **What the read shows** (`fresh_readLog`, `countFresh_eq`, and `chunks_flatten` in `SampledLog`): the read's coins of
+  the sample's family after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
 * **The read in order** (`treeStep_some`, `specOf_streams`, `sampleLinkFirst_snoc`, `sampleLinkFirst_readTail`,
   `sampleLinkFirst_readLog`, `sampleLinkFirst_congr`): where the release log's lines after its head pass
   `sampleLinkFirst`, the releases the read shows pass `SampleLinkFirst`: the sample, then the link, then the other
@@ -302,40 +302,6 @@ theorem releasedRootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roo
 
 /-! ## What the read shows -/
 
-theorem bit_cons_lt (x : UInt8) (l : List UInt8) {t : Nat} (ht : t < 8) :
-    Flock.Hm96.bit ⟨⟨x :: l⟩⟩ t = x.toNat.testBit t := by
-  unfold Flock.Hm96.bit
-  rw [Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, show (⟨⟨x :: l⟩⟩ : ByteArray).get! 0 = x from rfl,
-    Nat.testBit_eq_decide_div_mod_eq, Nat.shiftRight_eq_div_pow]
-  generalize x.toNat / 2 ^ t % 2 = r
-  by_cases h : r = 1 <;> simp [h]
-
-theorem bit_cons_add (x : UInt8) (l : List UInt8) (t : Nat) :
-    Flock.Hm96.bit ⟨⟨x :: l⟩⟩ (8 + t) = Flock.Hm96.bit ⟨⟨l⟩⟩ t := by
-  unfold Flock.Hm96.bit
-  rw [show (8 + t) / 8 = t / 8 + 1 by omega, show (8 + t) % 8 = t % 8 by omega]
-  rw [show (⟨⟨x :: l⟩⟩ : ByteArray).get! (t / 8 + 1) = (⟨⟨l⟩⟩ : ByteArray).get! (t / 8) by
-    show (x :: l).toArray[t / 8 + 1]! = l.toArray[t / 8]!
-    simp]
-
-theorem bitsOfBytes_list : ∀ l : List UInt8, Verity.bitsOfBytes ⟨⟨l⟩⟩ = l.flatMap byteBits
-  | [] => rfl
-  | x :: l => by
-    have e := bitsOfBytes_list l
-    unfold Verity.bitsOfBytes at e ⊢
-    rw [show (⟨⟨x :: l⟩⟩ : ByteArray).size = 8 / 8 + l.length by simp [ByteArray.size]; omega] at *
-    rw [show 8 * (8 / 8 + l.length) = 8 + 8 * l.length by omega, List.range_add, List.map_append, List.flatMap_cons,
-      List.map_map]
-    rw [show (⟨⟨l⟩⟩ : ByteArray).size = l.length from rfl] at e
-    rw [← e]
-    congr 1
-    · exact List.map_congr_left fun t ht => bit_cons_lt x l (List.mem_range.1 ht)
-    · exact List.map_congr_left fun t _ => bit_cons_add x l t
-
-theorem beq_bytes {a b : ByteArray} : (a == b) = true ↔ a = b := by
-  show (a.data == b.data) = true ↔ a = b
-  rw [beq_iff_eq, ByteArray.ext_iff]
-
 theorem countFresh_eq (label : String) (after : ByteArray) :
     ∀ rest : List String, countFresh label after rest = ((sel label (pairs rest)).filter (· == after)).length
   | a :: b :: rest => by
@@ -358,26 +324,6 @@ theorem countFresh_eq (label : String) (after : ByteArray) :
       · simp [hl]
   | [_] => rfl
   | [] => rfl
-
-/-- The bits of bytes, as the device's log reads them, are their bits as a sample reads them. -/
-theorem bitsOfBytes_eq (b : ByteArray) : Verity.bitsOfBytes b = bitsOf b := by
-  rw [bitsOf_eq]
-  rcases b with ⟨⟨l⟩⟩
-  exact bitsOfBytes_list l
-
-/-- **`m` coins of `ξ` are its bits**, where `ξ` is `m` coins long. -/
-theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * m → (chunks m ξ).flatten = bitsOf ξ
-  | 0, ξ, h => by
-    rw [← bitsOfBytes_eq]
-    simp [chunks, Verity.bitsOfBytes, h]
-  | m + 1, ξ, h => by
-    have h64 : COIN_BYTES ≤ ξ.size := by
-      rw [h, Nat.mul_succ]
-      exact Nat.le_add_left _ _
-    have hs : (ξ.extract COIN_BYTES ξ.size).size = COIN_BYTES * m := by
-      rw [ByteArray.size_extract, Nat.min_self, h, Nat.mul_succ, Nat.add_sub_cancel]
-    rw [chunks, List.flatten_cons, chunks_flatten m _ hs, bitsOfBytes_eq, ← bitsOf_append,
-      ByteArray.extract_append_extract, Nat.zero_min, Nat.max_eq_right h64, ByteArray.extract_zero_size]
 
 /-! ## The read in order -/
 
