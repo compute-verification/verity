@@ -318,7 +318,7 @@ means = "its tests, a suite of its own"
 path = "verity/hardware/lean.py"
 to = "deleted, once the Lean takes a card as a parameter"
 owner = "compute-research"
-day = "2026-11-24"
+day = "2026-11-15"
 
 [[not_yet]]
 path = "verity/definitions/"
@@ -331,7 +331,7 @@ note = "two Lake packages move with Sunday's chain; its served part waits for th
 path = "verity/claims/"
 to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
 owner = "soundness"
-day = "2026-11-18"
+day = "2026-11-15"
 
 [[not_yet]]
 path = "demos/vllm/"

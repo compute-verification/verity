@@ -124,7 +124,7 @@ theorem prod_map_ind {α : Type} (p : α → Prop) :
 
 end RunGame
 
-section Laws
+section SamplingDesigns
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
@@ -175,7 +175,7 @@ theorem oneWait_lhs_eq (H : Msg → Msg) (V : Verifier Coin) {Ω : Type} (P : Pr
   rw [accFail_eq, accPr_eq]
   rfl
 
-end Laws
+end SamplingDesigns
 
 /-! ## The table the accepted reruns fill -/
 

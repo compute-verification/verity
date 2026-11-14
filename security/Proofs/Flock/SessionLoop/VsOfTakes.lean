@@ -102,7 +102,7 @@ theorem bind_const_ok {ε α β : Type} {e : Except ε α} {f : Except ε β} {b
 /-- Two rounds of one rep stream are checked at alike configurations, whatever the tapes. -/
 theorem cfgAlike_rep {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h h' : List (Msg × Msg))
     (he : L.rep x h.length = L.rep x h'.length) : CfgAlike (L.cfg x ρ h) (L.cfg x ρ' h') := by
-  unfold LeanRelease.cfg LeanRelease.drawsAt
+  unfold LeanRelease.cfg LeanRelease.samplesAt
   rw [he]
   exact cfgAlike_ofBytes _ _ _ _
 

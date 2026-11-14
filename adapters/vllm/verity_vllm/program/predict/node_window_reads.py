@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import numpy as np
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .build import Unexpressible
 from .node_window import PROMPT as PROGRAM_PROMPT

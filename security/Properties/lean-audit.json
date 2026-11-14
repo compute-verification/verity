@@ -1150,12 +1150,21 @@
      "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
      "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
+   },
+   "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest",
+     "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites"
+    ]
    }
   },
   "not": {
    "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim"
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.Publishes": "the subprotocol's acceptance of a record's bytes at the public outputs it publishes, which `QBytesAtSubprotocol` reads in its event and `PublishedQBytes` spells out: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.QBytesBy": "`q_bytes` within the right receipts at a verifier's record, which `QBytesAtSubprotocolBy` reads in its event: an event, no claim"
   }
  },
  "witnesses": {
@@ -1914,10 +1923,6 @@
    "type_hash": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd",
    "unfolded_hash": "954bba068784062bf7ae8a7f433d76af1b1e9ca859912b76ca68d9a45b9fd348"
   },
-  "Properties.Pouw.Window.drawMisses": {
-   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
-   "unfolded_hash": "3c6da1ce22737558b799737bac2b5c880b8742b0efa8c15f0fc8fddbfbefa3d0"
-  },
   "Properties.Pouw.Window.floorPointGreatest": {
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1",
    "unfolded_hash": "a3249482b4e0fbd3a6f53f8e70e56a25abdc7bb31262db15cee58b7651af7d8a"
@@ -1957,6 +1962,10 @@
   "Properties.Pouw.Window.pointRefuses": {
    "type_hash": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
    "unfolded_hash": "82809a3351d5ae875daddd9071727f9abcea0193ccf3d75e7a3df64aa8784215"
+  },
+  "Properties.Pouw.Window.sampleMisses": {
+   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
+   "unfolded_hash": "3c6da1ce22737558b799737bac2b5c880b8742b0efa8c15f0fc8fddbfbefa3d0"
   },
   "Properties.Pouw.Window.workAtRefuses": {
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
@@ -2122,7 +2131,7 @@
    "type_hash": "acbb6080f1cd957386c50b95fde7e961d541958f674278973716c53b2c47099e",
    "unfolded_hash": "270fdff67c7dd662bb2376b054888ac1b4589aed97d2db688b6dbf4e80764033"
   },
-  "Properties.Spot.SecurityProofs.drawMisses": {
+  "Properties.Spot.SecurityProofs.sampleMisses": {
    "type_hash": "3f87a355ae74af656383010355fd73d01ba49126bc986f32fe55c0b1b87d2d0f",
    "unfolded_hash": "66e517579a3fe102af3a9855df35f6955639e35dce8dbe08ae7184d53f38247a"
   },
@@ -2307,7 +2316,7 @@
   "Properties.Accounting.Served": {
    "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Accounting.Compose"],
    "except": [],
-   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.drawUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
   "Properties.Pouw.Credit": {
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.Spot.Draw"],
@@ -2383,7 +2392,7 @@
   "Properties.Challenger": {
    "imports": ["CoreProtocol", "Spot", "Flock", "Lms", "Lean"],
    "except": [],
-   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
+   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `sampleCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Pouw.ServedWork": {
    "imports": ["Definitions.Pouw.Dither", "Definitions.Pouw.Assumptions.ServedWork", "Properties.Pouw.PeriodJ10R"],
@@ -9247,6 +9256,114 @@
    },
    "type_hash": "006b33c12d24ecdd617d1c8501408d55a34eb4781d23f9e405d3ce404c81cd0f"
   },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites :",
+    "  Exists fun node =>",
+    "    Exists fun r =>",
+    "      Exists fun sm =>",
+    "        Exists fun T =>",
+    "          Exists fun pub =>",
+    "            And (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm) T Unit.unit node r pub)",
+    "              (Not",
+    "                (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm)",
+    "                  { blocks := T.blocks, passes := T.passes, accepts := T.accepts, tick := T.tick, plan := T.plan,",
+    "                    correct := fun x x_1 => Finset.instEmptyCollection.emptyCollection, mem := T.mem, chip := T.chip,",
+    "                    rebuilt := T.rebuilt, disk := T.disk, link := T.link }",
+    "                  Unit.unit node r pub))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8adaaa52c3f7066d093fbd85cb406e9922ffabddeb774e5bfeef65e6d3a986ad"
+  },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
+    "  (X Cm : Type) [Fintype X]",
+    "  (prf : Fin node.samples → Pous.Bits κ → Accounting.Remote.Draw.Blocks Properties.RemoteAudit.Line.receiptMax)",
+    "  (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Properties.RemoteAudit.Line.Record)",
+    "  (com : Accounting.Remote.Draw.DrawCoins node.samples κ X → Cm) (R : Accounting.Remote.Draw.Receipts node.samples κ X)",
+    "  (passes : Nat) (tick : Accounting.Remote.Draw.DrawCoins node.samples κ X → Nat → Nat)",
+    "  (hS : Properties.RemoteAudit.Subprotocol.HonestSchedule node passes tick recs com) :",
+    "  And",
+    "    (∀ (c : Cm),",
+    "      Accounting.Remote.Draw.Assumptions.Live",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).view",
+    "          c))",
+    "    (And",
+    "      (Accounting.Remote.Draw.Assumptions.Refused",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "          com)",
+    "        prf (fun x x_1 x_2 => 0)",
+    "        (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "          (Properties.RemoteAudit.Line.played recs com))",
+    "        R)",
+    "      (And",
+    "        (Accounting.Remote.Draw.Assumptions.Counted",
+    "          ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "            com)",
+    "          (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "            (Properties.RemoteAudit.Line.played recs com)))",
+    "        (And",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              (Pous.StreamedWipe.prfAdvantage (prf t)",
+    "                (((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                          Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "                      (Accounting.Remote.Draw.Committed.junk com t)).distinguisher",
+    "                  prf RemoteAudit.Protocol.DELTA.cast t))",
+    "              0)",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                    Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).hide",
+    "                com prf RemoteAudit.Protocol.DELTA.cast t)",
+    "              0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Properties.RemoteAudit.Subprotocol.HonestSchedule"],
+    "reads": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ]
+   },
+   "type_hash": "d612f0fd599a28c98b1cf684d4a0c1fc246b80dcaf2c8c5f8fb093f24533ec66"
+  },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial :",
+    "  Not",
+    "    (Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy (fun x x_1 x_2 x_3 x_4 x_5 => True) (fun x x_1 => True)",
+    "      fun x x_1 => Option.none)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ],
+    "reads": []
+   },
+   "type_hash": "60aa3babbf4897496fcfe47730d7b47d0c2e7356d19b1b2ca2b849c2fe4ab685"
+  },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
@@ -12989,10 +13106,6 @@
     "function": "PouwWindow.bucket?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.drawMisses": {
-    "function": "PouwWindow.kPrime",
-    "outcome": "accept"
-   },
    "Properties.Pouw.Window.floorPointGreatest": {
     "function": "PouwWindow.floorPoint?",
     "outcome": "accept"
@@ -13183,10 +13296,6 @@
    },
    "Properties.Spot.SecurityProofs.designWellFormed": {
     "function": ["Spot.Slots.layout", "Properties.Spot.slotDesign"],
-    "outcome": "accept"
-   },
-   "Properties.Spot.SecurityProofs.drawMisses": {
-    "function": "Spot.Slots.select",
     "outcome": "accept"
    },
    "Properties.Requirement.topological": {
@@ -13822,7 +13931,7 @@
     "outcome": "accept"
    },
    "Properties.Challenger.Drawn.familyOneCommitment": {
-    "function": "Spot.Challenger.drawCoins",
+    "function": "Spot.Challenger.sampleCoins",
     "outcome": "accept"
    },
    "Properties.Challenger.Drawn.familyOneCommitmentRead": {
@@ -13932,6 +14041,14 @@
       "outcome": "none"
      }
     ]
+   },
+   "Properties.Pouw.Window.sampleMisses": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "accept"
+   },
+   "Properties.Spot.SecurityProofs.sampleMisses": {
+    "function": "Spot.Slots.select",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -13962,8 +14079,7 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns: DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under monitoringPeriodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileSampleIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.drawnByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Drawn.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from SampledByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Drawn.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, whose truth on the accelerator model as Definitions.Core.Accel writes it is open (it prices register reductions, so the four Russians' method pays at least an alu lane a MAC, but SAKMatmul as written still fails at a dual price that leaves those pipes cheap), so whether the guarantee is non-vacuous there is open; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
    "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-device device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. Whether SAKServed holds on the accelerator model as Definitions.Core.Accel writes it, which prices register reductions, is open, as for ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
    "Pous.Component.SecurityProofs.runAccepts_by": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts is RunAcceptsBy at PoUS's compiled run check (Iff.rfl), which ties runAccepts_fails to the guarantee",
@@ -14015,7 +14131,10 @@
    "Properties.Spot.MonitoringPeriod.AuditedSession": "unstated: the session the period's check audits at a window (Spot.Challenger.auditedIn on the window's root) is the session the window names, for every ledger the ledger's half reads and every window it returns; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.auditedChallengePhase; a lemma about the ledger's half that a reader of Properties.Spot.MonitoringPeriod.AuditedAt takes beside it, no guarantee's statement",
    "Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice": "unstated: each line of a ledger the period's check reads (Spot.MonitoringPeriod.read) is an entry under its place's number that says, its signature aside, what a line of the device's own ledger under the verifier's key says, or the fixed finder outputs a break (an LMS forgery or a SHA-512 collision); proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.ledgerLinesOfDevice; it does not say the presented ledger is whole; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
    "Properties.Spot.MonitoringPeriod.LedgerOfDevice": "unstated: the ledger the period's check reads (Spot.MonitoringPeriod.read) is the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring period's end, or a break; it takes Properties.Spot.MonitoringPeriod.Numbered (a line of the device's ledger that is an entry numbered i is its line i), a hypothesis of this statement alone that no guarantee takes, and a lemma of the modelled device once the model builds its whole ledger; proved from that hypothesis in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDevice; no guarantee entry while it takes it",
-   "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them"
+   "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them",
+   "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof",
+   "Properties.RemoteAudit.Subprotocol.PublishedQBytes": "unstated: on the subprotocol's acceptance, `q_bytes` plus `BLOCK_BYTES` times the pooled bound of the record's samples at `DELTA` is at most `BLOCK_BYTES` times its receipts, with no premise: what `RemoteAudit.Protocol.certify` computes; unproved, a statement that gets a guarantee entry beside `publishedEps`'s, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -24421,7 +24540,7 @@
    }
   },
   "Properties.Accounting.Remote.Line.Record": {
-   "digest": "4a79e96d003fcc36c9cc1ba8a2159cbf32e34ee4e71ad51537bee52c2c5187f9",
+   "digest": "87760342aa4c13e535d435f3f91244d56a5be4ffe4c1f0e20a3d1a8abe35c6dc",
    "definitions": {
     "Properties.RemoteAudit.Line.Node": "42711f27299bb2712c065ce499996be68bd26c2633bfabda7bdab0a113062b7d",
     "Properties.RemoteAudit.Line.Node.blockBytes": "01096187cab77105f77d1a06703965cd55de643c51b4e42a5d232ab07571c01e",
@@ -24461,6 +24580,7 @@
     "Properties.RemoteAudit.Line.recordPace": "1316e56cadcaa8849c67b093609407a0feaf4bc4a574736c2a27d058028c4cf4",
     "Properties.RemoteAudit.Line.recordSample": "532a4396ed137fa98a253640228c7234ad91b4aa9d6ee17a700efb223b4da383",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
+    "Properties.RemoteAudit.Line.sampleReceipts": "6029613ef43c2b62eb2c619ad1e5725d763d2c507a1d8f3c594912ac760e7f04",
     "Properties.RemoteAudit.Line.spanStart": "5abeb3e47b0228283062b5aa31507abf65ad01d964a30e39c7d247a3f8401e39",
     "Properties.RemoteAudit.Line.spanStop": "08dfa9d81578347c8ff30e3a1b7ca3c1e38c13f6b39385197a7fa52b0e208a9b",
     "Properties.RemoteAudit.Line.stretchPace": "769e5729fa2b2f7bc4a15a7c50795065e231a8c88508686a0ce1714239d4d488"
@@ -24539,7 +24659,7 @@
    }
   },
   "Properties.Accounting.Remote.Subprotocol": {
-   "digest": "c0c190d8c2cd0cac68514fad9d93235f51e0a53faf56c77334d6d16fb2f706ea",
+   "digest": "de20ba68841183d4212170ae7de894887f8615dafc78ce63a1c7f8b02b9e0d48",
    "definitions": {
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "5fc90912a6b189249808541a053d8d89b883764124ce64eb0781e90572d0520b",
     "Properties.RemoteAudit.Subprotocol.HonestSchedule": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
@@ -24547,6 +24667,8 @@
     "Properties.RemoteAudit.Subprotocol.LineHeldBy": "4f4117c4d5da44abee2d5ff68c56edc9f54b731808c5122db0d175ddd298702d",
     "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80",
     "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "9e7658d9ad6bfd062b2b5601fff6cfdddcdd435cb1692f222debe9d51296f602",
+    "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": "eb11e697dfc89eeb8e0ad836792fee48968565a6975701ac4a8769a12f197054",
+    "Properties.RemoteAudit.Subprotocol.QBytesBy": "f199917ff3d94900a1a721731ca4c8ca57a84563356b5262bae9370ce6afea5a",
     "Properties.RemoteAudit.Subprotocol.ReadBy": "b6bb8c08db864db7b362e5bc4eae9246e510634f345595a098d15c38867ccaf4",
     "Properties.RemoteAudit.Subprotocol.groupsBy": "158c1d4767d23fcbb4b0f277fb71816a87a4dfad310df14d4f5bd010ac8e44d8",
     "Properties.RemoteAudit.Subprotocol.honestEvidence": "400483a989e2fe6103a34e5657efa843e9385ed5ea8ef044244eed91e7ba586d",
@@ -24556,6 +24678,7 @@
     "Properties.RemoteAudit.Subprotocol.noOutside": "d36249429e424b260ddd542d3cd729c0ec12049fc45804e18e8055e9654f18f1",
     "Properties.RemoteAudit.Subprotocol.paceBy": "ffe59f9943bbe1369fabf94a6d962e2aa26ef93b3feb6c8c311b7929826de8fe",
     "Properties.RemoteAudit.Subprotocol.quietIngress": "8b16be2ac77baf6987ae14f5345941589075996ae63e5f6a144c9b06d772fb49",
+    "Properties.RemoteAudit.Subprotocol.receiptsBy": "4f33f9a3ac1500eddb978ba583f0a33bd9cfcd3db7fc0f2007c2fc83879a94c1",
     "Properties.RemoteAudit.Subprotocol.traceBy": "a0c77c62142ab0734b25f19c39b1eb487c5e873c3eb94d7e8eed1807bf65dc62"
    }
   },
@@ -26149,7 +26272,7 @@
    }
   },
   "Properties.Spot": {
-   "digest": "a27107d7603b39446e8f9467859eef9439c81f939ed4d623fb377bb684e48725",
+   "digest": "77d9801fd1dbeb6049a4bb486e1319b30b22364e31403ff7c327274023236005",
    "definitions": {
     "Properties.Spot.AcceptMeans": "3ff7289fbaba16aa92009db0eed759161b4518b084e4883867e5f6164fa4d836",
     "Properties.Spot.Ascending": "17557ee116948293242d3e7d9a046a27b45ccee692aee0277b044c6c256cac37",
@@ -26164,6 +26287,7 @@
     "Properties.Spot.ExpectsV2": "29c8a4403d892cf05453a760fa35095aae556e185259949573c6ab3eef3fbb3a",
     "Properties.Spot.OpenedRegistered": "c90c37a504d8560491f32f86cb3c2a2d2a68b89bec1a7c48565d9f257342f96e",
     "Properties.Spot.OutputPortIs": "69e9c64f0d70a6135d57a70b0963f50428987244bf24670857fc5d9030545cc5",
+    "Properties.Spot.OutputPortsAccepted": "fb6957bebf18c191631952d98b432236053bc318a0c15d03173ac574c711463c",
     "Properties.Spot.OutputValueIs": "90ab70f71002f771f6f9c78f08fcca72cfdb8c6c60ba2ab41aa1f14bb6cdd994",
     "Properties.Spot.PinnedHeld": "637cdf2a519683288cabce99ab44bba3feed7923961b741b1dbfdd4d7319b6a1",
     "Properties.Spot.PoolChained": "d5c9fddc044d13f69a61727f31985291f95250c52aae095edf19687cf5632cd5",
@@ -26178,7 +26302,7 @@
     "Properties.Spot.R8": "ce6bb040f31018060fe03e96eeae42fc8475f31b16a41e3e2ed96236cd813954",
     "Properties.Spot.RL": "d29a1643eddc47b3ed9f1a64c652662651eb36e06449166272a98ea7da483964",
     "Properties.Spot.Receipt": "8aa1f184ada218c95592732c64cf8945ebe186fe284ce8b3f1918ff5071177da",
-    "Properties.Spot.Registered": "2c211c27b05ce0d57adb9e1ad0367e9f21fdae975369fc774c8c00eddb46784d",
+    "Properties.Spot.Registered": "7ebedd5ddf0730da7fd5b6aaff42f4a82329673d2086e07c619dd0d2667d37aa",
     "Properties.Spot.RootIs": "e7a1cc5645335f09b65b757d497101e00be83f6362a25beef16446f20eb548fe",
     "Properties.Spot.RunPoolReset": "14b775256c97270586572c916dd97cbdb7b84424fbc6d0125ad159f9cad5dc3e",
     "Properties.Spot.RunPoolSpent": "ac4b6d2f6f726beaa52fbd355de92ca693112ef53c87f8df7803b0cf57b25995",
@@ -27966,7 +28090,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "cba9b5f451a8403d48e142f2953c62f0839317a292b3698f68d40b8e2e963622",
+   "digest": "2f5a7e14c462133303c5621a79cf462fed3b9eb745fe63fc8c62f77fa6903ad5",
    "definitions": {
     "Spot.OneStage.CERTIFIED_KEYS": "cc810f37104e3a01d4fcab1fce134737d2b7eaadde17439a09739aea9311e1e9",
     "Spot.OneStage.CERTIFIED_REFUSED": "6cb4793ad6550fdba552a3bc8e2f987b307b478a12d504d43e591530a619e303",
@@ -27985,7 +28109,7 @@
     "Spot.OneStage.Evidence.statement": "74b356c3f76171f9868dfa576a844a538f3f08c4410ac30345904616d6f97698",
     "Spot.OneStage.Evidence.verdicts": "81db97c8dd0262866fef18d1ee034915508f7e88883ed12ac90f627fc981eb32",
     "Spot.OneStage.PARAM_KEYS": "67fa7abb3b14fe0b31c7e59f31acd29a0329e4469f074e74c76ae7e8529b0793",
-    "Spot.OneStage.Params": "c7e59a1216107d2421365fa4fae992643407964b83359a62a6311a4d48b14313",
+    "Spot.OneStage.Params": "b95560f804862565274a5b4ae974e9642b0d4c4d478f030a2d66559149cd7ec8",
     "Spot.OneStage.Params.challenger": "598ee235786a0a3a9fa87465206478af0fe014791b74ae86ab3dd2f899a7095c",
     "Spot.OneStage.Params.delta": "d550f45ad0ba012c2bc8c7a0467b8c402089f9c49e78b913427cf382710b2de8",
     "Spot.OneStage.Params.verifier": "680df793464a25574c508c8be9441d42dc65883c3c4b93ed60db17fac4535c69",
@@ -28008,7 +28132,7 @@
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "b41893c95a243f5b9929c68df678f3483f8fa40523b96850745107b669388aad",
     "Spot.OneStage.paramsOfJson": "f26fba1c04da2a2963081bad9431d53b342593bebd3b3bc82c897f455c782377",
-    "Spot.OneStage.paramsParsed": "f0083b1d3835742e902af23549c4383bbb4771f713f7a47bedb7ed9be0fe28d1",
+    "Spot.OneStage.paramsParsed": "4d53baabb5eb3d655d8be238570088d483c07a4c171d168c011fdcb376b89539",
     "Spot.OneStage.protocol": "300822c245ce4c2b120c8026a5774b09392918617a1c5177056ed32ca41f4705",
     "Spot.OneStage.publicJson": "4bcf701fa845a3fcde02e6463e6da556a04c6d0bf8a35a2bf3d4c3d101867281",
     "Spot.OneStage.recordChecks": "3ae10f3b18127d311ec9abd8b39f8ce5cb48e27cc0094375bc168fbe6df78b54",
@@ -28019,13 +28143,14 @@
     "_private.Spot.OneStage.0.Spot.OneStage.logRecord": "2ee6c89989a0e9077f6e2e3d565fe9401b48d3c2e0fabc52908e0333e765517e",
     "_private.Spot.OneStage.0.Spot.OneStage.nats": "73351bcc555d722e7547ba91932388158ad080e5adab13a24503146004be20d9",
     "_private.Spot.OneStage.0.Spot.OneStage.obj": "49d70ec725a2c403c26bcdd493f11cbcdd9f313b74dfe118349e9052e866abff",
-    "_private.Spot.OneStage.0.Spot.OneStage.poolOf": "fa73781de4867f73a7fe0f36a06d72bf08ed6b5cf4d3a3859f6df9aab3d0c3be",
+    "_private.Spot.OneStage.0.Spot.OneStage.poolOf": "b97b775c0836c2fb8ac100ae786bb745d57fb758ccd18996472e57d87a6ef5de",
     "_private.Spot.OneStage.0.Spot.OneStage.poolValues": "090db22a554076342258069372f739a3d10c755192e1274d5afdacdca9b31dd8",
+    "_private.Spot.OneStage.0.Spot.OneStage.verdictsOf": "9189cd25a14c00ab6600df908ed397d96a8b2a47ece3570255a92deed87a4823",
     "_private.Spot.OneStage.0.Spot.OneStage.withField": "b341041c23d2a8e33b1bebc3515c3c53c196cf4285e0c2df875f630f7c0ed0d1"
    }
   },
   "Spot.OneStageZk": {
-   "digest": "3b49161c3d524dfb09c998871ad1b9ef85f3522e510f00aedcc3cb28b7d404eb",
+   "digest": "a08e0a86a6bf4ea65297635e17bd35117f1dcde29aff37bb8eb4e0c63e58e95e",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -28055,6 +28180,7 @@
     "Spot.OneStageZk.Member.slice": "2a3c790d5a655d8876ca9a414792460781acb34bfcecb4e73922cac83cb1cbdb",
     "Spot.OneStageZk.Member.statement": "4392042dfb712c3a9a74235891962cb58c51e65d4b664c2dd49c1e79718a6f3a",
     "Spot.OneStageZk.Member.units": "dd005d06e519bda7d52b15749294ce030cd25dafbc83f4b5787d56fb77384d8d",
+    "Spot.OneStageZk.NOT_ONE_MEMBER": "fa3a42b41a04b1ffbd9718efe633a88ba4e9c19afdc7450e46207d67ee8fd5a5",
     "Spot.OneStageZk.NO_CHALLENGER": "e162a96e930d08f9754dac695c52dafc52cfd3daf4b4792302f54b06244b1df8",
     "Spot.OneStageZk.NO_ROW_WHY": "bdb3c1dcd200ed424ffe254184c9b7cfd1e66da41f66c6808dfba2643fd103e6",
     "Spot.OneStageZk.NO_TABLES": "89a604bf3f3fab6ba56c515638fc1c6011ccaeb7feeab9bfa86e992a1c058ad0",
@@ -28118,6 +28244,7 @@
     "Spot.OneStageZk.classTwo": "cb9cce8f01cfbc699e1c82e8f47c64e05009271f397de991ce0e0290ac1a3268",
     "Spot.OneStageZk.coinKeyOf": "75d567137e40c17596f9dfb67bf48fe264148fefb140d156a9813bd3ce77c27e",
     "Spot.OneStageZk.coinsOf": "88cf42ea035ecf852e33f3506fa92ac5e737865c6a3767290bba9686cd56f656",
+    "Spot.OneStageZk.commonMember": "e3b2acefb98b4d0e61f722e8142f4207da0697c0aebec93daa90af76918ecf05",
     "Spot.OneStageZk.deployedKey": "202c89dd7909f7870179e8b48ec9f5ee421a7d536afd94c9ad007da6788b3615",
     "Spot.OneStageZk.drawFitsWhy": "0601f5e7ed692426e12be62da22f53b5e8581916dc0151a6b461f8f473048817",
     "Spot.OneStageZk.evidenceBytes": "ee22e17150755c25c7db5daa18c38317350755b1577ac10bdf8eb52f89edca2a",
@@ -28150,7 +28277,8 @@
     "Spot.OneStageZk.proofsOf": "d3d287adf010a8bdafb5ce8c84499ba5131815bfc3668e27387360071c33eaf9",
     "Spot.OneStageZk.provedHeld": "f4a6fef08d959aabe27fa2769e3b8dac75f7fa4b8f0c66b835c33f38fb36df9a",
     "Spot.OneStageZk.provedUnits": "03307c2d6b665cda9871cd823a6c4f28a122ca6e10e6085528c12986c789a939",
-    "Spot.OneStageZk.publicHeld": "bd875a81f27bc151c3cabcb637e12d9b90790cb4c209b897969ff3e394d3e06b",
+    "Spot.OneStageZk.publicHeld": "54737c753b0d30d8f1fd0aa31daa18127a4fc01a464649ad775a3f234cc58a78",
+    "Spot.OneStageZk.publicPorts": "79739e797603d619c85ffad05ca3765d9d9dbf3d46aea8d26606b12761da7026",
     "Spot.OneStageZk.push": "4a5d257d303daf1313a70fa2ca7e4f3d481cbcd3f12fd9c5d6c38550cca75dba",
     "Spot.OneStageZk.readsOf": "c9bb76d08b011e4961a1df2aa8c7c4d53771e0967c6fbf9add4a30b102294b95",
     "Spot.OneStageZk.readsRegistered": "4aaef956c03d73417875972b6a59378569bd404b5653c71508966b837e1a3bfa",
@@ -28302,7 +28430,7 @@
    }
   },
   "Spot.Record": {
-   "digest": "e505b6487c5a5820049de70e073c240bb6b44204ecf0dcc8695cc349ac6f682b",
+   "digest": "7f80d5bf56c2cd48a0d64c39e5dd644e2c841c99dab2355c63744fca63aba291",
    "definitions": {
     "Spot.Record.LEVEL": "543751b14b271912e0fe9a6f2605542d4a14d342e5c2194177433aed58d48227",
     "Spot.Record.allRan": "0bf32581414fd8f94a209b656c4c2c35fd2208a80af73d07a40b44b8d24b8d10",
@@ -28310,7 +28438,8 @@
     "Spot.Record.certifiedCheck": "a115ebd7643f1f3f4542a998d247f5d5995cf9a55211b52859260464ba2ad301",
     "Spot.Record.checks": "b42822058c307232f68e6a3813318013a1b12903ff6d670d422b0d90014c0282",
     "Spot.Record.lessOwnReads": "ea085bdf365ba55b29e27544378953f1fda747915dbcfb96e2ab00659935cd51",
-    "Spot.Record.matchesPublic": "5de1bd56b8d6a840f9a559c86835a74cb4da804de8d82f1b7a6ca7f5be3fa505",
+    "Spot.Record.matchesPublic": "1643e079f9ea7c3fd55f2c247b0cb138b0c8f7594e0888b87781c29728a67b30",
+    "Spot.Record.matchesPublicBy": "3aca7a4ccaa709691501538f4a95e94deaf29c0e89705ac737115ab0bd5a23e5",
     "Spot.Record.ownRegistered": "c03c7e82007dc6ab74231e65106159ac61cb6b9298b162f53c8660713912aade",
     "Spot.Record.profileDraw": "f7a6fc1ab1e8055e2a1e933f3d5c50187688bda0439a73c28b0ba75412dcdf22",
     "Spot.Record.registeredRoots": "ca7ef2ef9ae75a22514ae05bdde77d50484dd042185e0ed93cbca6a993002e3e",
@@ -28441,7 +28570,7 @@
    }
   },
   "Spot.Registration": {
-   "digest": "27821b6b39c5e0fd3685f5510b29b1cf222024beffaf7328e6234df358ec3c6f",
+   "digest": "d0f20f68376a238f18a40ed81aa1c04aae0ede7fa536f8047536c874514e8b36",
    "definitions": {
     "Spot.Registration.Earlier": "38a79710ad138599f5f588962cb4957cde8a4a01c11545392f3680d085ffcf5f",
     "Spot.Registration.Earlier.casesOn": "d0ab5c2e32c2df5ff9add433ab5d601ac1a837f07bd68cc17d3188665ddc2d16",
@@ -28458,7 +28587,7 @@
     "Spot.Registration.Pool.lag": "d5b7e19b4e308e5681cc5fc7614f0eea8ddd72f6fb8b7574000a8dbedb0287b2",
     "Spot.Registration.Pool.pin": "ede35058f38d2655d5e678c8e1a3f4937c7251d36069b30f6cad9322b55ab7c3",
     "Spot.Registration.Pool.pout": "d3693b6beb1228fac43e73c56592cde2b24443e7d8f38d7f848bddaecf09cb63",
-    "Spot.Registration.Pool.refused": "d3440f743fd910748f54cebcc8074800d62b2443c3b77264a11f10c27c95be36",
+    "Spot.Registration.Pool.refused": "4eeaf82a94f104bcdaf0c9c40506e2c81cdc36eeed1b1664e50e1eea90d1bf2e",
     "Spot.Registration.Pool.reset": "7377e2cc403c9ca34484fa0da38221c1741455dcac982fa0180d52581bdfd0b9",
     "Spot.Registration.Pool.spentBefore": "6551e6263f04e26a89e3b56be56892b0a9676fdd0ebab7e10ab441e64f196f6b",
     "Spot.Registration.Pool.verdicts": "b0e03f50593351246758b1d547d4e81b776afc46c8263ee31f5997e1c618e0c2",
@@ -28472,7 +28601,7 @@
     "Spot.Registration.PortIndex.last": "b09bdde29323640281273dab04658dbacb1f6a824dc1f745e743958ceb82c3ab",
     "Spot.Registration.PortIndex.rec": "2ab9172d4c3615a0ec4cff2a50a7f91d33f3f102b576211875b1f1f50ad2e806",
     "Spot.Registration.ROOT_KEYS": "9fe33cde00fe8238bf98ebf8ea3e56cc53db3e134b48adf7182f65a8cfe87cee",
-    "Spot.Registration.Verifier": "5fc5c345422d251e5bc02c4370617b4406278639e76c9557b6d8bb813277d81d",
+    "Spot.Registration.Verifier": "03bc572c4ca9432cd8ed755b122f910f69c2c44b32481919af8524aacb51cd1e",
     "Spot.Registration.Verifier.anchors": "a7c04f5970bd8d19ff0d06a13b92172113969dc719d707512cf45f708de2bcfd",
     "Spot.Registration.Verifier.binding": "b7082e7825961d6082204bf2c3f05853d4b6595286b96cc21b3b8ef689286b5a",
     "Spot.Registration.Verifier.certified": "d22e7ed226856efbea7f7888bb497dcc9f20ff993627763c571aa16eca082c0e",
@@ -28481,7 +28610,7 @@
     "Spot.Registration.Verifier.law": "506be34fcdd58d38c0346c01c5308728851b1956f1ad93438ac3ba1a200be4e7",
     "Spot.Registration.Verifier.leafLayer": "cb0a5b3d5761575a4c0759cc86b4cdf2a5ad272c4f94a7ac18d3b6c8b362e6fd",
     "Spot.Registration.Verifier.log": "58da3107d80dfc36fbea4740a3c762431f7059714f41a3d55a31a685387dc9ee",
-    "Spot.Registration.Verifier.members": "8596208bd9fa0d60b9c11bc5219980562a51a6dc2f31b7e5682b6dd23e0de54d",
+    "Spot.Registration.Verifier.members": "7c14502e353f036c24737e8ab97c7addfc31a3ca813949ab6df2796132e7a9ec",
     "Spot.Registration.Verifier.outputs": "d0ef8f6842dba7dfecd37c2c15f4b889a1e6ecb622ab4a1b11f26113e63b7ba6",
     "Spot.Registration.Verifier.params": "fe2d9865fbe38f867d3e730693553e5af1f4ace2fb813119dc92d94b5b666e67",
     "Spot.Registration.Verifier.partition": "097ef3e1666069c5e811a4d749ec2e7e284ad9627a0de53363a578681686eab2",
@@ -28495,14 +28624,15 @@
     "Spot.Registration.Verifier.scheme": "323d993f979773bd53b2407e44eb510e0ee54a56bdfc91ecc1b567f2537d61b5",
     "Spot.Registration.Verifier.seedSalt": "c3543107abedf7e28cbe53fd5dcda68ae4c63f0eec71eb6476227ed7ac98cfb4",
     "Spot.Registration.Verifier.supplied": "a394ddec89a16692e4a1affe70532fc3c8b43a0f032ece4161d7391ce8c04f88",
-    "Spot.Registration.Verifier.tied": "333909cd0a9bfc889553e27a962266adcbb5372372f845f2567980466517afcf",
+    "Spot.Registration.Verifier.tied": "1e97d7e618b0066be015b3d56a1f9528f3198f192c8d2f3fc71f97cae6d4ff99",
     "Spot.Registration.Verifier.v2": "980b8112f7425ab64d5a173d568dfe00088e35dbef70d5a2897c5a0962df5a80",
+    "Spot.Registration.Verifier.verdicts": "81511edf91511a548b68b8716c153964a56b9c75c7cffda4a8cab6053a96ace0",
     "Spot.Registration.Verifier.windowRoot": "bfb234bd6ccd03c642e74d3b56eec1a8d71e470ce9b78989a8f8791889d16723",
     "Spot.Registration.Verifier.workTable": "5168d61b1a397b0e44483525077ec84869641d8b00306c3c0fc80320c9ef87f2",
     "Spot.Registration.applyOutput": "aa52307ebbf1045737a64458522798582d2a621a5f1a4fd83c1a3b5683dc09ba",
     "Spot.Registration.applyOutputs": "3ca64b38bc80309cc1017365446b3e4db37a956c8ed3ca9b0b9b17744973a9e4",
     "Spot.Registration.certifiedHeld": "7250dd3c6f0b60f64ee469e3447ff3ed706ed965dbceece8db0a76d64bc3a261",
-    "Spot.Registration.check": "403796d2e6c09b3cab509d2a2b2197b36c98daae397f58f8e00cd1f91071cb41",
+    "Spot.Registration.check": "6833be5bdddbead25e42cacaccd35143e95959097c26a45e181fd7cbaed81dba",
     "Spot.Registration.checkOutputs": "520388be13502660254ee3da2f4a693399f04f9ae6e9e7f0767dfb2406ea57f8",
     "Spot.Registration.checkRegistered": "cb67dff3f9efc0829f675eb68a4a79361f38c1d1ce2c97ea210cfe03f203e6ee",
     "Spot.Registration.declaredCode": "ba72591986fa52bc2832f36e5497f1a0813f72402ee1304be0ac209db0eb60f1",
@@ -28523,8 +28653,10 @@
     "Spot.Registration.poolMarks": "fc9c8d707486b4d9d5b1c40df9916859c64f21d07b1de139e41c9c9af3109262",
     "Spot.Registration.poolOpen": "64ef3fcebfaa2b9fabda31940194a027bfd2997f47ba498afc5dcf8b338bf03c",
     "Spot.Registration.portIndex": "149382f90d91140aafab7d0d82a0f9294fd6dd65d225ec1a87153c4588ee8fe1",
+    "Spot.Registration.portsAccepted": "794194bbbf6e69431074e895d389eb062e5ff05a2c1f0ea4c6d7ad71fe070e77",
     "Spot.Registration.queryDigest": "9af0e784aa6af4426bc77a9a26689df4f072b46108735d5d2712ed34cca6e7b7",
     "Spot.Registration.r8Codes": "21da0cf50aa3cc278280ec59dd9365a6c6311e3ef865b7f6aaf6457ade27edb6",
+    "Spot.Registration.refusedIn": "8601ae61feafb7372b591795b644d0780ebbe171d47eace06c95273c7f5ddbf9",
     "Spot.Registration.tiedBad": "566f922cdd3376ede6879b759ad6b4eb775e3839c8897e995335999368c54ad3",
     "Spot.Registration.tiedGate": "453d4ade636d70e1174bea39da4a569304bd026ab73898380113ec9f4a4144be",
     "Spot.Registration.tiedGates": "5e0a1dd021850b230803ea144e709780c8753fe7ef36e703dd7b4d2db7421716",

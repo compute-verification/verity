@@ -12,7 +12,7 @@ import VCVio.Prelude.Core
 # a1l, step 6's pieces: every message of the holographic tables' sub-games has an inhabited type
 
 `AllInh` of each game `holoTable` and `holoTableCL` are built from: oracle Ligerito's (`foldRounds` to `ligerito`, as
-`LiveCompiled` proves the compiled ones'), the holographic lincheck's, the sparse phase's (`drawFin`, `degRounds`), the
+`LiveCompiled` proves the compiled ones'), the holographic lincheck's, the sparse phase's (`sampleFin`, `degRounds`), the
 registered phase's at any `fin` whose games all have it, and each rep's (`holoRep`, `holoRepC`).
 -/
 
@@ -29,7 +29,7 @@ theorem allInh_foldRounds (A : Arith F K) : ∀ (k : ℕ) (s : K) (q : Quad K), 
   | 0, _, _ => .ret _
   | k + 1, _, _ => by
       simp only [foldRounds]
-      refine AllInh.bind' (allInh_drawK A) fun _ => ?_
+      refine AllInh.bind' (allInh_sampleK A) fun _ => ?_
       repeat' (first
         | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
         | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split | dsimp only)
@@ -91,11 +91,11 @@ theorem allInh_holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
   all_goals exact allInh_lincheckRounds _ _
 
 omit [DecidableEq F] in
-theorem allInh_drawFin : ∀ n : ℕ, AllInh (drawFin (F := F) n)
+theorem allInh_sampleFin : ∀ n : ℕ, AllInh (sampleFin (F := F) n)
   | 0 => .ret _
   | n + 1 => by
-      simp only [drawFin]
-      exact AllInh.bind' (AllInh.draw' F) fun _ => AllInh.bind' (allInh_drawFin n) fun _ => AllInh.pure' _
+      simp only [sampleFin]
+      exact AllInh.bind' (AllInh.draw' F) fun _ => AllInh.bind' (allInh_sampleFin n) fun _ => AllInh.pure' _
 
 omit [DecidableEq F] in
 theorem allInh_degRounds (k : ℕ) : ∀ (n : ℕ) (claim : F), AllInh (degRounds k n claim)
@@ -112,7 +112,7 @@ theorem allInh_sparsePhase (A : Arith F K) (sh : SparseShape) (pub : SparsePub F
     (h : Fin 64 → F) : AllInh (sparsePhase A sh pub τ h) := by
   unfold sparsePhase
   repeat' (first
-    | exact allInh_drawFin _ | exact allInh_degRounds _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
+    | exact allInh_sampleFin _ | exact allInh_degRounds _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
     | exact AllInh.recv' _ | exact AllInh.draw' _ | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split)
 
 theorem allInh_regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape)

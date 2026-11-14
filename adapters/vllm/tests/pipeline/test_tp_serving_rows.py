@@ -25,7 +25,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import run_root as RT

@@ -31,7 +31,7 @@ def window(tmp_path) -> Path:
 def _main(tmp_path: Path, bundle: Path, window: Path) -> tuple[int, dict]:
     out = tmp_path / "out"
     rc = PB.main(["--bundle", str(bundle), "--window", str(window), "--bin", "absent", "--lean", "absent",
-                  "--firewall", "absent", "--out", str(out)])
+                  "--zk-server", "absent", "--out", str(out)])
     return rc, json.loads((out / "summary.json").read_text())
 
 
@@ -40,7 +40,7 @@ def test_the_bundle_is_held_to_its_window(window) -> None:
     held, bad = PB.hold(doc, payload, window)
     assert bad == {} and held and all(held.values())
     assert set(held) == {"bundle_check", "run", "registration", "partition"} | {f"public:m{m['k']}" for m in doc["members"]}
-    assert PB.held_draw(doc, window) == {}
+    assert PB.held_sample(doc, window) == {}
 
 
 def test_an_edited_payload_is_refused_before_anything_is_proved(tmp_path, window) -> None:

@@ -258,7 +258,7 @@ theorem freedAt_round (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} (hSv
   have hc : ∀ p, p < ((LeanRelease.ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size →
       ((LeanRelease.ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[p]! <
         ((LeanRelease.ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.size :=
-    Claims.ZKServer.ofDraws_order _ _ _
+    Claims.ZKServer.ofSamples_order _ _ _
   have hNO : ((LeanRelease.ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).nPiop ≤
       ((LeanRelease.ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size := by
     rw [hord.2, hord.1]

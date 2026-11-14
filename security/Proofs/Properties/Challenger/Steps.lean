@@ -10,9 +10,9 @@ import all Init.Data.Ord.String
 `ChallengePhase.drawCoins_ok`, `ChallengePhase.challengePhaseNamed_ok` and their like read an acceptance back into what each step of the
 reader returned. These are the converses, the steps a proof that the reader accepts a session assembles:
 
-* `drawCoins` reads the stream where the evidence has its five keys, `trustedChallengePhaseOf` returns a commitment and its
+* `sampleCoins` reads the stream where the evidence has its five keys, `trustedChallengePhaseOf` returns a commitment and its
   roots, the ledger opens the window withheld, the segment is of the family and `challengerStream` reads it
-  (`drawCoins_ok_of_steps`), and `coinsReason` gives no reason where the copy of main's history is the caller's and
+  (`sampleCoins_ok_of_steps`), and `coinsReason` gives no reason where the copy of main's history is the caller's and
   the bytes read are the start of that stream (`coinsReason_none_of_steps`);
 * `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session `pinnedChallengePhase` returns
   (`trustedChallengePhaseOf_ok_of_steps`), and `pinnedChallengePhase` the session `auditedOpen` returns where the pins log and the
@@ -292,10 +292,10 @@ theorem challengerStream_one {c : LiveCommitment} {segment doc : Json} {after : 
   simp [hk, hl, hst, hop, ha, ho, hr, pure, Except.pure, bind, Except.bind, -Array.any_eq_true,
     -Array.any_eq_false]
 
-/-- **`drawCoins` reads the stream where each of its steps accepts**: the evidence has its five keys,
+/-- **`sampleCoins` reads the stream where each of its steps accepts**: the evidence has its five keys,
 `trustedChallengePhaseOf` returns the session's commitment and roots, the ledger opens the window withheld, the segment is of
 the family, and `challengerStream` reads the segment under that commitment and the family's roots. -/
-theorem drawCoins_ok_of_steps {key : ChallengerKey} {window label : String} {after ξ : ByteArray} {coins : Json}
+theorem sampleCoins_ok_of_steps {key : ChallengerKey} {window label : String} {after ξ : ByteArray} {coins : Json}
     {c : LiveCommitment} {roots : Roots}
     (hk : keys? coins = some #["ledger", "main", "pins", "segment", "session"])
     (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
@@ -304,15 +304,15 @@ theorem drawCoins_ok_of_steps {key : ChallengerKey} {window label : String} {aft
     (hl : jsonStrIs (getD (getD coins "segment") "label") label = true)
     (hs : challengerStream c (getD coins "segment") after
       (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ) :
-    drawCoins key window label after coins = .ok ξ := by
-  unfold drawCoins
+    sampleCoins key window label after coins = .ok ξ := by
+  unfold sampleCoins
   simp only [hk, ht, hw, hl, hs, bind, Except.bind, beq_self_eq_true]
   rfl
 
-/-- **`coinsReason` gives no reason where `drawCoins` reads a stream** that the bytes read are the start of, every
+/-- **`coinsReason` gives no reason where `sampleCoins` reads a stream** that the bytes read are the start of, every
 coin of it read, the evidence's copy of main's history being the caller's. -/
 theorem coinsReason_none_of_steps {key : ChallengerKey} {main coins : Json} {window label : String}
-    {after read ξ : ByteArray} (hd : drawCoins key window label after coins = .ok ξ)
+    {after read ξ : ByteArray} (hd : sampleCoins key window label after coins = .ok ξ)
     (hm : sameMain main (getD coins "main") = true) (hr : startReason ξ read = none) :
     coinsReason key main coins window label after read = none := by
   unfold coinsReason

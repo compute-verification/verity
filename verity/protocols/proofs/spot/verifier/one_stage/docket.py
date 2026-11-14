@@ -133,6 +133,11 @@
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
   network certifier signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
   carries the pool or restarts it.
+* **Verdicts** (`verdicts`, the pool's form): a verifier may give its verdict log, and the caller's check
+  (`caller.check`) then refuses a record with an output value that reads a port of an earlier record the log names
+  refused (`R7-output-refused`, after `R7-pool-chain`), so a window carries no start past a window whose run the
+  verifier refused. A record the log doesn't name passes, as the pool's lag rule reads it, and a reused registered
+  value (`value`, the pool's `pin` among them) is not held to it.
 """
 from __future__ import annotations
 
@@ -261,7 +266,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
-          certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
+          certified: Mapping[str, Mapping[str, Any]] | None = None,
+          verdicts: Mapping[str, bool] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`, a port whose rows are the leaves of another port's tree naming that port too,
     `"wired"`: R3 refuses a record whose roots under the two names differ, `R3-wired`), the digest of its copy of the
@@ -308,7 +314,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     holds the record's registered values to be the ones it expects registered and the certified ones, each once, a
     certified value's entry to the verifier's leaves, words, word bits and domain as its own values', and its root to
     the verifier's (`R7-certified`): a certified value is never supplied, pinned, held or an output, and a record that
-    names one the verifier holds no entry for is refused as before (`R7-values`).  R3
+    names one the verifier holds no entry for is refused as before (`R7-values`).  `verdicts`: the verifier's verdict
+    log, in the pool's form (`_verdicts`), which the caller's check holds each output value's earlier port to
+    (`caller.check`, `R7-output-refused`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
     is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
@@ -326,6 +334,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     _declarations(day, declarations)
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
+    if verdicts is not None:
+        _verdicts(verdicts)
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
     if history is not None:
         if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
@@ -748,12 +758,23 @@ def _pool(pool: Mapping[str, Any] | None, registered: Mapping[str, int], supplie
         raise ValueError(f"the pool's lag is a positive integer: {pool['lag']!r}")
     if not (type(pool["week"]) is int and pool["week"] >= 0):
         raise ValueError(f"the pool's week is a natural: {pool['week']!r}")
-    verdicts = pool["verdicts"]
+    _verdicts(pool["verdicts"], "the pool's verdicts")
+    return dict(pool)
+
+
+def _verdicts(verdicts: Any, what: str = "the verdicts") -> dict[str, bool]:
+    """A verdict log: an object of record digests (lowercase hex of 64 bytes) to whether the verifier's run on that record
+    accepted; ValueError otherwise, which the Lean verifier refuses too (`OneStage.verdictsOf`)."""
     if not (isinstance(verdicts, Mapping) and all(isinstance(d, str) and len(d) == 128 and _HEX.fullmatch(d)
                                                   and type(a) is bool for d, a in verdicts.items())):
-        raise ValueError(f"the pool's verdicts are an object of record digests (lowercase hex of 64 bytes) to bools: "
-                         f"{verdicts!r}")
-    return dict(pool)
+        raise ValueError(f"{what} are an object of record digests (lowercase hex of 64 bytes) to bools: {verdicts!r}")
+    return dict(verdicts)
+
+
+def refused(verdicts: Mapping[str, bool], d: str) -> bool:
+    """Whether the verdict log names the verifier's run on record `d` refused; a record it holds no verdict for is not
+    refused (`Registration.refusedIn`)."""
+    return verdicts.get(d) is False
 
 
 def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
@@ -767,7 +788,7 @@ def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> b
         d = digest(log[len(log) - lag])
     except (TypeError, ValueError):
         return False
-    return pool["verdicts"].get(d) is False
+    return refused(pool["verdicts"], d)
 
 
 def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
@@ -912,11 +933,50 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
+#: `OneStageZk.TABLE_PORT`, the port a registration names a window's row tables' root at
+TABLE_PORT = "row-table"
+#: `OneStageZk.ROW_TABLES`
+ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "
+              "form is refused on a window with row tables until its guarantee covers a root every member reads")
+#: `OneStageZk.NOT_ONE_MEMBER`
+NOT_ONE_MEMBER = ("public file: the registration's roots are not one member's: the one statement's public file is held to "
+                  "a registration whose ports are bare, or are all one window member's, <member>/<port>")
+
+
+def public_ports(rec: Mapping[str, Any]) -> dict[str, Any]:
+    """`OneStageZk.publicPorts`: the record's roots by port as v2's one statement's public file names them (bare): its
+    own where no root's port holds a ``/``; else, where every root's port is ``<member>/<port>`` of one member, whose own
+    port names hold no ``/``, that member's roots with its name and the ``/`` taken off. Raises `ValueError` with v2's
+    refusal where the roots are two members' or more, or bare and a member's (`NOT_ONE_MEMBER`), or one is a row tables'
+    (`ROW_TABLES`) or names no port."""
+    roots = rec["roots"]
+    ports = [r["port"] for r in roots if isinstance(r.get("port"), str)]
+    if all("/" not in p for p in ports):
+        return {r["port"]: r for r in roots if isinstance(r.get("port"), str)}
+    names = {p.rsplit("/", 1)[0] if "/" in p else None for p in ports}
+    if None in names or len(names) != 1:
+        raise ValueError(NOT_ONE_MEMBER)
+    name, = names
+    out: dict[str, Any] = {}
+    for r in roots:
+        port = r.get("port")
+        if not isinstance(port, str):
+            raise ValueError("roots: a root of the registration names no port")
+        if port == TABLE_PORT:
+            raise ValueError(ROW_TABLES)
+        bare = port[len(name) + 1:]
+        out.pop(bare, None)
+        out[bare] = {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")}
+    return out
+
+
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
-                   population: int) -> Verdict:
-    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record."""
+                   population: int, reg: Mapping[str, Any] | None = None) -> Verdict:
+    """The verifier's own public file (its scheme, roots, their domains and its instance count) against the record, at
+    the record's roots by port ``reg`` (`Record.matchesPublicBy`; the record's own by default, `Record.matchesPublic`,
+    or v2's one statement's, `public_ports`)."""
     c = _Collect()
-    reg = {r["port"]: r for r in rec["roots"]}
+    reg = {r["port"]: r for r in rec["roots"]} if reg is None else reg
     if scheme != rec["scheme"]:
         c.fail("scheme", {"registered": rec["scheme"], "public": scheme})
     if {p: r["root"] for p, r in reg.items()} != dict(roots):
@@ -930,7 +990,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
-           "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused", "pool_spent_before",
-           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
-           "registered_entries", "unwindowed", "window_domain"]
+__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "PROTOCOL", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+           "WINDOW_DOMAIN", "check", "digest", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record", "record_digest",
+           "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

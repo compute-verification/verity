@@ -259,7 +259,7 @@ def RepMaps.atList {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.st
 
 section outer
 
-variable {n : ℕ} {L : Law n} {I : Inner} {Cm : Type} {Reg Reg' Reg₂ : Type} {i : RecVStar.Inner}
+variable {n : ℕ} {L : SamplingDesign n} {I : Inner} {Cm : Type} {Reg Reg' Reg₂ : Type} {i : RecVStar.Inner}
   {ss : Array VStar.Stmt}
 
 /-- **G items 1–3 at the decoder over the verifier's list** (`RepMaps.algebraDecodes`): at the inner shape's form, the
@@ -298,7 +298,7 @@ end outer
 section reads
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {i : RecVStar.Inner}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {i : RecVStar.Inner}
   {ss : Array VStar.Stmt} {Vs : Fin (vstarCount i) → VStmt}
   {zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount i)) → (Vs j).Outer Reg'}
   {dg : ByteArray → ByteArray} {N k Rw : ℕ}

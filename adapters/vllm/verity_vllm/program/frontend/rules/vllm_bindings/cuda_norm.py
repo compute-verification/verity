@@ -6,9 +6,9 @@ import torch
 from verity.circuits.refs import Coll
 from verity.definitions.registry import cuda_rmsnorm as C
 
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.derive import Alloc
+from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,

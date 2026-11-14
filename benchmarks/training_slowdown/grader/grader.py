@@ -228,7 +228,7 @@ def load_handover(path: Path) -> Handover:
     from verity.circuits.codec import decode_program, program_digest
     from verity.circuits.defs import REGISTRY
     # registers the Definitions the frontend's rules lower to, which a decoded step calls by id
-    import verity_vllm.program.frontend.train_step  # noqa: F401
+    import verity_torch.frontend.train_step  # noqa: F401
 
     path = Path(path)
     path = path / "handover.json" if path.is_dir() else path
@@ -726,7 +726,7 @@ def circuit_size(program) -> dict:
     (`boolean_prices`): its gates and ANDs by root callee class, and the word gates of the primitives with no Boolean
     version, which it leaves out."""
     from verity.circuits.census import census
-    from verity_vllm.program.frontend.train_step import primitives
+    from verity_torch.frontend.train_step import primitives
 
     return priced(census(program), boolean_prices(primitives(program)))
 

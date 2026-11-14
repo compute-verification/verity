@@ -21,7 +21,7 @@ from the others, with the acceptance `Acc` and the predicate `Good` still any:
 
 `joined` then takes each remaining piece in its owner's words:
 
-* the wiring (`hAcc`), the coin map's distribution at the frame (`hLaw`), the cut (`hCut`);
+* the wiring (`hAcc`), the coin map's distribution at the frame (`hDistribution`), the cut (`hCut`);
 * the stages' bytes within their rounds' releases that fit (`FirstFits`, `SecondFits`) and the sessions' releases'
   agreement (`SessionsAgree`), which give `DevAgrees` (`devAgrees_formReading`, `firstElems_of`, `secondElems_of`);
 * the three groups' coins (`CoinsAgree`) and no coin read at the statements' round (`StmtReadsNone`);
@@ -94,7 +94,7 @@ theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
     (S : SessionReading) (L : CoinMap.Locate) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
     (Acc Good : Verity.Exchange → Prop) (terms : ℝ≥0∞)
     (hAcc : ∀ o, o.params = θ → V.Verdict k .sampled o → Acc o)
-    (hLaw : CoinMapLaw V A x θ F c σ
+    (hDistribution : CoinMapDistribution V A x θ F c σ
       (CoinMap.frame V A x θ F c σ L
         (Messages.prover V θ F c σ (joinPlace V A x θ F c σ L) (joinReading A C S L) Dg))
       (CoinMap.ElemAgrees L A x (readsAt A.h)) (CoinMap.gapOf V θ F c σ L (A.L.V.k x)))
@@ -119,8 +119,8 @@ theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
     (hAt : StmtAt V A x θ F c σ (joinFrame V A x θ F c σ C S L Dg) (joinReading A C S L) Acc) :
     ProjectionBound V k A x θ F c σ (joinFrame V A x θ F c σ C S L Dg)
       (CoinMap.gapOf V θ F c σ L (A.L.V.k x) + joinMiss V A x θ F c σ C S L Dg q + terms) := by
-  have hLaw' : CoinMapLaw V A x θ F c σ (joinFrame V A x θ F c σ C S L Dg)
-      (CoinMap.ElemAgrees L A x (readsAt A.h)) (CoinMap.gapOf V θ F c σ L (A.L.V.k x)) := hLaw
+  have hDistribution' : CoinMapDistribution V A x θ F c σ (joinFrame V A x θ F c σ C S L Dg)
+      (CoinMap.ElemAgrees L A x (readsAt A.h)) (CoinMap.gapOf V θ F c σ L (A.L.V.k x)) := hDistribution
   have hDev : DevAgrees A x (joinReading A C S L) Acc Good (CoinMap.ElemAgrees L A x (readsAt A.h)) :=
     devAgrees_formReading A x C S (CoinMap.dev L) Acc Good (CoinMap.ElemAgrees L A x (readsAt A.h))
       (firstElems_of A x C L (readsAt A.h) Acc Good (readsAt_of_le A.h (Nat.zero_le _)) hFit₁)
@@ -148,6 +148,6 @@ theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
       hReached
   exact projection_agreed V k A x θ F c σ (joinFrame V A x θ F c σ C S L Dg) (joinReading A C S L) Acc Good
     (CoinMap.ElemAgrees L A x (readsAt A.h)) (CoinMap.gapOf V θ F c σ L (A.L.V.k x))
-    (joinMiss V A x θ F c σ C S L Dg q) terms hAcc hLaw' hDev hFirst hSecond hSessions hStmt hMsg hCut hRun hAt
+    (joinMiss V A x θ F c σ C S L Dg q) terms hAcc hDistribution' hDev hFirst hSecond hSessions hStmt hMsg hCut hRun hAt
 
 end Verity.SampledTwo

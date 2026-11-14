@@ -55,7 +55,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.numerics.rows import ROWS
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry import io_shell as IO
@@ -63,7 +63,7 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.check.replay.checks import check_rows
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving import registered_commit, registered_salts
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
@@ -720,7 +720,7 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+    return registered_commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
 
 
 def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
@@ -743,7 +743,7 @@ def index_salt(key: bytes, index: int) -> bytes:
     takes, so the committer samples it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
-    return H1R.salts(key, INDEX_NONCE + index, 1)
+    return registered_salts(key, INDEX_NONCE + index, 1)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served",

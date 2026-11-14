@@ -238,7 +238,7 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
 
 
-def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
+def test_the_sample_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
     seen = []
     real = V.lean
     monkeypatch.setattr(V, "lean", lambda f, value: (seen.append(value) if f == "select" else None) or real(f, value))
