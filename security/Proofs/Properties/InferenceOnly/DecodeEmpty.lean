@@ -204,7 +204,7 @@ fwd_def progEmpty decode_empty : decode programEmpty.toUTF8 by
   [fromUTF8?_toUTF8, parse_empty, domain_none, ofJson_tuple0, split_rule, toNat_rule, rfi_rule, ddefs_rule,
     index_rule, busy_rule, String.contains_char_eq, String.all_bool_eq, Array.mapM_empty,
     st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite,
-    st_forIn_nil, st_forIn_range0, leaves_rule]
+    st_forIn_nil, st_forIn_range0, leaves_rule, Fwd.foldl_size_bne_empty]
   block [domainError, Ty.ofJson]
   shallow [programEmpty]
 

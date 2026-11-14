@@ -337,7 +337,8 @@ fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse
     hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,
     leaves_of_V, bodyBad_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
     st_modify, st_pure, st_throw, st_ite, st_dite, st_forIn_empty, st_forIn_range1, prod_fst, prod_snd, ds_defs,
-    ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12]
+    ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12,
+    Fwd.foldl_size_bne_empty]
   block [Std.HashMap.insert, Std.HashSet.insert, Std.HashSet.erase, Sha512.hash]
   shallow []
 
