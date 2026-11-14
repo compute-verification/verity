@@ -131,10 +131,9 @@ def rows_of(record: dict) -> int:
 
 def held_rows(of: C.Head, cls: int = 0) -> int:
     """The head's count of the class, or `ROWS` where it holds none or states no one count of it."""
-    try:
-        return CC.count(of, cls) or ROWS
-    except ValueError:
-        return ROWS
+    listed = {e.name: e.rows for e in of.tables}
+    stated = {listed.get(name) for name in CT.names(cls)}
+    return stated.pop() or ROWS if len(stated) == 1 else ROWS
 
 
 def counts_of(registrations: list) -> tuple[int, ...]:
