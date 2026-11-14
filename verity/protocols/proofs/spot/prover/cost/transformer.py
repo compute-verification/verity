@@ -633,7 +633,7 @@ def render(out: dict) -> str:
         p, a, b = r["pooled"], r["pooled_ands"], r["per_block"]
         lines.append(f"| {r['period']} | {r['fleet']} | {r['blocks']:,.0f} | {p['0.01']:.4g} | {p['1e-06']:.4g} | "
                      f"{a['0.01']:.4g} | {a['1e-06']:.4g} | {b['0.01']:.4g} | {b['1e-06']:.4g} |")
-    lines += ["", "hand-off, `IntegrityMonitoringPeriod`'s windows (one a template; `compile --law L --cap N`):", "",
+    lines += ["", "hand-off, `IntegrityMonitoringPeriod`'s windows (one a template; `compile --sampling-design L --cap N`):", "",
               "| template | units | law | cap | K0 at 1% | K0 at 1e-6 |", "|---|---|---|---|---|---|"]
     for w in out["handoff"]["windows"]:
         (t, n), = w["templates"]

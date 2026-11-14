@@ -14,9 +14,8 @@
 # It leaves ([rewrite], [keep]):
 # - the proof system's own directories (`verity/protocols/proofs/`, `security/`, and proofs' under `benchmarks/`), the
 #   rest of the tree, which `zk_server_map.toml` covers, `benchmarks/recursion_e2e/` and `recursion_figures/`, renamed
-#   by their owner with the old spellings a recorded run carries, the network certifier's files
-#   (`verity/protocols/accounting/certifier/`), which network-accounting reruns this map over with its own spellings,
-#   and the lints and the Glossary row that name the word;
+#   by their owner with the old spellings a recorded run carries, and the lints and the Glossary row that name the
+#   word;
 # - a path into the proof system's tree, spelled as it stands there;
 # - what proofs' scripts under `benchmarks/` still share under the old word: the build lock `.firewall.lock` and
 #   `firewall_env`, until proofs renames them there;
@@ -68,7 +67,6 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
            "**/*.lock", "**/lean-audit.json", "**/lake-manifest.json", "GLOSSARY.md", "tests/test_retired_terms.py",
            "tests/lint/test_repo_retired_terms.py", "tests/lint/allowlists/**", ".agents/skills/friction/SKILL.md",
            "tools/research/tests/test_slack.py", "verity/protocols/proofs/**", "security/**",
-           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**",
            "benchmarks/one_stage/**", "benchmarks/remote_session/**", "benchmarks/recursion_e2e/**",
            "benchmarks/recursion_figures/**",
            "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/**", "benchmarks/serve_tax/**",

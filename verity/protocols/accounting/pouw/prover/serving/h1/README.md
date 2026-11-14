@@ -1,7 +1,9 @@
 # verity.protocols.accounting.pouw.prover.serving.h1
 
-PoUW's H1 scheme on vLLM's served int8 linears. The package's docstring states the scheme, and each module's docstring
-says what the module holds.
+PoUW's H1 scheme on a served model's int8 linears. The package's docstring states the scheme, and each module's docstring
+says what the module holds. Its receipts (`Receipts`) and the device halves of its registered rows, call tables and
+records are the workload's (`verity_torch.pouw.h1`), reached through the H1 device the workload hands in
+(`serving.tensors.h1_device`).
 
 ## Interface
 
@@ -12,11 +14,9 @@ says what the module holds.
   for a window's sample: its session's refusal, its K, and the proof blocks core samples. `commit` gives
   `CommitRecord`, `CommitTap`, `SCHEME`, `Sites`, `registration`, `reuse`, `shape` and `site`. The module that stages
   a window's sampled proof blocks as Flock statements gives `Refused` and `run`. `handoff` gives `FILE`. `kept` gives
-  `kept_row`. `live` gives `dump`. `prover` gives `STATE`, `Writer`, `kept_bytes` and `private`. `receipts` gives `C_`, `Call`, `Cubin`, `LANES`, `R`, `Receipts`, `call_receipts`, `call_streams`,
-  `gated_receipts`, `gated_reference`, `j10r_counters`, `layout`, `noise_blocks`, `noise_blocks_cpu`, `reference`,
-  `seed_record`, `seed_words`, `stream_blocks`, `tile_receipts` and `unit_seeds`. `registered` gives `commit` and
-  `salts`. `requests` gives `ROUND0`. `served` gives `Served`, `declared`, `declared_layout`, `descriptor`,
-  `register_weights`, `unit_of`, `weights_of` and `write_program`. `tables_device` gives `available`. `window` gives `RESERVE_FIELDS`, `Window`,
+  `kept_row`. `live` gives `dump`. `prover` gives `STATE`, `Writer`, `kept_bytes` and `private`. `registered` gives
+  `commit` and `salts`. `requests` gives `ROUND0`. `served` gives `Served`, `declared`, `declared_layout`, `descriptor`,
+  `register_weights`, `unit_of`, `weights_of` and `write_program`. `window` gives `RESERVE_FIELDS`, `Window`,
   `closed_on_error`, `connect`, `finish`, `gate_of`, `open_period`, `open_session`, `reserve_salt`, `reserved_of` and
   `salt_session`, and three names for a window's sample session: the session, its reserve at the gate, and the tests'
   sampling coin held in process. Those six names and that module are spelled with a word the Glossary retires, so this
@@ -25,6 +25,6 @@ says what the module holds.
   hooks, ranks and settings stay in `verity_vllm.protocols.pouw`); PoUW's prover tests; and the benchmarks under
   `benchmarks/pouw/`, `benchmarks/one_stage/` and `benchmarks/hash/`.
 - **Loads:** `verity.circuits`, `verity.commitments`, `verity.errors`, `verity.protocols.accounting.pouw` and
-  `verity.protocols.proofs.spot`; torch, at import in `receipts` and inside functions elsewhere; and `verity_flock`,
-  inside the functions that use it. It loads nothing under `adapters/`: a served call's int8 GEMM and dequantization
-  are the arm the workload hands in (`serving.int8_arm`).
+  `verity.protocols.proofs.spot`; numpy; and `verity_flock`, inside the functions that use it. It loads no tensor library
+  and nothing under `adapters/`: a served call's int8 GEMM and dequantization are the arm the workload hands in
+  (`serving.int8_arm`), and its tensors and device half are what it hands in through `serving.tensors`.

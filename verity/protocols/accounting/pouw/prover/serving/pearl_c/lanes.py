@@ -64,7 +64,7 @@ SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"s
            "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "rowdig_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
 #: the rows (m₁₆) from which a call's A tree, where it is aside, runs on the side lane after the call's rather than on the
-#: call's own: on the H200 the own lane was the faster at m₁₆ 16 and the other at 64, at 7 of GLM-5.3's 8 dense shapes each
+#: call's own: on the H200 the own lane was the faster at m₁₆ 16 and the other at 64, at 7 of a measured model's 8 dense shapes each
 TREE_APART_ROWS = 64
 
 
