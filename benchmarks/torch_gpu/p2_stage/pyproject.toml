@@ -17,7 +17,7 @@ untraced = ["tests/test_sketch.py"]
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
 inputs = ["tools/config/verity_config",
-          "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/pous", "verity/protocols/interface",
           "verity/protocols/pous/prover",
           "verity/hardware/record.py",

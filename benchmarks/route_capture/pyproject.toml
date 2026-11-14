@@ -17,7 +17,7 @@ inputs = [
     "tools/config/verity_config",
     "verity/__init__.py",
     "verity/errors.py",
-    "verity/settings.py",
+    "tools/config/verity_config/verity_settings.py",
     "verity/circuits",
     "verity/commitments",
     "verity/commitments/crypto",
