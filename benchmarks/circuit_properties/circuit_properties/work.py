@@ -115,11 +115,12 @@ against a stated constant, where the rows are equal only where an input's word i
 only at values a submitter found by trying circuits against the point's public seed, and where two nodes
 compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
 products by W are charged). The reading refuses a circuit
-(`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point:
-a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v; and
-rows of zeros whose signs differ, compared as one value) or
-times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a weight times a
-difference of an input's words; and where such an operand holds a NaN at the point, which leaves its rows uncompared.
+(`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point that
+are not zero: a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1
+times v) or times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a
+weight times a difference of an input's words; and where such an operand holds a NaN at the point, which leaves its
+rows uncompared. A row all zero at the point, -0 read as +0, is no work: it is left out of the comparison and none of
+the MACs that read it is charged (W plus -1 times W, times a stated ±1, is charged nothing).
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -229,7 +230,7 @@ STATED = THETA._replace(stated=True, distinct=False)
 
 class RepeatedRows(ValueError):
     """A charged operand whose rows the reading shows distinct, or specific alone (``by_words``: tested at the
-    word-by-word point), holds two equal rows at the point (`points.check`), reads values a scan the point doesn't run
+    word-by-word point), holds two equal rows, not zero, at the point (`points.check`), reads values a scan the point doesn't run
     whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n, rows) of its rows there, which leaves them
     uncompared. ``member`` is the activation that holds them, or the two whose rows are equal."""
 

@@ -2,7 +2,8 @@
 
 A charged product's operand whose rows the reading shows distinct (`Status.distinct`) or specific
 (`Status.specific`), `claims`, is claimed to have no two equal rows of its contraction's K words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
-two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
+two rows of such an operand are equal there and not zero, naming the Definition, the node, the operand and the two
+rows; a row zero there is left out and none of the MACs that read it is charged (`Tally.share`). The point
 is one draw at which every input is one positive word repeated, as a submitter may choose: whoever submits the
 circuit also picks the data. So every word of an input (`Input<w>`) is one word, sampled generic, nonzero and, as a
 float, positive, repeated through every array it fills (all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
@@ -326,8 +327,9 @@ _MEMO: dict = {}
 
 
 def check(program, R, root, reasons) -> Tally:
-    """Refuse ``program`` (`work.RepeatedRows`) where two rows of an operand of `claims` are equal at the point or one
-    holds a NaN; one pass a Program, memoized by its digest."""
+    """Refuse ``program`` (`work.RepeatedRows`) where two rows of an operand of `claims` are equal at the point and
+    not zero or one holds a NaN, and give the zero rows' share of each claim (`Tally.zero`); one pass a Program,
+    memoized by its digest."""
     cl = claims(R, root, reasons)
     if not cl:
         return Tally(points=0)
