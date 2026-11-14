@@ -211,7 +211,7 @@ def deriveTemplateUnitsBy (readDesc : ByteArray → V TemplateQuery.Desc)
     match TemplateQuery.locate rs i with
     | none => throw s!"partition: unit {i} is outside the partition's {pop} units"
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
-  let of := if cls then s!" (META definition of the unit class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
+  let of := if cls then s!" (META definition of the proof-block class {(circuitTemplate c).getD ""}; that the class circuit lowers it is not checked)" else ""
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}{of}"
 
 /-- `deriveQwordUnits`, the program read by `readProg`. -/

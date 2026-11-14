@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Game
 
 * `Flock.SecurityProofs.integrity_on`: `IntegrityPooled` on a set `I` of the period's sampling blocks. The probability
   that every sampling block of `I` is accepted and `I`'s incorrect proof blocks total at least `M` is at most
-  `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + δ_link,t)`. It is `IntegrityPooled`'s proof with every sampling block outside `I`
+  `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + ε_bind,t)`. It is `IntegrityPooled`'s proof with every sampling block outside `I`
   weighing nothing: `monitoringPeriod_union` over the sampling blocks of `I` accepted with a sampled proof block incorrect, and
   `monitoringPeriod_monitoringPeriod` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
   probability `≤ 1 = (1 − q)^0`.

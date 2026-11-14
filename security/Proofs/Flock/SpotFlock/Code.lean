@@ -272,7 +272,7 @@ def constAt (C : Prog) (g : ℕ) : Bool :=
 def partitionsOk (P : Partition) (C : Prog) : Bool :=
   decide P.gates.Nodup && P.gates.all (· < C.gates.length) &&
     (List.range C.gates.length).all (fun g => constAt C g || decide (C.Unread g) || P.gates.contains g) &&
-    P.blocks.all (fun u => !u.isEmpty) && P.blocks.all fun u => (unitClass C u).any fun w => decide (committed C u ≤ w)
+    P.blocks.all (fun u => !u.isEmpty) && P.blocks.all fun u => (sizeClass C u).any fun w => decide (committed C u ≤ w)
 
 /-- **A one-stage design is well formed** over strata of sizes `ns`, decided (`OneStage.WellFormed`). -/
 def oneStageOk (ns : List ℕ) : OneStage → Bool

@@ -49,7 +49,7 @@ H1_PEER = "vy-dc-h200"
 H1_DRAW_K = "2"
 DEVELOPMENT = "1"
 ONSITE_PIECES = "benchmarks/pous/onsite_pieces.sh"
-KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''
+KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''
 
 [run.commit]
 # once per workload: its Build, Match and Commit with the sealed replay bundle (a GPU leased only for the Match capture and the

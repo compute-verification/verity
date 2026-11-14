@@ -23,12 +23,12 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 `zk_session_soundHJ`: `zk_session_soundJ` under hidden outputs, the configuration the prover's `--zk` runs (the default
 `--statement`, whose tables `Stmt.setupTables` sets up with `Stmt.setupHidden`, at `--session-tables J`). For any live
 prover `τ` of a hidden-output `--zk` session of `J ≥ 1` tables (`J = nTab I`),
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
 partition, each read at its site in the hidden-output table it is sampled into (`placeZHJ`, `tabZHJ`) and bound to the
 rows it commits, input or output (`rsZHJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the
 `J` tables `planZHJ`.
 
-The sampling design, `miss(K)`, `ε_ks` and `δ_link` are `zk_session_soundJ`'s: the live subset sample `SamplingDesign.execOS src (.subset kd) n`,
+The sampling design, `miss(K)`, `ε_ks` and `ε_bind` are `zk_session_soundJ`'s: the live subset sample `SamplingDesign.execOS src (.subset kd) n`,
 under A3 at its one byte source. What changes is what hidden outputs change at one table (`zk_session_soundH`): the
 circuit and public file are `HmOut`'s, each table is `setupHidden`'s (`setupTables_partsH` at `J > 1`), the sites and
 rows are HiddenExec's `keyPlaceH` and `keyRowsH` (`rsZHJ`), the tags are `TagsOkZHJ`, and the challenger's live-coin part's samples are

@@ -46,7 +46,8 @@ on that buffer.
   stage pass, timed with the sketch and without; `bw_ref.py` checks it on the CPU afterwards (every y and the root
   from the pass's σ, and the σ of a sample of units from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).
-- `build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's own Makefile. `session.sh` is one run on
+- `verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's
+  own Makefile; the scripts here run on its `lib/`. `session.sh` is one run on
   an H200 under an untimed `gpu-lease`, from PoUS's encoded store (`ENCODED=1`, the layer's segment files sent
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded
   store in place, read only. Each script's header gives its command line.

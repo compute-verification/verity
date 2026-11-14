@@ -29,7 +29,7 @@ PY=$REPO/.venv/bin/python
 
 log "zk-cost-cpu: source $(git rev-parse HEAD), builds in $W"
 TU=$W/tmpl-unit
-{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall flock-read-tmpl) && if [ -n "${ZK_UNITS:-}" ]; then
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) && if [ -n "${ZK_UNITS:-}" ]; then
     mkdir -p "$TU" && (cd verity/protocols/proofs/flock/verifier && tar --exclude=.lake -cf - .) | tar -xf - -C "$TU" \
       && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean "$TU/" \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$TU/lakefile.toml" \
@@ -41,8 +41,8 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocol
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+sha256sum "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core

@@ -985,7 +985,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     red, _by = redundant_ands(C)
     rec["redundant_ands"] = red
     if red:
-        F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its C-Flock lowering")
+        F.warn("redundant-gates", "boolean", t.id, red, "ANDs on identical operands in its Flock lowering")
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
     elif is_boolean(t):
@@ -1586,14 +1586,14 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         dot = next((p for p in steps if p in IL.TC_STEPS), None)
         if dot is None:
             return {"lowered": False, "reason": f"{sub.id}: its tensor-core step {', '.join(steps) or '(a silicon reference)'} is not one "
-                    f"C-Flock lowers ({', '.join(sorted(IL.TC_STEPS))})"}
+                    f"Flock lowers ({', '.join(sorted(IL.TC_STEPS))})"}
         name = f"gemm-coordinate/{dot}/tc-step"
         low = IL.lowering(d, name, unit_fn=lambda t: IL.tc_units(t, dot))
     elif mod is None or not callable(getattr(mod, "lowering", None)):
-        return {"lowered": False, "reason": reg.supports(sub, "frame-v3/blake3-keyed") or f"{tid}: its C-Flock module has no lowering"}
+        return {"lowered": False, "reason": reg.supports(sub, "frame-v3/blake3-keyed") or f"{tid}: its Flock module has no lowering"}
     else:
         if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
-            return {"lowered": False, "reason": f"{sub.id}: the kernel's warps differ at N = {sub.params['N']}, so no single C-Flock unit"}
+            return {"lowered": False, "reason": f"{sub.id}: the kernel's warps differ at N = {sub.params['N']}, so no single Flock unit"}
         low = mod.lowering(sub, **st) if st else mod.lowering(sub)
         name = getattr(mod, "UNIT", low.name)
     rec: dict[str, Any] = {"lowered": True, "via": f"c-flock:{name}", "units_per_instance": low.units.n,

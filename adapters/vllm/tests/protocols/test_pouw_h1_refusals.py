@@ -79,9 +79,9 @@ else:
 import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
 import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
 import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
-import verity.protocols.accounting.pouw.prover.serving.h1.draw as PHD
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn as DN
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows as DR
+import verity.protocols.accounting.pouw.prover.serving.h1.sample as PHD
+import verity.protocols.accounting.pouw.prover.serving.h1.sampled as DN
+import verity.protocols.accounting.pouw.prover.serving.h1.sampled_rows as DR
 import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
 import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
 import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
@@ -2161,6 +2161,8 @@ def test_a_saved_window_whose_program_declared_again_is_another_is_refused_at_it
             HO.resume(tmp_path / "changed", mine.detach())
         assert str(refused.value) == (f"{run.entry}: the window Program declared again is not the one its tables were "
                                       "registered under")
+        theirs.setblocking(False)
+        assert theirs.recv(1) == b"", "the refused resume closed the stream it was handed"
     finally:
         mine.close()
         theirs.close()

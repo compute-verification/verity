@@ -263,7 +263,7 @@ def test_the_honest_level_is_refused_without_the_inner_transcript(forged, shape,
 
 
 @pytest.mark.parametrize("rep", [0, 1])
-def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forged, shape, tmp_path, rep, restaged):
+def test_a_level_climbing_to_tops_the_live_coin_part_did_not_commit_is_refused(forged, shape, tmp_path, rep, restaged):
     """`RecVStar.checkTopRows` at a real level: the honest level 3 against an inner transcript whose rep `rep` level-3 top
     (its third salted top, 32 nodes, after level 0's `root_B` and one salted top a level, `rec_vstar.tops`; `rec-top-L3`
     is rep 0's, then rep 1's) has node 0's `b ‖ c` one bit off is refused at the table row that reads the node: the
@@ -279,10 +279,10 @@ def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forg
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
                 "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(UNIT)}: port out's table row \d+ is not node 0 of rep {rep}'s level "
-                        rf"{LEVEL} top, which the coin server committed", v["why"]), v["why"]
+                        rf"{LEVEL} top, which the challenger's live-coin part committed", v["why"]), v["why"]
 
 
-def test_a_level_at_link_points_the_coin_server_did_not_sample_is_refused(forged, shape, tmp_path, restaged):
+def test_a_level_at_link_points_the_live_coin_part_did_not_sample_is_refused(forged, shape, tmp_path, restaged):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points, so the honest level
     against an inner transcript whose first link coin is one bit off from the record's is refused before setup."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
@@ -291,11 +291,11 @@ def test_a_level_at_link_points_the_coin_server_did_not_sample_is_refused(forged
     p = _run(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
              "--rec-inner-transcript", str(tmp_path / "transcript.json"), rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the inner session's record's link points are not "
-                                                   "the ones the coin server drew (link.points): check 5 would take the extra "
+                                                   "the ones the challenger's live-coin part drew (link.points): check 5 would take the extra "
                                                    "claims at points the prover chose")
 
 
-def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(forged, shape, tmp_path, restaged):
+def test_a_level_over_a_transcript_not_in_the_live_coin_parts_format_is_refused(forged, shape, tmp_path, restaged):
     """`RecSetup.checkReads` among `verify`'s inputs (`RecSetup.commits`): the honest level against the honest inner
     transcript's values written as compact JSON is refused before setup, since the recursion's transcript model reads
     the record in the challenger's own format."""
@@ -304,7 +304,7 @@ def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(for
     f.write_text(json.dumps(t))
     p = _run(forged, restaged / "pub.bin", restaged / "registered.json", shape, "inner-honest",
              "--rec-inner-transcript", str(f), rows=_acc_rows(tmp_path / "rows.json", restaged))
-    assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the coin server's record does not read in "
+    assert (p.returncode, p.stderr.strip()) == (2, "rec inner transcript: the challenger's live-coin part's record does not read in "
                                                    "its own format (RecRecord.readFull: rec_live.record_bytes, its "
                                                    "rounds first, then its kind, tops, Hello in its keys' order and "
                                                    "the link's roots and points, at json.dumps' indent=1)")
@@ -535,7 +535,7 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
     assert off.result() == (f"setup: {CAP}: its port top reads rec-top-L0, which the verifier's shared rows (--rec-rows) "
                             f"register as rec-top-L0: root {top['root']}, against {flipped}"), off.result()
     assert re.fullmatch(rf"setup: rec-tops: {re.escape(CAP)}: port top's table row \d+ is not node 5 of circuit's root_B, "
-                        "which the coin server committed", forged.result()), forged.result()
+                        "which the challenger's live-coin part committed", forged.result()), forged.result()
 
 
 def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape, undrawn, tmp_path):

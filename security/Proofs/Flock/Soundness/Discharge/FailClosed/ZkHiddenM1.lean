@@ -33,7 +33,7 @@ A refused hidden-output table carries the reference setup's regions and `contra`
   `M1W` (`Stmt.setupHidden`'s `checkInRange`, `Zk.schedule`'s `schedule_m1`, the inner code's `innerN_pow`), and
   `ksAvgStrictZ_planZHJ_le_m1` and `ksAvgStrictZ_planZHJ_le_closed` read the bounds at that plan (its rate cap is
   `ZkHidden.hr_planZHJ_23`).
-* `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `δ_link` (`linkBoundZC`), is at most the largest
+* `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `ε_bind` (`linkBoundZC`), is at most the largest
   `Σ_{u ∈ S} |io u|` over samples `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
   at most `k_d·r` at samples of `k_d` units with `|io u| ≤ r`.
 

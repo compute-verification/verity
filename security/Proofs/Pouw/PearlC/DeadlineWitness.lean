@@ -10,7 +10,7 @@ public import Definitions.Pouw.PearlC.Game
 /-!
 # The deadline guarantees' premises are satisfiable (non-vacuity witnesses)
 
-The deadline's statements at the served record (`PearlCSm120Rev1Cap1000ByDeadline_8192` and the others,
+The deadline's statements at the served record (`PearlCSm120Rev1InertShare1000ByDeadline_8192` and the others,
 `Proofs.Pouw.Lemmas.Deadline`) take, besides TT_OUT, a workload in `pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh`, the honest clock
 `HonestClock (CM.adversaries U) A run td` and the budget `A.BoundedBy U run td T q`. These witnesses meet all three,
 together with delivery by the deadline:

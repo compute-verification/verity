@@ -1,4 +1,4 @@
-"""The stagers ``drawn.py`` hands `verity.protocols.accounting.pouw.prover.serving.h1.drawn`'s ``stage`` (its `Stager`),
+"""The stagers ``drawn.py`` hands `verity.protocols.accounting.pouw.prover.serving.h1.sampled`'s ``stage`` (its `Stager`),
 built on Flock's Python (`verity_flock`), which verity does not import: `stager`, K's flat statement recomposed
 (``--recompose``), and `FileStager`, a statement on its committed circuit file, read and never composed."""
 from __future__ import annotations
@@ -14,7 +14,7 @@ from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 
 from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-from verity.protocols.accounting.pouw.prover.serving.h1 import drawn as D
+from verity.protocols.accounting.pouw.prover.serving.h1 import sampled as D
 
 
 def stager(k: int, tile: Sequence[int], m: int, circuit: Path, bind: dict) -> CS.UnitStager:

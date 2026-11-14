@@ -127,7 +127,7 @@ a decoder recovers from the client's view of the server side (`MonitoringPeriodC
     and each window's record is a sequence its registered Program accepts with a valid run at the registration's
     values (`AccSeqsChecked`);
   * **counted**: they number at most
-    `#Θ · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · #faultySets_i(δ) · 2^β_i · Dj^k_i` (`executionPhasesCount`). -/
+    `#Θ · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i` (`executionPhasesCount`). -/
 def MonitoringPeriodLeakChecked : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)

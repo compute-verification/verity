@@ -700,7 +700,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: an input gate that is no template's row, state or egress parameter, nor one of the slot "
                        "entries")
     if not _walkable(j):
-        raise D.Reject("scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks "
+        raise D.Reject("scan: not laid out as Flock's decoder lays a Program out, or past what its resolution walks "
                        "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)")
     ke = max(k for k, x in enumerate(nodes) if defs[callees[x["fn"]]]["form"] != "primitive")
     if not any(a[:3] == ("n", ke, 0) and T * leaves_of(be["ret_type"]) <= a[3]

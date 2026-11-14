@@ -80,8 +80,8 @@ wires `g` (`RowsRightZC`):
 * **output rows**: `g`'s committed bit is the circuit's evaluation on the committed inputs (`Circuit.eval`), the key
   program's output at `g` on those rows and the coin.
 So when `rd` reads every input row a sampled proof block's outputs depend on, its output rows are the program's outputs on the
-registered rows and the coin. `ε_ks`, `δ_link` are `EndToEnd`'s terms, averaged over the verifier's sample; `δ_rows` is
-`δ_link`'s closed form, for the rows finders (`rowsOutZC`: one trial at a registered read, which outputs the binding's
+registered rows and the coin. `ε_ks`, `ε_bind` are `EndToEnd`'s terms, averaged over the verifier's sample; `δ_rows` is
+`ε_bind`'s closed form, for the rows finders (`rowsOutZC`: one trial at a registered read, which outputs the binding's
 extractor on a row it reads there other than `rd`'s, and `rd`'s opening); and `δ_reg = q_R²/2^513` is the registered
 reads' term (`Registered.ReadsX.prob_off_le`): the probability that the session's leaf at an owned registered read is
 not `rd`'s, at a budget `q_R` of SHA-512 evaluations of one play of the audit and the extractor's pair.

@@ -12,7 +12,7 @@ file carries an event of the sample too, and bounds the sampled proof blocks' co
 * `execRefinesZK_tables_sampled`: `execRefinesZK_tables` with an event `E` of the sample on both sides. Both audits'
   outcomes carry the sample, and the refinement is one inequality at each of the sampling design's samples, where `E` is fixed;
 * `ZkLink.zk_flock_sampledC_reg`: `Audit.extraction_audit_sampled` at `analysisZCReg`, so in the compiled batched audit
-  `Pr[accepts ∧ some drawn unit is in incorrectRegZ] ≤ ε_ks + δ_link`;
+  `Pr[accepts ∧ some drawn unit is in incorrectRegZ] ≤ ε_ks + ε_bind`;
 * `zk_session_soundJ_custody_sampled_reg`: the same at verity-verify-proof's acceptance, at the challenger's live-coin part's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
@@ -89,7 +89,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (vb : ValueBindingZ A P planZ tab decode Hc) {L : SamplingDesign n}
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration**: it accepts with a sampled proof block in
-`incorrectRegZ` with probability at most `ε_ks + δ_link`, `zk_flock_countC_reg`'s terms without the miss term. -/
+`incorrectRegZ` with probability at most `ε_ks + ε_bind`, `zk_flock_countC_reg`'s terms without the miss term. -/
 theorem zk_flock_sampledC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
@@ -134,7 +134,7 @@ variable {n : ℕ} {Reg : Type}
 
 /-- **The sampled proof blocks of one `--zk` sampled session of `J` tables, against the public file, at the challenger's live-coin part's
 custody.** For any live prover `τ`, verity-verify-proof `--zk` accepts with some sampled proof block in `incorrectRegZ` with probability at
-most `ε_ks + δ_link`: `zk_session_soundJ_custody_reg`'s terms without the miss term, so without A3. -/
+most `ε_ks + ε_bind`: `zk_session_soundJ_custody_reg`'s terms without the miss term, so without A3. -/
 theorem zk_session_soundJ_custody_sampled_reg
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

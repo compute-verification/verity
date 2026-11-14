@@ -22,7 +22,7 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
   `LinkEvRegZK`;
 * `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
   and its term `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, `Q_s = Σ_c π_c` as in `linkBoundZC`;
-* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + δ_link + δ_reg`;
+* `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + ε_bind + δ_reg`;
   `zk_flock_regSampledC_cr`: the same with a incorrect sampled proof block counted too.
 
 `qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
@@ -359,7 +359,7 @@ theorem reg_knowledgeSoundZC
     (tab (L.draw ω) R u)
 
 /-- **The registered link theorem**: at the plurality value layer, the registered analysis's binding error is at most
-`δ_link + δ_reg`, `linkBoundZC` under A2 for the link finders and `regBoundZC` under `cr/sha-512` for the
+`ε_bind + δ_reg`, `linkBoundZC` under A2 for the link finders and `regBoundZC` under `cr/sha-512` for the
 registered-value finders, prover by prover. -/
 theorem zk_linkSoundRegC
     (hlow : LoweringSoundZK A P planZ tab decode) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
@@ -482,8 +482,8 @@ theorem zk_linkSoundRegC
 assumptions.** With each sampled proof block read from its table at its place (`place`), the committed values the plurality value
 layer of `vb`, and `wo` a registrant's opening of each commit string: at a prover whose registered-value finders satisfy
 `cr/sha-512` at budget `qW` (`hW`),
-`Pr[accept ∧ a drawn unit reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, with
-`ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample (`hCR`), `δ_link = linkBoundZC` under A2 for
+`Pr[accept ∧ a drawn unit reads a wire disagreeing with its registered value] ≤ ε_ks + ε_bind + δ_reg`, with
+`ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample (`hCR`), `ε_bind = linkBoundZC` under A2 for
 the link finders, and `δ_reg = regTermZC`. -/
 theorem zk_flock_regValsC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
@@ -520,7 +520,7 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
     exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
 /-- **`zk_flock_regValsC_cr` with the incorrect proof blocks counted too**: on its assumptions,
-`Pr[accept ∧ a drawn unit is incorrect or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
+`Pr[accept ∧ a drawn unit is incorrect or reads a wire disagreeing with its registered value] ≤ ε_ks + ε_bind + δ_reg`, the
 event `analysisRegZC`'s at its committed transcript. -/
 theorem zk_flock_regSampledC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)

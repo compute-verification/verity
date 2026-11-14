@@ -201,7 +201,7 @@ def no_piece(pids: Collection[str]) -> str:
     """Why a unit holding the primitives ``pids`` can't be lowered, with the fix where there is one."""
     import re
 
-    why = "C-Flock has no piece for " + ", ".join(pids)
+    why = "Flock has no piece for " + ", ".join(pids)
     if any(re.fullmatch(TOPP_WORD, p) for p in pids):
         why += (": the top-p keep word over every split count is `topp_word`'s composition, about 10^11 ANDs at a served "
                 "vocabulary, which no unit holds; bind the word-gate keep word (TopPKeepWord_v2{V,S}, one per split count S, "

@@ -258,7 +258,7 @@ RANK_PORTS = 16
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
                "shared rows wait for proofs' PRs A, B and C")
-PLAIN_ZK_SERVER = "none: C-Flock's ZK server checks only a --zk statement's sends (flock-circuit `zk_served`)"
+PLAIN_ZK_SERVER = "none: Flock's ZK server checks only a --zk statement's sends (flock-circuit `zk_served`)"
 
 
 def template_sets(root: Path) -> dict[str, tuple[Path, object]]:
@@ -863,7 +863,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     if plain(a):
-        summary.update(zk_server=None, arm=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER})
+        summary.update({"firewall": None, "arm": None, "plain": {"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER}})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 

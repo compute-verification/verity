@@ -20,7 +20,7 @@ import pytest
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
+from verity_vllm.compiler import replay_chain as RC
 from verity.circuits import boolean as BL
 
 

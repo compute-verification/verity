@@ -274,7 +274,7 @@ class Resumed:
     first: TS.First
     stream: S.Stream
     held: Any
-    registration: S.WindowCommitmentRecord
+    docket: S.WindowCommitmentRecord
     sample: S.Draw
     #: the boundary record's index in the boundary stream's log
     received: int = 0
@@ -286,7 +286,7 @@ class Resumed:
     @property
     def boundary(self) -> str:
         """The digest of the boundary record the stop record reads, a record of the boundary stream's log."""
-        return self.registration.record["previous"]
+        return self.docket.record["previous"]
 
 
 def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str, *, delta: float = 0.5,
@@ -342,7 +342,7 @@ def reads(r: Resumed) -> dict[str, Any]:
     row i), and the output row's, the stop record's `b.stop` at its registered root, leaves and domain, unit i at row
     i, read as `rows.own_value` names a record's own port. Lean refuses a statement that leaves a port out."""
     L = r.layout
-    stop = next(e for e in r.registration.record["roots"] if e["port"] == BR.STOP)
+    stop = next(e for e in r.docket.record["roots"] if e["port"] == BR.STOP)
     mine = L.stop_ports()[BR.STOP]
     ports = dict(r.held.file["ports"])
     ports[OUT] = {"value": CS.own_value(BR.STOP), "root": stop["root"], "leaves": mine["leaves"], "words": L.words(BR.STOP),
@@ -402,7 +402,7 @@ def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -
     log, as ``r`` holds them. ``case`` is Lean's, and reads the boundary stream's audit record as the driver hands it:
     the entry names that record's premise (`BOUNDARY_PREMISE`), as the ``boundary-audit`` entry does. ``audit``: the
     boundary stream's audit record's SHA-512."""
-    mine = {"earlier": r.boundary, "later": r.registration.digest, "received": r.received}
+    mine = {"earlier": r.boundary, "later": r.docket.digest, "received": r.received}
     why = f"Lean refused the read: {lean['refused']}" if "refused" in lean else None
     for k in ("logged", "order"):
         v = lean.get(k) or {}
@@ -413,7 +413,7 @@ def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -
     return {"accepted": why is None, "of_record": False, "tool": ACROSS, "case": lean.get("case"),
             "premise": BOUNDARY_PREMISE, **({} if why is None else {"why": why}),
             "boundary": {"registration": r.boundary, "received": r.received, "audit": audit},
-            "stop": {"registration": r.registration.digest, "previous": r.registration.record.get("previous")}}
+            "stop": {"registration": r.docket.digest, "previous": r.docket.record.get("previous")}}
 
 
 def boundary_audit(boundary: str, outcome: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -544,7 +544,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
     accepted, complete = audit.get("accepted") is True and got.get("accepted") is True, audit.get("complete") is True
     return {"format": FORMAT, "class": [L.prompt, L.outputs], "spans": L.spans, "run": L.run, "stop_rule": stop.to_json(),
             "design": design, "sample": list(r.sample.units),
-            "registration": {"boundary": r.boundary, "stop": r.registration.digest},
+            "registration": {"boundary": r.boundary, "stop": r.docket.digest},
             "accepted": accepted, "complete": complete, "length_held": accepted and complete,
             "case": (verdicts.get(ORDER) or {}).get("case"),
             "symbol": got.get("symbol"), "record": got.get("record"), "refused": got.get("refused"),
@@ -569,7 +569,7 @@ def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
     failed = sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok"))
     refused = sorted(k for k, v in (audit.get("verdicts") or {}).items() if v.get("accepted") is False)
     named = "; ".join(f"{what}: {', '.join(names)}" for what, names in (("checks", failed), ("verdicts", refused)) if names)
-    return {"commitment": r.registration.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
+    return {"commitment": r.docket.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
             "reason": named or "the stop stream refused the outcome", "verdict": "reject"}
 
 

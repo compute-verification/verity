@@ -101,6 +101,9 @@ from verity.protocols.accounting.pouw.prover.serving import (
 )
 
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
@@ -333,15 +336,15 @@ class H1Windows:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
         modules = {w: f"linear {w}" for w in range(len(self.layers))} | pouw._named(model, self.layers)
-        print(f"[serve-h1] declaring the window Program: {self.steps} steps of {len(shapes)} linears at T {self.rows}, "
-              f"{self.steps * len(shapes)} calls, {units(shapes, self.rows, self.steps)} tile units", flush=True)
+        logger.info("[serve-h1] declaring the window Program: %d steps of %d linears at T %d, %d calls, %d tile units",
+                    self.steps, len(shapes), self.rows, self.steps * len(shapes), units(shapes, self.rows, self.steps))
         t0 = time.perf_counter()
         self.program = served_declared(shapes, modules, self.rows, self.steps, unit=unit)
         t1 = time.perf_counter()
         self.digest = write_program(self.program, declared_layout(shapes, modules, self.rows, self.steps),
                                     self.out / "h1", rows=self.rows, steps=self.steps)
-        print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
-              f"{time.perf_counter() - t1:.1f} s", flush=True)
+        logger.info("[serve-h1] declared in %.1f s, its digest %s and %s in %.1f s", t1 - t0, self.digest[:16], PROGRAM,
+                    time.perf_counter() - t1)
         registered = None
         if model_key is not None:
             key, registered = model_key(self.digest)
@@ -394,10 +397,10 @@ class H1Windows:
         self.readied = {"tables": tables, "kernels": kernels, "session": session,
                         "seconds": {"roots": round(t1 - t0, 4), "tables": round(t2 - t1, 4), "kernels": round(t3 - t2, 4),
                                     "lean": round(t4 - t3, 4), "reserve": round(t5 - t4, 4)}}
-        print(f"[serve-h1] ready: weight roots in {t1 - t0:.1f} s, the call tables' GPU hasher {tables} in {t2 - t1:.1f} s, "
-              f"{kernels} z/y kernels compiled in {t3 - t2:.1f} s, the Lean verifier built in {t4 - t3:.1f} s"
-              + ("" if self.sessions is None else f", window 0's session {session or 'not reserved (its open reserves)'}"
-                                                  f" after {t5 - t4:.1f} s"), flush=True)
+        logger.info("[serve-h1] ready: weight roots in %.1f s, the call tables' GPU hasher %s in %.1f s, %s z/y kernels "
+                    "compiled in %.1f s, the Lean verifier built in %.1f s%s", t1 - t0, tables, t2 - t1, kernels, t3 - t2,
+                    t4 - t3, "" if self.sessions is None
+                    else f", window 0's session {session or 'not reserved (its open reserves)'} after {t5 - t4:.1f} s")
         return self.readied
 
     def describe(self) -> dict[str, Any]:
@@ -613,7 +616,8 @@ class H1Windows:
         """The K a window is sampled at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
-        ValueError when the session joined no period or the ledger commits it no K."""
+        ValueError when the session joined no period, the ledger commits it no K, or its window commits no gate
+        session's open root."""
         from verity.protocols.accounting.pouw.prover.serving import committed_k, draw_k
 
         if held is None:
@@ -632,7 +636,10 @@ class H1Windows:
                 raise ValueError(f"{why[0]}: {why[1]}")
             self._period_k[period] = k
         session = run.commits.get("session")                # None: no gate session carried the run's coins
-        return self._period_k[period], session.get("root") if session else None, f"period {period}'s open"
+        if session is None or session.get("root") is None:
+            raise ValueError(f"session {held.get('session')}'s window commits no gate session's open root, the stream its "
+                             "draw is taken on, so no draw can be formed")
+        return self._period_k[period], session["root"], f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:
@@ -668,7 +675,7 @@ class H1Windows:
         if self.tie is not None:
             self.tie.stop()
         if self.closer is not None:
-            print(f"[serve-h1] stopping: {self.releasing} windows still releasing", flush=True)
+            logger.info("[serve-h1] stopping: %d windows still releasing", self.releasing)
             self.closer.shutdown(wait=True)
         if self.sessions is not None:
             self.sessions.drain()

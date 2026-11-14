@@ -66,7 +66,7 @@ server = D.server_fixture(PORT)
 @pytest.mark.slow
 def test_the_period_check_agrees_with_its_mirror(server):
     """Lean and the mirror agree on every case, and each change reaches its verdict at least once: a change the run's
-    draw leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its draws."""
+    sample leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its samples."""
     SEEN.clear()
     examples = 1200
     stats = D.run(PORT, examples=examples, server=server)
