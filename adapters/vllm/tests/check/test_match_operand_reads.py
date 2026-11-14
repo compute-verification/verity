@@ -4,7 +4,8 @@
 sources have to be a function of the record's: each source as a progression of one run, then the greedy RLE (`RootView.canon`).
 
 Held here by kind of read: a parameter of the body, the prompt, the seed, a supplied field, a window of the fold's weights map, a
-warm request's prefix input, a witness and peers (one read of peers is not such a function yet, and is held as it is); a top-p
+warm request's prefix input, a witness and peers (one read of peers is not such a function yet, and is held as it is); the name a
+weights read carries, whichever wrapper named the field (`verity_vllm.check.match.canonical_operands`); a top-p
 select's split count; a read through a mux that the comparison unfolds (a stride that reaches a mux after another instance is
 not such a function either, and is held as it is), with what a comparison that unfolds its first side makes of a padded
 Program's reads (`compare_steps`); and, in one request's projection of a fold, the other request's parameters and nodes.
@@ -104,6 +105,31 @@ def test_a_read_has_the_records_sources_and_in_the_compact_form_their_progressio
     assert _reader(INPUTS, [runs], compact=False, **LOADED).canon(0) == [record]
     assert _reader(INPUTS, [runs], compact=True, **LOADED).canon(0) == [compact]
     assert compact == _as_compact(record) and K.expand_mixed(compact) == record
+
+
+WEIGHT_NAMES = [   # (the name a loader binds to the weights, the name a read of them carries)
+    ("model.layers.0.w", "model.layers.0.w"),                    # a record's hint: relative to the model
+    ("model.model.layers.0.w", "model.layers.0.w"),              # a request wrapper's: it holds the model as `model`
+    ("model.lm_head.weight", "lm_head.weight"),
+    ("inner.model.model.layers.0.w", "model.layers.0.w"),        # a rank wrapper's: it holds the request wrapper as `inner`
+    ("inner.model.lm_head.weight", "lm_head.weight"),
+    ("inner.model.layers.0.w", "model.layers.0.w"),
+    ("inner.inner.model.model.w", "inner.model.model.w"),        # one `inner.` is taken off, and then nothing more
+    ("model.inner.model.w", "model.inner.model.w"),
+]
+
+
+@FORMS
+@pytest.mark.parametrize(("bound", "carried"), WEIGHT_NAMES)
+def test_a_weights_read_carries_its_fields_name_relative_to_the_model_whichever_wrapper_named_it(bound, carried, compact):
+    """A wrapper's own levels above the model leave the name, one `inner.` of a rank wrapper and then one `model.` before `model.`
+    or `lm_head.`, so a rank Program's read, a request Program's and the fold's of one field carry one name: from a derived
+    Program's weights Input as from a field of a fold's weights map."""
+    inputs, runs = {TOK: ("Input32_v1", 4), 1: ("Input16_v1", 8)}, [("n", 1, 2, 4)]
+    derived = _reader(inputs, [runs], compact=compact, weight_fields={1: bound})
+    fold = _reader(inputs, [runs], compact=compact, oracle_wmap=[(0, 8, bound)], _wlos=[0], oracle_wmap_overlaps=[], input_base={1: 0})
+    record = [("W", carried, 2, 4)]
+    assert derived.canon(0) == fold.canon(0) == [_as_compact(record) if compact else record]
 
 
 # ------------------------------------------------------------------------------------------------ a rank's peers
@@ -402,3 +428,19 @@ def test_a_requests_projection_names_its_own_parameters_by_kind_and_counts_each_
     assert dict(P.xreq) == XREQ
     assert P.xreq_examples == [{"kind": "node" if t[1] == "node" else f"{t[1]}-param", "ref": list(t[2:])}
                                for record in records for t in record if t[0] == "XREQ"]
+
+
+def test_a_projection_handed_a_peers_node_the_fold_has_no_fields_for_gives_its_reads_no_source():
+    """No loader gives this: a fold's loader binds a peers node's fields and its request together and refuses a node without
+    fields, and the match hands a projection the node the fold binds to its request.  Handed such a node by hand, the record's
+    form has `None` where each read's source is, counted nowhere, and the compact form raises on it.  Today's answer, held so
+    that a change of it shows; a read no rule names should be a cross-request read."""
+    def r0_projection(compact: bool) -> Projection:
+        fold = _view(FOLD_INPUTS, [(R0_READ, READER, [[("n", R1_PEERS, 0, 2), ("n", R1_PEERS, 4, 6)], [("n", R0_PROMPT, 0, 3)]]),
+                                   (13, SELECT, [[("n", R0_READ, 0, 8)]])],
+                     compact=compact, **{**FOLD_LOADED, "peer_fields": {}, "peer_index": {}})
+        return Projection(fold, "fold[r0]", [0, 1], tok_node=R0_PROMPT, weights_node=FOLD_WTS, seed_node=R0_SEED, peer_node=R1_PEERS)
+    P = r0_projection(compact=False)
+    assert P.canon(0) == [[None, None], [("TOK", 0, 3)]] and dict(P.xreq) == {} and P._peer_src(R1_PEERS, 0, 2) is None
+    with pytest.raises(TypeError, match="'NoneType' object is not subscriptable"):
+        r0_projection(compact=True).canon(0)

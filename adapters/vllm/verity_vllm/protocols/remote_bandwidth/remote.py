@@ -53,7 +53,7 @@ import threading
 import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -64,7 +64,10 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 
 from verity_vllm import config
+from verity_vllm.engine.handle import core_or_none, engine_of
+from verity_vllm.errors import Refused
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity_vllm.protocols.remote_bandwidth.binder import Binder
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
@@ -127,11 +130,13 @@ class Phases:
 
     def summary(self) -> dict[str, dict[str, float]]:
         """Each phase's p50, p99, max and mean over the intervals, in ms (0 in an interval it didn't run in)."""
+        def at(ms: list[float], q: float) -> float:
+            return round(ms[min(len(ms) - 1, int(q * len(ms)))], 3)
+
         out = {}
         for k in sorted({k for x in self.closed for k in x}):
             ms = sorted(x.get(k, 0) / 1e6 for x in self.closed)
-            at = lambda q: round(ms[min(len(ms) - 1, int(q * len(ms)))], 3)  # noqa: E731
-            out[k] = {"p50": at(0.5), "p99": at(0.99), "max": at(1.0), "mean": round(sum(ms) / len(ms), 3)}
+            out[k] = {"p50": at(ms, 0.5), "p99": at(ms, 0.99), "max": at(ms, 1.0), "mean": round(sum(ms) / len(ms), 3)}
         return out
 
 
@@ -156,7 +161,8 @@ class Serving:
             lambda first, slots, digests, payloads: self._events.append(("append", first, slots, digests, payloads)))
         self.moves, self._early = True, False
         self.map.ahead = 1
-        self.step, self.steps, self.first = -1, 0, None
+        self.step, self.steps = -1, 0
+        self.first: int | None = None
         self.live = np.ones(registration.blocks, bool)
         self._plan: rb.Plan | None = None
         self.appends: list[audit.Append] = []
@@ -425,6 +431,7 @@ class KvDevice:
 
     def encode(self, payloads: Sequence[bytes], first: int, offsets: Sequence[int] | None = None) -> list[bytes]:
         """Blocks ``first`` … of ``payloads``: under the seed's key, or each under its bound offset."""
+        out: list[bytes]
         torch, w, out = self.torch, self.codec.field.block_words, []
         stream = torch.cuda.current_stream().cuda_stream
         for u in range(0, len(payloads), self.CHUNK):
@@ -485,22 +492,14 @@ class DeviceEncoded(audit.Store):
         self.gates["blocks_checked"] += 1
 
 
-class Refused(RuntimeError):
-    """The verifier refused the store's registration, answering its hello with ``bye``: a node has one live
-    registration (`audit.Registry`), which only the verifier closes.  ``why`` is the verifier's reason."""
-
-    def __init__(self, verifier: str, why: str) -> None:
-        super().__init__(f"the verifier at {verifier} refused the store's registration: {why}")
-        self.verifier, self.why = verifier, why
-
-
 def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: bytes = b"verity-vllm/store",
           codec: rcodec.Codec = rcodec.DEFAULT, log: Callable[[str], None] = print, **kw: Any) -> list[dict]:
     """The prover's side of a remote session against the verifier at ``verifier`` (``HOST:PORT``): register the
     store, then run each session of ``plan`` (`ProverSide`'s modes: ``serve``, or ``servedrop:K``, which withholds the
-    first K blocks appended) as the verifier starts it.  Returns each session's result; raises `Refused` with the
-    verifier's reason if it refuses the registration.  A prover that fails drops the connection, so the verifier sees
-    the session end there."""
+    first K blocks appended) as the verifier starts it.  Returns each session's result; raises `Refused`, its one
+    reason the verifier's address and the verifier's reason, if it refuses the registration, answering the store's
+    hello with ``bye``: a node has one live registration (`audit.Registry`), which only the verifier closes.  A prover
+    that fails drops the connection, so the verifier sees the session end there."""
     host, port = address(verifier)
     prover = session_module("prover")
     wire = prover.wire
@@ -511,7 +510,7 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
             p.register(codec=codec)
         except wire.Closed as e:
             if str(e).startswith("refused"):
-                raise Refused(verifier, str(e)) from None
+                raise Refused(f"the verifier at {verifier} refused the store's registration: {e}") from None
             raise
         out = []
         for mode, fraction in p.plan:
@@ -519,10 +518,8 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
             out.append(p.session(head, mode, fraction))
         return out
     except BaseException:
-        try:
+        with suppress(OSError):
             conn.sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
         conn.sock.close()
         raise
 
@@ -646,7 +643,8 @@ class CommitSession:
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
         self.kv_lib, self.step_ms, self.filler_gib = kv_lib, step_ms, filler_gib
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
-        self.store, self.binder = NodeMemory(), None
+        self.store = NodeMemory()
+        self.binder: Binder | None = None
         self.lockstep: Lockstep | None = None
         self.backend: StoreBackend | None = None
         self.record: dict[str, Any] | None = None
@@ -674,8 +672,6 @@ class CommitSession:
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
-        from verity_vllm.protocols.remote_bandwidth.binder import Binder
-
         self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
 
     def before_build(self, ekw: dict[str, Any]) -> None:
@@ -685,8 +681,8 @@ class CommitSession:
         self.install()
 
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
-        vc, why = llm.llm_engine.vllm_config, []
-        if getattr(getattr(llm.llm_engine, "engine_core", None), "engine_core", None) is None:
+        vc, why = engine_of(llm).vllm_config, []
+        if getattr(core_or_none(llm), "engine_core", None) is None:
             why.append("the engine core in another process")
         if vc.scheduler_config.async_scheduling:
             why.append("async scheduling resolved on")
@@ -698,27 +694,31 @@ class CommitSession:
             why.append("a KV pool registered (served writes stay outside the registration)")
         if why:
             raise SystemExit("--remote-verifier: the engine is not one the session serves: " + "; ".join(why))
+        binder = self.binder
+        if binder is None:
+            raise RuntimeError("the Commit's session checks its engine once its binder is installed (`install`)")
         if self.filler_gib:
-            self.binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
-        stats = self.binder.stats()
+            binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
+        stats = binder.stats()
         self.log(f"[delta] remote session: the store binder on the engine, {stats}")
         return stats
 
     def begin(self) -> Lockstep:
         if self.lockstep is not None:
             raise RuntimeError("a store serves one session: the Commit's session audits one run")
-        self.lockstep = Lockstep()
+        self.lockstep = lockstep = Lockstep()
         path = None if self.out is None else self.out / "memory_map.jsonl"
         device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
-        self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
-        self.backend.step_ns = round(self.step_ms * 1e6)
-        self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
+        self.backend = backend = StoreBackend(self.store, lockstep, path=path, device=device)
+        backend.step_ns = round(self.step_ms * 1e6)
+        self._thread = threading.Thread(target=self._session, args=(backend, lockstep), name="remote-session",
+                                        daemon=True)
         self._thread.start()
-        self.lockstep.begun()
-        return self.lockstep
+        lockstep.begun()
+        return lockstep
 
-    def _session(self) -> None:
-        backend, error, result, agree = self.backend, None, {}, {}
+    def _session(self, backend: StoreBackend, lockstep: Lockstep) -> None:
+        error, result, agree = None, {}, {}
         try:
             (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log)
             agree = store_map.agreement(backend)
@@ -726,7 +726,9 @@ class CommitSession:
             error = f"{type(e).__name__}: {e}"
         try:
             trace = backend.trace
-            steps = result.get("pass_steps") or []
+            steps = result.get("pass_steps")
+            if steps is None:
+                steps = []
             self.record = {
                 "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
@@ -743,15 +745,17 @@ class CommitSession:
                     **agree}}
             store_map.end(self.store)
         finally:
-            self.lockstep.close()
+            lockstep.close()
 
     def end(self) -> dict[str, Any]:
-        self.lockstep.finish()
-        self._thread.join()
-        rec = self.record if self.record is not None else {
+        lock, thread = self.lockstep, self._thread
+        if lock is None or thread is None:
+            raise RuntimeError("the Commit's session ends once it has begun (`begin`)")
+        lock.finish()
+        thread.join()
+        rec: dict[str, Any] = self.record if self.record is not None else {
             "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan, "accepted": False,
             "error": "the session's record was not written (its thread raised)", "memory_map": None, "encode": None}
-        lock = self.lockstep
         rec["run"] = {"steps": lock.audited + lock.unaudited, "audited": lock.audited, "unaudited": lock.unaudited}
         self.record = rec
         if self.out is not None:
