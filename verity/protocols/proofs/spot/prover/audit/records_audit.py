@@ -111,7 +111,7 @@ docket (``--window``'s ``registration.json``), the population Program's descript
 ``window/program.json``, the one the docket names), the audit's one-stage answer (`served_integrity.answer`:
 undecided for an accepted audit whose record names no challenger key and session a check verified its coins under, or
 doesn't say whether it wrote the case for the compiled check), and its terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
-values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+values pinned, its untied ones free) but for the scan's state (``--tied``): the period refuses an audit whose state isn't
 the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
@@ -188,7 +188,6 @@ HERE = Path(__file__).resolve().parent
 
 from verity import device as ST  # noqa: E402
 from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
@@ -778,14 +777,12 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
     return compose
 
 
-#: the window value the network certifier's period ties to its scan's state tree (``stateTied``): the scan's state rows
-TIED = SCAN_STATE
-
-
-def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
+def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dict[str, Any]:
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
-    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
-    circuit isn't the one the docket binds, the window commits no `TIED` value its circuit reads, the audit wrote no
+    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ``tied`` is the window
+    value the period ties to its scan's state tree (``stateTied``): the network certifier's scan-state value, which the
+    caller passes, since SPOT reads the certifier's output as a certified input and never imports it. ValueError where the
+    circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
 
@@ -795,10 +792,10 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)
     ties, untied = window_pins(own, doc, catalog_resolve)
-    if TIED not in ties | untied:
-        raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
+    if tied not in ties | untied:
+        raise ValueError(f"the window commits no {tied} its circuit reads: the period has no state to tie to its scan's")
     count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
-                           roots=window_roots(own), untied=set(untied) - {TIED})
+                           roots=window_roots(own), untied=set(untied) - {tied})
     try:
         program = json.loads((audit / "window" / "program.json").read_text())
     except OSError:
@@ -1264,10 +1261,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
+    p.add_argument("--tied", required=True, metavar="VALUE", help="the value the period ties to its scan's state tree: the "
+                   "network certifier's scan-state value (its verifier's `blocks.SCAN_STATE`)")
     a = ap.parse_args(argv)
     if a.cmd == "period":
         try:
-            got = period(a.window, a.audit, pins_of(a.pin, a.pins))
+            got = period(a.window, a.audit, pins_of(a.pin, a.pins), a.tied)
         except (ValueError, RuntimeError) as e:
             print(f"records_audit.py period: {e}", file=sys.stderr)
             return 1

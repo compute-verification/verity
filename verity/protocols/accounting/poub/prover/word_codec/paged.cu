@@ -46,7 +46,7 @@
 //
 // pg_reduce is the stack's linear epilogue: wt.cu's chunk partial sums [nch][M][N] summed in chunk order and scaled
 // (bf16(sum * xs[row or 0] * ws)), so a plain and an encoded linear over the same weight give the same bits.
-#include "../../verity/protocols/accounting/poub/prover/word_codec/kv.cu"
+#include "kv.cu"
 
 #include <cuda_bf16.h>
 

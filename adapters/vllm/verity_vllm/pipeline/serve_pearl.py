@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.accounting.pouw.prover import serving as PS
+from verity_vllm import messages as M
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
 SCHEME = PS.PearlC(forming="v1", device=PS.H100, hashing="h3").name
@@ -265,11 +266,11 @@ class PearlWindows:
                 if p["units"] != self.linears][:4]
         bad += [f"pass {p['pass']} retained no manifest" for p in passes if not p.get("manifest")][:4]
         error = error or ("; ".join(bad) or None)
-        (d / "coins.json").write_text(json.dumps(c["coins"]) + "\n")
+        M.write(d / "coins.json", "PearlPass", (json.dumps(c["coins"]) + "\n").encode())
         doc = {"schema": PS.SERVED_SCHEMA, "entry": ENTRY, "run": self.run_id, "window": window, "retained": True,
                "commit_steps": steps, "passes": passes, "passes_with_calls": len(passes),
                "coins": PS.coins_of(opt, reserved), "ok": error is None, "error": error}
-        (d / "served.json").write_text(json.dumps(doc, indent=1) + "\n")
+        M.write(d / "served.json", "PearlPass", (json.dumps(doc, indent=1) + "\n").encode())
         out = {"entry": ENTRY, "window": window, "steps": steps, "passes": len(passes),
                "calls": sum(p["units"] for p in passes), "salt": c.get("salt"), "weights_root": c.get("weights_root"),
                "coin_source": doc["coins"]["source"], "served": str(d.relative_to(self.out) / "served.json")}

@@ -35,7 +35,7 @@ never imports it. The challenger takes its coin tree's hiding
 key and each round's salt from its host's coins too. `serve` is its party, stepped over the session's stream by PoUS's
 loop (`challenger_session.run`) on the clock and coins it is given: it reads its clock once before each index it sends
 and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
-wherever it runs.
+wherever it runs. `start` is how a deployment starts it on the auditor's host (`challenger_session`'s docstring).
 
 `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
 side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
@@ -63,13 +63,15 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device.challenger_session import (
     CHALLENGER,
+    COMPONENT,
     MANIFEST,
     MODULE,
     PROVER,
@@ -79,6 +81,7 @@ from verity.protocols.accounting.pous.device.challenger_session import (
     Frames,
     Polled,
     coin_session_id,
+    deployed_request,
     run,
     session_id,
     setup_of,
@@ -260,7 +263,17 @@ def _challenger() -> Challenger:
     return Challenger(period.SESSION_DOMAIN)
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger})
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The challenger's start on the auditor's host (`ProtocolDef.starts`): the session's request
+    (`challenger_session.deployed_request`), and in its state directory its key, refused unless the configuration pins it
+    for PoUS (`onsite.signer`), its session log and its salt log."""
+    params = deployed_request(configuration, bound)
+    signer = onsite.signer(state, onsite.pin(configuration, CHALLENGER, COMPONENT))
+    salts, sessions = _logs(state)
+    return Start(params, {"signer": signer, "log": sessions, "salts": salts})
+
+
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger}, {CHALLENGER: start})
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
@@ -389,7 +402,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "device_key", "give_salt", "keep", "report", "serve"]
+__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "device_key", "give_salt", "keep", "report", "serve",
+           "start"]
 
 if __name__ == "__main__":
     sys.exit(main())

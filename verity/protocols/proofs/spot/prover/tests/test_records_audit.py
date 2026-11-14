@@ -62,6 +62,8 @@ COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
 LAW = "stratified:2"
 RUN = "ab" * 64
+#: the value a period ties to its scan's state tree, which `period` takes from its caller (the network certifier's scan state)
+TIED = "verity/certifier/scan-state/v1"
 
 
 def _rate(window: Path) -> str:
@@ -1165,30 +1167,30 @@ def _audited(window: Path, out: Path, registration: dict | None = None, accepted
 
 
 def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
-    """`period`: a window whose circuit reads its own scan state (`RA.TIED`) gives the network certifier's period its
+    """`period`: a window whose circuit reads its own scan state (`TIED`) gives the network certifier's period its
     docket, the Program the audit sampled (the one the docket names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
     Refused by name: a window that commits no scan state, a circuit the docket doesn't bind, an audit that wrote no
     Program or another than the docket names, and an answer committing to another docket."""
-    got = _registered(tmp_path / "w", name=RA.TIED, own=True)
+    got = _registered(tmp_path / "w", name=TIED, own=True)
     audit = _audited(got.dir, tmp_path / "a")
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
-    p = RA.period(got.dir, audit, {})
+    p = RA.period(got.dir, audit, {}, TIED)
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
     assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
     ties, untied = RA.window_pins(rec["window"], doc)
-    assert ties == {} and list(untied) == [RA.TIED]
+    assert ties == {} and list(untied) == [TIED]
     audited = RA.declared_count(doc, 0, pins=RA.pin_roots(untied), roots=RA.window_roots(rec["window"]), untied=set(untied))
-    assert audited["free"] == 8 * per_unit and audited["untied"] == [RA.TIED]
+    assert audited["free"] == 8 * per_unit and audited["untied"] == [TIED]
     capsys.readouterr()
-    assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json")]) == 0
+    assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--tied", TIED]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
     assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
         "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
-    refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {})["answer"]
+    refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {}, TIED)["answer"]
     assert refused["verdict"] == "reject" and refused["commitment"] == R.digest(rec)
 
     other = _registered(tmp_path / "x")
@@ -1201,15 +1203,15 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     (bare / "window" / "program.json").unlink()
     (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "name": "other"}))
     for window, audited_by, why in [
-            (other.dir, _audited(other.dir, tmp_path / "xa"), "commits no verity/certifier/scan-state/v1 its circuit reads"),
+            (other.dir, _audited(other.dir, tmp_path / "xa"), f"commits no {TIED} its circuit reads"),
             (unbound, audit, "is not the circuit record the registration binds"),
             (got.dir, bare, "wrote no Program"),
             (got.dir, renamed, "isn't the one the registration names"),
             (got.dir, _audited(got.dir, tmp_path / "o", {**rec, "window": {**rec["window"], "label": "other"}}),
              "commits to another registration than the window's")]:
         with pytest.raises(ValueError, match=why):
-            RA.period(window, audited_by, {})
-    assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json")]) == 1
+            RA.period(window, audited_by, {}, TIED)
+    assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json"), "--tied", TIED]) == 1
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
 
 
@@ -1219,7 +1221,7 @@ SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3,
 
 
 def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
-    """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
+    """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`TIED`), with ``shell`` units
     of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
@@ -1230,18 +1232,18 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    value = REG.Registered.commit("test/model", RA.TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
-    read = IF.Read(TID, "wrow", RA.TIED, 0, (n // 4, 4), 0, (0, K // 2))
-    registered = IF.Registered({RA.TIED: 4 * K // 2}, reads=(read,))
+    value = REG.Registered.commit("test/model", TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
+    read = IF.Read(TID, "wrow", TIED, 0, (n // 4, 4), 0, (0, K // 2))
+    registered = IF.Registered({TIED: 4 * K // 2}, reads=(read,))
     win = IF.Window(IF.Circuit("test", ((COORD, n), (fn, shell)), registered=registered), RUN, D.parse_design(LAW), cap,
-                    registered={RA.TIED: value})
+                    registered={TIED: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
     win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
     assert win.mismatches() == {}
-    entry = {"program": "test/model", "values": {RA.TIED: value.entry()}}
+    entry = {"program": "test/model", "values": {TIED: value.entry()}}
     win.write(win.close(), d, {"label": "test", "activations": entry}, registrar=R)
     return SimpleNamespace(dir=d, shell=fn)
 
@@ -1255,7 +1257,7 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
     p = subprocess.run([sys.executable, str(RA.__file__), "period", "--window", str(got.dir),
-                        "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
+                        "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--tied", TIED], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
     period = json.loads((tmp_path / "p.json").read_text())
