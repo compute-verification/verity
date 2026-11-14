@@ -3197,6 +3197,12 @@
       "paths": {
         "verity/protocols/interface/CoreProtocol/SiteV2Guards.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/verifier/wipe_stream.py": "verity/protocols/accounting/pous/device/wipe_stream.py",
+        "verity/protocols/accounting/pous/verifier/wipe_stream.c": "verity/protocols/accounting/pous/device/wipe_stream.c"
+      }
     }
   ]
 }

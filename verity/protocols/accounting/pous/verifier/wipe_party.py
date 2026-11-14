@@ -42,7 +42,7 @@ from typing import Any, BinaryIO
 from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
-from . import wipe_stream
+from verity.protocols.accounting.pous.device import wipe_stream
 from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"

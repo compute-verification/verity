@@ -180,7 +180,7 @@ EOF
     ip -br link 2>/dev/null; for i in /sys/class/net/*; do echo "$(basename "$i") $(cat "$i/speed" 2>/dev/null || echo -) Mb/s"; done
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
-  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/verifier/wipe_stream.c -o "$S/wipe_stream-check"
+  [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/device/wipe_stream.c -o "$S/wipe_stream-check"
   if [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"

@@ -14,7 +14,8 @@ import pous_test_signer
 import pytest
 
 from verity.protocols.accounting.pous.device import memory_challenger
-from verity.protocols.accounting.pous.verifier import audit, streamed_wipe, wipe_stream
+from verity.protocols.accounting.pous.verifier import audit, streamed_wipe
+from verity.protocols.accounting.pous.device import wipe_stream
 from verity.protocols.accounting.pous.device.continuous import ContinuousMemoryChallenger
 
 
