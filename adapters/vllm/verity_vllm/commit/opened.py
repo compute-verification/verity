@@ -94,13 +94,6 @@ class OpenedReader:
         finally:
             self.seconds += time.perf_counter() - t0
 
-    def or_none(self, step: int, name: str, lo: int, hi: int) -> bytes | None:
-        """For a consumer that fails an unread entry by name: a read that does not verify is None (and counted in `failed`)."""
-        try:
-            return self(step, name, lo, hi)
-        except OpeningNotVerified:
-            return None
-
     def record(self) -> dict[str, Any]:
         return {"source": "opened", "method": OPENED_METHOD, "run_root": bytes(self.run.run_root).hex(), "reads": int(self.stats["reads"]),
                 "leaves": int(self.stats["leaves"]), "bytes": int(self.stats["bytes"]), "not_retained": int(self.stats["not_retained"]),

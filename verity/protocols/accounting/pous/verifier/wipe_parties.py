@@ -9,10 +9,11 @@ prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 
 The challenger drives the same `streamed_wipe.WipeMemoryChallenger` as `wipe_party.serve`, in the same order: the
 labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
 send and receipt on its clock, the coin secret sampled when the first batch is revealed, the session signed once it
-ends with the egress its machine was given. On the same coins, clock readings and key it signs the same bytes as
-`serve`. Its machine gives it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with
-`capabilities["log"]`, its session log), its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when
-none) and the reads it times
+ends. It is given no egress count and signs none. On the same coins, clock readings and key it signs the same bytes as
+`serve`. Its header names the raw monotonic clock (`streamed_wipe.CLOCK`), so the clock its machine gives it is to read
+that one, `sources.RealClock(streamed_wipe.raw_clock_ns)`: the runtime's own real clock reads `time.monotonic_ns`,
+which time synchronisation slews. Its machine gives it `signing-key` (`capabilities["signer"]`, a
+`memory_challenger.Signer`, with `capabilities["log"]`, its session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`); the prover's gives it `store`
 (`capabilities["store"]`, the prover a `WipeParams` makes: `streamed_wipe.Prover` unless given, `wipe_store.StoreProver`
 on a node). The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses
@@ -72,7 +73,6 @@ class MemoryChallengerParty:
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
         caps = identity.capabilities
         self.signer, self.log = caps["signer"], caps["log"]
-        self.egress_bits = caps.get("egress_bits", WP.UNCOUNTED)
         try:
             self.request, self.wp = dict(params), WP.params_of(params, caps.get("reads", WP.READS))
         except ValueError:
@@ -158,7 +158,7 @@ class MemoryChallengerParty:
         self.c.receive(self._answers)
         if self.c.ended is None:
             return self._after_reading(self._challenge)
-        self.c.close(self.egress_bits)
+        self.c.close()
         return [Send(PROVER, Message("End")), *self._finish(None)]
 
     def _finish(self, refused: str | None) -> list[Any]:

@@ -41,6 +41,17 @@ class _StepJob:
     deferred_src: list = field(default_factory=list)   # ... and their (held) sources
     com: Any = None                         # window views: the view of the step's window the worker commits it into (None: the committer)
     seq: int = -1                           # the step's id among every step the committer began (the collector's key for its windows)
+    # What the collector (`native_collect.NativeCollectCommitter`) sets on a step of its own, each where the step reaches it. A
+    # step holds none of them until then, and the host committer's steps never do: declared, with no value
+    windowed: bool = field(init=False, repr=False, compare=False)                  # staged through the window ring
+    rows_snapshot: Any = field(init=False, repr=False, compare=False)              # the step's rows where the engine's are read late
+    done_evt: threading.Event = field(init=False, repr=False, compare=False)       # set at step end: plan, cursor and metas known
+    plan_used: int = field(init=False, repr=False, compare=False)                  # the plan's bytes (-1: a learning step)
+    plan_hint: Any = field(init=False, repr=False, compare=False)                  # (key, version) of the plan a hit step should follow
+    hint_entries: Any = field(init=False, repr=False, compare=False)               # that plan's entries, where the worker lacks them
+    plan_shape: tuple[int, int] = field(init=False, repr=False, compare=False)     # (ntok, nreq), for messages and records
+    plan: Any = field(init=False, repr=False, compare=False)                       # (key, version, entries) the step ended on
+    on_device: bool = field(init=False, repr=False, compare=False)                 # its retained views are the device pool's
 
 
 @dataclass
@@ -69,7 +80,7 @@ class WindowViews:
     """`NativeHostCommitter`'s window views (the module's docstring): its serving thread detaches each window, its worker ends it."""
 
     #: what a view shares with the committer once either has made it: one of each for the process
-    SHARED_LAZY = ("_side",)
+    SHARED_LAZY: tuple[str, ...] = ("_side",)
     #: what the committer this is mixed into holds: its pinned pool, how it stages, the worker's queue, the steps begun, what its
     #: sources expected and committed, the collector's pauses and the sources
     pool: Any
