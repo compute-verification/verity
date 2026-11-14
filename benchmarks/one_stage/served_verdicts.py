@@ -454,8 +454,9 @@ NUMBERED = frozenset({"window", "steps", "window_steps", "requests", "refused"})
 #: written, and with it the policy digest its verdict cites.
 OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
 #: A window's number, step range or count in text, each with what the published text says in its place; and its
-#: population where a stream's rule states it, the denominator of a rate written from the window's own N
-#: (`records_audit.rule_of`), which is no sampling rate and says only the design, K of each N
+#: population where a stream's rule states it, the denominator of a rate stated as K over the N proof blocks the window
+#: registers (the form `served_verdicts.sh`'s preflight asks for, which a refusal quotes): the published text keeps
+#: only the design, K of each N
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
                 % "|".join(sorted(OWN | NUMBERED))), ""),
@@ -2002,7 +2003,8 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network certifier's ``placement``),
     the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-host`
-    premise rests on; and each δ of the block record's at which its leg's quantity is not established. A placement
+    premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
+    otherwise); and each δ of the block record's at which its leg's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None

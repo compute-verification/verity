@@ -11,9 +11,11 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
-#                         its own PP_PARTITION: its window has no step 1); made-up settings, held only where HELD_ALPHA
-#                         and HELD_GAMMA are a pair in the form the limits-held step writes; `serve` around a stand-in
-#                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
+#                         its own PP_PARTITION: its window has no step 1; the tied window's rule is stated, V3C_LAW a
+#                         stratified-rate:NUM/DEN, which the harness gives no default; the record form's pair is
+#                         stated, HELD_ALPHA and HELD_GAMMA in the form the limits-held step writes); `serve` around a
+#                         stand-in harness (the deferral's copy asked once, only after a serve that exited 0 or 2,
+#                         pending, and never after one that exited 1 or any other status); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
 #                         the settings' engine args through what a served window's close reads of it
@@ -35,7 +37,13 @@
 #   rehearsal.sh serve    the serve node, one card: the harness at SETTINGS (default the run's sent record.env), after
 #                         the settings are held to what the rehearsal serves (`settings_ok`). Where the serve deferred
 #                         its audit and COPY_TO names HOST[:DIR], the deferral's files go there before the run ends
-#                         (`served_verdicts.sh copy deferred`), since the serve dir is gone with the node.
+#                         (`served_verdicts.sh copy deferred`), since the serve dir is gone with the node. A serve
+#                         went well where the harness exits 2, its record `pending` and composed off the node, which
+#                         is what a harness whose exit is the record's verdict says of every served node, or 0, which
+#                         is what one that exits by its steps alone says: after either the copy is asked. 1 (a
+#                         record that rejects, a step that failed) and every other status stop the verb there, with
+#                         no copy. The exit status is the harness's where the copy went or none was asked, 2
+#                         included, and a failed copy's own otherwise (1 where that is 2, which says pending).
 #   rehearsal.sh audit    the audit node, D the deferral's copy at the serve dir's own path: `served_verdicts.sh v3c`,
 #                         the follow-on, at the deferral's settings. PP_PEER is this node's name in the gate's peers
 #                         file. MAIN_FILE and PP_CHALLENGER_KEY default to the run's sent main.txt and
@@ -54,8 +62,8 @@
 #                         gate's `pubkey` held to PP_CHALLENGER_KEY's record. Exit 0 only where the lane has no open
 #                         period, the pin is a line of MAIN_FILE and the key is the record's.
 #   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`,
-#                         `settings-test DIR`, `serve-test DIR`, `link-test LEAN DIR` and `probe-test DIR` are `check`'s
-#                         steps of those names).
+#                         `serve-test DIR`, `link-test LEAN DIR` and `probe-test DIR` are `check`'s steps of those
+#                         names).
 #
 # A follow-on's settings come from the serve dir (deferred.env, compose.env), which carry no POUW: `audit` and `compose`
 # set POUW=pearlplus, the rehearsal's.
@@ -107,6 +115,16 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in MAIN_FILE PP_CHALLENGER_KEY DAY_PARAMS; do
       [ -z "${!v-}" ] || [ -s "${!v}" ] || no "$v names ${!v}, which is missing or empty: send it with the run"
     done
+    # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
+    # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
+    if [ -n "${PEARLPLUS_TIE-}" ]; then
+      num='' den=''
+      [[ ${V3C_LAW-} =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
+      [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
+        || no "V3C_LAW is ${V3C_LAW:-unset}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch states it, a" \
+          "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
+          "each template while none holds more than DEN"
+    fi
     # the class the window is committed at, the harness's default where the settings name none
     cls=${V3C_CLASS-4,32,4}
     if [[ $cls =~ ^[1-9][0-9]*,[1-9][0-9]*,([1-9][0-9]*)$ ]]; then
@@ -144,13 +162,24 @@ serve() {
   export SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:?no SETTINGS and no run dir}/inputs/record.env}
   settings_ok "$SETTINGS" || exit 3
   local rc d out=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
+  local crc
   filtered bash "$HARNESS" "$@"
   rc=$?
-  [ "$rc" = 0 ] && [ -n "${COPY_TO:-}" ] || return "$rc"
+  case $rc in
+    0) ;;
+    2) echo "REHEARSAL: the serve exited 2: its record is pending, composed off this node, so the verb goes on" ;;
+    *) return "$rc" ;;
+  esac
+  [ -n "${COPY_TO:-}" ] || return "$rc"
   d=$(sed -n 's/^serve dir //p' "$out/machine.txt" 2> /dev/null | tail -1)
   if [ -n "$d" ] && [ -f "$d/private/deferred/deferred.env" ]; then
     filtered env D="$d" bash "$HARNESS" copy deferred "$COPY_TO"
-    rc=$?
+    crc=$?
+    if [ "$crc" != 0 ]; then
+      echo "REHEARSAL: the deferral's copy to $COPY_TO failed (exit $crc) after a serve that exited $rc"
+      [ "$crc" != 2 ] || crc=1
+      return "$crc"
+    fi
   else
     echo "REHEARSAL: COPY_TO is $COPY_TO, and the serve dir ${d:-(not named in $out/machine.txt)} holds no deferral: nothing copied"
   fi
@@ -248,7 +277,8 @@ EOF
   [ "$(count "$scr/log3")" = 2 ]
 }
 serve_test() {  # `serve` around a stand-in harness, at SETTINGS: the deferral's copy is asked once, after a serve that
-  # exited 0 and deferred, of the serve dir the harness named; the exit status is the serve's, then the copy's
+  # exited 0 or 2 (pending) and deferred, of the serve dir the harness named, and after no other; the exit status is the
+  # serve's where the copy went or none was asked, and a failed copy's otherwise, never 2
   local scr=$1 rc n=0 ok=0
   mkdir -p "$scr/out" "$scr/d/private/deferred"
   export SCR=$scr
@@ -277,39 +307,20 @@ EOF
   try "a serve that deferred nothing, with COPY_TO" 0 1 COPY_TO=host:dir
   grep -q 'holds no deferral: nothing copied' "$scr/log" || { echo "no line says nothing was copied"; ok=1; }
   try "a copy that exits 5" 5 2 DEFERS=1 COPY_RC=5 COPY_TO=host:dir
-  return "$ok"
-}
-settings_test() {  # DIR: `settings` on made-up settings that hold but for the record form's pair: held at a pair in the
-  # form the limits-held step writes, and each other pair refused by name, saying the form
-  local scr=$1 ok=0 rc out v a g
-  mkdir -p "$scr"
-  echo x > "$scr/nonempty"
-  try() {  # WHAT WANT_RC WANT_SAID LINE...: `settings` on the base settings plus LINEs, WANT_SAID a part of what it says
-    local what=$1 want=$2 said=$3
-    shift 3
-    {
-      printf '%s\n' POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote ROW=row PP_CHALLENGER=c PP_PEER=p ALPHA=1/2 GAMMA=100 \
-        LIMITS_UNIT=u LIMITS_PROVE=p DAY=1 DAY_PROGRAM=abab DAY_LOG=l V3C_CLASS=4,32,4 CLASSES=4,32,4 \
-        "MAIN_FILE=$scr/nonempty" "PP_CHALLENGER_KEY=$scr/nonempty" "DAY_PARAMS=$scr/nonempty"
-      printf '%s\n' "$@"
-    } > "$scr/settings.env"
-    out=$(env -u HELD_ALPHA -u HELD_GAMMA -u WANT_CLASS bash "$SELF" settings "$scr/settings.env" 2>&1)
-    rc=$?
-    echo "$what: settings exits $rc (want $want): ${out//$scr/DIR}"
-    [ "$rc" = "$want" ] && [[ $out == *"$said"* ]] || ok=1
-  }
-  try "the pair 3/4 and 25" 0 "the record form's pair 3/4 and 25" HELD_ALPHA=3/4 HELD_GAMMA=25
-  try "the pair 1 and 25" 0 "the record form's pair 1 and 25" HELD_ALPHA=1 HELD_GAMMA=25
-  try "no pair" 3 "HELD_ALPHA is unset and HELD_GAMMA is unset"
-  try "half a pair" 3 "HELD_ALPHA is 3/4 and HELD_GAMMA is unset" HELD_ALPHA=3/4
-  a="the record form's alpha is a positive number P/Q or P"
-  for v in abc 0 0/4 -3/4 3/0 03/4 0.75; do
-    try "HELD_ALPHA $v" 3 "HELD_ALPHA is $v, and $a" "HELD_ALPHA=$v" HELD_GAMMA=25
-  done
-  g="the record form's gamma is a positive whole number"
-  for v in xyz 0 -25 025 2.5 25/1; do
-    try "HELD_GAMMA $v" 3 "HELD_GAMMA is $v, and $g" HELD_ALPHA=3/4 "HELD_GAMMA=$v"
-  done
+  # a harness whose exit is the record's verdict: 2 on the served node, where the record is pending
+  try "a serve that exits 2, pending, and deferred, with COPY_TO" 2 3 DEFERS=1 SERVE_RC=2 COPY_TO=host:dir
+  [ "$(tail -1 "$scr/copies")" = "D=$scr/d copy deferred host:dir" ] \
+    || { echo "the copy was asked as: $(tail -1 "$scr/copies")"; ok=1; }
+  grep -q 'the serve exited 2: its record is pending' "$scr/log" || { echo "no line says the record is pending"; ok=1; }
+  try "a serve that exits 2 and deferred nothing, with COPY_TO" 2 3 SERVE_RC=2 COPY_TO=host:dir
+  grep -q 'holds no deferral: nothing copied' "$scr/log" || { echo "no line says nothing was copied"; ok=1; }
+  try "a serve that exits 2 and deferred, with no COPY_TO" 2 3 DEFERS=1 SERVE_RC=2
+  try "a serve that exits 1, a record that rejects, and deferred, with COPY_TO" 1 3 DEFERS=1 SERVE_RC=1 COPY_TO=host:dir
+  try "a serve that exits 3, a refusal, and deferred, with COPY_TO" 3 3 DEFERS=1 SERVE_RC=3 COPY_TO=host:dir
+  try "a serve that exits 2 and a copy that exits 5" 5 4 DEFERS=1 SERVE_RC=2 COPY_RC=5 COPY_TO=host:dir
+  grep -q "the deferral's copy to host:dir failed (exit 5) after a serve that exited 2" "$scr/log" \
+    || { echo "no line says the copy failed"; ok=1; }
+  try "a serve that exits 2 and a copy that exits 2, which is no pending" 1 5 DEFERS=1 SERVE_RC=2 COPY_RC=2 COPY_TO=host:dir
   return "$ok"
 }
 
@@ -428,7 +439,6 @@ check() {
   step filter 2m bash "$SELF" filter-test "$scratch/filter"
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
   step settings 1m env WANT_CLASS="$WANT_CLASS" bash "$SELF" settings "$SETTINGS"
-  step settings-pair 1m bash "$SELF" settings-test "$scratch/settings-pair"
   step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
   step gate-probe 2m env SETTINGS="$SETTINGS" PY="$PY" bash "$SELF" probe-test "$scratch/probe"
 
@@ -571,7 +581,6 @@ case ${1:-} in
   filter-test) filter_test "${2:?a scratch directory}" ;;
   settings) settings_ok "${2:?a settings file}" ;;
   serve-test) serve_test "${2:?a scratch directory}" ;;
-  settings-test) settings_test "${2:?a scratch directory}" ;;
   probe) probe ;;
   probe-test) probe_test "${2:?a scratch directory}" ;;
   link-test) link_test "${2:?flock-verify}" "${3:?a scratch directory}" ;;
