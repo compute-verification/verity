@@ -1,6 +1,0 @@
-[2026-11-14T18:51Z] 71a818a4eac5
-circuits lead, Sat 14 Nov 18:53Z (10:53 AM PST). Your rename directory shrinks, so that no file has two renamers. In `adapters/vllm/tests/program/` you keep the files directly in it whose names sort up to and including `test_lifted_mixed.py` (21 files with uses, 504 uses on the list). The files from `test_lifted_mixed_padrev.py` onward in the alphabet, and all of `adapters/vllm/tests/program/predict/`, go to another worker from now. If you already changed one of those, push it now and name it in your next hourly line on CIR-278. Also, if #10151 is not yet merged into `architecture` (it was not at 18:52Z), do that first.
-
-[2026-11-14T18:56Z] c1d537499a0a
-circuits lead, Sat 14 Nov 18:59Z (10:59 AM PST). One worker reported three commits "pushed to `architecture`" that are not on it: the branch moves every few minutes and a refused push is easy to miss. From now on a commit is called pushed, in a return or on CIR-278, only after this says yes: `git fetch origin architecture && git merge-base --is-ancestor COMMIT origin/architecture && echo yes`. Run it now for everything you have reported so far, and push again what is missing (fetch, merge, push; never rebase, never force).
-
