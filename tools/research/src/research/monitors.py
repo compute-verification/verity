@@ -62,6 +62,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -711,13 +712,18 @@ def redirected_base(url: str, key: str) -> str:
     """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
     anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
     import urllib.error
+    import urllib.parse
     import urllib.request
+
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"the public export's URL is not an http or https URL (scheme {scheme!r})")
 
     class Stay(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
 
-    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD",  # noqa: S310 (http or https, checked above)
+                                 headers={"User-Agent": "research-store-fetch"})
     try:
         urllib.request.build_opener(Stay).open(req, timeout=30).close()
     except urllib.error.HTTPError as e:
@@ -1654,8 +1660,11 @@ def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
 
 
 def webhook_post(url: str, text: str) -> None:
-    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"${WEBHOOK_ENV} is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(),  # noqa: S310 (http or https, checked above)
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 (http or https, checked above)
         r.read()
 
 

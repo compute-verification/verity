@@ -404,9 +404,9 @@ def check_disk(root: Path | None) -> Check:
 
 def server_date(url: str = CLOCK_URL) -> float:
     """The time `url`'s Date header gives a HEAD, in seconds since the epoch; its one-second resolution is the caller's."""
-    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})
+    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})  # noqa: S310 (CLOCK_URL, a literal https URL)
     try:
-        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:
+        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:  # noqa: S310 (CLOCK_URL, a literal https URL)
             date = r.headers.get("Date")
     except urllib.error.HTTPError as e:
         date = e.headers.get("Date")

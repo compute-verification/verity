@@ -124,7 +124,8 @@ def mint_api(account_id: str, api_token: str, bucket: str, parent_access_key_id:
         body["prefixes"] = list(prefixes)
     if objects:
         body["objects"] = list(objects)
-    req = urllib.request.Request(f"{CF_API}/accounts/{account_id}/r2/temp-access-credentials", data=json.dumps(body).encode("utf-8"), method="POST",
+    req = urllib.request.Request(f"{CF_API}/accounts/{account_id}/r2/temp-access-credentials",  # noqa: S310 (CF_API, a literal https URL)
+                                 data=json.dumps(body).encode("utf-8"), method="POST",
                                  headers={"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"})
     opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler(urllib.request.getproxies_environment()))
     t0 = int(time.time())

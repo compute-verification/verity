@@ -34,6 +34,7 @@ import threading
 import time
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -184,6 +185,8 @@ class HttpRemote:
     TIMEOUT_S = 60.0
 
     def __init__(self, base_url: str):
+        if (scheme := urllib.parse.urlsplit(base_url).scheme) not in ("http", "https"):
+            raise ValueError(f"the public export's URL is not an http or https URL (scheme {scheme!r})")
         self.base = base_url.rstrip("/")
 
     def describe(self) -> str:
@@ -192,11 +195,12 @@ class HttpRemote:
     def _open(self, method: str, key: str):
         if key.startswith("/") or ".." in key.split("/"):
             raise ValueError(f"bad remote key {key!r}")
-        req = urllib.request.Request(f"{self.base}/{key}", method=method, headers={"User-Agent": "research-store-fetch"})
+        req = urllib.request.Request(f"{self.base}/{key}", method=method,  # noqa: S310 (http or https, checked in __init__)
+                                     headers={"User-Agent": "research-store-fetch"})
         for attempt in range(self.RETRIES + 1):
             wait = 0.5 * 2**attempt
             try:
-                return urllib.request.urlopen(req, timeout=self.TIMEOUT_S)
+                return urllib.request.urlopen(req, timeout=self.TIMEOUT_S)  # noqa: S310 (http or https, checked in __init__)
             except urllib.error.HTTPError as e:
                 if e.code in (403, 404):
                     raise KeyError(key) from None
