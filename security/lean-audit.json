@@ -27984,6 +27984,14 @@
    "Accounting.SecurityProofs.EgressRegistered": {
     "function": ["Accounting.Placed.egress", "Accounting.linkCapacity"],
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LeakParts": {
+    "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LeakPartsRegistered": {
+    "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
    }
   },
   "frozen": {
