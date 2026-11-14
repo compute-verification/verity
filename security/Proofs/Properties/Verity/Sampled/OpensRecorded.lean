@@ -173,7 +173,7 @@ read opens only the record's rounds (`openedRecorded_read`), and the device's lo
 theorem logOpensRecorded (I : Instance d α) (k : Verity.Registration.Composite) : I.LogOpensRecorded k := by
   intro θ F A hA c σ x hv hl text Jr hrec hJ
   obtain ⟨_, _, _, _, lr, _, Jr', _, hV, hread, hct, h1, hJt, hJ'⟩ :=
-    verdict_read (I.sessions_some hA).2 (play_ends I.base θ F c σ x).1 hv hl hrec
+    verdict_read (I.sessions_some hA).2.1 (play_ends I.base θ F c σ x).1 hv hl hrec
   have hJJ : Jr' = Jr := Except.ok.inj (hJ'.symm.trans hJ)
   rw [hJJ] at hJt
   exact openedRecorded_congr ((List.forall₂_map_left_iff.1 hV).imp fun _ _ h => ⟨h.1, h.2.1⟩)
