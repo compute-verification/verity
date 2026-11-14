@@ -1,6 +1,6 @@
 """Dither's served unit: the Definitions a sampled proof block's proof passes, the layout of a call's
 committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled output cells.
-The protocol is Dither v3.2 (`verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md`). No guarantee states its proof block
+The protocol is Dither v3.2 (`verity/protocols/experimental/dither/PROTOCOL.md`). No guarantee states its proof block
 yet: `Pouw.Guarantees.Dither.WorkSoundNoFold`
 is stated for the no-fold round, whose committed values are 32-bit prefix sums, not v3.2's 16-bit T_s and 32-bit O.
 
@@ -90,7 +90,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
 
-from . import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 #: a served call's values tree, and a filler's (no O)
 TAG = domains.POUW_DITHER_CALL
@@ -142,7 +142,7 @@ class Shape:
         if self.L <= 0 or self.L % self.lp:
             raise ValueError(f"L is t L′, a multiple of L′ {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
-            raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md, The segment "
+            raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/protocols/experimental/dither/PROTOCOL.md, The segment "
                              f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row <= 0 or self.row % 16 or TILE_WORD_BYTES % self.row:
             raise ValueError(f"a row is a multiple of 16 bytes dividing {TILE_WORD_BYTES}, not {self.row}")
