@@ -1,6 +1,7 @@
 # vLLM at its serving settings, replayed (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the
 # report on synthetic arm and replay directories and the runner against a stand-in for the serving cost benchmark's,
-# stdlib only.
+# stdlib only but for the scheduler replay's loader, which the report loads for its advice line: the loader's kept code
+# is advice v1's, over the certifier's circuits, and needs the tree's `verity` and numpy.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -29,6 +30,85 @@ inputs = [
     "adapters/vllm/verity_vllm/pipeline/advice_code/pool.py",
     "adapters/vllm/verity_vllm/pipeline/advice_code/replay.py",
     "adapters/vllm/verity_vllm/pipeline/advice_code/schedule.py",
+    # the loader charges the kept count at advice v1's own code for it (its `kept_code`), so loading it loads that
+    # code: the kept terms and their reader (`kept`), the window's coder (`window_code`) and its integer coder (`arith`)
+    "adapters/vllm/verity_vllm/pipeline/advice_code/kept.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py",
+    "adapters/vllm/verity_vllm/pipeline/advice_code/arith.py",
+    # `kept.emitting` wraps the replay's `Scheduler.update` to see what each row emits, and the adapter's one owner
+    # of a runtime patch is `engine.hooks` (the stdlib alone; its package's init is a docstring)
+    "adapters/vllm/verity_vllm/engine/__init__.py",
+    "adapters/vllm/verity_vllm/engine/hooks.py",
+    # `window_code` takes the window it charges from the certifier's prover (`window_charge.Advice`) and its code
+    # word's width from the certifier's verifier (`arith_encode.CW`); those two load the certifier's chain checks
+    # beside them and the grid and certificate `head_check` reads
+    "verity/protocols/__init__.py",
+    "verity/protocols/certifier/__init__.py",
+    "verity/protocols/certifier/prover/__init__.py",
+    "verity/protocols/certifier/prover/window_charge.py",
+    "verity/protocols/certifier/verifier/__init__.py",
+    "verity/protocols/certifier/verifier/arith_encode.py",
+    "verity/protocols/certifier/verifier/charge_chain.py",
+    "verity/protocols/certifier/verifier/replay_chain.py",
+    "verity/protocols/certifier/verifier/head_check.py",
+    "verity/protocols/certifier/verifier/certificate.py",
+    "verity/protocols/certifier/verifier/grid.py",
+    "verity/protocols/certifier/verifier/schedule.py",
+    # the chain checks import SPOT's produced and registered row helpers
+    "verity/protocols/spot/__init__.py",
+    "verity/protocols/spot/verifier/__init__.py",
+    "verity/protocols/spot/verifier/one_stage/__init__.py",
+    "verity/protocols/spot/verifier/one_stage/partition.py",
+    "verity/protocols/spot/verifier/one_stage/produced.py",
+    "verity/protocols/spot/verifier/one_stage/registered.py",
+    # `head_check` counts a Definition's ANDs with the census
+    "verity/definitions/__init__.py",
+    "verity/definitions/circuits/__init__.py",
+    "verity/definitions/circuits/census.py",
+    # the certifier's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
+    # them (the evaluator's directory is read whole), with the errors they raise
+    "verity/errors.py",
+    "verity/circuits/__init__.py",
+    "verity/circuits/boundary.py",
+    "verity/circuits/codec.py",
+    "verity/circuits/cut.py",
+    "verity/circuits/defs.py",
+    "verity/circuits/intervals.py",
+    "verity/circuits/layout.py",
+    "verity/circuits/liveness.py",
+    "verity/circuits/partition.py",
+    "verity/circuits/partition_object.py",
+    "verity/circuits/partition_v2.py",
+    "verity/circuits/parts.py",
+    "verity/circuits/population.py",
+    "verity/circuits/ports.py",
+    "verity/circuits/program.py",
+    "verity/circuits/query.py",
+    "verity/circuits/query_ast.py",
+    "verity/circuits/refs.py",
+    "verity/circuits/types.py",
+    "verity/circuits/units.py",
+    "verity/circuits/boolean/__init__.py",
+    "verity/circuits/boolean/forms.py",
+    "verity/circuits/boolean/trace.py",
+    "verity/circuits/evaluation",
+    # and over committed rows: the hm96 row leaf, the frame, the LMS check and their SHA-512 gates
+    "verity/commitments/__init__.py",
+    "verity/commitments/identity.py",
+    "verity/commitments/indexed.py",
+    "verity/commitments/limits.py",
+    "verity/commitments/merkle.py",
+    "verity/commitments/rowleaf.py",
+    "verity/commitments/scheme.py",
+    "verity/commitments/hm96/__init__.py",
+    "verity/commitments/crypto/__init__.py",
+    "verity/commitments/crypto/blake3.py",
+    "verity/commitments/crypto/lms.py",
+    "verity/commitments/gates/__init__.py",
+    "verity/commitments/gates/frame_v3.py",
+    "verity/commitments/gates/hm96.py",
+    "verity/commitments/gates/lms.py",
+    "verity/commitments/gates/sha512.py",
     # the record of the value settings in force, which the suite makes as the benchmark does (serve_tax.value_settings)
     "adapters/vllm/verity_vllm/settings.py",
 ]

@@ -12,6 +12,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.engine import build, engine_profile, run_facts
 from verity_vllm.pipeline.tp import rank_worker
 
@@ -31,6 +32,48 @@ def _module(name: str, **attrs) -> ModuleType:
 ])
 def test_resolved_async_scheduling_or_none(llm, want):
     assert build.resolved_async_scheduling(llm) is want
+
+
+_CONFIG = NS(
+    compilation_config=NS(mode=3, cudagraph_mode=None, cudagraph_capture_sizes=[4, 1], custom_ops=["all"]),
+    model_config=NS(enforce_eager=False, hf_config=NS(hidden_size=8, num_hidden_layers=2, model_type="m", architectures=["A"],
+                                                      rope_scaling=None)),
+    cache_config=NS(enable_prefix_caching=1, block_size=16, cache_dtype="fp8"),
+    scheduler_config=NS(enable_chunked_prefill=1, max_num_seqs=4, max_num_batched_tokens=64),
+    parallel_config=NS(tensor_parallel_size=2), use_v2_model_runner=True, optimization_level=2)
+_RANKS = [{"attention": "a", "tp_rank": 0}, {"attention": "a", "tp_rank": 1}]
+
+
+@pytest.mark.parametrize("llm", [
+    NS(llm_engine=NS(vllm_config=_CONFIG), collective_rpc=lambda fn: _RANKS),
+    NS(vllm=NS(llm_engine=NS(vllm_config=_CONFIG), collective_rpc=lambda fn: _RANKS)),
+    NS(vllm_config=_CONFIG, collective_rpc=lambda fn: _RANKS),
+], ids=["a vllm.LLM", "the wrapper around one", "its LLMEngine"])
+def test_the_profile_reads_the_config_of_whatever_the_handle_takes(monkeypatch, llm):
+    monkeypatch.delenv("VLLM_USE_BREAKABLE_CUDAGRAPH", raising=False)
+    assert engine_profile.effective_compilation(llm) == {
+        "mode": "3", "cudagraph_mode": "None", "enforce_eager": False, "breakable_cudagraph": False, "capture_sizes": [1, 4],
+        "model_runner": "v2", "custom_ops": ["all"], "optimization_level": 2}
+    assert engine_profile.cache_info(llm) == {
+        "enable_prefix_caching": True, "block_size": 16, "kv_cache_dtype": "fp8", "enable_chunked_prefill": True,
+        "max_num_seqs": 4, "max_num_batched_tokens": 64}
+    assert engine_profile.backends_info(llm) == {"attention": "a", "ranks": 2}
+    assert run_facts.model_config_subset(NS(llm=llm)) == {"hidden_size": 8, "num_hidden_layers": 2, "model_type": "m",
+                                                           "architectures": ["A"]}
+
+
+@pytest.mark.parametrize("value, linear", [
+    ("1", "vllm.model_executor.determinism.batch_invariant.linear_batch_invariant (triton matmul_persistent)"),
+    (None, "UnquantizedLinearMethod._gemm_impl"), ("", "UnquantizedLinearMethod._gemm_impl"),
+    (" 1", "UnquantizedLinearMethod._gemm_impl"), ("true", "UnquantizedLinearMethod._gemm_impl"),
+])
+def test_the_linear_backend_is_batch_invariant_exactly_when_the_switch_is_1(monkeypatch, value, linear):
+    if value is None:
+        monkeypatch.delenv("VLLM_BATCH_INVARIANT", raising=False)
+    else:
+        monkeypatch.setenv("VLLM_BATCH_INVARIANT", value)
+    runner = NS(get_model=lambda: NS(named_modules=lambda: []), sampler=None)
+    assert engine_profile._backends_of_runner(runner) == {"attention": None, "linear": linear, "moe": None, "sampler": None}
 
 
 class _Model:
@@ -105,7 +148,7 @@ def _no_device(exc):
 @pytest.mark.parametrize("export, want_export", [(None, None), ("{bad", None), ('{"a": 1}', {"a": 1}), ("<dir>", None)])
 def test_versions_doc_keeps_the_facts_it_reads(monkeypatch, tmp_path, props, gpu, export, want_export):
     monkeypatch.setitem(sys.modules, "triton", _module("triton", __version__="t"))
-    monkeypatch.setitem(sys.modules, "vllm", _module("vllm", __version__="v"))
+    fake_vllm.install(monkeypatch)["vllm"].__version__ = "v"
     real = importlib.metadata.version
 
     def version(name):
@@ -123,6 +166,7 @@ def test_versions_doc_keeps_the_facts_it_reads(monkeypatch, tmp_path, props, gpu
         (tmp_path / "EXPORT.json").write_text(export)
     doc = run_facts.versions_doc()
     assert (doc["triton"], doc["vllm"], doc["flashinfer"], doc["transformers"]) == ("t", "v", None, "4.0")
+    assert doc["python"] == sys.version.split()[0]
     assert doc.get("gpu") == gpu
     assert doc.get("export") == want_export
     assert doc["host"] == {}

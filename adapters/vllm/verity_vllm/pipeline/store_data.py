@@ -6,7 +6,10 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
+
+__all__ = ["data", "fetch", "listing", "selected_from"]
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -32,7 +35,7 @@ def selected_from(*args: str) -> str:
                        f"{p.stderr.strip()[-500:]!r}")
 
 
-def fetch(art: str, to: Path | None = None, paths: list[str] = ()) -> Path:
+def fetch(art: str, to: Path | None = None, paths: Sequence[str] = ()) -> Path:
     """Materialise `art`'s payload (only `paths` of a tree, when given) and return its path.  A store with no remote (a `research
     run` job's) that lacks it names the bundle that serves a job instead."""
     try:

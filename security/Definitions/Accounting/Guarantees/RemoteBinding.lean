@@ -70,7 +70,8 @@ open Accounting.Remote.Draw
 (`Receipts.finder`, at `q_t` SHA-512 calls) meeting `Claims.StrictBirthday`: the binding term is at most
 `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. -/
 def ReceiptsBindingOfCR : Prop :=
-  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] [Nonempty X] (D : Session n m s κ X)
+  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] [Nonempty X]
+    (D : Remote.Draw.Session n m s κ X)
     (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ)
     (L : Fin n → Finset ℕ) (q : Fin n → ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
