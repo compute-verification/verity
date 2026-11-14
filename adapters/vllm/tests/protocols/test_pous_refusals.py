@@ -15,7 +15,8 @@ from typing import Any
 
 import pytest
 import torch
-from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.runtime.stream import Side
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period, setup
 
 from tests import fake_vllm
@@ -212,7 +213,7 @@ def _lean(monkeypatch, tmp_path):
     `period.serve` answering for the tool named ``RUN`` as ``say["run"]`` makes of the Python's answer, and for any other
     as ``say["setup"]``.  Returns ``say``, the Python's runs and what was served, each in order."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CS, "session", session)
+    monkeypatch.setattr(CR, "session", session)
     audit, runs, served = period.audit, [], []
     say: dict[str, Any] = {"run": lambda answer: answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
 
@@ -235,7 +236,7 @@ def _subprotocol(opt, tmp_path, n):
     directory, out = _period_dir(tmp_path, n), tmp_path / f"out{n}"
     described = json.loads((directory / "period.json").read_text()) | {"tools": TOOLS}
     (directory / "period.json").write_text(json.dumps(described))
-    got = opt.leg(directory, NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    got = opt.leg(directory, NODE, out, side_of=Side.of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     return got, json.loads((out / "pous.json").read_text())
 
 
