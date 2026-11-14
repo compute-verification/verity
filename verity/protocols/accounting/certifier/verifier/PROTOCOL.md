@@ -299,13 +299,28 @@ and the start of its stretch of link-windows, in the numbers the period's `first
 its start up to the next entry's, and the last entry's from its start on. Link-window W of the period picks the one
 entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key, its
 session, and that session's own number for the link-window, W − a, since a session numbers its link-windows from 0.
-The developer's record, a clock-form registration's served window, is in the period's numbers. Refused by name: no
-entry; entries out of order; two entries with one start, whose stretches would overlap; one key identifier (a key's
-first 16 bytes) and one session twice; two entries with one key identifier; a period that starts before the first
-entry's stretch; parameters that still name `"key"`, `"session"` or `"sessions"`; and, at a link-window, a signer
-that is a listed key outside its stretch or is not listed. `certifierEntries` and `certifierLink` read the entries
-and the link off the parameters through the period's own decoder, for a composition that pins them. The period check
-is not in the public tree, because it reads the inference-only policy's layout check, which is withheld.
+The developer's record, a clock-form registration's served window, is in the period's numbers.
+
+In the rows form the evidence shows each listed entry's session's signed start (`"starts"`, one for each entry in the
+entries' order: the start's certificate, below, as `deployment.json`'s `start` holds it), and the check holds each
+entry to it. The start shown is its session's certified start: under the entry's key, in its session, over the
+period's schedule's parameters digest. And an entry starts as many link-windows after its key's first listed entry as
+its session's signed base is after that entry's session's on the key's life, a link-window being
+`window · bucket_ms` milliseconds. So a key may be listed there in several sessions. A key's first listed entry is
+held to no other entry: its `start` is the auditor's pin. A signed start says where a session starts on its key's
+life, not where the session before it stopped: a session that ends early loses the rest of its span, and no period
+runs across that hole on one numbering. The clock form's certifier signs no start, so the clock form reads none, and a
+key's restart there is a new entry under a new key.
+
+Refused by name: no entry; entries out of order; two entries with one start, whose stretches would overlap; one key
+identifier (a key's first 16 bytes) and one session twice; two keys with one key identifier, and in the clock form two
+entries with one; a period that starts before the first entry's stretch; parameters that still name `"key"`,
+`"session"` or `"sessions"`; in the rows form, an entry whose start is not the one its session signed, a shown start
+its session did not certify, and evidence that does not show one start for each listed entry, and in the clock form
+evidence that shows any; and, at a link-window, a signer that is a listed key outside its stretch or is not listed.
+`certifierEntries` and `certifierLink` read the entries and the link off the parameters through the period's own
+decoder, for a composition that pins them. The period check is not in the public tree, because it reads the
+inference-only policy's layout check, which is withheld.
 
 ## A served link (`served`)
 
@@ -2333,8 +2348,9 @@ of the sessions started under it.
   host's raw clock, and a device whose ticks read any other clock signs its starts under another tag. The digest
   names no clock, and that a device's ticks read the clock its tag means rests on `trusted-host`. A device that
   signs no start is refused by a check that requires the session's certified start.
-- A state restored from an earlier copy is past what a file can see: that rests on `trusted-host`. The period check
-  does not read the start's certificate.
+- A state restored from an earlier copy is past what a file can see: that rests on `trusted-host`. The period
+  check's rows form reads each listed entry's session's start's certificate (A period, above); its clock form reads
+  none.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
 wire's bits. The third record, `fails`, holds one reason a failed connection.
