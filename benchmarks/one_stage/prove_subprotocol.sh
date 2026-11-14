@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The proof subprotocol (prove_subprotocol.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the
-# Lean verity-verify-proof, cached under $SUBPROTOCOL_CACHE) with the ZK server's Lean frame and the sampled-proofs verifier built in the
+# Lean verity-verify-proof, cached under $SUBPROTOCOL_CACHE) with the ZK server's Lean frame and the SPOT verifier built in the
 # tree. From a clone:
 #   SUBPROTOCOL_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/prove_subprotocol.sh
 #   (a job run from a clone of the tree, 8 CPUs, 32 GB)
@@ -34,8 +34,8 @@ export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/ada
 # the prover's worker threads overflow the default stack on wide units
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup
-SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
+SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=spot-difftest
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 FW=
 if [ "${SUBPROTOCOL_FIREWALL:-1}" = 1 ]; then

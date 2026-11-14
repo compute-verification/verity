@@ -1,6 +1,6 @@
 """A recursive session's inner coins held to the challenger's release log: `Spot.Challenger.innerTreesReason`
 (`ChallengerInnerTrees.lean`, the verifier, which `VStar.Recursive.checkBlobs` reads) against its Python mirror
-`verity_flock.rec_live.tree_held_reason`, through `sampled-proofs-difftest`'s piece `challenger_inner_trees`.
+`verity_flock.rec_live.tree_held_reason`, through `spot-difftest`'s piece `challenger_inner_trees`.
 
 The sampled cases are inner sessions as rec_live's live-coin part (`rec_live.CoinServer`) runs them on coin trees a
 challenger (`challenger.LiveChallenger`) samples and opens, their release log lines among the challenger's roots and

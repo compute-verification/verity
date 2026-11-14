@@ -8,7 +8,7 @@
 #   the node), reads the Build's rank 0 Program and the required manifest from the Build's row dir ($A10_ROW, on the
 #   machine that built it), runs `a10.py values`, and keeps $OUT/compare.json, the logs and $OUT/saved-a11.tar, $OUT/saved-a9.tar
 #   (a11.py --load-values' directories).
-#   audit builds the sampled-proofs Lean in the tree, so it runs from a clone:
+#   audit builds the SPOT Lean in the tree, so it runs from a clone:
 #     A10_MODE=audit A10_MEM_GB=128 A10_VALUES=art:ID A10_SET=a11 A10_ARGS="--only K1,K2 --tamper none" bash benchmarks/one_stage/a10.sh
 #     (a job run from a clone of the tree, 128 GB, up to 4 h)
 #   It runs `a10.py audit` (a11.py with the committed window) on $A10_SET's saved directory from the values run's record
@@ -95,7 +95,7 @@ values)
   ;;
 audit)
   setup
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   S=$W/saved && mkdir -p "$S"
   R data fetch "${A10_VALUES:?}" --to "$W/fetch" --path "out/saved-${A10_SET:?}.tar" >> "$OUT/fetch.log" 2>&1 \

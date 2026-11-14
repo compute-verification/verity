@@ -17,7 +17,7 @@ public import Flock.With.SetupEq
 hypotheses: `Bridge.RowsOk`, `PortRoots.dupId = false`, `RootFixesDomainL` at the public file's leaf map, and
 `Bridge.PopMatches`. The verifiers refuse every file and registration that fails them: `verify --zk` runs `Flock.PortRoots.checkOf` and then
 `Flock.KsScope.checkOf` last in its verdict (`Main.verifyCmd`), on the circuit `ProvedScope.circuitOf` reads, and the
-sampled-proofs run refuses the registration (`Spot.Run.run`, `population-order`, `Spot.Slots.popOk`).
+SPOT run refuses the registration (`Spot.Run.run`, `population-order`, `Spot.Slots.popOk`).
 
 `PortRoots` reads the public file as `HmOut.loadPublic` loads it, without the circuit's public input words, while V5
 reads it over them (`HmIn.loadPublic`). Both are `HmRow.loadPublic` at one circuit's ports with other output ports, and
@@ -287,7 +287,7 @@ open Classical in
 /-- **`SampledKSLiveV5R` with its file preconditions read off acceptance**: its bound on the event that
 `verify --zk` at `own` accepts the transcript and the files (`LiveAcceptsKSP`: their ports row/v1, row/v2 or row-seg/v1
 rows of distinct published domains, no two registered roots one root under different domains, and the form, shared rows
-included, `KsScope` admits), the sampled-proofs run passes the registration's population (`RunPopOk`: the descriptor `desc` and
+included, `KsScope` admits), the SPOT run passes the registration's population (`RunPopOk`: the descriptor `desc` and
 the query `qr` give the game's `n` units in order), and the claims relation fails, under the sampling design the verifier samples
 under from the registration (`Bridge.SamplesUnder`), no Bernoulli sampling design (`Bridge.NotBernoulli`), at `δ` that sampling design's own miss
 of `B`, as in `SampledKSLiveV5`. It has none of `SampledKSLiveV5R`'s hypotheses `RowsOk`, `dupId = false`, `RootFixesDomainL` and

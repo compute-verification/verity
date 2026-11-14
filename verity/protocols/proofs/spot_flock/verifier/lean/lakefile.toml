@@ -1,6 +1,6 @@
-# Sampled proofs' recursive audit as a `Core.BlobProtocol` (`verity/sampled-proofs/recursive/v1`, `VStar.Recursive`): one-stage
+# SPOT's recursive audit as a `Core.BlobProtocol` (`verity/sampled-proofs/recursive/v1`, `VStar.Recursive`): one-stage
 # v1's live audit with its verdict of record V*'s compiled check (`verity-verify-proof verify --zk` once per V* part, at that part's
-# recursive inputs) on the blobs; and sampled proofs (`verity/sampled-proofs/v1`): one-stage v2, the two-stage form read
+# recursive inputs) on the blobs; and SPOT (`verity/sampled-proofs/v1`): one-stage v2, the two-stage form read
 # and refused while its switch is off, one-stage v1 and the recursive audit refused. Their command, `vstar-recursive`, is
 # built in `spot_flock_recursion/verifier/lean/`. Code, not analysis: Lean core, Flock, the interface and the one-stage
 # audit.

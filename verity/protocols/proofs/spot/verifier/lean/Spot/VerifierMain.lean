@@ -4,7 +4,7 @@ public import Difftest
 public import Spot.Pieces
 
 /-!
-# `sampled-proofs-verifier`: the verifier, and the challenger's coins
+# `spot-verifier`: the verifier, and the challenger's coins
 
 The verifier's functions (`Pieces.verifier`: the one-stage audit's checks, the stream's and the fleet's rules, and the
 challenger's ledger and session checks, `challenger_ledger`, `challenger_head`, `challenger_session`,

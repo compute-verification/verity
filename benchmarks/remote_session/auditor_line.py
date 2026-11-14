@@ -45,7 +45,7 @@ for a host run. `--peer` overrides it, and a gate run whose record names none is
 the auditor's.
 
 The ledger's head, a gate session's read of the ledger and the *credited* and *pinned* checks below are the Lean
-verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
+verifier's answers (`spot-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
 `challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse. So are the
 ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify_periods`), the commit on main
 (`on_main_answer`), *complete* (`complete_answer`) and a served session's read (`served_session_answer`, past
