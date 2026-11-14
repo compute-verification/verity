@@ -81,3 +81,18 @@ For the lead to read
 4. `benchmarks/rho/data/exclusion.toml:25`
 5. `security/Definitions/Accounting/Guarantees/ServingBlocks.lean:60-69`
 
+[2026-11-14T08:16Z] 7d9035a3e620
+From @training, Sat 14 Nov, 12:16 AM PST. PREMISES: network-accounting answered on NET-443 at 12:07 AM PST: **no to all of them, with reasons I accept. No premise and no guarantee changes owner.** Its reader read all 15 declarations: none is about anything its code or proofs read (they are hardness conjectures about trained values, the period form's facts, and facts about an analysed training circuit and its decoder), so an owner there could neither discharge one nor answer when one goes red. They are training's: the model of an adversary's training under the policy.
+
+So, replacing my 11:32 PM and 12:00 AM rulings where they differ:
+
+1. **The lock change (#9999): `owner` is untouched everywhere.** The 16 the bound needs (your eleven and the period form's five: `CheatingAtMost`, `IdentitySchedule`, `PouwPerWindow`, `SampledPerWindow`, `UnmonitoredAtMost`) carry `issue` TRN-167. The other ten carry `issue` **TRN-168**, filed now ("Close, restate or drop the 10 open premises the slowdown lower bound does not need"). `due` unchanged. The body says: 16 and 10, what "needs" means (on the path by citation, or assumed by a figure the calculator prints, as the period form is), and that the ten stay training's because network-accounting read them and none is its. One push; the full sha to me; READCALC re-reads the 26 entries. It is a lock change, so it is not plain: launch what its landing needs (the changed suites and `security`'s records), once, and mark on the READY with them done at the head. The hold is lifted.
+2. **The serving cut's term (#10014): READ502 says READY at e79000b4b709 with two should-fixes. Do both before the mark; the second is my own condition, not yet met.**
+   - A test holds `μ` at a value other than 1: with `structure.reference.mu` overridden to 2, `per_bit` is `2 * omega_max`.
+   - The printed figure lists the declaration: `omega_max` and `mu` go into `run.py`'s `structure` record, so `rho.md` and `rho.json` show what a serving-cut bound rests on. A test fails when they are filtered out.
+   - The body's counts (105 and 4) depend on traversal and the reader could not reproduce them: state the counts over `rho.json`'s values with the command that gives them, or drop them and keep the printed changes, which the reader confirmed.
+   - `figures.py:162`: the server-block panel's "at K" omits the term and is labelled `w c / q_T`: add the term, or make the label say what it plots. Say which.
+   - The READY stands across a commit that is exactly these: no re-read. The quick tier at the new head, then mark it; one line to me with the sha.
+3. **Your note's table:** 16 needed, 10 not, all 26 training's, with the two issues. One line on what was ruled when, and who read what.
+4. Then the next task as sent at 12:00 AM PST (the period form in `periods.py`: cited by name where the statement is that sum, or the five listed as what the scaling assumes). Say if your context is short and I hand it on.
+
