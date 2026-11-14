@@ -713,7 +713,7 @@ def test_stratified_queries_name_known_strata():
     assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
 
 
-def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
+def test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design():
     """A Stratified sample of the checked level: the profile's bound is the sampling design's exact count bound, its stratum bounds each
     stratum's own, and its weighted bound the sampling design's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
     for law in SMALL:
