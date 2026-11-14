@@ -3,6 +3,7 @@ import math
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -281,6 +282,49 @@ def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices
         assert x["without_hosts"] <= x["slowdown"]
         assert [r["decades"] for r in x["ranking"]] == sorted((r["decades"] for r in x["ranking"]), reverse=True)
         assert any(r["what"] == "draft:no-straddle" for r in x["ranking"])
+
+
+@pytest.fixture
+def result_here(monkeypatch):
+    """The run's result goes to the directory a test names, under a fixed host stamp: the kit's asks nvidia-smi and git."""
+    from verity_bench import kit
+
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"commit": None})
+    monkeypatch.setattr(sys, "path", list(sys.path))
+
+
+def test_periods_writes_the_onsite_lower_bound_under_its_metrics_id(tmp_path, monkeypatch, capsys, result_here):
+    """The onsite scenario's lower bound in each fleet and period goes into the run's result under the id
+    `metrics.toml` declares, modeled, with its period and its `over`, the world's year last in the row's unit."""
+    import periods
+
+    (row,) = tomllib.loads((Path(periods.__file__).parent / "metrics.toml").read_text())["metric"]
+    monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", periods.METRIC_SCENARIO, "--out", str(tmp_path)])
+    periods.main()
+    capsys.readouterr()
+    rows = json.loads((tmp_path / "periods.json").read_text())["rows"]
+    got = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert row["id"] == periods.METRIC and len(got) == len(periods.FLEETS) * len(periods.PERIODS)
+    assert [(m["name"], m["value"], m["mark"], m["period"], m["over"]) for m in got] == [
+        (row["id"], x["slowdown"], "modeled", x["period"], periods.OVER[x["fleet"]][0]) for x in rows]
+    assert (got[-1]["period"], got[-1]["over"], got[-1]["unit"]) == ("year", "world", row["unit"])
+
+
+def test_periods_writes_no_measurement_off_the_registry_or_without_the_onsite_scenario(tmp_path, monkeypatch, capsys,
+                                                                                       result_here):
+    """A run with `--set` gives no lower bound of the registry as it is, even at a value the registry has, and one
+    without the onsite scenario gives none of its: neither writes a measurement."""
+    import periods
+
+    for i, args in enumerate((["--scenario", periods.METRIC_SCENARIO, "--set", "bounds.lock_only=true"],
+                              ["--scenario", "reference-remote-h200"])):
+        out = tmp_path / str(i)
+        monkeypatch.setattr(sys, "argv", ["periods.py", *args, "--out", str(out)])
+        periods.main()
+        assert (out / "periods.json").is_file() and not (out / "result.json").exists()
+    capsys.readouterr()
 
 
 def test_periods_sets_proofs_sampled_beside_every_unit_proved(monkeypatch):

@@ -378,6 +378,30 @@ def main() -> None:
             {"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}} if measured else {})
         (out / "periods.md").write_text(text + "\n")
         (out / "periods.json").write_text(json.dumps(_finite(doc), indent=1, allow_nan=False))
+        if not (args.set or args.bounds or args.measured):
+            write_metric(out, rows)
+
+
+#: the metric's id (`metrics.toml` beside this file) and the scenario whose lower bound it is
+METRIC, METRIC_SCENARIO = "training/slowdown-onsite-h200", "reference-onsite-h200"
+#: each fleet's compute as the run's result names it (`kit.OVER`) and as the unit says it
+OVER = {"reference-h200": ("datacenter", "one datacenter"), "world-h200": ("world", "the world")}
+
+
+def write_metric(out: Path, rows: list[dict]) -> None:
+    """`METRIC_SCENARIO`'s lower bound in each fleet and period of `rows`, written into the run's result under `METRIC`
+    with its `period` and `over`, the world's year last (`metrics.toml`'s title and unit are its). Modeled: the
+    registry's parameters, fleets and periods, which no run measured. Written only for a run at the registry as it is
+    (no `--set`, `--bounds` or `--measured`), whose lower bound is the metric's."""
+    from verity_bench import kit
+
+    mine = [x for x in rows if x["scenario"] == METRIC_SCENARIO]
+    w = kit.writer(out) if mine else None
+    for x in mine:
+        over, where = OVER[x["fleet"]]
+        unit = (f"the slowdown's lower bound over a {x['period']} of {where}'s compute: the adversary's GPU-hours to the "
+                "target over the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1")
+        w.measurement(METRIC, x["slowdown"], unit, mark="modeled", period=x["period"], over=over)
 
 
 if __name__ == "__main__":
