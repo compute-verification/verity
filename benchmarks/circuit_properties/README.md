@@ -39,7 +39,7 @@ summaries can't count exactly (one value bound to two activation leaves above th
 
 ## The min-cut bound's work
 
-`work.read(program, k)` reads off a word Program what `min_cut.bound` takes of a circuit at a policy's k: |C| in
+`work.read(program, k)` reads off a word Program what `min_cut.slowdown_of` takes of a circuit at a policy's k: |C| in
 Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
 each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
 multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
@@ -73,8 +73,8 @@ equal for every M), so the looked-up rows plus such an array are charged as weig
 tokens; so does one word every member of every batch reads as a multiplier (a learning rate, a
 decay, an input's or computed from inputs, taken as nonzero); and two nodes that compute rows from one array's words
 into two arrays give each distinct rows.
-`work.bound(work, c)` is the most blocks over its
-sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
+`work.bound(work, c)` hands the charged products (`work.products`: MACs at `keep`, outputs at most 16 bits) to the
+calculator's `min_cut.slowdown_of`, which chooses the sub-work, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
 training loop's reading beside its trace's, never above it.
 
@@ -110,8 +110,9 @@ the served b1 Definitions on bits). For a model's shapes it loads the slowdown c
 loads the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
 
-The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`; without
-either it writes no file.
+The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`, and on a
+run of every configuration also the least s_× of its circuits into the run's result, under the metric `metrics.toml`
+declares (`run.write_metric`); without either it writes no file.
 
 The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
 `benchmarks/rho/data/circuits.toml` as data, each number with its source.

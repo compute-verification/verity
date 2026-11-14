@@ -11,3 +11,15 @@ better = "higher"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/compute/run.py --from r20261106-165116-614b"
 every = "7d"
 goal = "compute-accounting/compute-share-climb"
+
+# modeled from two recorded runs and the H200's card file, read from the evidence store, so any CPU node with a
+# --store-read key runs it; one value a reading of the tensor clock (member clock.tensor, and clock.sm, the default)
+[[metric]]
+id = "compute-accounting/h200-capacity-credited-share"
+title = "An H200's capacity credited to an honest Pearl+ prover, modeled: its e4m3 rate over the data sheet's ceiling at 1,980 MHz (and at the 1,830 MHz tensor clock), times compute-accounting/verified-compute-share"
+owner = "compute-accounting"
+unit = "share of one H200's capacity at the data sheet's ceiling"
+better = "higher"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/compute/h200_share.py --from r20261106-165116-614b --duty r20261113-180927-646d"
+every = "7d"
+goal = "accounting/h200-97-percent"
