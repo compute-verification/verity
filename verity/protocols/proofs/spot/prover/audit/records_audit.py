@@ -122,12 +122,12 @@ stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from 
 its members from them and the registered reads and window ingress it declares beside them (`interface.listed_reads`,
 `interface.listed_ingress`), the window figure printed beside the run figure with its premise. A registered read counts as
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
-and only where the window's docket (``--registration``) records that root for it (`registration_roots`,
+and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
 ``weights/<label>@<words>``, at the hiding root the committer registered for it once per model and key before the first
 window's coins (``--pins REGISTRATION``, the ``{program, values}`` the audit's ``--registered`` takes:
 `verity_vllm.program.predict.window_weights.weights_registration`), never a root the verifier computes from a checkpoint,
-and which `verity-vllm advice --weights-of-record` records in each window's docket. Its rotary table has a root
+and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary table has a root
 only where the committer registered the words its engine serves (within the analytic table's bound); else its reads stay
 free.
 
@@ -474,7 +474,7 @@ def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
 
 
 def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
-    """The roots a window's docket records for its parameters (`window_roots`): core's docket's window's, or
+    """The roots a window's registration records for its parameters (`window_roots`): core's docket's window's, or
     an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
     window's index there)."""
     w = rec.get("window")
