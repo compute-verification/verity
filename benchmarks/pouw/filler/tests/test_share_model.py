@@ -63,6 +63,15 @@ DFILL = [{"shape": "dfree-split", "fill_sms": sms, "B": 32, "L": 2048, "place": 
          for sms, a, w, s, n, bad, tuned in [
              (60, 0.3, 0.2, 1.04, 64, 1, {"tuned": {"fill_share": 0.25, "slowdown": 1.08, "split_only": 1.02}}),
              (92, 0.45, 0.3, 1.03, 96, 0, {})]]
+# an fstep run: a configuration with the pump on 60 SMs, its receipts in three parts, and one on the whole GPU with
+# neither parts nor a count of checked receipts, nor the keys a row may leave out
+FSTEP = [{"B": 32, "L": 2048, "FW": 4, "NC": 8, "AFW": 2, "ANC": 2, "ALZ": 3, "fill_sms": 60, "lt_mask": 3, "pdl": 0,
+          "thr": 0, "slowdown": 1.04, "fused0_vs_base": 1.01, "fill_share": 0.2, "fill_share_lin": 0.15,
+          "fill_share_att": 0.05, "fill_share_pump": 0.15, "fill_share_total": 0.35, "out_mismatches": 0,
+          "lin": {"rec_checked": 10, "rec_bad": 1}, "att": {"rec_checked": 20, "rec_bad": 0},
+          "pump": {"rec_checked": 30, "rec_bad": 0}},
+         {"B": 32, "L": 2048, "FW": 8, "NC": 4, "pdl": 1, "thr": 0, "slowdown": 1.02, "fused0_vs_base": 1.006,
+          "fill_share": 0.25, "rec_bad": 2, "out_mismatches": 0}]
 
 
 @pytest.fixture(scope="module")
@@ -445,4 +454,30 @@ def test_main_with_a_dfill_run_prints_its_table_and_the_adaptive_split_as_tuned_
         "60 SMs", "92 SMs", TUNED, "dfree adaptive ≤ 5%", "dfree adaptive ≤ 5% tuned"]
     assert head[5].endswith(" | 0.363, 0.360, 1.030 | 0.065, 0.064, 1.000 |")  # 0.065 / 1.03 + 0.3
     assert (res["filler"], res["dfill"]) == ("W11 (assumed)", DFILL)
+
+
+def test_main_with_an_fstep_run_prints_its_table_and_its_pick_on_the_whole_gpu_and_with_the_pump(tmp_path, monkeypatch,
+                                                                                                 capsys):
+    """`--fstep DIR` reads `DIR/fstep.jsonl`: its table, a line a configuration, and the fused filler's pick at each
+    point, first on the whole GPU, then with the pump on a split's other SMs. A row's receipts are its parts' where it
+    has parts, and a key it leaves out reads as its default."""
+    blocks, res = _run(tmp_path, monkeypatch, capsys, "--fstep", FSTEP)
+    fstep, whole, pump = blocks[1:4]
+    assert fstep[0].startswith("| fused step | B | L | FW | AFW | pump SMs | cuBLASLt mask | slowdown | split only |")
+    # receipts: the parts' 10 + 20 + 30 checked and 1 bad; with no parts, the row's own 2 bad and none checked
+    assert fstep[2] == ("| NC 8, no PDL | 32 | 2048 | 4 | 2 NC 2 lazy 3 | 60 | 3 | 1.040 | 1.010 | "
+                        "0.200 (0.150 + 0.050) | 0.150 | 0.350 | 60 (1) | 0 |")
+    assert fstep[3] == ("| NC 4 | 32 | 2048 | 8 | 0 | 0 | 0 | 1.020 | 1.006 | 0.250 (0.250 + 0.000) | 0.000 | 0.250 | "
+                        "0 (2) | 0 |")
+    assert len(fstep) == 4
+    # within 5%, the whole GPU has the second configuration only; with the pump the first's 0.35 is the most
+    assert whole == [("fstep pick ≤ 5%, whole GPU: B 32 L 2048: FW 8 AFW 0 pump 0 LT 0, filler 0.250 + 0.000, "
+                      "slowdown 1.020")]
+    assert pump == [("fstep pick ≤ 5% with the pump: B 32 L 2048: FW 4 AFW 2 NC 2 lazy 3 pump 60 LT 3, "
+                     "filler 0.200 + 0.150, slowdown 1.040")]
+    assert res["fstep_pick"] == {
+        "fused": {"32:2048": [[32, 2048, 8, 4, 0, 0, 0, 1, 0, 0, 4, 0, 0], 0.25, 0.0, 1.02]},
+        "fused + pump": {"32:2048": [[32, 2048, 4, 8, 2, 60, 3, 0, 0, 0, 2, 0, 3], 0.2, 0.15, 1.04]}}
+    assert list(S.FILLER)[-2:] == ["fused ≤ 5%", "fused + pump ≤ 5%"]
+    assert res["fstep"] == FSTEP
 
