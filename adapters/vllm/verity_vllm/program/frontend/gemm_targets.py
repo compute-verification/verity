@@ -22,7 +22,7 @@ What a record says
   K/16 k16 steps in ascending k order from zero, RNE to bf16.  The tile constants and the pipeline depth decide which output
   coordinates a CTA owns and how the k tiles are staged, NOT the per-coordinate arithmetic — but that is a claim per
   target, established by `evidence`, never assumed from the kernel source being the same.
-* `evidence` — the correspondence runs (`verity_vllm/program/gemm_target_correspondence.py`: the production
+* `evidence` — the correspondence runs (`verity_vllm/program/gemm_target_correspondence.py`: the served
   launch on the model's GEMM shapes incl. M tails, bit-exact against `cpu_model.gemm_model` under the single ascending
   chain of the target's own instruction model) that admitted the record.
 

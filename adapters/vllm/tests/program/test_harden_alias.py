@@ -721,7 +721,7 @@ def _test_Y(cls):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
+# T: Bet A's SERVING carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
 # tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings.py`) decide from the pinned kernel
 # (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.
