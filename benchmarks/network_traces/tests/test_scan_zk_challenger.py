@@ -59,7 +59,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)
     at = h.at
     M = sz.WZ._one_stage()
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     pg = sz.program(M, setup.cls, sz.TEMPLATES, at.G, at.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in h.rounds["honest"]]
@@ -79,7 +79,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     monkeypatch.setattr(M.a8, "session", session)
     monkeypatch.setattr(M.a0, "lean_verify", lambda *a, **kw: {"accepted": False, "why": "not proved here"})
     monkeypatch.setattr(sz.WZ, "firewall", lambda M, m: {})
-    monkeypatch.setattr(AC, "negatives", lambda ev, pre: {})
+    monkeypatch.setattr(AC, "negatives", lambda ev, pre, key, main: {})
 
     a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None)
     av = SimpleNamespace(bin=None, lean=None, lease=[], gpu=False, delta=2.0 ** -20)

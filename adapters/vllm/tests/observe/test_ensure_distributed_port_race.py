@@ -34,12 +34,16 @@ def test_eaddrinuse_retried_with_a_fresh_port(monkeypatch):
 
 
 def test_other_errors_and_exhaustion_raise(monkeypatch):
+    others = []
+
     def other(**_kw):
+        others.append(1)
         raise RuntimeError("gloo: no such device")
 
     _stub_vllm(monkeypatch, other)
     with pytest.raises(RuntimeError, match="no such device"):
         vllm_meta.ensure_distributed(None)
+    assert len(others) == 1
     assert not vllm_meta._DIST_READY
 
     calls = []

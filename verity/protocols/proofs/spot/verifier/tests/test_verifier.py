@@ -16,8 +16,15 @@ from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean,
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, hello as H, link_points as LP, partition as P,
-                                                            registration as R, verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    hello as H,
+    link_points as LP,
+    partition as P,
+    docket as R,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 
@@ -34,7 +41,8 @@ def _args(reg, draw, **change) -> dict:
 
 
 def _python_record(a: dict) -> dict:
-    return audit.audit_record(*a.values(), session_registered=audit.session_registered(a["verdicts"], a["registration"]))
+    opened = audit.less_own_reads(audit.session_registered(a["verdicts"], a["registration"]), a["registration"])
+    return audit.audit_record(*a.values(), session_registered=opened)
 
 
 def _public(rec: dict) -> tuple:
@@ -85,7 +93,7 @@ def test_every_check_runs_both_and_records_them():
 
 
 def test_the_declared_day_is_held_by_both():
-    """R2's declared day (`registration._declared`, `Registration.declaredCode`) by the verifier: the day's own program,
+    """R2's declared day (`registration._declared`, `VStar.Recursive.Caller.declaredCode`) by the verifier: the day's own program,
     another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the
     Python; and the Lean refuses the parameters the Python refuses (`registration._declarations`): a day without
     declarations or the other way round, a day that isn't a natural number, and a declaration not of the view's form."""
@@ -171,23 +179,25 @@ def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_
     """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
     the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
     right, one wrong, one at a port the registration doesn't name, and a port registered twice, read at its last root;
-    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which only its own is
-    kept."""
+    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which the value's is
+    dropped and the port's taken at that port's root (`Record.lessOwnReads`) and kept, refused, at another."""
     _, reg, draw = _drawn()
     rec = reg.record
     roots = {r["port"]: r["root"] for r in rec["roots"]}
     x = rec["roots"][0]["port"]
     twice = {**rec, "roots": [*rec["roots"], {**rec["roots"][0], "root": "77" * 64}]}
-    reads = _lean(registered={"0": {"value": x, "root": roots[x]}, "1": {"value": "elsewhere", "root": "00" * 64}})
+    reads = lambda root: _lean(registered={"0": {"value": x, "root": root},  # noqa: E731
+                                           "1": {"value": "elsewhere", "root": "00" * 64}})
     for registration, given, verdicts, failed in (
             (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
             (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
             (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
-            (rec, roots, reads, ["registered"])):
+            (rec, roots, reads(roots[x]), []), (rec, roots, reads("77" * 64), ["registered"])):
         a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
         got = V.audit_record(**a)
         assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
-        py = audit.audit_record(**a, session_registered=audit.session_registered(verdicts, registration))
+        opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
+        py = audit.audit_record(**a, session_registered=opened)
         assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
     assert got["checks"]["registered"]["detail"]["opened"] == [x]
 
@@ -345,6 +355,15 @@ def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
         V.coins(8)
 
 
+def test_the_executable_answers_only_the_verifiers_pieces():
+    """The executable answers `Pieces.verifier`'s names, the challenger's ledger and session checks among them, and
+    refuses as unknown a piece the difftest executable serves beside them, which `lean` takes as a refusal."""
+    for fn in ("challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"):
+        assert "unknown fn" not in json.dumps(V.lean(fn, {})), fn
+    for fn in ("challenger_day", "challenger_read", "challenger_trusted", "decode", "wires"):
+        assert f'"unknown fn: {fn}"' in V.lean(fn, {})["refused"], fn
+
+
 def test_lean_that_cannot_run_fails_closed(monkeypatch):
     _, reg, draw = _drawn()
 
@@ -355,7 +374,7 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
     assert v.codes == (V.DISAGREE,) and v.verifiers["lean"] == {"refused": "lake is not on the PATH"}
     rec = V.audit_record(**_args(reg, draw))
     assert not rec["accepted"] and rec["verifiers"]["lean"] == {"refused": "lake is not on the PATH"}
-    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH"}
+    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH", "answered": False}
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():

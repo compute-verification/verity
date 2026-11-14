@@ -56,6 +56,7 @@ too.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import hashlib
 import itertools
@@ -72,6 +73,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as T
+from verity.protocols.proofs.spot.verifier.one_stage.verifier import EXE as VERIFIER
 from verity.commitments import coin_tree as CT
 from verity.commitments.identity import canonical_json_text
 from verity.commitments.crypto import lms
@@ -1724,13 +1726,22 @@ def read(j: Any) -> Any:
 
 
 def draw_coins(j: Any) -> Any:
-    _request(j, ["after", "coins", "label", "read", "window"])
+    _request(j, ["after", "coins", "key", "label", "main", "read", "window"])
     after, bytes_read = _hex(j["after"]), _hex(j["read"])
     if type(j["window"]) is not str:
         raise D.Reject("window is not a string")
     if type(j["label"]) is not str:
         raise D.Reject("label is not a string")
-    return {"reason": T.coins_reason(j["coins"], j["window"], j["label"], after, bytes_read, lms_verify)}
+    def reason() -> dict:
+        key = Ch.ChallengerKey.from_json(j["key"])
+        why = T.coins_reason(key, j["main"], j["coins"], j["window"], j["label"], after, bytes_read, lms_verify)
+        # one object for both readers: a subprotocol's check reads, from the same evidence, the bytes read
+        if why is None:
+            drawn = T.draw_coins(key, j["window"], j["label"], after, j["coins"], lms_verify)
+            assert drawn[:len(bytes_read)] == bytes_read
+        return {"reason": why}
+
+    return _refusing(reason)
 
 
 def _pairs(log: Sequence[dict]) -> list[str]:
@@ -1800,8 +1811,13 @@ class Drawn:
         return [r.hex() for r in self.records["draw"].roots]
 
     def evidence(self, segment: dict) -> dict:
-        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "main": self.main, "pins": self.pins,
-                "segment": segment, "session": self.s.files()}
+        return {"ledger": self.ledger.lines(), "main": self.main, "pins": self.pins, "segment": segment,
+                "session": self.s.files()}
+
+    def held(self) -> dict:
+        """What a verifier of this session's coins holds: the challenger's key, which its evidence doesn't name, and
+        its own copy of main's first-parent history, which the evidence's must be."""
+        return {"key": self.s.key.to_json(), "main": self.main}
 
     def other_window(self, rng: random.Random) -> str:
         """The root of a window the ledger opens for another session, when it has one, else a window it doesn't open."""
@@ -1910,16 +1926,22 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 
 DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + FAMILY_ROOTS + [
-    "other-family", "log-tampered", "other-window", "window-form", "key-form", "off-main", "no-pins", "coins-form",
-    "unwithheld", "request"]
+    "other-family", "log-tampered", "other-window", "window-form", "key-form", "other-key", "off-main", "other-main",
+    "main-form", "no-pins", "coins-form", "named", "unwithheld", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
+    """A sample's coins (`Drawn`) with their evidence, the challenger's key and main's history, which the reader takes
+    from its caller, or mutation `name`: among them a malformed key, another key than the session's (`other-key`),
+    a history without the session's pin on both sides (`off-main`), the caller's history or the evidence's another
+    than the other's (`other-main`) or malformed (`main-form`), and evidence that names a key of its own (`named`),
+    which the reader refuses in form whatever it is."""
     rng = _seeded(rng)
     d = _drawn(rng, name, withheld=name != "unwithheld")
     seg, read_, after = _mutated(rng, d, name)
     coins = d.evidence(seg)
-    j = {"after": after.hex(), "coins": coins, "label": "draw", "read": read_.hex(), "window": d.ledger.window["root"]}
+    j = {"after": after.hex(), "coins": coins, "label": "draw", "read": read_.hex(), "window": d.ledger.window["root"],
+         **d.held()}
     match name:
         case "other-family":
             j["label"] = rng.choice(["other", "draw/0", ""])
@@ -1931,14 +1953,30 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
         case "window-form":
             j["window"] = rng.choice(["", "AB" * 64, j["window"][:-2]])
         case "key-form":
-            coins["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "other-key":
+            j["key"] = {**j["key"], "public": lms.public_key(_key(d.s.w, d.s.h, 1)).hex()}
         case "off-main":
-            coins["main"] = [c for c in coins["main"] if c != d.ledger.opened["pinned"]]
+            j["main"] = coins["main"] = [c for c in d.main if c != d.ledger.opened["pinned"]]
+        case "other-main":
+            other = rng.choice([[*d.main, "0" * 40], d.main[:-1], [*d.main[1:], d.main[0]], []])
+            if rng.random() < 0.5:
+                j["main"] = other
+            else:
+                coins["main"] = other
+        case "main-form":
+            other = rng.choice([None, "\n".join(d.main), {"main": d.main}, 5, [c.upper() for c in d.main], [d.main]])
+            if rng.random() < 0.5:
+                j["main"] = other
+            else:
+                coins["main"] = other
         case "no-pins":
             coins["pins"] = None
         case "coins-form":
             j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "window": d.ledger.window}, None,
                                      [coins]])
+        case "named":
+            j["coins"] = {**coins, "key": rng.choice([j["key"], None])}
         case "request":
             if rng.random() < 0.5:
                 del j[rng.choice(sorted(j))]
@@ -1968,7 +2006,7 @@ class Salted(Drawn):
     `T.SEED_SALT_FAMILY`, opened after the window's open root, between other families' roots; the ledger opens the
     session for that window. As a server picking its salt would, `early` opens a coin of the family after another root
     first and then the salt's after the window's root, and `twice` a second coin after the window's root (`second`).
-    `_step` and `other_window` are `Drawn`'s, and the evidence carries no key (`seed_salt_of`'s, `draw_coins`')."""
+    `_step`, `other_window` and the evidence are `Drawn`'s (`seed_salt_of`'s, `draw_coins`')."""
 
     def __init__(self, rng: random.Random, early: bool = False, twice: bool = False, withheld: bool = True) -> None:
         s = self.s = _ledger_session(rng)
@@ -1998,10 +2036,6 @@ class Salted(Drawn):
     def _others(self, rng: random.Random) -> None:
         for label in rng.choices(["other", "draw"], k=rng.randint(0, 2)):
             self._step(label, functools.partial(self.records[label].record, rng.randbytes(64)))
-
-    def evidence(self, segment: dict) -> dict:
-        return {k: v for k, v in super().evidence(segment).items() if k != "key"}
-
 
 SEED_SALT_NAMES = ["honest", "twice", "both", "early", "none", "forged", "other-family", "other-window", "window-form",
                    "key-form", "unwithheld", "coins-form", "log-tampered", "request"]
@@ -2063,14 +2097,14 @@ WITHIN_NAMES = ["honest", "log", "hellos", "ledger", "pins", "openings", "path",
 
 
 def within_case(rng: random.Random, name: str) -> Any:
-    """A sample's coin evidence (`Drawn`, with or without its key) and limits each at or past what it holds: at null,
+    """A sample's coin evidence (`Drawn`, with or without a key of its own) and limits each at or past what it holds: at null,
     v2's (`LIMITS`), sometimes with a list replaced by what isn't one or the evidence by what isn't an object, either
     holding none; then one size one past its limit, or a malformed request."""
     rng = _seeded(rng)
     d = Drawn(rng)
     coins = d.evidence(d.segment.to_json())
     if rng.random() < 0.5:
-        del coins["key"]
+        coins["key"] = d.s.key.to_json()
     session, openings = coins["session"], coins["segment"]["openings"]
     if name == "hellos" and not session["hellos"]:
         session["hellos"] = [rng.choice(HELLOS)]
@@ -2748,6 +2782,11 @@ LINKS_FIRST = D.Port(PIECES, "challenger_links_first", links_first, _cases(links
                      package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
+verifier = D.server_fixture(dataclasses.replace(COMMITMENT, exe=VERIFIER))
+
+#: the challenger's checks the verifier executable answers too (`Pieces.verifier`)
+VERIFIED = [(LEDGER, ledger_case, LEDGER_NAMES), (HEAD, head_case, HEAD_NAMES), (SESSION, session_case, SESSION_NAMES),
+            (CREDITED, credited_case, CREDITED_NAMES), (PINNED, pinned_case, PINNED_NAMES)]
 
 RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_case, OPENING_NAMES, 300),
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
@@ -2781,6 +2820,17 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")
+
+
+@pytest.mark.parametrize("port, make, names", VERIFIED, ids=[v[0].fn for v in VERIFIED])
+def test_the_verifier_answers_the_challengers_ledger_and_session_checks(verifier, port, make, names):
+    """The verifier's executable (`one_stage.verifier.EXE`) answers each of the challenger's ledger and session checks
+    as its row expects, on each of the sweep's mutations once: held to the row's Python reference as the sweep holds the
+    difftest executable, the honest case accepted and every mutation refused."""
+    for name in names:
+        kind, text = D.replay(port, make(random.Random(f"{name}/0"), name), verifier)
+        clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
+        assert clean == (name == "honest"), (port.fn, name, kind, text)
 
 
 @pytest.mark.parametrize("name", EXTRA_OPENINGS)

@@ -2,7 +2,8 @@
 (``ir_lower.whole``: the parse's fields read different bytes of one body, so its gate graph is no row of identical units), lowered
 piece by piece from the word Definition. Its input row is the body, whole SHA-512 blocks of bytes (ingress v0 pads to them).
 
-The unit is the whole instance, so its netlist depends on every static and is pinned per (MODEL, LP, V) by :data:`PINS`."""
+The unit is the whole instance, so its circuit description depends on every static and is pinned per (MODEL, LP, V) by
+:data:`PINS`."""
 TEMPLATE = "ingress-prompt"
 UNIT = "ingress-prompt/v0/body"
 PINS = {("m", 3, 1000): "14c0b236f6fafca82aab4142bbb36f2fbe74a725c95a4774059c3c2b35259395",

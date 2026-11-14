@@ -60,7 +60,7 @@ met at the code's executable check:
 namespace Claims.Sampling
 
 open FlockSoundness.Refine FlockSoundness.Binding
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 theorem find?_bs_root (own : Array _root_.Flock.Registered.Port) (root : Msg) :
     own.find? (fun p => decide (bs p.root = root)) = own.find? fun p => decide (p.root = bytes root) := by

@@ -95,12 +95,6 @@ class TreeNode:
     def ids(self) -> set[int]:
         return {n.id for n in self.walk()}
 
-    def leaves(self) -> Iterator[TreeNode]:
-        if not self.children:
-            yield self
-        for c in self.children:
-            yield from c.leaves()
-
     def render(self, depth: int = 0, max_depth: int = 8) -> str:
         pad = "  " * depth
         e = self.enter

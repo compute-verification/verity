@@ -329,7 +329,7 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
     ``case``'s."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))

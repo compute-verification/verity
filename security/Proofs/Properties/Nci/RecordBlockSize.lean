@@ -24,9 +24,9 @@ A block is a slot's units, and its size is the gates those units compute.
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope Ref Ty Defn)
+open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row Grid fieldsOf outerOf)
+open NciCheck.RecordText (Row Grid outerOf)
 open NciCheck.Record (inSlot)
 open NciCheck.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)

@@ -60,7 +60,7 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 
 namespace Verity.Sampled
 
-open Properties.NetworkCertifier.Bytes (bs bs_length)
+open Properties.Certifier.Bytes (bs bs_length)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -490,7 +490,7 @@ theorem remote_soundness_deployedReady_honest :
       (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
+  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles_none ⊤,
     Instance.Honest.sessionRegistered_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 

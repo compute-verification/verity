@@ -20,7 +20,8 @@ verity-bench compare A B     # accept two results only when their identities agr
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
 verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
-verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
+verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, no point's run: under a
+                                                        # research run its numbers go into the run's result (the kit's writer)
 verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
 verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
@@ -52,8 +53,8 @@ invariant (`bi-eager`, `bi-compiled`).
 
 ## Arms
 
-A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
-control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
+A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`) runs
+the preset's precision with stock FP8 as its control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
 checkpoint and quantizes it itself), its `control` (another arm of the spec, or `"none"`), and its `protocols_config`,
 which `verity_vllm.LLM` takes as it is, `{protocol: {...}}`, except that a string `"$NAME"` is the point's environment
 variable NAME (the cubin the spec's setup builds, say). The harness gives an arm with PoUW an in-process challenger as
@@ -195,8 +196,9 @@ find it the same way, and its command takes one of the node's GPU slots (`/works
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
 GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
-share): a node joins the tuple once it has that slots file, so a node without one is refused here, before any run, and
-not by the slot at a point's start. A preempted direct point is a failed run, which the
+share), before any run. A node joins the tuple once it has that slots file; a node in the tuple whose file is gone starts
+each point's run and is refused there by the slot (`slot.py` exits 75, naming the pools the node has), with nothing
+timed. A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
@@ -208,7 +210,10 @@ benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher
 (`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
 vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
 and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
-clean source tree. A requeued point first deletes its run's old `result.json`. The lookup asks the machine's catalog of
+clean source tree. A requeued point first deletes its run's old `result.json`. A passed point's result holds its
+numbers as measurements, appended by the kit's writer (`verity_bench.vllm.result.record`): each arm's mean of each
+metric, `ARM.METRIC`, with its 95% interval, and each arm's paired ratio over the baseline's reps, `ARM.METRIC.ratio`,
+each with the sweep's point as its `member`. The lookup asks the machine's catalog of
 the evidence store for an attempt of the tool `verity_bench.tool:VLLM_BENCH_POINT` with the point's `identity` param, at
 the commit's source tree (git must know the commit), and when a point isn't there, the store's remote: once per commit it fetches and indexes the
 attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
@@ -222,11 +227,12 @@ ran. Without a usable remote it refuses rather than report them missing; `--loca
 staged block type at K provers with C cores on one card, timed by `benchmarks/one_stage/server_rate.py`. The spec says
 the `workload` whose steady-state record its rows belong to, the `card`, the `cores` (C), the timed `sessions` and the
 sessions a prover runs `ahead`, the GPU `driver`'s version and the CUDA toolkit's (`cuda_toolkit`), a `setup` script,
-`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
-(`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
-counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement staged
-already: a directory on the node, or one of an artifact in the store (`art:ID/DIR`). Loading is as strict as a vLLM
-spec's.
+`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type at one statement size: the
+stager's `type` (`benchmarks/served_units/stage.py`), its statement's units `n` (its proof blocks), the `pin` (the
+SHA-512 of the block's circuit), the `provers` counts (a point each), the `warm` sessions a prover and, optionally,
+`period` and `staged`, a statement staged already: a directory on the node, or one of an artifact in the store
+(`art:ID/DIR`). Loading is as strict as a vLLM spec's. Two rows may name one type at two `n` (a full statement and a
+quarter of one, which share the `pin`); each point of such a type is `NAME-nN-kK`, and every other point `NAME-kK`.
 
 **Timed sessions.** A point times the spec's `sessions`, and at least eight a prover, the fewest the timing script
 times. Where a row's sessions file in bursts, its `period` says the
@@ -246,7 +252,8 @@ the node can't be asked before the run: the node side reads both on the node, re
 spec's, and writes what it read in the row (`versions`). The toolkit's version is `cuda_toolkit`, in the spec and in the
 row: `cuda` is the kit's name, in its host stamp, for the newest CUDA the driver serves, which is another number.
 
-**A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
+**A passed point** is a row whose `pin`, statement blocks (its `n` and `stage.blocks`), `provers` and `cores.count`
+are the point's and its spec's, and that passes the
 ten checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
 of a run of the point itself also holds the point's timed and warm sessions, its period and the versions. `plan` and
 `check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
@@ -310,7 +317,8 @@ Every environment variable the harness reads is declared once in `verity_bench.s
 how long things run) or `debug` (refused on a point, which is always a run of record). A point writes the value settings
 in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
 variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
-harness writes one through `verity_vllm.engine.env`. `benchmarks/harness/tests/test_settings.py` holds the harness's
+harness writes one through `verity_vllm.engine.env`, which it reaches through `verity_bench.adapter`, the one file of the
+benchmarks that imports the vLLM adapter past its public interface. `benchmarks/harness/tests/test_settings.py` holds the harness's
 other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table
@@ -348,6 +356,12 @@ and a target's latest label names its record. The command first pulls the remote
 The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it
 (and a live run's `row` label).
 
+`served_overhead.py` beside this README runs `served-table` with the numbers `metrics.toml` holds it to (`METRICS`,
+each a served row's `SPEC/POINT`): the Commit on the H200 and PoUS's bandwidth audit, each at batch 32, as a percent
+over stock FP8's time per output token. Under a research run it writes them into the run's result
+(`served_render.record`), measured, each with its interval, its run and result art, and its caveats; a row with no
+ratio has no value and says why, and the run's validation then fails.
+
 ## The bandwidth breakdown
 
 `verity-bench breakdown` (`verity_bench.breakdown`) reads, for each point of `llama31-8b-fp8-1gpu-bandwidth-ablation`,
@@ -372,26 +386,33 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   of the reps' ratios, `gamma` (the ratio less one), `n`, and the overhead's interval from the ratios' order statistics,
   exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
   six at 0.95), with its `half_width` as a share of the ratio (None where the ratio is 0).
-- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None)`:**
+- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None, *, mark=None, period=None, over=None)`:**
   appends one measurement to the run's result, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with
-  its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed
-  from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry holds
-  only where given. Under a research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, where
-  `research` reads it, whatever `out` is; outside one it is `out/result.json`.
+  its `mark`, its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was
+  computed from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry
+  holds only where given. The mark is required, one of `kit.MARKS`: `measured` (from a run of record's own records),
+  `modeled` (from a model or stated figures no run measured, or scaled past what a run covered) or `partial` (measured on
+  part of what its name covers); a value of None takes the mark it would have had. The writer also puts it first among
+  the `inputs`, the bare word unless the first input given already opens with it, since the console's Metrics tab reads
+  the mark from there until it reads `mark`. `period` and `over` say what span of time and of compute a value is
+  over, each its own field where given (`benchmarks/README.md`'s "Metrics"). Under a research run (`RESEARCH_RUN_DIR` set) the result is
+  `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, whatever `out` is; outside one it is `out/result.json`.
   **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
   (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
   `evidence`, a list of the files it stands on, as paths relative to the result's directory.
   **`kit.writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)`** add the result's other three
   keys: `workload_fingerprint` (the fields, beside `source_sha` from `RESEARCH_SOURCE_SHA`), and one file each, relative
   to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
-  result that uses none holds none.
+  result that uses none holds none. **`kit.writer(out, kind)`** writes a result of that `kind` (`NAME/vN`), the artifact
+  kind `research` stores it as (`bench-result/v1` where a result has none), and refuses a result of another kind.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
-verdict of record or a seal, so the writer refuses a value that isn't a number, a `why` beside a value, a verdict with no
-target, and a verdict in a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure,
-rejection). A validation is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed`
-and nothing else, which is the whole guard, and its detail says in the gates' own words what passed or failed. A result
-holds one run's measurements, one a name, and one validation.
+verdict of record or a seal, so the writer refuses a value that isn't a number, a missing or unknown mark, an unknown
+period or `over`, a `why` beside a value, a verdict with no target, and a verdict in a verifier's or a seal's words
+(accept, reject, pass, fail, seal, in any form: passing, failure, rejection). A validation is the run's own gates, never
+a protocol's security verdict: its status is `passed` or `failed` and nothing else, which is the whole guard, and its
+detail says in the gates' own words what passed or failed. A result holds one run's measurements, one a name, period
+and `over`, and one validation.
 
 ## Out of scope here
 

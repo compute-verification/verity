@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The `--zk` session of `J` tables at any acceptance
 
-`Composed/DefsJ.lean`'s session and runs pieces read flock-verify `--zk`'s acceptance only as the event a live outcome
+`Composed/DefsJ.lean`'s session and runs pieces read verity-verify-proof `--zk`'s acceptance only as the event a live outcome
 must pass, `AcceptsZK I`, and the record's custody only through its setup, `setupOf (zkInputs I)`. Here they are at any
 event `acc` and setup `setup`, by the same proofs; at `AcceptsZK I` and `setupOf (zkInputs I)` each is the deployed one
 (`decodesOnZKJA_accepts`, `runsOnZCJA_accepts`, `recordsLiveZKJA_accepts`, `simZJA_accepts`). The verifier's public

@@ -89,8 +89,8 @@ theorem circuitOf_back {tags : Flock.Tags} {cf : ByteArray} {T T' : List (String
 /-- **The files' check and the population check of the statement `statementOf` read**: `PortRoots.checkOf` at the
 circuit read with the statement's inputs' tables, on its public file, and `population` on its public file. -/
 theorem statementOf_checks {p : _root_.Spot.OneStageZk.Own} {population : ByteArray → Flock.V Unit}
-    {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
-    (h : _root_.Spot.OneStageZk.statementOf p population bs = .ok a) :
+    {tables : List (String × ByteArray)} {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
+    (h : _root_.Spot.OneStageZk.statementOf p population tables bs = .ok a) :
     a.ksFiles = Flock.PortRoots.checkOf
         (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables)
         (Flock.Witness.zkTags a.I) a.I.publicFile ∧
@@ -109,7 +109,7 @@ theorem statementOf_checks {p : _root_.Spot.OneStageZk.Own} {population : ByteAr
         split at h
         · cases h
         · obtain ⟨rd, -, h⟩ := ebind_ok h
-          have ha : _root_.Spot.OneStageZk.StepAt.ofOwn p tags0 circuitB pubB bs rd (population pubB) = a :=
+          have ha : _root_.Spot.OneStageZk.StepAt.ofOwn p tags0 circuitB pubB tables rd (population pubB) = a :=
             Except.ok.inj h
           subst ha
           exact ⟨rfl, rfl⟩
@@ -127,6 +127,7 @@ theorem statement_checks {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs
   obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   have ha : a' = a := Except.ok.inj h
   subst ha
+  obtain ⟨tables, -, hs⟩ := ebind_ok hs
   exact statementOf_checks hs
 
 /-! ## The public file's count -/

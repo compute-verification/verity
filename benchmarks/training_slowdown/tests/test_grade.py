@@ -273,6 +273,24 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
 
 
+def test_a_grown_models_own_numbers_price_neither_the_policy_nor_c0():
+    """A job of a route that grows the start (`grow`) records the grown model's forward MACs a token and c, and its
+    map (`origin`). Nothing that prices the policy reads them: the grade's (c, k), at the console's rule and at a
+    registry's policy, is the policy's at the start's shape, and C0 and the fit are the starts registry's, as for a
+    job of the start's own shape."""
+    search = traced([OVER, UNDER, UNDER])
+    grown = copy.deepcopy(search)
+    fwd = 3 * grown["record"]["forward_macs_per_token"]
+    grown["record"] |= {"forward_macs_per_token": fwd, "c": 4096 * fwd, "origin": {"blocks": 24, "sha256": "0" * 64,
+                                                                                 "map": {"blocks.23.wo.weight": None}}}
+    runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1)], [job([OVER, UNDER])]
+    for name in ("console", "v4-pro-session"):
+        plain, deep = (graded(runs + [s], ref, CONFIG | {"policy": name}) for s in (search, grown))
+        assert plain["policy"] == deep["policy"] == policy.named(name, SHAPE)
+        assert plain["fit"] == deep["fit"] and plain["p"] == deep["p"]
+    assert policy.c0(registry()["starts"]["s"])[0] == 1e15 * PER_MAC
+
+
 def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
     """What ρ reads of a record's trace: each raw row priced by `capture.products.priced` by the rule of the capture
     that traced it, which gives back the row that capture states (a stored record's float32 attention products in
@@ -992,25 +1010,29 @@ def test_rho_is_the_bound_of_record_where_products_bind():
 
 
 def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
-    """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
-    β_x, b_y, F and |C|, with no n, and ρ's products term is its blocks times c/|C|: with the calculator's `bound`
-    replaced, each choice of the work is scored by it, and ρ and S follow it. Without a traced step, or on one whose
-    M is empty (no operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
+    """The bound of record is the calculator's choice on the traced step's products (`min_cut.slowdown_of`) at the
+    policy's (c, k) and |C|, with no n, and ρ's products term is its term: with `slowdown_of` replaced by one that
+    gives 300 blocks wherever it chooses a work, the bound of record is its `Bound` on the work it chose, and ρ and S
+    follow it. Without a traced step, or on one whose M is empty (no operand holds a bit, so there is no β to hand
+    over), it is not available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
-    calls = []
+    calls, real = [], calculator._min_cut()
 
-    def stub(c, k, n, **kw):
-        calls.append((c, k, n, kw))
-        return SimpleNamespace(slowdown=300.0 * c / kw["size"], blocks=300.0, statement="HE",
-                               rests_on="given (H) and (E)")
+    def stub(c, k, n, *, size, work, scale):
+        calls.append((c, k, n, size))
+        got = real.slowdown_of(c, k, n, size=size, work=work, scale=scale)
+        if got.choice is None:
+            return got
+        return real.Chosen(SimpleNamespace(slowdown=300.0 * c / size, blocks=300.0, statement="HE",
+                                           rests_on="given (H) and (E)"), got.choice, got.products, 300.0 * c / size,
+                           got.terms, got.K_thr, got.q, got.beta_w, got.beta_x, got.b_y, got.F, got.alpha, got.N, got.O)
 
-    stubbed = SimpleNamespace(**vars(calculator._min_cut()) | {"bound": stub, "HE": "the statement"})
+    stubbed = SimpleNamespace(**vars(real) | {"slowdown_of": stub, "HE": "the statement"})
     monkeypatch.setattr(calculator, "_min_cut", lambda: stubbed)
     s = graded(runs, ref)
     w, got = s["rho"]["work"], s["bound_of_record"]
     assert len(calls) > 1 and all(call[:3] == (*policy.CONSOLE, None) for call in calls)
-    assert calls[-1][3] == {"N": w["N"], "O": w["O"], "size": w["C_gates"], "beta_w": w["beta_w"],
-                            "beta_x": w["beta_x"], "b": w["b_y"], "F": w["F"]}
+    assert calls[-1][3] == w["C_gates"]
     slowdown = 300.0 * policy.CONSOLE[0] / w["C_gates"]
     assert (got["available"], got["slowdown"], got["blocks"], got["theorem"]) == (True, slowdown, 300.0, "HE")
     assert s["rho"]["rho"] == slowdown > 1 and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * slowdown)
@@ -1026,7 +1048,7 @@ def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
         b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
     empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
     assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
-    assert not empty["bound_of_record"]["available"] and len(calls) == made
+    assert not empty["bound_of_record"]["available"]
 
 
 def test_the_grades_slowdown_is_the_entry_points(monkeypatch):

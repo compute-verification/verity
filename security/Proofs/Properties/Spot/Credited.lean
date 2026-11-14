@@ -7,13 +7,14 @@ public import Proofs.Properties.Pous.MemoryChallenger.Sort
 public import Proofs.Properties.Accounting.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.SpotFlock.SampleInts
 
 /-!
 # v2 credits its one session with the coins' sample
 
 Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed
 (`Spot.OneStageZk.evidenceOf`), the units its one session proves (`Spot.OneStageZk.provedUnits` on the
-session's record) are the units `ξ` samples under the verifier's law as derived, over the registered population
+session's record) are the units `ξ` samples under the verifier's sampling design as derived, over the registered population
 (`Spot.OneStage.drawnFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
 sample, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
 
@@ -66,22 +67,6 @@ theorem qsort_cast (as : Array Nat) :
 
 /-! ## A sample's units -/
 
-theorem filterMap_int : ∀ {l : List Json} {u : List Int}, l.mapM int? = some u → l.filterMap int? = u
-  | [], u, h => by
-    simp only [List.mapM_nil] at h
-    exact Option.some.inj h
-  | a :: l, u, h => by
-    simp only [List.mapM_cons] at h
-    cases ha : int? a with
-    | none => simp [ha] at h
-    | some x =>
-      cases hl : l.mapM int? with
-      | none => simp [ha, hl] at h
-      | some xs =>
-        simp only [ha, hl, Option.bind_eq_bind, Option.bind_some] at h
-        obtain rfl := Option.some.inj h
-        simp only [List.filterMap_cons, ha, filterMap_int hl]
-
 theorem filterMap_nat : ∀ {l : List Json} {u : List Int}, l.mapM int? = some u → (∀ i ∈ u, 0 ≤ i) →
     (l.filterMap nat?).map (fun n : Nat => (n : Int)) = u
   | [], u, h, _ => by
@@ -103,21 +88,6 @@ theorem filterMap_nat : ∀ {l : List Json} {u : List Int}, l.mapM int? = some u
         simp only [List.filterMap_cons, hn, List.map_cons, Int.toNat_of_nonneg hx,
           filterMap_nat hl (fun i hi => h0 i (List.mem_cons_of_mem _ hi))]
 
-theorem toList_of_mapM {us : Array Json} {xs : Array Int} (h : us.mapM int? = some xs) :
-    us.toList.mapM int? = some xs.toList := by
-  rw [Array.mapM_eq_mapM_toList] at h
-  cases hl : us.toList.mapM int? with
-  | none => rw [hl] at h; cases h
-  | some l =>
-    rw [hl] at h
-    obtain rfl := Option.some.inj h
-    rfl
-
-/-- Integers read with `int?` throughout are read by `filterMap int?`. -/
-theorem filterMap_int_arr {us : Array Json} {xs : Array Int} (h : us.mapM int? = some xs) :
-    us.filterMap int? = xs :=
-  Array.toList_inj.1 (by rw [Array.toList_filterMap]; exact filterMap_int (toList_of_mapM h))
-
 /-- Nonnegative integers read with `int?` throughout are read, as naturals, by `filterMap nat?`. -/
 theorem filterMap_nat_arr {us : Array Json} {xs : Array Int} (h : us.mapM int? = some xs)
     (h0 : ∀ i ∈ xs.toList, 0 ≤ i) : (us.filterMap nat?).map (fun n : Nat => (n : Int)) = xs :=
@@ -138,7 +108,7 @@ theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 
 
 /-! ## v1 at the coins -/
 
-/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's law derives (`law`), the
+/-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's sampling design derives (`law`), the
 record names a population `n`, the coins sample `units` under `law` over `n` (`drawnFrom`), and the evidence's
 `proved_units` are those units, ascending. -/
 theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {ξ : ByteArray}
@@ -235,7 +205,7 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
 
 /-- **v2 credits its one session with the coins' sample.** Where v2 accepts evidence it parsed at the coins `ξ`: the
 evidence names one session `s`, whose record is on the blobs as UTF-8 (`record`), and the parameters' public file is on
-the blobs (`pubB`); the verifier's law derives (`law`) and the record names a population `n`; and the units the session
+the blobs (`pubB`); the verifier's sampling design derives (`law`) and the record names a population `n`; and the units the session
 proves (`provedUnits`) are the units `ξ` samples under `law` over `n` (`drawnFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
@@ -341,7 +311,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
 
 /-- **v2's credit, as `Units.unitsAt` reads it**: where v2 accepts evidence it parsed at the coins `ξ`, at any load of
 the parameters' public file and the sample the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
-`ξ` samples under the verifier's law as derived over the registered population, ascending. -/
+`ξ` samples under the verifier's sampling design as derived over the registered population, ascending. -/
 theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)

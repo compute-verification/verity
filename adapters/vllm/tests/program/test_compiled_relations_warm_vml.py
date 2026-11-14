@@ -1,4 +1,4 @@
-"""compiled_relations.warm_vml: each process's first MKL VML call is made on one thread, once, before the compiled relations run.
+"""compiled_relations.warm_vml: each process's first MKL VML call is made on one thread, once, before a replay on torch's CPU math.
 
 torch's statically linked MKL races on its first VML call when several intra-op threads make it at once (one chunk at 1771 ulp);
 the helper's single-threaded `exp` initialises every VML function.  CPU: without torch it does nothing; with torch it makes one
@@ -65,8 +65,13 @@ def test_commit_replay_warms_before_it_replays(monkeypatch):
     from verity_vllm.pipeline import cpu_replay
 
     calls: list[str] = []
+
+    def replay(_o: object) -> bool:
+        calls.append("replay")
+        return True
+
     monkeypatch.setattr(cpu_replay, "warm_vml", lambda: calls.append("warm"))
-    monkeypatch.setattr(cpu_replay, "replay", lambda o: calls.append("replay") or True)
+    monkeypatch.setattr(cpu_replay, "replay", replay)
     assert cpu_replay.main(object()) == 0
     assert calls == ["warm", "replay"]
 

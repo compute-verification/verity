@@ -20,6 +20,10 @@ Every unit reads its own lanes of the bf16 logits and recomputes their temperatu
 Then the row in chunks of N lanes, ``GumbelTopPSelect_v1{V,N,FIRST,LAST}``: every S's keep bits (its mask kernel, each lane's
 slice, warp-half group and tie count from the positions carried chunk to chunk), those ``splits`` names, the -inf mask, the noise
 and the select, whose best and index are carried too.
+
+`mask_plan` ends the row in ``TopPMaskChunk_v1{V,N,FIRST,LAST}`` instead: the select chunk up to its -inf mask (the same lines,
+`_masked`), returning the chunk's masked f32 lanes and carrying only the positions, for a reader that takes the row after
+top-p (`sampled_accept`) as whole rows of a chunk's lanes.
 """
 from __future__ import annotations
 
@@ -252,7 +256,10 @@ _COUNTS = {"best_nmin", "numdup", "numkeep"}
 STATE_FLAGS = 6 + 4 * R * F
 RSW = 1 + 2 + 2 + 2 * len(STATE_WORDS) + 2 * F + STATE_FLAGS
 CAW = 3 * F
-CARRY = 3 + 2 + 5 * (len(K.SPLIT_COUNTS) - 1)
+#: a mask chunk's carry: each S's position of the lane past it (S = 1: pb and c; else off, pb, ph, sl, c)
+MASK_CARRY = 2 + 5 * (len(K.SPLIT_COUNTS) - 1)
+#: a select chunk's carry: the best, its index and the lanes so far, then a mask chunk's
+CARRY = 3 + MASK_CARRY
 
 
 def scw(S: int) -> int:
@@ -531,10 +538,12 @@ def slice_pre(E, geo: Geo, pre, sl, wrapped, h1):
     return E.op("seli", h1, ph[1], ph[0])
 
 
-def _carry_split(cw):
-    """(best, best_i, i) and each S's (off, pb, ph, sl, c) from a select carry's words (S = 1: pb and c)."""
-    head = (cw[[0]], _w(cw[[1]], CW), _w(cw[[2]], CW))
-    per, o = {}, 3
+def _carry_split(cw, head: bool = True):
+    """(best, best_i, i) (``head``; else None) and each S's (off, pb, ph, sl, c) from a select carry's words, or a mask chunk's,
+    which has no head (S = 1: pb and c)."""
+    o = 3 if head else 0
+    head = (cw[[0]], _w(cw[[1]], CW), _w(cw[[2]], CW)) if head else None
+    per = {}
     for S in K.SPLIT_COUNTS:
         if S == 1:
             per[S] = (None, _w(cw[[o]], CW), None, None, _w(cw[[o + 1]], CW))
@@ -545,21 +554,42 @@ def _carry_split(cw):
     return head, per
 
 
-def _select_body(B, S, logits, temp, seed, pos, splits, *rest):
-    E = IREngine(B)
-    rest, N = list(rest), S.N
+def _position_words(out_pos) -> list:
+    """Each S's position words of the lane past a chunk, as a carry holds them."""
+    words = []
+    for s in K.SPLIT_COUNTS:
+        offn, pbn, phn, sln, cn = out_pos[s]
+        words += [pbn, cn] if s == 1 else [offn, pbn, phn, sln, cn]
+    return words
+
+
+def _masked(B, E, S, logits, temp, splits, rest, head: bool):
+    """A chunk's lanes after temperature and top-p, -inf outside the kept set: every split count's keep bits from its row
+    scalars (``rest``: the six ``sw{S}``, then the carry unless FIRST) and each lane's positions, those ``splits`` names.
+    Returns (the temperature's words, the masked lanes, the carry's head (``head``), each S's position past the chunk, the
+    zero count word)."""
+    rest = list(rest)
     x = _x(B, E, logits, temp)
     tv, sp = E.param(temp, 32), E.param(splits, 32)
-    scal = {s: unpack_scalars(E, _words(E, rest[i]), s) for i, s in enumerate(K.SPLIT_COUNTS)}
+    sws = [_words(E, rest[i]) for i in range(len(K.SPLIT_COUNTS))]
+    cw = None if S.FIRST else _words(E, rest[len(K.SPLIT_COUNTS)])
+    return (tv, *mask_lanes(E, S.V, S.N, x, sp, sws, cw, head))
+
+
+def mask_lanes(E, V: int, N: int, x, sp, sws, cw, head: bool):
+    """`_masked` on its inputs as the engine's words: the lanes ``x`` after temperature, ``splits`` (sp), each S's row scalars
+    (``sws``) and the carry (``cw``; None on a row's first chunk).  Returns (the masked lanes, the carry's head (``head``),
+    each S's position past the chunk, the zero count word)."""
+    scal = {s: unpack_scalars(E, sws[i], s) for i, s in enumerate(K.SPLIT_COUNTS)}
     zero = E.const([0], CW)
-    if S.FIRST:
-        head = (None, zero, zero)
+    if cw is None:
+        carried = (None, zero, zero) if head else None
         per = {s: (zero, zero, zero, zero, zero) for s in K.SPLIT_COUNTS}
     else:
-        head, per = _carry_split(_words(E, rest[len(K.SPLIT_COUNTS)]))
+        carried, per = _carry_split(cw, head)
     keep, out_pos = E.const([0] * N, 1), {}
     for s in K.SPLIT_COUNTS:
-        geo = Geo(S.V, s)
+        geo = Geo(V, s)
         off, pb, ph, sl, c0 = per[s]
         h1, reset, wrapped, nxt = positions(E, geo, N, (off, pb, ph, sl))
         M, Zh, rZ, plog, dup, numkeep, pre, stop, ties = scal[s]
@@ -570,7 +600,13 @@ def _select_body(B, S, logits, temp, seed, pos, splits, *rest):
         keep_s = keep_lanes(E, x, dm, E.op("iadd", c, lp), h1, plog, numkeep, stop, ties)
         keep = E.op("xor", keep, E.op("and", keep_s, E.op("weq", sp, s)))
         out_pos[s] = (*nxt, c[[N - 1]])
-    masked = E.op("sel", keep, x, NEG_INF)
+    return E.op("sel", keep, x, NEG_INF), carried, out_pos, zero
+
+
+def _select_body(B, S, logits, temp, seed, pos, splits, *rest):
+    E = IREngine(B)
+    N = S.N
+    tv, masked, head, out_pos, zero = _masked(B, E, S, logits, temp, splits, rest, head=True)
     idx = E.op("iadd", head[2], E.const(list(range(N)), CW))
     key = B.call(GumbelStreamKey, seed, pos)
     g = B.batch(GumbelNoiseLane, key, E.result(idx, CW), axes=(None, 0))
@@ -588,11 +624,24 @@ def _select_body(B, S, logits, temp, seed, pos, splits, *rest):
         best = E.op("sel", gt, y[[j]], best)
     if S.LAST:
         return Coll(I32, E.result(_w(bi, 32), 32).refs)
-    words = [best, bi, E.op("iadd", head[2], E.const([N], CW))]
-    for s in K.SPLIT_COUNTS:
-        offn, pbn, phn, sln, cn = out_pos[s]
-        words += [pbn, cn] if s == 1 else [offn, pbn, phn, sln, cn]
+    words = [best, bi, E.op("iadd", head[2], E.const([N], CW))] + _position_words(out_pos)
     return _res(E, K.cat([_w(v, 32) for v in words]))
+
+
+def _mask_sig(S):
+    ps = [("logits", Array(S.N, BF16)), ("temp", F32), ("splits", I32)]
+    ps += [(f"sw{s}", Array(scw(s), F32)) for s in K.SPLIT_COUNTS]
+    if not S.FIRST:
+        ps.append(("cw", Array(MASK_CARRY, F32)))
+    return tuple(ps), Array(S.N, F32) if S.LAST else Tuple(Array(S.N, F32), Array(MASK_CARRY, F32))
+
+
+def _mask_body(B, S, logits, temp, splits, *rest):
+    E = IREngine(B)
+    _, masked, _, out_pos, _ = _masked(B, E, S, logits, temp, splits, rest, head=False)
+    if S.LAST:
+        return _res(E, masked)
+    return _res(E, masked, K.cat([_w(v, 32) for v in _position_words(out_pos)]))
 
 
 # --- the Definitions -------------------------------------------------------------------------------------------------------------
@@ -623,6 +672,9 @@ _StepRaw, TopPStep = _pair("TopPStep", ("V", "S", "N", "FIRST", "COMBINE"), _ste
 _SelectRaw, GumbelTopPSelect = _pair("GumbelTopPSelect", ("V", "N", "FIRST", "LAST"), _select_sig, _select_body,
                                      "N lanes of the row: every split count's keep bits, those `splits` names, the -inf mask, "
                                      "the Gumbel noise and the select, carried chunk to chunk; LAST: the token.")
+_MaskRaw, TopPMaskChunk = _pair("TopPMaskChunk", ("V", "N", "FIRST", "LAST"), _mask_sig, _mask_body,
+                                "N lanes of the row after temperature and top-p: the select chunk's lanes up to its -inf "
+                                "mask, with each split count's positions carried chunk to chunk; LAST: no carry.")
 STAGE_DEFINITIONS = [TopPStatsHead, TopPStatsExp, TopPProbs, TopPStep, GumbelTopPSelect]
 
 
@@ -641,6 +693,18 @@ class Unit:
 @cache
 def plan(V: int) -> tuple[Unit, ...]:
     """The units of a row of V in an order that writes each before its readers."""
+    return _row(V, "select", GumbelTopPSelect, 0)
+
+
+@cache
+def mask_plan(V: int) -> tuple[Unit, ...]:
+    """A row of V's top-p pipeline units and its mask chunks (`TopPMaskChunk_v1`, `chunk(V)` lanes each), each chunk wired to
+    every split count's row scalars and to the chunk before it: the row after temperature and top-p as rows of a chunk's lanes,
+    the 0th output of each ``("mask", k)``, where `plan`'s select chunks would take the token."""
+    return _row(V, "mask", TopPMaskChunk, 1)
+
+
+def _row(V: int, kind: str, defn, carry_out: int) -> tuple[Unit, ...]:
     out: list[Unit] = []
     for S in K.SPLIT_COUNTS:
         out += _pipeline(Geo(V, S))
@@ -652,8 +716,8 @@ def plan(V: int) -> tuple[Unit, ...]:
         w = []
         w += [(f"sw{S}", scalars_unit(V, S), 0) for S in K.SPLIT_COUNTS]
         if not first:
-            w.append(("cw", ("select", k - 1), 0))
-        out.append(Unit(("select", k), bind(GumbelTopPSelect, V=V, N=hi - lo, FIRST=first, LAST=last), (lo, hi), tuple(w)))
+            w.append(("cw", (kind, k - 1), carry_out))
+        out.append(Unit((kind, k), bind(defn, V=V, N=hi - lo, FIRST=first, LAST=last), (lo, hi), tuple(w)))
     return tuple(out)
 
 
@@ -719,5 +783,5 @@ def cut(t) -> list[tuple[SpecializedDefinition, int]]:
     return list(n.items())
 
 
-__all__ = ["Geo", "chunk", "plan", "cut", "Unit", "scalars_unit", "STAGE_DEFINITIONS", "TopPStatsHead", "TopPStatsExp",
-           "TopPProbs", "TopPStep", "GumbelTopPSelect", "SELECT_N", "STATS_PART"]
+__all__ = ["Geo", "chunk", "plan", "mask_plan", "cut", "Unit", "scalars_unit", "STAGE_DEFINITIONS", "TopPStatsHead",
+           "TopPStatsExp", "TopPProbs", "TopPStep", "GumbelTopPSelect", "TopPMaskChunk", "SELECT_N", "STATS_PART", "MASK_CARRY"]

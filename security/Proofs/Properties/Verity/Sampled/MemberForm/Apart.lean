@@ -135,6 +135,7 @@ theorem membersParamsOfJson_apart {j : Json} {p : _root_.Spot.OneStageZk.Params}
     obtain ⟨p0, -, h⟩ := ebind_ok h
     try dsimp only at h
     obtain ⟨ms', hms', h⟩ := ebind_ok h
+    obtain ⟨w, -, h⟩ := ebind_ok h
     cases h
     cases hm
     exact membersOf_apart hms'

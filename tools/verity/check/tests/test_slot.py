@@ -1705,6 +1705,47 @@ def test_a_slot_with_book_waits_for_and_reserves_that_and_stays_its_mem_for_ever
     assert [(d["mem"], d.get("book")) for d in docs] == [(300, 150), (300, 150), (300, None)] and "book" not in docs[2]
 
 
+def test_a_shards_ask_books_a_lowered_line_and_the_heavy_part_keeps_its_slots_booking(tmp_path, monkeypatch):
+    """A train shard's ask (`check.shard_ask_gib`, as RUN_MEM_ENV) is what a slot whose book= is lowered under it books, and
+    CMD gets that booking as BOOK_ENV, past which check.py grants nothing; the security/Proofs replay's ask, under the 520
+    its one-full-check slot books, keeps that booking and the slot's 560 to plan on; `--budget-gb`, which plans past the
+    booking on purpose, gets no BOOK_ENV."""
+    spec2 = importlib.util.spec_from_file_location("repo_check_shard_ask", ROOT / "tools" / "verity" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    heavy, light = check.shard_ask_gib(["pytest", "lean-audit:security/Proofs"], []), check.shard_ask_gib(["lean-build"], [])
+    assert (heavy, light) == (330, 110)
+    (tmp_path / "slots").write_text("t 0 only=trains mem=560 book=520 scope=1\n" + "".join(
+        f"{by} {i} only=trains mem=300 book=40\n" for i, by in enumerate("bcd", 1)))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: 2000)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda proc=None, priority=False: 0)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"], mem=env[SLOT.SLOT_MEM_ENV], book=env.get(SLOT.BOOK_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, str(check.TRAIN_GB))
+    for gib, by, want in ((heavy, "t", {"slot": "t", "mem": "560", "book": "520"}),
+                          (heavy, "b", {"slot": "b", "mem": "330", "book": "330"}),
+                          (light, "c", {"slot": "c", "mem": "300", "book": "110"})):
+        monkeypatch.setenv(SLOT.RUN_MEM_ENV, check.ask_gb(gib))
+        with pytest.raises(Exec):
+            SLOT.main(["--priority", "--by", by, "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+        assert ran == want, (gib, by)
+        monkeypatch.setenv(SLOT.SLOT_MEM_ENV, ran["mem"])
+        monkeypatch.setenv(SLOT.BOOK_ENV, ran["book"])
+        assert check.slot_mem_gb() == int(want["book"]), "check.py grants what the slot books, never its mem= past it"
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--by", "d", "--budget-gb", "300", "--", "check.py"], now=lambda: NOW,
+                  sleep=lambda s: pytest.fail("waited"))
+    assert ran["book"] is None
+
+
 def test_a_book_that_isnt_a_share_of_its_mem_stops_its_own_slot_and_nothing_else(tmp_path, monkeypatch, capsys):
     """book= is how much of its mem= a slot reserves, so one over mem=, on a line without mem=, or that isn't a whole number
     from 1 is a mistyped line. Its slot starts no check and says why with the fix, in the wait and in `--status`; the

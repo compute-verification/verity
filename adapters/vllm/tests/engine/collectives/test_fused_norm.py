@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 import torch
 
+from tests import fake_vllm
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.pipeline.tp import match as M
 
@@ -44,10 +45,11 @@ def _unfused(hidden_states, residual, norm):
 
 @pytest.fixture
 def mods(monkeypatch):
-    home, user = types.ModuleType(FN.FAR_MODULE), types.ModuleType("fake_dsv32_model")
-    for m in (home, user):
-        m.__dict__.update(fused_allreduce_rms_norm=_fused)
-    monkeypatch.setitem(sys.modules, FN.FAR_MODULE, home)
+    far = f"{FN.FAR_MODULE}:{FN.FAR_NAME}"        # read from `sys.modules`, not imported: the surface doesn't hold it
+    fake = fake_vllm.install(monkeypatch, extra=[far])
+    fake.set(far, _fused)
+    home, user = fake[FN.FAR_MODULE], types.ModuleType("fake_dsv32_model")
+    user.__dict__.update(fused_allreduce_rms_norm=_fused)
     monkeypatch.setitem(sys.modules, "fake_dsv32_model", user)
     return home, user
 

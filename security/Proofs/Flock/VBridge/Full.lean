@@ -19,7 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 /-!
 # `VFull` and the verifier's U4
 
-`VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s law samples. V*'s laws are the full
+`VFull` asks that each wire V* reads a stage from be a wire of a unit session `j`'s sampling design samples. V*'s sampling designs are the full
 sample (`VLaw.live`), so that is every unit (`vFull_of_whole`). The verifier's U4 (`Flock.Registered.checkFull`,
 `Flock.HmRow`) refuses a sampled statement unless every unit its own registered reads name for a round's commitment
 (`rec-c<i>`, `rec-top-L<l>`, R's `rec-opening-c<i>` and `rec-top-stacked-L<l>`, the sparse phase's messages) is sampled
@@ -187,7 +187,7 @@ theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Dr
 
 variable {S : ℕ} {Vs : Fin S → VStmt}
 
-/-- **`VFull` under the full sample** (`--draw subset:N`): V*'s laws sample every unit, so `VFull` needs only that each wire
+/-- **`VFull` under the full sample** (`--draw subset:N`): V*'s sampling designs sample every unit, so `VFull` needs only that each wire
 of `Sk i j` (`i < r`) is a wire of some unit. -/
 theorem vFull_of_whole (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (hio : ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →

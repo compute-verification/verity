@@ -1,4 +1,12 @@
-/-
+module
+
+public import Flock.Comp
+public import Flock.DeriveCheck
+public import Flock.Layout
+public import Flock.Net
+public import Flock.Tags
+
+/-!
 Item 1e (Project doc `verified-lowering-design.md`): the typed statement `verity/flock-circuit/types`
 (`verity_flock.typed_statement`), whose unit is a circuit type and a layout instead of rows. No statement carries the
 unit's rows: the verifier derives them and places them as the old statement's `unit` slots. It folds rows only through
@@ -19,13 +27,6 @@ A flat class (no placed parts, Δ or reads) is one `CIRCUIT unit` section. A tem
 each placed layout's net, and Δ. A placed read's layout is generated (`table/v2`); its product rows' B side is the table,
 which the verifier holds (`hold`): the statement names each table by the SHA-512 of its words and never carries them.
 -/
-module
-
-public import Flock.Comp
-public import Flock.DeriveCheck
-public import Flock.Layout
-public import Flock.Net
-public import Flock.Tags
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -22,7 +22,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/prover/agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 HIDDEN = HERE / "fixtures" / "hidden-outputs" / "flat"
 FLAT = "verity/flock-circuit@f5df3bbc+seed-injection"
 SERVED = "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b"
@@ -33,7 +33,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 @pytest.fixture(scope="module")
 def built():
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
 
 
 def _lean(statement: str, stage: Path, public: str) -> str | None:

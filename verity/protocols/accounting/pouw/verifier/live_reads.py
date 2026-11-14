@@ -6,7 +6,8 @@ the live Program."""
 from __future__ import annotations
 
 import functools
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

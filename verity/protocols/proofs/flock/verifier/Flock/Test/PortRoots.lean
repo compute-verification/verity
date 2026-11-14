@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.PortRoots
+meta import Flock.PortRoots
+
+/-!
 `PortRoots`: circuits of `row/v1` ports, of `row/v2` ports, and of `row/v2` and `row-seg/v1` ports pass `rowsOk`; a mix
 of `row/v1` and bit rows, or a bit row of the wrong shape, is refused before its public file is read, and so is one that
 names a port twice. Each port's leaves are framed at its own schema, so two ports of one name at different schemas have
@@ -17,10 +22,6 @@ naming `public_inputs` is refused where the circuit's META names none (`INPUTS_W
 another row, another frame, row key or schema, and a pinned dummy row that is not the padding instance's are refused
 (`HEADER_WHY`).
 -/
-module
-
-public import Flock.PortRoots
-meta import Flock.PortRoots
 
 @[expose] public section
 

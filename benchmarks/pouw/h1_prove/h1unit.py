@@ -74,11 +74,11 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -372,7 +372,7 @@ def verify_registered(program: str, name: str, leaves: int, root: bytes, index: 
 
 def registered_reads(program: Program, tp: TemplatePartition, call: int, roots: dict[str, str], window: str,
                      window_root: str, prog: str | None = None) -> dict:
-    """The verifier's ``--registered`` file of a statement over call ``call``'s units (flock-verify ``verify --zk
+    """The verifier's ``--registered`` file of a statement over call ``call``'s units (verity-verify-proof ``verify --zk
     --registered``, `h1window.table_reads_file`): for each registered port (`window_ports`), the value it reads (the
     call's A table or z table, or the weights' b/<K>), its root (``roots`` ``{value: root}``, the execution phase's registration),
     rows, width and domain (the tables' binding the execution phase's open root ``window_root``, b/<K>'s none), and the row each
@@ -633,9 +633,9 @@ def leaves_one(dom: CommitmentDomain, index: int, bc: bytes) -> bytes:
 def _frame(ports: list, set_name: str, n: int, bcs: dict[str, list[bytes]]) -> dict:
     """`circuit.statement`'s frame-v3 entry over given ``b || c`` (the verifier's: it never holds a row) of ``n`` instances,
     each port's tree over its table's rows."""
-    from verity_flock import circuit as FC
     from verity.commitments.frame_v3 import BitRowLeaf, FrameV3
     from verity.commitments.frame_v3 import Port as FPort
+    from verity_flock import circuit as FC
     bind, doms = {}, {}
     for p in ports:
         bind[p.name] = identity_digest_sha512(FC.BINDING_TAG, {"set": set_name, "lo": 0, "hi": int(n), "port": p.name, "schema": p.schema})

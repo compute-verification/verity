@@ -13,8 +13,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags` (`TagsOkZHJ`) takes them, and their shared-row
   public file passes `ScopeZR`, `Typable`'s statement check; the public-output one-table checks, `TagsOk` and
   `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two firewalled
-  runs of `benchmarks/recursion_e2e` (MODES=firewall). The first staged its inner statement with every instance's own
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two zk_served
+  runs of `benchmarks/recursion_e2e` (MODES=zk_server). The first staged its inner statement with every instance's own
   rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`) and proved its inner session on the
   challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and sample kept),
   staged V*'s statements with the inner program, every level registering its opened rows and their siblings, RecCap's
@@ -129,7 +129,7 @@ def inner(once) -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def level(inner, restaged) -> list[str]:  # noqa: F811
+def level(inner, restaged) -> list[str]:
     """`flock-witness session`'s files at the recorded level restaged (`test_lean_rec_coins`' `restaged`, which registers
     every port the level's outputs read, so `Registered.checkComplete` passes it at setup), and the recorded session."""
     level = restaged
@@ -410,13 +410,13 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 
 
 @pytest.mark.parametrize("part", [pytest.param("L3", marks=UNREGISTERED_ROWS), "cap"])
-def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa: F811
-    """`flock-verify verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
+def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):
+    """`verity-verify-proof verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
     session its coefficients are checked against, the verifier's full sample of that session (`_f1_draw`), and the challenger's
     live-coin part's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
     (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as `85-rec-reprice.sh`'s STEP=lean runs it: through every check and
-    every refusal the verdict runs last (the form's, a draw-less session's, a V* session's short of every unit,
+    every refusal the verdict runs last (the form's, a sample-less session's, a V* session's short of every unit,
     `RecSetup.fullDraw`, and one over an inner session whose record holds no sample, `RecSetup.innerDrawn`), and not as a
     private circuit's. The checks above are the model's predicates; this is the shipped verdict, so a refusal added to it
     that an honest V* session meets fails here and nowhere else. About two minutes, beside the gate's witness runs."""
@@ -425,7 +425,7 @@ def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa:
     names = [nm for nm, _ in F1_STATEMENTS]
 
     def run():
-        p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
+        p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"), "verify", "--zk", "--statement", STATEMENT,
                        "--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition",
                        str(v / "partition.json"), "--program", str(v / "program.json"), "--registered",
                        str(v / "registered.json"), "--rec-inner", str(d / "inner.json"), "--rec-part",

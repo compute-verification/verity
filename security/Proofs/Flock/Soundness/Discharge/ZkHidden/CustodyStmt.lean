@@ -161,7 +161,7 @@ theorem zk_session_soundHJ_custody_jsonSt
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `flock-verify draw`
+    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `verity-verify-proof draw`
     -- printed the verifier's sample
     (hTags : TagsOkZHJ I)
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)

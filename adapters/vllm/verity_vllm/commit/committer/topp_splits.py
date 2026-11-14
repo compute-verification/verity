@@ -47,9 +47,9 @@ class _SplitKernelProxy:
 
 
 def install_split_kernel_proxies(sink: list) -> dict[str, hooks.Patch]:
-    """Replace the three split kernels in vLLM's module namespace with recording proxies; returns {name: patch} for uninstall (empty
-    when the module has none of them: a vLLM whose top-p has no split kernels records no launch).  A vLLM without the module is an
-    ImportError: there is no launch to read a split count from."""
+    """Replace the three split kernels in vLLM's module namespace with recording proxies; returns {name: patch}, each of which its
+    caller uninstalls (empty when the module has none of them: a vLLM whose top-p has no split kernels records no launch).  A vLLM
+    without the module is an ImportError: there is no launch to read a split count from."""
     mod = sys.modules.get(TOPP_SPLIT_MODULE) or importlib.import_module(TOPP_SPLIT_MODULE)
     patches: dict[str, hooks.Patch] = {}
     for nm in TOPP_SPLIT_KERNELS:
@@ -59,7 +59,3 @@ def install_split_kernel_proxies(sink: list) -> dict[str, hooks.Patch]:
         patches[nm] = hooks.patch(mod, nm, _SplitKernelProxy(k, nm, sink))
     return patches
 
-
-def uninstall_split_kernel_proxies(patches: dict[str, hooks.Patch]) -> None:
-    for p in reversed(list(patches.values())):
-        p.uninstall()

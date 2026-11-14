@@ -3,7 +3,7 @@ module
 public import Definitions.Pouw.Barrier.Defs
 
 /-!
-# The degenerate-input barrier: pinned statements (trusted)
+# The degenerate-input barrier: guarantees (trusted)
 -/
 
 @[expose] public section

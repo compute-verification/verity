@@ -26,7 +26,7 @@ import secrets
 from collections.abc import Callable, Mapping
 from typing import Any
 
-__all__ = ["DEFAULT_SEED", "SeedCoins", "derived", "served"]
+__all__ = ["DEFAULT_SEED", "DERIVED", "UNSEEDED", "SeedCoins", "derived", "param_of", "rule_of", "served"]
 
 #: The public default seed: the first 63 bits of SHA-512 over its name, so nobody chose its value.
 DEFAULT_SEED = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1

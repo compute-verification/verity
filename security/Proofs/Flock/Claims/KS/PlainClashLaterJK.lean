@@ -87,7 +87,7 @@ theorem accepts_reqsDJK (keep : Bool → Bool)
   refine ⟨rest[ℓ - 1], by rw [hRe]; exact find?_later hRl hlat h1 (by omega), hpos', ?_⟩
   simpa using (merkleCheck_rows hmc).1
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings at the
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings at the
 model leaf `lf` are its reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and
 its level-`ℓ` openings its `plainLevelColsOf` entries (`accepts_reqsDJK`). -/
 theorem accepts_opensLDLfJK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
@@ -148,7 +148,7 @@ theorem accepts_opensLDLfJK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽)
   exact ⟨slotOpensL_level _ 0 ℓ _ _ _ _ p₀ pend₀ hp₀ rfl (fun _ => rfl) hlv hQ hlt₀ (fun hℓ => hf₀ ℓ h1 hℓ) h1,
     slotOpensL_level _ 1 ℓ _ _ _ _ p₁ pend₁ hp₁ rfl (fun _ => rfl) hlv hQ hlt₁ (fun hℓ => hf₁ ℓ h1 hℓ) h1⟩
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
 reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and its level-`ℓ` openings its
 `plainLevelColsOf` entries (`accepts_reqsDJK`); `accepts_opensLDLfJK` at `leaf512`. -/
 theorem accepts_opensLDJK (keep : Bool → Bool)

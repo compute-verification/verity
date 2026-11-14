@@ -23,14 +23,13 @@ host_memory = { value = 1.6e13, unit = "bit", source = "NVIDIA DGX H100 datashee
 host_ops = { value = 4.5875e14, unit = "op/s", source = "2 x Xeon Platinum 8480C (DGX H100 datasheet): 112 cores x 2,048 INT8 AMX ops per cycle x 2.0 GHz base, tiers' host_share method", status = "derived" }
 links = { value = 4.8e12, unit = "bit/s", low = 3.2e12, high = 4.8e12, source = "NVIDIA DGX H100 datasheet: 8 x ConnectX-7 at 400 Gb/s and 2 dual-port BlueField-3 at up to 400 Gb/s a port; low: the compute fabric alone", status = "datasheet" }
 
+# memory and links are the cards' (rho/params.py CARDED), as in location.h200-hgx-rack4.
 [location.h200-hgx]
 devices = { value = 8, unit = "GPU", source = "NVIDIA HGX H200: 8 GPUs on one NVLink switch domain", status = "datasheet" }
 flops = { value = 1.58312e16, unit = "FLOP/s", low = 7.9152e15, high = 1.58312e16, status = "datasheet", source = "benchmarks/census/hardware.json h100-sxm5-80gb/e4m3: 1978.9e12 dense FP8, x 8 (H200 is H100's compute with more HBM); low: BF16" }
-memory = { value = 9.024e12, unit = "bit", source = "8 x 141 GB HBM3e (NVIDIA H200 datasheet)", status = "datasheet" }
 hosts = { value = 1, unit = "server", source = "one DGX H200", status = "datasheet" }
 host_memory = { value = 1.6e13, unit = "bit", source = "NVIDIA DGX H200 datasheet: 2 TB system memory", status = "datasheet" }
 host_ops = { value = 4.5875e14, unit = "op/s", source = "2 x Xeon Platinum 8480C (DGX H200 datasheet): 112 cores x 2,048 INT8 AMX ops per cycle x 2.0 GHz base (2.9% of the GPUs' FP8 rate)", status = "derived" }
-links = { value = 4.8e12, unit = "bit/s", low = 3.2e12, high = 4.8e12, source = "NVIDIA DGX H200 datasheet: 8 x ConnectX-7 at 400 Gb/s and 2 dual-port BlueField-3 at up to 400 Gb/s a port; low: the compute fabric alone", status = "datasheet" }
 
 [location.b200-hgx]
 devices = { value = 8, unit = "GPU", source = "NVIDIA DGX B200 datasheet: 8 x B200 on one NVLink 5 switch domain", status = "datasheet" }
@@ -65,11 +64,9 @@ links = { value = 3.2e12, unit = "bit/s", source = "benchmarks/nci/tiers.py DEFA
 [location.h200-hgx-rack4]
 devices = { value = 32, unit = "GPU", source = "4 x location.h200-hgx", status = "derived" }
 flops = { value = 6.33248e16, unit = "FLOP/s", low = 3.16608e16, high = 6.33248e16, source = "4 x location.h200-hgx flops", status = "derived" }
-memory = { value = 3.6096e13, unit = "bit", source = "4 x location.h200-hgx memory", status = "derived" }
 hosts = { value = 4, unit = "server", source = "4 DGX H200s", status = "derived" }
 host_memory = { value = 6.4e13, unit = "bit", source = "4 x location.h200-hgx host_memory", status = "derived" }
 host_ops = { value = 1.835e15, unit = "op/s", source = "4 x location.h200-hgx host_ops", status = "derived" }
-links = { value = 1.92e13, unit = "bit/s", low = 3.2e12, high = 1.92e13, source = "the servers' NICs all uplinked, 4 x location.h200-hgx links; low: a 4:1 oversubscribed uplink", status = "assumed" }
 
 # Fleets, the inventory: the monitored locations and the unregistered leaves. MFU is what a construction gets of the peak (dense FP8).
 # The count of a reference fleet of 8-GPU servers (reference-h200, reference-h100, reference-b200) is the census's

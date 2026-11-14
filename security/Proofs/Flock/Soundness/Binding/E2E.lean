@@ -131,7 +131,7 @@ theorem flock_e2e_drawn_hm96
 
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's law, with the rows' value binding**: `flock_e2e_drawn_exec` at
+/-- **The e2e drawn-unit bound at the executable's sampling design, with the rows' value binding**: `flock_e2e_drawn_exec` at
 `vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS`
 and `hT`, `ecr/sha-512` through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; the live
 verifier's bytes are `flock_e2e_drawn_hm96`'s at `L := Law.execOS …`. -/
@@ -162,7 +162,7 @@ theorem flock_e2e_drawn_exec_hm96
       (add_le_add (StrictCR.ksAvgBE_le_strict H E plan k (reg σ) (cont σ) hKS) le_rfl))
     (tr.le hT))
 
-/-- **The e2e count curve at the executable's law, with the rows' value binding**: `flock_e2e_count_exec` at
+/-- **The e2e count curve at the executable's sampling design, with the rows' value binding**: `flock_e2e_count_exec` at
 `vb := HmRows.binding rs hHm`, its count curve bounded by `Law.stratified`'s `miss`, at most
 `miss(K) + ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
 through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes

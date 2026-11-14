@@ -4,7 +4,7 @@ records joined into the report the unsharded run gives.  ``--binding NAME`` chec
 
 Shards are numbered 1..N, as check.py's are (``check.py --shard K/N``).  A target is shard K's when the hash of its id, its
 kind and label, is K - 1 modulo N (`shard_of`): never its place in the list, so a new target moves no other.  Each shard builds the whole task list as the unsharded run does (the catalog, or the task list
-and bindings' records the cache holds), checks only its own targets, its heavy ones first (`cli.HEAVY`), reading and writing
+and bindings' records the cache holds), checks only its own targets, its heavy ones first (`cli.heavy`), reading and writing
 the per-target cache as the unsharded run does, and writes into its directory its records (`RECORDS`: each target's result as
 the run made it, before `checks.report` joins a by-calls root to its callees' verdicts, since a callee may be another shard's)
 and then its manifest (`MANIFEST`): K and N, the request, the whole list's length and digest (`digest`), and each target it

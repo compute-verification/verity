@@ -175,4 +175,5 @@ class PoUWScheme(Protocol):
         ...
 
 
-__all__ = ["U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile", "fold_roots", "grid_tiles", "tagged"]
+__all__ = ["CALL_RANGE", "U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile",
+           "fold_roots", "grid_tiles", "tagged"]

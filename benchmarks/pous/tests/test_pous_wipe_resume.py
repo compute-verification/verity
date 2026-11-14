@@ -30,7 +30,7 @@ def streamed(tmp_path_factory):
 
     def python(signed, commitment, *, trusted, schemes, decide):
         v = sw.verdict(signed, commitment, trusted=trusted, schemes=schemes)
-        return v, {"python": {"accepted": v.accepted, "egress_mib": v.egress_mib, "reasons": list(v.reasons)}}
+        return v, {"python": {"accepted": v.accepted, "reasons": list(v.reasons)}}
 
     out = resume.run(n=256, k=400, limit_ns=1_000_000, decide="python", scratch=tmp_path_factory.mktemp("wipe-resume"),
                      clock=_load("pous_fakes", POUS_TESTS).Clock(10 ** 9, 1_000), untimed_tries=1 << 10, sample_sessions=0, judge=python, coin_secret=b"fixed coins")

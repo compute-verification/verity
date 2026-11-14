@@ -15,7 +15,7 @@ others show only that the hypotheses can be met.
   `2 = ¬1` in unit `1`, outputs `{2, 3}`, delivered wires `D = {2}`. `K = {1}` separates `B = {0}` from `D`, and is
   narrower than the exits `{1, 3}` (`W.three_mem_exits`). Two different transcripts that both get gate `1` wrong deliver
   the same value on `D`. `W.count` is the count `card_delivered_le` gives.
-* `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and law, with the exits as
+* `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and sampling design, with the exits as
   separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
 * `A.influence`, `A.accepts`: a sampling design that samples nothing, a session that always accepts and the honest committed
   transcript meet `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
@@ -170,7 +170,7 @@ theorem exits_card_le (P : Partition C n) (B : Finset (Fin n)) :
         exact ⟨hgc, u, rfl, hgu⟩
     _ ≤ ∑ u ∈ B, (P.exits {u}).card := card_biUnion_le
 
-/-- **The harm form is not vacuous**: on any partition and law, the exits and their per-unit widths meet every
+/-- **The harm form is not vacuous**: on any partition and sampling design, the exits and their per-unit widths meet every
 hypothesis of `card_influenceSet_le_harm`. -/
 theorem harm_witness (P : Partition C n) {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) (L : Law n)
     (a : Fin C.N → Bool) (δ : ℝ≥0∞) :

@@ -20,6 +20,8 @@ sys.path.insert(0, str(HERE))
 import stall_probe as sp  # noqa: E402
 
 ORIGIN = 10.0
+#: the process label the relay's serve program gives the probe
+RELAY = "warden"
 
 
 def _stat(tid: int, state: str, minor: int, major: int) -> str:
@@ -65,7 +67,7 @@ def test_a_d_episode_is_kept_with_its_kernel_functions_faults_stack_and_cgroup_a
     w.set(100, "S", minor=5)
     w.set(101, "R", minor=1)
     (w.task(100) / "stack").write_text("[<0>] __wait_rcu_gp+0x15b/0x190\n[<0>] expand_files+0x1d4/0x2c0\n")
-    s = sp.Sampler({"warden": 100, "publisher": 200}, ORIGIN, {100: "ticker"}, proc=proc, cgroups=cgroups)
+    s = sp.Sampler({RELAY: 100, "publisher": 200}, ORIGIN, {100: "ticker"}, proc=proc, cgroups=cgroups)
     s.sample(9.999)
     w.set(100, "S", minor=7)
     s.sample(10.000)
@@ -84,7 +86,7 @@ def test_a_d_episode_is_kept_with_its_kernel_functions_faults_stack_and_cgroup_a
     doc = s.doc()
 
     (e,) = doc["episodes"]
-    assert e["process"] == "warden" and e["tid"] == 100 and e["label"] == "ticker"
+    assert e["process"] == RELAY and e["tid"] == 100 and e["label"] == "ticker"
     assert e["start"] == pytest.approx(0.001) and e["ms"] == pytest.approx(3.0) and e["samples"] == 3
     assert e["wchan"] == {"__wait_rcu_gp": 2, "folio_wait_bit_common": 1}
     assert list(e["wchan"]) == ["__wait_rcu_gp", "folio_wait_bit_common"]
@@ -100,7 +102,7 @@ def test_a_d_episode_is_kept_with_its_kernel_functions_faults_stack_and_cgroup_a
     assert threads[101]["states"] == {"R": 5} and threads[101]["label"] == "thread" and threads[101]["faults"] == [0, 0]
     assert doc["samples"] == 7 and doc["gaps"] == [[pytest.approx(0.004), pytest.approx(16.0)]]
     assert doc["interval_ms"]["max"] == pytest.approx(16.0) and 0.9 <= doc["interval_ms"]["p50"] <= 1.0
-    warden = doc["cgroups"]["warden"]
+    warden = doc["cgroups"][RELAY]
     assert warden["path"] == str(cg) and warden["start"]["memory.events"]["max"] == 3
     assert warden["end"]["memory.events"]["max"] == 4, "the end's state is read at the end"
     assert doc["cgroups"]["publisher"] == {"path": None, "start": None, "end": None}, "a process that isn't there"
@@ -109,7 +111,7 @@ def test_a_d_episode_is_kept_with_its_kernel_functions_faults_stack_and_cgroup_a
 def test_a_thread_is_found_at_the_next_scan_and_an_episode_open_at_the_end_or_at_its_exit_is_closed(tree):
     proc, cgroups, w, _ = tree
     w.set(100, "R")
-    s = sp.Sampler({"warden": 100}, ORIGIN, proc=proc, cgroups=cgroups)
+    s = sp.Sampler({RELAY: 100}, ORIGIN, proc=proc, cgroups=cgroups)
     s.sample(10.0)
     w.set(102, "D", minor=4, wchan="rwsem_down_read_slowpath")
     s.sample(10.0 + sp.SCAN_S / 2)
@@ -127,18 +129,18 @@ def test_a_thread_is_found_at_the_next_scan_and_an_episode_open_at_the_end_or_at
     assert ended[102]["wchan"] == {"rwsem_down_read_slowpath": 2} and ended[102]["stack"] is None
     assert doc["stack"] == "unreadable (root only)"
     assert doc["by_label"]["thread"]["episodes"] == 2 and doc["by_label"]["thread"]["max_ms"] == pytest.approx(10.0)
-    assert sp.summary(doc)["faults"] == {"warden thread": [0, 0]}
+    assert sp.summary(doc)["faults"] == {f"{RELAY} thread": [0, 0]}
 
 
 def test_summary_is_what_warden_json_keeps_each_labels_faults_summed():
     doc = {"by_label": {"ticker": {"episodes": 0}}, "samples": 9, "interval_ms": {"p50": 1.0}, "gaps": [[0.1, 6.0]],
            "stack": "not read",
-           "threads": [{"process": "warden", "label": "ticker", "faults": [1, 0]},
-                       {"process": "warden", "label": "thread", "faults": [2, 1]},
-                       {"process": "warden", "label": "thread", "faults": [3, 0]},
+           "threads": [{"process": RELAY, "label": "ticker", "faults": [1, 0]},
+                       {"process": RELAY, "label": "thread", "faults": [2, 1]},
+                       {"process": RELAY, "label": "thread", "faults": [3, 0]},
                        {"process": "publisher", "label": "thread", "faults": None}]}
-    assert sp.summary(doc) == {"by_label": {"ticker": {"episodes": 0}}, "faults": {"warden ticker": [1, 0],
-                                                                                 "warden thread": [5, 1]},
+    assert sp.summary(doc) == {"by_label": {"ticker": {"episodes": 0}}, "faults": {f"{RELAY} ticker": [1, 0],
+                                                                                 f"{RELAY} thread": [5, 1]},
                                "samples": 9, "interval_ms": {"p50": 1.0}, "gaps": 1, "stack": "not read"}
 
 

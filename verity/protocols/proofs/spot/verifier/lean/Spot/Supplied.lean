@@ -1,11 +1,16 @@
-/-
+module
+
+public import Flock.ZkServer
+public import Spot.Registered
+
+/-!
 Supplied values (`one_stage/registered.py`'s `supplied_root`): a registered value the verifier fills itself, from what it
 holds before the sample, so the prover never chooses it.
 
 * `sources`: the verifier's `{value: [[source, ...], ...]}`, each source `{"port": P}` (the record's `roots` entry of port
   P), `{"value": V}` (its `registered` entry of value V, never a supplied value's), `{"bytes": hex}` (the verifier's own
   bytes), `{"position": "K"}` (K, a decimal below the record's population, after every unit of the log's records,
-  `logBase`, as a u64 big-endian) or `{"window": hex}` (`runSalt`: SHA-512 of `WINDOW_SALT`, the coin, the verifier's
+  `logBase`, as a u64 big-endian) or `{"window": hex}` (`runSalt`: SHA-512 of `RUN_SALT`, the coin, the verifier's
   binding, its stream's digest and its prover's identity as hex, and the record's window as canonical JSON, NUL between
   them, a window that is an object of the canonical domain; none without a binding);
 * a row is its sources' bytes in order (a root the record names, its last entry, as R3 and R7 read a name twice; hex
@@ -22,10 +27,6 @@ holds before the sample, so the prover never chooses it.
   format) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over `verity/one-stage/supplied-salt/v1`,
   the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them.
 -/
-module
-
-public import Flock.Firewall
-public import Spot.Registered
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -37,7 +38,7 @@ open Lean (Json)
 open Flock (V)
 
 def SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v1"
-def WINDOW_SALT : String := "verity/one-stage/window-salt/v1"
+def RUN_SALT : String := "verity/one-stage/window-salt/v1"
 def SOURCES : List String := ["port", "value", "bytes", "position", "window"]
 def SALT_BYTES : Nat := 192
 
@@ -76,6 +77,12 @@ def bytesLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
     let h := (List.range 4).foldl (fun acc k => acc * 256 + (data.get! (4 * i + k)).toNat) 0
     (Array.range (32 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
 
+/-- `registered.half_leaves`: two bytes, one big-endian 16-bit half, as its `16 / bits` leaves of `bits` bits least
+significant first: the row `SecondStage.VERDICT_ONE_LEAF` fills, one 16-bit leaf where `bytesLeaves` gives two. Refused
+until written: no source reads it yet. -/
+def halfLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) :=
+  throw s!"{data.size} bytes at leaves of {bits} bits: a 16-bit half's leaves are not yet read (VERDICT_ONE_LEAF)"
+
 /-- `registered.digests`: a parameter whose leaves are whole `Digest`s, eight SHA-512 words of 64 one-bit leaves each
 (`gates.rowleaf.digest_bits`'s order), or an array of them. -/
 def digests : Flock.Program.Ty → Bool
@@ -104,7 +111,7 @@ def runSalt (coin : ByteArray) (binding : Option (String × String)) (window : J
     | throw "a window salt is bound to a stream and a prover: the verifier holds no binding"
   if !(window matches .obj _) || (Flock.Program.domainError window).isSome then
     throw "the record's window is no canonical JSON object"
-  let head := ((WINDOW_SALT.toUTF8.push 0 ++ coin).push 0 ++ stream.toUTF8).push 0 ++ prover.toUTF8
+  let head := ((RUN_SALT.toUTF8.push 0 ++ coin).push 0 ++ stream.toUTF8).push 0 ++ prover.toUTF8
   return Flock.Sha512.hash (head.push 0 ++ (← Flock.canon window).toUTF8)
 
 private def decimal? (s : String) : Option Nat :=
@@ -162,7 +169,7 @@ def pack (bits wordBits : Nat) (row : Array Nat) : Array Nat :=
 /-- `registered.row_digest`: a registered row's `x` in `schema`, `sha512/row/v1` of its u16 words (`rowWords`), else the
 bit row of its u16 words, little-endian, under `sha512/row/v2` or `sha512/row-seg/v1`. -/
 def rowDigest (schema : String) (row : Array Nat) (wordBits : Nat) : ByteArray :=
-  if schema == Registered.SCHEMA then Flock.Firewall.rowDigest (rowWords row wordBits) else
+  if schema == Registered.SCHEMA then Flock.ZkServer.rowDigest (rowWords row wordBits) else
   let ws := row.flatMap fun x => (Array.range (wordBits / 16)).map fun j => x / 2 ^ (16 * j) % 2 ^ 16
   let bytes := ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) ByteArray.empty
   if schema == Flock.HmRow.ROW_SCHEMA_V2 then Flock.Sha512.hash (Flock.HmRow.rowPrefixV2 (16 * ws.size) ++ bytes)

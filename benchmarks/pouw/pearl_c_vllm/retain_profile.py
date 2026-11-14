@@ -14,7 +14,7 @@ wrapped where its module holds it, skipped where it is absent): per pass, each p
 trees' seconds on the GPU (CUDA events around `served_y.y_tree`, read at the run's end), the writer threads' seconds, and
 /proc/meminfo's Dirty and Writeback at each pass end, with the ending thread's and the process's CPU seconds and the wall
 clock there (``main_cpu_s``, ``process_cpu_s``, ``wall_s``: a step's main-thread CPU against its wall time).  It writes the parts by pass, with served.json's ``step_s`` beside
-them, to ``--profile``.  ``--seed S`` samples the epoch's coins and the hm96 salt key from ``random.Random(S)`` (two serves of
+them, to ``--profile``.  ``--seed S`` takes the epoch's coins and the hm96 salt key from ``random.Random(S)`` (two serves of
 one load then retain the same bytes, so two trees' retention paths compare file by file); ``--wait-ends`` completes each
 step's retained pass in its step (`PassEnds.retain_behind` off).
 
@@ -40,31 +40,31 @@ HERE = Path(__file__).resolve().parent
 GiB = 1 << 30
 #: (module, attribute) of each part timed by `serve`, by its name in the profile; a dotted attribute is a class's method
 PARTS = {
-    "gemm": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun._gemm"),
-    "after": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun._after"),
-    "begin": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.begin"),
-    "poison": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.poison"),
-    "join_sides": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.join_sides"),
-    "retained_call": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._retained"),
-    "excluded": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded"),
-    "excluded_host": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded_host"),
-    "y_tree": ("verity_vllm.protocols.pouw.pearl_c.served_y", "y_tree"),
-    "write_behind": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_behind"),
-    "copies": ("verity_vllm.protocols.pouw.pearl_c.host", "_Copies.start"),
-    "arena_take": ("verity_vllm.protocols.pouw.pearl_c.host", "_Arena.take"),
+    "gemm": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun._gemm"),
+    "after": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun._after"),
+    "begin": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.begin"),
+    "poison": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.poison"),
+    "join_sides": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.join_sides"),
+    "retained_call": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds._retained"),
+    "excluded": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "excluded"),
+    "excluded_host": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "excluded_host"),
+    "y_tree": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y", "y_tree"),
+    "write_behind": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "write_behind"),
+    "copies": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_Copies.start"),
+    "arena_take": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_Arena.take"),
     "stream_sync": ("torch.cuda.streams", "Stream.synchronize"),
     "event_sync": ("torch.cuda.streams", "Event.synchronize"),
-    "landed": ("verity_vllm.protocols.pouw.pearl_c.host", "_landed"),
-    "writer": ("verity_vllm.protocols.pouw.pearl_c.host", "_write_host"),
-    "join": ("verity_vllm.protocols.pouw.pearl_c.ends", "joined"),
-    "write_retained": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._write_retained"),
-    "weights_files": ("verity_vllm.protocols.pouw.pearl_c.ends", "_linked"),
-    "pass_files": ("verity_vllm.protocols.pouw.pearl_c.ends", "_write"),
-    "manifest": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_manifest"),
-    "readback": ("verity_vllm.protocols.pouw.pearl_c.ends", "_bytes"),
-    "end": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.end"),
-    "retained_ends": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.retained_ends"),
-    "finish": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.finish"),
+    "landed": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_landed"),
+    "writer": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_write_host"),
+    "join": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "joined"),
+    "write_retained": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds._write_retained"),
+    "weights_files": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "_linked"),
+    "pass_files": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "_write"),
+    "manifest": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "write_manifest"),
+    "readback": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "_bytes"),
+    "end": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds.end"),
+    "retained_ends": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds.retained_ends"),
+    "finish": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds.finish"),
 }
 
 
@@ -246,12 +246,12 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
         import random
 
         from verity.protocols.accounting.pouw.verifier import verifier
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
         draw = random.Random(args.seed)
         verifier.coins = draw.randbytes
         PPD.new_salt_key = lambda scheme: draw.randbytes(32)
     if args.wait_ends:
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
         PPD.PearlCDeviceRun.retain_behind = False
     prof = _Profile()
     parts = _install(prof)

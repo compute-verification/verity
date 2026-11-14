@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.ProvedScope
+public import Flock.Registered
+
+/-!
 The circuit and public files `verify --zk` holds to the form the sampled audit's knowledge soundness covers
 (`Flock.Guarantees.SampledKSLiveV3`): every port a `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the
 scope check reads them (`rowsOk`), each of its own name, no two ports whose registered frame-v3 roots over the public
@@ -27,10 +32,6 @@ one root under different domains (`collidesPub`).
   `frame` and `row_key_sha512`, each port's `schemas` entry, each port's rows against its `roots` entry, each port's
   pinned dummy row). It reads no session, so files with none are held to it.
 -/
-module
-
-public import Flock.ProvedScope
-public import Flock.Registered
 
 @[expose] public section
 

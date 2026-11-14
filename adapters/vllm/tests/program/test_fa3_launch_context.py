@@ -3,7 +3,7 @@
 Torch-free: the registry helpers (`parse_launch_context`, `launch_seqlen_q`, `attention_geometry` on a cc 9.0 / cc 8.9 profile) and the
 workload-side derivation (`verity_vllm.pipeline.launch_context`).  The measured case: Llama-3.2-1B (NH 32, KVH 8, D 64: g = 4) -- an 8-token
 prompt alone runs the 64 x 192 tile (kBlockN 192), the same prompt in a prefill launch with a 1024-token prompt runs 192 x 128 (kBlockN 128).
-The measured workload file is `test_fa3_launch_context_of_record`.
+The stored Llama-3.2-1B B8 workload's launch contexts are `test_fa3_launch_context_of_record`.
 """
 from __future__ import annotations
 
@@ -34,6 +34,28 @@ def test_parse_launch_context_forms():
         TG.parse_launch_context("[1024,0]")
 
 
+NEITHER_A_COUNT_NOR_JSON = ("x", "\u00b2", "--5", "+5", "-", "1024,1", "[1024,", "{batch: 1}", "conflict!")
+
+
+@pytest.mark.parametrize("text", NEITHER_A_COUNT_NOR_JSON)
+def test_a_string_that_is_neither_a_count_nor_json_is_refused_by_name(text):
+    """The Build's `--launch-context` hands its text to `parse_launch_context`.  The refusal is the function's own: it names the text
+    and says what a launch context may be, where `int`'s and `json`'s errors do neither."""
+    with pytest.raises(ValueError, match="^launch context: ") as refusal:
+        TG.parse_launch_context(text)
+    said = str(refusal.value)
+    assert type(refusal.value) is ValueError and repr(text) in said
+    assert all(form in said for form in ("(1024)", "[1024, 1, 1]", '{"0": 1024}', '{"batch": [[[rows, start], ...], ...]}', '"conflict"'))
+
+
+@pytest.mark.parametrize(("text", "said"), [("0", "max_seqlen_q 0 < 1"), ("-3", "max_seqlen_q -3 < 1"), ("[1024,0]", "must be >= 0 / >= 1"),
+                                            ("true", "launch context: True"), ("1.5", "unsupported spec float")])
+def test_a_count_or_json_that_is_no_launch_context_keeps_its_own_refusal(text, said):
+    with pytest.raises(ValueError) as refusal:
+        TG.parse_launch_context(text)
+    assert said in str(refusal.value) and "neither a count nor JSON" not in str(refusal.value)
+
+
 def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
     # no context: own rows (B1 semantics)
     assert TG.launch_seqlen_q(8, 0, None) == (8, "own rows")
@@ -51,6 +73,17 @@ def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
         TG.launch_seqlen_q(1, 7, ctx)
     with pytest.raises(TG.LaunchContextConflict):
         TG.launch_seqlen_q(8, 0, TG.parse_launch_context("conflict"))
+
+
+NO_TABLE = object()
+
+
+@pytest.mark.parametrize("table", [NO_TABLE, None, {}, [], 0, ""], ids=["left out", "null", "no step", "an empty list", "zero", "an empty string"])
+def test_a_declared_context_whose_step_table_is_left_out_or_empty_names_no_step(table):
+    # a table left out, null or empty is a table of no steps: the refusal of a step the context does not name, which lists the steps it has
+    ctx = {"declared": True} if table is NO_TABLE else {"declared": True, "max_seqlen_q_by_step": table}
+    with pytest.raises(TG.LaunchContextInvalid, match=r"names steps \[\] but the request runs step 3"):
+        TG.launch_seqlen_q(8, 3, ctx)
 
 
 def test_fa3_tile_flips_with_the_launch_context_fa2_does_not():
@@ -124,3 +157,12 @@ def test_unreadable_manifest_is_an_error_not_no_context():
         LC.shape_contexts({"sweep": {"input_lengths": [8, 1024]}})
     # a shape the workload does not have is genuinely "no context" (the row's default build_request of the longest prompt / largest cap)
     assert LC.spec_for({"sweep": {"input_lengths": [8, 1024], "output_caps": [15, 69]}}, 1024, 127) == ""
+
+
+@pytest.mark.parametrize("requests", [None, [], [{"foo": 1}]])
+def test_a_workload_of_no_declared_request_and_no_sweep_is_refused_by_name(requests):
+    # the workload `common.launch_batch` reads off a φ that declares no request (a class's Program, off batch invariance)
+    w = {"requests": requests, "engine": {"target": {"batch_invariant": False}}}
+    for read in (LC.batch_dispatch, LC.shape_contexts):
+        with pytest.raises(ValueError, match=r"declares no requests with their prompt_len and no sweep .* The fix: .* its launch"):
+            read(w)

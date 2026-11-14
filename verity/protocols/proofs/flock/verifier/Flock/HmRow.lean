@@ -937,8 +937,8 @@ the branch that reads it, which here is the last. -/
 
 /-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
 (`Net.parseWith`) and the file hashed in a task beside them,
-`parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
-`flock-verify` compiles `parse` too, and runs no task. -/
+`parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `ZkServer.Hello.Setup.setup`). Not a `@[csimp]`:
+`verity-verify-proof` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
     (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
   parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre
@@ -1740,7 +1740,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   checkRows c
   return c
 
-/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the ZK server's setup (`Firewall.Hello.Setup.setup`). -/
+/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the ZK server's setup (`ZkServer.Hello.Setup.setup`). -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
   if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseFast tags bytes tables else do
@@ -2436,7 +2436,7 @@ table `j` is `setupH`'s statement of part `j` as a subset sample of the populati
 stratified sample, whose sampling design is held to the verifier's own derivation once, for the session, before it is split. Every part
 comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-sample's law is held to, `stratified` its own `K`, at which a stratified sample's law is its own derivation, `closure` its
+sample's sampling design is held to, `stratified` its own `K`, at which a stratified sample's sampling design is its own derivation, `closure` its
 own closure map, which a work sample's closure is held to, and `publicInputs` its own recomputation of the public input
 words (`HmIn.checkOwn`). A table with pinned outputs (`HmRow.pinnedCount`) is refused, as `ProvedScope.check` refuses
 it, until a soundness theorem covers that form. -/
@@ -2492,7 +2492,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
+  -- the sample's sampling design and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
@@ -2650,7 +2650,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
+  -- the sample's sampling design and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with

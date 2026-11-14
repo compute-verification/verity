@@ -11,7 +11,7 @@ path's prover commits and its verifier reads.
    (`tile_refs`).
 
 The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
-reference tool, not a verifier: ``verity/protocols/accounting/pouw/clear/clear_audit.py``.  Served execution phases are checked by PoUW's verifier, the Lean (`lean/check`, `core_check`).
+reference tool, not a verifier: ``verity/protocols/accounting/pouw/prover/clear/clear_audit.py``.  Served execution phases are checked by PoUW's verifier, the Lean (`lean/check`, `core_check`).
 
 Commitments are `verity.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
 hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is

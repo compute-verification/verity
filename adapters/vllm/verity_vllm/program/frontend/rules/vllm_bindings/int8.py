@@ -26,7 +26,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _norm_attn,
     attn_kind_for,
 )
-from verity_vllm.program.frontend.torch_frontend import _tensor_type
+from verity_vllm.program.frontend.strided_views import _tensor_type
 
 #: `engine.int8_attention_vllm.Int8AttentionImpl`, by name: the frontend reads the instantiated layers, never the engine
 INT8_ATTENTION_IMPL = "Int8AttentionImpl"
@@ -159,7 +159,8 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
         return ("exp2_lut127",) if any(isinstance(ln, str) and self.impl_refusal(ln) is None for ln in layers) else ()
 
     def impl_refusal(self, layer_name: str) -> str | None:
-        obs = (_OBSERVED["attention_impls"] or {}).get(layer_name) or {}
+        impls = _OBSERVED["attention_impls"]    # none before an instantiation observes them, nor for a layer it did not
+        obs = impls[layer_name] if impls and layer_name in impls else {}
         if not str(obs.get("impl", "")).endswith(f".{INT8_ATTENTION_IMPL}"):
             return f"the layer's observed impl {obs.get('impl')!r} is not {INT8_ATTENTION_IMPL}"
         if not obs.get("int8_k_scales"):

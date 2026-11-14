@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # What the ZK server adds to one lane statement: served.sh on a stand-in window (H1S_SMOKE=K), lane 0 alone, no negatives,
-# once under the ZK server (H1S_FIREWALL=1) and once without it (0), each lane Lean-checked. out/summary.json has each
-# arm's job-cgroup CPU seconds, the flock-firewall processes' CPU seconds (summed over each one's last /proc sample: the
-# prover never waits for them, so its timed.py record leaves them out) and summed peak RSS, and served.sh's summary.
+# once under the ZK server (H1S_FIREWALL=1) and once without it (0), each lane Lean-checked. out/arms.txt has each arm's
+# exit code and job-cgroup CPU seconds; the text file beside it has, a line an arm, the flock-firewall processes' CPU
+# seconds (summed over each one's last /proc sample: the prover never waits for them, so its timed.py record leaves them
+# out), how many they were and their summed peak RSS in KB; out/fw<ARM>/ is that arm's served.sh out/, its summary.json
+# among it, and out/fw<ARM>.log its log.
 #   research run --on auto --cpus 16 --mem-gb 240 --timeout 240m --custody-ttl 12h --cwd source -- bash benchmarks/pouw/h1_lanes/zk_cost.sh
 # env: ZC_K (2048)  ZC_ARMS ("1 0")  ZC_MEM_GB (served.sh's H1L_MEM_GB, 230)  HZ_CACHE (/workspace/research/cache/pouw-hidden-zk)
 set -uo pipefail

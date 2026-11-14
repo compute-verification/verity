@@ -20,7 +20,7 @@ holds of the whole ledger (`verifyLedger_inv`).
 `pinnedChallengePhase` take the window whose root the caller names, closed by its v2 `end` (`auditedOpen_ok`,
 `pinnedChallengePhase_ok`). So the ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end
 (`ledgerShows_of`). `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded
-(`sessionNamed_root`).
+(`challengePhaseNamed_root`).
 
 The challenger's functions are monadic. Each fact about one is a Hoare triple proved by `mvcgen`, and `of_triple` reads
 it back at an `.ok` result.
@@ -505,6 +505,23 @@ theorem jsonTrue_eq' {j : Json} (h : jsonTrue j = true) : j = .bool true := by
 theorem nat_nonnull {j : Json} {n : Nat} (h : Spot.nat? j = some n) : j.isNull = false := by
   cases j <;> first | rfl | simp [Spot.nat?, Spot.int?] at h
 
+/-! The reader compares a value with `null` or a Boolean by a match (`Json.isNull`, `jsonTrue`, `Spot.jsonBoolIs`), as
+it compares one with a string (`Spot.jsonStrIs`, read back by `LiveSalt.jsonStrIs_eq`), never by `BEq Json`'s `==`, a
+`partial def` no proof reads. Each comparison holds of the value it names (`_self`) and of no other (`_eq`). -/
+
+theorem jsonTrue_self : jsonTrue (.bool true) = true := by rfl
+
+theorem isNull_eq {j : Json} (h : j.isNull = true) : j = .null := by
+  cases j <;> first | rfl | cases h
+
+theorem isNull_self : Json.null.isNull = true := by rfl
+
+theorem jsonBoolIs_eq {j : Json} {b : Bool} (h : Spot.jsonBoolIs j b = true) : j = .bool b := by
+  cases j <;> simp_all [Spot.jsonBoolIs]
+
+theorem jsonBoolIs_self (b : Bool) : Spot.jsonBoolIs (.bool b) b = true := by
+  simp [Spot.jsonBoolIs]
+
 theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j = .str s := by
   cases j <;> first | (subst h; rfl) | exact absurd h.symm hs
 
@@ -605,7 +622,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
     ⟨enK, enS, by rw [hop]; exact hlt, jsonTrue_eq' hclosed, jsonTrue_eq hcomp1, hcomp2, hrl,
       by rw [hop, ← hwl]; exact hl1, hl2⟩, huniq⟩
 
-theorem sessionOf_spec (key : ChallengerKey) (record log close : Json) :
+theorem challengePhaseOf_spec (key : ChallengerKey) (record log close : Json) :
     ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem recordOfJson_spec (j : Json) : ⦃⌜True⌝⦄ ChallengerRecord.ofJson j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -620,11 +637,11 @@ theorem commitment_of {q l : Nat} {s t : String} (h : (q == l && s == t) = true)
 -- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record
 set_option maxHeartbeats 1000000 in
 /-- `challengePhaseNamed` returns the commitment whose root's hex the ledger's `end` recorded. -/
-theorem sessionNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_root {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok r) : Flock.hexOf r.1.root = a.commitment := by
   refine of_triple (Q := fun r => Flock.hexOf r.1.root = a.commitment) ?_ h
   clear h
-  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_spec, recordOfJson_spec, mapM_spec]
   apply commitment_of <;> with_reducible assumption
 
 end Properties.Pouw.LiveSalt.Ledger

@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.PublicInst
 
 /-!
-# The hidden-output headlines at the general form, over what flock-verify accepts
+# The hidden-output headlines at the general form, over what verity-verify-proof accepts
 
 Where the wires feed the unit or the outputs (`ProvedScope.wiresFeed`), a hidden-output statement the check passes is
 in the general form (`Checks.scopeGen`: `Layout.scopeGenH`), and the headline there is the general form's
@@ -52,7 +52,7 @@ section Hidden
 open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)
 
-/-- **One hidden-output non-ZK sampled session that flock-verify accepts, where the wires feed, is sound.**
+/-- **One hidden-output non-ZK sampled session that verity-verify-proof accepts, where the wires feed, is sound.**
 `General.flock_headline_exec_hidden_gen` over `Verifies`. -/
 theorem flock_headline_exec_hiddenG
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) {mPts : ℕ}
@@ -129,7 +129,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session that flock-verify accepts, where the wires feed, is sound.**
+/-- **One hidden-output `--zk` sampled session that verity-verify-proof accepts, where the wires feed, is sound.**
 `General.zk_session_soundH_gen` over `VerifiesZK`. -/
 theorem zk_session_soundHG
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = true) (hn : I.count ≤ 1)
@@ -183,7 +183,7 @@ theorem zk_session_soundHG
     (hs.loadH hh) (hs.scopeGen hh hf) σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOkH hh hn) hRec hk hRw hM hρ
     hr ht' K₀ τ (hCR hs)
 
-/-- **One hidden-output `--zk` sampled session of `J` tables that flock-verify accepts, where the wires feed, is
+/-- **One hidden-output `--zk` sampled session of `J` tables that verity-verify-proof accepts, where the wires feed, is
 sound.** `ZkHidden.zk_session_soundHJI` over `VerifiesZK`, at every number of tables. -/
 theorem zk_session_soundHJG
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = true)
@@ -241,7 +241,7 @@ theorem zk_session_soundHJG
     (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1 (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2
     kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables that flock-verify accepts, where the wires
+/-- **One hidden-output `--zk --registered` sampled session of `J` tables that verity-verify-proof accepts, where the wires
 feed, is sound, and its registered reads are checked.** `ZkHidden.zk_session_soundHJI` over `VerifiesZKR`, at a public
 file with or without shared rows (`rsZHJI` reads none), and `ZkReg.checked_of_acceptsHJI` at every accepted outcome. -/
 theorem zk_session_soundHJRG

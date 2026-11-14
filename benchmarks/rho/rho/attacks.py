@@ -143,6 +143,24 @@ class Tile:
         return lambda budget: tile(budget.inputs, *values) * scale
 
 
+def held_layers(k: float, layer_bits: float, products: float, entry: float, step_tokens: float, layers: int) -> float:
+    """The most forward products one block finishes holding `n` contiguous layers' updates (`n · layer_bits`, `b_w` a
+    parameter, `Shard`'s convention) and receiving, for each of at most a step's tokens (which share the weights it
+    holds), the token's entry to the first of them (`entry` bits: `β_x d`, the replay-consistent coder's rate over the
+    residual width): `max_n n P min((k − n · layer_bits) / entry, T_step)`, with `P` a layer's forward products a
+    token. The block computes the layers' activations itself, so it reads none of them: E1's Proposition 3 on its
+    activation rate (`classes.fanout_priced`) allows a block `aOut k / β_x` forward products, which one held layer
+    exceeds from `layer_bits / (1 − aOut d / P)` bits where `P > aOut d`. 0 below one layer's update. It counts
+    forward products against that limit alone, so it is no entry of `ATTACKS`."""
+    best = 0.0
+    for n in range(1, layers + 1):
+        room = k - n * layer_bits
+        if room <= 0:
+            break
+        best = max(best, n * products * min(room / entry, step_tokens))
+    return best
+
+
 @dataclass(frozen=True)
 class Point:
     """A measured execution's block: `bits` novel bits and `flops` FLOPs (`None`: any compute), which did the

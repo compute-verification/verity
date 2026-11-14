@@ -9,23 +9,27 @@ returns its verdict and reason.
 `members_run` is the Python of `OneStageZk.membersRun`, the part of that check that reads the per-member form: the
 statements' structure, the sessions' coins held to the trees the window's challenger session logged, each closed after
 its session's evidence before the next is opened, the members laid over the registration's population, each registered
-value one tree, the registration's roots each one member's, then each statement's session verified on its member's own
-files. It refuses with Lean's reason where Lean refuses, and is no verdict itself: its `Run` is the sessions'
-findings, which the audit above it (v1's check at the coins) reads. Each session's verdict is the
-Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `proofs.verify` runs it).
+value one tree, the registration's roots each one member's, each statement's member one the sample holds a unit of
+(`_sampled`, Lean's `sampledHeld`), then each statement's session verified on its member's own files. It refuses with
+Lean's reason where Lean refuses, and is no verdict itself: its `Run` is the sessions' findings, which the audit above
+it (v1's check at the coins) reads. Each session's verdict is the Flock verifier's own (`flock_verdict`: its
+executable's ``verify --zk``, as `proofs.verify` runs it).
 
 Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
-the reads Lean's `Member.statement` makes of them, then what a session's verdict checks of the files alone
-(`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the sample missed is refused there as
-one it holds is. The form the sampled audit's knowledge soundness covers is the Flock verifier's own there too, and so
-is what a session's setup takes of the public file's header and rows (`flock_form`: its executable's ``ks-form``).
+the reads Lean's `Member.statement` makes of them, on the member's own lookup tables (the blobs' pinned tables its
+circuit looks up, `proofs.own_tables`, so the members of a window may look up different tables), then what a session's
+verdict checks of the files alone (`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the
+sample missed is refused there as one it holds is. The form the sampled audit's knowledge soundness covers is the Flock
+verifier's own there too, and so is what a session's setup takes of the public file's header and rows
+(`flock_form`: its executable's ``ks-form``).
 
 Where it is not Lean's step for step, each on a case neither side accepts:
 
 * **A link's ``root_B`` length** (`challenger.LINK_ROOT_LEN`). Lean holds each session's link to the length its
-  statement fixes for its table's ``root_B`` (`OneStageZk.rootBTables`, the session set up on the member's files) before
-  it verifies any session. This sets up no session, so it passes no length (`TABLES`): a session Lean refuses there for
-  that length alone is here a session its own verdict rejects, since the verifier holds ``root_B`` to that length.
+  statement fixes for its table's ``root_B`` (`OneStageZk.ownRootBTables`, the session set up on the member's files)
+  before it verifies any session. This sets up no session, so it passes no length (`TABLES`): a session Lean refuses
+  there for that length alone is here a session its own verdict rejects, since the verifier holds ``root_B`` to that
+  length.
 * **A circuit's ``vus_per_block``** (`OneStageZk.Member.blockHeld`). Lean refuses a circuit file that parses with
   another ``vus_per_block`` than the parameters', and one that does not parse for that, where it holds the member's
   files. This reads the file's META alone, so it refuses both for the ``vus_per_block``.
@@ -41,6 +45,9 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
+* **The members' wiring** (the parameters' ``proofs.wiring``, `OneStageZk.wiringOf`, held by `wiresHeld` after the
+  sessions): parameters naming one raise `Outside`. This reads no circuit's ports or public file's rows, which that
+  check compares.
 * **A registered file's own form** (`Flock.Registered.ofJson`, which `classHeld` and each statement read it through).
   This reads a member's registered file by the fields `classHeld` compares, `Outside` where one is not a registered
   port's; the file's other refusals are the Flock verifier's, at the member's session, and are not answered here for a
@@ -145,8 +152,8 @@ class _Refused(Exception):
 @dataclass(frozen=True)
 class Statement:
     """What one member's session is verified on, each file a blob's: the member's circuit and public files, the
-    verifier's program (its descriptor's bytes), partition object and registered file for the member, the pinned lookup
-    tables the blobs hold, by name, and the session's record and proof files, by name."""
+    verifier's program (its descriptor's bytes), partition object and registered file for the member, the member's own
+    lookup tables, the pinned ones its circuit looks up, by name, and the session's record and proof files, by name."""
 
     circuit: Path
     public: Path
@@ -210,11 +217,14 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
     they are not in that form."""
     form = Outside("the parameters and the evidence are not in the per-member form as its parsers read it "
                    "(`OneStageZk.membersParamsOfJson`, `membersEvidenceOf`)")
+    if isinstance(params.get("proofs"), dict) and "wiring" in params["proofs"]:
+        raise Outside("the parameters name the members' wiring, whose check (`OneStageZk.wiresHeld`) this does not run")
     try:
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)
               and bool(ms) and type(sts) is list and type(evidence["sessions"]) is list
-              and type(evidence["proved_units"]) is list and isinstance(evidence["coins"], dict)
+              and type(evidence["proved_units"]) is list and all(_nat(u) for u in evidence["proved_units"])
+              and isinstance(evidence["coins"], dict)
               and isinstance(params["challenger"], dict) and isinstance(params["partition"], dict)
               and isinstance(params["program"], dict))
         for m in ms.values() if ok else ():
@@ -326,6 +336,15 @@ def _laid(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
         raise _Refused(MEMBERS_LAID)
 
 
+def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:
+    """`OneStageZk.sampledHeld`: each statement's member, in the statements' order, has a unit among the evidence's
+    ``proved_units`` `want`; the first that has none refuses (`OneStageZk.unsampled`)."""
+    for name in held:
+        if not any(lo <= u < hi for u in want for lo, hi in ms[name]["units"]):
+            raise _Refused(f"member {name}: the sample holds none of its units, and a member the sample missed has no "
+                           "statement")
+
+
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
     """A registered file's ports by the fields `classHeld` compares, in the file's order; `Outside` where one is not
     read."""
@@ -387,6 +406,28 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
         name, bare = mine[0]
         out[name].append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")})
     return out
+
+
+def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Mapping[str, Any]) -> dict[str, Any]:
+    """`OneStageZk.Member.slice`: the member's count of units, its roots of the registration and its scheme."""
+    return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
+
+
+def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Each member's slice of the registration `record` (`OneStageZk.Member.slice`), for the members `members` by name,
+    each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
+    registration's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), and the registration's
+    scheme. `population_why` holds a member's public file to its slice. `ValueError` with Lean's reason where the
+    members are not laid over the registration's population (`OneStageZk.laidHeld`) or a root of the registration is
+    not one member's: an audit outside the per-member form's run reads a member's slice here, never by a rule of its
+    own."""
+    ms = {name: {"units": [list(r) for r in units]} for name, units in members.items()}
+    try:
+        _laid(ms, record)
+        roots = _roots(ms, record)
+    except _Refused as e:
+        raise ValueError(str(e)) from None
+    return {name: _slice(m, roots[name], record) for name, m in ms.items()}
 
 
 def _meta(circuit: Path) -> Any:
@@ -500,10 +541,12 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
     return population_why(units, strata, header, slice_)
 
 
-def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes,
-           tables: Sequence[tuple[str, Path]], strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path]:
-    """`OneStageZk.Member.files`: the member `name`'s circuit and public files, read as `Member.statement` reads them
-    and held with no session (`files_why`); a refusal names the member."""
+def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, strata: Any,
+           slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+    """`OneStageZk.Member.files`: the member `name`'s circuit and public files and its own lookup tables, the blobs'
+    pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as `Member.statement` reads
+    them and held with no session (`files_why`); a refusal names the member. A table its circuit looks up that the
+    blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
     try:
         circuit = _blob(blobs, m["circuit"], "circuit")
         meta = _meta(circuit)
@@ -511,8 +554,10 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             lookups = PF.lookups_of(meta)
         except ValueError as e:
             raise _Refused(str(e)) from None
-        if (why := PF.tables_why(lookups, blobs)) is not None:
+        own = PF.own_tables(lookups, blobs)
+        if (why := PF.tables_match_why(own, lookups)) is not None:
             raise _Refused(why)
+        tables = tuple((n, blobs[PF.MUFU_SHA512[n]]) for n in own)
         if m["registered"] is None and PF.reads_registered(descriptor):
             raise _Refused("registered: the program reads registered values (a RegisteredInput among its "
                            "definitions) and the verifier holds no registered reads: verify with its own "
@@ -526,7 +571,7 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             raise _Refused(why)
     except _Refused as e:
         raise _Refused(f"member {name}: {e}") from None
-    return circuit, public
+    return circuit, public, tables
 
 
 def flock_verdict(st: Statement) -> dict[str, Any]:
@@ -611,13 +656,13 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         _laid(ms, record)
         _class(ms)
         roots = _roots(ms, record)
+        _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
         except (P.QueryRefused, ValueError) as e:
             strata = e
         descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
-        tables = tuple((n, blobs[d]) for n, d in PF.MUFU_SHA512.items() if d in blobs)
-        files = {name: _files(name, m, blobs, descriptor, tables, strata,
+        files = {name: _files(name, m, blobs, descriptor, strata,
                               {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
@@ -628,8 +673,9 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
                 _, parsed = _record(path, s["name"])
             except _Refused as e:
                 raise _Refused(f"member {name}: {e}") from None
-            statement = Statement(*files[name], descriptor, params["partition"], ms[name]["registered"], tables, path,
-                                  tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
+            circuit, public, tables = files[name]
+            statement = Statement(circuit, public, descriptor, params["partition"], ms[name]["registered"], tables,
+                                  path, tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
             findings.append(_session(s["name"], name, statement, parsed, verdict))
         proved = tuple(u for f in findings for u in f.units)
         every = all(f.accepted for f in findings)

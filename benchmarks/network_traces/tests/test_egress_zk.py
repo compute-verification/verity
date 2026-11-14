@@ -1,7 +1,7 @@
 """egress_zk's host side: the execution phase it reads (each bucket's state renders the network certifier's row, its
 registration read under the test key) and each member's host read (`egress_zk.refused`, as Lean's registered reads make it, of the
 rows the units compute) as the member's: honest accepted with every o0 1 and every row the warden's, lying's changed
-unit's row not the warden's, moved's at the other unit's position. Lean's statement setup (`flock-verify statement`,
+unit's row not the warden's, moved's at the other unit's position. Lean's statement setup (`verity-verify-proof statement`,
 `Registered.checkComplete` among its checks) holds each staged member to the verifier's registered reads of every
 port. Nothing here proves (`egress_zk.prove` does, on a node)."""
 

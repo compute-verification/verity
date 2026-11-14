@@ -38,7 +38,7 @@ open FlockSoundness.Discharge.Integrate (DrawSetup)
 
 variable {n : ℕ} (I : Inputs) (own : Option ByteArray) (mPts : ℕ)
 
-/-- **A sample flock-verify sets up under hidden outputs at the verifier's public inputs `own`**: `DrawSetupH` with
+/-- **A sample verity-verify-proof sets up under hidden outputs at the verifier's public inputs `own`**: `DrawSetupH` with
 `Stmt.setupHidden … own`. -/
 structure DrawSetupHP (S : Finset (Fin n)) (d : Lean.Json) where
   st : Stmt

@@ -1,4 +1,4 @@
-"""lean-agreement: `check.py --lean-agreement` as check's lean-agreement step runs it, on the flock-verify the task reads (at
+"""lean-agreement: `check.py --lean-agreement` as check's lean-agreement step runs it, on the Lean verifier the task reads (at
 its var `verify`) and the upstream build and inputs `upstream.json` pins, fetched from the evidence store as ci.py fetches what
 it pins (`research data fetch`) and held to the pin's sha256.  Those fetches and ci.py's read the store's remote this
 process's environment names: a `research run` job on a node with no store config of its own gets one with --store-read.  An

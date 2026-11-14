@@ -51,13 +51,13 @@ def _module(name: str, path: Path):
 TV = _module("test_served_verdicts", HERE / "test_served_verdicts.py")
 S = TV.S
 T = _module("test_pearl_c_vllm", ROOT / "benchmarks" / "pouw" / "tests" / "test_pearl_c_vllm.py")
-SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_passes.py")
 
 
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
     from verity.protocols.accounting.pouw.verifier import verifier as PV
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
@@ -101,7 +101,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": w}}))
 
     def row() -> dict:
-        return S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+        return S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
 
     before = row()
     assert before["verdict"] == "missing" and f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]

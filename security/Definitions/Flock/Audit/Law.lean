@@ -9,7 +9,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
 /-!
-# Draw laws
+# Sampling designs
 
 A sampling design is the verifier's coin space `Ω`, uniform, and the set of units each coin samples, core's `Verity.Law`
 (`Definitions.Core.Draw`) over `Fin n`. What a sampling design gives a consumer is its escape function: the probability that a sample

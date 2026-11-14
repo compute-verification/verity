@@ -16,7 +16,7 @@ from verity.definitions.registry import tp_allreduce as T  # noqa: E402
 from verity.definitions.registry import tp_allreduce_check as K  # noqa: E402
 
 from tests.properties import tp4_nccl_tree_replay as X  # noqa: E402
-from verity_vllm.properties.record import DIR, PropertyRecord  # noqa: E402
+from verity_vllm.records.property_record import DIR, PropertyRecord  # noqa: E402
 
 N = 8192
 NCCL_ENV = {**X.BI_PINS, "NCCL_P2P_DISABLE": "1", "NCCL_LAUNCH_MODE": "GROUP", "NCCL_NTHREADS": "1"}
