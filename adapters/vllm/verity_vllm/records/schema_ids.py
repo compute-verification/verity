@@ -173,6 +173,16 @@ WEIGHTS_OF_RECORD_SCHEMA = "verity/commit/weights-of-record/v2"
 #: writes it, and a row calls a record that carries it stale
 WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 
+# --- the properties (`verity_vllm.properties`)
+#: the manifest of a difftest's cases, `manifest.json` in the directory `properties.admission.produce` writes them to
+DIFFTEST_PRODUCE_SCHEMA = "verity-gen/difftest-produce/v1"
+#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which
+#: `properties.admission`'s `main` writes
+QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
+#: the golden corpus (`properties/golden/corpus.json`), which `properties.golden.record` writes; `load_corpus` gives an
+#: empty one with it where there is no file
+GOLDEN_CORPUS_SCHEMA = "verity-gen/golden/v1"
+
 # --- the TP row (`verity_vllm.pipeline.tp`)
 #: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
 TP_REPLAY_DEFERRED_SCHEMA = "verity-vllm/tp-replay-deferred/v1"
