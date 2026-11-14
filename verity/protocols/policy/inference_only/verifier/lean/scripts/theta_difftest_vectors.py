@@ -5,8 +5,8 @@
 
 Writes three files under `DIR/baseline_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted"}` as
 `InferenceOnlyCheck.Theta.check` reads them (`InferenceOnlyCheck.Theta`'s docstring); `expanded.jsonl`, the same case expanded gate by
-gate (`inference_only_reference.expand_baseline`) as `InferenceOnlyCheck.Theta.checkUnrolled` reads it, or `null` where the policy check
-refuses the instance or its provenance is not one entry per θ entry; and `python.jsonl`, `inference_only_reference.check_baseline`'s
+gate (`inference_only_reference.expand_theta`) as `InferenceOnlyCheck.Theta.checkUnrolled` reads it, or `null` where the policy check
+refuses the instance or its provenance is not one entry per θ entry; and `python.jsonl`, `inference_only_reference.check_theta`'s
 results. The Lean audit runs `InferenceOnlyCheck/ThetaDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
 
 Case `seed`'s declaration, for the first `COUNT`, is one of `difftest_vectors`' shapes with each parameter bound at
@@ -303,7 +303,7 @@ def pinned() -> list[dict]:
         for seed in range(1000):
             rng = random.Random(10_000 + seed)
             made = build(rng, text, params, lambda c: c, bad, at)
-            if reference.check_baseline(made["case"]["instance"], made["case"]["trusted"]).get("error") == code:
+            if reference.check_theta(made["case"]["instance"], made["case"]["trusted"]).get("error") == code:
                 out.append(made | {"malformed": code, "seed": seed})
                 break
         else:
@@ -316,7 +316,7 @@ def pinned() -> list[dict]:
     for bad, code in TYPED:
         for seed in range(1000):
             made = build(random.Random(20_000 + seed), text, params, lambda c: c, bad, 2)
-            if reference.check_baseline(made["case"]["instance"], made["case"]["trusted"]).get("error") == code:
+            if reference.check_theta(made["case"]["instance"], made["case"]["trusted"]).get("error") == code:
                 out.append(made | {"malformed": code, "seed": seed})
                 break
         else:
@@ -354,7 +354,7 @@ def expanded(c: dict):
     prov = inst.get("provenance")
     if not (isinstance(prov, list) and len(prov) == len(inst["theta"])):
         return None
-    return {"instance": reference.expand_baseline(inst), "trusted": c["trusted"]}
+    return {"instance": reference.expand_theta(inst), "trusted": c["trusted"]}
 
 
 def line(obj) -> str:
@@ -372,7 +372,7 @@ def write(out: Path, count: int = COUNT) -> dict[str, Path]:
         for c in cases:
             fc.write(line(c))
             fe.write(line(expanded(c)))
-            fp.write(line(reference.check_baseline(c["instance"], c["trusted"])))
+            fp.write(line(reference.check_theta(c["instance"], c["trusted"])))
     return paths
 
 
