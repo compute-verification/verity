@@ -344,7 +344,7 @@ theorem stratifiedWith_sub (src : ByteArray) (strata : Array _root_.Flock.Draw.S
       exact ⟨i, by omega, j, hj, hx'⟩
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **A draw's units are slots of its population**: under a `subset` law, or a stratified or work law whose strata's
+/-- **A draw's units are slots of its population**: under a `subset` sampling design, or a stratified or work sampling design whose strata's
 ranges are the population's slots in order, every unit `drawUnits` returns is below the population. -/
 theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
     (hb : _root_.Flock.Bridge.NotBernoulli law)
@@ -431,7 +431,7 @@ theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {
 
 open Properties.Spot.SecurityProofs (bind_eq_ok throw_bind_ne) in
 /-- **An accepted second stage's draw** is the object `drawFirstRead` writes for the units it drew under `secondLaw`'s
-Flock law over the `|sample|·Σ n_t` proof blocks. -/
+Flock sampling design over the `|sample|·Σ n_t` proof blocks. -/
 theorem selectSecond_draw {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
     ∃ parsed units read', Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) =
