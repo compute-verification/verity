@@ -743,8 +743,11 @@ def _submit(tmp_path, template, **shell):
     """submit.sh for `template` from this checkout, in a shell that holds the store's own key pair, with stand-ins on PATH for what
     reaches a network: `sky` records each call's arguments and the store's variables in its environment (where the SkyPilot client
     reads a `--secret NAME` from, and what it sends an API server on this port), `python3` records `research pods ...` and runs
-    anything else, and `curl` says the API server answers.  `shell` adds to the environment; None takes a variable out.  Returns
-    the finished process, the `sky` calls and the `research pods` calls."""
+    anything else, and `curl` says the API server answers.  The shell holds RESEARCH_AT_CHECKOUT, as the tests' own environment
+    does (conftest.py), and `python3` runs no `research` without it: the one submit.sh starts is then this checkout's, where a
+    checkout behind origin/main would run origin/main's from a worktree it registers in this repository and leaves registered.  `shell`
+    adds to the environment; None takes a variable out.  Returns the finished process, the `sky` calls and the `research pods`
+    calls."""
     import os
     import shutil
     import subprocess
@@ -766,12 +769,16 @@ def _submit(tmp_path, template, **shell):
         "    print('http://127.0.0.1:46580')\n")
     stand_ins = {"sky": f'exec "{sys.executable}" "{tmp_path / "sky.py"}" "$@"',
                  "python3": 'if [ "$1 $2 $3" = "-m research pods" ]; then shift 2; echo "$*" >> "$PODS_CALLS"; exit 0; fi\n'
+                            'if [ "$1 $2" = "-m research" ] && [ -z "$RESEARCH_AT_CHECKOUT" ]; then\n'
+                            '  echo "python3 stand-in: RESEARCH_AT_CHECKOUT is unset, so this could run origin/main\'s research: '
+                            'set it in _submit\'s env" >&2; exit 97; fi\n'
                             f'exec "{sys.executable}" "$@"',
                  "curl": "exit 0", "ssh": "exit 0", "rsync": "exit 0", "uv": "exit 0"}
     for name, body in stand_ins.items():
         (bin_dir / name).write_text(f"#!/bin/bash\n{body}\n")
         (bin_dir / name).chmod(0o755)
     env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "VY_INFRA_REMOTE": str(tmp_path / "no-remote"),
+           "RESEARCH_AT_CHECKOUT": "1",
            "SKY_CALLS": str(calls), "PODS_CALLS": str(tmp_path / "pods-calls"), "RESEARCH_STORE_CONFIG": str(tmp_path / "absent.toml"),
            "R2_ENDPOINT": "https://" + "0" * 32 + ".r2.cloudflarestorage.com", "R2_BUCKET": "bkt", **STORE_PAIR, **shell}
     r = subprocess.run(["bash", str(SKY / "submit.sh"), template, "job-1", "--allow-stale", "--env", "NAME=n"], capture_output=True, text=True,
