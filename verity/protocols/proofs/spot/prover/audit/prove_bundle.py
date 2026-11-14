@@ -105,7 +105,7 @@ class Staged:
     def __init__(self, wdir: Path, out: Path) -> None:
         self.wdir, self.out = wdir, out
         self.rec = json.loads((wdir / "registration.json").read_text())
-        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_sampling_design(self.rec["law"])), None)
+        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_design(self.rec["law"])), None)
         self.files = (json.loads((wdir / "window.json").read_text()), self.rec)
         self.want = CS.expected_ports(self.mine)
         self.roots = {r["port"]: r for r in self.rec["roots"]}
@@ -146,7 +146,7 @@ class Staged:
         return {**mm, "checks": ok, "k_log": circ.meta.get("k_log")}
 
 
-def _sampling_design(sampling_design: dict) -> str:
+def _design(sampling_design: dict) -> str:
     return f"{sampling_design['law']}:{sampling_design['k']}"
 
 
