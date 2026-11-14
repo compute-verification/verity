@@ -148,7 +148,7 @@ def BytesUniform : Prop :=
 
 /-- **The session's rounds are second-stage and the sample doesn't read them.** -/
 def BytesFixed : Prop :=
-  ∀ x, sr x ⊆ c.stage2 x ∧ ∀ r d, bytes x (forkOn (sr x) r d) = bytes x r
+  ∀ x, sr x ⊆ c.secondStage x ∧ ∀ r d, bytes x (forkOn (sr x) r d) = bytes x r
 
 theorem sampleSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes) :
     DrawSlots (deploy rel (code c reg L bytes sr sess)) := by

@@ -16,7 +16,7 @@ from verity.circuits.types import Array, Tuple
 def _difftest_body(B, S, logits, top_p, seed, pos, temp):
     """`GumbelTopPTokenSelect_v1{V}` returning ALSO its intermediate masked fp32 row (served output 1), so the difftest checks
     `TopPMask_v1{V}` lane by lane and not only the sampled token.  Same body as the registered composite; S is an OPERAND
-    of the registered forms (`splits`, i32) -- here the launch geometry `production` recorded (`splits_for(1, num_SMs)` of the device)
+    of the registered forms (`splits`, i32) -- here the launch geometry `serving` recorded (`splits_for(1, num_SMs)` of the device)
     enters as a `Const32[S]`, the same way the fold carries the split kernels' constexpr."""
     scaled = B.call(bind(TemperatureScale, V=S.V), logits, temp)
     masked = B.call(bind(TopPMask, V=S.V), scaled, top_p, B.call(const(32, int(S.S))))

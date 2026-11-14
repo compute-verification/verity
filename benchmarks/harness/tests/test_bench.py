@@ -1199,7 +1199,7 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
 def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
     """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
     device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.run_device import PearlCDeviceRun
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
 
     class Run(PearlCDeviceRun):
         def __init__(self):
@@ -1351,7 +1351,7 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
 
     calls: list[tuple[Any, ...]] = []
     window = SimpleNamespace(verdicts={0: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64, calls=[0],
-                             requests=[0], refused_requests=[], coin_source="in-process",
+                             requests=[0], refused_requests=[], coins_from="in-process",
                              details={"steps_served": 106, "static": True, "u": "1/2"}, request_gaps=lambda: [])
 
     class LLM:
@@ -1388,7 +1388,7 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
 def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
     def run(**over):
         base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
-                    calls=[0, 1], requests=[0], refused_requests=[], coin_source="in-process",
+                    calls=[0, 1], requests=[0], refused_requests=[], coins_from="in-process",
                     details={"steps_served": 120, "static": True, "u": "1/2"}, request_gaps=lambda: [])
         return SimpleNamespace(**{**base, **over})
 

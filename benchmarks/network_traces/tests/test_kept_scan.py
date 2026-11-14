@@ -9,21 +9,22 @@ execution phases, a request the network certifier didn't certify, a class whose 
 doesn't serve it, and a prompt past the class's prompt cap are refused by name; so are a kept run that won't read, one
 whose certified I/O isn't accepted or whose ingress execution phases aren't 0, 1, …, and certified I/O read with a request
 that has no END or without a request the scan starts. A serve dir with no kept run gives None, and the unpacked fetch
-is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they were (`prove_path.network_traces`),
-so a5's ``import replay`` still finds one_stage's where it did before. `prove_path.place_slots` places the window's
+is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they were, so a5's ``import replay``
+still finds one_stage's where it did before. `prove_path.place_slots` places the window's
 slots off the scan's starts and rows without serving, and refuses by name a request started in two slots, a served
 request started in none, a started request that wasn't served, and a slot whose prompt or ``max_tokens`` isn't its
-served request's. SPOT never imports the certifier: `kept_scan` reads the ingress rows by the reader its caller passes
-(here the certifier's `warden_rows.window_rows`), and refuses a kept run when none is passed."""
+served request's. SPOT imports neither the certifier nor a benchmark: `kept_scan` reads the kept run by the reader its
+caller passes (here `certifier_piece.kept_ingress`), and refuses by name when none is passed."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
 import shutil
 import sys
 import tarfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -34,7 +35,6 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
-from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
@@ -44,15 +44,32 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
 from verity.protocols.proofs.spot.prover.audit import prove_path as PP  # noqa: E402
 
-with PP.network_traces():
+
+@contextlib.contextmanager
+def network_traces() -> Iterator[None]:
+    """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
+    its ``replay`` isn't one_stage's, which ``a5`` imports."""
+    path, replay = list(sys.path), sys.modules.pop("replay", None)
+    sys.path.insert(0, str(ROOT / "benchmarks" / "network_traces"))
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
+    try:
+        yield
+    finally:
+        sys.path[:] = path
+        sys.modules.pop("replay", None)
+        if replay is not None:
+            sys.modules["replay"] = replay
+
+
+with network_traces():
     import certifier_piece as CP
     from benchmarks.network_traces import warden_chain as WCH
     from verity.protocols.accounting.certifier.device import warden_serve as WS
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
-    """`prove_path.kept_scan` with the certifier's reader of its ingress rows, as its composing caller passes it."""
-    return PP.kept_scan(serve_dir, cls, users, window_rows=WRW.window_rows)
+    """`prove_path.kept_scan` with the reader of the kept run its composing caller passes."""
+    return PP.kept_scan(serve_dir, cls, users, kept_ingress=CP.kept_ingress)
 
 
 _spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py")
@@ -150,12 +167,11 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     monkeypatch.setattr(H1R, "MODE", "numpy")
-    with PP.network_traces():
-        from verity.protocols.accounting.certifier.prover import scan_zk as SZ
+    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
     rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
     run = "ab" * 64
     value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
-    path = PP.scan_state_opening(value, tmp_path)
+    path = PP.scan_state_opening(value, tmp_path / SZ.SCAN_STATE_FILE)
     assert path == tmp_path / SZ.SCAN_STATE_FILE and path.stat().st_mode & 0o777 == 0o600
     rec = {"window": {"run": run, "activations": {"program": WC.NAME, "values": {SCAN_STATE: value.entry()}}}}
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
@@ -179,10 +195,10 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
     assert kept_scan(tmp_path, CLASS, USERS) is None
 
 
-def test_a_kept_run_read_with_no_reader_of_its_ingress_rows_is_refused_by_name(serve_dir, tmp_path):
-    with pytest.raises(ValueError, match="by the certifier's reader, which SPOT never imports"):
-        PP.kept_scan(serve_dir, CLASS, USERS[:3])
-    assert PP.kept_scan(tmp_path, CLASS, USERS) is None
+def test_a_scan_with_no_reader_of_the_kept_run_is_refused_by_name(serve_dir, tmp_path):
+    for d in (serve_dir, tmp_path):
+        with pytest.raises(ValueError, match="by the caller's reader, since SPOT imports neither the certifier nor a benchmark"):
+            PP.kept_scan(d, CLASS, USERS[:3])
 
 
 def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_by_name(serve_dir, tmp_path):

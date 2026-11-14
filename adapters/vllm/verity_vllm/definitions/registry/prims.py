@@ -129,7 +129,7 @@ _GATHERS: dict[int, PrimitiveDefinition] = {}
 
 def gather_bf16(vocab: int) -> PrimitiveDefinition:
     """`GatherBf16x{V}`: (token: i32, column: Array<V, bf16>) -> bf16 = column[token]; out-of-range or negative
-    token -> 0x7FFF (a total, documented extension; production would fault)."""
+    token -> 0x7FFF (a total, documented extension; serving would fault)."""
     p = _GATHERS.get(vocab)
     if p is None:
         def ev(tok: int, *col: int, _V=vocab) -> int:

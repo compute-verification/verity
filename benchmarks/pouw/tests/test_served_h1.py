@@ -42,7 +42,7 @@ import pytest
 import serve as SV
 import torch
 
-from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+from verity_torch.pouw.h1 import receipts as RC
 
 SALT, RA, RB = bytes(range(64)), bytes(range(64, 128)), bytes(range(128, 192))
 

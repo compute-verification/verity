@@ -3,7 +3,7 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
 
 * **The window's composition.** `serve_commit.CommitWindows` opens the arm once the committer is installed and closes it
   first at the window's close. The arm installs, at stage ``commit``, ``pouw:pearl-c-h100-v1-h3`` beside
-  ``sampled-proofs:rows-sha512``, the window's circuit cut at Pearl+'s sites (the sampled-proofs setting ``cut``,
+  ``sampled-proofs:rows-sha512``, the window's circuit cut at Pearl+'s sites (the SPOT setting ``cut``,
   `protocol_options.refusals`). Pearl+'s wrap of each linear's ``quant_method.apply`` sits under the committer's forward
   hooks, so the Commit commits each linear's x and the y Pearl+ returns: the values window-commit's cut reads
   (`window_class.PearlTables`).

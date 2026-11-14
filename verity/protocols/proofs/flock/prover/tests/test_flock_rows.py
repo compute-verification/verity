@@ -1,4 +1,4 @@
-"""`flock-rows`, the verifier's `Flock.Derive.derive` compiled, writes each unit's rows exactly as `ir_lower.netlist` does, on
+"""`flock-rows`, the verifier's `Flock.Derive.derive` compiled, writes each unit's rows exactly as `ir_lower.circuit_description` does, on
 every pinned template unit (each template's `PINS`). So the Python layout is a mirror of the derivation the verifier runs
 (Project doc `verified-lowering-design.md` §1.2): a mismatch can only make an honest proof fail."""
 from __future__ import annotations

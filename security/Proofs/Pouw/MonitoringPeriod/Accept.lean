@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Proofs.Properties.Pouw.Check
-public import Proofs.Properties.Pouw.Draw
+public import Proofs.Properties.Pouw.Sample
 public import Properties.Pouw.Check
 public import Properties.Pouw.MonitoringPeriod.Witnesses
 import all Init.Data.Array.Basic

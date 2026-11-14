@@ -246,25 +246,25 @@ the session's rounds fresh (`Arg.rerunsCostExp_le`, `sessExt_rerunsAt`, `place_e
 theorem slot_cost_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStatement) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (W : (Fin (L.V.k x) → Coin) → ℕ) (i : Fin (L.nPU x)) (w : List ℕ → ℝ) (hw : ∀ l, 0 ≤ w l)
     (r : Fin (L.V.k x) → Coin) :
-    Ex (fun d : Fin (L.V.k x) → Coin => w (L.checked x (forkOn (L.stage2 x) r d)) *
-        Ex fun ρ : L.BlockEC x => L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.stage2 x) r d) ρ) ≤
-      Ex fun d : Fin (L.V.k x) → Coin => w (L.checked x (forkOn (L.stage2 x) r d)) *
-        if (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val then
-          L.es x * (W (forkOn (L.stage2 x) r d) : ℝ) else 0 := by
+    Ex (fun d : Fin (L.V.k x) → Coin => w (L.checked x (forkOn (L.secondStage x) r d)) *
+        Ex fun ρ : L.BlockEC x => L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.secondStage x) r d) ρ) ≤
+      Ex fun d : Fin (L.V.k x) → Coin => w (L.checked x (forkOn (L.secondStage x) r d)) *
+        if (L.sessSlots x (L.checked x (forkOn (L.secondStage x) r d)) i).head? = some i.val then
+          L.es x * (W (forkOn (L.secondStage x) r d) : ℝ) else 0 := by
   have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
-  have hresL := Ex_resample (fun d => L.selRounds x (L.firstSel x i) (forkOn (L.stage2 x) r d))
+  have hresL := Ex_resample (fun d => L.selRounds x (L.firstSel x i) (forkOn (L.secondStage x) r d))
     (selRounds_resample hS.toRunsFixed (L.firstSel x i) r) fun d =>
-      w (L.checked x (forkOn (L.stage2 x) r d)) *
-        Ex fun ρ : L.BlockEC x => L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.stage2 x) r d) ρ
-  have hresR := Ex_resample (fun d => L.selRounds x (L.firstSel x i) (forkOn (L.stage2 x) r d))
+      w (L.checked x (forkOn (L.secondStage x) r d)) *
+        Ex fun ρ : L.BlockEC x => L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.secondStage x) r d) ρ
+  have hresR := Ex_resample (fun d => L.selRounds x (L.firstSel x i) (forkOn (L.secondStage x) r d))
     (selRounds_resample hS.toRunsFixed (L.firstSel x i) r) fun d =>
-      w (L.checked x (forkOn (L.stage2 x) r d)) *
-        if (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val then
-          L.es x * (W (forkOn (L.stage2 x) r d) : ℝ) else 0
+      w (L.checked x (forkOn (L.secondStage x) r d)) *
+        if (L.sessSlots x (L.checked x (forkOn (L.secondStage x) r d)) i).head? = some i.val then
+          L.es x * (W (forkOn (L.secondStage x) r d) : ℝ) else 0
   beta_reduce at hresL hresR
   rw [← hresL, ← hresR]
   refine Ex_mono fun d => ?_
-  cases h : L.selSlot x (L.firstSel x i) (forkOn (L.stage2 x) r d) with
+  cases h : L.selSlot x (L.firstSel x i) (forkOn (L.secondStage x) r d) with
   | none =>
     rw [selRounds_none h]
     simp only [forkOn_empty, slotCost_none H L x s (run H P L.V x ω) W i h, Ex_const, mul_zero]
@@ -275,87 +275,87 @@ theorem slot_cost_le_weighted (hS : L.CostContract H) {x : Msg} (s : AuditStatem
   | some iu =>
     obtain ⟨i', u⟩ := iu
     obtain ⟨hsel, hm⟩ := selSlot_eq_some.1 h
-    have hfi : (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val ∧ i' = i := by
+    have hfi : (L.sessSlots x (L.checked x (forkOn (L.secondStage x) r d)) i).head? = some i.val ∧ i' = i := by
       unfold firstSel at hsel
-      by_cases hf : (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val
+      by_cases hf : (L.sessSlots x (L.checked x (forkOn (L.secondStage x) r d)) i).head? = some i.val
       · rw [ite_eq_left hf] at hsel
         exact ⟨hf, (Option.some.inj hsel).symm⟩
       · rw [ite_eq_right hf] at hsel
         cases hsel
     rw [hfi.2] at h hm
-    have hmem : u.val ∈ L.checked x (forkOn (L.stage2 x) r d) := List.mem_of_getElem? hm
-    have hsub : ∀ σ : Fin (L.V.k x) → Coin, forkOn (L.stage2 x) r (forkOn (L.rounds x u) d σ) =
-        forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ := forkOn_sub (hS.fixed x _ u hmem).1 r d
+    have hmem : u.val ∈ L.checked x (forkOn (L.secondStage x) r d) := List.mem_of_getElem? hm
+    have hsub : ∀ σ : Fin (L.V.k x) → Coin, forkOn (L.secondStage x) r (forkOn (L.rounds x u) d σ) =
+        forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ := forkOn_sub (hS.fixed x _ u hmem).1 r d
     have hcσ : ∀ σ : Fin (L.V.k x) → Coin,
-        L.checked x (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) = L.checked x (forkOn (L.stage2 x) r d) :=
+        L.checked x (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ) = L.checked x (forkOn (L.secondStage x) r d) :=
       (hS.fixed x _ u hmem).2
     rw [selRounds_some h]
     simp only [hsub, hcσ, ite_eq_left hfi.1]
     rw [Ex_mul_left, Ex_mul_left, Ex_mul_left]
     refine mul_le_mul_of_nonneg_left ?_ (hw _)
-    obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω (forkOn (L.stage2 x) r d) u hmem
+    obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω (forkOn (L.secondStage x) r d) u hmem
     have hag : ∀ σ : Fin (L.V.k x) → Coin, ∀ t ∉ L.rounds x u,
-        forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ t = forkOn (L.stage2 x) r d t :=
+        forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ t = forkOn (L.secondStage x) r d t :=
       fun σ t ht => by simp [forkOn, ht]
     have hunit : ∀ σ (ρ : L.BlockEC x),
-        L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) ρ =
+        L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ) ρ =
           (((A.ext xS (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) (ρ u))).rerunsAt H
-            (run H P' A.V xS ())).map fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum := by
+            (run H P' A.V xS ())).map fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum := by
       intro σ ρ
-      have hmσ : (L.checked x (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ))[i.val]? = some u.val := by
+      have hmσ : (L.checked x (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ))[i.val]? = some u.val := by
         rw [hcσ σ]
         exact hm
-      have hfσ : (L.sessSlots x (L.checked x (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)) i).head? =
+      have hfσ : (L.sessSlots x (L.checked x (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ)) i).head? =
           some i.val := by
         rw [hcσ σ]
         exact hfi.1
-      rw [slotCost_some H L x s _ W hmσ hfσ ρ, L.sessExt_rerunsAt H P ω P' (forkOn (L.stage2 x) r d) hshape hcard
+      rw [slotCost_some H L x s _ W hmσ hfσ ρ, L.sessExt_rerunsAt H P ω P' (forkOn (L.secondStage x) r d) hshape hcard
         (fun r' h => (hview r' h).1) (hag σ) s _ (ρ u), L.coinsOf_forkOn hcard, List.map_map, Nat.cast_list_sum,
         List.map_map]
       refine congrArg List.sum (List.map_congr_left fun d' _ => ?_)
       simp only [Function.comp_apply]
       rw [L.place_congr hcard (hag σ) d']
     calc Ex (fun σ : Fin (L.V.k x) → Coin => Ex fun ρ : L.BlockEC x =>
-            L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) ρ)
+            L.slotCost H x s (run H P L.V x ω) W i (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ) ρ)
         = Ex (fun σ : Fin (L.V.k x) → Coin => Ex fun c : A.EC (L.sh x u) =>
             (((A.ext xS (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c)).rerunsAt H
               (run H P' A.V xS ())).map
-                fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum) := by
+                fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum) := by
           refine congrArg Ex (funext fun σ => ?_)
           simp only [hunit σ]
           exact Ex_pi_eval_dep (E := fun v : Fin (L.nPU x) => A.EC (L.sh x v)) u fun c : A.EC (L.sh x u) =>
             (((A.ext xS (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c)).rerunsAt H
               (run H P' A.V xS ())).map
-                fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum
+                fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum
       _ = Ex (fun p : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
             (((A.ext xS (fun t => p.1 (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) p.2)).rerunsAt H
               (run H P' A.V xS ())).map
-                fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum) :=
+                fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum) :=
           (Ex_prod fun p : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) =>
             (((A.ext xS (fun t => p.1 (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) p.2)).rerunsAt H
               (run H P' A.V xS ())).map
-                fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum).symm
+                fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum).symm
       _ = Ex (fun p : (Fin (A.V.k xS) → Coin) × A.EC (A.shape xS) =>
             (((A.ext xS p.1 p.2).rerunsAt H (run H P' A.V xS ())).map
-              fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum) :=
+              fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum) :=
           Ex_restrict_shape (L.emb x u xS hcard) (L.emb x u xS hcard).injective hshape
             fun ρ' c' => (((A.ext xS ρ' c').rerunsAt H (run H P' A.V xS ())).map
-              fun d' => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).sum
+              fun d' => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).sum
       _ ≤ (1 + A.waits (A.shape xS) * A.k (A.shape xS)) *
-            Ex (fun d' : Fin (A.V.k xS) → Coin => (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)) :=
+            Ex (fun d' : Fin (A.V.k xS) → Coin => (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)) :=
           A.rerunsCostExp_le H xS (run H P' A.V xS ()) fun _ => Nat.cast_nonneg _
       _ = (1 + A.waits (L.sh x u) * A.k (L.sh x u)) *
             Ex (fun σ : Fin (L.V.k x) → Coin =>
-              (W (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) : ℝ)) := by
+              (W (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ) : ℝ)) := by
           rw [hshape]
           refine congrArg (fun z => (1 + (A.waits (L.sh x u) : ℝ) * A.k (L.sh x u)) * z) ?_
           refine Eq.trans (Ex_comp_inj (L.emb x u xS hcard) (L.emb x u xS hcard).injective
             fun d' : Fin (A.V.k xS) → Coin =>
-              (W (L.place x u xS (forkOn (L.stage2 x) r d) d') : ℝ)).symm ?_
+              (W (L.place x u xS (forkOn (L.secondStage x) r d) d') : ℝ)).symm ?_
           exact congrArg Ex (funext fun σ =>
-            congrArg (fun z => (W z : ℝ)) (L.place_emb hcard (forkOn (L.stage2 x) r d) σ))
+            congrArg (fun z => (W z : ℝ)) (L.place_emb hcard (forkOn (L.secondStage x) r d) σ))
       _ ≤ L.es x * Ex (fun σ : Fin (L.V.k x) → Coin =>
-            (W (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) : ℝ)) :=
+            (W (forkOn (L.rounds x u) (forkOn (L.secondStage x) r d) σ) : ℝ)) :=
           mul_le_mul_of_nonneg_right
             (le_maxBelow (fun v => 1 + (A.waits (L.sh x v) : ℝ) * A.k (L.sh x v)) u.isLt)
             (Ex_nonneg fun _ => Nat.cast_nonneg _)
@@ -377,9 +377,9 @@ theorem ex_weighted_cost_le (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : P
           w i (L.checked x r) *
             if (L.sessSlots x (L.checked x r) i).head? = some i.val then L.es x * (W r : ℝ) else 0 := by
     intro i
-    rw [← Ex_forkOn (L.stage2 x) (fun r => w i (L.checked x r) *
+    rw [← Ex_forkOn (L.secondStage x) (fun r => w i (L.checked x r) *
         Ex fun ρ : L.BlockEC x => L.slotCost H x s (run H P L.V x ω) W i r ρ),
-      ← Ex_forkOn (L.stage2 x) (fun r => w i (L.checked x r) *
+      ← Ex_forkOn (L.secondStage x) (fun r => w i (L.checked x r) *
         if (L.sessSlots x (L.checked x r) i).head? = some i.val then L.es x * (W r : ℝ) else 0), Ex_prod, Ex_prod]
     exact Ex_mono fun r => slot_cost_le_weighted hS s P ω W i (w i) (hw i) r
   calc Ex (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>

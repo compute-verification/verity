@@ -181,7 +181,6 @@ def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int =
     are dealt to `workers` shares by cost (largest first) and this call takes share `worker`; each finished key is written
     to `out` at once, so a stopped worker keeps what it checked and a rerun skips it (`done_keys`). With `fresh` each key
     runs in a new process: a worker's memory is then one key's, where in one process it grows with every T it has bound."""
-    import time
     from concurrent.futures import ProcessPoolExecutor
 
     man = json.loads((d / "manifest.json").read_text())
@@ -195,7 +194,6 @@ def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int =
     rep: dict = {"dir": str(d), "suite": man["suite"], "worker": worker, "workers": workers, "tmin": tmin, "tmax": tmax,
                  "rows": 0, "mismatched_rows": 0, "words_bad": 0, "first_mismatch": None, "by_key": {}}
     for key in sorted(mine, key=lambda k: (groups[k][0], k)):
-        t0 = time.time()
         if fresh:
             with ProcessPoolExecutor(1, max_tasks_per_child=1) as pool:
                 n, nb, nw, first = pool.submit(_check_key, d, key, tmin, tmax).result()
@@ -206,8 +204,8 @@ def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int =
         rep["rows"] += n
         rep["mismatched_rows"] += nb
         rep["words_bad"] += nw
-        rep["by_key"][key] = {"rows": n, "mismatched_rows": nb, "seconds": round(time.time() - t0, 1)}
-        print(f"{key} rows={n} bad_rows={nb} {time.time() - t0:.1f}s", flush=True)
+        rep["by_key"][key] = {"rows": n, "mismatched_rows": nb}
+        print(f"{key} rows={n} bad_rows={nb}", flush=True)
         if out:
             out.write_text(json.dumps(rep, indent=1) + "\n")
     return rep

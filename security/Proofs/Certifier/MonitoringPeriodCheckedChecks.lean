@@ -161,7 +161,7 @@ theorem retAll_E_nil (L : Compiled Coin A) (hck : ∀ x r, L.checked x r = []) (
       generalize (List.finRange (L.kOut x)).zip outer = jos
       refine retAll_bind (p := fun l : List (List Msg × Claims.Sampling.Opening Bool) => l = []) _ _
         (retAll_flatMapRP_nil _ (fun jo => ?_) _) fun found hfound => ?_
-      · generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
+      · generalize List.map (fun l => forkOn (L.secondStage x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
         refine retAll_bind (p := fun _ => True) _ _ (retAll_true _) fun inner _ => ?_
         generalize (List.finRange (L.kIn x)).zip inner = lis
         exact retAll_flatMapRP_nil _ (fun li => retAll_runExt_nil L hck _ _ _ _ _) _
@@ -191,7 +191,7 @@ noncomputable def freeL (Coin : Type) : Compiled Coin (twoA Coin) where
   scopeCheck _ := true
   partition _ := some notPart
   commit := trueCm
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   sh _ _ := ()
   κb _ _ := 0
@@ -549,7 +549,7 @@ theorem MonitoringPeriodLeakChecked_nontrivial :
 set_option synthInstance.maxSize 1024 in
 /-- **`MonitoringPeriodLeakChecked`'s premises at the toy code**, over a monitoring period of no windows, the one period the toy
 code places, since it gives no statement a partition: `Compiled.KS` and the commitment's binding
-(`MonitoringPeriodLeakAccepted_honest`); the windows' registrations (`WindowsPlaced`) and their checks' pinning
+(`MonitoringPeriodLeakAccepted_honest`); the windows' registrations (`ExecutionPhasesPlaced`) and their checks' pinning
 (`CheckedUnique`), of which that period has none; and, at the record format of no connection (`noFormat`), the
 read-back under the one parameter (`RecordFormat.ReadsBy`) and the channel of the one secret (`MonitoringPeriodChannelReg`),
 whose view holds no cell. The toy code parses no statement and its verifier rejects every run, so the lemma shows that
@@ -560,7 +560,7 @@ theorem MonitoringPeriodLeakChecked_honest :
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
       (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).commit.Binds FlockDeploy.sha512 ∧
-      WindowsPlaced
+      ExecutionPhasesPlaced
         (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
           (fun _ _ _ => [])).partition 0 (Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) Fin.elim0 Fin.elim0 ∧
       (∀ i : Fin 0, CheckedUnique ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).prog

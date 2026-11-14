@@ -1,4 +1,4 @@
-"""Lean's check of the planner's one-stage designs: `Spot.PlanCheck` (the `sampled-proofs-plancheck` executable)
+"""Lean's check of the planner's one-stage designs: `Spot.PlanCheck` (the `spot-plancheck` executable)
 reads a design exactly, in rationals, and answers what it certifies, and `Properties.Spot` proves each answer
 from the proved guarantees (`LeakCheckSound`, `LeakCountSound`, `WorkCheckSound`).
 
@@ -26,7 +26,7 @@ from typing import Iterable, Mapping, Sequence
 from verity.protocols.proofs.spot.verifier.one_stage.verifier import LeanError, executable
 from .optimize import Cell, Grain, leak_count
 
-EXE = "sampled-proofs-plancheck"
+EXE = "spot-plancheck"
 #: the share by which a design's float rate is rounded up before Lean checks it
 SLACK = Fraction(1, 2**20)
 #: the precision a two-stage point's bits are certified at

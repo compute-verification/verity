@@ -415,6 +415,9 @@ def wipe(store, run: str) -> dict:
 
 
 READERS = {"PoUS state bound": pous, "wipe residue": wipe}
+#: what the text says beside a reference's certified bits: PoUS's reach the card's memory through the device model its
+#: statement reads, not through the answer, until an answer names its tier and leaf
+THROUGH = {"PoUS state bound": "through the device model, not the answer"}
 
 
 def beside(store_of: Callable[[], object]) -> list[dict]:
@@ -543,7 +546,8 @@ def text(doc: dict) -> str:
     for r in doc["beside"]:
         where = f"{r['run']}, {r.get('date') or 'no date'}, {r.get('card') or 'no card'}"
         error = "no error in its record" if r.get("error") is None else f"error {r['error']:.3g}"
-        lines.append(f"  beside it, {r['name']}: " + (f"{r['value']:.3f} ({r['detail']}; {error}; {where})"
+        through = f", {THROUGH[r['name']]}" if r["name"] in THROUGH else ""
+        lines.append(f"  beside it, {r['name']}: " + (f"{r['value']:.3f} ({r['detail']}{through}; {error}; {where})"
                                                      if r["value"] is not None
                                                      else f"{r['no_bound']} ({where})" if r.get("no_bound")
                                                      else f"not read ({r['why']})"))

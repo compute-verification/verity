@@ -46,6 +46,8 @@ def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: l
         return "the window's draw root is not 128 lowercase hex"
     if files is None:
         return NO_DRAW_SESSION
+    if isinstance(files, CoinError):
+        return f"the window's draw session is not one the ledger opens on its draw root: {files}"
     try:
         trusted, received = Ch.trusted_session_of(lines, {"root": root}, key, pins, main, files, verify)
     except CoinError as e:
@@ -86,13 +88,14 @@ def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: S
 def draw_files(commits: Mapping[str, Any], ledger: Any, fetch: Any, verify: Any) -> Any:
     """The files of the window's sample session (`draw_session_reason`), the one `ledger` (`pouw_h1_challenger.Ledger`)
     opens on the window's sample root (its H1 commitment `commits`'s ``draw``'s ``root``), from its ``out/`` as `fetch`
-    gives it; None when the ledger opens none there or `fetch` has no tree for it, which `draw_session_reason` refuses."""
+    gives it; the `CoinError` naming why when the ledger opens none there, and None when `fetch` has no tree for it, which
+    `draw_session_reason` refuses (the former naming it)."""
     root = _draw(commits).get("root")
     try:
         tree = fetch(ledger.pinned({"root": root}, verify).session) if isinstance(root, str) else None
         return None if tree is None else remote.session_files(Path(tree) / "out")
-    except CoinError:
-        return None
+    except CoinError as e:
+        return e
 
 
 __all__ = ["NO_DRAW_SESSION", "draw_files", "draw_reason", "draw_session_reason"]

@@ -191,7 +191,7 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
         HO.resume(tmp_path / "b", a.fileno())
     a.close()
     run.stray = torch.zeros(2, dtype=torch.int8)
-    with pytest.raises(ValueError, match="tensor on cpu in the window's saved state"):
+    with pytest.raises(ValueError, match="buffer on cpu in the window's saved state"):
         HO.suspend(run, tmp_path / "d")
     del run.stray
     run.close()

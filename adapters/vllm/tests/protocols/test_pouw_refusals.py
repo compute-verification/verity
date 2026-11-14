@@ -50,7 +50,7 @@ from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as PF
 from verity.protocols.accounting.pouw.prover.serving.operands import quantize
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import grouped as PG
+from verity_torch.pouw.pearl_c import grouped as PG
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import schedule_of, whole_options
 
