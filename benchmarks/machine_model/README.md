@@ -60,7 +60,7 @@ own and changes with it.
   data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
-file through `verity.hardware.cards`, imported only where a ceiling is read (`model.card`, the card table, the opcode
+file through `verity.device`, imported only where a ceiling is read (`model.card`, the card table, the opcode
 table), so only `theta`, `cover` and `render`'s `theta` section need `verity`; and nothing else of the workspace. A
 design's perplexity arm and a sheet's Lean module are named in the data by path and never read by a computation. It
 measures nothing: no command starts a process, reads the environment or the network, or needs a GPU.
