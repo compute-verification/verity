@@ -42,6 +42,8 @@ from verity_vllm import config as C
 from verity_vllm.config import option
 from verity_vllm.pipeline.tp import run_root as RT
 
+__all__ = ["BINDING", "Options", "ROWS_SCHEME", "from_bundle", "main", "record", "source", "window_of", "window_of_record"]
+
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
 ROWS = "verity-vllm tp-serving-rows: a rank's sealed replay bundle -> rows"
@@ -81,12 +83,14 @@ def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int
 def gather(out_dir: str, tp: dict[str, Any], got: list[dict[str, Any]]) -> dict[str, Any]:
     """``tp.json`` over the ranks' answers; fail closed unless every rank of the world, and only those, wrote its window."""
     world, by = int(tp["world"]), {int(g["rank"]): g for g in got}
-    why = [f"rank {r}: {(by.get(r) or {}).get('error') or 'no window'}" for r in range(world) if not (by.get(r) or {}).get("window")]
+    windows = {r: by[r].get("window") if r in by else None for r in range(world)}
+    errors = {r: by[r].get("error") if r in by else None for r in range(world)}
+    why = [f"rank {r}: {errors[r] or 'no window'}" for r in range(world) if not windows[r]]
     why += [f"rank {r} is not a rank of the world of {world}" for r in sorted(set(by) - set(range(world)))]
     why += [f"{len(got)} answers for {len(by)} ranks"] if len(got) != len(by) else []
     root = bytes.fromhex(tp["tp_run_root"])
     doc = {"schema": SCHEMA, **tp, "runs": {str(r): run_of(root, r) for r in range(world)},
-           "windows": {str(r): (by.get(r) or {}).get("window") for r in range(world)}, "result": not why, "why": "; ".join(why) or None}
+           "windows": {str(r): windows[r] for r in range(world)}, "result": not why, "why": "; ".join(why) or None}
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "tp.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     if why:
@@ -192,7 +196,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     if weights is None:
         tree = json.loads((bdir / "weights" / "tree.json").read_text())
         try:
-            words = CPU.OnRead(bdir, tree, (c.get("weight_registration") or {}).get("root"), checkpoint, tp={"world": world, "rank": rank},
+            words = CPU.OnRead(bdir, tree, C2.block_of(c, "weight_registration").get("root"), checkpoint, tp={"world": world, "rank": rank},
                                roles=CR.registered_roles(p))
         except ValueError as e:
             raise CR.Refused(f"rank {rank}: the bundle's weights: {e}") from e
@@ -218,26 +222,26 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
-    row = next((r for r in reversed(rows) if r.get("arm") != "control" and r.get("pair") == 0 and (r.get("commit") or {}).get("tp_run_root")),
+    row = next((r for r in reversed(rows) if r.get("arm") != "control" and r.get("pair") == 0 and C2.block_of(r, "commit").get("tp_run_root")),
                None)
     if row is None:
         raise LookupError(f"{d / 'runs.jsonl'}: no pair-0 instrumented run with a TP run root (the Commit failed before its roots)")
     c = row["commit"]
     world = int(c["world"])
-    roots = {int(k): str(v["run_root"]) for k, v in (c.get("per_rank") or {}).items()}
+    roots = {int(k): str(v["run_root"]) for k, v in C2.block_of(c, "per_rank").items()}
     if sorted(roots) != list(range(world)):
         raise ValueError(f"the record's ranks {sorted(roots)} are not the world of {world}")
     v = json.loads((d / "versions.json").read_text())
     if RT.combine(v.get("root_tag"), world, {r: bytes.fromhex(x) for r, x in roots.items()}).hex() != c["tp_run_root"]:
         raise ValueError(f"the record's TP run root {c['tp_run_root'][:16]} does not combine its ranks' roots")
-    argv = [str(x) for x in v.get("argv") or []]
+    argv = [str(x) for x in C2.list_of(v, "argv")]
     dd = json.loads((d / C2.DEFERRED).read_text()) if (d / C2.DEFERRED).is_file() else {}
-    bundles = {str(int(x["rank"])): str(x["manifest_sha256"]) for x in dd.get("bundles") or []
+    bundles = {str(int(x["rank"])): str(x["manifest_sha256"]) for x in C2.list_of(dd, "bundles")
                if int(x["pair"]) == 0 and "replay_deferred" in c["per_rank"].get(str(int(x["rank"])), {})
                and c["per_rank"][str(int(x["rank"]))].get("commit_pass") is not False}
     return {"world": world, "tp_run_root": c["tp_run_root"], "roots": {str(r): roots[r] for r in range(world)}, "root_tag": v["root_tag"],
             "bundles": bundles,
-            "of_record": (v.get("sampled_replay") or {}).get("of_record") or {}, "label": row.get("label"),
+            "of_record": C2.block_of(C2.block_of(v, "sampled_replay"), "of_record"), "label": row.get("label"),
             "workload": argv[argv.index("--workload") + 1] if "--workload" in argv[:-1] else None, "workload_sha256": row.get("workload_sha256")}
 
 
@@ -253,7 +257,7 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     rank, world = int(rank), int(rec["world"])
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
-    doc = json.loads(C.workload_file(workload_file).read_text())
+    doc = json.loads(C.workload_file(Path(workload_file)).read_text())
     got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if got != rec["workload_sha256"]:
         raise ValueError(f"{workload_file}: workload sha256 {got[:16]} is not the record's {str(rec['workload_sha256'])[:16]}")
