@@ -675,9 +675,9 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
            case: Callable[[Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
     ``rows`` is step 1's rows audit of the network certifier run (`own_rows`); ``chain`` is given KEEP, the run, the
-    endpoint's records and the run's execution phases, or is None to read the report of the chain the split's chain step
-    ran; ``check`` None stops once the chain accepted, with no answer (the split's
-    chain step). `NotRun` when a step can't run."""
+    endpoint's records and the number of its link's execution phases the run holds, or is None to read the report of the
+    chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's chain
+    step). `NotRun` when a step can't run."""
     import chain_record as CR
     import warden_chain as WC
     keep = serve_dir / PRIVATE
