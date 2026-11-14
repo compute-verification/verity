@@ -16,9 +16,6 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 
-from verity_vllm.records.schema_ids import (GLM53_MTP_EH_NORM_CAPTURE_SCHEMA, GLM53_MTP_EH_PROJ_CAPTURE_SCHEMA,
-                                            GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA)
-
 DIR = "properties"
 
 
@@ -212,21 +209,21 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "and length they write for a decode token, padding tokens and bytes other than 0 and 1 included, equals "
              "Dsv4SwaIndices_v1 and Dsv4C128aGlobalTopk_v1, at served steps and at the int32 and int64 edges of their domains, bit "
              "for bit."),
-    Property("glm53_mtp_eh_norm_capture", GLM53_MTP_EH_NORM_CAPTURE_SCHEMA,
+    Property("glm53_mtp_eh_norm_capture", "verity-vllm/glm53-mtp-eh-norm-capture/v1",
              "On the capture's Hopper GPU at vLLM's defaults, GLM-5.3's MTP draft layer's fused_eh_norm runs one Triton "
              "specialisation of _fused_eh_norm_kernel, whose PTX is the code MtpEhNorm_v1 was read from and whose SASS takes rsqrt "
              "of FFMA sum, rcp(6144), eps, and at the served statics (H 6144, a tile of 8192 on 4 warps, eps 1e-05) every output "
              "word of every token equals MtpEhNorm_v1: each half TritonBlockRMSNorm_v1 at those statics, the embedding row +0 "
              "exactly where the token's int64 position is 0, on served-scale, special and probe rows, bit for bit; the probe's "
              "words refute each other reduction order of the tile and each other position test."),
-    Property("glm53_mtp_eh_proj_capture", GLM53_MTP_EH_PROJ_CAPTURE_SCHEMA,
+    Property("glm53_mtp_eh_proj_capture", "verity-vllm/glm53-mtp-eh-proj-capture/v1",
              "On the capture's Hopper GPU at vLLM's served cuBLAS configuration, GLM-5.3's MTP draft layer's eh_proj (F.linear, K "
              "12288, N 6144, bf16) takes at every token count from 1 to 8192 the route the record's route runs give (one serial "
              "chain, or split-K at the fitted count, the profiler's reduce kernel present exactly on a split run), and every "
              "compared output word equals Gemm_v2{K=12288, N=6144, DOT=HopperBF16WgmmaDot16_v1} on a serial run and "
              "CublasSplitKGemm_v1 at the run's split on a split run, bit for bit, the crafted probe's words fitting only the "
              "contiguous split with f32 partials reduced forward."),
-    Property("glm53_mtp_indexer_logits_capture", GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA,
+    Property("glm53_mtp_indexer_logits_capture", "verity-vllm/glm53-mtp-indexer-logits-capture/v1",
              "On the capture's Hopper GPU at vLLM's defaults (DeepGEMM on, not batch invariant), the indexer flattens a decode "
              "step that carries 1 + 5 tokens a request (native next_n is 1, 2 or 4 there) into six query rows a request, each "
              "with the context length max(L - 5 + j, 0) and the request's block-table row, and DeepGEMM's "

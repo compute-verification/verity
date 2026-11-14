@@ -51,10 +51,9 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity_vllm.records.property_record import seal as seal_record
-from verity_vllm.records.schema_ids import GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA
+from verity_vllm.records.property_record import REGISTRY, seal as seal_record
 
-SCHEMA = GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA
+SCHEMA = REGISTRY["glm53_mtp_indexer_logits_capture"].schema
 RECORD = "glm53_mtp_indexer_logits_capture.json"
 H, D, BLOCK, STRIDE = DS.H, DS.D, DS.BLOCK, DS.STRIDE
 SPEC, NEXT_N = 5, 6

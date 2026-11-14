@@ -263,9 +263,3 @@ POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
 #: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and
 #: `into_verdict` writes as a Commit's `protocols.json`
 PROTOCOL_COMPOSITION_SCHEMA = "verity-vllm/protocol-composition/v0"
-
-# --- GLM-5.3's MTP draft-layer captures (`tests/properties/glm53_mtp_<name>_capture_gpu.py`)
-#: each capture's property record, which the capture seals and `records.property_record.REGISTRY` names its property by
-GLM53_MTP_EH_NORM_CAPTURE_SCHEMA = "verity-vllm/glm53-mtp-eh-norm-capture/v1"
-GLM53_MTP_EH_PROJ_CAPTURE_SCHEMA = "verity-vllm/glm53-mtp-eh-proj-capture/v1"
-GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA = "verity-vllm/glm53-mtp-indexer-logits-capture/v1"

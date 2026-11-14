@@ -59,10 +59,9 @@ from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import dsa_norm_rows as NR
-from verity_vllm.records.property_record import seal as seal_record
-from verity_vllm.records.schema_ids import GLM53_MTP_EH_NORM_CAPTURE_SCHEMA
+from verity_vllm.records.property_record import REGISTRY, seal as seal_record
 
-SCHEMA = GLM53_MTP_EH_NORM_CAPTURE_SCHEMA
+SCHEMA = REGISTRY["glm53_mtp_eh_norm_capture"].schema
 RECORD = "glm53_mtp_eh_norm_capture.json"
 #: GLM-5.3's hidden size, `next_power_of_2` of it, Triton's default warps, and rms_norm_eps
 H, BLOCK, WARPS, EPS = 6144, 8192, 4, 1e-5
