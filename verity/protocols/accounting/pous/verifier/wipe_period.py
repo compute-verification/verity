@@ -47,7 +47,8 @@ session, an uncounted egress, the node's memory outside the declared tiers (`und
 leave outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
 `main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
-through `wipe_on_node.py`, which hands it the runtime's `Side.of`).
+through `wipe_on_node.py`, which hands it the runtime's `Side.of`). Run as a module, with no side to hand it, this file
+exits 1 naming `wipe_on_node.py`.
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ import os
 import re
 import secrets
 import socket
+import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -730,3 +732,7 @@ __all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT
            "main", "memory_bits",
            "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
            "timing", "uncertified", "uncounted", "undeclared", "writer_gap"]
+
+if __name__ == "__main__":
+    sys.exit(f"python -m {__spec__.name} runs no wipe, since it has no challenger's side to hand `main`: run "
+             "benchmarks/pous/streamed_wipe/wipe_on_node.py, which hands it the runtime's Side.of")

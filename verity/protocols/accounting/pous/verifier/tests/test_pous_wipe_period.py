@@ -22,6 +22,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import threading
 from collections.abc import Callable
@@ -231,6 +232,15 @@ def test_the_split_wipe(how: str) -> None:
         assert c.ended == sw.WRONG and answered == len(c.batches)
     else:
         assert answered == 3 and c.ended is None and c.signed is None
+
+
+def test_the_module_run_with_no_side_refuses_and_names_the_start_file(tmp_path) -> None:
+    """An old command, `python -m ...wipe_period --expect accept`, exits non-zero naming the file that starts the wipe,
+    so it never reads as the verdict it expected."""
+    r = subprocess.run([sys.executable, "-m", W.__name__, "--period", str(tmp_path), "--out", str(tmp_path / "out"),
+                        "--expect", "accept"], capture_output=True, text=True)
+    assert r.returncode == 1 and r.stdout == "", r.stdout + r.stderr
+    assert "run benchmarks/pous/streamed_wipe/wipe_on_node.py" in r.stderr and not (tmp_path / "out").exists()
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
