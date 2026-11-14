@@ -64,7 +64,7 @@ def test_the_gate_applies_the_caps_and_fixes_of_test_repository_to_each_changed_
         ["a/README.md", "b/PROTOCOL.md", skill, split])
     for f in doc["failures"]:
         p, cap = f["path"], rep.markdown_cap(f["path"])
-        assert f["why"] == (f"{p} is {sizes[p]} bytes at {top[:12]}, over its {cap}-byte cap (tests/test_repository.py), and "
+        assert f["why"] == (f"{p} is {sizes[p]} bytes at {top[:12]}, over its {cap}-byte limit (tests/test_repository.py), and "
                             f"is new at {base[:12]} below")
         assert f["fix"] == [f"trim {p} to {cap} bytes or fewer ({sizes[p] - cap} over): "
                             + rep.markdown_over_cap(p, sizes[p]).split("; ", 1)[1]]
@@ -98,11 +98,11 @@ def test_a_queue_merge_is_judged_against_the_tip_it_merged_onto(tmp_path):
     rc, got = _gate(tmp_path, main, _merge(tmp_path, member, heads[2], 2))
     assert rc == 0 and got["below"] == member and [f["path"] for f in got["files"]] == ["b.md"] and got["notes"] == []
     rc, got = _gate(tmp_path, main, grown := _merge(tmp_path, member, heads[3], 3))
-    assert rc == 1 and got["failures"][0]["why"] == (f"doc.md is {big + 3} bytes at {grown[:12]}, over its {cap}-byte cap "
+    assert rc == 1 and got["failures"][0]["why"] == (f"doc.md is {big + 3} bytes at {grown[:12]}, over its {cap}-byte limit "
                                                      f"(tests/test_repository.py), and was {big} bytes at {member[:12]} below")
     rc, got = _gate(tmp_path, main, _merge(tmp_path, member, heads[4], 4))
     assert rc == 0 and got["failures"] == [] and got["notes"] == [
-        f"doc.md is {big - 5} bytes, over its {cap}-byte cap, but was {big} bytes at {member[:12]} below: not this change's"]
+        f"doc.md is {big - 5} bytes, over its {cap}-byte limit, but was {big} bytes at {member[:12]} below: not this change's"]
 
 
 def test_a_head_is_judged_against_its_merge_base_so_a_file_over_on_base_fails_only_growth(tmp_path):

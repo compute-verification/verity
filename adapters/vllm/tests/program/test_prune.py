@@ -10,12 +10,12 @@ import numpy as np
 from verity.circuits.defs import Body, BodyNode, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import BF16
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.circuits.types import Array
 from verity.definitions.boolean import boolean_version
-from verity.circuits.ops import gemm as G
-from verity.circuits.ops.prims import BF16
 from verity.definitions.registry import b1, gemm_bias
 from verity.definitions.registry import topp_words as TW
 

@@ -15,8 +15,8 @@ from verity.protocols.accounting.pouw.verifier.audit import (
 )
 
 torch = pytest.importorskip("torch")
-PH = pytest.importorskip("verity_vllm.protocols.pouw.h1")
-PHK = pytest.importorskip("verity_vllm.protocols.pouw.h1.hooks")
+PH = pytest.importorskip("verity.protocols.accounting.pouw.prover.serving.h1")
+PHK = pytest.importorskip("verity_vllm.protocols.pouw.h1_hooks")
 
 FRESH = PH.weight_root
 

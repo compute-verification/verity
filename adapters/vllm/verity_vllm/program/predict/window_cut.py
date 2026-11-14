@@ -17,8 +17,8 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.definitions.registry import linear_cut as LC
 from verity.commitments.windows import interface as IF
+from verity.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible
 from .window_builder import Row
@@ -36,7 +36,7 @@ class Linears:
 
 def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
     """Whether `LinearOut_v1{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block Flock proves."""
-    if N // W + 1 > rows:
+    if rows < N // W + 1:
         return False
     if provable:
         try:

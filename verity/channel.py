@@ -15,11 +15,13 @@ by name (`Refused.name`, one of `REFUSALS`): a frame that isn't one (`malformed`
 (`oversized`), a type the registry doesn't hold (`unknown-type`), a version it doesn't (`unknown-version`), and fields
 other than the schema's (`schema`). `Phase` refuses a message that isn't one the party expects next (`out-of-phase`).
 The head must be the canonical encoding of what it says, so one message has one frame. `handshake` is the exchange that
-opens every channel between parties.
+opens every channel between parties. `Record` is a record entry: a message as it enters a run's transcript, numbered,
+chained and signed by its sender.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import struct
@@ -359,6 +361,76 @@ def names(values: Sequence[str]) -> tuple[str, ...]:
     return tuple(values)
 
 
+# --- the record --------------------------------------------------------------------------------------------------------
+
+
+class Record:
+    """`Core.Record` in Python: a record entry, one message of a run's transcript, numbered, chained to the entry before
+    it and signed by the party that sent it (`verity/protocols/interface`, `CoreProtocol/Record.lean`).
+
+        entry   = {body, kind, prev, schema, seq, session, sig}
+        message = SHA-512([role] || I || [d])              d: the schema's tagged SHA-512 of the entry without its sig
+
+    each `[x]` a u64 big-endian length then `x`, and `I` the signer's 16-byte LMS identifier.  `body` is the message, an
+    object of the schema's form; `kind` its kind under the schema; `schema` the protocol's entry schema and version,
+    which names the tag `d` is under; `session` the session it belongs to, None for an entry of none.  Entry `i` of a
+    record has `seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`ZERO` for entry 0, `prev_of`), the line being
+    the entry's `line`: sorted keys, no whitespace, every character past ASCII escaped.
+
+    * `of_json`: `Record.ofJson`, the form: the seven keys, each of its type.  Everything a protocol accepts beyond the
+      form (its schemas, kinds and bodies, which key signs, its sessions) is its own check; the auditor's ledger
+      (`spot.challenger`) is the first.
+    * `line`: an entry's line, as the auditor's ledger writes it (Lean `Spot.PyJson.canonical`).
+    * `unsigned`, `message`, `prev_of`: `Record.unsigned`, `Record.message`, `Record.prevOf`.
+    """
+
+    FIELDS = ("body", "kind", "prev", "schema", "seq", "session", "sig")
+    """A record entry's keys, sorted."""
+    ZERO = "0" * 128
+    """The `prev` of a record's first entry."""
+    FORM = ("a record entry is {body, kind, prev, schema, seq, session, sig}: an object, a string, a SHA-512 in "
+            "lowercase hex, a string, a natural number, a string or null, and lowercase hex")
+    _PREV = re.compile(r"[0-9a-f]{128}")
+    _HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+    @staticmethod
+    def of_json(e: Any) -> dict:
+        """`e`, a parsed JSON value, when it is a record entry: its seven keys, each of its type; ValueError(`FORM`)
+        otherwise."""
+        if not (isinstance(e, dict) and sorted(e) == list(Record.FIELDS) and isinstance(e["body"], dict)
+                and type(e["kind"]) is str and type(e["prev"]) is str and Record._PREV.fullmatch(e["prev"]) is not None
+                and type(e["schema"]) is str and type(e["seq"]) is int and e["seq"] >= 0
+                and (e["session"] is None or type(e["session"]) is str)
+                and type(e["sig"]) is str and Record._HEX.fullmatch(e["sig"]) is not None):
+            raise ValueError(Record.FORM)
+        return e
+
+    @staticmethod
+    def line(entry: dict) -> str:
+        """An entry's line: sorted keys, no whitespace, every character past ASCII escaped."""
+        return json.dumps(entry, sort_keys=True, separators=(",", ":"))
+
+    @staticmethod
+    def unsigned(entry: dict) -> dict:
+        """An entry without its `sig`: what its signature's digest is over."""
+        return {k: v for k, v in entry.items() if k != "sig"}
+
+    @staticmethod
+    def _field(b: bytes) -> bytes:
+        return len(b).to_bytes(8, "big") + b
+
+    @staticmethod
+    def message(role: str, I: bytes, d: bytes) -> bytes:
+        """What an entry's `sig` signs under the protocol's `role`, the signer's identifier `I` and `d`, the digest of
+        the entry without its sig under the tag its schema names."""
+        return hashlib.sha512(Record._field(role.encode()) + I + Record._field(d)).digest()
+
+    @staticmethod
+    def prev_of(line: str | bytes) -> str:
+        """The `prev` of the entry after the one whose line is `line`."""
+        return hashlib.sha512(line.encode() if isinstance(line, str) else line).hexdigest()
+
+
 __all__ = ["HEADER", "KINDS", "MAX_HEAD", "NAME", "PUBLIC", "REFUSALS", "WIRE_VERSION", "Body", "Bool", "FrameReader",
-           "Hex", "Int", "Json", "List", "Message", "Phase", "Refused", "MessageTypes", "Schema", "Str", "canonical", "frame",
-           "frames", "names", "parse", "split"]
+           "Hex", "Int", "Json", "List", "Message", "Phase", "Record", "Refused", "MessageTypes", "Schema", "Str",
+           "canonical", "frame", "frames", "names", "parse", "split"]

@@ -8,6 +8,7 @@ import Proofs.Pouw.PearlC.DeviceGap
 import Proofs.Pouw.PearlC.DeviceRev1Gap
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # rev1's H100 rows are satisfiable
@@ -178,6 +179,51 @@ theorem wide_tileDebit_zero (H : Unit → Unit) (s : Unit) :
   rw [ha, he]
   simp [debitOf]
 
+/-- The support's plus end at the witness's element `1.0` and unit scales is the code of `448`. -/
+theorem witness_endPlus : (FormingP.atomMixP hopperE4m3K32).elem 1 1 1 (SaltDead.flatLine fun _ => false)
+    (SaltDead.flatLineF fun _ => false) = ⟨0x7E, by decide⟩ := by
+  decide +kernel
+
+/-- The support's minus end at the witness's element `1.0` and unit scales is the code of `−448`. -/
+theorem witness_endMinus : (FormingP.atomMixP hopperE4m3K32).elem 1 1 1 (SaltDead.flatLine fun _ => false)
+    (SaltDead.flatLineF fun _ => true) = ⟨0xFE, by decide⟩ := by
+  decide +kernel
+
+/-- On a word of 128 codes of `±448` (both rows alike), no product of the H100's chain is cut. -/
+theorem witness_noCuts (c : Code) (hc : c = ⟨0x7E, by decide⟩ ∨ c = ⟨0xFE, by decide⟩) :
+    Mend.chainCuts hopperE4m3K32 4 (rowAtoms (fun _ : Fin 128 => c) (fun _ : Fin 128 => c)) =
+      List.replicate 128 false := by
+  rcases hc with rfl | rfl <;> decide +kernel
+
+open Classical in
+/-- A word of two rows of `1.0` at the witness's unit scales has no product that no salt makes count: no element is
+salt-dead, and both ends' codes are `±448`, at which no product is cut. -/
+theorem witness_wordMend_zero (k : ℕ) (hk : k = 128) (x w : Fin k → ℚ) (hx : ∀ l, x l = 1) (hw : ∀ l, w l = 1) :
+    wordMend devH100 witnessSem.alpha witnessSem.beta x w = 0 := by
+  subst hk
+  have hX : x = fun _ => 1 := funext hx
+  have hW : w = fun _ => 1 := funext hw
+  subst hX hW
+  have hcut : ∀ (m : Bool) (l : ℕ),
+      Mend.cutAt hopperE4m3K32 4 witnessSem.alpha witnessSem.beta 128 (fun _ => 1) (fun _ => 1) m l = false := by
+    intro m l
+    have hend : Mend.endRow hopperE4m3K32 witnessSem.alpha witnessSem.beta 128 (fun _ => 1) m =
+        fun _ => if m then ⟨0xFE, by decide⟩ else ⟨0x7E, by decide⟩ := by
+      funext t
+      cases m
+      · exact witness_endPlus
+      · exact witness_endMinus
+    unfold Mend.cutAt
+    rw [hend, witness_noCuts (if m then ⟨0xFE, by decide⟩ else ⟨0x7E, by decide⟩) (by cases m <;> simp), List.getD_eq_getElem?_getD,
+      List.getElem?_replicate]
+    split <;> rfl
+  unfold wordMend
+  rw [card_eq_zero, filter_eq_empty_iff]
+  rintro l - (⟨hd, -⟩ | ⟨hz, -⟩)
+  · exact witness_saltLive 128 (fun _ => 1) l rfl hd
+  · have h0 := hcut false l
+    exact Bool.false_ne_true (h0.symm.trans hz)
+
 theorem wide_passRows :
     witnessSem.passRows (wideWorkload.layout.shape 0) (witnessAct 0) (Ico 0 1) = Ico 0 1 := by
   classical
@@ -218,9 +264,21 @@ theorem ttOutPearlCH100Rev1Witness :
     unfold debitOf
     rw [ha, he]
     simp
+  have hmend : ∑ i, ∑ j, (wordMend devH100 witnessSem.alpha witnessSem.beta
+      (wordsVal (wideWorkload.layout.shape 0).m (wideWorkload.layout.shape 0).k (witnessAct 0) i)
+      (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
+        (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) j) : ℚ) = 0 :=
+    sum_eq_zero fun i _ => sum_eq_zero fun j _ => by
+      exact_mod_cast witness_wordMend_zero (wideWorkload.layout.shape 0).k rfl
+        (wordsVal (wideWorkload.layout.shape 0).m (wideWorkload.layout.shape 0).k (witnessAct 0) i)
+        (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
+          (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) j)
+        (fun l => by simp [wordsVal, witnessAct, wordQ_one])
+        (fun l => by simp [wordsVal, wideWorkload, wordQ_one])
   have hzero : witnessSem.unitDebitRev1 devH100 (fun _ => ()) () wideWorkload 0 (witnessAct 0) = 0 := by
     unfold PearlCSem.unitDebitRev1
-    rw [hzero0]
+    dsimp only
+    rw [hzero0, hmend]
     simp (disch := decide) only [laterZeroPromos_eq_zero_of_le, Nat.cast_zero, sum_const_zero, mul_zero,
       add_zero]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -348,12 +406,25 @@ theorem ttOutTilePearlCH100Rev1Witness :
             ((TR.tiling wideWorkload.layout).rows 0)) ((TR.tiling wideWorkload.layout).cols 0)
     rw [hu, hr, hc, wide_passRows]
     unfold PearlCSem.tileDebitRev1
-    rw [tileDebitDev_h100, wide_tileDebit_zero]
+    dsimp only
+    have hmend : ∑ e ∈ (univ : Finset (Fin (wideWorkload.layout.shape 0).m × Fin (wideWorkload.layout.shape 0).n)).filter
+        (fun e => (e.1 : ℕ) ∈ Ico 0 1 ∧ (e.2 : ℕ) ∈ Ico 0 64), (wordMend devH100 witnessSem.alpha witnessSem.beta
+          (wordsVal (wideWorkload.layout.shape 0).m (wideWorkload.layout.shape 0).k (witnessAct 0) e.1)
+          (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
+            (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) e.2) : ℚ) = 0 :=
+      sum_eq_zero fun e _ => by
+        exact_mod_cast witness_wordMend_zero (wideWorkload.layout.shape 0).k rfl
+          (wordsVal (wideWorkload.layout.shape 0).m (wideWorkload.layout.shape 0).k (witnessAct 0) e.1)
+          (wordsVal (wideWorkload.layout.shape 0).n (wideWorkload.layout.shape 0).k
+            (wideWorkload.fixed (wideWorkload.layout.fixedId 0)) e.2)
+          (fun l => by simp [wordsVal, witnessAct, wordQ_one])
+          (fun l => by simp [wordsVal, wideWorkload, wordQ_one])
+    rw [tileDebitDev_h100, wide_tileDebit_zero, hmend]
     simp (disch := decide) only [laterZeroPromos_eq_zero_of_le, Nat.cast_zero, sum_const_zero, mul_zero,
       add_zero]
     have h2 := creditDevRev1_h100_nonneg (wideWorkload.layout.shape 0)
     have h3 := tileShare_nonneg (wideWorkload.layout.shape 0) (Ico 0 1) (Ico 0 64)
-    positivity
+    exact mul_nonneg (mul_nonneg (by norm_num) h2) h3
   · rw [hNT]
     refine sum_pos' (fun g _ => ?_) ⟨0, by simp, ?_⟩
     · show (0 : ℝ) ≤ (((1 - 1 / 400) * creditDevRev1 devH100

@@ -10,8 +10,8 @@ log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 { hostname; git rev-parse HEAD; git status --porcelain | head; nproc; free -g | head -2; } > "$OUT/machine.txt" 2>&1
 log "uv sync"
 uv sync --all-packages --extra torch-cpu > "$OUT/uv.log" 2>&1 || { log "uv sync failed"; exit 5; }
-log "lake build flock-verify flock-firewall"
-(cd verity/protocols/proofs/flock/verifier && mkdir -p .lake && flock .lake/verity-build.lock lake build flock-verify flock-firewall) \
+log "lake build verity-verify-proof flock-firewall"
+(cd verity/protocols/proofs/flock/verifier && mkdir -p .lake && flock .lake/verity-build.lock lake build verity-verify-proof flock-firewall) \
   > "$OUT/lake-flock.log" 2>&1 || { log "lake build failed"; tail -20 "$OUT/lake-flock.log"; exit 6; }
 log "check_build.sh bin"
 bash verity/protocols/proofs/flock/prover/check_build.sh bin "$SCR/flock-circuit" > "$OUT/check-build.log" 2>&1 \

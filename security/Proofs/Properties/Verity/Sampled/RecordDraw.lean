@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Flock.Claims.JsonNorm
-public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Flock.Claims.CanonWf
 public import Proofs.Properties.Challenger.Coins
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -17,10 +17,10 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
   (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
   (`unitsAscending`) and the record's `unit_draw` is the subset sample of those units,
   `UnitDraw.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordDrawn`): v2 accepts only a subset record sample
-  (`recordDraw_subset`), whatever law it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
+  (`recordDraw_subset`), whatever sampling design it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
   the record sample's population and units (`drawHeld_of`).
 * **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, `k` accepted, v2 drew `units`, and the session's
-  law and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
+  sampling design and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
   (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.drawUnits_size`), and the sample file
   at the units' proof blocks is `UnitDraw.toJson ⟨.subset kd, n, units, #[]⟩` (`drawOf_filter`).
 * **`norm` fixes a subset sample's file** (`norm_toJson_subset`), as `DrawHeld`'s proof reads it.
@@ -765,28 +765,6 @@ theorem drawOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     (List.toFinset_sort (· ≤ ·) (hs.imp ne_of_lt)).2 (hs.imp le_of_lt)
   simp only [FlockSoundness.Discharge.ZkLink.drawOf, himg, hsort, Array.toArray_toList]
 
-open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff) in
-/-- **A well-formed value's objects hold their keys in order.** -/
-theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.Spot.sortedKeys j = true := by
-  refine FlockDeploy.json_ind (fun _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) (fun _ _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) ?_ ?_
-  · intro a ih hw
-    cases hw with
-    | arr h => exact sortedKeys_arr.2 fun x hx => ih x hx (h x hx)
-  · intro m ih hw
-    cases hw with
-    | obj hm h =>
-      refine sortedKeys_obj.2 ⟨?_, fun p hp => ?_⟩
-      · rw [Std.TreeMap.Raw.toList_toArray, increasing_iff, List.pairwise_map]
-        exact (Std.TreeMap.Raw.ordered_keys_toList hm).imp fun hlt => compareOfLessAndEq_eq_lt.1 hlt
-      · have hp' : p ∈ m.toList := by
-          rw [← Std.TreeMap.Raw.toList_toArray]
-          exact Array.mem_toList_iff.2 hp
-        refine ih p hp' (h p.1 p.2 ?_)
-        rw [Std.TreeMap.Raw.get?_eq_getElem?]
-        exact (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp'
-
 /-! ## `norm` fixes a subset sample's file -/
 
 theorem norm_arr_of {a : Array Json} (h : ∀ x ∈ a, Flock.norm x = x) : Flock.norm (.arr a) = .arr a := by
@@ -814,7 +792,7 @@ theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
 
 /-- **The record's sample is the session's sample file at v2's units**: where v2 holds the record's sample to its own
 (`DrawHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the sampling design `L` over `n` units there, and
-the session's law and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
+the session's sampling design and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
 blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.drawUnits_size`), so the record's subset sample
 is the session's. -/
 theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}

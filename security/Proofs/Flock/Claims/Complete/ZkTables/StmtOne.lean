@@ -64,7 +64,7 @@ antecedent.
 * Its public header is the population's with the sample put in (`HmRow.drawn`), so its `unit_draw` is the statement's
   sample (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`); its `Σ` is a SHA-512 digest
   and its `Hello` is `helloOf`'s (`setupOne_stmt`).
-* The setup checked the sample's law (`ProvedScope.drawLaw`), under `--zk` a stratified or a subset sample. Either, when it
+* The setup checked the sample's sampling design (`ProvedScope.drawLaw`), under `--zk` a stratified or a subset sample. Either, when it
   decodes, is an object of exactly the keys it reads, each a string, a natural number, an array of them, or strata that
   decode (`good_stratified`, `good_subset`), so it is printable.
 -/
@@ -136,7 +136,7 @@ private theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = tru
 
 /-! ## What the setup of one table set up -/
 
-/-- A sampled session's setup checked its sample's law (`ProvedScope.drawLaw`). -/
+/-- A sampled session's setup checked its sample's sampling design (`ProvedScope.drawLaw`). -/
 private theorem setup_drawLaw {s : Ins} {p : SessionSpec × Array Flock.Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
     ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by

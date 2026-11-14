@@ -12,9 +12,9 @@ public import Proofs.Flock.Soundness.Finders
 its own statement at one table (`SampledKSLiveV5`'s binders: its circuit file's descriptor, public input ports and public
 file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's audit (`JointAuditV5`)
 registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
-(`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream) under the registration's law (`Bridge.LawOn`: subset,
+(`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream) under the registration's sampling design (`Bridge.LawOn`: subset,
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
-then runs one flock-verify session per member in the registration's order, member `m` proving its part of the sample
+then runs one verity-verify-proof session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The deployed sample
 ends or runs out of the stream's bytes (`sampleEnded`), and a sample that ran out is refused: the run accepts when the
 sample ended and the session of every member with a proof block in the sample accepts (`JointAuditV5.Accepts`).
@@ -123,7 +123,7 @@ def part (S : Finset (Fin nJ)) : Finset (Fin m.n) := Finset.univ.filter fun u =>
 `kd` proof blocks. -/
 def OneClass (L : Law m.n) : Prop := ∀ ω, mPtsOf m.D.unroll.g (L.draw ω).card = mPtsOf m.D.unroll.g (m.kd / nTab m.I)
 
-/-- The member's flock-verify session on its part `S` at the registration `R`. -/
+/-- The member's verity-verify-proof session on its part `S` at the registration `R`. -/
 noncomputable def live (S : Finset (Fin m.n)) (R : Reg) : Game Discharge.Exec.Transcript :=
   liveOfZJ m.dg (planZHJP m.dj m.y₀) m.N m.wr S R
 
@@ -195,7 +195,7 @@ def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → F
 
 /-- **A window's audit of several members**: every member registered at one registration `Reg`, in the registration's
 order; one live sample over the population of all their `nJ` proof blocks, sampled by the deployed sample on the verifier's
-one byte stream `src` under the registration's law `law` on strata of sizes `ns`, sampling `kd` proof blocks; then one
+one byte stream `src` under the registration's sampling design `law` on strata of sizes `ns`, sampling `kd` proof blocks; then one
 session per member, in order. Each member's part of every sample that ended has its session's link points (`hcls`).
 That some outcome of the stream ends the sample is no field: what needs it (`memberLaw` and what is built on it) takes
 it as `Nonempty EndΩ`, and where no outcome does no run is accepted (`prob_accepts_of_not_ends`). -/
@@ -225,7 +225,7 @@ open Classical
 
 variable (w : JointAuditV5)
 
-/-- The window's sample: the deployed sample under the registration's law on the verifier's bytes, over every member's
+/-- The window's sample: the deployed sample under the registration's sampling design on the verifier's bytes, over every member's
 proof blocks. -/
 def L : Law w.nJ := Bridge.execSel (n := w.nJ) w.src w.law w.nJ
 
@@ -246,7 +246,7 @@ noncomputable def game : Game ((w.Reg × Bool) × Finset (Fin w.nJ) × List Disc
   .send w.Reg fun R => .coin w.L.Ω fun ω =>
     (w.sessions (w.L.draw ω) R).map fun ts => ((R, w.ended ω), w.L.draw ω, ts)
 
-/-- **The run accepts**: the sample ended, and flock-verify `--zk --public-inputs` accepts, at its `own`, the session of
+/-- **The run accepts**: the sample ended, and verity-verify-proof `--zk --public-inputs` accepts, at its `own`, the session of
 every member with a proof block in the sample. A sample that ran out is refused whatever its sessions say. A member
 with no proof block in the sample has no statement to verify, so nothing reads its session's verdict. -/
 def Accepts (o : (w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
@@ -324,9 +324,9 @@ noncomputable def eps : ℝ≥0∞ := ∑ k, ((w.ms.get k).epsKs (w.design k) + 
 end JointAuditV5
 
 /-- **A window's sample over several members, `EndToEndHiddenV5`'s form.** For a window's audit as in `JointAuditV5`,
-whose one live sample under the registration's law covers every member's proof blocks and whose members' sessions each
+whose one live sample under the registration's sampling design covers every member's proof blocks and whose members' sessions each
 prove their part of it, every live prover `τ` and every set `W` of the population's proof blocks, the probability that
-the sample ended, flock-verify accepts the session of every member with a proof block in the sample and every proof
+the sample ended, verity-verify-proof accepts the session of every member with a proof block in the sample and every proof
 block of `W` is incorrect is at most
 $$P_a(W) + \sum_m (\varepsilon_{ks,m} + \varepsilon_{bind,m}),$$
 `P_a(W)` the sampling design's own miss of `W` on its strata. Its named assumptions: A3 (`Assumptions.UniformRandomBytes`) for the
@@ -349,7 +349,7 @@ def JointSampledV5 : Prop :=
       prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
 
 /-- **A window's sample over several members, the share form.** For a window's audit as in `JointAuditV5`, every live
-prover `τ` and every share `ε`, the probability that the sample ended, flock-verify accepts the session of every member
+prover `τ` and every share `ε`, the probability that the sample ended, verity-verify-proof accepts the session of every member
 with a proof block in the sample and more than `ε·nJ` of the population's proof blocks are incorrect is at most the
 most the sampling design misses of any set of more than `ε·nJ` of them plus `Σ_m (ε_ks,m + ε_bind,m)`, under
 `JointSampledV5`'s named assumptions. -/
@@ -413,14 +413,14 @@ def Plays (W : ℕ → JointAuditV5) (T : ℕ) (s : Strategy (game W T)) (t : �
   MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
 
 /-- **The most harm in the period's confidence set**: the largest total weight over every choice of a set of proof
-blocks in each of the run's windows whose laws' own misses multiply to at least `δ`. -/
+blocks in each of the run's windows whose sampling designs' own misses multiply to at least `δ`. -/
 noncomputable def maxHarm (W : ℕ → JointAuditV5) (h : (t : ℕ) → Fin (W t).nJ → ℕ) (δ : ℝ)
     (l : List (AuditRecV5 W)) : ℝ :=
   ⨆ B : {B : (i : Fin l.length) → Finset (Fin (W l[i].idx).nJ) //
       ENNReal.ofReal δ ≤ ∏ i, ENNReal.ofReal ((W l[i].idx).pa (B i))},
     ((∑ i, ∑ u ∈ B.1 i, h l[i].idx u : ℕ) : ℝ)
 
-/-- **The run's incorrect proof blocks are in the period's confidence set at `δ`**: the windows' laws miss them together
+/-- **The run's incorrect proof blocks are in the period's confidence set at `δ`**: the windows' sampling designs miss them together
 with probability at least `δ`, and their ANDs and their output bits in all are each at most the most any choice in that
 set holds. -/
 def Within (W : ℕ → JointAuditV5) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ) (l : List (AuditRecV5 W)) :
@@ -437,7 +437,7 @@ end JointPeriodV5
 probability that every window's run accepts (`JointAuditV5.Accepts`) and their incorrect proof blocks are not in the
 period's confidence set is at most
 $$\delta + \sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}):$$
-outside it, when every window is accepted, the product of the windows' laws' own misses of their incorrect proof blocks is
+outside it, when every window is accepted, the product of the windows' sampling designs' own misses of their incorrect proof blocks is
 at least `δ`, and their ANDs and output bits in all are at most the period's `maxHarm`. The sampling term is `δ` however
 many windows and members the period has. Its named assumptions, at every window: A3 (`Assumptions.UniformRandomBytes`)
 for its sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw`), and `cr/sha-512`

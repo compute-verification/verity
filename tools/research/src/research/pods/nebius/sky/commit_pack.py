@@ -11,7 +11,7 @@ queues at 12:10Z), or after an MPS fault; it exits once nothing runs and the que
 PACK_MAX_WALL_S, when whatever still runs is stopped. At 12:28Z it drains: every Commit still running is stopped and reported
 `drained` (not a fault), the dispatcher requeues each unpacked, and the pod exits, so none runs into the 12:30Z quiet hour.
 Storage: it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
-and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (400): the bundles waiting,
+and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_LIMIT_GB (400): the bundles waiting,
 plus an estimate for each Commit running here and for the candidate: the pacer's own (sky/release.py's learned rate per model,
 which it mirrors to $VY_BUNDLE_SIZES, x1.25), else its model's in BUNDLE_EST_GB, else PACK_BUNDLE_EST_GB, 60, for
 B8 with 1,024 + 128 tokens, scaled by batch and tokens (phi3-mini's was 113 GB, the grid's B8 1k ones of smaller models 25-57 GB,
@@ -69,7 +69,7 @@ BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/comm
                               "/workspace/jobs/probe-jit/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/*/commit/replay_bundle_p*").split(",")
-BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "400")) * 1e9
+BUNDLE_LIMIT = float(os.environ.get("PACK_BUNDLE_LIMIT_GB", "400")) * 1e9
 BUNDLE_BATCH = 8
 BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "60")) * 1e9
 # phi3-mini's measured 113 GB; the packable 3-4B models nobody has measured are taken to be as large
@@ -137,8 +137,8 @@ def bundle_est(entry: dict) -> float:
 
 
 def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
-    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the cap."""
-    return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_CAP
+    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the limit."""
+    return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_LIMIT
 
 
 def bundle_bytes(globs: list[str]) -> int:

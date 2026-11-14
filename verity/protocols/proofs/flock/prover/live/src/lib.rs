@@ -33,7 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
-pub mod firewall;
+pub mod zk_server;
 pub mod glue;
 pub mod huge_pages;
 pub mod proved_scope;
@@ -50,6 +50,8 @@ pub mod zk_hooks;
 pub mod zk_veil;
 #[cfg(feature = "sha512")]
 pub mod sha512_native;
+#[cfg(feature = "sha512")]
+pub mod wide_leaf;
 // needs flock-vtime-b684b12.patch, which the pods apply with the SHA-512 patches
 #[cfg(feature = "sha512")]
 pub mod session_verify;

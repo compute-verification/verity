@@ -67,7 +67,7 @@ noncomputable def ex [Fintype Ω] (μ : PMF Ω) (n : ℕ) (F : (Fin n → Ω) �
   ∑ cs, (Verity.Game.iid μ n cs).toReal * F cs
 
 /-- The probability of the event `E` over `n` windows' coins, each flipped independently from `μ`: core's
-`Verity.Game.prPMFReal` under their law `iid μ n`. -/
+`Verity.Game.prPMFReal` under their distribution `iid μ n`. -/
 noncomputable abbrev prob [Fintype Ω] (μ : PMF Ω) (n : ℕ) (E : (Fin n → Ω) → Prop) : ℝ :=
   Verity.Game.prPMFReal (Verity.Game.iid μ n) E
 

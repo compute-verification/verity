@@ -13,7 +13,7 @@ import dataclasses
 import hashlib
 import random
 import struct
-from functools import lru_cache
+from functools import cache
 
 import pytest
 
@@ -27,7 +27,7 @@ from verity.circuits.ops import s8 as S8
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import s8 as BS8
 from verity.circuits.program import Program
-from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.protocols.accounting.pouw.verifier import grind as GR
 from verity.protocols.accounting.pouw.prover.circuit import compile as C
@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.proofs.spot.verifier.one_stage import partition as OP
 
-V1, V8, V16, V32 = Value(1), Value(8), Value(16), Value(32)
+V1, V8, V32 = Value(1), Value(8), Value(32)
 M32 = (1 << 32) - 1
 LAYER = ((2048, 21504), (8192, 2048))
 REDUCED = ((2048, 3), (8192, 2))
@@ -79,7 +79,6 @@ XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
 #: a noise word's w-bit pieces, least significant first
 PIECES = {w: tuple(_prim(f"CompileTestPiece{w}x{s}", (("x", V32),), Value(w), lambda x, s=s, w=w: (x >> w * s) % (1 << w))
                    for s in range(32 // w)) for w in (8, 16)}
-ADD8 = ADD[8]
 #: a noise primitive (the coin rules' coin flow): it adds its coin to its operand
 NOISED8 = _prim("CompileTestNoised8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF, ports=COIN)
 FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
@@ -238,7 +237,7 @@ def _coord(K):
     return bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _layer(members):
     """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
     return OP.mixed_population_program([(_coord(K), n) for K, n in members])

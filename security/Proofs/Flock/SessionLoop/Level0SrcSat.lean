@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.ZK.FrameParse
 /-!
 # The loop's level-0 source is satisfiable
 
-`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-firewall-os-src`), holds at every statement and witness for
+`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-zk-server-os-src`), holds at every statement and witness for
 some source: the one that hands each rep stream its table's packed witness at the tape's mask words and the tape's
 level-0 samples, written in `Level0.ofDraws`'s layout.
 
@@ -22,7 +22,7 @@ level-0 samples, written in `Level0.ofDraws`'s layout.
 
 @[expose] public section
 
-namespace Flock.Firewall.Level0
+namespace Flock.ZkServer.Level0
 
 open Claims.ZKServer (get!_list size_list u64OfLE_of_get)
 
@@ -144,35 +144,39 @@ theorem rows_size (lv : Level) (tPad : Nat) (g : Array F128) (extra lanePad : Na
   unfold Link.rows Link.rowsFft Link.rowsDirect
   split <;> simp
 
-theorem In_ext {a b : Link.In} (h1 : a.m = b.m) (h2 : a.g = b.g) (h3 : a.extra = b.extra)
-    (h4 : a.lanePad = b.lanePad) (h5 : a.salt = b.salt) : a = b := by
+theorem In_ext {a b : Link.In} (h0 : a.wideLeaf = b.wideLeaf) (h1 : a.m = b.m) (h2 : a.g = b.g)
+    (h3 : a.extra = b.extra) (h4 : a.lanePad = b.lanePad) (h5 : a.salt = b.salt) : a = b := by
   cases a
   cases b
   simp only [Link.In.mk.injEq]
-  exact ⟨h1, h2, h3, h4, h5⟩
+  exact ⟨h0, h1, h2, h3, h4, h5⟩
+
+variable {wideLeaf : Bool}
 
 set_option maxHeartbeats 1000000 in
 /-- **`ofDraws` on a table's inputs written in its layout gives them back**: where `i`'s packed table has
 `2^(lanes + cols)` words, its extra lanes and lane paddings are `0` past level 0's sizes, and its salts are `192` bytes at
 the `2^d` tree positions and empty past them, `ofDraws` on `i.g` and `inBytes` returns a level 0 whose inputs are `i`. -/
 theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv : Level}
-    (hz : Zk.schedule m = .ok (s, tPad))
-    (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hm : i.m = m) (hg : i.g.size = 2 ^ (lv.lanes + lv.cols))
+    (hz : Zk.schedule wideLeaf m = .ok (s, tPad))
+    (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hw : i.wideLeaf = wideLeaf) (hm : i.m = m)
+    (hg : i.g.size = 2 ^ (lv.lanes + lv.cols))
     (he : ∀ e c, ¬ (e < Zk.EXTRA_LANES ∧ c < 2 ^ lv.cols) → i.extra e c = 0)
     (hp : ∀ l k, ¬ (l < 2 ^ lv.lanes + Zk.EXTRA_LANES ∧ k < tPad) → i.lanePad l k = 0)
     (hs : ∀ q, q < 2 ^ lv.d → (i.salt q).size = 192) (hs' : ∀ q, ¬ q < 2 ^ lv.d → i.salt q = .empty) :
-    ∃ l, ofDraws m i.g (inBytes lv tPad i) = .ok l ∧ l.toIn = i := by
+    ∃ l, ofDraws wideLeaf m i.g (inBytes lv tPad i) = .ok l ∧ l.toIn = i := by
   have h1 : (i.g.size != 2 ^ (lv.lanes + lv.cols)) = false := by rw [hg]; simp
   have h2 : ((inBytes lv tPad i).size != drawSize lv tPad) = false := by rw [inBytes_size]; simp
-  have h3 : ∀ g E P S, ((build m lv tPad g E P S).rows.size != 2 ^ lv.d) = false := fun g E P S => by
-    have hr : (build m lv tPad g E P S).rows.size = 2 ^ lv.d := by
+  have h3 : ∀ g E P S, ((build wideLeaf m lv tPad g E P S).rows.size != 2 ^ lv.d) = false := fun g E P S => by
+    have hr : (build wideLeaf m lv tPad g E P S).rows.size = 2 ^ lv.d := by
       first
         | exact rows_size _ _ _ _ _
         | exact (congrArg Array.size (build_rows rfl)).trans (rows_size _ _ _ _ _)
     rw [hr]
     simp
-  have hok : ofDraws m i.g (inBytes lv tPad i) = .ok (build m lv tPad i.g (drawnExtra lv (inBytes lv tPad i))
-      (drawnPads lv tPad (inBytes lv tPad i)) (drawnSalts lv tPad (inBytes lv tPad i))) := by
+  have hok : ofDraws wideLeaf m i.g (inBytes lv tPad i) = .ok (build wideLeaf m lv tPad i.g
+      (drawnExtra lv (inBytes lv tPad i)) (drawnPads lv tPad (inBytes lv tPad i))
+      (drawnSalts lv tPad (inBytes lv tPad i))) := by
     subst hlv
     unfold ofDraws
     rw [hz]
@@ -250,10 +254,10 @@ theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv :
       rw [if_neg hn1, if_neg hn2, hsub, show (192 * q + k) / 192 = q by omega, show (192 * q + k) % 192 = k by omega]
     · rw [if_neg hq]
       exact (hs' q hq).symm
-  exact ⟨_, hok, In_ext hm.symm rfl (funext fun e => funext fun c => hE e c) (funext fun l => funext fun k => hP l k)
-    (funext fun q => hS q)⟩
+  exact ⟨_, hok, In_ext hw.symm hm.symm rfl (funext fun e => funext fun c => hE e c)
+    (funext fun l => funext fun k => hP l k) (funext fun q => hS q)⟩
 
-end Flock.Firewall.Level0
+end Flock.ZkServer.Level0
 
 namespace Claims.ZKServer
 
@@ -270,7 +274,7 @@ noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (k : ℕ) : V (Array F128 × ByteArray × Array ByteArray) :=
   if h : k / 2 < Masked.jOf x then
-    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
+    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
       (Masked.zkTab x ⟨k / 2, h⟩).tPad (Masked.linkIn x w ρ.2 ⟨k / 2, h⟩), #[])
   else .error "no table"
 
@@ -285,7 +289,7 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
     omega
   have hJ : (⟨(2 * j.val + r.val) / 2, hj⟩ : Fin (Masked.jOf x)) = j := Fin.ext hk
   have hsrc : Loop.tapeSrc x w (ν, t) (2 * j.val + r.val) = .ok ((Masked.linkIn x w t j).g,
-      _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j), #[]) := by
+      _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j), #[]) := by
     unfold Loop.tapeSrc
     rw [dif_pos hj, hJ]
     all_goals rfl
@@ -331,8 +335,8 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
   rw [hsrc]
   simp only [bind, Except.bind]
   rw [Masked.stsOf_half x j r]
-  exact _root_.Flock.Firewall.Level0.ofDraws_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
-    (tPad := (Masked.zkTab x j).tPad) (lv := Masked.lv0 x j) (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl hg
+  exact _root_.Flock.ZkServer.Level0.ofDraws_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
+    (tPad := (Masked.zkTab x j).tPad) (lv := Masked.lv0 x j) (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl rfl hg
     he hp hs hs'
 
 end Claims.ZKServer

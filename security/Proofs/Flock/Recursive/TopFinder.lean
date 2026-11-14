@@ -24,9 +24,11 @@ import Proofs.Flock.Soundness.Game
 
 The candidate-3 verifier now checks the five registered-entry fields structurally, beside its canonical-JSON
 comparison.  Consequently a held binding top different from the explicit registered strings gives two
-equal-size frame-v3 trees with one root.  `topFinder` runs the audit once and returns `topRoot_collision`'s collision
-at exactly that bad event (`TopColl`, a disjunct of VBridgeCOff's bad event, which reads every outcome, so the event
-asks no acceptance); off it the held top is `TopOf`'s (`topOf_held`).
+equal-size frame-v3 trees with one root.  `topFinder` runs the audit once and returns the pair of the first of the
+history's candidates that collides (`topCandsAt`: the held top's and the registered strings' SHA-512 inputs two at a
+time, both read off the history and the registration, with nothing chosen), a collision at exactly that bad event
+(`TopColl.cand`, `topCandsAt_spec`; `TopColl` is a disjunct of VBridgeCOff's bad event, which reads every outcome, so
+the event asks no acceptance); off it the held top is `TopOf`'s (`topOf_held`).
 -/
 
 @[expose] public section
@@ -166,24 +168,27 @@ theorem topEntryFields_ok {program : String} {bcs : Array ByteArray} {e : Lean.J
     rcases hb with ⟨⟨⟨⟨hv, hr⟩, hl⟩, hw⟩, hd'⟩
     exact ⟨dom, rfl, hv, hr, hl, hw, hd'⟩
 
-/-- One entry structurally checked against two top arrays gives equal sizes and equal frame-v3 roots. -/
+/-- One entry structurally checked against two top arrays gives equal sizes and equal frame-v3 roots, under the
+domain of the first array's size. -/
 theorem topEntryFields_bind {program : String} {e : Lean.Json} {bcs bcs' : Array ByteArray}
     (h : RecVStar.topEntryFields program bcs e = .ok true)
     (h' : RecVStar.topEntryFields program bcs' e = .ok true) :
-    ∃ dom, bcs.size = bcs'.size ∧
+    ∃ dom,
+      Registered.domain program RecVStar.STACKED RecVStar.TOP_ROW_WORDS bcs.size Registered.WORD_BITS = .ok dom ∧
+      bcs.size = bcs'.size ∧
       FV3.root dom (topLeaves dom bcs) Sha512.hash =
         FV3.root dom (topLeaves dom bcs') Sha512.hash := by
   obtain ⟨dom, hdom, -, hr, hl, -, -⟩ := topEntryFields_ok h
   obtain ⟨dom', hdom', -, hr', hl', -, -⟩ := topEntryFields_ok h'
   have hsz : bcs.size = bcs'.size := Option.some.inj (hl.symm.trans hl')
   have hdd : dom = dom' := by
-    rw [hsz] at hdom
+    rw [← hsz] at hdom'
     exact Except.ok.inj (hdom.symm.trans hdom')
   subst dom'
   have hhex : hexOf (FV3.root dom (topLeaves dom bcs) Sha512.hash) =
       hexOf (FV3.root dom (topLeaves dom bcs') Sha512.hash) :=
     Option.some.inj (hr.symm.trans hr')
-  exact ⟨dom, hsz, hexOf_inj hhex⟩
+  exact ⟨dom, hdom, hsz, hexOf_inj hhex⟩
 
 end Flock.SecurityProofs.TopFinder
 
@@ -201,13 +206,45 @@ def TopColl (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt)
   ∃ cs s bcs, innerCommitsAt (wr t).1 (wr t).2 st reg = .ok cs ∧
     cs.stream? "stacked/rep0" = some s ∧ s.tops[0]? = some bcs ∧ bcs ≠ bcs'
 
-/-- A bad held top yields the collision between its concrete strings and the explicit registered strings. -/
-theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
+/-- **The held binding top at a history**: level 0's top of the stream `stacked/rep0` among the inner commitments the
+verifier holds at `t` (`innerCommitsAt`), none where it holds none. -/
+def heldTop (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
+    (t : List (Cm × I.Coin)) : Option (Array ByteArray) :=
+  (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption.bind fun cs =>
+    (cs.stream? "stacked/rep0").bind fun s => s.tops[0]?
+
+/-- **The registered top's frame-v3 domain** at `size` commit strings: `Registered.domain` at the program the
+registration `reg` names under META's digest (`RecVStar.registration`), none where the registration names none. -/
+def topDom (st : Flock.Stmt) (reg : Lean.Json) (size : ℕ) : Option ByteArray :=
+  (Flock.RecVStar.registration (some reg) (metaRegistration st)).toOption.bind fun r => r.bind fun pe =>
+    (Flock.Registered.domain pe.1 Flock.RecVStar.STACKED Flock.RecVStar.TOP_ROW_WORDS size
+      Flock.Registered.WORD_BITS).toOption
+
+/-- **A history's candidates**: the held top's and the explicit registered strings `bcs'`'s SHA-512 inputs two at a
+time (`topCands`), under the registered top's domain at the held top's size. The held top and the domain are read off
+the history and the registration (`heldTop`, `topDom`). -/
+def topCandsAt (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
+    (bcs' : Array ByteArray) (t : List (Cm × I.Coin)) : List (Prop × (List UInt8 × List UInt8)) :=
+  (heldTop wr st reg t).toList.flatMap fun bcs =>
+    (topDom st reg bcs.size).toList.flatMap fun dom => topCands dom bcs bcs'
+
+/-- **A candidate whose test passes is a collision.** -/
+theorem topCandsAt_spec {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
+    {bcs' : Array ByteArray} {t : List (Cm × I.Coin)} {c : Prop × (List UInt8 × List UInt8)}
+    (hc : c ∈ topCandsAt wr st reg bcs' t) (h : c.1) : Hash.Collision Refine.H512 c.2.1 c.2.2 := by
+  obtain ⟨bcs, -, hc⟩ := List.mem_flatMap.1 hc
+  obtain ⟨dom, -, hc⟩ := List.mem_flatMap.1 hc
+  exact topCands_spec hc h
+
+/-- A bad held top has a candidate whose test passes: two of the SHA-512 inputs of its concrete strings' and the
+explicit registered strings' roots collide. -/
+theorem TopColl.cand {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
     {bcs' : Array ByteArray} {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
     (hstk : StackedTopAt lv st reg cap salt bcs') {t : List (Cm × I.Coin)}
-    (h : TopColl wr st reg bcs' t) : Merkle.Collision Refine.H512 := by
-  obtain ⟨cs, s, bcs, hi, hs, ht, hne⟩ := h
+    (h : TopColl wr st reg bcs' t) : ∃ c ∈ topCandsAt wr st reg bcs' t, c.1 := by
+  obtain ⟨cs, s, bcs, hi0, hs, ht, hne⟩ := h
   obtain ⟨program, e, hreg', hfields', -⟩ := hstk
+  have hi := hi0
   unfold innerCommitsAt at hi
   obtain ⟨_, -, hi⟩ := FlockC3.RegLevels.TopHold.eok_bind hi
   obtain ⟨program', e', hreg, hfields, -⟩ :=
@@ -215,8 +252,23 @@ theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st
   have he : (program', e') = (program, e) := by
     simpa using Except.ok.inj (hreg.symm.trans hreg')
   obtain ⟨rfl, rfl⟩ := he
-  obtain ⟨dom, hsz, hroot⟩ := topEntryFields_bind hfields hfields'
-  exact topRoot_collision hsz hne hroot
+  obtain ⟨dom, hdom, hsz, hroot⟩ := topEntryFields_bind hfields hfields'
+  obtain ⟨c, hc, hp⟩ := topRoot_cand hsz hne hroot
+  have hb : heldTop wr st reg t = some bcs := by
+    unfold heldTop
+    rw [hi0]
+    show (cs.stream? "stacked/rep0").bind (fun s => s.tops[0]?) = some bcs
+    rw [hs]
+    exact ht
+  have hd : topDom st reg bcs.size = some dom := by
+    unfold topDom
+    rw [hreg']
+    exact congrArg Except.toOption hdom
+  refine ⟨c, List.mem_flatMap.2 ⟨bcs, ?_, List.mem_flatMap.2 ⟨dom, ?_, hc⟩⟩, hp⟩
+  · rw [hb]
+    exact List.mem_singleton.2 rfl
+  · rw [hd]
+    exact List.mem_singleton.2 rfl
 
 /-- **Off `TopColl`, the held top is `TopOf`'s**: the held binding top at the history is `bcs'`, which `hstk` makes
 `cap`'s nodes' commit strings under `salt`. -/
@@ -232,19 +284,19 @@ theorem topOf_held {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Floc
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
 
-/-- One run of the recursive audit, selecting the held-top collision when its concrete top differs from `bcs'`,
-accepted or not (the collision reads only the history's held top and `hstk`). An honest `Finder.CR` budget counts
-the audit run plus both top recomputations: for each side, one hm96 `treeLeaf` hash per commit string and
-`2 * bcs.size - 1` frame-v3 leaf/node hashes (including padding where the size is not a power of two). -/
+/-- One run of the recursive audit, output the pair of the first of the history's candidates (`topCandsAt`, at the
+outcome's history) whose test passes: a collision when the history's concrete top differs from `bcs'`, accepted or
+not (`TopColl.cand`, under `StackedTopAt`). The candidates read only the history's held top, the registration and
+`bcs'`. An honest `Finder.CR` budget counts the audit run plus both top recomputations: for each side, one hm96
+`treeLeaf` hash per commit string and `2 * bcs.size - 1` frame-v3 leaf/node hashes (including padding where the size is
+not a power of two). -/
 noncomputable def topFinder
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
-    (bcs' : Array ByteArray) (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig)
-    (salt : ℕ → ByteArray) (hstk : StackedTopAt lv st reg cap salt bcs')
+    (bcs' : Array ByteArray)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Finder Pair :=
-  oneRun _ σ (onePick Refine.H512
-    (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) => TopColl wr st reg bcs' o.2.2.1)
-    fun _ h => TopColl.collision hstk h)
+  oneRun _ σ (onePick fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
+    topCandsAt wr st reg bcs' o.2.2.1)
 
 /-- A differing held top, accepted or not, occurs with probability at most `qT²/2^513` under the honest budget of
 `topFinder`. -/
@@ -254,7 +306,7 @@ theorem prob_topCollAt_le
     (salt : ℕ → ByteArray) (hstk : StackedTopAt lv st reg cap salt bcs')
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    {qT : ℝ} (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT) :
+    {qT : ℝ} (hT : (topFinder wr st reg bcs' zs σ).CR Refine.H512 qT) :
     prob (fun o => TopColl wr st reg bcs' o.2.2.1)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) := by
@@ -264,7 +316,8 @@ theorem prob_topCollAt_le
     rw [prob_toReal]
     exact (expect_one_le Refine.H512 _ σ
       (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) => TopColl wr st reg bcs' o.2.2.1)
-      fun _ h => TopColl.collision hstk h).trans hT.le
+      (fun o => topCandsAt wr st reg bcs' o.2.2.1)
+      (fun _ h => h.cand hstk) fun _ _ hc hp => topCandsAt_spec hc hp).trans hT.le
   exact (ENNReal.le_ofReal_iff_toReal_le
     (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _)) (by positivity)).2 hev
 
@@ -276,7 +329,7 @@ theorem prob_topColl_le
     (salt : ℕ → ByteArray) (hstk : StackedTopAt lv st reg cap salt bcs')
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    {qT : ℝ} (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT) :
+    {qT : ℝ} (hT : (topFinder wr st reg bcs' zs σ).CR Refine.H512 qT) :
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) :=
@@ -290,7 +343,7 @@ theorem prob_regOrTop_le
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qX qT : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
-    (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT) :
+    (hT : (topFinder wr st reg bcs' zs σ).CR Refine.H512 qT) :
     prob (fun o => RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
         (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1))
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤

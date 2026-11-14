@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.PearlC.DeviceCapGap
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset

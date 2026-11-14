@@ -7,10 +7,10 @@ public import Proofs.Flock.Claims.Sampling.Prefix
 # Every checked unit's session is the record's one Flock session (`SessionRuns`)
 
 At the record's statement the verifier runs `DRAW_ROUNDS` sample rounds and the sample file round, then one session of
-flock-verify `--zk` at the statement the sample file sets up (`prefixAt`: `SamplingDeploy.PrefixAt` with the sample file
+verity-verify-proof `--zk` at the statement the sample file sets up (`prefixAt`: `SamplingDeploy.PrefixAt` with the sample file
 round's check `okAt`); there is no unit anywhere else (`eq_xOf_of_nPU`). Every unit's rounds are the session's, and
 `sessionOf` reads a view whose sample file round passed as the session's statement and the rounds after it, and one whose
-sample file round refused as `refused`, so `SessionRuns` is `SamplingDeploy.sessionRuns_prefix` at flock-verify `--zk`
+sample file round refused as `refused`, so `SessionRuns` is `SamplingDeploy.sessionRuns_prefix` at verity-verify-proof `--zk`
 against SHA-512 (`flockAt_sha512`).
 -/
 
@@ -58,7 +58,7 @@ theorem record_session_xOf (u : ℕ) (v : Seen) : (record A o e).session (xOf A 
 
 open Classical in
 /-- **The record's verifier is a prefix, then one session**: the sample rounds answer a coin, the sample file round answers
-`[]` where `okAt` passes and refuses elsewhere, and past it each round is flock-verify `--zk`'s at the session's
+`[]` where `okAt` passes and refuses elsewhere, and past it each round is verity-verify-proof `--zk`'s at the session's
 statement, with `kS` rounds where `okAt` passed (`numsOk`). -/
 theorem prefixAt :
     SamplingDeploy.PrefixAt FlockDeploy.sha512 (V A o) (FlockDeploy.V true) (xOf A o) (DRAW_ROUNDS + 1) (kS A o)
@@ -93,7 +93,7 @@ theorem prefixAt :
     rw [Nat.add_sub_cancel, kS]
     exact h3
 
-/-- **`SessionRuns` at the record**: every checked unit's session is the record's one flock-verify `--zk` session, on
+/-- **`SessionRuns` at the record**: every checked unit's session is the record's one verity-verify-proof `--zk` session, on
 the rounds after the sample file round. -/
 theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
   SamplingDeploy.sessionRuns_prefix FlockDeploy.sha512 (record A o e) SamplingDeploy.flockAt_sha512

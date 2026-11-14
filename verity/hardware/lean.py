@@ -10,7 +10,8 @@ it, so a number written another way, or an arm moved, is a changed record though
 - a clock, and device memory's rate, is its millions times ``10 ^ 6``; every other rate is ``SMs * the entry *`` the name
   of its clock;
 - a per-SM store is ``SMs * the entry``; a store in bytes is the bytes in binary units (``binary``) over the bytes of a
-  word, and ``text`` the same over an instruction's bytes;
+  word, and ``text`` the same over an instruction's bytes; device memory is ``store.dram_installed``, the memory on the
+  board, the entry a registered sheet reads (``verity.device.Sheet.of_file``), in ``size`` and in ``text``;
 - a field's arms are in the card file's order, and constructors whose arms read the same share the first one's
   (``arms``); ``weight``'s arms are the formats whose weight is not 1, in ``FORMATS``' order, and the rest are its
   default.
@@ -34,13 +35,15 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.errors import InvalidArtifact
-from verity.hardware.cards import WORD, load, number, rate, skus
+from verity.device import WORD, load_card, number, rate, skus
 
 #: The Lean module that declares ``Verity.Accel.Card``, which a card table imports.
 CARD = "Definitions.Core.Accel.Card"
 #: ``weight``'s arms, in order: the formats that have one where their weight is not 1. A format this doesn't name goes
 #: after these, in the card file's order. An arm's place is part of the term (a match's alternatives are positional).
 FORMATS = ("nvf4", "mxf4", "f16", "bf16", "tf32", "f64", "b1")
+#: The card file's entry a table's device memory is: the memory on the board, the larger of the card's two readings.
+DRAM = "dram_installed"
 #: The one command that writes the generated modules: each module's header names it, and so does the test's failure.
 COMMAND = "uv run python -m verity.hardware.lean --write"
 
@@ -48,7 +51,7 @@ COMMAND = "uv run python -m verity.hardware.lean --write"
 def root() -> Path:
     """The repository's root, which a card file's ``lean`` is a path from: the nearest directory above this file that
     holds the tree the first table is in."""
-    top = Path(load(tabled()[0])["lean"]).parts[0]
+    top = Path(load_card(tabled()[0])["lean"]).parts[0]
     for parent in Path(__file__).resolve().parents:
         if (parent / top).is_dir():
             return parent
@@ -57,24 +60,24 @@ def root() -> Path:
 
 def tabled() -> list[str]:
     """The GPU cards that name a Lean table."""
-    return [sku for sku in skus("gpu") if "lean" in load(sku)]
+    return [sku for sku in skus("gpu") if "lean" in load_card(sku)]
 
 
 def table(card: dict | str) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
     """The Lean table a card (or the card of a SKU) gives: its clocks in Hz (``tensorClock`` the card's ``clock.tensor``,
     its ``clock.sm`` where it has none), each store's words, each resource's units a second
-    (``verity.hardware.cards.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
-    card = load(card) if isinstance(card, str) else card
+    (``verity.device.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
+    card = load_card(card) if isinstance(card, str) else card
     sms, clock = number(card["sm"]["count"]), card["clock"]
     clocks = {"clock": number(clock["sm"]) * 10 ** 6, "tensorClock": number(clock.get("tensor", clock["sm"])) * 10 ** 6}
     store = card["store"]
     size = {"reg": sms * (number(store["reg"]) + number(store["reg_extra"])),
             "smem": sms * number(store["smem"]) / WORD, "l2": number(store["l2"]) / WORD,
-            "dram": number(store["dram"]) / WORD}
+            "dram": number(store[DRAM]) / WORD}
     rho = {r: rate(card, r) for r in [*card["rate"], "dram"]}
     return clocks, {"size": size, "ρ": rho, "weight": {f: number(e) for f, e in card["weight"].items()},
                     "exact": number(card["model"]["exact"]),
-                    "text": number(store["dram"]) / number(card["model"]["instruction_bytes"])}
+                    "text": number(store[DRAM]) / number(card["model"]["instruction_bytes"])}
 
 
 def numeral(q: Fraction, *, nat: str | None = None) -> str:
@@ -118,7 +121,7 @@ def header(sku: str) -> str:
 def render(card: dict | str) -> str:
     """The Lean module of a card (or of a SKU's card) that names a Lean table: ``clock``, ``tensorClock`` where the
     card's ``clock.tensor`` is not its ``clock.sm``, and ``card``, in the shape the module's docstring gives."""
-    card = load(card) if isinstance(card, str) else card
+    card = load_card(card) if isinstance(card, str) else card
     sku = card["sku"]
     if "lean" not in card:
         raise KeyError(f"{sku} names no Lean table: its card file has no `lean`")
@@ -152,7 +155,7 @@ def render(card: dict | str) -> str:
     size = [("reg", (f"{count} * ({whole(number(store['reg']), 'store.reg')} + "
                      f"{whole(number(store['reg_extra']), 'store.reg_extra')})")),
             ("smem", f"{count} * {whole(number(store['smem']) / WORD, 'store.smem in words')}"),
-            *((s, over(s, Fraction(WORD), f"store.{s} in words")) for s in ("l2", "dram"))]
+            *((s, over(key, Fraction(WORD), f"store.{key} in words")) for s, key in (("l2", "l2"), ("dram", DRAM)))]
     weights = fields["weight"]
     listed = sorted((f for f in weights if weights[f] != 1),
                     key=lambda f: FORMATS.index(f) if f in FORMATS else len(FORMATS))
@@ -168,14 +171,15 @@ def render(card: dict | str) -> str:
         "  ρ", *arms([(r, resource(r)) for r in fields["ρ"]]),
         "  weight", *arms([(f, numeral(weights[f])) for f in listed], "1" if len(listed) < len(weights) else None),
         f"  exact := {whole(fields['exact'], 'model.exact')}",
-        "  text := " + over("dram", number(card["model"]["instruction_bytes"]), "store.dram over model.instruction_bytes"),
+        "  text := " + over(DRAM, number(card["model"]["instruction_bytes"]),
+                            f"store.{DRAM} over model.instruction_bytes"),
         "",
         f"end Verity.Accel.{name}", ""])
 
 
 def modules() -> dict[str, str]:
     """Every generated Lean module: its path from the repository's root, and its text."""
-    return {load(sku)["lean"]: render(sku) for sku in tabled()}
+    return {load_card(sku)["lean"]: render(sku) for sku in tabled()}
 
 
 def stale(top: Path | None = None) -> list[str]:

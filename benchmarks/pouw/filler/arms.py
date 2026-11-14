@@ -197,7 +197,7 @@ class Idle:
     name: str = "idle"
     lineage: dict = field(default_factory=lambda: {
         "parent": None, "approach": "pouw/filler-idle", "mechanism": ["place:none"],
-        "hypothesis": "serving alone: coverage is serving's certified share, and the A/A slowdown is the timing noise"})
+        "hypothesis": "serving alone: coverage is serving's utilization, and the A/A slowdown is the timing noise"})
     sources: tuple = ("benchmarks/pouw/filler/arms.py",)
     filler: Filler | None = None
     choice: str = "nothing to choose"

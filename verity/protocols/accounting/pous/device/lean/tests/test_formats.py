@@ -1,7 +1,7 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
 `streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' root, the header and the
-signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message and
-egress count, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
+signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message, start
+and end messages and an egress count's unit, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
 `test_wipe_verdict.py` hold the verdicts)."""
 
 from __future__ import annotations
@@ -11,21 +11,21 @@ import hashlib
 import json
 import shutil
 
-import pytest
-from hypothesis import strategies as st
-
 import mc_cases as M
+import pytest
 import verity_difftest as D
 import wipe_cases as W
+from hypothesis import strategies as st
+
+from verity.commitments.crypto import lms
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 EXE = "memory-challenger-difftest"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, a refusal of its own (`ValueError`, which
-#: `InvalidArtifact` is), an empty randomness source (`TypeError`) and a width overflowed (`OverflowError`).
+#: `InvalidArtifact` is), an empty `source` (`TypeError`) and a width overflowed (`OverflowError`).
 REFUSALS = (D.Reject, ValueError, TypeError, OverflowError)
 
 
@@ -88,15 +88,15 @@ SALT = mostly(st.binary(min_size=192, max_size=192), st.binary(min_size=191, max
 
 
 @st.composite
-def coin_tree_inputs(draw) -> dict:
+def coin_tree_inputs(sample) -> dict:
     """Each refusal now and then: no rounds, a salt too many or too few or short, a bad key, a session not 32 bytes, no
     labels or more than a u64 index holds, no source."""
-    k = draw(mostly(st.integers(1, 5), st.just(0)))
-    n = draw(mostly(st.just(k), st.sampled_from([k + 1, max(0, k - 1)])))
-    session = draw(mostly(st.just(32), st.sampled_from([31, 33])).flatmap(lambda m: st.binary(min_size=m, max_size=m)))
-    return {"source": draw(hexed(mostly(st.binary(min_size=1, max_size=6), st.just(b"")))), "session": session.hex(),
-            "blocks": draw(mostly(st.integers(1, 60), st.one_of(st.just(0), WIDE(64)))), "k": k, "key": draw(hexed(KEYS)),
-            "salts": [s.hex() for s in draw(st.lists(SALT, min_size=n, max_size=n))]}
+    k = sample(mostly(st.integers(1, 5), st.just(0)))
+    n = sample(mostly(st.just(k), st.sampled_from([k + 1, max(0, k - 1)])))
+    session = sample(mostly(st.just(32), st.sampled_from([31, 33])).flatmap(lambda m: st.binary(min_size=m, max_size=m)))
+    return {"source": sample(hexed(mostly(st.binary(min_size=1, max_size=6), st.just(b"")))), "session": session.hex(),
+            "blocks": sample(mostly(st.integers(1, 60), st.one_of(st.just(0), WIDE(64)))), "k": k, "key": sample(hexed(KEYS)),
+            "salts": [s.hex() for s in sample(st.lists(SALT, min_size=n, max_size=n))]}
 
 
 def test_coin_tree(server):
@@ -109,16 +109,16 @@ def verify_coin(v) -> bool:
 
 
 @st.composite
-def verify_coin_inputs(draw) -> dict:
-    s = draw(M.sessions())
-    c, o = s.commitment, draw(st.sampled_from(s.openings))
-    x = draw(st.integers(0, 2 ** 16))
-    o = draw(st.sampled_from([
+def verify_coin_inputs(sample) -> dict:
+    s = sample(M.sessions())
+    c, o = s.commitment, sample(st.sampled_from(s.openings))
+    x = sample(st.integers(0, 2 ** 16))
+    o = sample(st.sampled_from([
         o, dataclasses.replace(o, index=o.index + 1), dataclasses.replace(o, index=o.index + c.blocks),
         dataclasses.replace(o, j=o.j + 1), dataclasses.replace(o, j=2 ** 32 + o.j), dataclasses.replace(o, salt=M._flip(o.salt, x)),
         dataclasses.replace(o, salt=o.salt[:-1]), dataclasses.replace(o, path=o.path[:-1]), dataclasses.replace(o, path=o.path + (bytes(64),)),
         dataclasses.replace(o, path=tuple(p[:-1] for p in o.path))]))
-    c = draw(st.sampled_from([
+    c = sample(st.sampled_from([
         c, dataclasses.replace(c, session=hashlib.sha512(b"other").digest()[:32]), dataclasses.replace(c, k=c.k + 1),
         dataclasses.replace(c, k=2 ** 33), dataclasses.replace(c, blocks=o.index), dataclasses.replace(c, coin_key=c.coin_key[:-1]),
         dataclasses.replace(c, coin_root=M._flip(c.coin_root, x)), dataclasses.replace(c, coin_root=c.coin_root[:-1])]))
@@ -196,8 +196,8 @@ def mc_message(v) -> str:
 
 
 def test_mc_message(server):
-    I = st.one_of(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
-    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
+    identifiers = st.one_of(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
+    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(identifiers), "session": hexed(st.binary(max_size=40)),
                                                    "record": hexed(st.binary(max_size=70))}))
     stats = D.run(port("mc_message", mc_message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
@@ -231,16 +231,16 @@ def lms_verify(v) -> bool:
 
 
 @st.composite
-def lms_verify_inputs(draw) -> dict:
-    signer = draw(st.one_of(st.builds(M.test_signer, st.sampled_from(M.SECRETS), st.just(2), st.integers(0, 3)),
+def lms_verify_inputs(sample) -> dict:
+    signer = sample(st.one_of(st.builds(M.test_signer, st.sampled_from(M.SECRETS), st.just(2), st.integers(0, 3)),
                             st.just(M.test_signer(M.SECRETS[0], 1, 1)), st.builds(M.deployed_signer)))
-    session, record = draw(st.binary(max_size=40)), draw(st.binary(max_size=64))
-    sig, pub, x = signer.sign(session, record), signer.public_key, draw(st.integers(0, 2 ** 16))
-    sig = draw(mostly(st.just(sig), st.sampled_from([M._flip(sig, x), sig[:-1], b"", (2 ** 32 - 1 - x).to_bytes(4, "big") + sig[4:],
+    session, record = sample(st.binary(max_size=40)), sample(st.binary(max_size=64))
+    sig, pub, x = signer.sign(session, record), signer.public_key, sample(st.integers(0, 2 ** 16))
+    sig = sample(mostly(st.just(sig), st.sampled_from([M._flip(sig, x), sig[:-1], b"", (2 ** 32 - 1 - x).to_bytes(4, "big") + sig[4:],
                                 (x % 4 + 4).to_bytes(4, "big") + sig[4:], bytes(len(sig))]), 2))
-    pub = draw(mostly(st.just(pub), st.sampled_from([pub[:-1], M._flip(pub, x), M.test_signer(M.STRANGER, 2, 0).public_key]), 3))
-    session, record = draw(mostly(st.just((session, record)), st.sampled_from([(session + b"x", record), (session, M._flip(record, x))]), 3))
-    scheme = draw(mostly(st.just(signer.scheme), st.sampled_from([mc.LMS, M.ts.scheme(1), M.ts.scheme(3), "none"]), 3))
+    pub = sample(mostly(st.just(pub), st.sampled_from([pub[:-1], M._flip(pub, x), M.test_signer(M.STRANGER, 2, 0).public_key]), 3))
+    session, record = sample(mostly(st.just((session, record)), st.sampled_from([(session + b"x", record), (session, M._flip(record, x))]), 3))
+    scheme = sample(mostly(st.just(signer.scheme), st.sampled_from([mc.LMS, M.ts.scheme(1), M.ts.scheme(3), "none"]), 3))
     return {"scheme": scheme, "public_key": pub.hex(), "session": session.hex(), "record": record.hex(), "signature": sig.hex()}
 
 
@@ -260,23 +260,77 @@ SIGNED = mostly(st.integers(0, 2 ** 32 - 1), st.integers(-2 ** 70, 2 ** 70), 4)
 WIPE_BATCH = st.fixed_dictionaries({"b": SIGNED, "first": SIGNED, "count": SIGNED, "send_ns": SIGNED, "receipt_ns": SIGNED,
                                     "wrong": SIGNED, "digest": hexed(st.binary(max_size=70))})
 WIPE_BATCHES = st.lists(mostly(WIPE_BATCH, malformed(WIPE_BATCH), 15), max_size=5)
+#: A start mark as the header writes it: none or a digest, now and then bytes of another length.
+WIPE_MARK = hexed(mostly(st.one_of(st.just(b""), st.binary(min_size=sw.MARK_BYTES, max_size=sw.MARK_BYTES)),
+                         st.binary(max_size=70), 5))
+#: A signed session's fields; `MemoryChallenger.StreamedWipe.Signed.ofJson` refuses a start mark of another length.
+WIPE_SIGNED = st.fixed_dictionaries({
+    "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "ended": ENDED, "start_mark": WIPE_MARK,
+    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
+    "scheme": st.sampled_from([mc.LMS, M.ts.scheme(1), "none", ""]), "public_key": hexed(st.binary(max_size=70)),
+    "signature": hexed(st.binary(max_size=140))})
+WIPE_MESSAGE_KEYS = ("commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches")
 
 
 def wipe_message(v) -> str:
-    return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), W.int_(v, "fill_start_ns"),
-                      W.int_(v, "fill_end_ns"), [W.batch_of(r) for r in M.list_(v, "batches")],
-                      W.int_(v, "egress_bits")).hex()
+    return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), M.hex_(v, "start_mark"),
+                      W.int_(v, "fill_start_ns"), W.int_(v, "fill_end_ns"),
+                      [W.batch_of(r) for r in M.list_(v, "batches")]).hex()
+
+
+def wipe_start_message(v) -> str:
+    return sw.start_message(W.commitment_of(M._get(v, "commitment"))).hex()
+
+
+def wipe_end_message(v) -> str:
+    return sw.end_message(W.signed_of(M._get(v, "signed"))).hex()
 
 
 def test_wipe_message(server):
     """The signed message over sampled commitments (tier names past ASCII among them), batch records of either sign and
-    width, and fill times and egress of either sign; commitments `WipeParams` refuses and records past a field's width
-    refused by both."""
+    width, start marks of any length, and fill times of either sign; commitments `WipeParams` refuses and
+    records past a field's width refused by both."""
     commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 4)
-    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "ended": ENDED, "fill_start_ns": SIGNED,
-                                                   "fill_end_ns": SIGNED, "batches": WIPE_BATCHES, "egress_bits": SIGNED}))
-    stats = D.run(port("wipe_message", wipe_message, inputs), examples=300, server=server)
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "ended": ENDED, "start_mark": WIPE_MARK,
+                                                   "fill_start_ns": SIGNED, "fill_end_ns": SIGNED,
+                                                   "batches": WIPE_BATCHES}))
+    stats = D.run(port("wipe_message", wipe_message, inputs), examples=400, server=server)
     assert stats.outputs > 100 and stats.rejects > 30, stats
+
+
+def test_wipe_start_message(server):
+    """The start message over sampled commitments (tier names past ASCII among them); commitments `WipeParams` refuses
+    refused by both."""
+    commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 3)
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment}))
+    stats = D.run(port("wipe_start_message", wipe_start_message, inputs), examples=300, server=server)
+    assert stats.outputs > 100 and stats.rejects > 30, stats
+
+
+def test_wipe_end_message(server):
+    """The end message over sampled signed sessions, their signatures of any length; a start mark neither empty nor 64
+    bytes, a commitment `WipeParams` refuses and a record past a field's width refused by both."""
+    inputs = with_malformed(st.fixed_dictionaries({"signed": mostly(WIPE_SIGNED, malformed(WIPE_SIGNED), 5)}))
+    stats = D.run(port("wipe_end_message", wipe_end_message, inputs), examples=300, server=server)
+    assert stats.outputs > 80 and stats.rejects > 30, stats
+
+
+def test_wipe_messages_of_sessions(server):
+    """On sessions `WipeMemoryChallenger` ran, with a start mark and with none, the Lean's signed message, start message and end
+    message are the Python's own, and the signed header carries the certificate's SHA-512."""
+    params = sw.WipeParams(8, 3, 1, 1_000, (("gpu", 3 * sw.LABEL_BYTES), ("host-dram", 5 * sw.LABEL_BYTES)))
+    seen = set()
+    for certificate in (None, b"a start certificate", b"a start certificatf"):
+        s = W.run(params, M.test_signer(M.SECRETS[0], 1, 1), certificate=certificate)
+        j = s.signed.to_json()
+        assert j["start_mark"] == ("" if certificate is None else hashlib.sha512(certificate).hexdigest())
+        for fn, reference, value, python in (
+                ("wipe_message", wipe_message, {k: j[k] for k in WIPE_MESSAGE_KEYS}, s.signed.message()),
+                ("wipe_start_message", wipe_start_message, {"commitment": j["commitment"]}, sw.start_message(s.commitment)),
+                ("wipe_end_message", wipe_end_message, {"signed": j}, sw.end_message(s.signed))):
+            assert D.replay(port(fn, reference, st.none()), value, server) == ("output", D.canonical(python.hex())), fn
+        seen.add((s.signed.message(), sw.start_message(s.commitment), sw.end_message(s.signed)))
+    assert len({m for m, _, _ in seen}) == len({e for _, _, e in seen}) == 3 and len({a for _, a, _ in seen}) == 1
 
 
 def test_wipe_egress_units(server):

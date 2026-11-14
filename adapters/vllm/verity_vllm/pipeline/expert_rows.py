@@ -8,7 +8,7 @@ layouts:
 * ``read``: a table read (`gates.embedding.EmbeddingRead_v1{V=E, H}`), a unit a block of a pair: ``in0`` the pair's expert (the
   read's key), ``in1`` and ``in2`` the table's root and domain id, ``in3``, ``in4`` and ``in5`` the table's row at the expert, its
   salt and its path -> ``o0`` the row and ``o1`` its verdict;
-* ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
+* ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)_v3`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
   ``ws``, the block's rows of the pair's expert and their G-block's scale row -> ``o0`` the pair's output words of those rows;
 * ``fused``: a block GEMM that reads its block's rows itself (`boolean_fp8_moe.MoeExpertFp8ReadGemm(W)_v1`), a unit a block of a
   pair: a read's six ports (``in0`` .. ``in5``), then ``xq``, ``sx``, (``g``,) and ``ws`` -> ``o0`` the pair's output words of
@@ -33,7 +33,12 @@ slot.  A member holds one table's units of one slot (a read) or one layer's of o
 its ``w`` the ``o0`` of the read of its block's rows and its ``ws`` that of the read of its G-block's scale row.  A fused block's
 units go as a read's and are cut as a read's; it is wired as a read (its key) and as a block GEMM (``g`` and ``ws``), and it
 declares its table as a read does.  A wire whose writer's template is not in the window is not made, so its port is free.  A
-block GEMM's output is held to the served words by the twin of the pair row (`fp8_moe_rows.moe_expert_fp8_block_row`)."""
+block GEMM's output is held to the served words by the twin of the pair row (`fp8_moe_rows.moe_expert_fp8_block_row`).
+
+The rank's embedding shard has tables of the same registration (`shard_param`, `shard_words`): one a column block of its one
+width (`serving_templates.shard_block`), a row a token of the whole vocabulary, zeros where another rank holds the token.  They
+are the same for every window, so the committer commits them once a process and holds them (`commit_shard`); an expert's
+tables are committed a window at a time, those its reads read (`commit_tables`)."""
 from __future__ import annotations
 
 import bisect
@@ -50,7 +55,7 @@ from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import EXPERTS, template
+from verity_vllm.pipeline.serving_templates import EXPERTS, shard_block, template
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.records import expert_tables as XT
 
@@ -81,6 +86,47 @@ def table_words(stack: np.ndarray, what: str, E: int, N: int, K: int, G: int, n:
     a = a.view(want)
     a = a.reshape(E, N, K)[:, block * n:(block + 1) * n, :] if what == "w" else a.reshape(E, -(-N // G), K // G)[:, block, :]
     return np.ascontiguousarray(a).reshape(E, -1).view("<u2")
+
+
+def shard_param(label: str, words: int, block: int) -> str:
+    """The registered parameter of column block ``block`` of the rank's embedding shard ``label`` as a table of rows of ``words``
+    u16 words, one a token of the whole vocabulary: ``weights/<label>@<words>/b<block>/vocab``."""
+    return f"{WR.weight_param(label, words)}/b{int(block)}/vocab"
+
+
+def shard_words(shard: np.ndarray, V: int, start: int, block: int) -> np.ndarray:
+    """Column block ``block``'s table of a rank's embedding shard ``shard`` (its ``(VS, H)`` bf16 elements as read), as u16 words
+    ``(V, W)`` at the shard's one width W (`serving_templates.shard_block`): row v the shard's row v - start at columns
+    [block W, block W + W) for a token the rank holds (start <= v < start + VS) and zeros for every other, as
+    ``EmbeddingShard_v1`` gives a token's row.  The elements are taken as their bytes, never converted."""
+    a = np.ascontiguousarray(shard)
+    if a.ndim != 2 or a.dtype.itemsize != 2:
+        raise ValueError(f"an embedding shard's elements are (VS, H) 2-byte words, not {a.dtype} of shape {a.shape}")
+    VS, H = a.shape
+    W = shard_block(H)
+    if not (0 <= start <= V - VS and 0 <= block < H // W):
+        raise ValueError(f"block {block} of a shard of {VS} tokens from {start} of {V}: the shard's tokens are among the "
+                         f"vocabulary's and its blocks are {H // W}")
+    out = np.zeros((V, W), dtype="<u2")
+    out[start:start + VS] = a.view("<u2")[:, block * W:(block + 1) * W]
+    return out
+
+
+def bnk_param(label: str, words: int) -> str:
+    """The registered parameter of the ``(B, K, N)`` weight ``label`` in (B, N, K) order, rows of ``words`` = K u16 words:
+    ``weights/<label>@<words>/bnk``."""
+    return f"{WR.weight_param(label, words)}/bnk"
+
+
+def bnk_words(field: np.ndarray) -> np.ndarray:
+    """A ``(B, K, N)`` weight's bf16 elements as read, as u16 words ``(B N, K)``: row b N + n its words [b, :, n], the K words
+    a unit (b, n) of a GEMM over the weight read as [B][N][K] reads, which are no run of the weight as the record holds it.
+    The elements are taken as their bytes, never converted."""
+    a = np.ascontiguousarray(field)
+    if a.ndim != 3 or a.dtype.itemsize != 2:
+        raise ValueError(f"a weight registered in (B, N, K) order is (B, K, N) 2-byte words, not {a.dtype} of shape {a.shape}")
+    B, K, N = a.shape
+    return np.ascontiguousarray(a.view("<u2").transpose(0, 2, 1)).reshape(B * N, K)
 
 
 def kind(t: str, statics: Mapping[str, Any]) -> tuple[str, int]:
@@ -349,7 +395,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     out: dict[str, Any] = {}
     nonces, key = committer["nonces"], bytes(committer["key"])
@@ -374,12 +420,69 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     return out
 
 
+#: the serving process's embedding shards' tables (`commit_shard`), by the committer's key and program and the table's
+#: parameter and nonce: committed once a process and held, rows and all, until it ends
+_SHARDS: dict[tuple[bytes, str, str, int], Any] = {}
+#: the serving process's weights in (B, N, K) order (`commit_bnk`), by the same: committed once a process and held
+_BNK: dict[tuple[bytes, str, str, int], Any] = {}
+
+
+def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable[[], np.ndarray]) -> Any:
+    """The rank's ``(B, K, N)`` weight ``label`` in (B, N, K) order (`bnk_param`, `bnk_words` of ``field()``, its elements as
+    served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
+    ``committer``'s key at the program and nonce its registration names, once a process: a value this process committed is
+    handed back as held and ``field`` is not called.  Refused for a parameter the registration names no nonce for."""
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+
+    param = bnk_param(label, K)
+    if param not in committer["nonces"]:
+        raise ValueError(f"{param}: the committer's registration names no nonce for the value (records.expert_tables)")
+    at = (bytes(committer["key"]), str(committer["program"]), param, int(committer["nonces"][param]))
+    if at not in _BNK:
+        _BNK[at] = H1R.commit(at[1], param, bnk_words(field()), at[0], at[3], keep_rows=True)
+    return _BNK[at]
+
+
+def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callable[[], np.ndarray]) -> dict[str, Any]:
+    """The tables of the rank's embedding shard ``label`` of ``H`` columns, by parameter (`shard_param`, at the shard's one
+    width): each column block's table over the vocabulary and from the rank's first token its registration names
+    (``committer``'s ``vocab``; `shard_words` of ``shard()``, the shard's elements as served), committed as `commit_tables`
+    commits an expert block's, once a process.  A table this process committed under the same key at the same program and
+    nonce is handed back as held (`_SHARDS`) and ``shard`` is called only where one is not, so a window pays for the shard's
+    tables only where no earlier window of its process has.  Refused for a table the registration names no nonce for: the
+    registration holds the shard's tables at its one width, and a table at any other is none of its."""
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+
+    nonces, key, W = committer["nonces"], bytes(committer["key"]), shard_block(H)
+    out: dict[str, Any] = {}
+    words = None
+    for b in range(H // W):
+        param = shard_param(label, W, b)
+        if param not in nonces:
+            raise ValueError(f"{param}: the committer's registration names no nonce for the table (records.expert_tables)")
+        at = (key, str(committer["program"]), param, int(nonces[param]))
+        if at not in _SHARDS:
+            if words is None:
+                words = shard()
+            V, start = committer["vocab"][param]
+            _SHARDS[at] = H1R.commit(at[1], param, shard_words(words, V, start, b), key, at[3], keep_rows=True,
+                                     schema=G.SCHEMA_SEG)
+        out[param] = _SHARDS[at]
+    return out
+
+
 def committer(reg: XT.ExpertTables, key: bytes) -> dict[str, Any]:
     """A window's committer's tables (`serving_rows.after_commit`'s ``tables``) from its registration ``reg``: its secret
-    ``key``, the rank's program and each table's nonce, as the registration names them."""
+    ``key``, the rank's program and each table's nonce, as the registration names them; where it registers an embedding
+    shard's tables (`shard_param`), also the vocabulary each is registered over and the rank's first token of it (``vocab``:
+    the entry's rows, and the rank's even share of them)."""
     if not isinstance(key, bytes) or len(key) != 32:
         raise ValueError("a table's salts are drawn under the committer's 32-byte key")
-    return {"key": key, "program": reg.program, "nonces": dict(reg.nonces)}
+    out = {"key": key, "program": reg.program, "nonces": dict(reg.nonces)}
+    vocab = {p: (int(e["leaves"]), reg.rank * (int(e["leaves"]) // reg.world)) for p, e in reg.values.items() if p.endswith("/vocab")}
+    return {**out, "vocab": vocab} if vocab else out
 
 
 def of_request(spec: Mapping[str, Any] | None, rank: int = 0) -> dict[str, Any] | None:

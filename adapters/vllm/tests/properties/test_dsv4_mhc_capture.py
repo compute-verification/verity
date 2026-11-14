@@ -24,7 +24,7 @@ from verity.definitions.registry import mhc as R
 
 from tests import fake_vllm
 from tests.properties import dsv4_mhc_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 SMALL: dict[str, Any] = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}
 SMALL_NS = {"fused": 2, "tf32": 2, "broadcast": 1, "head": None}

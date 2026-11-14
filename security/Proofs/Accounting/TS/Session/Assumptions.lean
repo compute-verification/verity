@@ -60,10 +60,10 @@ open Pouw.RelativeSecurity (Paths)
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
 
 /-- `accounting-ts-accepted-live` (the proof system's acceptance rule). **A proof is credited only after
-flock-verify `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
-flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`.
+verity-verify-proof `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
+verity-verify-proof accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`.
 
-Every served path today verifies with plain `flock-verify --zk` and binds its served values through the public file
+Every served path today verifies with plain `verity-verify-proof --zk` and binds its served values through the public file
 (served_zk's Lean checks, `served_commit`'s verdict, `h1_prove`); of the audit's runners only `one_stage/a0.py` passes
 `--registered`. So no served path meets it until the served trees are registered as ports of `own`
 (`RowsSession.ServedRegistered`), or a bridge for public-file binding is stated. -/
@@ -92,7 +92,7 @@ and of how `sess` is built:
    `EndToEndRegisteredRows`' `bound` is small only because they are fresh and uniform given the prover. Under `--zk`
    they are the verifier's keyed coin tree, committed at `Hello` after the prover's nonce and opened round by round.
    So the session's audit coins come from the auditor's verifier, on a machine the prover doesn't control, fresh for
-   each session, under the named assumption `trusted-host`. Neither `CoinTree.checkFresh`, which refuses only a
+   each session, under the named assumption `trusted-device`. Neither `CoinTree.checkFresh`, which refuses only a
    key reused within a run, nor the coin tree's commitment, which protects the prover, gives this.
 
 If 1 fails, `δ` weakens; if 2, 3 or 5 fails, it breaks. 1–3 are the challenger's and the ZK server's code, which a check
@@ -109,7 +109,7 @@ def ExecutionPhaseDesign [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ �
 
 /-- `accounting-ts-served-checks` (a fact of each served Definition's circuit, to be computed by a check). **The served
 Definition's check holds at its session's value layer wherever the sampled proof blocks are right**: on every path, when
-flock-verify accepts proof `i` of round `w`'s session and every sampled proof block is right (`WrongAt` fails) with its rows
+verity-verify-proof accepts proof `i` of round `w`'s session and every sampled proof block is right (`WrongAt` fails) with its rows
 right at its own owned reads (`RowsAt`), `pf`'s relation (`rel x w i`, the proof's Definition) holds at `rows` of the
 session's value layer (`XplurZC`). It is `Flock.SoundAtBridge.RelOfRows` on the accepted sessions. Under a sampled
 sample it holds only for a relation that reads the sampled proof blocks alone: an unsampled unit can be wrong while every sampled one
@@ -122,7 +122,7 @@ def ServedChecksHold (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S �
 
 /-- `accounting-ts-served-roots-linked` (Flock's rows link at the served roots). **Where the sampled
 proof blocks are right, the session's value layer is the served layer's opening**: at each round and proof, the probability
-over the window's paths that flock-verify accepts the session, every sampled proof block is right at its own owned reads, and
+over the window's paths that verity-verify-proof accepts the session, every sampled proof block is right at its own owned reads, and
 yet `rows` of the session's value layer is not `pf`'s opening (`pf.opened x w i`: the round's served leaves, committed
 before σ_w) is at most `δs`. It is `Flock.SoundAtBridge.OpenedPlurAt` on those sessions. `EndToEndRegisteredRows`
 links only registered reads, and the served trees are hiding commitments that bind nothing on their own;

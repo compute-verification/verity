@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriod
+public import Definitions.Certifier.Guarantees.MonitoringPeriod
 public import Definitions.Accounting.NetWitness
-public import Proofs.NetworkCertifier.MonitoringPeriod
+public import Proofs.Certifier.MonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -52,7 +52,7 @@ verifier's `PrBad` at `RLeakCertifier` (`period_le`), which `MonitoringPeriodLea
 
 The per-window conjunct of `MonitoringPeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_monitoringPeriodLeak`). Its count of the secrets is what the claim at
-`K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-host`) is the realization's
+`K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-device`) is the realization's
 `trusted`, which this proof doesn't read: `period_le` is the per-window bound its records give, and deriving it from
 `MonitoringPeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/

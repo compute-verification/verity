@@ -58,7 +58,7 @@ by) give of the bytes and the release log they accept, each stated at the code's
   parameters' members on the registered files, `WindowOn`, laid out, each member's files passing, `FilesPass`),
   and how v2 reads the members' files (`membersRead`).
 * `MemberForm.States`: the statement the form read for a member is its window's member's (`statesMember`), so a
-  session's verdict at it is flock-verify `--zk`'s at the window's member.
+  session's verdict at it is verity-verify-proof `--zk`'s at the window's member.
 * `MemberForm.Passes`: a member whose files the form's run held has its files pass at the window's member
   (`filesPass_of_held`, `WindowOn.passes`), and a member whose files pass has roots that fix their domains
   (`FilesPass.rootsFix`).
@@ -101,7 +101,7 @@ by) give of the bytes and the release log they accept, each stated at the code's
 * `MemberForm.Sent`: each session of the form in what the prover sent: the evidence sent for the `u`-th session
   (`sentEvidenceAt`), the `j`-th statement's one session as the evidence's `j`-th, named at place `j` (`named_at`),
   its record and evidence among what was sent (`sentRecordAt_session`, `sentEvidenceAt_session`), its one table and
-  that table's coin tree (`rootBTables_one`, `Member.spec_coinTree`).
+  that table's coin tree (`ownRootBTables_one`, `Member.spec_coinTree`).
 * `MemberForm.Reads`: at a play the form accepts, every release of the sample's family precedes every opening and
   the play has the sessions of the window's sample (`windowRead_members`).
 * `MemberForm.WindowPasses`: what a window's instance takes of the form's acceptance. At each play the form

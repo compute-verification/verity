@@ -42,7 +42,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 The compiled recursive component runs, per V\* part `j`, `partVerdict`: part `j`'s setup at its record's sample
 (`buildSessionOf` and the recursive setup's checks), then `Zk.verify` on the record and the rep files the part names
-(`partFiles`), the scope check, the tables' sizes, the sample's law, the full-draw and inner-draw refusals, the program and
+(`partFiles`), the scope check, the tables' sizes, the sample's sampling design, the full-draw and inner-draw refusals, the program and
 the record's canonical text. The model verifier (`RecDeploy.V`) decides session `s` with `RecDeploy.nextO` at the
 session's V\* statement `xO`: at SHA-512 it accepts exactly when `Zk.verify` at `xO`'s recursive setup accepts the last
 message's record and proof files, `FlockDeploy.checks` pass and so do the verdict's last refusals

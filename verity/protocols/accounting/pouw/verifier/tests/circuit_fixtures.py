@@ -44,8 +44,8 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
     out: list[int] = []
     for rs in range(len(c) // tm):
         for cs in range(len(c[0]) // tn):
-            part = lambda x: [list(x[rs * tm + i][cs * tn:(cs + 1) * tn]) for i in range(tm)]   # noqa: E731
-            digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)), hashing="h0")
+            tile_c, tile_u = ([list(x[rs * tm + i][cs * tn:(cs + 1) * tn]) for i in range(tm)] for x in (c, u))
+            digest = C.leaf(types.SimpleNamespace(c=tile_c, u=tile_u), hashing="h0")
             out += [int.from_bytes(digest[4 * w:4 * w + 4], "little") for w in range(8)]
     return tuple(out)
 

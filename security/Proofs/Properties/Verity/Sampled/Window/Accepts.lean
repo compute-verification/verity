@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Moves
 /-!
 # One-stage v2's acceptance over several sessions is their verdicts, in order
 
-`Spot.OneStageZk.run` folds `Spot.OneStageZk.step` over the evidence's sessions, each a `flock-verify verify --zk` at
+`Spot.OneStageZk.run` folds `Spot.OneStageZk.step` over the evidence's sessions, each a `verity-verify-proof verify --zk` at
 the session's own record's sample, carrying a `Run` from one to the next: the coin-tree keys the earlier sessions
 used, the verdicts so far, the units the accepted ones proved and whether every one accepted. The last run accepted
 every session exactly where each session's verdict was `.ok`, in order:

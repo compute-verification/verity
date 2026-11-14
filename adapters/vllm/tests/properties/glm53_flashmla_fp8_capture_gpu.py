@@ -71,16 +71,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.kernels import tc as CK
+from verity.definitions.numerics import derived_rows as DRW
+from verity.definitions.numerics import flashmla_dsv32_twin as V
+from verity.definitions.numerics import flashmla_twin as T
 
 from tests.properties import dsv4_flashmla_capture_gpu as D
 from tests.properties import dsv4_marlin_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.circuits.kernels import tc as CK
-from verity.definitions.numerics import derived_rows as DRW
-from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.numerics import flashmla_dsv32_twin as V
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
 
 SCHEMA = "verity-vllm/glm53-flashmla-fp8-capture/v1"
 RECORD = "glm53_flashmla_fp8_capture.json"
@@ -201,7 +201,7 @@ def layout(quick: bool) -> dict[str, Any]:
     nb = [-(-v // PBS) for v in lens]
     blocks = 1 + sum(nb)
     perm = 1 + rng.permutation(blocks - 1)
-    table = np.zeros((len(lens), max(nb)), dtype=np.int32)
+    table: np.ndarray = np.zeros((len(lens), max(nb)), dtype=np.int32)
     off = 0
     for r, k in enumerate(nb):
         table[r, :k] = perm[off:off + k]
@@ -244,7 +244,7 @@ def _queries(rng: np.random.Generator, t: int) -> np.ndarray:
 
 def _row(rng: np.random.Generator, visible: int) -> np.ndarray:
     """The 2048 positions an indexer names among `visible` rows: every one in a random order then -1, or 2048 of them."""
-    idx = np.full(TOPK, -1, dtype=np.int32)
+    idx: np.ndarray = np.full(TOPK, -1, dtype=np.int32)
     k = min(visible, TOPK)
     idx[:k] = rng.permutation(visible)[:k]
     return idx
@@ -338,6 +338,7 @@ def flashmla_library() -> str:
 
 def split_sass(lines) -> Any:
     """(arch, function, its lines) for each function of a `cuobjdump -sass` listing."""
+    buf: list[str]
     arch, name, buf = None, None, []
     for line in lines:
         m = re.match(r"\s*arch = (sm_\w+)", line)
@@ -678,7 +679,7 @@ def compare_tokens(job: dict[str, Any]) -> dict[str, Any]:
     splits = T.request_splits(metas, [int(v) for v in np.asarray(a["num_splits"])], 0, TOPK // BN)
     for t in range(*job["tokens"]):
         g = np.asarray(a["gidx"][t])
-        q = np.zeros((NH + 1, DK), dtype=np.uint16)
+        q: np.ndarray = np.zeros((NH + 1, DK), dtype=np.uint16)
         q[:NH] = a["q"][t]
         y = V.decode(q, *rows_at(cache, g), g, SPLITS=splits, QT=QT, BN=BN, DV=DV, SCALE=SCALE)
         got = np.asarray(a["out"][t], dtype=np.uint16)

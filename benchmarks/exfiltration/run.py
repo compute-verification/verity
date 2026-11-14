@@ -15,8 +15,9 @@ import sys
 
 from verity_bench.exfiltration import main
 
-#: the metrics `benchmarks/metrics.toml` holds this benchmark to, by id: each a figure of the document over the world's
-#: year at the share (`verity_bench.exfiltration.FIGURES`)
+#: the metrics `benchmarks/exfiltration/metrics.toml` holds this benchmark to, by id: each a figure of the document
+#: at the share (`verity_bench.exfiltration.FIGURES`), recorded over each of its monitoring periods, the world's year
+#: the one each title names
 METRICS = {"benchmarks/exfiltration-gb-world-year": "headline",
            "benchmarks/exfiltration-compute-audit-gb": "compute_audit",
            "benchmarks/exfiltration-network-certifier-gb": "network_certifier"}

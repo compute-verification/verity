@@ -246,8 +246,8 @@ def drawnUnits (draw : Lean.Json) : Array ℕ :=
   | _ => #[]
 
 /-- **The sampling design and population v2's sample runs under** at the parameters `p` and the commitment `c`
-(`OneStage.drawnFrom`'s): the verifier's law as `Draw.derive` expands it, the record's population `n`, and the sampling design `L`
-the sample reads its bytes under, the derived law where `Draw.deriveLaw` gives one and else the sampling design's own
+(`OneStage.drawnFrom`'s): the verifier's sampling design as `Draw.derive` expands it, the record's population `n`, and the sampling design `L`
+the sample reads its bytes under, the derived sampling design where `Draw.deriveLaw` gives one and else the sampling design's own
 (`Draw.flockLaw`). -/
 def LawOf (p : _root_.Spot.OneStageZk.Params) (c : _root_.Spot.OneStage.Commitment)
     (L : Flock.Draw.Law) (n : ℕ) : Prop :=
@@ -320,7 +320,7 @@ theorem coinsReason_none {v : _root_.Spot.Registration.Verifier} {law rec_ draw 
         cases j <;> rfl
       rw [hdf, hx]
 
-/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the verifier's law as
+/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the verifier's sampling design as
 derived and the record's population, `OneStage.drawnFrom` on `ξ` gives them. -/
 theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}
@@ -409,7 +409,7 @@ theorem components_nodup (k : Verity.Registration.Composite) (s : Verity.Sent) :
     rw [List.map_map]
     rfl
   rw [e]
-  cases k <;> decide
+  exact Verity.ids_nodup k
 
 theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd : (l.map f).Nodup) (hx : x ∈ l)
     (hy : y ∈ l) (h : f x = f y) : x = y := by
@@ -498,7 +498,8 @@ theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
   subst hP
   change VStar.Recursive.Sampled.checkBlobs (.inl p₀) c E (Core.Blobs.ofArray s.blobs) = .accept pub prof at hck
   rcases E with ev | e'
-  · change _root_.Spot.OneStageZk.checkBlobs p₀ c ev (Core.Blobs.ofArray s.blobs) = .accept pub prof at hck
+  · have hck := (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record p₀.base.verifier
+      (_root_.Spot.OneStageZk.checkBlobs p₀ c ev (Core.Blobs.ofArray s.blobs)) = .accept pub prof from hck)).2
     unfold _root_.Spot.OneStageZk.checkBlobs at hck
     cases hξ : _root_.Spot.OneStageZk.coinsOf p₀ c ev with
     | error r => rw [hξ] at hck; simp [Core.atCoins] at hck
@@ -580,13 +581,11 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
   rw [← hl log (Option.mem_def.2 hlog)]
   exact hs
 
-/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`composite_readsV2`). -/
+/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`Verity.component_eq_some`). -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol o.sent := by
   obtain ⟨-, -, P, hP, hc⟩ := h
-  have hk' : Verity.component k .sampled = some VStar.Recursive.Sampled.protocol := composite_readsV2 k
-  rw [hk'] at hP
-  cases hP
+  obtain rfl : P = VStar.Recursive.Sampled.protocol := (Verity.component_eq_some.1 hP).2
   exact hc
 
 /-- **The sample in a play**: where the play's parameters name sampled proofs' one-stage form, the sampled verdict

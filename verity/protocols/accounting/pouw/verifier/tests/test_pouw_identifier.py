@@ -82,7 +82,7 @@ def test_the_vectors_cover_every_named_scheme():
 
 
 def test_the_identifier_names_exactly_the_registered_schemes():
-    assert I.SCHEMES == tuple(SCHEMES)
+    assert tuple(SCHEMES) == I.SCHEMES
 
 
 def test_the_64_bit_fields_are_exact_decimal_strings():

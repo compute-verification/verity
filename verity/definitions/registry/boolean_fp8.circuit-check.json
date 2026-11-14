@@ -20,6 +20,10 @@
    "and": 30422,
    "type": "3a3c70b998d9e2bdc999c100faeea2ecfecaf40c95e6509fe7c19f1679918def5e49d5c1b0bb23366ba3f7de61ceefb145b2d34811bdabb61664c81ab5d25c82"
   },
+  "ScaledMmFp8BlockCoordinateGivenScale_v2{K=256,G=128}": {
+   "and": 61747,
+   "type": "9a87eabc620ac8578363447f34432ae751b880541a45f70bc04d8463a96bc7b931c0eb6292fcb740d8d27cd96466cc13f6768a1ee5ee66ebaf1dccf59d448db4"
+  },
   "ScaledMmFp8BlockCoordinateGivenScale_v2{K=64,G=32}": {
    "and": 21103,
    "type": "5640c54926934f2ba49a27828ec25e7de7fd6ba0018471c45082eabaf16677cf86a4ccc37f99079017185b66778ce20a08c42aba8138ac84c0fa15e1ad9ab6af"

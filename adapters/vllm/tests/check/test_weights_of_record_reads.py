@@ -247,13 +247,22 @@ def test_built_record_reads_the_program_header_and_is_the_full_load_record(ckpt,
         WR.build_record(write_program_dir(tmp_path, 1, 0), str(tmp_path / "absent"), checkpoints_manifest=man, shard_pin=None)
 
 
-def test_the_default_manifest_is_the_trees_pins_whatever_the_working_directory(tmp_path, monkeypatch):
-    (tmp_path / "manifests").mkdir()
-    (tmp_path / "manifests" / "checkpoints.json").write_text("{}")
-    monkeypatch.chdir(tmp_path)
-    assert WR._default_manifest() == str(config.CHECKPOINTS) and config.CHECKPOINTS.is_file()
+def test_the_default_manifest_is_the_trees_pins_whatever_the_working_directory(ckpt, tmp_path, monkeypatch):
+    d, man = ckpt
+    here = tmp_path / "run" / "manifests" / "checkpoints.json"
+    here.parent.mkdir(parents=True)
+    here.write_text(Path(man).read_text())
+    monkeypatch.chdir(here.parent.parent)
+    assert WR._default_manifest() == str(config.CHECKPOINTS) and config.CHECKPOINTS.is_file()   # the tree's pins, not the working directory's
     monkeypatch.setattr(config, "CHECKPOINTS", tmp_path / "pins" / "checkpoints.json")
-    assert WR._default_manifest() is None
+    assert WR._default_manifest() is None                                                       # a tree that holds none: no manifest, and a pin of no entry
+    pin = WR.record_shard_pin(d)
+    assert pin is not None and pin["manifest"] is None and pin["entry"] is None and all(s["pinned"] is None for s in pin["shards"].values())
+    monkeypatch.setattr(config, "CHECKPOINTS", Path(man))
+    assert WR._default_manifest() == man                                                        # the tree's pins are what a pin with none named is taken by
+    pin = WR.record_shard_pin(d)
+    assert pin is not None and pin["manifest"] == man and pin["entry"] == {"repo": "test/reads", "revision": "abc"}
+    assert pin["shards"] and all(s["pinned"] is True for s in pin["shards"].values())
 
 
 def test_program_head_is_the_loaded_program_with_its_rows_as_stored(tmp_path):
