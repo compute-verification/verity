@@ -331,7 +331,7 @@ def ours(runner: Any, header: dict[str, Any]) -> tuple[dict[str, Any], Any]:
     out: dict[str, Any] = {"header_kv_cache_dtype": header.get("kv_cache_dtype")}
     hook = None
     try:
-        seen = Seen(BT.mla_layers(runner.model))
+        seen = Seen(BT.mla_layers(runner.model), BT.LAYOUT_WORDS[BT.layout(runner.model)])
         seen.seen = []
         hook = BT.StepHook(runner.model, latents=seen)
         out["tables_guard"] = {"verdict": "ok", "layers": list(hook.layers)}
