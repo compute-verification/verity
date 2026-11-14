@@ -43,7 +43,7 @@ public import Proofs.Certifier.WitnessesCarried
 public import Proofs.Certifier.PoolRoots
 public import Proofs.Certifier.MonitoringPeriodCheckedChecks
 public import Definitions.Certifier.Guarantees.SampledCharge
-public import Proofs.NetworkCertifier.MonitoringPeriodChecked
+public import Proofs.Certifier.MonitoringPeriodChecked
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
