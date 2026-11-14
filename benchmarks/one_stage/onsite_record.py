@@ -1679,7 +1679,7 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
     completing the member re-lays it (the staged entry's ``relaid``: an instance-major member's), the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its ``instances`` read off its header: either way by SHA-512
     the staged ``body`` R4 holds to the registration. Its header v2 holds to its member's slice of the registration (``publicHeld``)."""
-    from verity.commitments.windows import flock_inputs as FI
+    from verity.commitments.periods import flock_inputs as FI
 
     if not isinstance(relaid := entry.get("relaid"), bool):
         return (f"--public-pin doesn't say whether completing {key} re-lays its body (its relaid), so its completed file "
