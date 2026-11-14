@@ -138,6 +138,6 @@ def test_a_launch_that_picked_its_id_picks_a_new_one_when_the_machine_has_it_and
 
     handed.clear()
     rc, err = _run(here, "--id", A)
-    assert rc == 3 and handed == [], err
+    assert rc == 3 and handed == [] and "launching again" not in err, err
     assert f"refused: run id {A} is another launch's on m" in err and "launch again" in err
     assert sorted(p.name for p in here.iterdir()) == [B]
