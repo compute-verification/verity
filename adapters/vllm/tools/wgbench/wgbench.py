@@ -15,7 +15,7 @@ Timing, per shape: each arm's calls (one per copy of X and W, cycling over enoug
 CUDA graph, warmed, then items of at least --secs seconds, the arms alternating item by item (order rotated each round).
 Around every item, `stamp.cu` reads each SM's %clock64 and %globaltimer (one CTA an SM), so an item reports its declared
 MACs a SM clock against the H200 card's `rate.tensor` (the wgmma s8 rate a clock), its SM clock, and its rate against
-theta = 989.4 T int8 MAC/s (the card's `sm.count` x `rate.tensor` at `clock.tensor`, to four digits).  `dcgmi dmon` samples Tensor Active (1004), SM clock and power
+theta = 989.4 T int8 MAC/s (the card's tensor peak at `clock.tensor`, to four digits).  `dcgmi dmon` samples Tensor Active (1004), SM clock and power
 beside the run; an item's mean is over the samples inside it.  Back to back, every arm holds the card at its power cap
 (about 1,350 to 1,600 MHz); a served step's GEMMs run near 1,713 MHz between memory-bound kernels.  `--rest R` puts the SMs
 to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of the rate) and takes their rest clocks out
