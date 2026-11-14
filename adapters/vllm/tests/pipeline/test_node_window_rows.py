@@ -40,13 +40,14 @@ def _bf16(a: np.ndarray) -> np.ndarray:
 
 
 def rank(r: int) -> NJ.Rank:
-    """Rank ``r``'s window: units in (layer, step, request) order, layer 1 reading layer 0's output at its step and request,
-    layer 0 at step s + 1 reading layer 1's at step s, the first step's ``x`` the prompt's (a boundary read) and, at rank 0,
-    the last units' outputs the served ids."""
+    """Rank ``r``'s window: units in (layer, step, request) order, layer 1 reading layer 0's output at its step and
+    request, layer 0 at step s + 1 reading layer 1's at step s, the first step's ``x`` the prompt's (a boundary read)
+    and, at rank 0, the last units' outputs the served ids."""
     reads = [IF.Read(GID, "x", "prompt", 0, (REQUESTS,), 0, (16,))]
     if r == 0:
         reads.append(IF.Read(GID, "o0", "served", UNITS - REQUESTS, (REQUESTS,), 0, (16,)))
-    circuit = IF.Circuit(f"toy/rank{r}", ((GEMM, UNITS),), wires=WIRES, registered=REGISTERED, boundary_reads=tuple(reads),
+    circuit = IF.Circuit(f"toy/rank{r}", ((GEMM, UNITS),), wires=WIRES, registered=REGISTERED,
+                         boundary_reads=tuple(reads),
                          order=IF.ordered({GID: UNITS}, WIRES, {GID: range(0, UNITS, REQUESTS)}))
     spans = {GID: tuple((a, REQUESTS, 0, (a // REQUESTS) % STEPS) for a in range(0, UNITS, REQUESTS))}
     return NJ.Rank(r, circuit, (), spans, STEPS, {})
@@ -100,9 +101,11 @@ def stated():
 
 def test_each_rank_commits_the_window_the_join_names(stated, tmp_path):
     """Each rank's window, committed and written under its run, returns `tp.serving_rows.write`'s five keys and
-    ``window``, the H of the ``circuit.json`` it wrote (`window_replay.window_digest`), which is that rank's entry in the
-    joined record's ranks (`interface.ranks_of`); the two ranks' differ, rank 0's naming the served ids. The written
-    ``window.json`` and ``partition.json`` are the period's: its run, population and partition digest."""
+    ``window``, the H of the ``circuit.json`` it wrote (`window_replay.window_digest`), which is that rank's entry in
+    the joined record's ranks (`interface.ranks_of`); the two ranks' differ, rank 0's naming the served ids. The written
+    ``window.json`` and ``partition.json`` are the period's: its run, population and partition digest. Every member
+    reads ``w`` by reference (the rank's registered value's rows) and ``x`` from its writers but the first, whose ``x``
+    is the prompt's, held."""
     got = {r: commit(r, tmp_path / f"rank{r}") for r in range(WORLD)}
     for r, res in got.items():
         d = tmp_path / f"rank{r}"
@@ -110,9 +113,12 @@ def test_each_rank_commits_the_window_the_join_names(stated, tmp_path):
         assert res["window"] == WRP.window_digest(json.loads((d / "circuit.json").read_bytes())) == stated.of[r].window
         assert (res["run"], res["population"]) == (f"{TP_ROOT}/rank{r}", UNITS)
         win, part = (json.loads((d / f).read_text()) for f in ("window.json", "partition.json"))
-        assert (win["run"], win["population"], win["registration_digest"]) == (res["run"], UNITS, res["registration_digest"])
+        assert (win["run"], win["population"]) == (res["run"], UNITS)
+        assert win["registration_digest"] == res["registration_digest"]
         assert win["partition_digest"] == part["partition_digest"] == res["partition_digest"]
         assert part["law"] == DESIGN and isinstance(res["seconds"], dict)
+        assert [m.get("value_rows") for m in win["members"]] == [["w"]] * (UNITS // CAP)
+        assert [m.get("wired_rows") for m in win["members"]] == [None] + [["x"]] * (UNITS // CAP - 1)
     assert got[0]["window"] != got[1]["window"]
 
 
