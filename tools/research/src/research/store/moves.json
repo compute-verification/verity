@@ -2798,6 +2798,11 @@
       "paths": {
         "benchmarks/pouw/commit_gpu/": "verity/commitments/cuda/commit_gpu/"
       }
+    },
+    {
+      "paths": {
+        "tools/verity/check/": "tools/check/"
+      }
     }
   ]
 }
