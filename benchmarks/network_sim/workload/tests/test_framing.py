@@ -1,9 +1,9 @@
 """The hardware's routes, and φ: positions in messages, the canonical cut, HELLOs, and the occupancy profile."""
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, decode_frame
 from workload import framing as F
+from workload.canonical import CANONICAL_STREAM
 from workload import model as M
 from workload import placement as P
 from workload.hardware import OUTSIDE, DeviceGraph, mock

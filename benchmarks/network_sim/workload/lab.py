@@ -12,14 +12,13 @@ of every link. The proxy carries requests in and server-sent events out, so φ's
 - **Requests.** A request is the session's index and its payload's length (`>II`), then zero bytes that make every
   request of the block the same number of frames, F_in, the least power of two that holds its longest, then its
   messages' bytes (`framing.encode`) in stream order. On the link it is the certifier's canonical framing
-  (`active.request_frames`): its length and bytes in `DATA` frames on stream 0, the last zero-filled, so the k-th
+  (`canonical.request_frames`): its length and bytes in `DATA` frames on stream 0, the last zero-filled, so the k-th
   request on a link is session k − 1's.
-- **Events.** Each outbound message's bytes are cut into chunks of `active.TOKEN_BYTES` (the last may be shorter), each
-  chunk one canonical event (`active.event`) after the line `id: <position>`, which the proxy reads and doesn't
-  record. A session's events are then padded with empty ones (`active.event(b"")`, of no message) to the block's most,
-  F, so every response of a block is F events (`fixlen`): with F_in, the served profile N2 derives a link's egress
-  counts from (`verity.protocols.accounting.certifier.verifier.served`). The positions number a block's events 0 … n − 1 in session,
-  message and chunk order, the padding last, the canonical order the certifier's shaper hands in, so the k-th event
+- **Events.** Each outbound message's bytes are cut into chunks of `canonical.TOKEN_BYTES` (the last may be shorter), each
+  chunk one canonical event (`canonical.event`) after the line `id: <position>`, which isn't recorded
+  (`canonical.event_body`). A session's events are then padded with empty ones (`canonical.event(b"")`, of no message)
+  to the block's most, F, so every response of a block is F events (`fixlen`). The positions number a block's events
+  0 … n − 1 in session, message and chunk order, the padding last, the canonical order the certifier's shaper hands in, so the k-th event
   released on a link is position k.
 
 A message from block X to block Y therefore crosses X's certifier in an event of X's response, and Y's in Y's request: the
@@ -33,17 +32,12 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from verity.protocols.accounting.certifier.verifier.active import (
-    TOKEN_BYTES,
-    event,
-    event_placement,
-    request_frame_count,
-)
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER, LENGTH
 
 from . import framing as F
 from . import model as M
 from . import placement as P
+from .canonical import TOKEN_BYTES, event, event_placement, request_frame_count
 from .hardware import OUTSIDE, DeviceGraph
 
 REQUEST = struct.Struct(">II")
@@ -147,7 +141,7 @@ class Lab:
         return self._length(s) + self.request_pad(s)
 
     def request_frames(self, s: Exchange) -> int:
-        """The link frames session s's request takes (`active.request_frames`): its block's F_in."""
+        """The link frames session s's request takes (`canonical.request_frames`): its block's F_in."""
         return request_frame_count(self.request_length(s), self.frame_bytes)
 
     def payload(self, block: str, position: int, payloads: dict[int, bytes]) -> bytes:

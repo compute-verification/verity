@@ -10,9 +10,6 @@ dependencies = ["numpy>=1.26"]
 # CUDA build (about 3 GB). The two conflict, so a command names the one it wants.
 torch-cpu = ["torch>=2.4"]
 
-[project.scripts]
-network-certifier-calibrate = "verity.protocols.accounting.certifier.verifier.calibration:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
