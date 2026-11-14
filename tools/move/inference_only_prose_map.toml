@@ -6,7 +6,7 @@
 # renames no declaration and leaves every lock and pin as it is. Under that scope a word in capitals alone is a constant's
 # name and stays, so each row is a phrase: "NCI's" is "the inference-only policy's", "the NCI check" is "the inference-only
 # check", and a heading or a sentence that opens with the name opens with "The".
-# What it leaves, each for a hand edit: NCI in a data file's comment (a lakefile, a pyproject, `public_boundary.toml`) and
+# What it leaves, each for a hand edit: NCI in a data file's comment (a lakefile, a pyproject) and
 # in a string (a figure's title, an error's text, a lock's reasons); NCI and "novel communication intensity" for the
 # quantity, a block's fresh input bits per gate, which is no policy; `benchmarks/nci`'s own prose, which follows its
 # directory's name; and the sentence of the check's README that says the older names stay, which names them in quotes.

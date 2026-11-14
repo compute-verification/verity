@@ -1,6 +1,6 @@
 # The slowdown's names: what `tools/move/rename.py --map tools/move/slowdown_map.toml` renames, the older name "dampener"
 # in paths and Lean (GLOSSARY.md, Older names: "dampener", "compute dampener" D). The prose's words are
-# `slowdown_prose_map.toml`'s.
+# `dampener_prose_map.toml`'s.
 # - `Dampener` becomes `Slowdown` as a word or one part of a name: the modules `Dampener.lean`, the namespace of the
 #   slowdown's vocabulary (`Nci.Dampener`), its guarantees and proofs (`Dampener`, `DampenerRemote`,
 #   `DampenerRemotePeriod`, `DampenerThreaded`, `DampenerThreadedSlots`, `DampenerWindows`, with their `_honest` and
