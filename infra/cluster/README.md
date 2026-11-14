@@ -101,7 +101,8 @@ uv run cluster submit infra/cluster/descriptions/nebius.toml --run-id R --now T 
 uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay infra/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
-uv run cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
+uv run cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key, to
+                # each node's address in the environment (VY_NEBIUS_1_HOST, VY_NEBIUS_2_HOST), as usage and policy read it
 uv run cluster usage hourly [--on nebius-1|nebius-2|all] [--hours H] [--json]   # per node and UTC hour: busy, useful, held idle
 uv run cluster usage wasters --day YYYY-MM-DD [--top N] [--json]   # that day's holdings with the most held-but-idle GPU-hours
 python3 -m cluster kueue-shadow loop --out RECORD.jsonl --hours H   # on vy-nebius-1; `kueue-shadow down` removes it
