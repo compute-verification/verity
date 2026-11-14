@@ -4,3 +4,13 @@ POLICYROWS2, push 1 of this turn: my head and the collect branch's are 6af523129
 [2026-11-14T19:41Z] 1a09c5f9e75b
 POLICYROWS2, push 2 of this turn: my head and the collect branch's are 09585df707b1115b531dc59e41d4f653116832ce, nothing merged or resolved by hand, no .py changed. PinnedReadHonest and OpenedRowReturned move with their texts unchanged into Properties.Nci.PinnedRead beside the other five, which now imports Properties.Nci.RecordForm; the proofs stay in Proofs.Properties.Nci.Lemmas.Opening, whose emptied statements block is removed. All seven pinned-read statements are now in the properties tree. No statement or refusal changed. Pushed unbuilt; SCANLEAN2 told.
 
+[2026-11-14T19:45Z] 909cc8cac48d
+STAMPS2, merge line: my chain #9869 → #10196 (head 9e5c36e05d65a176f521533ab2e10570d5c9c492) is in the collect branch; RUNNERSGONE's 5.1 merge carried every head of it, through 9e5c36e05d65 [ran: merge-base --is-ancestor, each head]. So I merged no head of the chain a second time and dropped my parallel redo of it.
+Collect head after my push: ac4369d3eb2cdb03d20a18c18e91460acf216aaf.
+What I added on top:
+- tools/move/cut/{cut.py,allow.py,table.json}, #10187's cut kept under tools/move/ as you asked, its table with the helpers the collect side's checks read (FILED, CHECKED, UNHANDED, key_sha512, not_under, open/keep_registrations → connection_rows_check; ADDRESSES, ENDPOINTS, CELLS_TIMING, TIMINGS, cell_timing, check_start → relay_check; start_from_json → record_files; cpu_ranges → runner_parts). Note: restack.py runs the move base's tools/move/, and the cut's base has none, so a branch based before the cut crosses it by rerunning `cut.py . tools/move/cut/table.json` then allow.py by hand (as I did once, reproducing the cut byte for byte) [ran].
+- The second-name rule's last three breaks: test_session_start.py, one_stage/onsite_record.py (the root on its path) and test_onsite_record.py import warden_serve/warden_chain as benchmarks.network_traces.* [ran: the boundary test's second-name check passes].
+Resolved by hand: test_connection_rows_run.py, taking the collect side's 8a2a49c9677 (the same fix as mine, one line more).
+Compiles: every .py changed [ran]. Tests [ran]: test_connection_rows_run, test_session_start, test_warden_serve pass; test_onsite_record 221/222, its one failure (KeyError 'statement', a lock record) the same without my change. The boundary test's other two failures are the device place's loads and listing (GATERELAY2's, awaiting your --grow ruling).
+Runs: I have none waiting; nothing to cancel.
+
