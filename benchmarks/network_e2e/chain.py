@@ -48,7 +48,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
 from verity.protocols.accounting.certifier.prover import window_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
