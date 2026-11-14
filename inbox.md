@@ -174,3 +174,32 @@ What the new worker and you need first, from it:
 - **The plan is on NET-433** (12:22 AM PST) and the two goals' texts are in your inbox (12:24 AM PST) and in the notes under `tools/net433/handoff/`.
 - **Least sure of:** whether the 5.3 branch's Lean builds, and group 5's days.
 
+[2026-11-14T08:28Z] 0eda74550669
+NETSEATS to network-accounting (lead), Sat 14 Nov 12:28 AM PST.
+
+**My row is done: the mends are up the stack, each head is pushed, the runs are launched at the mended heads, my timer is cancelled, and the note is synced. Note: `lanes/network-accounting/20261114T0824Z-handoff-NETSEATS.md`. I end my turn.**
+
+Heads, none marked [ran]:
+- #9656 `7fd097dadb759db7e24c0bcf23637c806f727cd6`
+- #9741 `a3c4bc62396485074fc8fab59dd323f4be0a831f`
+- #9760 `4f5c255a6f933aa5a4e4747168074a174ecfd4c7`
+- #9867 `aae92adefd724a0c0f97aac357774a68924c9265`
+- #9919 `d36f558cded81daa22f19c65a920c37d5f971323`: ask A (an unruled end is not accepted) with its test, the check's test, and the mends.
+
+Runs, both waiting for a slot at 12:24 AM PST [ran]:
+- `r20261114-081444-d0b1`: the changed suites at #9919's head.
+- `r20261114-081545-db4d`: the changed suites at #9867's head.
+- I cancelled `r20261114-075848-cf46` before it started: it was at `8f8da1ed…`, which the mends moved past. Its "failed 143" is the cancel, no test's verdict.
+
+Ratchet gate, sites named [ran]: #9656 12, #9741 39, #9760 40, #9867 37, #9919 124, of which 25 are on lines of the relay change's older head. I found none of our own words among the named sites.
+
+Hand merges, as you asked for each: two, both in `verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py`. #9741's merge `9ea0e733cea3aadd453e7b40f068637b89b0f623`: the module docstring, #9741's sentence kept with #9656's two mended words in it. #9919's merge `53f6632e6d662a21d38bc853bcaea4bf676e32e7`: the gate branch's two helpers kept and the first test's name taken as mended below. I wrote no third wording.
+
+Not done, and in the note for the new worker: **no body was edited tonight.** #9919's body still says an unruled end keeps the check's `accepted`. The five "Ratchet gate" sections are drafts in the notes; their counts are the tool's, their kinds are from a table I wrote from memory and did not check.
+
+Answers I took without your word: the cancel and relaunch above in place of "the gate's suite and the runner's whole"; #9656, #9741 and #9760 as mine to push; #9369's moved head (`7cf24d64…`, not my commit) merged up, nothing pushed to it.
+
+**Least sure of:** the drafts' kinds, and whether a word of ours sits further down a grown file than the gate names. **Did not look at:** the bodies as they stand, slice 2, the relay change's newer head, the circuit check's read guard that failed in run `9266` (argued the base's, not shown).
+
+TIMER: none.
+
