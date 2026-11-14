@@ -4203,8 +4203,18 @@ def transcript : Exec.Transcript where
 def draw : Lean.Json :=
   (Flock.JsonParse.parse drawText).toOption.getD .null
 
+/-- The subset draw's decoded value. -/
+def unitDraw : Flock.Draw.UnitDraw where
+  law := .subset 16
+  population := 32
+  units := #[0, 1, 2, 3, 6, 7, 12, 13, 14, 16, 17, 18, 23, 28, 29, 30]
+
 /-- **The concrete record carries its non-null subset draw**, checked by kernel reduction. -/
 theorem record_draw : Exec.recordDraw transcript.record = some draw := by
+  decide +kernel
+
+/-- **The concrete record's draw decodes to a 16-subset of its 32-unit population**, checked by kernel reduction. -/
+theorem draw_decodes : Flock.Draw.UnitDraw.ofJson draw = .ok unitDraw := by
   decide +kernel
 
 /-- The concrete ZK transcript has the verifier's two repetition streams. -/
