@@ -80,7 +80,7 @@ rehearsal's ``out/program/``), its circuit files' directory (``--circuits``), an
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
       --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
-      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
+      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes GATE_LOGIN" \\
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
 
@@ -206,7 +206,8 @@ class Gate:
     """The gate's verbs as ``argv + VERB``, each call and its answer kept in ``log``."""
 
     def __init__(self, argv: list[str]) -> None:
-        self.argv, self.log = argv, []
+        self.argv = argv
+        self.log: list[dict[str, Any]] = []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
         from tests.protocols.pouw_h1_gpu import gate_argv
@@ -361,7 +362,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
                                [str(p) for p in pins or ()], main,
-                               None if draw is None else str(draw / "out" if window is not None else draw))
+                               draw_directory=None if draw is None else str(draw / ("out" if window is not None else "")))
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 

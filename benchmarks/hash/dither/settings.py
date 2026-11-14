@@ -52,7 +52,7 @@ REGISTRY = Registry(
                                         "halves on their bytes, a differing call refusing its step"),
     S("DITHER_LANE_REFS", str, None, VALUE, "the gate step's option A partials against SERVE-REG's gated lane: 1 checks "
                                             "them in the gate, a path saves their records there"),
-    S("DITHER_MM_CFG", str, None, VALUE, "N,K,MMAX=CFG+...: a call's GEMM config in place of exactlin.pick's"),
+    S("DITHER_MM_CFG", str, None, VALUE, "N,K,MMAX=CFG+...: a call's GEMM config in place of int8_fused.pick's"),
     S("DITHER_CHECK_WORKERS", int, 0, WHERE, "the gate check's worker processes (0: its own count): how fast it checks"),
     S("DITHER_DEAD_ONCE", one, False, VALUE, "1: a step's GEMMs and y commits write a row past m only where an earlier step "
                                              "left something else; the same bytes"),

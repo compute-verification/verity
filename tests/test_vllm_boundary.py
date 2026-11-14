@@ -36,7 +36,7 @@ ROUTE = ("route the code through verity_vllm's interface (PUBLIC in tests/test_v
 #: interface and delete its line.  It only shrinks.
 ALLOWED = {
     # stock engines a benchmark builds and drives beside the integration's
-    "benchmarks/harness/verity_bench/vllm/runner.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
+    "benchmarks/harness/verity_bench/vllm/engine.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
     "benchmarks/served_commit/tp_decode.py": "circuits: a stock vllm.LLM at TP8 against a Commit arm in the same engine",
     **dict.fromkeys(("benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/profile_decode.py",
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
@@ -61,7 +61,7 @@ ALLOWED = {
     # served arms that replace a layer's kernels inside a stock engine
     **dict.fromkeys(("benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py",
-                     "benchmarks/hash/dither/native.py", "benchmarks/hash/dither/sbench.py"),
+                     "benchmarks/hash/dither/sbench.py"),
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
     **dict.fromkeys(("benchmarks/hash/exactlin/percall.py", "benchmarks/hash/exactlin/share.py"),
                     "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),

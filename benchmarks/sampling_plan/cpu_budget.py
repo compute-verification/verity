@@ -28,12 +28,12 @@ from collections.abc import Sequence
 from math import ceil, log
 from pathlib import Path
 
-from verity.protocols import reporting
+from verity import protocol
 from verity.commitments.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
 
-#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`reporting`)
-DELTAS = tuple(map(float, reporting.DELTAS))
-PERIODS = dict(reporting.PERIODS)
+#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`verity.protocol`)
+DELTAS = tuple(map(float, protocol.DELTAS))
+PERIODS = dict(protocol.MONITORING_PERIODS)
 SERVERS = 10_000
 UNITS = 8
 SLOT_CORES, SLOT_GB = 42, 120

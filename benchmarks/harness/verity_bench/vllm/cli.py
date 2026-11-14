@@ -16,7 +16,8 @@ from verity_config import sha256
 from verity_bench.vllm.arms import resolve_arms
 from verity_bench.vllm.presets import expand_sweep, load_spec, local_checkpoint, served
 from verity_bench.vllm.result import write
-from verity_bench.vllm.runner import ProcessEngineFactory, run_benchmark
+from verity_bench.vllm.engine import ProcessEngineFactory
+from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
 
 

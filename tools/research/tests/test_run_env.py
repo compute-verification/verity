@@ -73,7 +73,7 @@ def test_a_job_users_unit_gets_it_and_a_value_the_run_names_wins(tmp_path, monke
 
     monkeypatch.setattr(jobuser, "finish", lambda *a, **k: finish(*a, run=as_root, **k))
 
-    def harness(a, cmd):
+    def harness(a, cmd, poll=None, ended=None):
         from research.telemetry.job import set_status
 
         spawned.append((cmd, dict(os.environ)))

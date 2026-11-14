@@ -3,7 +3,7 @@
 The model's layers are a stand-in linear type (`pous.linear_types`) holding an int8 weight [N, K] and its f32
 ``weight_scale`` [N, 1] as the ``int8_exact`` target's linears do, and P2 runs at the small point's 1,024-bit blocks, 8 a
 segment (`pous._base`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
-period's audit and the memory challenger are `verity.protocols.accounting.pous.verifier`'s and `benchmarks/pous/p2_v1/store.py`'s own; the
+period's audit and the memory challenger are `verity.protocols.accounting.pous.verifier`'s and `verity/protocols/accounting/pous/prover/p2/p2_store/store.py`'s own; the
 memory challenger's key is the PoUS tests' test signer, its clock a counter.
 """
 from __future__ import annotations
@@ -138,7 +138,7 @@ def test_the_decode_at_use_on_a_gpu_is_the_stores_own_module():
     """What `pous._decoder` builds on a GPU comes from the store's package alone, as far as a CPU reaches: the layout of no
     tensors at the registered point, refused at any other, and rows of another shape refused before the library loads."""
     load = pous._p2("load")
-    assert load.__name__ == "p2_v1.load" and "p2_stage" not in sys.modules
+    assert load.__name__ == "p2_store.load" and "p2_stage" not in sys.modules
     layout = load.StoreLayout(pous._base(P2), (), bytes(128))
     with pytest.raises(ValueError, match="the point libp2v1.so is built for"):
         load.StoreLayout(SMALL, (), bytes(128))

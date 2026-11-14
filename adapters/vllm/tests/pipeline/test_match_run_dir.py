@@ -1,5 +1,6 @@
-"""A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records: the tier-b steps of a `--full-replay`
-run among them, which no flag sets.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
+"""A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records, the tier-b steps of a `--full-replay`
+run among them unless `--tier-b-steps` names others.  `--no-verify-weights`, `--keep-traces` and `--chains` reach the capture's
+command, the census's and the manifest.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
 realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
 could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
 written, which a pod's script shows."""
@@ -37,10 +38,70 @@ def test_a_run_dir_rerun_replays_the_tier_b_steps_its_run_json_records(tmp_path,
     assert RC.Plan(a).tier_b_steps == []
 
 
-def test_no_flag_sets_the_tier_b_steps():
-    with pytest.raises(SystemExit):
-        cli.parse("match", ["--tier-b-steps", "0,1"], {})
-    assert cli.parse("match", [], {}).tier_b_steps == RC.TIER_B_STEPS
+def _rerun_plan(tmp_path, recorded, full_replay):
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1, 2, 3], tier_b_steps=recorded)
+    a = cli.parse("match", ["--run-dir", str(run), "--phase", "cpu", *(["--full-replay"] if full_replay else [])], {})
+    RC._defaults_from_run_dir(a)
+    return RC.Plan(a)
+
+
+@pytest.mark.parametrize("recorded, steps", [
+    ([""], [0, 1, 2, 3]),       # joins to nothing: every snapshot step
+    (" ", [0]),                 # names no step: step 0 alone
+    ("0,1", [0, 1]),            # a string's characters, joined and split again
+    (["1,2"], [0, 1, 2]),
+    (["3", 1], [0, 1, 3]),
+])
+def test_a_run_json_s_tier_b_steps_are_the_comma_list_they_join_to(tmp_path, recorded, steps):
+    assert _rerun_plan(tmp_path, recorded, True).tier_b_steps == steps
+
+
+@pytest.mark.parametrize("recorded", [[""], " ", "0,1", ["1,2"], [0, 2]])
+def test_a_rerun_without_the_full_replay_has_no_tier_b_steps(tmp_path, recorded):
+    assert _rerun_plan(tmp_path, recorded, False).tier_b_steps == []
+
+
+@pytest.mark.parametrize("full_replay", [True, False])
+@pytest.mark.parametrize("recorded", [[1.0], [1.5], [True], [None], [[1]], [{"x": 1}], ["x"]])
+def test_a_run_json_s_tier_b_step_that_is_no_integer_s_text_is_refused_with_or_without_the_replay(tmp_path, recorded, full_replay):
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        _rerun_plan(tmp_path, recorded, full_replay)
+
+
+@pytest.mark.parametrize("given, steps", [
+    ([], [0, 2]),                                   # no flag: the steps the run.json records
+    (["--tier-b-steps", "1,3"], [0, 1, 3]),         # a flag wins over the record, and step 0 is always replayed
+    (["--tier-b-steps", "2,7"], [0, 2]),            # a step that is no snapshot step is dropped
+    (["--tier-b-steps", ""], [0, 1, 2, 3]),         # an empty list: every snapshot step
+    (["--tier-b-steps", RC.DEFAULT_TIER_B_STEPS], [0, 2]),   # the default's own text reads as no flag
+])
+def test_tier_b_steps_on_the_command_line_win_over_the_ones_a_run_json_records(tmp_path, given, steps):
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1, 2, 3], tier_b_steps=[0, 2])
+    a = cli.parse("match", ["--run-dir", str(run), "--phase", "cpu", "--full-replay", *given], {})
+    RC._defaults_from_run_dir(a)
+    assert RC.Plan(a).tier_b_steps == steps
+
+
+def test_a_first_run_s_tier_b_steps_are_the_flag_s_else_step_0_and_three_decode_steps(tmp_path):
+    def steps(*given):
+        return RC.Plan(cli.parse("match", ["--out", str(tmp_path), "--snapshot-steps", "0,1,2,3,4", "--full-replay", *given], {})).tier_b_steps
+
+    assert (steps(), steps("--tier-b-steps", "4"), steps("--tier-b-steps", "")) == ([0, 1, 2, 3], [0, 4], [0, 1, 2, 3, 4])
+
+
+def test_the_capture_verifies_the_weights_and_the_census_keeps_no_trace_unless_a_flag_says_otherwise(tmp_path):
+    (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0", "prompt_len": 5, "max_tokens": 4}]}))
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1])
+
+    def cmd(stage, *given):
+        a = cli.parse("match", ["--run-dir", str(run), *given], {})
+        RC._defaults_from_run_dir(a)
+        return RC.Plan(a).cmd(stage)
+
+    unverified, kept = cmd("capture", "--no-verify-weights"), cmd("census", "--keep-traces")
+    assert "--verify-weights" not in unverified and cmd("capture") == [*unverified, "--verify-weights"]
+    assert "--no-traces" not in kept and cmd("census") == [*kept, "--no-traces"]
+    assert cmd("capture", "--keep-traces") == cmd("capture") and cmd("census", "--no-verify-weights") == cmd("census")
 
 
 CPU_STAGES = ("resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring",
@@ -82,6 +143,11 @@ def test_a_cpu_phase_with_every_stage_skipped_writes_the_manifest_the_spec_and_t
     assert spec["reconstructed_after_execution"] is True
     stages = json.loads((run / RC.G.ARTIFACTS["stages"]).read_text())["stages"]
     assert [(s["stage"], s["status"], s["reason"]) for s in stages] == [(st, "skipped", "--skip") for st in CPU_STAGES]
+    # the weights were verified and three chains recorded, unless a flag says otherwise
+    assert (man["verify_weights"], man["sampling"]["chains"]) == (True, RC.DEFAULT_CHAINS) == (True, 3)
+    assert _cpu_phase(run, "--no-verify-weights", "--chains", "5") == 0
+    man = json.loads((run / "run.json").read_text())
+    assert (man["verify_weights"], man["sampling"]["chains"]) == (False, 5)
 
 
 def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realized_shape(tmp_path, monkeypatch):
@@ -95,6 +161,21 @@ def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realiz
     real = json.loads((run / "run.json").read_text())["realized"]
     assert real["max_concurrent_requests"] is None and real["prompt_lens"] == [5, 3] and real["n_generated"] == [4, 0]
     assert RC._max_concurrent([]) is None
+
+
+@pytest.mark.parametrize("reqs, peak", [
+    ([{"first_step": 0, "finish_step": 2}, {"first_step": 1, "finish_step": 3}, {"first_step": 3, "finish_step": 3}], 2),
+    ([{"first_step": 0, "finish_step": 0}, {"first_step": 2, "finish_step": 2}], 1),
+    ([{"first_step": 0, "finish_step": 2}, {"first_step": None, "finish_step": 2}], None),
+    ([{"first_step": 0}], None),
+])
+def test_the_peak_of_requests_in_one_step_is_none_unless_every_request_states_both_its_steps(reqs, peak):
+    assert RC._max_concurrent(reqs) == peak
+
+
+def test_every_request_s_steps_are_read_before_any_is_found_missing():
+    with pytest.raises(AttributeError, match="'int' object has no attribute 'get'"):
+        RC._max_concurrent([{"first_step": None}, 7])
 
 
 NESTED = "[" * 100_000 + "]" * 100_000      # JSON nested past what Python's parser reads: `json` raises RecursionError, no ValueError

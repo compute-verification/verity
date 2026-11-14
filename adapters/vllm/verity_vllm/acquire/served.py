@@ -29,8 +29,8 @@ uncaptured.  Each step names the Definitions its batch selects:
     device's k16 step, or cc 12.0's M = 1 gemvx `CublasGemv_v1`;
   * a query row i of a request's qlen rows over klen keys sees T = klen - qlen + 1 + i keys in the device's attention launch
     (`served_device.launch`).  FA3's tile (kBlockM, kBlockN) is the batch's max query length's; its scheduler (vllm-flash-attn's
-    `num_splits_heuristic` and its varlen split, statically capped at `split_cap` when the step has at most the largest capture
-    size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
+    `num_splits_heuristic` and its varlen split, held to the static count a full graph may hold when the step has at most the largest
+    capture size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
     `Fa3AttentionSplit_v1`.  FA2 splits a decode step `fa2_num_splits` ways (`Attention_v5`, `Fa2AttentionSplit_v1`).
 
 The manifest's identities are one per (step, request, committed value), the request's rows of the value
@@ -50,9 +50,12 @@ import hashlib
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity.definitions.registry import inductor as IR
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
@@ -62,12 +65,12 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
-from verity.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
-from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
-from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
+from verity_vllm.query.manifest.format import SCHEMA, SERVED_FAMILY, manifest_digest
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
 
 KIND = "verity/served-required-manifest/v1"
 FAMILY = SERVED_FAMILY
@@ -378,7 +381,7 @@ _GRAPH_RETURN = re.compile(r"^\s*return \((\w+),\)\s*$", re.M)
 
 
 def _graph_output(path: str) -> str:
-    top = open(path).read().split("\n    class submod_", 1)[0]
+    top = Path(path).read_text().split("\n    class submod_", 1)[0]
     m = _GRAPH_RETURN.search(top)
     if m is None:
         raise Unmodelled(f"{path}: the split graph returns no single value")
@@ -405,8 +408,8 @@ def _merge(env: dict[str, Any], local: dict[str, Any]) -> dict[str, Any]:
 
 def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str) -> dict[str, Any]:
     """The piece programs through the split graph: global calls over named values, the attention ops, the backbone's output."""
-    att_of_out = {(a["out"]["piece"], a["out"]["ret"]): a for a in graph["attention"]
-                  if (a.get("out") or {}).get("kind") == "piece_ret"}
+    # an attention op's record leaves out an operand its signature does not name (`compiled.split_graph_wiring`)
+    att_of_out = {(to["piece"], to["ret"]): a for a in graph["attention"] if (to := a.get("out")) and to.get("kind") == "piece_ret"}
     if len(att_of_out) != len(graph["attention"]):
         raise Unmodelled("an attention op's output buffer is not a piece's return")
     values: dict[str, dict[str, Any]] = {IDS: {"width": 1, "piece": 0}, POSITIONS: {"width": 1, "piece": 0}}
@@ -417,7 +420,7 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
     attention: list[dict[str, Any]] = []
     for p, (prog, wiring) in enumerate(zip(programs, graph["wiring"])):
         env = []
-        for k, (src, raw) in enumerate(zip(wiring["args"], wiring["raw_args"])):
+        for n, (src, raw) in enumerate(zip(wiring["args"], wiring["raw_args"])):
             kind = src["kind"]
             if kind == "piece_ret":
                 key = (src["piece"], src["ret"])
@@ -432,10 +435,10 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
             elif kind == "layer_name":
                 env.append({"layer_name": True})
             else:
-                raise Unmodelled(f"piece {p} argument {k} ({raw}): a {kind} argument")
+                raise Unmodelled(f"piece {p} argument {n} ({raw}): a {kind} argument")
         names = [f"c{p:02d}.{v['name']}" for v in prog["values"]]
 
-        def g(ref: dict[str, Any]) -> dict[str, Any]:
+        def g(ref: dict[str, Any], env: list[dict[str, Any]] = env, names: list[str] = names) -> dict[str, Any]:
             if "value" in ref:
                 out = {"value": names[ref["value"]], **{k: ref[k] for k in ("width", "cols") if k in ref}}
             elif "arg" in ref:
@@ -465,12 +468,13 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
                 producer[w] = gc
         rets.append([g(r) for r in prog["returns"]])
         for a in graph["attention"]:
-            if (a.get("q") or {}).get("piece") != p:
+            q = a.get("q")
+            if not q or q.get("piece") != p:
                 continue
             ops = {}
             for k in ("q", "k", "v"):
-                s = a.get(k) or {}
-                if s.get("kind") != "piece_ret":
+                s = a.get(k)
+                if not s or s.get("kind") != "piece_ret":
                     raise Unmodelled(f"attention {a['layer']}: its {k} is not a piece's return")
                 ops[k] = rets[s["piece"]][s["ret"]]
                 if "value" not in ops[k]:
@@ -611,7 +615,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
     return assemble(wired, moe_plans, _final_value(split_graph, graph, wired), kernels, SA.winners(inductor_dir),
                     source={"inductor_dir": inductor_dir, "split_graph": split_graph,
                             "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen]},
-                    schedule=schedule, steps=steps, routes=routes.get("routes") or {}, capture_sizes=capture_sizes,
+                    schedule=schedule, steps=steps, routes=probed if (probed := routes.get("routes")) else {}, capture_sizes=capture_sizes,
                     max_num_seqs=max_num_seqs, device=device, split_cap=split_cap, lm_head=lm_head, rank=rank)
 
 
@@ -656,7 +660,7 @@ def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kerne
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:
     """The backbone's output: the split graph's return, a piece's return that is a value."""
     out = _graph_output(split_graph)
-    src = open(split_graph).read().split("\n    class submod_", 1)[0]
+    src = Path(split_graph).read_text().split("\n    class submod_", 1)[0]
     m = re.search(rf"^\s*{out} = (submod_\d+)\[(\d+)\]", src, re.M)
     pieces = [w["submod"] for w in graph["wiring"]]
     if m is None or m.group(1) not in pieces:
@@ -703,3 +707,6 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
         out[f"{M},{K},{N}"] = json.loads(exact[0])
     return {"device": torch.cuda.get_device_name(), "versions": {"torch": torch.__version__, "cuda": torch.version.cuda},
             "routes": out}
+
+
+__all__ = ["SPLIT_CAP", "assemble", "build", "probe_routes"]

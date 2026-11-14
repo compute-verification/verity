@@ -14,7 +14,7 @@
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
-It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what a network certifier's client sends: ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
@@ -22,7 +22,7 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
-certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+certifier's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
 ``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
@@ -44,7 +44,9 @@ quantization method is registered under every precision, so a pin whose checkpoi
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
-request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
+request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection. It
+takes a request's first line only as the network certifier does (`serve_head.request_line`), and answers 400 to any other:
+those are the bytes the certifier passes on without its release.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
@@ -136,9 +138,10 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_pearl as SPL,
-                                   serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW, serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
+                                   serve_pearl as SPL, serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW,
+                                   serve_seal as SS)
+from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
@@ -285,9 +288,12 @@ class Server:
         try:
             head = await reader.readuntil(b"\r\n\r\n")
             t_head = self.clock()
-            lines = head.decode("latin-1").split("\r\n")
-            method, path, _ = lines[0].split(" ", 2)
-            headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
+            line, *fields = head[:-4].split(b"\r\n")
+            first = HD.request_line(line)
+            if first is None:
+                return await self._json(writer, 400, error_body(HD.NO_REQUEST_LINE, 400, "BadRequestError"))
+            method, path = first
+            headers = HD.header_fields(fields)
             if method == "POST" and path.split("?", 1)[0] == WATERMARK_PATH and isinstance(self.order, TickAdmit):
                 return await self.watermark(reader, writer, headers)
             body = await reader.readexactly(int(headers.get("content-length") or 0))
@@ -304,8 +310,12 @@ class Server:
 
     async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
         """The network certifier's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
-        its end is answered 200 (400 for a malformed stream)."""
-        w = self.order.watermark(headers.get(RUN_HEADER, "").strip())
+        its end is answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (a client's, a run's
+        second: `TickAdmit.watermark`) is answered 400 with its body unread."""
+        try:
+            w = self.order.watermark(headers)
+        except ValueError as e:
+            return await self._json(writer, 400, error_body(str(e), 400, "BadRequestError"))
         try:
             if "chunked" not in headers.get("transfer-encoding", "").lower():
                 w.close("the watermark's body is chunked")

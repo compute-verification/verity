@@ -30,13 +30,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import rec_profile as RP
+import rec_table as RT
+import settings as RS
+
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 
-import rec_profile as RP  # noqa: E402
-import rec_table as RT  # noqa: E402
-import settings as RS  # noqa: E402
-
+#: the job's command before its KEY=VALUE arguments, run from the tree's root; a caller of `main` may wrap it (`job`)
+JOB = ("bash", "benchmarks/recursion_e2e/job.sh")
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
 E2E = (*RP.E2E_STEPS, "negative")
@@ -215,7 +216,7 @@ def job_env(a: argparse.Namespace) -> list[str]:
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
     env, m, limit = job_env(a), on(a), a.max_min or max_min(a)
-    job = ["bash", "benchmarks/recursion_e2e/job.sh", *env]
+    job = [*a.job, *env]
     if direct(a):
         return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
                 "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]
@@ -250,10 +251,7 @@ def cmd_plan(a) -> int:
 
 def cmd_run(a) -> int:
     a = preset(a)
-    if a.here:
-        cmd = ["bash", str(HERE / "job.sh"), *job_env(a)]
-    else:
-        cmd = job_command(a, root())
+    cmd = [*a.job, *job_env(a)] if a.here else job_command(a, root())
     print(" ".join(cmd), flush=True)
     return 0 if a.dry_run else subprocess.run(cmd, cwd=root(), check=False).returncode
 
@@ -331,7 +329,7 @@ def cmd_store(a) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, job: tuple[str, ...] = JOB) -> int:
     ap = argparse.ArgumentParser(prog="verity bench recursion_e2e", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -393,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             p.add_argument("--dir", required=True, help="a new or empty directory the art's tree is written in")
     a = ap.parse_args(argv)
+    a.job = job
     return {"plan": cmd_plan, "run": cmd_run, "result": cmd_result, "table": cmd_table, "store": cmd_store}[a.cmd](a)
 
 

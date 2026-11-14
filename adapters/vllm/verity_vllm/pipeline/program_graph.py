@@ -48,6 +48,7 @@ from verity_vllm.query.program_view import (
     spec_base,
     spec_statics,
 )
+from verity_vllm.query.program_view import specialization as _specialization
 
 __all__ = ["Options", "main"]
 
@@ -452,9 +453,6 @@ def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             runs.append({"start": k, "count": j - k, "fn": nodes[k]["fn"], "form": nodes[k]["form"], "chained": chained})
         k = j
     return runs
-
-
-_specialization = word_query.specialization
 
 
 def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:

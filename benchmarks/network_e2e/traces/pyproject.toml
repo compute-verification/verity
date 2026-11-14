@@ -29,7 +29,10 @@ inputs = [
     "verity/__init__.py",
     "verity/protocols/accounting/certifier/verifier/__init__.py",
     "verity/protocols/accounting/certifier/verifier/release.py",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py"]
+    # `verity.protocols.accounting.certifier.verifier.pacer` (the probes' tests): the network certifier's clock, which its
+    # probes read
+    "verity/protocols/accounting/certifier/verifier/pacer.py", "verity/protocols/__init__.py",
+          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

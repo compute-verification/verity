@@ -34,6 +34,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from verity_vllm import settings
+from verity_vllm.records.schema_ids import SPEC_TOKENS_SCHEMA
+
 if TYPE_CHECKING:
     from verity_vllm.protocols import Composition
 
@@ -201,7 +204,7 @@ def main(args: Options) -> None:
     # loader produced from the checkpoint's tokenizer, per-request output limits, arrival steps, sampling parameters, and the engine
     # kwargs the harness resolved.  Written before the warm-up; nothing observed from the run goes in here (tokens.json is the record).
     (out / "spec_tokens.json").write_text(json.dumps({
-        "schema": "verity-gen/spec-tokens/v1", "known_before_execution": True,
+        "schema": SPEC_TOKENS_SCHEMA, "known_before_execution": True,
         "tokenizer": {"repo": eng.cp["repo"], "revision": eng.cp.get("revision")},
         "requests": [{"request_id": r["request_id"], "prompt_token_ids": r["prompt_token_ids"], "prompt_len": len(r["prompt_token_ids"]),
                       "max_tokens": r["max_tokens"], "arrive_step": int(r.get("arrive_step") or 0)} for r in wl["requests"]],
@@ -216,13 +219,11 @@ def main(args: Options) -> None:
         print(f"[m1] normalizer -> {nz}", flush=True)
     # [v2 acquire, Phase 4a] the built engine's runtime tree (always) and, with a required-value manifest, the acquisition plan, written
     # before any run; the plan's hooks go in beside the observer below (counts / shapes only).
-    import os
-
     from verity_vllm.acquire.install import IncompletePlan
     from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
     from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
 
-    man_path = args.acquisition_manifest or os.environ.get(MANIFEST_ENV) or None
+    man_path = args.acquisition_manifest or settings.raw(MANIFEST_ENV) or None
     try:
         acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), man_path, out, source="m1_capture")
     except IncompletePlan as e:

@@ -24,6 +24,7 @@ from verity_vllm.check.replay.index import (
     ProgramIndex,
     const_word,
     described,
+    file_args,
     plane_copies,
     row_args,
 )
@@ -221,7 +222,7 @@ def _evaluate_row(pi: ProgramIndex, store: WordStore, weights: Callable[[str, in
     inputs: list[list[np.ndarray]] = []
     wslices: list[np.ndarray | None] = []
     wrefs: list[dict[str, Any] | None] = []
-    for oi, stored in enumerate(r.get("args") or []):
+    for oi, stored in enumerate(file_args(r)):
         runs = _weight_runs(pi, stored)
         if runs is not None:
             wsl, wref = (None, None) if plan else _weight_gather(pi, weights, *runs, inputs_rec)

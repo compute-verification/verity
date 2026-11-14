@@ -15,9 +15,11 @@
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)
 #   WIPE_KEY_SHA512  the SHA-512 of its public key (the gate's `party_key wipe`), in 128 lowercase hex digits: the one
 #                    key the verifier trusts, a session signed under another rejected. By default vy-auditor-2's wipe
-#                    party's (TRUSTED_SHA512 below), so another challenger needs its own. The pin is the
-#                    deployment's, never read from the session it judges: set empty, or in a tree that pins none,
-#                    no key is pinned and the piece refuses
+#                    party's (TRUSTED_SHA512 below, wipe_party.AUDITOR_KEYS's), so another challenger needs its own.
+#                    The pin is the deployment's, never read from the session it judges: set empty, or in a tree that
+#                    pins none, no key is pinned and the piece refuses. It decides only which session is accepted: the
+#                    record says trusted-host holds only under the key AUDITOR_KEYS pins for the challenger's host,
+#                    and under any other pin reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a

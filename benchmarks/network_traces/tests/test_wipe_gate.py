@@ -40,8 +40,7 @@ elif cmd.startswith("status "):
         open(os.environ["STUB_FIFO"], "w")
         signal.pause()
     print(json.dumps({"run": "%(run)s", "note": os.environ.get("STUB_NOTE"),
-                      "end": {"run": "%(run)s", "rc": 0, "ended_utc": "2026-10-27T17:05:00Z",
-                              "verdict": {"accepted": True}}}))
+                      "end": {"run": "%(run)s", "rc": 0, "ended": "ended", "verdict": {"accepted": True}}}))
 elif cmd == "fetch %(run)s":
     files = {"end.json": b"{}", "request.json": b"{}", "out/certificates.jsonl": b"",
              "out/deployment.json": json.dumps({"windows": 3, "origin_unix": 1.5,
@@ -73,7 +72,8 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
     out.mkdir(parents=True, exist_ok=True)
     env = {"PATH": f"{bin_}{os.pathsep}{os.path.dirname(sys.executable)}{os.pathsep}{os.defpath}",
            "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_RUN_ID": "r1",
-           "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable, **env}
+           "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable,
+           "VY_CHALLENGER_1_HOST": "192.0.2.21", **env}
     if popen:
         return subprocess.Popen(["bash", str(ROOT / "benchmarks/network_traces/wipe_gate.sh")], cwd=ROOT,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
@@ -85,6 +85,17 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
 def _published(tmp_path: Path) -> list[str]:
     return sorted(p.relative_to(tmp_path / "run" / "out").as_posix()
                   for p in (tmp_path / "run" / "out").rglob("*") if p.is_file())
+
+
+def test_without_the_challenger_hosts_address_nothing_is_sent(tmp_path):
+    """site.json names the variable that holds the challenger host's address, which `_gate` sets: with it unset and no
+    CHALLENGER the script ends naming it, before the gate is asked anything; a CHALLENGER given whole reads none."""
+    keep = tmp_path / "keep"
+    got = _gate(tmp_path, KEEP=str(keep), VY_CHALLENGER_1_HOST="")
+    assert got.returncode != 0 and "VY_CHALLENGER_1_HOST is unset: site.json names it for its gate" in got.stderr
+    assert not keep.exists() and _published(tmp_path) == []
+    got = _gate(tmp_path, KEEP=str(keep), VY_CHALLENGER_1_HOST="", CHALLENGER="research@192.0.2.9")
+    assert got.returncode == 0 and (keep / RUN / "fetch.tar.gz").is_file(), got.stdout + got.stderr
 
 
 def test_record_keeps_no_witness(tmp_path):
@@ -106,7 +117,8 @@ def test_record_keeps_no_witness(tmp_path):
     assert not [n for n in names if "witness" in n.split("/")]
     assert f"{RUN}/out/deployment.json" in names and f"{RUN}/request.json" in names
     sys.path.insert(0, str(HERE))
-    import wipe_egress
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
+    from benchmarks.network_traces import wipe_egress
     assert sorted(wipe_egress.read_run(tmp_path / "run" / "out" / "bundle.tgz")) == sorted(wipe_egress.FILES)
 
 

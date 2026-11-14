@@ -82,11 +82,11 @@ def test_a_criterion_that_is_neither_sequence_nor_dag_is_refused(tmp_path):
         bd.decompose(str(tmp_path), [], within_step="multiset")
 
 
-def test_a_view_with_no_recorded_rows_is_refused_as_the_fold(monkeypatch, tmp_path):
-    """A derived Program's view has none: passed as the fold it is refused by name, before any instance is attributed."""
+def test_a_view_with_no_recorded_rows_fails_as_the_fold_where_its_rows_are_read(monkeypatch, tmp_path):
+    """A derived Program's view has none: passed as the fold it fails before any instance is attributed, with Python's own error."""
     B = _two_requests()
     B.oracle_rows = None
-    with pytest.raises(ValueError, match="the view passed as the fold has no instances.jsonl rows"):
+    with pytest.raises(TypeError, match="'NoneType' object is not iterable"):
         _decompose(monkeypatch, tmp_path, B, {0: STEP0})
 
 

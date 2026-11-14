@@ -8,18 +8,25 @@ id-form server's cells and fails any other at its first cell (format), none of w
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import dataclasses
 import hashlib
+import inspect
 import socket
+from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active, io_tie as IT
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
+from verity.protocols.accounting.certifier.verifier import active, id_form as IDF, io_tie as IT, pacer, warden as device_module
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, encode_frame
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.pacer import Report
-from verity.protocols.accounting.certifier.verifier.release import read_watermark, release_of, watermark_head, with_release
+from verity.protocols.accounting.certifier.verifier.release import (WATERMARK_END, one_request, read_watermark, release_head,
+                                                     release_of, to_watermark, watermark_chunk, watermark_head,
+                                                     with_release)
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_release import NOT_ONE_REQUEST, ONE_REQUEST
 from verity.protocols.accounting.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
                                                     REFUSED, WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell,
                                                     cells, read_cell, read_reason, reason_frame)
@@ -244,6 +251,61 @@ def expected_egress(s: int, n: int, last: int = END) -> list[tuple[int, int]]:
     return [(s + i // R, k) for i, k in enumerate(kinds)]
 
 
+# --- the relay's files and the older form's --------------------------------------------------------------------------
+
+#: what a file of the relay still imports from the older form's file, by the file: the relay's own its sleep. It leaves
+#: that file in a change of its own, so this only shrinks.
+OLDER_FORM_READS = {Path(inspect.getfile(audit)).stem: {"precise_sleep"}}
+
+
+def package_imports(path: Path, package: str) -> dict[str, set[str]]:
+    """{a module of `package`: the names `path` imports from it, "*" for the module itself}, the imports inside its
+    functions included."""
+    out: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom):
+            module = ".".join(filter(None, (package, node.module))) if node.level == 1 else node.module or ""
+            if module == package:
+                for a in node.names:
+                    out.setdefault(a.name, set()).add("*")
+            elif module.startswith(package + "."):
+                out.setdefault(module[len(package) + 1:].partition(".")[0], set()).update(a.name for a in node.names)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith(package + "."):
+                    out.setdefault(a.name[len(package) + 1:].partition(".")[0], set()).add("*")
+    return out
+
+
+def test_a_file_of_the_relay_imports_from_the_older_forms_file_only_what_is_listed():
+    """A file of the relay is a module of this package that reaches the relay's by its imports, or one such a module
+    reaches, the older form's file left out. Of the older form's file they import `OLDER_FORM_READS` and no more, so
+    once that is empty the older form can go without the relay; and the list names nothing they no longer import."""
+    older, relay = Path(active.__file__), Path(inspect.getfile(audit))
+    imports = {p.stem: package_imports(p, active.__package__) for p in older.parent.glob("*.py") if p != older}
+
+    def reached(start: str) -> set[str]:
+        seen, todo = set(), [start]
+        while todo:
+            if (m := todo.pop()) in imports and m not in seen:
+                seen.add(m)
+                todo += imports[m]
+        return seen
+
+    files = set().union(*(r for m in imports if relay.stem in (r := reached(m))))
+    assert {relay.stem, *OLDER_FORM_READS} <= files, sorted(files)
+    found = {m: imports[m].get(older.stem, set()) for m in files}
+    more = {m: sorted(names - OLDER_FORM_READS.get(m, set())) for m, names in found.items()}
+    assert not any(more.values()), (
+        "\n".join(f"{m}.py imports {', '.join(names)} from {older.name}" for m, names in sorted(more.items()) if names)
+        + f"\nA file of the relay reads nothing of the older form's file. Move the definition to a module of the relay's "
+          f"own, or to one named for what it holds, beside {relay.name}, and have {older.name} import it from there, so "
+          f"that it keeps one definition.")
+    stale = {m: sorted(names - found[m]) for m, names in OLDER_FORM_READS.items() if names - found[m]}
+    assert not stale, (f"OLDER_FORM_READS lists what its file no longer imports from {older.name}: {stale}. Delete it "
+                       f"from the list, which only shrinks.")
+
+
 # --- the schedule ----------------------------------------------------------------------------------------------------
 
 
@@ -408,10 +470,121 @@ def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
     assert [w["accepted"] for w in audit(PARAMS, *records(warden))["windows"]] == [False, True]
 
 
+class EarlyClock(VirtualClock):
+    """A clock on which a tick's first wait ends at once, before its time, and the wait after it runs its length."""
+
+    def __init__(self, now: float) -> None:
+        super().__init__(now)
+        self.waits: list[float] = []
+        self.early = False
+
+    async def sleep(self, delay: float) -> None:
+        if delay > 0:
+            self.waits.append(delay)
+            self.early = not self.early
+        await super().sleep(0 if delay > 0 and self.early else delay)
+
+
+def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boundary():
+    """A wait may end before its time (a timer against another clock, a signal). A tick runs once the clock reads
+    its boundary and never before: here every tick's first wait ends at once, and the tick still runs only after the
+    clock is moved to its boundary, on time, with every record complete."""
+
+    async def go():
+        clock = EarlyClock(-TAU / 2)
+        device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(device.run())
+        before, after = [], []
+
+        async def settle(seen: list[int]) -> None:
+            for _ in range(4):  # the loop runs whatever is ready: a tick that the clock's reading lets run runs here
+                await clock.sleep(0)
+            seen.append(device.ticks)
+
+        for t in range(PARAMS.window):
+            await settle(before)
+            clock.advance(t * TAU)
+            await settle(after)
+        clock.advance(PARAMS.window * TAU)
+        await running
+        return device, before, after, clock
+
+    device, before, after, clock = asyncio.run(go())
+    assert before == list(range(PARAMS.window)) and after == list(range(1, PARAMS.window + 1))
+    assert device.lateness == [0.0] * PARAMS.window and len(clock.waits) == 2 * PARAMS.window
+    assert [(r.link, r.status.reason) for r in device.records] == [("requests", None), ("responses", None),
+                                                                   ("fails", None)]
+
+
+def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
+    """Unless a caller injects them, the clock is the host's raw clock and each wait is against that clock. Here the
+    raw clock is a count the test moves and each wait ends half its length early, then on its time: every clock
+    read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network certifier's own clock, and every tick runs at
+    its boundary or after it, inside the slack. On that clock it is paced, and its pacer, here a stand-in with no
+    process, is started on the raw clock too."""
+    now, asked, waits, started = [-0.35], [], [], []
+
+    class Paced:
+        @classmethod
+        async def start(cls, links=None, *, backlog=0, clock="monotonic"):
+            started.append(clock)
+            return cls()
+
+        async def reports(self):
+            return
+            yield
+
+        async def close(self):
+            return 0
+
+        async def kill(self):
+            pass
+
+    def read(clock_id):
+        asked.append(clock_id)
+        return now[0]
+
+    async def short(delay, clock):
+        waits.append(clock)
+        now[0] += delay / 2 if len(waits) % 2 else delay
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", read)
+    monkeypatch.setattr(device_module, "precise_sleep", short)
+    monkeypatch.setattr(device_module, "Pacer", Paced)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=0.05)
+    assert device.clock is pacer.raw_clock
+    asyncio.run(device.run())
+    assert started == ["raw"]
+    assert set(asked) == {pacer.time.CLOCK_MONOTONIC_RAW} and all(clock is device.clock for clock in waits)
+    assert device.ticks == PARAMS.window and len(waits) >= 2 * PARAMS.window
+    assert 0 <= min(device.lateness) and max(device.lateness) < device.slack
+    assert [(r.link, r.status.reason) for r in device.records] == [("requests", None), ("responses", None),
+                                                                   ("fails", None)]
+
+
+def test_a_host_without_a_raw_clock_starts_no_network_certifier(monkeypatch):
+    """Where the host's raw clock can't be read, the run refuses by name before a wait, a tick or its pacer: it has
+    no other clock to run on."""
+
+    def refuse(clock_id):
+        raise OSError(22, "Invalid argument")
+
+    waits = []
+
+    async def sleep(delay):
+        waits.append(delay)
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", refuse)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
+    with pytest.raises(pacer.ClockRefused, match="no raw monotonic clock"):
+        asyncio.run(device.run())
+    assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
+
+
 def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
-    injected clock a bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so
-    each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
+    injected clock a bucket's time (origin 0, on the host's raw clock, the pacer's) has long passed when its tick hands
+    it, so each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
     (`monitor-unavailable`) from the next bucket on: each grid is the unpaced run's up to that bucket, then padding. Each
     window's records are published as its buckets' releases are in. Each connection's last part closes the pacer's
     copy of its socket, so each client reads to its end."""
@@ -435,6 +608,18 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
         Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+
+
+def test_an_unpaced_network_certifier_on_a_clock_of_the_hosts_is_refused():
+    """The network certifier's own clock is the host's raw one, so the rule that a device on the host's clock is paced
+    holds on it: with no `paced`, the default clock, the raw clock and the steered clock are each refused, and only an
+    injected clock runs unpaced."""
+    for host in ({}, *({"clock": clock} for clock in pacer.CLOCKS.values())):
+        with pytest.raises(ValueError, match="host's clock is paced"):
+            Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, **host)
+    assert pacer.raw_clock in pacer.CLOCKS.values() and len(pacer.CLOCKS) == 2
+    clock = VirtualClock(0.0)
+    assert Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep).paced is None
 
 
 def test_a_warden_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
@@ -588,7 +773,7 @@ CAPPED = dataclasses.replace(GATED, max_tokens_cap=4)
 
 def id_req(max_tokens: int) -> bytes:
     """An id request in the network certifier's cells (offset 0), of two cells at GB."""
-    return active.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
+    return IDF.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
 
 
 def capped(request_bytes: bytes, response: bytes, params: WardenParams = CAPPED):
@@ -609,7 +794,7 @@ def test_a_request_at_the_cap_passes_and_its_response_is_released():
         verdict = audit(CAPPED, *records(warden))
         assert verdict["accepted"], verdict["windows"]
         assert verdict["max_tokens_cap"] == 4 and [c["max_tokens"] for c in verdict["connections"]] == [4]
-    assert active.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
+    assert IDF.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
 
 
 def refused(request_bytes: bytes) -> None:
@@ -634,13 +819,25 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
     refused(id_req((1 << 32) - 1))
 
 
+def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_response_limit_and_released_without_one():
+    """Under a response limit a request that asks for no token is refused as one past the limit is, by the same
+    reason: none of its bytes is cut into a cell or reaches the server. The least a released request asks for is
+    1. A schedule without one reads no request's `max_tokens`, and releases the same request."""
+    assert active.id_request_max_tokens(id_req(0)[:GP]) == 0
+    refused(id_req(0))
+    _, _, server, e = capped(id_req(1), id_answer([7]))
+    assert (e["failed"], e["max_tokens"], e["release"]) == (None, 1, 0) and server.conns[0].received
+    _, _, server, e = capped(id_req(0), id_answer([7]), params=GATED)
+    assert (e["failed"], e["max_tokens"], e["release"]) == (None, None, 0) and server.conns[0].received
+
+
 def malformed_requests() -> dict[str, bytes]:
-    """Requests whose `max_tokens` the network certifier can't read as `active.id_request` writes one."""
-    good, at = id_req(4), active.MAX_TOKENS_AT
-    field = lambda f: good[:at] + f + good[at + active.ID_DIGITS:]  # noqa: E731
+    """Requests whose `max_tokens` the network certifier can't read as `id_form.id_request` writes one."""
+    good, at = id_req(4), IDF.MAX_TOKENS_AT
+    field = lambda f: good[:at] + f + good[at + IDF.ID_DIGITS:]  # noqa: E731
     return {
         "a leading zero": field(b"0000000004"), "a sign": field(b"        -4"), "not digits": field(b"      four"),
-        "past a u32": field(b"4294967296"), "no digits": field(b" " * active.ID_DIGITS),
+        "past a u32": field(b"4294967296"), "no digits": field(b" " * IDF.ID_DIGITS),
         "another key": good.replace(b'{"max_tokens":', b'{"max_tokenz":'), "not an id request": request(300),
         "a short request": good[:at + 4], "no request": b"",
         "a content-length that isn't a u32": good.replace(b"content-length:", b"content-length:x", 1)[:len(good)],
@@ -651,16 +848,16 @@ def malformed_requests() -> dict[str, bytes]:
 def test_a_request_whose_max_tokens_field_does_not_parse_is_refused(name):
     """A request whose field isn't a u32 at its place is refused (cap) as one past the cap is."""
     request_bytes = malformed_requests()[name]
-    assert active.id_request_max_tokens(request_bytes[:GP]) is None
+    assert IDF.id_request_max_tokens(request_bytes[:GP]) is None
     refused(request_bytes)
 
 
 def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
     """Under the cap a server is held to its request's `max_tokens`: a third id on a request of two fails the
-    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of zero gets its END alone or
-    fails at cell 0. Without a cap the same response is released whole."""
-    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (0, [], (None, None)),
-                                     (0, [7], ("limit", 0))):
+    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of one gets its END alone
+    where its server sends no id, or fails at cell 1 on a second. Without a cap the same response is released whole."""
+    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (1, [], (None, None)),
+                                     (1, [7, 8], ("limit", 1))):
         warden, client, _, e = capped(id_req(max_tokens), id_answer(ids))
         assert (e["failed"], e["failed_at"]) == outcome
         sent = ids[:max_tokens]
@@ -676,12 +873,13 @@ def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
 
 def test_the_audit_holds_released_requests_and_responses_to_the_cap():
     """The audit under a cap reads each request's `max_tokens` from its cells: records an uncapped run made, with a
-    request past the cap released or a response past its request's `max_tokens`, are refused; a `cap` reason under a
-    schedule without a cap is not the schedule's."""
-    warden, _, _, _ = capped(id_req(5), id_answer([1]), params=GATED)
-    verdict = audit(CAPPED, *records(warden))
-    assert verdict["windows"][0]["problems"] == ["connection 1: its request's max_tokens (5) is past the cap, and was "
-                                                 "released"]
+    request past the cap or of 0 released or a response past its request's `max_tokens`, are refused; a `cap` reason
+    under a schedule without a cap is not the schedule's."""
+    for max_tokens in (5, 0):
+        warden, _, _, _ = capped(id_req(max_tokens), id_answer([]), params=GATED)
+        verdict = audit(CAPPED, *records(warden))
+        assert verdict["windows"][0]["problems"] == [f"connection 1: its request's max_tokens ({max_tokens}) is "
+                                                     "not from 1 to the cap, and was released"]
     warden, _, _, _ = capped(id_req(2), id_answer([1, 2, 3]), params=GATED)
     verdict = audit(CAPPED, *records(warden))
     assert verdict["windows"][0]["problems"] == ["connection 1: its response has 3 DATA cells, past its max_tokens (2)"]
@@ -1097,6 +1295,202 @@ def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
         assert bool(sent) == (name == "open") and server.closed == (name in ("open", "backlog")), name
 
 
+#: `PARAMS` with a bucket more of delay: a client's copy of the stream is up to three buckets of cells, and a server
+#: that gets a request whole at its `END` answers it by its first egress slot
+STREAMED = dataclasses.replace(PARAMS, delay=D + 1)
+STREAM_RUN = bytes(range(32))
+OWN_LINE, STREAM_HEAD = watermark_head(STREAM_RUN).split(b"\r\n", 1)
+#: the request lines a client sends: the stream's own, and others a server routes as it routes that one
+CLIENT_LINES = {
+    "the stream's own": OWN_LINE,
+    "a fourth word": OWN_LINE + b" x",
+    "a query string": b"POST /verity/watermark?x HTTP/1.1",
+    "another method": b"GET /verity/watermark HTTP/1.1",
+    "an escaped letter": b"POST /verity/%77atermark HTTP/1.1",
+    "a scheme and authority": b"POST http://server/verity/watermark HTTP/1.1",
+    "line breaks first": b"\r\n\r\n" + OWN_LINE,
+}
+#: of those lines and `LONG_LINES`, the ones that are no request line the release headers go after: to any path, a
+#: request that opens with one is one request to no server
+UNREAD = {"a fourth word", "line breaks first"}
+
+
+def client_stream(line: bytes) -> bytes:
+    """A client's request that opens with `line`: the watermark stream's head after it, naming the run, then bucket
+    0's line with release 0 named lost and the stream's end."""
+    return line + b"\r\n" + STREAM_HEAD + watermark_chunk(0, 1, (0,)) + WATERMARK_END
+
+
+def elsewhere(line: bytes) -> bytes:
+    """A client's request that opens with `line` on another path, bucket 0's line and the stream's end its one body."""
+    body = watermark_chunk(0, 1, (0,)) + WATERMARK_END
+    return line.replace(b"verity", b"verify") + b"\r\nhost: s\r\ncontent-length: %d\r\n\r\n" % len(body) + body
+
+
+def released_elsewhere(name: str, line: bytes, watermark: bool) -> None:
+    """Beside an honest request, `line` on another path (`elsewhere`): released whole where the release headers go
+    after it, and where they don't (`UNREAD`) refused at its `END` as no one request to a server."""
+    other = elsewhere(line)
+    certifier, _, server = streamed({1: [cells(http(b"{}"), B), cells(other, B)]}, watermark)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert not to_watermark(other) and one_request(other) == (name not in UNREAD)
+    if name in UNREAD:
+        assert (log[2]["failed"], log[2]["release"], server.conns[1].received) == ("malformed", None, b"")
+        assert certifier.requests_released == 1
+    else:
+        assert log[2]["failed"] is None and certifier.requests_released == 2
+        assert server.conns[1].received == with_release(other, log[2]["release"], STREAM_RUN, log[2]["ingress_end"])
+
+
+def streamed(arrivals: dict[int, list[bytes]], watermark: bool):
+    server = Ordered([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]])
+    hooks = {"watermark": server.watermark} if watermark else {}
+    certifier, clients, _ = run(server, arrivals, params=STREAMED, run_nonce=lambda n: STREAM_RUN[:n], **hooks)
+    return certifier, clients, server
+
+
+@pytest.mark.parametrize("watermark", (True, False))
+@pytest.mark.parametrize("name", sorted(CLIENT_LINES))
+def test_a_clients_request_to_the_watermarks_path_is_refused_at_its_first_cell_and_no_server_gets_it(name, watermark):
+    """Beside an honest request, a client's copy of the stream, with the watermark or without. Its connection gets
+    padding and one `FAIL`, in the bucket after its first cell's bytes are read: no cell of its request is cut, it has
+    no place in the release order, its server connection gets nothing, and the `fails` record holds malformed. The
+    server sees exactly the run without that client: the honest request, numbered 0, and the stream's lines, none
+    naming a release lost. The same line to another path, on a request of one body, is released whole where the
+    release headers go after it (`released_elsewhere`)."""
+    honest, mine = cells(http(b"{}"), B), client_stream(CLIENT_LINES[name])
+    alone = streamed({1: [honest]}, watermark)[2]
+    certifier, clients, server = streamed({1: [honest, cells(mine, B)]}, watermark)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert (log[2]["failed"], log[2]["failed_at"], log[2]["release"], log[2]["ended"]) == ("malformed", 0, None, 2)
+    assert log[2]["ingress_cells"] == 0 and server.conns[1].received == b""
+    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    assert {f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2} == {PAD}
+    assert [k for _, k, _ in clients[1].cells()] == [PAD] * R + [FAIL] + [PAD] * (R - 1)
+    assert reasons(certifier) == [(2, 2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert server.events == alone.events and (log[1]["release"], log[1]["failed"]) == (0, None)
+    assert certifier.requests_released == 1 and bytes(clients[0].shim().data) == b"r0"
+    if watermark:
+        admitted, _, lines, ended, early = tick_engine(server.events, STREAM_RUN)
+        assert ended and early == [] and certifier.watermark_lost == [] and certifier.watermark_error is None
+        assert [n for _, n, _ in lines] == [0, 0] + [1] * (STREAMED.window - 2) and not any(lost for *_, lost in lines)
+        assert {T: ns for T, ns in admitted.items() if ns} == {2: [0]}
+    released_elsewhere(name, CLIENT_LINES[name], watermark)
+
+
+def test_a_schedule_that_bounds_max_tokens_refuses_it_before_its_path_is_read():
+    """Under `CAPPED` the request is refused as every request whose `max_tokens` isn't where an id request has it,
+    with that refusal's own reason: none of its bytes is cut into a cell or reaches the server."""
+    refused(client_stream(OWN_LINE))
+
+
+#: request lines that end past the first cell, each of which a server still routes as it routes the stream's own
+LONG_LINES = {
+    "line breaks first": b"\r\n" * 28 + OWN_LINE,
+    "a long authority": b"POST http://" + b"a" * 44 + b"/verity/watermark HTTP/1.1",
+    "a long method": b"A" * 56 + b" /verity/watermark HTTP/1.1",
+}
+
+
+@pytest.mark.parametrize("name", sorted(LONG_LINES))
+def test_a_request_line_that_ends_past_the_first_cell_is_refused_at_its_end_and_no_server_gets_it(name):
+    """A client's copy of the stream whose first cell says nothing of its path. Its cells before the last are cut and
+    signed, and the request is read whole before its `END` is cut: it has no `END`, no place in the release order and
+    no byte for the server, it fails as its client's (malformed) in that bucket, and the server sees the run without
+    it. The same line to another path, on a request of one body, is released whole where the release headers go after
+    it (`released_elsewhere`)."""
+    honest, mine = cells(http(b"{}"), B), client_stream(LONG_LINES[name])
+    assert not to_watermark(mine[:P]) and to_watermark(mine) and -(-len(mine) // P) == 2 * R + 1
+    alone = streamed({1: [honest]}, True)[2]
+    certifier, clients, server = streamed({1: [honest, cells(mine, B)]}, True)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert (log[2]["failed"], log[2]["release"], log[2]["ingress_end"], log[2]["ingress_cells"]) == \
+        ("malformed", None, None, 2 * R)
+    assert server.conns[1].received == b"" and server.events == alone.events
+    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    assert [f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2] == [PAD] * R + [DATA] * (2 * R) + [PAD] * R
+    assert reasons(certifier) == [(4, 2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert certifier.requests_released == 1 and certifier.watermark_lost == [] and log[1]["release"] == 0
+    released_elsewhere(name, LONG_LINES[name], True)
+
+
+#: what a sender puts behind an honest request on its connection, each with release headers of its own on it: a copy
+#: of the stream, and a second request to the first one's path
+BEHIND = {
+    "a copy of the stream": OWN_LINE + b"\r\n" + release_head(0, STREAM_RUN, 0) + b"transfer-encoding: chunked\r\n\r\n"
+                            + watermark_chunk(0, 1, (0,)) + WATERMARK_END,
+    "a request to the first one's path": http(b"{}", release_head(0, STREAM_RUN, 0)),
+}
+
+
+def never_released(request_bytes: bytes, watermark: bool = True) -> None:
+    """Beside an honest request, `request_bytes` on a connection of its own are refused at their `END`: the cells
+    before it are cut and signed, and the request has no `END`, no place in the release order and no byte for the
+    server; it fails as its client's (malformed), and the server sees exactly the run without that client."""
+    honest, n = cells(http(b"{}"), B), -(-len(request_bytes) // P)
+    assert 1 <= n <= STREAMED.ingress_cells
+    alone = streamed({1: [honest]}, watermark)[2]
+    certifier, clients, server = streamed({1: [honest, cells(request_bytes, B)]}, watermark)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert (log[2]["failed"], log[2]["release"], log[2]["ingress_end"], log[2]["ingress_cells"]) == \
+        ("malformed", None, None, n - 1)
+    assert server.conns[1].received == b"" and server.events == alone.events
+    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    kinds = [f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2]
+    assert kinds.count(DATA) == n - 1 and END not in kinds
+    assert [(o, why) for _, o, why in reasons(certifier)] == [(2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert certifier.requests_released == 1 and (log[1]["release"], log[1]["failed"]) == (0, None)
+    assert bytes(clients[0].shim().data) == b"r0" and certifier.watermark_lost == []
+
+
+@pytest.mark.parametrize("watermark", (True, False))
+@pytest.mark.parametrize("name", sorted(BEHIND))
+def test_a_second_request_behind_the_first_is_refused_at_its_end_and_no_server_gets_either(name, watermark):
+    """A connection whose bytes are an honest request and, past its body, a second one with release headers of its
+    sender's own: release 0 of the run, in bucket 0. Its first line is the honest request's, so no cell of it opens a
+    request to the watermark's path, and released whole it would give the server the second behind the first, its
+    headers as sent. It is read whole before its `END` is cut and refused there (`never_released`), with the watermark
+    or without. The first request alone is released."""
+    second = BEHIND[name]
+    both = http(b"{}") + second
+    assert not to_watermark(both) and to_watermark(second) == (name == "a copy of the stream")
+    assert release_of(second) == (0, STREAM_RUN, 0) and one_request(http(b"{}")) and not one_request(both)
+    never_released(both, watermark)
+
+
+def test_a_line_of_the_body_that_looks_like_a_request_line_is_the_bodys_and_is_released():
+    """An honest request whose body holds, on lines of their own, the stream's request line and release headers: its
+    head counts those bytes as its body, a server reads one request, and it is released whole with its place in the
+    release order, its body as the client sent it. One byte more than its length says is a second request's."""
+    inner = OWN_LINE + b"\r\n" + release_head(0, STREAM_RUN, 0) + b"\r\n"
+    one = http(b"{}\r\n" + inner)
+    certifier, _, server = streamed({1: [cells(one, B)]}, True)
+    (entry,) = certifier.log
+    assert (entry["failed"], entry["release"]) == (None, 0) and one_request(one)
+    assert server.conns[0].received == with_release(one, 0, STREAM_RUN, entry["ingress_end"])
+    assert server.conns[0].received.endswith(b"\r\n\r\n{}\r\n" + inner)
+    never_released(one + b"x")
+
+
+@pytest.mark.parametrize("name", sorted(NOT_ONE_REQUEST))
+def test_a_request_a_server_may_read_a_second_request_in_is_never_released(name):
+    """Each of the requests `release.one_request` refuses, on a connection of its own: a byte past the first
+    request's body, and each head servers end differently (`never_released`)."""
+    never_released(NOT_ONE_REQUEST[name])
+
+
+@pytest.mark.parametrize("name", sorted(name for name, data in ONE_REQUEST.items()
+                                        if 0 < len(data) <= STREAMED.ingress_cells * P))
+def test_bytes_that_are_at_most_one_request_are_released_whole(name):
+    """Each of the requests `release.one_request` takes that fits the schedule's ingress, and bytes that open no
+    request: released whole, with the release headers where they are a request."""
+    data = ONE_REQUEST[name]
+    certifier, _, server = streamed({1: [cells(data, B)]}, True)
+    (entry,) = certifier.log
+    assert (entry["failed"], entry["release"]) == (None, 0)
+    assert server.conns[0].received == with_release(data, 0, STREAM_RUN, entry["ingress_end"])
+
+
 def test_the_parameters_digest_binds_every_parameter():
     """Each integer parameter, the egress form and the response cap move the digest, as do the cell kinds and the
     reasons it binds; a schedule without a cap hashes neither it nor its reason, so its digest is the period check's
@@ -1106,8 +1500,8 @@ def test_the_parameters_digest_binds_every_parameter():
     moved += [dataclasses.replace(PARAMS, egress="id"), CAPPED, dataclasses.replace(CAPPED, max_tokens_cap=5)]
     digests = {PARAMS.digest, GATED.digest} | {p.digest for p in moved}
     assert len(digests) == len(moved) + 2 and all(len(d) == 64 for d in digests)
-    assert {*INTEGER_FIELDS, "egress", "max_tokens_cap", "lengths", "content"} == {
-        f.name for f in dataclasses.fields(WardenParams)}
+    assert {*INTEGER_FIELDS, "egress", "max_tokens_cap", "lengths", "content", "request_words", "head_offset",
+            "head_wait"} == {f.name for f in dataclasses.fields(WardenParams)}
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)
     assert WardenParams().egress == "id" and WardenParams().max_tokens_cap is None and REASONS[-2:] == ("format", "cap")
     assert GATED.reasons == REASONS[:-1] and CAPPED.reasons == REASONS

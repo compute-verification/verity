@@ -198,12 +198,12 @@ class Stack:
         if arm is None or arm.executor is None:
             yield None
             return
-        if executor is None:
-            raise RuntimeError(f"arm {arm.name!r} runs {arm.executor}, and this stack has no executor")
         spec = arm.spec if spec is None else spec
         bad = self.refusals(spec)
         if bad:
             raise Refused(bad, "linear stack")
+        if executor is None:        # below the refusals: a spec the stack refuses is `Refused` on every stack
+            raise RuntimeError(f"arm {arm.name!r} runs {arm.executor}, and this stack has no executor")
         self._pass = executor.begin(spec)
         try:
             yield self._pass
@@ -235,7 +235,8 @@ class Stack:
         if arm is None or arm.executor is None:
             return original(layer if weight is None else _WithWeight(layer, weight), x, bias)
         if self._pass is None:
-            raise RuntimeError(f"{arm.executor} is active outside a pass: open one (Stack.pass_) before the forward")
+            name = arm.executor if self.executor is None else self.executor.name
+            raise RuntimeError(f"{name} is active outside a pass: open one (Stack.pass_) before the forward")
         return self._pass.call(site, x, layer.weight if weight is None else weight, bias)
 
 

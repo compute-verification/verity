@@ -1,12 +1,14 @@
 """The record's leak guard's cost on a gate of a given size. The gate run is synthetic: its public files are a published
-gate bundle's (each repeated SCALE times) and its witness/ holds random files of the sizes the bundle's end.json records
-(each times SCALE; a witness file that is a public file's twin is its copy). The run dir is as a gate wrapper leaves it:
-out/bundle.tgz (that gate's public files) and a runner's resources.jsonl, with a hold beside it holding one file that
-carries a witness piece as hex, which the guard must refuse. The guard reads the gate as its fetch (a tarball), the run
-dir and the hold; each scale's time, peak memory and verdict go to stdout and OUT/cost.json, by counts and paths only.
+gate bundle's (each repeated SCALE times) and its witness/ holds random files of the sizes SIZES.json gives by name, as
+`{"cells.salts": N, ...}` (each times SCALE; a witness file that is a public file's twin is its copy). A gate's end
+doesn't say what its witness holds, so the sizes are the caller's: of a run's own witness/, read with its lane key.
+The run dir is as a gate wrapper leaves it: out/bundle.tgz (that gate's public files) and a runner's resources.jsonl,
+with a hold beside it holding one file that carries a witness piece as hex, which the guard must refuse. The guard
+reads the gate as its fetch (a tarball), the run dir and the hold; each scale's time, peak memory and verdict go to
+stdout and OUT/cost.json, by counts and paths only.
 
-    python3 leak_guard_cost.py BUNDLE.tgz --out DIR --scratch DIR [--scale K]... [--old GUARD.py --old-scale K
-        --old-cap S]
+    python3 leak_guard_cost.py BUNDLE.tgz --sizes SIZES.json --out DIR --scratch DIR [--scale K]...
+        [--old GUARD.py --old-scale K --old-cap S]
 
 --old runs another guard (one without --hold) on the same run dir, the planted file in out/, with --dry, for at most
 --old-cap seconds.
@@ -57,15 +59,14 @@ def _tar(path: Path, root: Path, members) -> int:
     return path.stat().st_size
 
 
-def build(bundle: Path, scale: int, w: Path) -> dict:
-    """The synthetic gate at `scale` under `w`: its fetch, the run dir and the hold."""
+def build(bundle: Path, sizes: dict[str, int], scale: int, w: Path) -> dict:
+    """The synthetic gate at `scale` under `w`, its witness files of `sizes`: its fetch, the run dir and the hold."""
     src = w / "gate"
     src.mkdir(parents=True)
     with tarfile.open(bundle) as t:
         t.extractall(src, filter="data")
     g = next(src.rglob("end.json")).parent
     public = sorted(p for p in g.rglob("*") if p.is_file())
-    sizes = json.loads((g / "end.json").read_text())["witness"]
     for p in public:
         _repeat(p, scale)
     twins = {p.name: p for p in public}
@@ -118,6 +119,7 @@ def timed(argv: list[str], logs: Path, cap: float | None = None) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("bundle", type=Path)
+    ap.add_argument("--sizes", type=Path, required=True, help="the witness files' sizes in bytes by name, as JSON")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--scratch", type=Path, required=True)
     ap.add_argument("--scale", type=int, action="append")
@@ -126,13 +128,14 @@ def main() -> int:
     ap.add_argument("--old-cap", type=float, default=1800)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
+    sizes = json.loads(a.sizes.read_text())
     rows = []
     doc = {"python": sys.version.split()[0], "numpy": importlib.util.find_spec("numpy") is not None,
            "cpus": os.cpu_count(), "scales": rows}
     for k in a.scale or [1]:
         w = a.scratch / f"x{k}"
         t0 = time.monotonic()
-        b = build(a.bundle, k, w)
+        b = build(a.bundle, sizes, k, w)
         row = {"scale": k, "build_s": round(time.monotonic() - t0, 1),
                **{x: b[x] for x in ("public_bytes", "witness_bytes", "bundle_bytes", "fetch_bytes", "run_bytes")}}
         if a.old is not None and k in a.old_scale:

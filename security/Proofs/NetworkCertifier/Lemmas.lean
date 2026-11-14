@@ -7,9 +7,8 @@ import Mathlib.Data.Sym.Sym2.Init
 /-!
 # The network certifier's lemmas
 
-The statements that are steps of the guarantees' proofs (`Definitions.NetworkCertifier.Guarantees`) rather than bounds or rules
-a document cites: the occupancy facts, Theorem 1(b)'s counting bound and the advice cap the clock-sync form
-specialises. Each is a `def G : Prop` under the guarantees' namespace, proved by `NetTiming.SecurityProofs.G`, so they
+The statements that are steps of the network certifier's proofs rather than bounds or rules a document cites: the
+occupancy facts, Theorem 1(b)'s counting bound and the advice cap. Each is a `def G : Prop` under the guarantees' namespace, proved by `NetTiming.SecurityProofs.G`, so they
 are audited with them and pinned by no record.
 -/
 

@@ -89,7 +89,12 @@ theorem saltOf_dataOfL (hy : y.length = saltLen) (i : ℕ) (x : Bool) : saltOf �
 
 theorem pathOf_dataOfL (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) (i : ℕ) (x : Bool) :
     pathOf s.length ⟨i, x, dataOfL y s k b⟩ = SamplingDeploy.pathMsg s := by
-  simp only [pathOf, dataOfL, List.append_assoc]
+  have hl : saltLen ≤ (dataOfL y s k b).length := by
+    simp only [dataOfL, List.length_append, hy]
+    omega
+  show (if saltLen ≤ (dataOfL y s k b).length then ((dataOfL y s k b).drop saltLen).take (64 * s.length) else [0]) = _
+  rw [ite_eq_left hl]
+  simp only [dataOfL, List.append_assoc]
   rw [List.drop_left' hy]
   exact List.take_left' (by rw [SamplingDeploy.pathMsg_length s hs])
 

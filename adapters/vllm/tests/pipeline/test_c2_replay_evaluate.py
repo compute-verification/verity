@@ -17,8 +17,10 @@ from typing import Any
 import pytest
 
 import verity_vllm.pipeline.c2_replay as C2
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import executed_prefix as EPX
+from verity_vllm.pipeline import serving_rows as SRW
 
 Record = dict[str, Any]
 Lines = Callable[[], list[str]]
@@ -102,6 +104,21 @@ def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: 
                     f"FAULTS {faults}")
 
 
+@pytest.mark.parametrize("binding", ["absent", None, {}])
+def test_a_commit_whose_binding_is_absent_null_or_empty_links_no_account_either(tmp_path: Path, said: Lines, binding: Any) -> None:
+    bare, s = sources(tmp_path, binding={}), sources(tmp_path)
+    if binding == "absent":
+        del s.row["commit"]["binding"]
+    else:
+        s.row["commit"]["binding"] = binding
+    arr = {"r0": 0, "r1": 1}
+    kw, facts = C2.executed_prefix_kw(bare, executed(), LINKAGE, arr, LABELS)
+    assert C2.executed_prefix_kw(s, executed(), LINKAGE, arr, LABELS) == (kw, facts)
+    assert all("a_r is not linked" in v["faults"][1] for v in kw["executed_prefix"].values())
+    first, second = said()
+    assert first == second and first.startswith("WARNING [delta] not-executed class -> sampled_replay(executed_prefix=): ")
+
+
 def test_with_no_early_stop_the_facts_pass_quietly_and_a_sample_of_k_takes_none(tmp_path: Path, said: Lines) -> None:
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     linked = {"coverage": LINKED["coverage"] | {"commit_account_link": LINKED["coverage"]["commit_account_link"] | {"served_by_request": {"r0": 4, "r1": 4}}}}
@@ -115,7 +132,7 @@ def test_with_no_early_stop_the_facts_pass_quietly_and_a_sample_of_k_takes_none(
 
 def test_a_replay_that_takes_no_executed_prefix_is_given_none_and_an_early_stop_is_warned_of(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, said: Lines) -> None:
-    monkeypatch.setattr(C2.SR, "sampled_replay", lambda progs, bmap, reader, weights, plan=False: {})
+    monkeypatch.setattr(SR, "sampled_replay", lambda progs, bmap, reader, weights, plan=False: {})
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     assert C2.executed_prefix_kw(sources(tmp_path, tokens=full), executed(full), LINKAGE, {"r0": 0, "r1": 1}, LABELS)[0] == {}
     assert said() == []
@@ -162,6 +179,28 @@ def test_a_disagreement_fails_the_commit_s_coverage_by_name(tmp_path: Path, said
     assert not reconciled(absent, None)["not_executed_reconciliation"]["ok"] and "coverage" not in absent.row["commit"]
 
 
+@pytest.mark.parametrize("binding", ["absent", None, {}, {"population": None}, {"population": {}}, {"population": {"manifest": None}},
+                                     {"population": {"manifest": {}}}, {"population": {"manifest": {"not_executed_by_rule": None}}}])
+@pytest.mark.parametrize("population", ["absent", None, {}, {"not_executed_by_rule": None}])
+def test_a_commit_or_a_population_that_names_no_class_is_reconciled_as_one_whose_class_is_null(
+        tmp_path: Path, said: Lines, binding: Any, population: Any) -> None:
+    null = sources(tmp_path)
+    null.row["commit"]["binding"]["population"]["manifest"]["not_executed_by_rule"] = None
+    want = reconciled(null, None)["not_executed_reconciliation"]
+    assert not want["ok"] and want["problems"]
+    s, sr = sources(tmp_path), Record()
+    if binding == "absent":
+        del s.row["commit"]["binding"]
+    else:
+        s.row["commit"]["binding"] = binding
+    if population != "absent":
+        sr["population"] = population
+    C2.reconcile(s, sr, {}, None, executed(), {"executed_prefix": {}})
+    assert sr["not_executed_reconciliation"] == want and s.row["commit"]["not_executed_reconciliation"] is sr["not_executed_reconciliation"]
+    first, second = said()
+    assert first == second and first.startswith("WARNING [delta] not-executed reconciliation (pair 0): DISAGREE ")
+
+
 def test_nothing_is_reconciled_without_the_class_or_without_an_early_stop(tmp_path: Path, said: Lines) -> None:
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     for s, kw, tokens in ((sources(tmp_path), {}, None), (sources(tmp_path, tokens=full), None, full)):
@@ -173,7 +212,7 @@ def test_nothing_is_reconciled_without_the_class_or_without_an_early_stop(tmp_pa
 def test_the_seed_is_the_prover_s_else_derived_from_the_challenge_and_the_run_root_else_from_the_run_root_alone() -> None:
     rc = SimpleNamespace(run_root=bytes(range(64)))
     assert C2.seed_of(SimpleNamespace(replay_seed=0, replay_challenge="c0ffee"), rc) == (0, RC.PROVER_SEED_SOURCE, "prover-chosen", None)
-    seed, source = C2.SR.challenge_seed("c0ffee", rc.run_root)
+    seed, source = SR.challenge_seed("c0ffee", rc.run_root)
     assert C2.seed_of(SimpleNamespace(replay_seed=None, replay_challenge="c0ffee"), rc) == (seed, source, "challenge", "c0ffee")
     assert C2.seed_of(SimpleNamespace(), rc) == (C2.CH.root_seed(rc.run_root), RC.ROOT_SEED_SOURCE, "run-root", None)
     assert {"prover-chosen", "challenge", "run-root"} <= set(RC.SEED_FORMS)
@@ -192,10 +231,10 @@ class Steps:
                                "r1": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=1}"}]}, "dir": "/programs/r1", "result": {"T": 3}}}
         self.progs: Record = {k: v["instances"] for k, v in self.loaded.items()}
         monkeypatch.setattr(C2, "programs_of_record", self.programs_of_record)
-        monkeypatch.setattr(C2.SR, "ProgramIndex", self.index)
-        monkeypatch.setattr(C2.SRW, "readers", self.readers)
-        monkeypatch.setattr(C2.SR, "boundary_linkage", self.boundary_linkage)
-        monkeypatch.setattr(C2.SR, "sampled_replay", self.sampled_replay)
+        monkeypatch.setattr(SR, "ProgramIndex", self.index)
+        monkeypatch.setattr(SRW, "readers", self.readers)
+        monkeypatch.setattr(SR, "boundary_linkage", self.boundary_linkage)
+        monkeypatch.setattr(SR, "sampled_replay", self.sampled_replay)
         monkeypatch.setattr(C2.SD, "touch", lambda com, reads: self.calls.append(("touch", com.name, reads)))
 
     def programs_of_record(self, s: C2.ReplaySources, labels: dict[str, str], *, definitions: bool = True) -> tuple[Record, dict[str, str]]:
@@ -284,7 +323,7 @@ def test_arrivals_the_engine_s_schedule_moved_are_the_replay_s_and_the_linkage_s
     arr = {"r0": 0, "r1": 2}
     assert steps.calls[2][6] == arr and steps.replays[0]["arrivals"] == arr
     assert [r["steps"] for r in steps.calls[3][3]] == [[0, 1, 2, 3], [2, 3]]
-    seed, source = C2.SR.challenge_seed("c0ffee", bytes(64))
+    seed, source = SR.challenge_seed("c0ffee", bytes(64))
     assert (steps.replays[0]["seed"], steps.replays[0]["seed_source"], steps.replays[0]["seed_challenge"]) == (seed, source, "c0ffee")
     assert sr["sample"]["seed_form"] == "challenge"
     assert said()[0] == "INFO [delta] replay/linkage arrivals follow the engine schedule of record: {'r0': 0, 'r1': 2} (declared {'r0': 0, 'r1': 1})"

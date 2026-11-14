@@ -33,7 +33,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
   `GeluRef{N,DT,APPROX}`, `SiluRefElem` / `SiluRef{N,DT}`, `SoftmaxRef{N,DT}`, `RoPERef{D,DT}` / `RoPEHeadsRef{NHEADS,D,DT}`,
   `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` / `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
   `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`, `LogSoftmaxRef{N,DT}`.
-  Profile-mode additions, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
+  Profile-mode addition, NOT in the reference digest: `RoPEHeadGptJ{D}` (one head of vLLM's
   `rotary_embedding(is_neox=False)`, proof-supported through the `RopeOut`/`RopeOutAdd` twins; superseded by `boolean_rope`'s v2).
 
 **Loader note.**  Decoding a descriptor that names a reference kind requires `import verity.definitions.registry.ref_prims` first
@@ -727,14 +727,6 @@ def RoPEHeadGptJ(B, S, x, cs):
     return _Coll(Array(S.D, BF16), Explicit(tuple(r for i in range(R) for r in (lo.refs[i], hi.refs[i]))))
 
 
-@composite("RoPEGptJ", 1, ["NHEADS", "D"],
-           lambda S: ((("x", Array(S.NHEADS, Array(S.D, BF16))), ("cs", Array(S.D, BF16))), Array(S.NHEADS, Array(S.D, BF16))),
-           conformance=_GPTJ_CONF)
-def RoPEGptJ(B, S, x, cs):
-    """`RoPEHeadGptJ_v1{D}` over NHEADS heads sharing one cache row (the `RoPE_v1` shape)."""
-    return B.batch(bind(RoPEHeadGptJ, D=S.D), x, cs, axes=(0, None))
-
-
 I64 = Value(64)
 
 
@@ -778,7 +770,7 @@ REF_COMPOSITES = [DotRef, LinearRef, RMSNormRef, LayerNormRef, GeluRefElem, Gelu
                   ReluRef, RoPEInterleavedRef, ArgmaxStepF32, ArgmaxRef]
 #: profile-mode kinds registered here (vLLM GPT-J rotary); NOT part of the reference vocabulary digest —
 #: they belong to the profile vocabulary (`b1.py` conventions, bf16 cache row, one rounding) and are proof-supported.
-PROFILE_ADDITIONS = [RoPEHeadGptJ, RoPEGptJ]
+PROFILE_ADDITIONS = [RoPEHeadGptJ]
 
 #: `prims.py` / `b1.py` primitives a reference body may call (shared with the profile-mode vocabulary; pinned in the digest).
 SHARED_PRIMITIVES = [P.Bf16ToF32, P.F32ToBf16Rn, P.F32Add, P.F32Mul, P.F32Fma, P.F32Div, P.Bf16Add, P.SelectF32, P.SelectBf16,

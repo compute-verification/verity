@@ -23,8 +23,9 @@ def main() -> None:
     out = ap.parse_args().out
     lines = tomllib.loads(LAYOUT.read_text(encoding="utf-8")).get("not_yet", [])
     w = kit.writer(out)
-    w.measurement("top/tree-not-yet-lines", len(lines), "lines", target=0)
-    w.measurement("top/tree-unowned-lines", sum(r.get("owner") == "unowned" for r in lines), "lines", target=0)
+    w.measurement("top/tree-not-yet-lines", len(lines), "lines", target=0, mark="measured")
+    w.measurement("top/tree-unowned-lines", sum(r.get("owner") == "unowned" for r in lines), "lines", target=0,
+                  mark="measured")
     w.validation("passed", "benchmarks/tree/not_yet.py", f"read {len(lines)} [[not_yet]] lines of tests/tree.toml")
 
 

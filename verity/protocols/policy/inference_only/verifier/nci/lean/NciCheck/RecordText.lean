@@ -26,7 +26,10 @@ names them, so that the check and the statement read one definition.
   `ingress`, with its wires, each fill some rows of some units, and no two fill one row (`inputsOf`). A row is
   declared to hold a registered read of a parameter, a table read of a table's root or of its domain id, or a port
   of an opening of a table (`Declared`); a row a wire or ingress fills, or nothing fills, is declared to hold none
-  of them.
+  of them. A table is an entry of `registered.tables`, over a registered parameter, or a history table
+  (`historiesOf`), over a parameter of its own name that is no registered parameter's. A history's initial state is
+  θ only where the record declares it as a registered parameter, with a table of `registered.tables` over it: a
+  check asks θ of the registered parameters alone.
 
 `Held` is why a check counts a row as θ: `Declared`'s reasons, an opening's with the pin of its reader. Whether a
 declared row is θ, and the pin, are the check's to decide, from the trusted input and the instance: nothing here
@@ -181,13 +184,15 @@ structure TableRead where
   units : Nat
 
 /-- A table opening: template `reader`'s units `[start, start + units)` each open a row of `table` by the key in input
-row `key`, filling input rows `ports`, with the verdict in output `verdict`. -/
+row `key`, filling input rows `ports`, with the verdict in output `verdict`; and, where the record declares it, the
+row each returns in output `row`. -/
 structure Opening where
   reader : String
   table : String
   key : String
   ports : List String
   verdict : String
+  row : Option String
   start : Nat
   units : Nat
 
@@ -204,8 +209,11 @@ def REGISTERED : List String := ["params", "tables", "reads", "roots", "openings
 def READ : List String := ["reader", "port", "param", "at", "radix", "base", "step"]
 def TABLE : List String := ["name", "param", "offset", "words", "rows"]
 def TABLE_READ : List String := ["reader", "port", "table", "of", "at", "units"]
+/-- An opening's keys; it may declare its `row` beside them. -/
 def OPENING : List String := ["reader", "table", "key", "ports", "verdict", "at", "units"]
 def INGRESS : List String := ["reader", "port", "at", "units", "step"]
+/-- A history table's keys; it may state its `capacity` beside them. -/
+def HISTORY : List String := ["name", "program", "writer", "out", "words", "runs"]
 
 /-- Whether `j` is an object of exactly the keys `ks`. -/
 def keyed (j : Json) (ks : List String) : Bool :=
@@ -261,6 +269,34 @@ def NO_REGISTERED : Json :=
   Json.mkObj [("params", Json.mkObj []), ("tables", Json.arr #[]), ("reads", Json.arr #[]), ("roots", Json.arr #[]),
     ("openings", Json.arr #[])]
 
+/-- Whether `reg` is an object of `registered`'s keys: the five of `REGISTERED`, and `values`, `histories` or both
+beside them. -/
+def registeredKeys (reg : Json) : Bool :=
+  keyed reg REGISTERED || keyed reg ("values" :: REGISTERED) || keyed reg ("histories" :: REGISTERED)
+    || keyed reg ("values" :: "histories" :: REGISTERED)
+
+/-- The names `reg` gives its registered parameters and its tables, as far as it states them: `params`' keys, and
+the `name` of each entry of `tables` that has one. -/
+def namesOf (reg : Json) : List String :=
+  (match valueAt reg "params" with
+    | .obj kvs => kvs.toArray.toList.map (·.1)
+    | _ => []) ++
+  (match valueAt reg "tables" with
+    | .arr ts => ts.toList.filterMap (stringAt · "name")
+    | _ => [])
+
+/-- **The record's history tables**, by name, in order: none where `reg` has no `histories`. Refused (none) unless
+`histories` is a list of objects of a history's keys (`HISTORY`, with or without `capacity`), each named by a
+string that is no registered parameter's name, no table's (`namesOf`) and no other history's. Nothing else of a
+history is read: its program, writer, rows and runs are not this reader's to hold. -/
+def historiesOf (reg : Json) : Option (List String) :=
+  let names : Option (List String) := match reg.getObjVal? "histories" with
+    | .error _ => some []
+    | .ok (.arr hs) => hs.toList.mapM fun h =>
+      if keyed h HISTORY || keyed h ("capacity" :: HISTORY) then stringAt h "name" else none
+    | .ok _ => none
+  names.filter fun ns => ns.eraseDups.length == ns.length && ns.all fun n => !(namesOf reg).contains n
+
 /-- The record's declarations of what fills its units' rows, each refused (`inputs`) unless it is well formed for
 the templates `ts` and the cuts of `W`, and unless no two declarations, the wires of `W` among them, fill one row.
 It reads `W`'s cuts and wires and nothing else of it: no template of its own and no order.
@@ -268,16 +304,23 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
 * `registered.params`, `{name: leaves}`, at least one leaf each;
 * `registered.tables`, `{name, param, offset, words, rows}`: `rows` rows of `words` leaves from leaf `offset` of a
   registered parameter, within it; names distinct;
+* `registered.histories` (`historiesOf`), where the record has some: each is a table of its own name over a
+  parameter of that name, which is no registered parameter's. A table read and an opening name it as they name an
+  entry of `tables`;
 * `registered.reads` (`readOf`): of an input row or an output of the reader, its cut as a wire's, its reader units
   among the reader's, and every source with its row's words within the parameter;
 * `registered.roots`, `{reader, port, table, of, at, units}`: units `[at, at + units)` of the reader read, in a row
   of 32 words, the table's root (`of` = `root`) or its domain id (`domain`);
 * `registered.openings`, `{reader, table, key, ports, verdict, at, units}`: units `[at, at + units)` of the reader
-  open a row of the table by the key in row `key`, filling `ports`, with the verdict in output `verdict`;
+  open a row of the table by the key in row `key`, filling `ports`, with the verdict in output `verdict`. One may
+  declare its `row` beside them, the output that returns the row opened: only where the reader is a table read's
+  shape, six input rows and two outputs, the row returned and then the verdict, and `row` is the first of the two, so
+  never the verdict's own output nor a row of a reader that returns more; nothing fills a row by it, and an opening
+  that declares none is read as before;
 * `ingress`, `{reader, port, at, units, step}`: units `[at, at + units)` of the reader read that row from outside. -/
 def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except String Inputs := do
   let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
-  if !(keyed reg REGISTERED || keyed reg ("values" :: REGISTERED)) then throw "inputs"
+  if !(registeredKeys reg && (historiesOf reg).isSome) then throw "inputs"
   let .obj pkv := valueAt reg "params" | throw "inputs"
   let params ← pkv.toArray.toList.mapM fun (p, v) => match nat? v with
     | some n => if n ≥ 1 then pure (p, n) else throw "inputs"
@@ -296,6 +339,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     let some leaves := params.lookup param | throw "inputs"
     if tables.any (·.name == name) || words < 1 || rows < 1 || offset + words * rows > leaves then throw "inputs"
     tables := tables ++ [({ name, param } : Table)]
+  tables := tables ++ ((historiesOf reg).getD []).map fun name => ({ name, param := name } : Table)
   let .arr readsJ := valueAt reg "reads" | throw "inputs"
   for r in readsJ do
     let w ← readOf r
@@ -332,11 +376,14 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
   let .arr openingsJ := valueAt reg "openings" | throw "inputs"
   let mut openings : List Opening := []
   for o in openingsJ do
-    if !keyed o OPENING then throw "inputs"
+    let declaresRow := keyed o ("row" :: OPENING)
+    if !(keyed o OPENING || declaresRow) then throw "inputs"
     let reader ← strIn o "reader"
     let table ← strIn o "table"
     let key ← strIn o "key"
     let out ← strIn o "verdict"
+    let row := stringAt o "row"
+    if declaresRow && row.isNone then throw "inputs"
     let .arr portsJ := valueAt o "ports" | throw "inputs"
     if portsJ.isEmpty then throw "inputs"
     let t ← tmplIn ts reader
@@ -345,6 +392,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     let _ ← rowIn t key
     if !(tables.any (·.name == table)) || (t.outs.lookup out).isNone then throw "inputs"
+    if row.any fun r => !(t.rows.length == 6 && t.outs.map (·.1) == [r, out]) then throw "inputs"
     let mut ports : List String := []
     for pj in portsJ do
       let .str p := pj | throw "inputs"
@@ -352,7 +400,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
       let k := W.cutsOf reader p
       decls := decls.push { w := rect reader p start units k, bits := 16 * words / k, fill := .opening openings.length }
       ports := ports ++ [p]
-    openings := openings ++ [({ reader, table, key, ports, verdict := out, start, units } : Opening)]
+    openings := openings ++ [({ reader, table, key, ports, verdict := out, row, start, units } : Opening)]
   let .arr ingressJ := (doc.getObjVal? "ingress").toOption.getD (Json.arr #[]) | throw "inputs"
   for g in ingressJ do
     if !keyed g INGRESS then throw "inputs"

@@ -22,6 +22,13 @@ public import Identity.Domains.Shared
 
 namespace Domains
 
+-- The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
+
+-- The network certifier's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+abbrev CERTIFIER_SPAN : String := "verity-network-certifier/span/v0"
+abbrev CERTIFIER_SPAN_PROTOCOL : String := "verity/certifier/span/v0"
+
 -- Not yet read from here: the commitments' own (`verity.ml.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
@@ -92,6 +99,7 @@ abbrev FIREWALL_COINS : String := "verity/firewall-coins/v0"
 abbrev FIREWALL_PUBLIC : String := "verity/firewall-public/v0"
 abbrev FIREWALL_RELEASE : String := "verity/firewall-release/v0"
 abbrev FIREWALL_TRANSCRIPT : String := "verity/firewall-transcript/v0"
+abbrev FLOCK_CIRCUIT_BINDING : String := "verity/flock-circuit/binding/v2"
 abbrev FLOCK_NETLIST_SIGMA : String := "verity/flock-netlist/sigma/v1"
 abbrev FLOCK_NETLIST : String := "verity/flock-netlist/v1"
 abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
@@ -123,9 +131,11 @@ abbrev POUS_STORAGE_PROFILE : String := "verity-pous/storage-profile/v1"
 abbrev POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512 : String :=
   "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 abbrev POUS_STREAMED_WIPE_BATCH_RECORDS : String := "verity-pous/streamed-wipe/batch-records/v1"
+abbrev POUS_STREAMED_WIPE_END : String := "verity-pous/streamed-wipe/end/v1"
 abbrev POUS_STREAMED_WIPE_LABEL : String := "verity-pous/streamed-wipe/label/v1"
-abbrev POUS_STREAMED_WIPE_SESSION : String := "verity-pous/streamed-wipe/session/v1"
-abbrev POUS_STREAMED_WIPE : String := "verity-pous/streamed-wipe/v1"
+abbrev POUS_STREAMED_WIPE_SESSION : String := "verity-pous/streamed-wipe/session/v2"
+abbrev POUS_STREAMED_WIPE_START : String := "verity-pous/streamed-wipe/start/v1"
+abbrev POUS_STREAMED_WIPE : String := "verity-pous/streamed-wipe/v2"
 abbrev POUS_W_COMMITMENT : String := "verity-pous/w-commitment/v2"
 abbrev MEMORY_CHALLENGER_RECORD : String := "verity/memory-challenger-record/v1"
 abbrev POUS_PERIOD_SESSION : String := "verity/pous-period/session/v1"
@@ -201,8 +211,10 @@ abbrev CERTIFIER_RECORDS : String := "verity-network-certifier/records/v2"
 abbrev CERTIFIER_REVEAL_REQUEST : String := "verity-network-certifier/reveal-request/v1"
 abbrev CERTIFIER_REVEAL_RESPONSE : String := "verity-network-certifier/reveal-response/v1"
 abbrev CERTIFIER_ROW_SHA512 : String := "verity-network-certifier/row-sha512/v1"
+abbrev CERTIFIER_SCAN_OK_ROW_SALT : String := "verity-network-certifier/scan-ok-row-salt/v1"
 abbrev CERTIFIER_SERVICE_SPEC : String := "verity-network-certifier/service-spec/v0"
 abbrev CERTIFIER_SESSION : String := "verity-network-certifier/session/v0"
+abbrev CERTIFIER_START : String := "verity-network-certifier/start/v2"
 abbrev CERTIFIER_STATEMENT : String := "verity-network-certifier/statement/v0"
 abbrev CERTIFIER_TRANSFER_REGISTRATION : String := "verity-network-certifier/transfer-registration/v1"
 abbrev CERTIFIER_TRANSFER : String := "verity-network-certifier/transfer/v1"

@@ -483,13 +483,15 @@ def test_remote_config(env, monkeypatch):
         load_remote(env / "c.toml")
 
 
-@pytest.mark.parametrize("place", ["artifacts.json", "artifacts.json"])
+@pytest.mark.parametrize("place", [Path("artifacts.json"), Path("fixtures", "artifacts.json")], ids=["at-the-root", "under-fixtures"])
 def test_the_registry_is_read_at_either_place_a_tree_holds_it(env, monkeypatch, place):
     """A run's research can be older or newer than the tree it reads: wherever the tree holds the registry, it finds the
-    repository from below, reads the map there and writes it back there."""
+    repository from below, reads the map there and writes it back there.  The place from before the registry moved is
+    spelled here in two parts, so a rewrite of the registry's path that left the store one place fails this test."""
     from research.store import fixtures as F  # noqa: PLC0415
-    from research.store.local import find_repo  # noqa: PLC0415
+    from research.store.local import REPLICA_MAPS, find_repo  # noqa: PLC0415
 
+    assert place in REPLICA_MAPS and len(set(REPLICA_MAPS)) == 2
     monkeypatch.delenv("RESEARCH_REPO")
     repo = env / "repo"
     (repo / place).parent.mkdir(parents=True, exist_ok=True)

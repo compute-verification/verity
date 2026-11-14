@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -124,6 +125,43 @@ def test_registration_refuses_partial_blocks_and_unknown_tiers():
                    receipt=RECEIPT, source="x")
 
 
+def test_a_name_is_registered_once_and_a_store_holds_one_kv_pool():
+    """A second region under a registered name and a second KV pool are refused, and the store is as it was: the same
+    layout and the same registration log."""
+    s = NodeMemory()
+    weights(s)
+    pool(s)
+    lay, reg = s.layout(), s.registration()
+    with pytest.raises(ValueError, match="region 'w' is already registered"):
+        weights(s, seed=1)
+    with pytest.raises(ValueError, match="holds one KV pool"):
+        s.register_kv_pool("kv2", [ArrayBacking(np.zeros(16 * BLOCK, np.uint8))], PageLayout(4, 8, 64),
+                           block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT)
+    assert (s.layout(), s.registration()) == (lay, reg)
+
+
+def test_in_place_encoding_is_of_whole_words_of_a_codec_whose_payload_fills_its_word():
+    """`encode_range` refuses a range that starts or ends inside a word, and any range of a region whose codec stores
+    less payload than its word holds, and leaves the bytes as they were.  A range of whole words is encoded, each word
+    under its own index, and no byte outside it changes."""
+
+    class HalfPayload(FakeCodec):
+        payload_bytes = WORD // 2
+
+    s = NodeMemory()
+    b, _ = weights(s)
+    half = ArrayBacking(np.zeros(BLOCK, np.uint8))
+    s.register("half", "hbm", "weights", half, block_bytes=BLOCK, codec=HalfPayload(), receipt=RECEIPT, source="x",
+               encode=False)
+    before = b.read(0, b.nbytes)
+    for name, offset, n in [("w", 1, WORD), ("w", WORD, WORD - 1), ("half", 0, BLOCK)]:
+        with pytest.raises(ValueError, match="whole words of a codec whose payload fills its word"):
+            s.encode_range(name, offset, n)
+    assert b.read(0, b.nbytes) == before and half.read(0, BLOCK) == bytes(BLOCK)
+    s.encode_range("w", WORD, 2 * WORD)
+    assert b.read(0, b.nbytes) == before[:WORD] + CODEC.encode(before[WORD:3 * WORD], 1) + before[3 * WORD:]
+
+
 def test_page_layouts_page_major_and_plane_major():
     s = NodeMemory()
     pool(s, layers=1, pages=3, slots=8, slot_bytes=64)
@@ -133,6 +171,52 @@ def test_page_layouts_page_major_and_plane_major():
     t = NodeMemory()
     pool(t, layers=1, pages=3, slots=8, slot_bytes=64, page_stride=512, plane_stride=3 * 512)
     assert t.pool.ids.tolist() == [[0, 1, 6, 7], [2, 3, 8, 9], [4, 5, 10, 11]]
+
+
+def test_a_plane_major_pages_blocks_each_hold_part_of_every_slot():
+    """HND (``slot_major`` off): every block of a plane covers all of its page's slots.  So an append to any slot
+    leaves the whole page dirty, and a pass reads the page's blocks only once its last slot is written.  The CPU
+    reference of a step's write is of slot-major pages: it refuses these and writes nothing."""
+    s = NodeMemory()
+    bs, _ = pool(s, layers=1, slot_major=False)
+    p = s.pool
+    assert (p.lo.tolist(), p.hi.tolist()) == ([0, 0, 0, 0], [8, 8, 8, 8])
+    s.kv_alloc([1])
+    s.kv_append([Append(1, 0, 7)], 0)
+    assert p.dirty[1].tolist() == [True] * 4 and not s.begin_pass([1]).blocks
+    s.end_pass()
+    s.kv_append([Append(1, 7, 1)], 1)
+    assert p.dirty[1].tolist() == [False] * 4 and [b.tolist() for b in s.begin_pass([1]).blocks] == [[4, 5, 6, 7]]
+    s.end_pass()
+    before, reg = bs[0].read(0, bs[0].nbytes), s.registration()
+    with pytest.raises(NotImplementedError, match="slot-major"):
+        s.kv_write_reference([Append(1, 0, 8)], kv_payload, step=2)
+    assert (bs[0].read(0, bs[0].nbytes), s.registration()) == (before, reg)
+
+
+def test_a_kv_pools_planes_are_whole_blocks_and_its_pages_lie_apart():
+    """A pool whose plane, page stride or plane stride is not whole blocks, or whose strides lay one page's plane over
+    another's, is refused before a layer is registered: the same layer then registers under a layout that is whole and
+    apart.  A layer one block short of the layout's last page is refused."""
+
+    def register(store: NodeMemory, layout: PageLayout, blocks: int = 16) -> None:
+        store.register_kv_pool("kv", [ArrayBacking(np.zeros(blocks * BLOCK, np.uint8))], layout, block_bytes=BLOCK,
+                               codec=CODEC, receipt=RECEIPT)
+
+    s = NodeMemory()
+    lay, reg = s.layout(), s.registration()
+    for ragged in (PageLayout(4, 8, 48, page_stride=1024, plane_stride=512),
+                   PageLayout(4, 8, 64, page_stride=1024 + WORD),
+                   PageLayout(4, 8, 64, page_stride=2048, plane_stride=512 + WORD)):
+        with pytest.raises(ValueError, match="is not whole 256-byte blocks"):
+            register(s, ragged, 32)
+    with pytest.raises(ValueError, match="the layout's pages overlap"):
+        register(s, PageLayout(4, 8, 64, page_stride=512))
+    assert (s.layout(), s.registration()) == (lay, reg)
+    register(s, PageLayout(4, 8, 64))
+    assert s.pool.ids.tolist() == [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15]]
+    with pytest.raises(ValueError, match="layer 0: 3840 bytes don't hold the pool's pages"):
+        register(NodeMemory(), PageLayout(4, 8, 64), 15)
 
 
 def test_kv_life_alloc_append_free_without_reencoding():
@@ -180,6 +264,28 @@ def test_a_page_freed_part_written_keeps_its_dirty_block_out():
     assert {4, 6} <= idle and not {5, 7} & idle
     s.kv_alloc([1])
     assert set(s.idle_blocks("kv/0").tolist()) >= {4, 6}
+
+
+def test_a_page_is_allocated_once_freed_once_and_written_inside_its_slots():
+    """Allocating an allocated page and freeing a free one are refused by the pages' numbers, and so is a step with an
+    append to a free page, past a page's last slot or before its first.  A refused call changes no page: none of its
+    other pages is allocated or freed, and none of the step's other appends is taken.  A page's first and last slots
+    are inside it."""
+    s = NodeMemory()
+    pool(s)
+    s.kv_alloc([1, 2])
+    with pytest.raises(RuntimeError, match=r"pages \[2\] are already allocated"):
+        s.kv_alloc([3, 2])
+    with pytest.raises(RuntimeError, match=r"pages \[0, 3\] are not allocated"):
+        s.kv_free([0, 1, 3])
+    p, reg = s.pool, s.registration()
+    for outside in (Append(3, 0, 1), Append(1, 6, 3), Append(1, -1, 2)):
+        with pytest.raises(RuntimeError, match="an append outside an allocated page's slots"):
+            s.kv_append([Append(2, 0, 4), outside], 0)
+    assert p.allocated.tolist() == [False, True, True, False] and s.registration() == reg
+    assert not p.dirty.any() and not p.fill.any()
+    s.kv_append([Append(1, 6, 2), Append(2, 0, 1)], 0)
+    assert p.fill.tolist() == [0, 8, 1, 0] and s.registration().count == reg.count + 1
 
 
 def _window(s: NodeMemory, sigma: bytes, steps):
@@ -277,6 +383,56 @@ def test_a_pass_outside_a_window_has_no_plan_and_no_receipts():
         ps.plan()
     with pytest.raises(RuntimeError, match="outside a window: it has no seed"):
         s.receipts(ps, 0)
+
+
+def test_windows_and_passes_open_and_close_in_turn():
+    """A window opens when none is open and no pass is, and closes when it is open and no pass is; a pass opens when
+    none is open and closes when one is.  A call out of turn is refused and changes nothing: the window's record is
+    the one of a store that was never asked out of turn."""
+
+    def store() -> NodeMemory:
+        s = NodeMemory(salt_key=bytes(32))
+        weights(s)
+        return s
+
+    s = store()
+    with pytest.raises(RuntimeError, match="no window is open"):
+        s.end_window()
+    with pytest.raises(RuntimeError, match="no pass is open"):
+        s.end_pass()
+    s.begin_window(SIGMA)
+    with pytest.raises(RuntimeError, match="a window is already open"):
+        s.begin_window(SIGMA2)
+    s.begin_pass()
+    with pytest.raises(RuntimeError, match="a pass is already open"):
+        s.begin_pass()
+    with pytest.raises(RuntimeError, match="a window begins between passes"):
+        s.begin_window(SIGMA2)
+    with pytest.raises(RuntimeError, match="a window ends between passes"):
+        s.end_window()
+    assert s.in_pass and s.window_open and s.window == 0
+    pc = s.end_pass()
+    w = s.end_window()
+    assert not s.in_pass and not s.window_open and w.passes == (pc,)
+    assert _window(store(), SIGMA, [((), None)]) == ([pc], w)
+
+
+def test_inside_a_window_a_pass_that_reads_no_block_is_refused():
+    """A store of a KV pool alone, its one live page not yet written.  Outside a window the pass reads nothing and
+    commits nothing.  Inside one it is refused and no pass is open; once the page is written, the window's first pass
+    is the one that reads it."""
+    s = NodeMemory()
+    pool(s)
+    s.kv_alloc([0])
+    assert not s.begin_pass([0]).blocks and s.end_pass() is None
+    s.begin_window(SIGMA)
+    with pytest.raises(ValueError, match="pass 0 reads no block"):
+        s.begin_pass([0])
+    assert not s.in_pass and s.window_open
+    s.kv_write_reference([Append(0, 0, 8)], kv_payload, step=0)
+    s.begin_pass([0])
+    pc = s.end_pass()
+    assert (pc.index, pc.blocks) == (0, 8) and s.end_window().passes == (pc,)
 
 
 def test_openings_verify_and_a_tampered_one_does_not():
@@ -456,6 +612,53 @@ def test_an_opening_inside_a_subtree_is_refused_by_the_drivers_leaf_check():
                  {"leaf": Opening(1, rb.hidden(leaf, salt), path)}, {"leaf_receipts": o.leaf_receipts[:-1]}):
         bad = o.__class__(**{**o.__dict__, **edge})
         assert not verify_opening(s.region("w"), pc, plan, bad, RECEIPT, CODEC.decode, None)
+
+
+def test_the_reference_refuses_an_opening_that_is_not_the_plans_and_a_plan_that_is_not_the_passs():
+    """Position 19 again, block 19 of ``w``, before the reference reads a receipt. It is refused under another block's
+    index, named for ``w2``, which is not its segment's region, and checked against ``w2``'s blocks, which do not hold
+    block 19. So is a plan that reads a block twice, a plan with two other positions swapped, the pass's own plan once
+    the pass names the swapped plan's digest, and a pass whose segments do not add up to the plan's length."""
+    s, _ = _aligned_store()
+    (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
+    (o,), plan, w = s.open([(0, 19)]), s.plan(0), s.region("w")
+    assert (o.block, o.region) == (19, "w") and verify_opening(w, pc, plan, o, RECEIPT, CODEC.decode, None)
+    for edge in ({"block": 20}, {"region": "w2"}):
+        assert not verify_opening(w, pc, plan, replace(o, **edge), RECEIPT, CODEC.decode, None), edge
+    assert not verify_opening(s.region("w2"), pc, plan, o, RECEIPT, CODEC.decode, None)
+    twice, swapped = plan.copy(), plan.copy()
+    twice[40] = twice[41]
+    swapped[[40, 41]] = swapped[[41, 40]]
+    assert twice[19] == swapped[19] == 19 and sorted(swapped.tolist()) == sorted(plan.tolist())
+    assert not verify_opening(w, pc, twice, o, RECEIPT, CODEC.decode, None)
+    assert not verify_opening(w, pc, swapped, o, RECEIPT, CODEC.decode, None)
+    other = rb.Plan.of(swapped.tolist(), s.layout().blocks).digest
+    assert other != pc.plan_digest == rb.Plan.of(plan.tolist(), s.layout().blocks).digest
+    assert not verify_opening(w, replace(pc, plan_digest=other), plan, o, RECEIPT, CODEC.decode, None)
+    last = pc.segments[-1]
+    short = replace(pc, segments=(*pc.segments[:-1], replace(last, count=last.count - 1)))
+    assert not verify_opening(w, short, plan, o, RECEIPT, CODEC.decode, None)
+
+
+def test_the_reference_holds_an_opening_to_the_plans_block_under_a_receipt_of_the_bytes_alone():
+    """A receipt need not read a block's index (`Receipt.binds` names what it reads beside the block). Under one that
+    reads the bytes alone, an opening that names another block of its region carries the same receipt, leaf and path,
+    and the reference refuses it by the plan: the block at the position is not the one it names."""
+
+    class OfTheBytes(FakeReceipt):
+        name = "fake-sha512-bytes"
+
+        def keyed(self, seed: bytes):
+            return lambda j, block, z=None: hashlib.sha512(seed + block + (z or b"")).digest()
+
+    s, rec = NodeMemory(salt_key=bytes(32)), OfTheBytes()
+    b = ArrayBacking(np.random.default_rng(5).integers(0, 256, 3 * BLOCK, np.uint8))
+    s.register("w", "hbm", "weights", b, block_bytes=BLOCK, codec=CODEC, receipt=rec, source="rng")
+    (pc,), _ = _window(s, SIGMA, [((), None)])
+    (o,), plan, w = s.open([(0, 1)]), s.plan(0), s.region("w")
+    assert int(plan[1]) == o.block and verify_opening(w, pc, plan, o, rec, CODEC.decode, None)
+    for block in sorted({0, 1, 2} - {o.block}):
+        assert not verify_opening(w, pc, plan, replace(o, block=block), rec, CODEC.decode, None), block
 
 
 @pytest.mark.parametrize("kind", rb.KINDS)

@@ -5,7 +5,7 @@ Checked today, against ``allowlists/p04_one_result.json``:
 * ``verdict-import``: the rule's import contract, "``check.verdict`` imports only ``check.result`` and
   ``properties.record``", the verdict codes ``check.codes`` they carry (core's until the layout move), and the typed stage
   records the rules read (``records``, which imports nothing else in ``verity_vllm``) (``VERDICT_ALLOWED``).  Any other integration import made by the modules ``check/verdict.py``
-  absorbs (``_imports.VERDICT_MODULES``: ``check.verdict``, ``check.commit_rules``, ``check.c2_rules``, ``check.gates``) is a violation.
+  absorbs (``_imports.VERDICT_MODULES``) is a violation.
   One entry per (importer, imported) module pair.
 * ``g-identifier``: a ``G1`` to ``G8`` token in an identifier (names, attributes, defs, classes, arguments, keywords).
 * ``g-literal``: a string literal in code (docstrings excepted) that starts with a ``G1`` to ``G8`` token, as in a
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import ast
 import re
-from functools import lru_cache
+from functools import cache
 
 from . import _imports as I
 from . import _ratchet as R
@@ -77,7 +77,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = verdict_violations()
     for p in R.library_files():

@@ -8,9 +8,14 @@
     kinds(instance, trusted, rows) -> [kind, …] | {"error": code}
     exported(instance, trusted, rows) -> [[slot, why the row is θ or None], …] | {"error": code}
     count(instance, trusted, limits) -> {"bool_gates", "complies", "failure"} | {"error": code}
+    block_rows(instance, trusted, limits) -> {"rows", "fresh", "complies", "failure"} | {"error": code}
+    chosen(instance, trusted) -> {"inputs", "inside", "theta", "cross_wires", "free", "ingress", "unregistered",
+                                  "openings", "chosen"} | {"error": code}
+    unit_rows(circuit file) -> the rows of one unit of its template | ValueError
 
 `Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
-of the summary counts; `RecordCount`'s gives the count's limits. Where the Lean reads each template's gates
+of the summary counts; `RecordCount`'s gives the count's limits, `RecordRows`'s the rows rule's and `RecordChosen`'s
+what the prover chose of an execution phase's input bits. Where the Lean reads each template's gates
 from the Program's own count and its rows from its Definition's parameters, takes one closed form per wire and per
 declaration, and multiplies through the slots, this file expands: each template's gates gate by gate
 (`nci_reference.activation_gates`), every unit's slot from the inference entries' digits, every input row of every
@@ -66,11 +71,16 @@ _nat = reference._nat
 FIELDS = ("program", "record", "gamma", "alpha", "pins")
 #: the count's limits: the gate table, and `(c, k, n)`
 LIMITS = ("table", "c", "k", "n")
+#: the rows rule's limits: the rows table, `Γ` and `α`
+ROWS_LIMITS = ("table", "gamma", "alpha")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
+#: a history table's keys; it may state its `capacity` beside them
+HISTORY = {"name", "program", "writer", "out", "words", "runs"}
 TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
+#: an opening's keys; it may declare its `row` beside them
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
 INGRESS = {"reader", "port", "at", "units", "step"}
 #: `Record.Kind`: what an input row of a unit is classed as, each row exactly one. `inside`: a wire fills it
@@ -386,19 +396,40 @@ def entries(w: dict):
         yield w["at"] + i // w["C"], w["c0"] + i % w["C"], source(w, i)
 
 
-def _objects(xs, keys: set[str]) -> list[dict]:
-    if not (isinstance(xs, list) and all(isinstance(x, dict) and set(x) == keys for x in xs)):
+def _objects(xs, keys: set[str], beside: frozenset[str] = frozenset()) -> list[dict]:
+    """`xs`, a list of objects of the keys `keys`, each with or without the keys `beside`; `inputs` otherwise."""
+    if not (isinstance(xs, list) and all(isinstance(x, dict) and set(x) - beside == keys for x in xs)):
         raise Malformed("inputs")
     return xs
+
+
+def histories_of(reg: dict) -> list[str]:
+    """The Lean's `RecordText.historiesOf`: the record's history tables, by name, in order; none where `registered`
+    has no `histories`. Refused (`inputs`) unless `histories` is a list of objects of a history's keys (`HISTORY`, with
+    or without `capacity`), each named by a string that is no registered parameter's name, no table's (the `name` of
+    each entry of `tables` that has one) and no other history's. Nothing else of a history is read."""
+    hs = reg.get("histories", [])
+    if not (isinstance(hs, list) and all(isinstance(h, dict) and set(h) - {"capacity"} == HISTORY
+                                         and isinstance(h["name"], str) for h in hs)):
+        raise Malformed("inputs")
+    names = [h["name"] for h in hs]
+    tables = reg["tables"] if isinstance(reg["tables"], list) else []
+    taken = {*reg["params"], *(t["name"] for t in tables if isinstance(t, dict) and isinstance(t.get("name"), str))}
+    if len(set(names)) != len(names) or taken & set(names):
+        raise Malformed("inputs")
+    return names
 
 
 class Inputs:
     """What the record declares to fill its units' input rows beside its wires, each declaration refused (`inputs`)
     unless it is well formed for the templates and cuts, and unless no row is filled twice (`fill`, row by row):
-    `params`, the registered parameters' leaves; `tables`, by name; `reads`, the registered reads; `roots`, the table
-    reads; `openings`; and `fill`, by `(template, port)`, each filled `(unit, row)` with what fills it:
-    `("wire", index)`, `("read", parameter)`, `("root", table, what it reads of it)`, `("opening", index)` or
-    `("ingress",)`."""
+    `params`, the registered parameters' leaves; `tables`, by name, each over its `param`: the entries of
+    `registered.tables`, then the history tables (`histories_of`), each over a parameter of its own name, which is no
+    registered parameter's; `reads`, the registered reads; `roots`, the table reads; `openings`, each with the `row`
+    it declares, if any: the first of its reader's two outputs, the second its verdict, where the reader has six input
+    rows (a table read's shape), by which nothing is filled; and `fill`, by
+    `(template, port)`, each filled `(unit, row)` with what fills it: `("wire", index)`, `("read", parameter)`,
+    `("root", table, what it reads of it)`, `("opening", index)` or `("ingress",)`."""
 
     def __init__(self, templates: list[Template], cuts: dict, wires: list[dict], rec: dict) -> None:
         by = {t.tid: t for t in templates}
@@ -427,10 +458,11 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "histories"}
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
+        histories = histories_of(reg)
         self.params = reg["params"]
         self.tables: dict[str, dict] = {}
         for t in _objects(reg["tables"], TABLE):
@@ -440,6 +472,7 @@ class Inputs:
                     and t["offset"] + t["words"] * t["rows"] <= self.params[t["param"]]):
                 raise Malformed("inputs")
             self.tables[t["name"]] = t
+        self.tables.update({name: {"name": name, "param": name} for name in histories})
         self.reads = [pattern(r, READ) for r in reg["reads"]]
         for r in self.reads:
             words, k = port(r["reader"], r["port"], outs=True)
@@ -461,14 +494,17 @@ class Inputs:
                 raise Malformed("inputs")
             put(r["reader"], r["port"], ((u, j) for u in range(r["at"], r["at"] + r["units"]) for j in range(k)),
                 ("root", r["table"], r["of"]))
-        self.openings = _objects(reg["openings"], OPENING)
+        self.openings = _objects(reg["openings"], OPENING, frozenset({"row"}))
         for i, o in enumerate(self.openings):
-            if not (all(isinstance(o[k], str) for k in ("reader", "table", "key", "verdict"))
+            if not (all(isinstance(o[k], str) for k in ("reader", "table", "key", "verdict", *({"row"} & set(o))))
                     and isinstance(o["ports"], list) and o["ports"] and all(isinstance(p, str) for p in o["ports"])):
                 raise Malformed("inputs")
             units(o["reader"], o["at"], o["units"])
             port(o["reader"], o["key"])
             if o["table"] not in self.tables or o["verdict"] not in dict(by[o["reader"]].outs):
+                raise Malformed("inputs")
+            t = by[o["reader"]]
+            if "row" in o and not (len(t.rows) == 6 and [q for q, _ in t.outs] == [o["row"], o["verdict"]]):
                 raise Malformed("inputs")
             for p in o["ports"]:
                 k = port(o["reader"], p)[1]
@@ -612,7 +648,11 @@ def expand(inst, tr) -> dict:
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
-    is_theta = {p: theta(T, x.params, p) for p in x.params}.__getitem__
+    thetas = {p: theta(T, x.params, p) for p in x.params}
+
+    def is_theta(p: str) -> bool:
+        """Whether `p` is a registered parameter that is θ: a history table's parameter, its own name, is none."""
+        return thetas.get(p, False)
     digests = {t.tid: closure_digest(desc, t.tid) for t in templates}
     pins = {tid: d if d in i["pins"] else None for tid, d in digests.items()}
 
@@ -736,3 +776,74 @@ def count(inst, tr, limits) -> dict:
     failure = ("gates" if max(bools) > limits["c"] else "fresh" if max(e["fresh"]) > limits["k"] else
                "count" if e["slots"] > limits["n"] else None)
     return {"bool_gates": max(bools), "complies": failure is None, "failure": failure}
+
+
+def block_rows(inst, tr, limits) -> dict:
+    """`RecordRows.checkDetail`: the rate rule in rows, a block's rows each unit's template's entry of the rows table
+    (`{template: rows of one unit}`, none of them 0), unit by unit: `size` where a block has more than `Γ` rows, else
+    `nci` where its fresh bits exceed `α` times its rows. `instance` or `params` where the limits are not as stated,
+    then the form's own refusal, then `rows-table` where the table lacks a template of the record."""
+    if not (isinstance(limits, dict) and all(k in limits for k in ROWS_LIMITS) and isinstance(limits["table"], dict)):
+        return {"error": "instance"}
+    table, gamma, alpha = (limits[k] for k in ROWS_LIMITS)
+    if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] != 0
+            and all(_nat(m) and m != 0 for m in table.values())):
+        return {"error": "params"}
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    if any(t.tid not in table for t in e["templates"]):
+        return {"error": "rows-table"}
+    rows = [0] * e["slots"]
+    for t in e["templates"]:
+        for u in range(t.units):
+            rows[e["slot"][t.tid][u]] += table[t.tid]
+    most, fresh = max(rows), max(e["fresh"])
+    failure = "size" if most > gamma else "nci" if fresh * alpha[1] > alpha[0] * most else None
+    return {"rows": most, "fresh": fresh, "complies": failure is None, "failure": failure}
+
+
+#: `Flock.WORD`: the columns of one word of a unit circuit's input rows
+WORD = 128
+
+
+def unit_rows(file: bytes) -> int:
+    """The rows of one unit of a circuit file's template, `Spot.FilePart.ofCircuit`'s `m`: META's `units_per_vu` times
+    the unit circuit's computed rows, `constPos - nIn + 1` with `nIn = min(inWords * WORD, constPos)`, each read from
+    the unit circuit's `flock-ir-unit/v2` header (`Flock.Net.parse`'s fields). It reads `m` from the header line and
+    holds none of the Lean parse's refusals (the Lean parses the whole file and refuses one that is no circuit of the
+    statement SPOT verifies), so the comparison runs only on files the Lean takes. `ValueError` where the file is not a
+    flat circuit file with such a header."""
+    head, meta, rest = (file.split(b"\n", 2) + [b"", b""])[:3]
+    if not head.startswith(b"flock-circuit ") or not meta.startswith(b"META "):
+        raise ValueError("not a flat flock-circuit file")
+    try:
+        upv = json.loads(meta[5:])["units_per_vu"]
+        at = rest.find(b"CIRCUIT unit ")
+        if not (isinstance(upv, int) and upv > 0 and (at == 0 or at > 0 and rest[at - 1:at] == b"\n")):
+            raise ValueError("no units_per_vu, or no unit circuit")
+        h = rest[at:].split(b"\n", 2)[1].decode().split()
+        if h[:1] != ["flock-ir-unit/v2"]:
+            raise ValueError("the unit circuit is not a flock-ir-unit/v2 circuit")
+        const_pos, at, in_words = int(h[3]), 5, 0
+        for _ in range(int(h[4])):
+            col, words, bits = int(h[at]), int(h[at + 1]), int(h[at + 2])
+            in_words, at = col + words, at + 3 + bits
+    except (KeyError, TypeError, IndexError) as e:
+        raise ValueError(f"no unit circuit header to read ({type(e).__name__})") from None
+    return upv * (const_pos - min(in_words * WORD, const_pos) + 1)
+
+
+def chosen(inst, tr) -> dict:
+    """`RecordChosen.checkDetail`: over the whole execution phase, every slot's units, the input bits (`inputs`), those
+    of each of `KINDS`, and the ones the prover chose (`chosen`): the rows no declaration fills (`free`), the registered
+    reads and table reads of a parameter that is not θ (`unregistered`) and the ports of an opening that is not held
+    (`openings`). Added up row by row over every unit, where the Lean takes one product a declaration. Or the form's
+    own refusal."""
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    total = {k: sum(e[k]) for k in ("inputs", *KINDS)}
+    return {**total, "chosen": total["free"] + total["unregistered"] + total["openings"]}

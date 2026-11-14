@@ -11,6 +11,7 @@ altered window's unit 0 doesn't open."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ import numpy as np
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import HEADER
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.commitments.windows import rows as SR
 
@@ -27,6 +28,7 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
 import a5_warden as AW  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 import test_warden_serve as tws  # noqa: E402
 
 N, REST = 8, 4
@@ -63,7 +65,7 @@ def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
         x, port = at[name], AW.LINKS[name][1]
         B, S = x.params.cell_bytes, x.params.lanes * x.params.slots
         assert dict(m.rows)["row"] == S * B // 2 and x.registration["words"] == S * B // 2
-        first = {AW.ws.INGRESS: 0, AW.ws.EGRESS: x.params.delay * x.params.slots}[name]
+        first = {RC.INGRESS: 0, RC.EGRESS: x.params.delay * x.params.slots}[name]
         assert x.units == WR.Units.span(x.connection, first, N) and x.reads == list(x.units.cells) and x.connection >= 1
         file = reads[m.key]["ports"][port]
         assert file == WR.port(x.head, x.opening.wiring, x.params, x.units, m.base) and file.get("reads_from", 0) == m.base
@@ -105,7 +107,7 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
     neg = AW.negatives(at, source, rec)
     assert all(x["refused"] for x in neg.values()), neg
     assert "doesn't sign its head" in neg["prover-root-under-the-wardens-certificate (check_registration)"]["why"]
-    x = at[AW.ws.INGRESS]
+    x = at[RC.INGRESS]
     foreign = neg["foreign-read-under-a-crossed-wiring (port)"]
     assert foreign["cell_of"] == foreign["opens"][0] != foreign["read"][0]
     assert "isn't the one the warden signed" in foreign["why"]
@@ -114,7 +116,7 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
     padded = neg["padding-slot-read-under-a-padded-wiring (port)"]
     assert padded["empty"] and "isn't the one the warden signed" in padded["why"]
     assert f"connection {x.connection} has" in neg["read-past-the-connections-cells (port)"]["why"]
-    e, pads = at[AW.ws.EGRESS], at[AW.ws.EGRESS].params.delay * at[AW.ws.EGRESS].params.slots
+    e, pads = at[RC.EGRESS], at[RC.EGRESS].params.delay * at[RC.EGRESS].params.slots
     pad = neg["statement-made-for-a-pad-in-a-data-cells-place (registered reads)"]
     assert pad["reads"][0] == [e.connection, 0] and pad["rows"][0] != pad["program_rows"][0]
     assert f"{e.units.value(e.head)}, not another value" in pad["why"]
@@ -124,17 +126,17 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
     assert swapped["reads"] == [[e.connection, pads + 1], [e.connection, pads]] and swapped["rows"] == swapped["program_rows"]
     assert "not another value" in swapped["why"] and swapped["units"] != e.units.digest().hex()
     assert len(neg) == 10
-    gates = AW.gate_rows(at[AW.ws.EGRESS])
-    lay, B = at[AW.ws.EGRESS].registration["layout"], at[AW.ws.EGRESS].params.cell_bytes
-    assert [g["bucket"] - lay["first_bucket"] for g in gates] == at[AW.ws.EGRESS].positions
-    assert [g["words"] for g in gates] == [[j * B // 2, (j + 1) * B // 2] for j in at[AW.ws.EGRESS].slots]
+    gates = AW.gate_rows(at[RC.EGRESS])
+    lay, B = at[RC.EGRESS].registration["layout"], at[RC.EGRESS].params.cell_bytes
+    assert [g["bucket"] - lay["first_bucket"] for g in gates] == at[RC.EGRESS].positions
+    assert [g["words"] for g in gates] == [[j * B // 2, (j + 1) * B // 2] for j in at[RC.EGRESS].slots]
 
 
 def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_slot(run):
     """What the two forged wirings would have the verifier read, had `port` placed them: connection q2's read on q1's
     cell, and a connection the warden never served on B zero bytes."""
     _tmp, at = run
-    x = at[AW.ws.INGRESS]
+    x = at[RC.INGRESS]
     B, w = x.params.cell_bytes, x.opening.wiring
     forged, (q2, k2), (q1, k1), (t, j) = AW.crossed(x)
     assert forged.digest() != x.head.wiring and q1 != q2
@@ -148,7 +150,7 @@ def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_s
 def test_the_altered_cell_is_committed_under_the_wardens_salt_and_doesnt_open(run):
     tmp, at = run
     mine, c, _rec, win = committed(tmp, at, "altered", altered=True)
-    m, x = AW.chunks(mine)[AW.ws.INGRESS], at[AW.ws.INGRESS]
+    m, x = AW.chunks(mine)[RC.INGRESS], at[RC.INGRESS]
     paths = SR.registered_header(win, next(e["k"] for e in win["members"] if e["name"] == m.key))["row"]["paths"]
     assert [WR.opens(x.dom, x.head.root, p, bc, bytes.fromhex(path))
             for p, bc, path in zip(x.positions, bcs(c, m, "row"), paths)] == [False] + [True] * (N - 1)
@@ -174,7 +176,7 @@ def test_a_statement_made_for_another_units_wiring_is_refused_by_the_registered_
         assert all(WR.opens(x.dom, x.head.root, p, bc, bytes.fromhex(path))
                    for p, bc, path in zip(header["positions"], bcs(c, m, port), header["paths"]))
         why = WR.refusal(files[m.key]["ports"][port], x.dom, header, bcs(c, m, port))
-        if name == AW.ws.INGRESS:
+        if name == RC.INGRESS:
             assert why is None
         else:
             assert why.startswith("registered reads:") and AW.MADE_FOR[made] in why, why
@@ -194,12 +196,14 @@ def test_salts_of_names_one_salt_for_each_row_of_a_port_of_the_window(run):
 
 
 def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_module(tmp_path, monkeypatch):
-    """This audit's process holds `network_traces`' `replay` under that name (its imports reach `active_replay`, which
-    imports it), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
-    path, so the case is written and no error stands in its place."""
+    """A process that holds `network_traces`' `replay` under that name holds a module with none of what a5 writes an
+    audit's case with. a5 reads the `replay.py` beside it by its path, so the case is written and no error stands in
+    its place."""
     import a5
-
-    theirs = AW.ws.ar.replay
+    monkeypatch.syspath_prepend(str(HERE.parent / "network_traces"))
+    spec = importlib.util.spec_from_file_location("replay", HERE.parent / "network_traces" / "replay.py")
+    theirs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(theirs)
     monkeypatch.setitem(sys.modules, "replay", theirs)
     assert Path(theirs.__file__).parent.name == "network_traces" and not hasattr(theirs, "params")
     RP = a5.own_replay()
