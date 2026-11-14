@@ -5,8 +5,8 @@ public import Poub.Flight
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
 
-At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) only
-for a node with none live: a second while one is live is refused and counted (`refused`), and draws nothing, so a retry
+At most one live registration a node (the red team's KB-4). `register` samples a codec seed (`Registration.register`) only
+for a node with none live: a second while one is live is refused and counted (`refused`), and samples nothing, so a retry
 never resamples. A session runs over its node's live registration, sampled by this registry, as its k-th, k its sessions so
 far: the epoch its coins are committed under (`coins.SessionCoins`, epoch k of the one challenger). A registration ends only
 when the verifier closes it (`close`), which counts each of its sessions as it stands: "accepted", the failure that
@@ -32,7 +32,7 @@ def Registry.SCHEMA : String := "verity/remote-bandwidth/registry/v0"
 def Registry.UNENDED : String := "unended"
 
 /-- A live registration's session: one this registry started, as it stands, with its windows in flight (`Flight`)
-and the windows a draw's openings coin covers (`Shared`), or the outcome it was read back with. -/
+and the windows a sample's openings coin covers (`Shared`), or the outcome it was read back with. -/
 inductive Registry.Run
   | running (s : Session.State) (inFlight perCoin : Nat)
   | read (outcome : String)
@@ -79,7 +79,7 @@ def sampled (r : Registry) (node : ByteArray) : Except String Nat := do
   let node ← node? node
   pure ((r.closed.filter (·.node == node)).size + if r.live.any (·.node == node) then 1 else 0)
 
-/-- `Registration.register`'s draw for a node with no live registration, which it makes live; refused, and counted, for
+/-- `Registration.register`'s sample for a node with no live registration, which it makes live; refused, and counted, for
 one with. -/
 def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec)
     (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
@@ -94,7 +94,7 @@ def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoo
   pure (some reg, { r with live := r.live.push { node, digest := reg.digest, drawn := some reg } })
 
 /-- The next session over the node's live registration, `Session.State.init` on its parameters and coins, as its k-th
-(`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a draw's openings coin
+(`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a sample's openings coin
 (`Shared`); refused for a registration that isn't its node's live one, sampled here. -/
 def session (r : Registry) (reg : Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (index : Option Int) (inFlight : Nat := 2) (perCoin : Nat := 1) : Option (Nat × Registry) := do

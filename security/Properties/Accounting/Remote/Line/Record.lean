@@ -41,8 +41,8 @@ import Mathlib.Topology.Sheaves.Init
 What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session, and the paced session
 (`Accounting.Remote.Held.Pace`) the memory model reads it as:
 
-* `Node`: what is fixed before the coins: the session's parameters, the windows a draw (`groups_per_coin`, g) and the
-  registration it runs on (so its windows, one group each, `Node.windows`, its draws, `Node.samples`, and its registered
+* `Node`: what is fixed before the coins: the session's parameters, the windows a sample (`groups_per_coin`, g) and the
+  registration it runs on (so its windows, one group each, `Node.windows`, its samples, `Node.samples`, and its registered
   blocks, `Node.blocks`), the groups a stretch, a block's bytes, the node's on-chip storage and memory in bytes, its
   rates (`Poub.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks`
   are those rates in the model's units: a tick is a nanosecond on the record's clock and a block is `blockBytes`. Its
@@ -53,15 +53,15 @@ What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session,
 * `Verified`: the Lean verifier accepts the record's session (`Shared.run` at the node's g from `State.init` at its
   parameters and registration, then `outcome`; at g = 1 `Session.run`, `Poub.Shared.run_one`).
 * `Record.summary`: the Lean verifier's record of the session (`Session.State.summary`), which is some summary
-  exactly where it accepts. The line reads it (`lineOf`, `lineOfRecordAt`): each window's passes, each draw's receipts
-  and draws (`sampleReceipts`: draw `c` is windows `c·g … (c + 1)·g − 1`, a window at g = 1), and the registered blocks;
-  `Record.groups` and `Record.receipts` are its groups, one a window, and its draws' receipts.
+  exactly where it accepts. The line reads it (`lineOf`, `lineOfRecordAt`): each window's passes, each sample's receipts
+  and samples (`sampleReceipts`: sample `c` is windows `c·g … (c + 1)·g − 1`, a window at g = 1), and the registered blocks;
+  `Record.groups` and `Record.receipts` are its groups, one a window, and its samples' receipts.
 * `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
-  first event that throws; `Record.receiptsAt` its windows' receipts and `Record.sampleReceiptsAt` its draws'.
-* `recordSample`: the record's opening draw (`Accounting.Remote.Draw.Run`), one draw for each of the session's
-  (`Node.samples`), draw `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
+  first event that throws; `Record.receiptsAt` its windows' receipts and `Record.sampleReceiptsAt` its samples'.
+* `recordSample`: the record's opening sample (`Accounting.Remote.Draw.Run`), one sample for each of the session's
+  (`Node.samples`), sample `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
   (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
-  that `Live`, a draw's size fixed by the coins before it, can hold of a session whose acceptance turns on later coins.
+  that `Live`, a sample's size fixed by the coins before it, can hold of a session whose acceptance turns on later coins.
 * `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Draw.Committed`):
   holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordSample`;
   `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
@@ -83,9 +83,9 @@ open Accounting.Remote.Held _root_.Poub.Line
 
 /-- The node and the session's structure the line reads, fixed before the coins. -/
 structure Node where
-  /-- the session's parameters: its windows, one group each, and the receipts each draw draws -/
+  /-- the session's parameters: its windows, one group each, and the receipts each sample samples -/
   params : Poub.Session.Params
-  /-- the windows a draw, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one openings coin; at most 1,
+  /-- the windows a sample, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one openings coin; at most 1,
   one a window -/
   groupsPerCoin : ℕ
   /-- the registration the session runs on, its registered blocks among it -/
@@ -103,7 +103,7 @@ structure Node where
 /-- The session's windows, one group each: its parameters'. -/
 def Node.windows (n : Node) : ℕ := n.params.windows
 
-/-- The session's draws: its windows `g` a draw, `⌈W/g⌉` of them (`Poub.Line.samplesOf`), one a window at
+/-- The session's samples: its windows `g` a sample, `⌈W/g⌉` of them (`Poub.Line.samplesOf`), one a window at
 g ≤ 1. -/
 def Node.samples (n : Node) : ℕ :=
   if n.groupsPerCoin ≤ 1 then n.windows else (n.windows + n.groupsPerCoin - 1) / n.groupsPerCoin
@@ -119,7 +119,7 @@ structure Record where
   events : Array Poub.Session.Event
   seen : Array Seen
 
-/-- The record's session through the Lean verifier, at the node's parameters, windows a draw and registration. -/
+/-- The record's session through the Lean verifier, at the node's parameters, windows a sample and registration. -/
 def Record.run (node : Node) (r : Record) :
     Except String (Array Poub.Session.Result × Poub.Session.State) :=
   _root_.Poub.Shared.run node.groupsPerCoin
@@ -152,7 +152,7 @@ where `Verified` does. -/
 def ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) : Trace Ω :=
   { overBlocks T node.blocks with accepts := fun ω => Verified node (rec ω) }
 
-/-- The record's line on the node: `lineOfRecordAt` at the node's windows a draw, the Lean verifier's record of the
+/-- The record's line on the node: `lineOfRecordAt` at the node's windows a sample, the Lean verifier's record of the
 session and the node's `samples`, or refused where it gives none. -/
 def lineOf (node : Node) (r : Record) : Except String Line :=
   match r.summary node with
@@ -168,19 +168,19 @@ def Record.groups (node : Node) (r : Record) : Array Group :=
     | .error _ => #[]
   | none => #[]
 
-/-- Each draw's receipts among windows `ws` sampled `g` windows a coin: each window's `Σ lengths_t` at g ≤ 1, and above
-it draw `c`'s windows' summed (`Poub.Line.samplesOf`). -/
+/-- Each sample's receipts among windows `ws` sampled `g` windows a coin: each window's `Σ lengths_t` at g ≤ 1, and above
+it sample `c`'s windows' summed (`Poub.Line.samplesOf`). -/
 def sampleReceipts (g : ℕ) (ws : Array Poub.Session.WindowSummary) : Array ℕ :=
   if g ≤ 1 then ws.map _root_.Poub.Line.receipts else (_root_.Poub.Line.samplesOf g ws).map (·.1)
 
-/-- `U_c`, each draw's receipts in the Lean verifier's record of the session (a window's at one window a coin), none
+/-- `U_c`, each sample's receipts in the Lean verifier's record of the session (a window's at one window a coin), none
 where it has none. -/
 def Record.receipts (node : Node) (r : Record) : Array ℕ :=
   match r.summary node with
   | some sm => sampleReceipts node.groupsPerCoin sm.windows
   | none => #[]
 
-/-- One event through the Lean verifier at `g` windows a draw: the state it leaves, or the state it was given where it
+/-- One event through the Lean verifier at `g` windows a sample: the state it leaves, or the state it was given where it
 throws. -/
 def reachStep (g : ℕ) (s : Poub.Session.State) (e : Poub.Session.Event) :
     Except Poub.Session.State Poub.Session.State :=
@@ -201,19 +201,19 @@ def Record.reached (node : Node) (r : Record) : Poub.Session.State :=
 def Record.receiptsAt (node : Node) (r : Record) (t : ℕ) : ℕ :=
   ((r.reached node).windows[t]?.map Poub.Session.Win.receipts).getD 0
 
-/-- Draw `c`'s receipts in the state the record's session reaches: window `c`'s at g ≤ 1 (`receiptsAt`), and above it
+/-- Sample `c`'s receipts in the state the record's session reaches: window `c`'s at g ≤ 1 (`receiptsAt`), and above it
 those of its windows `c·g … (c + 1)·g − 1` the state has, summed. -/
 def Record.sampleReceiptsAt (node : Node) (r : Record) (c : ℕ) : ℕ :=
   if node.groupsPerCoin ≤ 1 then r.receiptsAt node c
   else ((r.reached node).windows.extract (c * node.groupsPerCoin) (c * node.groupsPerCoin + node.groupsPerCoin)).foldl
     (fun a w => a + w.receipts) 0
 
-/-- `m`, the most receipts a draw the line reads has: `receive` rejects a pass that would take its window's receipts to
-`RECEIPT_LIMIT` (`Properties.Poub.ReceiptsBelowLimit`), and the line refuses a draw of `g` > 1 windows with
+/-- `m`, the most receipts a sample the line reads has: `receive` rejects a pass that would take its window's receipts to
+`RECEIPT_LIMIT` (`Properties.Poub.ReceiptsBelowLimit`), and the line refuses a sample of `g` > 1 windows with
 `RECEIPT_LIMIT` or more (`Poub.Line.ofSummaryAt`). -/
 def receiptMax : ℕ := Poub.Session.RECEIPT_LIMIT - 1
 
-/-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
+/-- **The record's opening sample**: the session's samples, sample `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
 def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
@@ -222,8 +222,8 @@ def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Dr
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
 
-/-- **The records' opening draw, read through the coin commitment**: holding commitment `c`, the prover's record at
-`ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordSample`), with the correct receipts
+/-- **The records' opening sample, read through the coin commitment**: holding commitment `c`, the prover's record at
+`ω` is `recs c ω`, and the session it plays is that record's opening sample (`recordSample`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
     (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)

@@ -7,11 +7,11 @@ public import Proofs.Properties.Accounting.Remote.Frozen
 # `Live` under the release order (`LiveUnder`)
 
 `liveUnder`: on coins that agree below `W + t`, and events that the release order (`ReleaseOrder`) fixes up to window
-`t`'s draw, two sessions draw window `t` at the same event, from states that differ only in their coins
+`t`'s sample, two sessions sample window `t` at the same event, from states that differ only in their coins
 (`OpeningsUnreadUntilSampled`), and that event is `close t`, which keeps the window's record and the appends
 (`sample_keeps`). After it, `RecordKeptAfterSample` keeps the record and the openable receipts on each side.
 
-The first event that draws window `t` on the first coins (`exists_first`) is the same on the second (`take_agree`, by
+The first event that samples window `t` on the first coins (`exists_first`) is the same on the second (`take_agree`, by
 induction with `ReleaseOrder`), and the second draws it there too: were it unsampled, `OpeningsUnreadUntilSampled` back
 from the second coins would leave it unsampled on the first. Nor does the second draw it earlier, by the same lemma
 from the first coins. Runs are taken over lists (`runL`), split by `runL_append`.
@@ -113,7 +113,7 @@ theorem run_extract (s : State) (a : Array Event) (k : Nat) : run s (a.extract 0
 theorem run_toArray (s : State) (l : List Event) : run s l.toArray = runL s l := by
   rw [run_runL, List.toList_toArray]
 
-/-! ## The step that draws a window -/
+/-! ## The step that samples a window -/
 
 theorem no_sample {ws ws' : Array Win} {t : Nat} (k : Keep ws ws') (h0 : dr ws t = none) (h1 : (dr ws' t).isSome) :
     False := by
@@ -141,7 +141,7 @@ theorem record_of {s s' : State} (hd : s'.digest = s.digest) (h : ∀ u : Nat, S
   obtain ⟨-, b', -, -⟩ := h (t - 1)
   simp only [State.record, a, b, c, d, b', hd]
 
-/-- `close` keeps the record of the window it draws, and the appends. -/
+/-- `close` keeps the record of the window it samples, and the appends. -/
 theorem close_keeps {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : State} (he : close s t' now = .ok (r, s₁))
     {t : Nat} (h0 : dr s.windows t = none) (h1 : (dr s₁.windows t).isSome) :
     s₁.record t = s.record t ∧ s₁.appends = s.appends := by
@@ -165,7 +165,7 @@ theorem close_keeps {s : State} {t' : Int} {now : Nat} {r : Result} {s₁ : Stat
       exact sameW_trans (sameW_modify _ _ _ (by intro; exact ⟨rfl, rfl, rfl, rfl⟩) v)
         (sameW_modify _ _ _ (by intro; exact ⟨rfl, rfl, rfl, rfl⟩) v)
 
-/-- The event that draws window `t` is `close t`, so it keeps the window's record and the appends. -/
+/-- The event that samples window `t` is `close t`, so it keeps the window's record and the appends. -/
 theorem sample_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : step s e = .ok (r, s₁)) {t : Nat}
     (h0 : sampledOf s t = none) (h1 : (sampledOf s₁ t).isSome) :
     s₁.record t = s.record t ∧ s₁.appends = s.appends := by
@@ -178,7 +178,7 @@ theorem sample_keeps {s : State} {e : Event} {r : Result} {s₁ : State} (he : s
   | close t' now => exact close_keeps he h0 h1
   | verify t' openings => injection he with he; exact (no_sample (keep_verify he) h0 h1).elim
 
-/-! ## Two sessions up to the draw -/
+/-! ## Two sessions up to the sample -/
 
 theorem take_split (l : List Event) {a b : Nat} (hab : a ≤ b) : l.take b = l.take a ++ (l.take b).drop a := by
   have := List.take_append_drop a (l.take b)
@@ -205,7 +205,7 @@ theorem exists_first {Q : Nat → Prop} (h0 : ¬Q 0) :
       · rw [show j = k + 1 by omega] at hqj
         exact ⟨k, Nat.le_refl _, hqj, fun i hi hqi => hq ⟨i, hi, hqi⟩⟩
 
-/-- Up to window `t`'s draw on `coins`, the events on `coins'` are the same. -/
+/-- Up to window `t`'s sample on `coins`, the events on `coins'` are the same. -/
 theorem take_agree (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Event) (hD : ReleaseOrder params reg appendCoins notBeforeNs D)
     {coins coins' : Array ByteArray} {t : Nat} (hag : ∀ j, j < params.windows + t → coins'[j]! = coins[j]!) :

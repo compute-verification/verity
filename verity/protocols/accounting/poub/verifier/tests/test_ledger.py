@@ -243,7 +243,7 @@ def test_the_coin_commitments_hiding_is_charged(store) -> None:
 
 
 def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
-    """`binding_over` is draws·√(receipts·s)·q/2^256.5 with √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`: the
+    """`binding_over` is samples·√(receipts·s)·q/2^256.5 with √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`: the
     root it takes is at least the true one and less than one step above it."""
     step = Fraction(1, 2 ** ledger.BINDING_ROOT_BITS)
     for draws, held, samples, queries in ((1, 1, 1, 0), (7, 10 ** 9, 33_273, 2 ** 80), (3, 2, 5, 12_345)):

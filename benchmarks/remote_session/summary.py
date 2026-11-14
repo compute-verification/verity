@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def miss(units: int, bad: int, s: int) -> float:
-    """The chance that s distinct draws of `units` miss all `bad` of them."""
+    """The chance that s distinct samples of `units` miss all `bad` of them."""
     if bad > units - min(s, units):
         return 0.0
     return math.exp(sum(math.log1p(-bad / (units - k)) for k in range(min(s, units))))
