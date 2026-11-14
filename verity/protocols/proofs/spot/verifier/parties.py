@@ -516,7 +516,7 @@ class Verifier(_Verifier):
         return self._start(params, _params)
 
     def _take(self, m: Message) -> str | None:
-        if m.type != "ZkServer":
+        if m.type != "Firewall":
             return super()._take(m)
         if self.zk_server is not None:
             return "out-of-phase"
