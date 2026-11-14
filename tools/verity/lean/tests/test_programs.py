@@ -127,10 +127,10 @@ def test_the_key_moves_with_the_source_and_any_file_of_the_toolchain_and_needs_b
     (tc / "lib" / "lean" / "Init.olean").write_text("other")
     assert C.program_key(pkg, src)[0] != key, "a module of the toolchain"
     (tc / "bin" / "leanc").unlink()
-    assert C.program_key(pkg, src) is None, "no `leanc`: no key"
-    monkeypatch.setattr(C, "elan_toolchain", lambda p: None)
-    assert C.program_key(pkg, src) is None, "no toolchain `elan` names: no key"
-    assert C.kept_program(pkg, src) is None, "and no kept program: the caller compiles its own"
+    assert C.program_key(pkg, src) == f"the toolchain {tc} has no bin/leanc", "no `leanc`: no key"
+    monkeypatch.setattr(C, "elan_toolchain", lambda p: "`elan which lean` named no toolchain")
+    assert C.program_key(pkg, src) == "`elan which lean` named no toolchain", "no toolchain `elan` names: no key"
+    assert C.kept_program(pkg, src) == "`elan which lean` named no toolchain", "the caller compiles its own"
 
 
 def test_the_compile_reads_none_of_the_caller_s_environment(tmp_path, monkeypatch):
@@ -146,7 +146,7 @@ def test_no_program_is_kept_where_a_build_could_write_the_cache(tmp_path, monkey
     monkeypatch.setattr(C, "sandboxed", lambda: False)
     hello(tmp_path, "a")
     assert C.sandbox_reads_only(tmp_path / "programs") is False
-    assert C.kept_program(tmp_path, tmp_path / "Hello.lean") is None
+    assert "could have written it" in C.kept_program(tmp_path, tmp_path / "Hello.lean")
 
 
 def test_eviction_keeps_the_most_recently_taken_and_every_program_a_process_holds(tmp_path, monkeypatch):
@@ -158,6 +158,6 @@ def test_eviction_keeps_the_most_recently_taken_and_every_program_a_process_hold
     (tmp_path / "unread-0").write_text("another source's")
     with open(tmp_path / ".facts-1.lock", "a") as held:
         fcntl.flock(held, fcntl.LOCK_SH)
-        C.evict("facts")
+        assert C.evict("facts") == ["facts-1"]
     assert sorted(p.name for p in tmp_path.iterdir() if not p.name.startswith(".")) == [
         "facts-1", "facts-5", "facts-6", "facts-7", "unread-0"]

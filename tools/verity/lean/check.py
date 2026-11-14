@@ -986,7 +986,9 @@ def program(pkg: Path, source: str) -> str:
         lock = _programs_locks.setdefault(key, threading.Lock())
     with lock:
         if key not in _programs or not _programs[key][0].exists():
-            if (exe := kept_program(pkg, src)) is None:
+            if isinstance(exe := kept_program(pkg, src), str):
+                if PROGRAMS is not None:
+                    print(f"program cache: {exe}; {source} is compiled for this process alone", flush=True)
                 d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
                 atexit.register(shutil.rmtree, d, True)
                 exe = d / stem.lower()
@@ -1010,15 +1012,17 @@ LEANC_FLAGS = ["-O3", "-DNDEBUG", "-rdynamic"]
 PROGRAM_SCHEMA = "lean-program/v1"
 
 
-def program_key(pkg: Path, src: Path) -> tuple[str, Path] | None:
-    """(The key `kept_program` keeps the program ``src`` under, the toolchain directory it compiles with), or None when
-    the key can't be computed. The key is a digest of everything the compile reads: ``src``'s bytes (it imports the
-    toolchain's modules alone, the only ones the compile's search path holds), the toolchain `elan` resolves for ``pkg``
-    (its real directory and the path, mode, size, mtime and inode of every file and link in it: the compiler, the C
-    compiler and linker it brings, their sysroot and the modules), the flags (`PROGRAM_SCHEMA`, `LEANC_FLAGS`) and the
-    environment (`program_env`, the same for every caller)."""
-    if (tc := elan_toolchain(pkg)) is None or not (tc / "bin" / "leanc").is_file():
-        return None
+def program_key(pkg: Path, src: Path) -> tuple[str, Path] | str:
+    """(The key `kept_program` keeps the program ``src`` under, the toolchain directory it compiles with), or why the key
+    can't be computed. The key is a digest of everything the compile reads: ``src``'s bytes (it imports the toolchain's
+    modules alone, the only ones the compile's search path holds), the toolchain `elan` resolves for ``pkg`` (its real
+    directory and the path, mode, size, mtime and inode of every file and link in it: the compiler, the C compiler and
+    linker it brings, their sysroot and the modules), the flags (`PROGRAM_SCHEMA`, `LEANC_FLAGS`) and the environment
+    (`program_env`, the same for every caller)."""
+    if isinstance(tc := elan_toolchain(pkg), str):
+        return tc
+    if not (tc / "bin" / "leanc").is_file():
+        return f"the toolchain {tc} has no bin/leanc"
     try:
         h = hashlib.sha256(json.dumps({"schema": PROGRAM_SCHEMA, "source": sha256(src), "toolchain": str(tc),
                                        "leanc": LEANC_FLAGS, "env": program_env(tc)}).encode())
@@ -1030,20 +1034,22 @@ def program_key(pkg: Path, src: Path) -> tuple[str, Path] | None:
                 link = os.readlink(p) if os.path.islink(p) else ""
                 h.update(f"{os.path.relpath(p, tc)}\0{st.st_mode}\0{st.st_size}\0{st.st_mtime_ns}\0{st.st_ino}\0{link}\n"
                          .encode())
-    except OSError:
-        return None
+    except OSError as e:
+        return f"the toolchain {tc} changed while it was read: {e}"
     return h.hexdigest(), tc
 
 
-def elan_toolchain(pkg: Path) -> Path | None:
+def elan_toolchain(pkg: Path) -> Path | str:
     """The real directory of the toolchain `lake env` runs in ``pkg`` (`elan which lean`: the package's `lean-toolchain`
-    or an override), or None when `elan` doesn't name one."""
+    or an override), or why `elan` names none."""
     try:
         r = subprocess.run(["elan", "which", "lean"], cwd=pkg, env=lake_env(), capture_output=True, text=True,
                            timeout=60)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    return Path(r.stdout.strip()).resolve().parents[1] if r.returncode == 0 and r.stdout.strip() else None
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"`elan which lean` didn't run: {e}"
+    if r.returncode or not r.stdout.strip():
+        return f"`elan which lean` named no toolchain (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}"
+    return Path(r.stdout.strip()).resolve().parents[1]
 
 
 def program_env(tc: Path) -> dict[str, str]:
@@ -1052,14 +1058,18 @@ def program_env(tc: Path) -> dict[str, str]:
     return {"PATH": str(tc / "bin")}
 
 
-def kept_program(pkg: Path, src: Path) -> Path | None:
+def kept_program(pkg: Path, src: Path) -> Path | str:
     """The program ``src`` from `PROGRAMS` under its `program_key`, compiled into it first when it isn't there: one
     process compiles while the others wait on its `.compile` lock, and the program appears whole, renamed into place.
-    This process holds the program's `.lock` shared until it exits, and `evict` removes none that is held. None when there
-    is no `PROGRAMS`, its key can't be computed, or a build could write it (`sandbox_reads_only`): the caller then
+    This process holds the program's `.lock` shared until it exits, and `evict` removes none that is held. Why not, when
+    there is no `PROGRAMS`, its key can't be computed, or a build could write it (`sandbox_reads_only`): the caller then
     compiles its own. Raises RuntimeError when it does not compile."""
-    if PROGRAMS is None or not sandbox_reads_only(PROGRAMS) or (k := program_key(pkg, src)) is None:
-        return None
+    if PROGRAMS is None:
+        return "no --program-cache"
+    if not sandbox_reads_only(PROGRAMS):
+        return f"{PROGRAMS} is not read-only to a sandboxed build here, so a build could have written it"
+    if isinstance(k := program_key(pkg, src), str):
+        return k
     key, tc = k
     name = f"{src.stem.lower()}-{key}"
     exe = PROGRAMS / name
@@ -1101,22 +1111,23 @@ def compile_program(src: Path, tc: Path, exe: Path) -> None:
         shutil.rmtree(d, ignore_errors=True)
 
 
-def evict(stem: str) -> None:
+def evict(stem: str) -> list[str]:
     """Remove `PROGRAMS`' programs of ``stem`` past the `PROGRAMS_KEPT` most recently taken, but for those a process holds
-    (its `.lock` shared): one is removed only under its `.lock` held exclusively, which no process then holds."""
-    def taken(p: Path) -> int:
-        try:
-            return p.stat().st_mtime_ns
-        except FileNotFoundError:                   # another process's `evict` removed it since the glob
-            return 0
-    kept = sorted(PROGRAMS.glob(f"{stem}-*"), key=taken, reverse=True)
-    for exe in kept[PROGRAMS_KEPT:]:
-        with open(exe.with_name(f".{exe.name}.lock"), "a") as lock:
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                continue
-            exe.unlink(missing_ok=True)
+    (its `.lock` shared): one is removed only under its `.lock` held exclusively, which no process then holds, and one
+    eviction runs at a time (`.evict`). Returns the names of those it left because a process holds them."""
+    held = []
+    with open(PROGRAMS / ".evict", "a") as evicting:
+        fcntl.flock(evicting, fcntl.LOCK_EX)
+        kept = sorted(PROGRAMS.glob(f"{stem}-*"), key=lambda p: p.stat().st_mtime_ns, reverse=True)
+        for exe in kept[PROGRAMS_KEPT:]:
+            with open(exe.with_name(f".{exe.name}.lock"), "a") as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    held.append(exe.name)
+                    continue
+                exe.unlink()
+    return held
 
 
 #: {directory: whether a sandboxed build can't write it}, probed once a process (`sandbox_reads_only`)
@@ -1129,16 +1140,21 @@ def sandbox_reads_only(d: Path) -> bool:
     d = d.resolve()
     if d not in _READS_ONLY:
         d.mkdir(parents=True, exist_ok=True)
-        probe = Path(tempfile.mkdtemp(prefix="lean-audit-sandbox-"))
-        try:
-            _READS_ONLY[d] = sandboxed() and subprocess.run(
-                [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), str(probe), "--", "bash", "-c",
-                 f'! touch "{d}/.sandbox-probe" 2>/dev/null'], capture_output=True, timeout=60).returncode == 0
-        except (OSError, subprocess.TimeoutExpired):
-            _READS_ONLY[d] = False
+        _READS_ONLY[d] = sandboxed() and _unwritable_in_sandbox(d)
+    return _READS_ONLY[d]
+
+
+def _unwritable_in_sandbox(d: Path) -> bool:
+    probe = Path(tempfile.mkdtemp(prefix="lean-audit-sandbox-"))
+    try:
+        return subprocess.run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), str(probe), "--", "bash", "-c",
+                               f'! touch "{d}/.sandbox-probe" 2>/dev/null'], capture_output=True,
+                              timeout=60).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    finally:
         (d / ".sandbox-probe").unlink(missing_ok=True)
         shutil.rmtree(probe, ignore_errors=True)
-    return _READS_ONLY[d]
 
 
 #: the packages whose audit writes `Unread.lean`'s facts (`unread_facts`) for `unread.py`'s ratchet, which `lean_audit.py`
