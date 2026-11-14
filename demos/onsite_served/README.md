@@ -16,7 +16,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `verity run demos/onsite_served/config.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | The directory's one command (Running it, below). It reads `config.toml` and the deploy bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
+| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | The directory's one command (Running it, below). It reads `config.toml` and the deploy bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
 | `config.toml` | The configuration, `verity/config/v0` (`verity.config`): the workload and its parameters, the listed subprotocols, each party's machine, the keys the auditor pinned for its devices and the channels. `served_table.configuration(commit: str) -> dict[str, Any]` is the same configuration as data. |
 | `served_table` (`served_table.py`), the table `verity run` loads by its path | What `verity run` reads of the served window: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
 | `demo.toml` | The demo's doneness for the examples' ladder (`demos/README.md`): its protocol, workload and placement, and how far its run and its proof have got (`run`, `proof`). |
@@ -110,19 +110,19 @@ challenger's two, which no piece reads yet.
 
 Every party resolved, every channel and piece, and nothing run (no GPU); with `--bindings`, a missing binding refused:
 
-    verity run demos/onsite_served/config.toml --dry-run --bindings BINDINGS
+    verity run demos/onsite_full.toml --dry-run --bindings BINDINGS
 
 On the prover node, from the commit `research deploy install` installed (set `[program] commit` to it, else the verdict
 names the difference under `simulated`): the served window, every piece inside it, the auditor's sides opened through
 their bindings:
 
-    verity run demos/onsite_served/config.toml --on prover-node --bindings BINDINGS --state STATE
+    verity run demos/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
 
 The gate's and the auditor device's sides are started by their gates when the prover's pieces open them, so
 `verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the served window's public
 record, the onsite check and the period's verdict:
 
-    verity run demos/onsite_served/config.toml --on auditor-host --state STATE
+    verity run demos/onsite_full.toml --on auditor-host --state STATE
 
 A run of record launches each of the two commands under `research run`, and `minutes.py` reads the demo's minutes from
 those two runs (`vllm/onsite-demo-minutes` in `demos/onsite_served/metrics.toml`).

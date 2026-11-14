@@ -226,15 +226,15 @@ sys.exit(1 if failed else 0)
 '''
 
 
-def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks_break(tmp_path, monkeypatch):
+def test_the_lock_runs_audit_repairs_bookkeeping_and_the_limits_the_repaired_locks_break(tmp_path, monkeypatch):
     """`--bookkeeping warn` (drive's lock run) reaches check.py: a package that fails only on bookkeeping passes on its
-    repaired lock, and a cap of `tests/test_lean_packages.py` that lock breaks is set to its count in a copy under `repaired/`,
+    repaired lock, and a limit of `tests/test_lean_packages.py` that lock breaks is set to its count in a copy under `repaired/`,
     which audit.json's `repaired` names for drive to commit, with every warning under `bookkeeping`. Without the flag the
     package fails and nothing is repaired. The flag goes only with --regenerate, over every package: `--package` naming
     each, as check.py's `lean-audit:PKG` parts of a deferred run do, is every package, and one that leaves a package out
     fails."""
-    caps = 'UNWITNESSED = {"pkg/b": 1}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
-    root = _tree(tmp_path, monkeypatch, {LA.CAPS_TEST: caps})
+    limits = 'UNWITNESSED = {"pkg/b": 1}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
+    root = _tree(tmp_path, monkeypatch, {LA.CAPS_TEST: limits})
     (root / "tools/verity/lean/check.py").write_text(BOOK_AUDIT)
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"unlisted": True}))
     cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
@@ -248,8 +248,8 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks
     rc, doc = go(2, True)
     assert rc == 0 and doc["regenerated"] == {"pkg/b": str(tmp_path / "out2" / "audit-b" / "lean-audit.json")}
     assert doc["repaired"] == {LA.CAPS_TEST: str(tmp_path / "out2" / "repaired" / LA.CAPS_TEST)}
-    assert Path(doc["repaired"][LA.CAPS_TEST]).read_text() == caps.replace('{"pkg/b": 1}', '{"pkg/b": 2}')
-    assert (root / LA.CAPS_TEST).read_text() == caps, "the tree's own copy is never written"
+    assert Path(doc["repaired"][LA.CAPS_TEST]).read_text() == limits.replace('{"pkg/b": 1}', '{"pkg/b": 2}')
+    assert (root / LA.CAPS_TEST).read_text() == limits, "the tree's own copy is never written"
     assert doc["bookkeeping"] == [
         "pkg/b: bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)",
         f"bookkeeping: UNWITNESSED['pkg/b'] in {LA.CAPS_TEST} (@lean): 1 -> 2, the count its lock has"]
@@ -521,9 +521,9 @@ def test_a_facts_document_is_judged_from_only_as_its_sidecar_names_it(tmp_path):
 
 
 def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
-    """A count above its cap is raised to, and a cap above its count by more than its room lowered to, the count and its
-    room, which changes queued on `next` still use; a cap within its room stays, and a package no cap names with nothing
-    listed gets none. A caps file without the line fails."""
+    """A count above its limit is raised to, and a limit above its count by more than its room lowered to, the count and
+    its room, which changes queued on `next` still use; a limit within its room stays, and a package no limit names with
+    nothing listed gets none. A limits file without the line fails."""
     text = ('X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9, "e": 6}\nINLINE = {"a": 3}\n'
             'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
     locks = {"a": {"unwitnessed": {"t": "h"}, "shape": {"inline": {"t": {"x": "why", "y": "why"}}}},
@@ -540,7 +540,7 @@ def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
         LA.held_caps("UNWITNESSED = {}\n", locks)
 
 
-def test_raised_unread_raises_the_areas_above_their_caps_and_keeps_the_rest():
+def test_raised_unread_raises_the_areas_above_their_limits_and_keeps_the_rest():
     u = types.SimpleNamespace(caps_text=lambda caps: json.dumps(caps, sort_keys=True))
     unread = {"failures": ["unread: A has 3 ..."], "areas": {
         "A": {"count": {"modules": 3, "declarations": 30}, "cap": {"modules": 2, "declarations": 40}},
@@ -1076,7 +1076,7 @@ def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
     assert arts.put({pkg: SANDBOXED}, log=said.append) == 3 and len(said) == 4
 
 
-def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_alone_holds(tmp_path):
+def test_the_artifact_cache_drops_its_oldest_past_the_limit_counting_only_what_it_alone_holds(tmp_path):
     store = tmp_path / "store"
     (store / "artifacts").mkdir(parents=True)
     (store / "keys").mkdir(parents=True)
@@ -1272,10 +1272,10 @@ def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_take
     assert arts.bundle_into(alone, 1) == ([], 0) and len(list(alone.iterdir())) == 2, "nothing fits: no file"
 
 
-def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
+def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_limit_and_a_later_run_the_rest(tmp_path):
     """Every build bundles what it compiled, up to `BUNDLE_CAP` a bundle, and the launcher lists dozens: together more
     than the cache may hold. One run takes them in the launcher's order, newest first, and stops at its budget, a quarter
-    of the cap; the bundle it stopped in is not marked, and a later run takes what is left of it. Downloads run ahead of
+    of the limit; the bundle it stopped in is not marked, and a later run takes what is left of it. Downloads run ahead of
     the unpacking: a bundle fetched and not reached is dropped, unmarked."""
     def bundle(i: int) -> tuple[str, str]:
         f = tmp_path / f"b{i}.tar.gz"
@@ -1813,7 +1813,7 @@ def test_packages_of_one_manifest_and_toolchain_both_build_warm(tmp_path, monkey
     assert (tmp_path / "cache" / "lean-deps" / LA.deps_key(root / "pkg/a") / "dep" / "built").exists()
 
 
-def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_stays(tmp_path):
+def test_kept_builds_past_the_limit_go_least_recently_used_first_and_a_held_one_stays(tmp_path):
     """Every tree whose manifest or lakefile differs keeps a build of its own, and unremoved they pile up (71 of them, 19 GB,
     on a 200 GB disk). A build given back is the newest whatever its directory's mtime was; one whose lock a run
     holds stays."""
@@ -1835,7 +1835,7 @@ def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_st
     assert builds.evict() == 1 and "k0" not in {p.name for p in store.iterdir()}
 
 
-def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
+def test_each_packages_newest_build_stays_past_the_limit(tmp_path):
     """At 24 kept builds, fewer than the ~30 packages, every Lean check would evict some packages' only build and rebuild them
     cold (Flock alone takes about 1,100 s)."""
     store = tmp_path / "lean-builds"
@@ -1857,7 +1857,7 @@ def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
     assert builds.evict() == 1 and not old.exists() and not (store / "stale.pkg").exists()
 
 
-def test_builds_past_the_byte_cap_go_least_recently_used_first_but_never_a_packages_newest_or_a_held_one(tmp_path):
+def test_builds_past_the_byte_limit_go_least_recently_used_first_but_never_a_packages_newest_or_a_held_one(tmp_path):
     """Kept by count alone, 48 builds of about 17 GB each fill a node's root disk. Past `max_gb` the least recently used go
     until the rest fit, but never a package's newest, and never one whose lock a run holds."""
     import fcntl
@@ -1877,7 +1877,7 @@ def test_builds_past_the_byte_cap_go_least_recently_used_first_but_never_a_packa
         assert builds.evict() == 2
     left = sorted(p.name for p in store.iterdir() if p.is_dir())
     assert left == ["k0", "k1", "k4"], "k2 and k3 go; k0 is pkg/a's newest and k1 is held"
-    assert LA.WarmBuilds(store, kept=48, max_gb=None).evict() == 0, "no byte cap: the count alone"
+    assert LA.WarmBuilds(store, kept=48, max_gb=None).evict() == 0, "no byte limit: the count alone"
 
 
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
@@ -1935,7 +1935,7 @@ FACTS_AUDIT = FAKE_AUDIT.replace(
         rep["unread_facts"] = {"file": f"{tag}/unread-facts.jsonl.gz", "sha256": hashlib.sha256(gz.read_bytes()).hexdigest()}
     reps.append(rep)
 ''')
-#: a stand-in for `unread.py`'s `check`: the modules the joined facts hold, against a cap of their number
+#: a stand-in for `unread.py`'s `check`: the modules the joined facts hold, against a limit of their number
 FAKE_UNREAD = r'''
 import gzip, json
 from pathlib import Path
@@ -1944,9 +1944,9 @@ def check(root, files, facts, out, caps=CAPS):
     mods = [json.loads(line)["module"] for f in facts for line in gzip.open(f, "rt")]
     out.mkdir(parents=True, exist_ok=True)
     (out / "seen.json").write_text(json.dumps(mods))
-    cap = json.loads(caps.read_text())
-    return {"failures": [f"unread: {len(mods)} above {cap}"] if len(mods) > cap else [], "lower": len(mods) < cap,
-            "seconds": 0.0, "areas": {"A": {"count": {"modules": len(mods), "declarations": 0}, "cap": cap}}}
+    limit = json.loads(caps.read_text())
+    return {"failures": [f"unread: {len(mods)} above {limit}"] if len(mods) > limit else [], "lower": len(mods) < limit,
+            "seconds": 0.0, "areas": {"A": {"count": {"modules": len(mods), "declarations": 0}, "cap": limit}}}
 '''
 SPEC = {"lakefile.toml": "", "lean-toolchain": "v1\n", "lake-manifest.json": json.dumps({"packages": []}), "lean-audit.json": "{}"}
 
@@ -1954,7 +1954,7 @@ SPEC = {"lakefile.toml": "", "lean-toolchain": "v1\n", "lake-manifest.json": jso
 def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_reuses(tmp_path, monkeypatch):
     """The ratchet on wholly unread modules runs after the audits on both packages' facts: those an audit wrote, else
     those kept beside the reused pass; a pass kept without its facts, or with other bytes than its entry names, is audited
-    again; the caps and `unread.py` rerun no audit; a run with one of the two packages leaves the ratchet to another."""
+    again; the limits and `unread.py` rerun no audit; a run with one of the two packages leaves the ratchet to another."""
     extra = {"tools/verity/lean/check.py": FACTS_AUDIT, "tools/verity/lean/unread.py": FAKE_UNREAD,
              "tools/verity/lean/unread-caps.json": "2", "pkg/b/lean-audit.json": "{}",
              "security/S.lean": "", "security/Proofs/P.lean": "",
@@ -2224,7 +2224,7 @@ def test_an_audit_sweeps_before_it_makes_its_scratch_tree_named_by_its_pid(tmp_p
     assert made == [f"{LA.SCRATCH}{os.getpid()}-"]
 
 
-def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path):
+def test_kept_dependencies_and_replays_past_their_limits_go_oldest_first(tmp_path):
     """Kept dependency trees and replay entries are evicted, or a node fills up with them. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
     deps = tmp_path / "lean-deps"
     for i, k in enumerate(("a", "b", "c")):
@@ -2245,7 +2245,7 @@ def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path)
     assert LA.prune_replays(tmp_path / "absent", kept=2) == 0
 
 
-def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):
+def test_records_trees_beyond_the_limit_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):
     """Nine idle `lean-records` trees, about 490k files each, take a node to 95% of its inodes.
     `prune_records` keeps the most recently used (by `.who`, `links.json`, `.lock`); an older one whose `.lock` a run holds
     stays; a link to a tree elsewhere goes with its target."""
@@ -2273,7 +2273,7 @@ def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_
 def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_and_its_passes(tmp_path):
     """Trees seeded for `build 8` keep their source's old `.who`, and an hourly prune that keeps 3 would take some of them,
     so a waiting run would build Mathlib from scratch on the root disk. The slots' own trees stay, the
-    ones a lowered cap left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
+    ones a lowered limit left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
     store = tmp_path / "lean-records"
     for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes"]):
         (store / name).mkdir(parents=True)

@@ -66,7 +66,7 @@ theorem maskSetup_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coin
     let ⟨ls, hc⟩ := Hidden.parseCommit_check ht (Hidden.setupHidden_parseCommit h); ⟨_, ls, hc⟩,
     (Hidden.setupHidden_spec' h).m⟩
 
-theorem tableZKH_eq {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y₁ y₂ : DrawSetupZKH I mPts S d) :
+theorem tableZKH_eq {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y₁ y₂ : SampleSetupZKH I mPts S d) :
     y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁, w₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ :=
     y₁
@@ -78,7 +78,7 @@ theorem tableZKH_eq {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y₁ y₂
 
 /-- The hidden-output `--zk` tables at a sample `verify --zk` sets up are its table. -/
 theorem tablesAtZKH_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZKH I mPts S (dj S)) :
+    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZKH I mPts S (dj S)) :
     tablesAtZKH (Reg := Reg) dj y₀ S R = y.table := by
   show tableAtZKH dj y₀ S = _
   rw [tableAtZKH, dif_pos ⟨y⟩]
@@ -86,12 +86,12 @@ theorem tablesAtZKH_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : 
 
 /-- Table `j` of the hidden-output plan, at a sample at which `verify --zk` sets table `j` up, is its table. -/
 theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (j : Fin (nTab I))
-    (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (j : Fin (nTab I))
+    (y : SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
     (planZHJ (Reg := Reg) dj y₀ S R).get (Fin.cast (planZHJ_length dj y₀ S R).symm j) = y.table := by
   simp only [planZHJ, List.get_ofFn, Fin.cast_cast, Fin.cast_eq_self]
   rw [tableZHJ, dif_pos ⟨y⟩]
-  exact DrawSetupZHJ.table_eq _ _
+  exact SampleSetupZHJ.table_eq _ _
 
 /-- **Zero knowledge at `J` `CoinedSetup`s, at `δ₁` per hidden leaf** (`ZkViewAt` at `J` tables): at any coin vector of
 each table that the honest prover doesn't refuse (`CoinedSetup.Admits`), for any encoding `enc` of the joint view and any
@@ -180,10 +180,10 @@ refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins beca
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
 refuses a statement that meets the mask slot (`Zk.maskFree`). -/
 theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
-    (hdm : ∀ (S : Finset (Fin n)) (y : DrawSetupZKH I mPts S (dj S)), avoidsMask y.x.st = true)
+    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+    (hdm : ∀ (S : Finset (Fin n)) (y : SampleSetupZKH I mPts S (dj S)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
-    ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZKH I mPts S (dj S)),
+    ∀ (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZKH I mPts S (dj S)),
       ZkViewAt (coinedOf P (tablesAtZKH (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
   fun S R y => zkViewAt_of_ok _ (coinedOf_setup_of P _ y.x.st y.x.wf.1 (by rw [tablesAtZKH_eq dj y₀ S R y]; rfl)
     (maskSetup_of_setupHidden ((ZkExec.zkTags_typed I).trans ht) y.x.h) (hdm S y)).2.2.2.2.2
@@ -199,14 +199,14 @@ Which verifiers: this is honest-verifier zero knowledge at each fixed coin vecto
 refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the challenger's live-coin part commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
-refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.DrawSetupZHJ.avoidsMask`). -/
+refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.SampleSetupZHJ.avoidsMask`). -/
 theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
-      (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
+      (y : SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
     {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
     ∀ (S : Finset (Fin n)) (R : Reg)
-      (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
+      (ys : ∀ j : Fin (nTab I), SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) (δ₁) :=
   fun S R ys => zkViewAtJ_of_ok _ (fun j => (coinedOf_setup_of P _ (ys j).x.st (ys j).x.wf.1
@@ -223,11 +223,11 @@ Which verifiers: this is honest-verifier zero knowledge at each fixed coin vecto
 refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the challenger's live-coin part commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
-refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.DrawSetupZHJ.avoidsMask`). -/
+refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.SampleSetupZHJ.avoidsMask`). -/
 theorem zk_session_composedHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -238,7 +238,7 @@ theorem zk_session_composedHJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
@@ -249,7 +249,7 @@ theorem zk_session_composedHJ
     {qF qS : ℝ}
     -- every table's statement avoids the mask slot, and hash-derived-key
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
-      (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
+      (y : SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
     (hKey : Assumptions.Zk.HashDerivedKeyHm96) :
     (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
@@ -270,7 +270,7 @@ theorem zk_session_composedHJ
           ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
           k Rw M ρ t' (reg σ) (cont σ)) ∧
     ∀ (S : Finset (Fin n)) (R : Reg)
-      (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
+      (ys : ∀ j : Fin (nTab I), SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
         (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ)) :=
   ⟨zk_session_soundHJ I ht dj y₀ wr dg N hc hU hpub hpt hscope kd hkd Lb src hA3 hDraw hTags hRec hk hRw hM hρ hr ht'

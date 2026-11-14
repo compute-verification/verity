@@ -60,7 +60,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")
 ROOT = HERE.parents[1]
@@ -116,7 +116,7 @@ def _window(d: Path, flipped: bool = False) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-firewall"}
+    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-zk-server"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"
@@ -324,7 +324,7 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 
 def _answer(out: Path) -> dict:
     """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
-    certifier's period read it), its registration the one the audit registered."""
+    certifier's period read it), its docket the one the audit registered."""
     from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))

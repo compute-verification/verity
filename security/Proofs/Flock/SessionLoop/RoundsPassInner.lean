@@ -729,7 +729,7 @@ theorem roundOk_innerAt (L₁ : LeanRelease Flock.Wit Tp)
     rfl
   have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real (finHonest (ofLoopLink L₁ src real))) src real).cfg x
       (ν, t) ((m₀, ρ₀) :: ops) = (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
-    unfold cfg drawsAt
+    unfold cfg samplesAt
     rfl
   have hrow' : ((withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).rowH.size < 2 ^ 64 := by
     rw [← hcfg]

@@ -2,7 +2,7 @@
 # Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
 # commitment, sampled through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
-# and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
+# and verified by Lean, the advice's root then held to the docket the sample followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which the audit must reject with
 # the ZK server releasing no proof of it (with PP_PLAIN=1, which has no ZK server, with Lean refusing the proof it reads).
 # M0's flock-circuit and Lean's verity-verify-proof are built from this tree, in scratch.
@@ -26,14 +26,14 @@
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
-#     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
+#     audited from its records alone (records_audit.py: circuit.json, the docket and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
 #   PP_LLAMA, PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
 #     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
-#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
+#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights docket at TINY (verity_vllm.program.predict.weights_tie;
 #     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
 #     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
 #     their own), ending at the verifier's own digest; the verifier makes its tie of X from X's public bytes (the circuit's
@@ -98,7 +98,7 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
 
-(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${PP_FLOCK_WORK:-$W}
@@ -106,7 +106,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
@@ -188,7 +188,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} ${PP_JOBS:+--jobs $PP_JOBS} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
-    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   keep $name
@@ -209,7 +209,7 @@ print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["w
   $TIME $PY verity/protocols/proofs/spot/verifier/one_stage/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
     --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
     ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   return $rc
@@ -281,7 +281,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     $TIME $PY verity/protocols/proofs/spot/verifier/one_stage/records_audit.py audit --window $W/$name-window --law work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
     rc=$?
     grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
     keep $name

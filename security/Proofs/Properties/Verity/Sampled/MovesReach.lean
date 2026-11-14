@@ -17,7 +17,7 @@ the tape beside it, clause by clause of `MovesOf`:
 * **The record's sample** (`ReachesOff.recordDraw`, clause (i)): at the sample-coupled coin map, where the play's sampled
   verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family `label` answering `after`,
   and every release of that family precedes every opening, the record decodes to the session's sample file at the
-  outcome's sample (`recordDraw_firstStop`, `sample_extend`).
+  outcome's sample (`recordSample_firstStop`, `sample_extend`).
 * **An answered stop's round** (`stop_round`, toward clause (iv)): a stop the trace answers on the first table's rep
   `r` stream, at that stream's `k`-th opening, submits the record's round `k` of that stream, as `roundOf` makes it of
   the stop's message and the coins the opening released; the record's stream has that many rounds
@@ -86,12 +86,12 @@ theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array Byte
 outcome on the joint distribution's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
 it ends where the sampled verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family
 `label` answering `after`, and every release of that family precedes every opening, its record decodes to the session's
-sample file at `ω`'s sample (`ReachesOff.out_reaches`, `recordDraw_firstStop`). -/
+sample file at `ω`'s sample (`ReachesOff.out_reaches`, `recordSample_firstStop`). -/
 theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {k : Verity.Registration.Composite} {A : Live} {rd : Reading A.rounds}
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} {BL : LinkHold A.mP} {B : RoundHold}
     {label : String} {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool}
-    (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
+    (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : SampleReadAll k coinsRead) (hH : SampleHeld k)
     (hrd : PicksOpenings rd) (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
     (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
@@ -116,7 +116,7 @@ theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
   obtain ⟨ω, pts, reps, hL, h1, hreach⟩ := h.out_reaches
   refine ⟨ω, pts, reps, hL, h1, fun record hrec => ?_⟩
   rw [sample_extend]
-  exact recordDraw_firstStop e hA ht hR hH hrd hm hsrc ω hreach hv hl hN hP hrec
+  exact recordSample_firstStop e hA ht hR hH hrd hm hsrc ω hreach hv hl hN hP hrec
 
 /-! ## The rep rounds, stop by stop -/
 

@@ -3,10 +3,10 @@ module
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -31,8 +31,8 @@ set_option Elab.async false
 
 `zk_session_soundH_custody`, `zk_session_soundHJ_custody` and `zk_session_soundHJ_custody_json` at `HmOut.parseStmt`
 (`hcS`, a templated file's committed circuit unrolled), with the rows' fit `hv1` given: `zk_session_soundHSt` and
-`zk_session_soundHJSt` with the record's custody in place of `hRec` and `hDraw`, the samples from `drawOkZKH_of_execSt`
-and `drawOkZKHJ_of_fileSt`.
+`zk_session_soundHJSt` with the record's custody in place of `hRec` and `hDraw`, the samples from `sampleOkZKH_of_execSt`
+and `sampleOkZKHJ_of_fileSt`.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -60,7 +60,7 @@ theorem zk_session_soundH_custodySt
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the record, at the link points of the sampling design's samples
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
@@ -74,31 +74,31 @@ theorem zk_session_soundH_custodySt
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
         ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
       (zcStrat execArith hs512 (planAtZKH dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZK I o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZHSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHSt_computes dj y₀ ht hcS hv1 hscope hU hpub))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)) τ ≤
       (Law.stratified σs ks hks).miss K₀ +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZHSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHSt_computes dj y₀ ht hcS hv1 hscope hU hpub))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_liveSt hTags hCust.1
-          (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) := by
+          (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) := by
   exact zk_session_soundHSt I ht dj y₀ wr dg N hcS hv1 hU hpub hscope σs ks hks St hS Kd pop Lb src hA3
-    (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀
+    (fun ω => sampleOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀
     τ hCR
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the challenger's live-coin part's custody**, at the session's
@@ -111,7 +111,7 @@ theorem zk_session_soundHJ_custodySt
     (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -128,7 +128,7 @@ theorem zk_session_soundHJ_custodySt
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _)) τ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
@@ -143,7 +143,7 @@ theorem zk_session_soundHJ_custodySt
           ((rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub))
           k Rw M ρ t' (reg σ) (cont σ) :=
   zk_session_soundHJSt I ht dj y₀ wr dg N hcS hv1 hU hpub hscope kd hkd Lb src hA3
-    (fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
+    (fun _ => sampleOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the record's custody and the printed sample
 file**, at the session's statement circuit (`zk_session_soundHJ_custody_json` at `HmOut.parseStmt`). -/
@@ -155,7 +155,7 @@ theorem zk_session_soundHJ_custody_jsonSt
     (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -174,7 +174,7 @@ theorem zk_session_soundHJ_custody_jsonSt
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveSt I ht hcS (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hRec
-          fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj (drawFileZK_of_toJson_subset dj kd n hdj) _)) τ
+          fun _ => sampleOkZKHJ_of_fileSt I ht hcS kd n hdiv dj (sampleFileZK_of_toJson_subset dj kd n hdj) _)) τ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
@@ -189,6 +189,6 @@ theorem zk_session_soundHJ_custody_jsonSt
           ((rsZHJSt dj y₀ ht hcS hv1 hscope hU hpub).bindingZ (rsZHJSt_computes dj y₀ ht hcS hv1 hscope hU hpub))
           k Rw M ρ t' (reg σ) (cont σ) :=
   zk_session_soundHJ_custodySt I ht hcS hv1 hU hpub hscope kd hkd hdiv dj y₀ wr dg N Lb src hA3 hTags
-    ⟨hRec, drawFileZK_of_toJson_subset dj kd n hdj⟩ hk hRw hM hρ hr ht' K₀ τ
+    ⟨hRec, sampleFileZK_of_toJson_subset dj kd n hdj⟩ hk hRw hM hρ hr ht' K₀ τ
 
 end FlockSoundness.Discharge.ZkHidden

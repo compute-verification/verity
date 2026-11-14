@@ -90,7 +90,7 @@ before the salt, and no one else can fix them. The record's open cells (`Account
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
 `reveal(p, registration)` takes the PoUW window's registration as the proof system returned it
 (`spot.service.WindowCommitmentRecord`) and fails closed without it: it refuses unless the receipt is that
-registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
+registration's (`one_stage.docket.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
 window by default), for a window whose salt was never sampled, and for one it has revealed already. So the salt reaches
 one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw

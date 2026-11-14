@@ -33,7 +33,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import Strided, runs
 from verity.commitments import randomness as RND
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
 from .node_window_join import Joined

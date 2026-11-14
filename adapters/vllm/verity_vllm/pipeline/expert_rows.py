@@ -51,8 +51,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, shard_block, template

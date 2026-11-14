@@ -30,7 +30,7 @@ The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`
 * `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's incorrect proof blocks `B` are in the confidence set, they are
   within the one budget (`StratifiedBlockMT.within_of_le`), so the event is empty. Otherwise an accepted sampling block
   outside the budget has a sampled proof block wrong, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnWrong_le`), or
-  its sample misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
+  its sample misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.sampleMiss_le`).
 * `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the incorrect proof blocks
   are not within the period's budget either has a sampling block accepted with a sampled proof block wrong, at most
   `Σ_t (ε_ks,t + ε_bind,t)` by `monitoringPeriod_union`, or every sample misses with the product of the escapes below `δ`, at most
@@ -123,7 +123,7 @@ theorem JointStratifiedMT : Flock.Guarantees.JointStratifiedMT := by
       _ ≤ prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ +
             prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ := prob_or_le _ _ _ _
       _ ≤ (w.epsKs + w.link) + ENNReal.ofReal δ :=
-          add_le_add (w.accepted_drawnWrong_le τ hCR hA2) ((w.drawMiss_le hA3 (w.wrongSet τ) τ).trans hB.le)
+          add_le_add (w.accepted_drawnWrong_le τ hCR hA2) ((w.sampleMiss_le hA3 (w.wrongSet τ) τ).trans hB.le)
       _ = ENNReal.ofReal δ + w.epsKs + w.link := (add_comm _ _).trans (add_assoc _ _ _).symm
 
 /-- **The joint stratified bound over a period of sampling blocks of `J` tables, pooled.** -/
@@ -139,26 +139,26 @@ theorem JointStratifiedHorizonMT : Flock.Guarantees.JointStratifiedHorizonMT := 
     monitoringPeriodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
       (monitoringPeriodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
   have hA := monitoringPeriod_union (fun t => (W t).game) (StratifiedBlockMT.record W)
-    (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).epsKs + (W t).link)
+    (fun r => r.accepted ∧ r.sampledWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).epsKs + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
-  have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlockMT.record W) (fun r => ¬ r.drawnWrong)
+  have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlockMT.record W) (fun r => ¬ r.sampledWrong)
     BlockRecMT.escape (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.escape ((W t).wrongSet τ),
       ne_top_of_le_ne_top ENNReal.one_ne_top (Law.escape_le_one _ _), fun _ => rfl,
-      (W t).drawMiss_le (hA3 t hτ.1) ((W t).wrongSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs
+      (W t).sampleMiss_le (hA3 t hτ.1) ((W t).wrongSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs
   calc value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ StratifiedMT.Within W δ ands bits l) (StratifiedMT.run W T s)
-      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, ¬ r.drawnWrong) ∧ (l.map BlockRecMT.escape).prod < ENNReal.ofReal δ))
+      ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ (l.map BlockRecMT.escape).prod < ENNReal.ofReal δ))
           (StratifiedMT.run W T s) := by
         refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.drawnWrong
+        by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
         · refine Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, ?_⟩
           by_contra hlt
           exact hl.2 (StratifiedMT.within_of_le hδ ands bits (not_lt.1 hlt))
-    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.drawnWrong) (StratifiedMT.run W T s) +
-          value (fun l => (∀ r ∈ l, ¬ r.drawnWrong) ∧ (l.map BlockRecMT.escape).prod < ENNReal.ofReal δ)
+    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (StratifiedMT.run W T s) +
+          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ (l.map BlockRecMT.escape).prod < ENNReal.ofReal δ)
             (StratifiedMT.run W T s) :=
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, ((W t).epsKs + (W t).link)) + ENNReal.ofReal δ := by

@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 if TYPE_CHECKING:
     from verity_vllm.commit import opened as OC

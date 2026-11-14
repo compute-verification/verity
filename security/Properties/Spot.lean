@@ -369,7 +369,7 @@ def kindOf (draw : Json) : String :=
 
 /-- A sample's keys: its sampling design, population and units, with `k` (subset), `p` (bernoulli) or `k` and `strata` (stratified,
 work), and a work sample's `closure` when it has one. -/
-def drawKeys (kind : String) (closure : Bool) : Array String :=
+def sampleKeys (kind : String) (closure : Bool) : Array String :=
   let keys := sortStrings (#["law", "population", "units"] ++
     if kind == "subset" then #["k"] else if kind == "bernoulli" then #["p"] else #["k", "strata"])
   if closure then sortStrings (keys.push "closure") else keys
@@ -394,7 +394,7 @@ def Drawn (draw population law : Json) : Prop :=
   let kind := kindOf draw
   let closure := kind == "work" && (field? draw "closure").isSome
   (draw matches .obj _) ∧ kind ∈ ["subset", "bernoulli", "stratified", "work"] ∧
-  keys? draw = some (drawKeys kind closure) ∧
+  keys? draw = some (sampleKeys kind closure) ∧
   jeq (Draw.lawOf draw) law ∧ jeq (getD draw "population") population ∧
   ∃ us units, getD draw "units" = .arr us ∧ us.mapM int? = some units ∧ Ascending units ∧
     (∀ (h : 0 < units.size), 0 ≤ units[0] ∧ ∃ n, int? (getD draw "population") = some n ∧ units[units.size - 1] < n) ∧
@@ -411,7 +411,7 @@ def Drawn (draw population law : Json) : Prop :=
 /-! ## The units, the receipt and the verdicts -/
 
 /-- The sampled proof blocks, as integers. -/
-def drawnInts (draw : Json) : Array Int :=
+def sampledInts (draw : Json) : Array Int :=
   match getD draw "units" with
   | .arr us => us.filterMap int?
   | _ => #[]
@@ -445,7 +445,7 @@ def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
-    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
+    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
   OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
@@ -460,7 +460,7 @@ def VerdictsAccept (vs : Array (String × Json)) : Prop :=
 /-! ## What acceptance publishes -/
 
 /-- The sampled proof blocks as natural numbers. -/
-def drawnNats (draw : Json) : Array Nat :=
+def sampledNats (draw : Json) : Array Nat :=
   match getD draw "units" with
   | .arr us => us.filterMap nat?
   | _ => #[]
@@ -470,7 +470,7 @@ verdict ran (`Record.allRan`, which `VerdictsAccept` asks only of the verdicts o
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
-  { drawn := drawnNats e.draw,
+  { drawn := sampledNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
@@ -483,19 +483,19 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDes
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
-    delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
+    delta := p.delta, drawn := #[(Record.LEVEL, (sampledNats e.draw).size)] }
 
 /-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed sampling design as derived, the sample is a
 sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
 values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
-(`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
+(`Record.profileSample`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
-        Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+        Record.profileSample law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 
 /-- The commitment's digest, which the receipt is held to, is the window record's digest of the record it decodes:

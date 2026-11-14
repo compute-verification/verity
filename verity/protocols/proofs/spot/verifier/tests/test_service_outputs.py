@@ -1,10 +1,10 @@
 """A stream's records chained by output values (`registration.check`'s `outputs`): a later registration's registered value
 is a port an earlier record committed, so the state one window leaves is the state a later one reads, under the earlier
 record's root, domain and hiding leaves. The stream hands R7 the record each output value names however long its log, and
-the run of record (`Run.run`) checks the output values the registration did, in one stage and in a two-stage design's
-interior registration. And a stream's certified entries (`registration.check`'s `certified`): a registered value that is
+the run of record (`Run.run`) checks the output values the docket did, in one stage and in a two-stage design's
+interior docket. And a stream's certified entries (`registration.check`'s `certified`): a registered value that is
 none of the program's parameters, which the stream's check and its run of record hold to the entry the verifier built
-for it, and an interior registration takes none."""
+for it, and an interior docket takes none."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ BOUNDARY, INTERIOR = ("bx", "bout", "carry"), ("x", "out")
 N_RHO, NB, Q, K = 3, 4, 2, 1
 STATE = S.Value("state", None, "serve", registered=True)
 #: A link's certified rows: a registered value that is none of the program's parameters, with the entry and root the
-#: verifier built for it from the registration it read under the deployment's key.
+#: verifier built for it from the docket it read under the deployment's key.
 ROWS = S.Value("link-0/in/7", None, "serve", registered=True)
 CERTIFIED = {ROWS.name: {"root": "c5" * 64, "leaves": 3, "words": 64, "domain": "c4" * 64}}
 ROWS_ENTRY = {"value": ROWS.name, **CERTIFIED[ROWS.name]}
@@ -136,7 +136,7 @@ def _three_windows(stream: S.Stream) -> str:
 
 def test_a_window_reads_the_state_an_earlier_window_left():
     """Window 0 commits the state it leaves as its port `next`; windows 1 and 2 follow it; window 3 registers that port as
-    its `state`. Its check gets window 0's record though it is neither the last record nor a value's first registration,
+    its `state`. Its check gets window 0's record though it is neither the last record nor a value's first docket,
     the verdict is the whole log's, and its outcome is accepted, the run of record holding the output value as R7 did.
     Window 0's record left out of the log R7 reads is `R7-output`, as is a record the log doesn't hold; a root other than
     the port's is `R7-held`; and the value registered with no output named is refused under its own domain."""
@@ -168,7 +168,7 @@ def test_a_window_reads_the_state_an_earlier_window_left():
 
 def test_the_run_of_record_reads_the_output_values(monkeypatch):
     """The stream's run of record gets the output values R7 took (`verifier.run`'s `value_outputs`, in the Lean's
-    params): a run that drops them refuses the registration the stream accepted, and the outcome with it."""
+    params): a run that drops them refuses the docket the stream accepted, and the outcome with it."""
     stream = _stream()
     prev = _three_windows(stream)
     w0 = stream.log[0]
@@ -210,7 +210,7 @@ def test_a_stream_takes_the_verifiers_certified_entries():
 
 def test_the_run_of_record_reads_the_certified_entries(monkeypatch):
     """The stream's run of record gets the certified entries R7 took (`verifier.run`'s `certified`, in the Lean's
-    params): a run that drops them refuses the registration the stream accepted, and the outcome with it."""
+    params): a run that drops them refuses the docket the stream accepted, and the outcome with it."""
     stream = _stream(_spec((STATE, ROWS)))
     cand, ports = _window(0, None, [ROWS_ENTRY])
     reg = stream.register(cand, ports, certified=CERTIFIED)
@@ -243,7 +243,7 @@ def test_a_stream_holds_a_certified_value_to_a_reported_read():
 
 def _two_stage(spec: S.Spec):
     """A two-stage stream of `spec` past its first-stage sample: the stream, its boundary record, which leaves its replay
-    blocks' state at port `carry`, that registration, the sample, the interior's `outputs` naming that port, and the
+    blocks' state at port `carry`, that docket, the sample, the interior's `outputs` naming that port, and the
     interior's record and ports registering the entries it is given."""
     stream = _stream(spec, replay=BLOCK)
     m = Q * N_RHO
@@ -272,9 +272,9 @@ def test_an_interior_registration_takes_no_certified_entries():
 
 
 def test_an_interior_registration_reads_a_port_of_its_boundary():
-    """Under a two-stage design the interior registration's registered `state` is the boundary registration's port
-    `carry`, the state its replay blocks leave: R7 takes it in the interior registration, the interior's copies carry
-    it to the run of record, which agrees on the outcome binding both registrations. Its one failure is round 2's
+    """Under a two-stage design the interior docket's registered `state` is the boundary docket's port
+    `carry`, the state its replay blocks leave: R7 takes it in the interior docket, the interior's copies carry
+    it to the run of record, which agrees on the outcome binding both dockets. Its one failure is round 2's
     (`second-read`): the replay block's Definition links CARRY's `x`, `state` and output to the boundary's ports of
     them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
     reads `state` from the registered value instead. Registered with no output named, it is refused under its own

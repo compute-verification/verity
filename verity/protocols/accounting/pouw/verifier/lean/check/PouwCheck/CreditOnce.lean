@@ -1,7 +1,7 @@
 module
 
 public import PouwCheck.Credit
-public import Spot.ChallengerSession
+import all Spot.ChallengerSession
 
 /-!
 # A period's credit with one replay of the auditor's ledger (`Credit.periodCredit`, compiled)
@@ -30,48 +30,15 @@ open Flock (V)
 /-- What `checked ledger` returns for a key: a ledger's replay. -/
 abbrev Replay := ChallengerKey → V (Array Win × Array MonitoringPeriod)
 
-/-! `auditedOpen`'s private helpers, as `Spot.ChallengerSession` writes them: its private part stays its own. -/
-
-private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
-
-private def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
-
-private def isDigest (j : Json) (n : Nat := 128) : Bool :=
-  match j with
-  | .str s => s.length == n && (Flock.unhex s).toOption.isSome
-  | _ => false
-
-/-- `auditedOpen` with `replay` its ledger's replay. -/
+/-- `auditedOpen` with `replay` its ledger's replay: Spot's `auditedIn` on what `replay` returns. -/
 def auditedOpenWith (replay : Replay) (window : Json) (key : ChallengerKey) : V (Audited × Json) := do
   unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
   let (wins, periods) ← replay key
-  let root := strOf (getD window "root")
-  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
-  let o := w.opened
-  let s := o.session
-  unless o.schema == LEDGER_SCHEMA do
-    throw s!"the auditor's ledger opens this window's session {s} under {o.schema}, which names no prover and seals no refused hellos"
-  let some e := w.ended
-    | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
-  let b := e.body
-  unless jsonTrue (getD b "closed") do
-    throw s!"the auditor's ledger ends session {s} unclosed: its client didn't close it"
-  let files := getD b "files"
-  let malformed := s!"the auditor's ledger's end of session {s} is malformed: {END_FORM}"
-  let some recordLeaf := nat? (getD b "record_leaf") | throw malformed
-  let some refusedHellos := nat? (getD b "refused_hellos") | throw malformed
-  unless isDigest (getD b "commitment") && SEALED_FILES.all (fun f => (field? files f).isSome) do throw malformed
-  let p := periods.find? (·.windows.contains s)
-  if let some p := p then
-    if p.cap == Json.null || p.circuit == Json.null then
-      throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
-  return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
-            commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
-            period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
-            circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+  auditedIn wins periods window
 
 theorem auditedOpen_eq (ledger window : Json) (key : ChallengerKey) :
-    auditedOpen ledger window key = auditedOpenWith (checked ledger) window key := rfl
+    auditedOpen ledger window key = auditedOpenWith (checked ledger) window key :=
+  auditedOpen_eq_auditedIn ledger window key
 
 /-- `auditedChallengePhase` with `replay` its ledger's replay. -/
 def auditedChallengePhaseWith (replay : Replay) (window : Json) (key : ChallengerKey) : V Audited :=
