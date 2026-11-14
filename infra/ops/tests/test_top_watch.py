@@ -638,7 +638,7 @@ def test_the_sweep_loads_and_its_other_checks_run_when_research_velocity_cant_be
                              "goals": lambda: tw.save_goals(NOW, lambda: DUMP, tmp_path / "goals", {})})
     assert ran == ["traffic"]
     log = capsys.readouterr().out
-    assert "is not preserved in the store (ImportError: " in log
+    assert "is not preserved in the store (ModuleNotFoundError: import of research.velocity halted" in log
     assert "goals: 1 of the 1 copies here are not preserved in the store yet" in log
 
 
