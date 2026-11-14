@@ -12,7 +12,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and their traits. test_envelopes pins theorem.multiple_bound to the Lean text of the remote slowdown's definition
 # and guarantee, and test_min_cut pins rho/min_cut.py to the min-cut bound's (alphaHE, shareF, workHEOn, and HE's,
 # HEShared's and HECharged's conclusions).
-# The monitoring periods are core's reporting grid's (rho/params.py), stdlib only. The output bits an incorrect proof
+# The monitoring periods are core's reporting grid's (rho/params.py: `verity/protocol.py`, which imports the wire). The output bits an incorrect proof
 # block injects are the widest public size class of a block's outputs (rho/params.py and tiers.py read
 # verity.circuits.partition_v2, which imports its package). The registry also reads core's per-window delta
 # (profile.py, which imports verity.circuits) and the inference-only policy's calibrations (rho/params.py). It reads
@@ -24,7 +24,7 @@ inputs = ["security/lean-audit.json", "security/Properties/lean-audit.json", "be
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", 
-          "verity/protocols/reporting.py", "verity/circuits",
+          "verity/protocol.py", "verity/channel.py", "verity/circuits",
           "verity/protocols/proofs/spot/verifier/profile.py", "benchmarks/census/deployments.json", "benchmarks/nci/calibrations.json",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/policy/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/policy/inference_only/__init__.py"]

@@ -1,0 +1,6 @@
+#!/bin/sh
+# `gh` for the watchers' loops, which only read GitHub: the read-only App token of the moment (gh_read_token.sh --cached) at
+# each call, so no loop holds a token from its start or takes one from a file
+GH_TOKEN=$("${WATCHERS_GH_TOKEN:-/data/infra/gh_read_token.sh}" --cached) || exit 1
+export GH_TOKEN
+exec "${WATCHERS_GH:-/data/watchers/bin/gh}" "$@"

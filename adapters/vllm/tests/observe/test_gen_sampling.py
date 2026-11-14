@@ -1,19 +1,16 @@
-"""The torch-free recomputation of the sampler's uniforms (`program.sampling_rng`) and the sampling workloads."""
+"""The torch-free recomputation of the sampler's uniforms (`tests.program.sampling_rng`) and the sampling workloads."""
 
 from __future__ import annotations
 
-import ast
-import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from verity_vllm.config import RowEngine, workload_file
-from verity_vllm.engine import static_schedule
-from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program import sampling_rng as R
+from tests import fake_vllm
+from tests.program import sampling_rng as R
+from verity_vllm.config import workload_file
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09", "workload_b0_sampling_n2", "workload_b0_sampling_2req_seeds"]
@@ -27,7 +24,8 @@ WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09"
     ((0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344), (0xa4093822, 0x299f31d0), "d16cfe09 94fdcceb 5001e420 24126ea1"),
 ])
 def test_philox_known_answers(ctr, key, expect):
-    out = R.philox4x32_10(*[np.array([c], dtype=np.uint32) for c in ctr], key[0], key[1])
+    c0, c1, c2, c3 = (np.array([c], dtype=np.uint32) for c in ctr)
+    out = R.philox4x32_10(c0, c1, c2, c3, key[0], key[1])
     assert " ".join(f"{int(x[0]):08x}" for x in out) == expect
 
 
@@ -60,25 +58,17 @@ def test_gumbel_seed_is_keyed_by_seed_and_position():
     assert R.gumbel_seed_of(0, 32, is_drafting=True) == R.gumbel_seed_of(0, 32 + (1 << 30))
 
 
-# --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch; exec the pure function instead) ---
+# --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch, so its tests skip where torch is absent) ---
 
 def _adapter_fn(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
-    tree = ast.parse(src)
-    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object, "RowEngine": RowEngine, "PP": PP,
-                "static_schedule": static_schedule, "workload_file": workload_file}
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name in (name, "execution_of_workload"):
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    return ns[name]
+    pytest.importorskip("torch")
+    from verity_vllm.engine import vllm_adapter
+    return getattr(vllm_adapter, name)
 
 
 @pytest.mark.parametrize("name", WORKLOADS)
 def test_sampling_workloads_schema(name):
-    doc = json.loads((PROFILES / f"{name}.json").read_text())
+    doc = json.loads(workload_file(PROFILES / f"{name}.json").read_text())
     assert doc["sampling"]["variant"] in doc["variants"]
     assert "greedy" in doc["variants"] and doc["variants"]["greedy"]["temperature"] == 0.0
     assert all(len(r["prompt_token_ids"]) == 32 and r["max_tokens"] == 16 and "accepted_token_ids" not in r for r in doc["requests"])
@@ -104,7 +94,7 @@ def test_load_workload_honours_sampling_block_and_keeps_greedy_default():
 
 def test_load_workload_rejects_unknown_variant(tmp_path):
     load = _adapter_fn("load_workload")
-    doc = json.loads((PROFILES / "workload_b0_sampling_temp07.json").read_text())
+    doc = json.loads(workload_file(PROFILES / "workload_b0_sampling_temp07.json").read_text())
     doc["sampling"]["variant"] = "nope"
     p = tmp_path / "w.json"
     p.write_text(json.dumps(doc))
@@ -119,11 +109,7 @@ def test_sampling_params_uses_request_seed_and_n(monkeypatch):
     class SP:
         def __init__(self, **kw):
             calls.append(kw)
-    import sys
-    import types
-    fake = types.ModuleType("vllm")
-    fake.SamplingParams = SP
-    monkeypatch.setitem(sys.modules, "vllm", fake)
+    fake_vllm.install(monkeypatch).set("vllm:SamplingParams", SP)
     fn({"max_tokens": 16, "seed": 3, "n": 2}, {"temperature": 0.7, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1})
     fn({"max_tokens": 16}, {"temperature": 0.0, "top_p": 1.0, "top_k": 0})
     assert calls[0]["seed"] == 3 and calls[0]["n"] == 2 and calls[0]["temperature"] == 0.7

@@ -249,12 +249,12 @@ def test_leaf_statements_the_sample_did_not_ask_for_are_refused(world, lanes, tm
     evidence, proved = prove(world, tmp_path, files)
     s = evidence["statements"][_leaf_statements(evidence)[0]]
     for extra, why in (
-            (s, "drawn leaf 1's statement ['lane', 0] is proved twice: each statement is proved and verified once, and a "
-                "retry never reproves it"),
-            ({**s, "unit": 0}, "unit 0 has a leaf statement and is no drawn lanes-form leaf: only the draw's leaves at a K "
-                               "committed as lanes are proved as lanes"),
-            ({**s, "statement": ["lane", 4]}, "drawn leaf 1's statement ['lane', 4] is none of leaf_lanes.statements(8, "
-                                              "16): a lane with its index or the combine")):
+            (s, ("drawn leaf 1's statement ['lane', 0] is proved twice: each statement is proved and verified once, and a "
+                 "retry never reproves it")),
+            ({**s, "unit": 0}, ("unit 0 has a leaf statement and is no drawn lanes-form leaf: only the draw's leaves at a K "
+                                "committed as lanes are proved as lanes")),
+            ({**s, "statement": ["lane", 4]}, ("drawn leaf 1's statement ['lane', 4] is none of leaf_lanes.statements(8, "
+                                               "16): a lane with its index or the combine"))):
         got = verified(world, {**evidence, "statements": evidence["statements"] + [extra]}, files, runner(proved))
         assert got == (None, ("outcome", why))
 
@@ -277,9 +277,9 @@ def test_a_leaf_program_other_than_the_committed_one_is_refused(world, lanes, tm
     evidence, proved = prove(world, tmp_path, files)
     other = {**evidence, "leaf_programs": {**evidence["leaf_programs"], "combine384": b"another".hex()}}
     got, why = verified(world, other, files, runner(proved))
-    assert got is None and why == ("circuit", "the window's combine384 leaf Program is not the one the period-open "
-                                              "committed (leaf_programs combine384): verify each lanes-form statement "
-                                              "against it")
+    assert got is None and why == ("circuit", ("the window's combine384 leaf Program is not the one the period-open "
+                                               "committed (leaf_programs combine384): verify each lanes-form statement "
+                                               "against it"))
     monkeypatch.setattr(Cr, "leaf_of", lambda *_: False)
     got, why = verified(world, evidence, files, runner(proved))
     assert got is None and why[0] == "circuit" and "is not h1window.leaf_program's at K = 384" in why[1]

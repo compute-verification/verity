@@ -205,5 +205,5 @@ def test_a_send_needs_the_key(api, monkeypatch):
 
 def test_the_registry_names_each_coordinator_by_its_cloud_agent():
     held = L.coordinators()
-    assert "top" in held and "console" not in held and "dashboard" not in held, "desktop agents get no follow-ups"
+    assert "top" in held and "console" not in held and "dashboard-goals" not in held and "dashboard-metrics" not in held, "desktop agents get no follow-ups"
     assert all(L.CLOUD_AGENT.fullmatch(a) for a in held.values())
