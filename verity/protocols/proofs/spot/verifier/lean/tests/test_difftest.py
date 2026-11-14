@@ -6469,7 +6469,7 @@ def test_the_callers_check_agrees(callers):
 
 def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
     """The docket's `link-points` on the per-member form's members, Lean's answers the Python's (the piece's
-    ``members``, which `Registration.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
+    ``members``, which `Docket.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
     case's parameters; `registration.check`'s ``members``). Two windows of two members at one unit a proof block:
     PAIR's two proof blocks and TRIPLE's eighteen, a template each, and one template's twenty-four cut in half. A row
     is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the members
@@ -7475,7 +7475,7 @@ def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
 
 
 def test_a_many_port_registration_agrees(pieces):
-    """R3 over a window of 4096 ports, the shape whose quadratic walk `Registration.portIndex` replaced, Lean and Python
+    """R3 over a window of 4096 ports, the shape whose quadratic walk `Docket.portIndex` replaced, Lean and Python
     agreeing: accepted as registered, and each change to one port reaches its code and no other."""
     a = _many_ports(_REGISTRATION_OF(_v1_audit("subset")), 4096)
 

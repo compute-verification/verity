@@ -900,7 +900,7 @@ theorem evidenceOf_statements {b : ByteArray} {e : Evidence} (h : evidenceOf b =
 
 /-- **The per-member form's parameters name members and hand them to the registration's check**: whatever
 `membersParamsOfJson` returns names some, and the members its v1 part's verifier holds
-(`Registration.Verifier.members`, which `link-points` reads) are those, each its units and its circuit's units a proof
+(`Docket.Verifier.members`, which `link-points` reads) are those, each its units and its circuit's units a proof
 block. -/
 theorem membersParamsOfJson_linked {j : Json} {p : Params} (h : membersParamsOfJson j = .ok p) :
     ∃ ms : Array Member, p.members = some ms ∧ p.base.verifier.members = ms.map fun m => (m.units, m.g) := by
@@ -924,7 +924,7 @@ theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOf
 
 /-- **Parameters of either form are parsed parameters but for the files and the members**: their v1 part is that of
 parameters `paramsParsed` returned, the one statement's own (`paramsOfJson_parsed`) or the per-member form's, read at
-`proofs` of no file, but for the members its registration's check reads (`Registration.Verifier.members`), which the
+`proofs` of no file, but for the members its registration's check reads (`Docket.Verifier.members`), which the
 per-member form's parse hands it (`membersParamsOfJson_linked`). -/
 theorem paramsEitherOfJson_base {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) :
     ∃ j' p' ms, paramsParsed j' = .ok p' ∧

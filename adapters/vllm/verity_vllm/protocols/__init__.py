@@ -65,7 +65,7 @@ from verity_vllm.errors import Refused
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
-__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
+__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",

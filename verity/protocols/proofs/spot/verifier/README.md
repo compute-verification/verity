@@ -396,7 +396,7 @@ Its digest is `SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical J
 `verity.circuits.codec.canonical_json`).
 
 The verifier holds the record to its own copies with R1 to R8 (`check`). The Lean verifier runs the same check
-(`Spot.Registration.check`), `Properties.Spot.R1` to `R8` state what each accepts, and
+(`Spot.Docket.check`), `Properties.Spot.R1` to `R8` state what each accepts, and
 `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py` holds the Python to the Lean.
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
@@ -639,5 +639,5 @@ A verifier that reads the registration log's registered compiler (`compiler`: th
 with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
 window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
 (`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
-`R6-compiler`. Lean `Registration.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+`R6-compiler`. Lean `Docket.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
 the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.

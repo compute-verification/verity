@@ -18,19 +18,24 @@ import numpy as np
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
-from verity.commitments.periods.interface import Circuit, Integration, Read, Registered, Window
+from verity.commitments.periods.interface import Circuit, Integration, Read, Registered, Window, Wire
 
-from . import answer_circuit, decode_circuit, verdict_circuit
+from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
 from . import setup_circuit as SP
+from .session import SessionStatements, SessionUnit
 from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 
-DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit)
+DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 #: the setup's registered parameters: the store's blocks and W's rows
 STORE, WEIGHTS = "store", "weights"
 
 
 class SetupIntegration:
-    """PoUS's setup as an integration: one proof block per sampled block, the setup unit (`setup_proof.setup_unit`) over
+    """Until a sampled unit's index reaches it as a row the verifier makes, nothing ties a sampled block to its index: a
+    prover could prove a correct setup of another block in a sampled unit's place, so the setup's units prove less than
+    they read as proving.
+
+    PoUS's setup as an integration: one proof block per sampled block, the setup unit (`setup_proof.setup_unit`) over
     the block of the store, its base, the registered row of W that holds its payload and its slot (`setup_proof.place`).
 
     `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
@@ -80,16 +85,41 @@ def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
 
 
 class SessionIntegration:
-    """PoUS's session as an integration: the signature check, the message's hash and one opened block a round, each
-    its own proof block."""
+    """PoUS's session as an integration (`session.session_statements`): the signature check (`PousSessionSig_v1`, one
+    unit), the message's hash (`PousSessionDigest_v1`, one unit) and one opened block a round (`PousRound_v1` at slot 0
+    for the even rounds and at slot 1 for the odd), each its own proof block. Its wires are the session's links: the
+    signature's ``m`` reads the digest's output m (``o1``), and round j's ``records`` the digest's records output ⌊j/2⌋
+    (``o{2 + ⌊j/2⌋}``). The rows the verifier knows (the key, the header, the domain id, the signed context, j and i) and
+    each round's registered row are free rows here, which the session's tables are to fill."""
+
+    def __init__(self, statements: SessionStatements) -> None:
+        self.statements = statements
+        rounds = statements.rounds
+        self._parity = tuple(tuple(u for j, u in enumerate(rounds) if j % 2 == s) for s in (0, 1))
+
+    def _templates(self) -> list[tuple[SessionUnit, ...]]:
+        st = self.statements
+        return [g for g in ((st.signature,), (st.digest,), *self._parity) if g]
 
     def circuit(self) -> Circuit:
-        raise NotImplementedError("proofs/zero-knowledge: PoUS's session as a window's circuit "
-                                  "(SessionIntegration.circuit)")
+        groups = self._templates()
+        sig, dig = (descriptor_id(g[0].definition) for g in groups[:2])
+        wires = [Wire(sig, "m", dig, "o1", 0, (1,), 0, (0,))]
+        for group in self._parity:
+            wires += [Wire(descriptor_id(group[0].definition), "records", dig, f"o{2 + u}", u, (1,), 0, (0,))
+                      for u in range(len(group))]
+        return Circuit("pous-session", tuple((g[0].definition, len(g)) for g in groups), wires=tuple(wires))
 
     def run(self, window: Window) -> None:
-        raise NotImplementedError("proofs/zero-knowledge: PoUS's session's values recorded into a window "
-                                  "(SessionIntegration.run)")
+        """Each unit's rows as bytes (a port's words, `octets`) and its outputs: the one-bit ok as a 16-bit integer, m and
+        the records rows as bytes."""
+        for group in self._templates():
+            def rows(values):
+                return np.frombuffer(b"".join(values), dtype=np.uint8).reshape(len(group), -1)
+            inputs = [rows([u.rows[p] for u in group]) for p in range(len(group[0].rows))]
+            outputs = [np.array([u.outputs[0][0] for u in group], dtype=np.uint16),
+                       *(rows([u.outputs[o] for u in group]) for o in range(1, len(group[0].outputs)))]
+            window.record(group[0].definition, inputs, outputs)
 
 
 def write_window(integration: Integration, out_dir: Path, registrar: Any) -> Path:

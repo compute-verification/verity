@@ -1,9 +1,11 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import MemoryChallenger.Protocol
 public import MemoryChallenger.WipeJudge
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import MemoryChallenger.Protocol
@@ -242,6 +244,22 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/wipe/v0`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
+/-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
+(`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
+bound states (`eps`), at a moment. Until the network certifier's count reaches the check, every accepted wipe publishes
+`certified` false, and its rows say so. The wipe is computed at `memory_bits`, which must be at least the memory
+registered for the server (`params`): foreign bits outside what it declared are outside its bound.
+
+Its answers name no auditor's device's key, so they are of the whole site (`witness`), and no step the bound held at
+(`held`). Its part is every tier a wipe can declare. The session's own tiers are in its profile's `tiers` as pairs of a
+label (`gpu-hbm`, `host-dram`, a disk's name) and bytes, not the list of labels `Core.Account.Amount.tiers` reads. -/
+def account : Core.Account :=
+  { protocol := ID, witness := none
+    amounts := [{ metric := "after a wipe", part := .memory [.hbm, .dram, .disk], key := .published "foreign_bits",
+                  unit := Core.Account.bits, side := .free, time := .moment, error := .published "eps",
+                  capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified"),
+                  params := [{ name := "memory_bits", key := .published "memory_bits" }] }] }
+
 private def segment : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
 /-- `StreamedWipeMeetsH200`'s H200: 141 GiB, filled whole as one tier. -/
@@ -277,5 +295,6 @@ private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { se
   | .ok s => (decodeCommitment s.toUTF8).toOption.isNone
   | .error _ => false
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
+#guard account.Formed ∧ account.protocol = protocol.id
 
 end MemoryChallenger.WipeProtocol
