@@ -1,5 +1,5 @@
 """The remote bandwidth session over the node's `NodeMemory`, inside the prover's process (the Commit's, or the serve
-driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role
+driver's): `StoreBackend` is the backend PoUB's prover's `ProverSide` drives (`REMOTE_SESSION`), the role
 `device.GpuBackend` and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
 `config.CommitConfig.remote_verifier`).
 
@@ -37,7 +37,7 @@ Commit's session is `CommitSession`: the binder on its engine from the build, th
 Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next step, so the memory map's steps are
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
-`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
+PoUB's prover is not a package: `session_module` loads its ``prover.py`` from the source tree
 (`REMOTE_SESSION`, below), and `prove` takes the wire from it. The verifier's side, the wire among it, is
 `verity.protocols.accounting.poub.verifier.session`.
 """
@@ -71,9 +71,9 @@ from verity_vllm.protocols.remote_bandwidth.binder import Binder
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
-REMOTE_SESSION = config.ROOT.parent.parent / "benchmarks" / "remote_session"
-#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
-VLLM_ENCODED = config.ROOT.parent.parent / "benchmarks" / "vllm_encoded"
+REMOTE_SESSION = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent
+#: kv.cu's launchers over torch (``paged.py``, with ``kv_bench.py`` beside it), the remote session's device encode.
+VLLM_ENCODED = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent
 
 __all__ = ["CommitSession", "StoreBackend", "prove"]
 
@@ -87,8 +87,8 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``), loaded once from its file, as its own
-    scripts import it."""
+    """The module ``name`` of PoUB's prover in ``directory`` (``prover``, ``device``; ``paged``), loaded once from its
+    file, as its own scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, Path(directory) / f"{name}.py")
@@ -405,7 +405,7 @@ class StoreBackend:
 
 
 class KvDevice:
-    """The store's encode on the GPU by kv.cu (``benchmarks/word_codec/kv.cu``, a build at the codec's field and mask
+    """The store's encode on the GPU by kv.cu (``verity/protocols/accounting/poub/prover/word_codec/kv.cu``, a build at the codec's field and mask
     loaded as `kv_bench.Lib`): blocks under the seed's key by ``kv_encode``; an append's under their bound keys and its
     coin by ``kv_encode_bound``, each block's offset b_j(c_a) = `codec.binding`(d_j, j, key, c_a) handed to the device
     by ``paged.offsets`` (`VLLM_ENCODED`), so the host computes only d_j and b_j."""
