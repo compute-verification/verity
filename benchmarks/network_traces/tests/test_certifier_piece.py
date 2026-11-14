@@ -676,7 +676,7 @@ def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_c
     bucket's connections reordered, signed by its key, refused by name, and `rows_check`'s `Rejected` for the piece;
     the run re-signed under another key refused at the record, and, its deployment.json rewritten to the record's, by
     the audit at its first certificate, which isn't the record's key's; a record changed after its certificate signed
-    it refused at its head; and the honest run's case under a schedule with a response cap refused by name, the audit
+    it refused at its head; and the honest run's case under a schedule with a `max_tokens_cap` refused by name, the audit
     reading none. The one test that runs the case's encoding, the binding to the signed heads and the audit together
     on real records, which the stand-ins above don't."""
     honest = published(tmp_path / "honest")
