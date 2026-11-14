@@ -1,0 +1,3 @@
+[2026-11-14T17:13Z] a4172940c3b8
+model: Claude Opus 5.5; subscriptions removed: none held. KEY, Sat 14 Nov 9:13 AM PST: stopped; before your message I had already posted one comment on VLLM-435 at 9:12 AM PST (as worker KEY, shown as vllm/KEY: the eighth file is our `held-alpha-limits.json`; 3d07's record holds only the deployment and weights registrations; asked vllm to keep the serve dir past 12:05 PM PST or make the window circuit, window registration, limits and block counts first). I ran no record check, launched no run and changed no code or #9502; please withdraw or answer over that comment as you see fit.
+
