@@ -57,9 +57,11 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
   the deployment's constructions), from `SessionRegistered` at that composite's verdict, the openings and the
   registered files discharged as for remote.
 * `onsite_soundness_deployedReady`: **`Verity.Soundness` at the deployed vocabulary**, onsite's seven targets with
-  SPOT's discharged by `spotSound_deployedReady`; the other six are the base's, each a premise.
+  SPOT's discharged by `spotSound_deployedReady` from `FamiliesPinned` (`Instance.sessionRegistered`); the other six
+  are the base's, each a premise.
 * `onsite_soundness_deployedReady_honest`, `onsite_soundness_deployedReady_nontrivial`: its premises hold at the idle
-  deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
+  deployment's instance, whose coin commitment holds the family v2's parameters name, and its conclusion fails for a
+  verifier that accepts everything.
 -/
 
 @[expose] public section
@@ -526,7 +528,8 @@ files that passed the commit phase's check while one of the period's seven claim
 seven errors at that strategy summed, at the vocabulary `Instance.vocab` builds from the deployment and the
 constructions `Instance.constructionsAt` assembles at onsite. It is `soundness_of_subprotocols` with SPOT's target
 proved (`spotSound_deployedReady`, from Flock's live chain through `spotSound_of_targets`) from the one premise about
-the deployment's sessions that `remote_soundness_deployedReady` takes, here at onsite's verdict (`SessionRegistered`).
+the deployment's sessions that `remote_soundness_deployedReady` takes, here at onsite's verdict (`FamiliesPinned`,
+which gives `SessionRegistered` by `Instance.sessionRegistered`).
 
 The other six targets are the base's (`Instance.target_of_base`), each a premise no proof here discharges: PoUW's
 (`PouwSound`), the inference-only policy's (`InferenceOnlySound`), PoUS's (`PousSound`), PoUB-P2's
@@ -541,30 +544,31 @@ theorem onsite_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hSr : I.SessionRegistered .onsite)
+    (hFP : I.FamiliesPinned .onsite)
     (hW : I.base.PouwSound .onsite) (hI : I.base.InferenceOnlySound .onsite)
     (hP : I.base.PousSound .onsite) (hB : I.base.BandwidthAuditSound .onsite)
     (hN : I.base.NetworkCertifierSound .onsite) (hX : I.base.WipeSound .onsite) :
     (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest)).SoundnessAt .onsite :=
   Verity.soundness_of_subprotocols ι α d (I.vocab (I.constructionsAt K₀ .onsite reg record recordDigest))
-    (spotSound_deployedReady I K₀ .onsite reg record recordDigest hSr)
+    (spotSound_deployedReady I K₀ .onsite reg record recordDigest (I.sessionRegistered hFP))
     (I.target_of_base _ .onsite .pouw (by decide) hW) (I.target_of_base _ .onsite .inferenceOnly (by decide) hI)
     (I.target_of_base _ .onsite .pous (by decide) hP) (I.target_of_base _ .onsite .poub (by decide) hB)
     (I.target_of_base _ .onsite .network (by decide) hN) (I.target_of_base _ .onsite .wipe (by decide) hX)
 
 open scoped ENNReal in
 /-- **`onsite_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
-reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
-premise speaks of the sessions the deployment runs, and the base's six targets hold at `⊤`. -/
+reading (`Instance.Honest.inst`), whose coin commitment holds the family v2's parameters name
+(`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's six targets
+hold. -/
 theorem onsite_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .onsite ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .onsite ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .onsite ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.PousSound .onsite ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.BandwidthAuditSound .onsite ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.NetworkCertifierSound .onsite ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.WipeSound .onsite :=
-  ⟨Instance.Honest.sessionRegistered_none ⊤ .onsite,
+    (Instance.Honest.inst ⊤ Instance.Honest.bound).FamiliesPinned .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PouwSound .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.InferenceOnlySound .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PousSound .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.BandwidthAuditSound .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.NetworkCertifierSound .onsite ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.WipeSound .onsite :=
+  ⟨Instance.Honest.familiesPinned ⊤ Instance.Honest.bound .onsite,
     Instance.Honest.target_top .onsite .pouw, Instance.Honest.target_top .onsite .inferenceOnly,
     Instance.Honest.target_top .onsite .pous, Instance.Honest.target_top .onsite .poub,
     Instance.Honest.target_top .onsite .network, Instance.Honest.target_top .onsite .wipe⟩
