@@ -329,10 +329,10 @@ CUTS: dict[str, tuple[str, dict[str, Any], str, list[dict[str, int]], str]] = {
                           "x w g y", ROUTED, f"expert 2 coordinate 0: {WORDS}"),
     "Attention_v3": ("attention-head-fa2-d16-bn16",
                      {"subcircuit": "AttentionHead<T,16>", "dot": AMPERE, "inv": FA2, "statics": {"D": 16, "BN": 16}, "rule": HEAD_RULE},
-                     "q k v out", HEADS, r"head 0: \d+ words differ from the row$"),
+                     "q k v out", HEADS, "head 0: 16 words differ from the row$"),
     "Attention_v2": ("attention-head-hopper-bf16-wgmma-fa3invsum_v1-d16-bn16",
                      {"subcircuit": "AttentionHead<T,16>", "dot": HOPPER, "inv": FA3, "statics": {"D": 16, "BN": 16}, "rule": HEAD_RULE},
-                     "q k v out", HEADS, r"head 0: \d+ words differ from the row$"),
+                     "q k v out", HEADS, "head 0: 16 words differ from the row$"),
     "RoPE_v1": ("rope-head-d16", {"subcircuit": "RoPEHead<16>", "statics": {"D": 16}, "rule": ROPE_RULE},
                 "x cs out", [{"head": h, "NHEADS": 2} for h in range(2)], "head 0: differs from the row$"),
 }
