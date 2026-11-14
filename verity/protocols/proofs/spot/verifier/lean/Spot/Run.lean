@@ -184,11 +184,10 @@ def templateCircuits (proofs query : Json) : V (Array (String × String × Json 
       getD proofs "templates") | throw form
   if let some ts := field? proofs "tables" then
     let .obj _ := ts | throw form
-    for (p, e) in entries ts do
-      unless tableEntry? p e do
-        throw s!"{form}: a pinned table's entry is exactly value (its parameter), root, leaves, words and domain, and " ++
-          s!"word_bits where its words are not 16-bit, root and domain SHA-512s in lowercase hex and the counts positive " ++
-          s!"integers: {p} {e.compress}"
+    if let some (p, e) := (entries ts).find? fun (p, e) => !tableEntry? p e then
+      throw (s!"{form}: a pinned table's entry is exactly value (its parameter), root, leaves, words and domain, and " ++
+        s!"word_bits where its words are not 16-bit, root and domain SHA-512s in lowercase hex and the counts positive " ++
+        s!"integers: {p} {e.compress}")
   let named ← es.mapM fun e =>
     let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each registered " ++
       s!"an object or null and each read two positive counts: {e.compress}"
