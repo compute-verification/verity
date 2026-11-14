@@ -404,8 +404,8 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     and by default, each a positive finite rate, and no DPU's."""
     for n in (ledger.Node.stated(FIGURES), ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13), node()):
         assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
-            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597e12, 819.2e9)
-        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597e12, 819.2e9)
+            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597568e12, 819.2e9)
+        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597568e12, 819.2e9)
     assert not [f.name for f in dataclasses.fields(ledger.Node) if "dpu" in f.name]
     for name in ("gpu_write_bytes_per_s", "host_write_bytes_per_s"):
         for bad in (0.0, -1.0, math.inf):
@@ -423,7 +423,7 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
         "hbm": ledger.Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
                            timing.GPU_CHIP_BYTES),
         "dram": ledger.Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
-    assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.5952e12
+    assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.599744e12
     assert sum(t.devices * t.read_bytes_per_s for t in n.tiers.values()) == n.read_bytes_per_s == 12.9188e12
     assert sum(t.devices * t.chip_bytes for t in n.tiers.values()) == n.chip_bytes == 3_105_652_736
     fast = ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13)
@@ -432,7 +432,7 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
     with pytest.raises(TypeError):
         n.tiers["disk"] = n.tiers["dram"]
     with pytest.raises(ValueError, match="tiers"):
-        dataclasses.replace(n, tiers={"hbm": (8, 1.597e12, 1.539e12, 263_163_904)})
+        dataclasses.replace(n, tiers={"hbm": (8, 1.597568e12, 1.539e12, 263_163_904)})
     for bad, what in (({"devices": 0}, "devices"), ({"devices": 1.0}, "devices"), ({"spec_bytes_per_s": 0.0}, "spec"),
                       ({"read_bytes_per_s": math.inf}, "read"), ({"chip_bytes": -1}, "chip_bytes"),
                       ({"chip_bytes": 1.0}, "chip_bytes")):

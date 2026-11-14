@@ -71,9 +71,10 @@ F = 2^20 is provisional, under the sketch's random-oracle assumption."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
 in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
-GPU_SPEC_BYTES_PER_S = 1.597e12
-"""The RTX PRO 6000 Server Edition's datasheet memory bandwidth, 1,597 GB/s (NVIDIA's product page and datasheet, as
-the census's `rtx-pro-6000-server` entries cite them), which no measured kernel reaches."""
+GPU_SPEC_BYTES_PER_S = 1.597568e12
+"""The RTX PRO 6000 Server Edition's specified memory bandwidth, the card's `memory.bandwidth`: the bus's own rate, 512
+bits at two transfers a clock of the 12,481 MHz memory clock, 1,597.568 GB/s (the product page's 1,597 GB/s rounds
+it), which no measured kernel reaches."""
 HOST_READ_BYTES_PER_S = 606.8e9
 """The host DRAM's measured read rate: 8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any
 reader mix measured; DRAM caps the sum, not the root complex."""
@@ -85,8 +86,8 @@ measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and
 SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
 """R specified, the headline: every tier at its datasheet rate."""
 GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
-"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the datasheet's 1,597 GB/s,
-the bus's own rate (512 bits at the 12,481 MHz memory clock it ran at), 4.4% above every write measured on it.  Labels
+"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the bus's own rate,
+1,597.568 GB/s (`GPU_SPEC_BYTES_PER_S`), 4.5% above every write measured on it.  Labels
 derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
 constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
 engines and 51.40 by zero copy (`benchmarks/bandwidth/write.cu`).  A ceiling must bound every prover, and a measured
@@ -132,7 +133,7 @@ SQUARINGS_PER_S = {width: GPUS * rate for width, rate in GPU_SQUARINGS_PER_S.ite
 """C_sq, the node's stated squaring ceiling per width, the sum over its devices: each GPU at s times the reference and
 the host at s·h times the 8 GPUs' reference, above its IFMA bound h."""
 GPU_HBM_BYTES = 96 * 2 ** 30
-"""One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
+"""One RTX PRO 6000's memory, 96 GiB (the card's `store.dram`)."""
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up: how much of a paced
 line's ingress charge is its disks (`session.verifier.ingress_bursts`)."""

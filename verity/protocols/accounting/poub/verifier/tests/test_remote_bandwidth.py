@@ -1031,7 +1031,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
     GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
     openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.896–0.927%; over the
     horizon the pooled μ_sample is under 0.01% and the whole γ about 0.67%, over 0.15%, which μ_chip exceeds alone and
-    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
+    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.9%: R cancels in what is certified.
     The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.57–5.60%.  The 20 s option at 11,091
     openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at
     2,773."""
@@ -1048,7 +1048,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
         spec = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s,
                              capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
         assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
-        assert 0.058 < spec.gamma < 0.0586
+        assert 0.0585 < spec.gamma < 0.0589
         hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS,
                             samples=s, read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
         assert hbm.timing > idle and 0.0557 < hbm.gamma < 0.0561
@@ -1062,7 +1062,7 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's: its 8 GPUs' and its host's, every
     tier, each GPU's value kept apart for the benches that read one GPU."""
     assert timing.GPUS == 8
-    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
+    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597568e12 + 819.2e9
     assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
     assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
     assert {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()} == timing.SQUARINGS_PER_S
@@ -1078,7 +1078,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
     the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  Each docstring names its
     benches; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under the default codec,
     and no DPU's is stated."""
-    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597e12 > 1528.98e9 > 56.39e9
+    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597568e12 > 1528.98e9 > 56.39e9
     assert timing.HOST_WRITE_BYTES_PER_S == timing.HOST_SPEC_BYTES_PER_S == 819.2e9 > 207.69e9
     body = ast.parse(Path(timing.__file__).read_text()).body
     docs = {a.targets[0].id: b.value.value for a, b in zip(body, body[1:])
