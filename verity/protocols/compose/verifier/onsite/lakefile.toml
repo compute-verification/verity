@@ -1,6 +1,6 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), the
 # inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
-# run check), bandwidth (the remote bandwidth session), communication (the network certifier over the period,
+# run check), bandwidth (the PoUB session), communication (the network certifier over the period,
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
@@ -49,7 +49,7 @@ path = "../../../accounting/certifier/verifier/lean"
 name = "pous_check"
 path = "../../../accounting/pous/verifier/check"
 
-# Bandwidth: the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
+# Bandwidth: PoUB's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
 [[require]]
 name = "remote_audit"
 path = "../../../accounting/poub/verifier/lean"
