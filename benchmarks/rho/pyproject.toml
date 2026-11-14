@@ -19,8 +19,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # no census: data/ states the reference datacenter's machines and the world's active parameters, and
 # tests/test_params.py and tests/test_hardware.py hold them to the census's deployments and adversary.
 inputs = ["security/lean-audit.json", "security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
-          "security/Definitions/Nci/Remote.lean", "security/Definitions/Nci/Guarantees/Remote.lean",
-          "security/Definitions/Nci/Cut.lean", "security/Definitions/Nci/Guarantees/Cut.lean",
+          "security/Definitions/InferenceOnly/Remote.lean", "security/Definitions/InferenceOnly/Guarantees/Remote.lean",
+          "security/Definitions/InferenceOnly/Cut.lean", "security/Definitions/InferenceOnly/Guarantees/Cut.lean",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/bracket.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", 

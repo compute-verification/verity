@@ -37,7 +37,7 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 |---|---|---|---|---|
 | SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes |
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` | yes | yes |
-| the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
+| the inference-only policy | `InferenceOnlySound` | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` | | yes |
 | PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `RemoteAudit.P2Protocol.protocol` | | yes |
 | the network certifier | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` | | yes |

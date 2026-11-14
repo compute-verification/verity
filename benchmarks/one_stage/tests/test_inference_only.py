@@ -1,6 +1,6 @@
 """`inference_only.py`: a served run's inference-only verdict, its declared circuit's blocks against the (c, k, n) it
-registered before it served, by `NciCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
-primitive, input by input; the verdict's rule is the count rule's reference (`nci_reference.check_count_detail`) on its
+registered before it served, by `InferenceOnlyCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
+primitive, input by input; the verdict's rule is the count rule's reference (`inference_only_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
 session's gates and fresh bits with every weight held, and n, under an H200 int8 serve's φ or the one ``--serve`` states,
@@ -355,7 +355,7 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
     (tmp_path / "circuit.json").write_text(json.dumps(small))
     (tmp_path / "registration.json").write_text(json.dumps({}))
     (d / "private").mkdir(mode=0o700)
-    lean = _nci_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
+    lean = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
     assert IO.main(["verdict", "--policy", str(tmp_path / "policy.json"), "--serve-run", str(d), "--circuit",
                     str(tmp_path / "circuit.json"), "--registration", str(tmp_path / "registration.json"), "--pins",
                     str(tmp_path / "no-weights.json"), "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
@@ -395,7 +395,7 @@ NEW_USAGE = OLD_USAGE.replace("--count INSTANCE", "--count [--detail] INSTANCE")
 COUNT = 987654321
 
 
-def _nci_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
+def _inference_only_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
     """A stand-in `nci-check` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
     INSTANCE`` prints ``detail`` where it has one, and anything else gets ``usage``, exit 2. It logs each call's
     arguments to ``args.log`` beside it."""
@@ -416,7 +416,7 @@ exit 2
 
 
 def _whole(row: dict) -> dict:
-    """`NciCheck.Count`'s whole verdict on the session Program with θ empty: its row's fresh bits past k, and a count."""
+    """`InferenceOnlyCheck.Count`'s whole verdict on the session Program with θ empty: its row's fresh bits past k, and a count."""
     return {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
             "failure": [0, "fresh"]}
 
@@ -425,14 +425,14 @@ def _whole(row: dict) -> dict:
     (OLD_USAGE, None, ["--count"]),
     (NEW_USAGE, {"complies": False}, ["--count", "--detail"]),
 ], ids=["count-prints-all", "detail-prints-all"])
-def test_the_record_takes_nci_checks_gates_fresh_bits_and_verdict_and_none_of_its_counts(small, tmp_path, usage, public,
+def test_the_record_takes_inference_only_checks_gates_fresh_bits_and_verdict_and_none_of_its_counts(small, tmp_path, usage, public,
                                                                                          flags):
     """An `nci-check` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
     ``--detail``, which its usage names: each is called for its whole verdict, rows, total and failure, which the private
     verdict keeps whole, and the public verdict and its line take only its gates a block, whether they agree, and with θ
     empty its fresh bits and ``complies``, and none of its counts."""
     row = IO.session_row(small, None, None)
-    exe = _nci_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
+    exe = _inference_only_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"] == {
         "gates": row["gates"], "agrees_on_gates": True, "with_theta_empty": {"fresh": row["fresh"] + 5, "complies": False}}
@@ -447,7 +447,7 @@ def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tm
     """An `nci-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
     of the block: the verdict says so beside its own, and takes nothing from it."""
     row = IO.session_row(small, None, None)
-    exe = _nci_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
+    exe = _inference_only_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"] == {"error": "nci-check --count printed no row of the block"}
     assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}}
@@ -455,13 +455,13 @@ def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tm
 
 @pytest.mark.parametrize(("usage", "flags"), [(OLD_USAGE, ["--count"]), (NEW_USAGE, ["--count", "--detail"])],
                          ids=["count-prints-all", "detail-prints-all"])
-def test_an_nci_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
+def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
     """`nci-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, the
     verdict accepting beside it; anything else it carries, a count here, stays in the private verdict."""
     row = IO.session_row(small, None, None)
     refusal = {"error": "program", "message": "E_REINTERPRET: a reference reads a leaf at another width"}
     said = {**refusal, "blocks": [[row["key"], row["gates"], row["fresh"], COUNT]], "total": COUNT}
-    exe = _nci_check(tmp_path / "lean", usage, said, said)
+    exe = _inference_only_check(tmp_path / "lean", usage, said, said)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"] == refusal and IO.line(pub).endswith("; nci-check --count: program")
     assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub)
@@ -469,7 +469,7 @@ def test_an_nci_check_refusal_lands_in_lean_with_its_code_and_message_alone(smal
 
 
 @pytest.mark.slow
-def test_nci_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
+def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
     """The compiled `nci-check --count` on `small`'s session Program counts the verdict's gates a block: the Lean the
     verdict runs beside its own count reads the instance it is given, as only the built executable can show (the
     reference test holds the instance to the Python count, and `nci-count-difftest` the Lean to the reference)."""

@@ -34,18 +34,18 @@ open Accounting Core
 /-- **A composite's acceptance holds the policy's case to its check's**: on what composite `k` accepted as a `same`
 composition, every decoding of the policy's case meets `PolicyHeld`. -/
 theorem policyHeld_of_same {k : Verity.Registration.Composite} {s : Sent} (h : SameAccepts k s)
-    {p : NciCheck.Protocol.Params} {r : NciCheck.Protocol.Commitment} {e : NciCheck.Protocol.Evidence}
+    {p : InferenceOnlyCheck.Protocol.Params} {r : InferenceOnlyCheck.Protocol.Commitment} {e : InferenceOnlyCheck.Protocol.Evidence}
     (hc : PolicyCase k s p r e) : Properties.Remote.PolicyHeld p r e := by
   obtain ⟨ps, c, ev, ⟨h1, h2, h3⟩, pub, prof, ⟨⟨-, hcases, -⟩, -⟩, -⟩ := h
   obtain ⟨ps', c', ev', ⟨h1', h2', h3'⟩, ⟨P, n, cs⟩, hx, hx1, hp, hr, he⟩ := hc
   obtain rfl : ps' = ps := Except.ok.inj (h1'.symm.trans h1)
   obtain rfl : ev' = ev := Except.ok.inj (h3'.symm.trans h3)
-  have hx1' : P = NciCheck.Protocol.protocol := hx1
+  have hx1' : P = InferenceOnlyCheck.Protocol.protocol := hx1
   subst hx1'
   obtain ⟨p', r', e', hp', hr', he', pub', prof', hacc⟩ := hcases _ hx
-  have hp'' : (canonicalJson n.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p' := hp'
-  have hr'' : NciCheck.Protocol.commitmentOf cs.commitment = .ok r' := hr'
-  have he'' : NciCheck.Protocol.evidenceOf cs.evidence = .ok e' := he'
+  have hp'' : (canonicalJson n.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p' := hp'
+  have hr'' : InferenceOnlyCheck.Protocol.commitmentOf cs.commitment = .ok r' := hr'
+  have he'' : InferenceOnlyCheck.Protocol.evidenceOf cs.evidence = .ok e' := he'
   obtain rfl : p' = p := Except.ok.inj (hp''.symm.trans hp)
   obtain rfl : r' = r := Except.ok.inj (hr''.symm.trans hr)
   obtain rfl : e' = e := Except.ok.inj (he''.symm.trans he)
@@ -56,10 +56,10 @@ the policy's case decodes. -/
 theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent}
     (h : ComponentAccepts k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
   obtain ⟨Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
-  have hQ' : Q = NciCheck.Protocol.protocol := by
+  have hQ' : Q = InferenceOnlyCheck.Protocol.protocol := by
     cases k <;> exact (Option.some.inj hQ).symm
   subst hQ'
-  have hx1' : P = NciCheck.Protocol.protocol := hx1
+  have hx1' : P = InferenceOnlyCheck.Protocol.protocol := hx1
   subst hx1'
   obtain ⟨p, r, e, hp, hr, he, -⟩ := hacc
   exact ⟨p, r, e, ps, c, ev, hdec, _, hx, rfl, hp, hr, he⟩

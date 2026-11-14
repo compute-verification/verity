@@ -20,23 +20,23 @@
    "owner": "@proofs",
    "digest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
   },
-  "Nci.Cut.Assumptions.Exports": {
+  "InferenceOnly.Cut.Assumptions.Exports": {
    "owner": "@training",
    "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
   },
-  "Nci.Cut.Assumptions.Hardness": {
+  "InferenceOnly.Cut.Assumptions.Hardness": {
    "owner": "@training",
    "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6"
   },
-  "Nci.Formalism.Assumptions.CutCost": {
+  "InferenceOnly.Formalism.Assumptions.CutCost": {
    "owner": "@training",
    "digest": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4"
   },
-  "Nci.Formalism.Assumptions.EfficiencyFloor": {
+  "InferenceOnly.Formalism.Assumptions.EfficiencyFloor": {
    "owner": "@training",
    "digest": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e"
   },
-  "Nci.Formalism.Assumptions.TokenWork": {
+  "InferenceOnly.Formalism.Assumptions.TokenWork": {
    "owner": "@training",
    "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
   },
@@ -200,102 +200,102 @@
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
    "why": "The read's verdict, the event `EmbeddingReadBinding` bounds."
   },
-  "Nci.CompliesAtMost": {
+  "InferenceOnly.CompliesAtMost": {
    "owner": "@training",
    "digest": "a92b5ed6a492ef282a3ffcc8b9a81158971ae5080d1d0acd6a4bee8e05365aad",
-   "why": "The declaration's count verdict, the only premise the day's bound takes on its circuit: at most n proof blocks of a (c, k)-partition, what a published complies of the count gives (NciCheck.Properties.DescCountsCK)."
+   "why": "The declaration's count verdict, the only premise the day's bound takes on its circuit: at most n proof blocks of a (c, k)-partition, what a published complies of the count gives (InferenceOnlyCheck.Properties.DescCountsCK)."
   },
-  "Nci.Cut.Arrays": {
+  "InferenceOnly.Cut.Arrays": {
    "owner": "@training",
    "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1",
    "why": "The shared arrays HEShared is stated for: each matmul reads an edge of a graph with no clique of ω + 1."
   },
-  "Nci.Cut.CostsAtLeast": {
+  "InferenceOnly.Cut.CostsAtLeast": {
    "owner": "@training",
    "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc",
    "why": "What q is: at most the cost β_r β_s of each matmul's pair of arrays."
   },
-  "Nci.Cut.NoSharedPair": {
+  "InferenceOnly.Cut.NoSharedPair": {
    "owner": "@training",
    "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1",
    "why": "The work HE is stated for: no two matmuls share both a w- and an x-value."
   },
-  "Nci.Cut.ReadsAtMost": {
+  "InferenceOnly.Cut.ReadsAtMost": {
    "owner": "@training",
    "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06",
    "why": "The partition the bound counts: every block reads at most k gates outside θ."
   },
-  "Nci.Cut.ValuesInjective": {
+  "InferenceOnly.Cut.ValuesInjective": {
    "owner": "@training",
    "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275",
    "why": "What `val` is: it names the value each word carries, one-to-one on each matmul's w-words and on its x-words."
   },
-  "Nci.Formalism.Annotation.Valid": {
+  "InferenceOnly.Formalism.Annotation.Valid": {
    "owner": "@training",
    "digest": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d",
    "why": "What a valid annotation is: θ' and the token blocks are gates, and the token blocks are pairwise disjoint."
   },
-  "Nci.Formalism.Annotation.WorkPerBit": {
+  "InferenceOnly.Formalism.Annotation.WorkPerBit": {
    "owner": "@training",
    "digest": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8",
    "why": "What r is in the token cap's clean form: X is token gates, and the token work from each entry is at most r(ν) a bit of state; the clean form concludes from it the token-work bound (TokenWork), the assumption the guarantees take."
   },
-  "Nci.Formalism.Caps": {
+  "InferenceOnly.Formalism.Caps": {
    "owner": "@training",
    "digest": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7",
    "why": "What the kinds' caps are: each kind's work is a set of gates, of which every inference block holds at most its cap, as TokenCap concludes for the token kind."
   },
-  "Nci.Formalism.InPeriods": {
+  "InferenceOnly.Formalism.InPeriods": {
    "owner": "@training",
    "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79",
    "why": "The periods the run's partition fits in: B ≤ N n."
   },
-  "Nci.Formalism.InferenceBlock": {
+  "InferenceOnly.Formalism.InferenceBlock": {
    "owner": "@training",
    "digest": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f",
    "why": "What an inference block is: a set of at most c gates reading at most k values outside θ."
   },
-  "Nci.Formalism.PartitionBound": {
+  "InferenceOnly.Formalism.PartitionBound": {
    "owner": "@training",
    "digest": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6",
    "why": "What a partition-level bound is: Λ ≤ |𝓘| c / |C| for every partition into inference blocks, the form an amortized kind's bound takes."
   },
-  "Nci.Formalism.PeakAtMost": {
+  "InferenceOnly.Formalism.PeakAtMost": {
    "owner": "@training",
    "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce",
    "why": "What M is in the token cap's clean form: at least (k − ν) r(ν) at every ν, arithmetic on r and k."
   },
-  "Nci.Formalism.Run.Among": {
+  "InferenceOnly.Formalism.Run.Among": {
    "owner": "@training",
    "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247",
    "why": "The scope: a run of the methods considered, the class A2 is stated over."
   },
-  "Nci.Formalism.Run.Reaches": {
+  "InferenceOnly.Formalism.Run.Reaches": {
    "owner": "@training",
    "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef",
    "why": "The event the bound conditions on: the run reaches the target loss ℓ*."
   },
-  "Nci.Formalism.Run.Within": {
+  "InferenceOnly.Formalism.Run.Within": {
    "owner": "@training",
    "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792",
    "why": "The bin of Δ the bound is stated for: the run's total update is at most D bits."
   },
-  "Nci.Formalism.ServingFits": {
+  "InferenceOnly.Formalism.ServingFits": {
    "owner": "@training",
    "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4",
    "why": "Fit's condition on a session block's reads: Δ + s τ ≤ k."
   },
-  "Nci.Formalism.SessionBlocks": {
+  "InferenceOnly.Formalism.SessionBlocks": {
    "owner": "@training",
    "digest": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8",
    "why": "Fit's partition for serving: compute blocks of between c − d and c gates."
   },
-  "Nci.Formalism.TrainingBlocks": {
+  "InferenceOnly.Formalism.TrainingBlocks": {
    "owner": "@training",
    "digest": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936",
    "why": "Fit's partition for training: compute, reduction and update application blocks of between c − d and c gates."
   },
-  "Nci.Formalism.TrainingFits": {
+  "InferenceOnly.Formalism.TrainingFits": {
    "owner": "@training",
    "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7",
    "why": "Fit's conditions on each training block's reads: Δ + s τ ≤ k, 2 Δ_grad ≤ k and Δ_t + Δ_grad ≤ k."
@@ -2175,259 +2175,259 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.CapBelowColumns": {
+  "InferenceOnly.Assumptions.CapBelowColumns": {
    "owner": "@lean",
    "digest": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.CheatingAtMost": {
+  "InferenceOnly.Assumptions.CheatingAtMost": {
    "owner": "@training",
    "digest": "89add569caacb16556501cbd98787134ad9098307d8b22fc10f53b164cd1ade2",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.Coverage": {
+  "InferenceOnly.Assumptions.Coverage": {
    "owner": "@lean",
    "digest": "f5c08e9f733d3b86105a396c50c33d7e9f6f0f3cdb0b1164500c67f530e8f6cc",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.CoversEfficientMethods": {
+  "InferenceOnly.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
    "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.DescriptionHard": {
+  "InferenceOnly.Assumptions.DescriptionHard": {
    "owner": "@training",
    "digest": "acf4d99142d8d1f6398750eb5cf307f3047dbec15dd21f5bc86041b38b7ea321",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.Fits": {
+  "InferenceOnly.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "c924e46d32c2891665e8ce5fd9f3ccfe6bb9b8401f133658dc2309193828d455",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.FitsSlots": {
+  "InferenceOnly.Assumptions.FitsSlots": {
    "owner": "@lean",
    "digest": "db941c03e221398e32d352fa7711180927ba043667546f6a8f8563981a9e361a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.IdentitySchedule": {
+  "InferenceOnly.Assumptions.IdentitySchedule": {
    "owner": "@training",
    "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.MinEntropyHard": {
+  "InferenceOnly.Assumptions.MinEntropyHard": {
    "owner": "@training",
    "digest": "ac056d32cda0731b25c07ec1e66d1dff9f413d1672320b350a7002582c48cab7",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ParameterHard": {
+  "InferenceOnly.Assumptions.ParameterHard": {
    "owner": "@compute-accounting",
    "digest": "1f84dc87f11505c81bce746c2d3cb6a89fcf434889dc02daba8b314f4f3b9760",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ParameterHardAt": {
+  "InferenceOnly.Assumptions.ParameterHardAt": {
    "owner": "@compute-accounting",
    "digest": "d0f4ee118f23ba285508f06568096593d66309ae87536a41b907a9a2858e9132",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.PouwPerWindow": {
+  "InferenceOnly.Assumptions.PouwPerWindow": {
    "owner": "@training",
    "digest": "73c9272c6730698f6165c13cdc251d08c790d55adbdb9688fff024707355941a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.PouwSound": {
+  "InferenceOnly.Assumptions.PouwSound": {
    "owner": "@lean",
    "digest": "f1ab2af6035f8383c3a9b0eeadae952029fec217ebcbac4e47f5aafe225de14d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.Reach": {
+  "InferenceOnly.Assumptions.Reach": {
    "owner": "@lean",
    "digest": "c6ce2ba243a8043e5a085b62e7bfc3158a388c7f3a0aafb9cb09ba28e2f79bdd",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ReachSlots": {
+  "InferenceOnly.Assumptions.ReachSlots": {
    "owner": "@lean",
    "digest": "ec0f6898eedfae70463e47a76d77a7a013c742555769b58e3521434cd04b041f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.Recovers": {
+  "InferenceOnly.Assumptions.Recovers": {
    "owner": "@training",
    "digest": "d9edc87f9d67a1e87668b32bf8eeaa3407c435c23af1795ffb1b1833af22309a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ReferenceLayered": {
+  "InferenceOnly.Assumptions.ReferenceLayered": {
    "owner": "@lean",
    "digest": "44bf4685e681184c35f39fd8f4002a2b0b7cce0cbbf2898b198c83a3f8f94e29",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ResidualAtMost": {
+  "InferenceOnly.Assumptions.ResidualAtMost": {
    "owner": "@lean",
    "digest": "1991167745b6c12c20d9486beacd705ed52b382712c938758c6c31fa725299ee",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.SampledDetection": {
+  "InferenceOnly.Assumptions.SampledDetection": {
    "owner": "@lean",
    "digest": "1c23f4c51df5938029b64808c707695c53cefb77f6c46014ce3c9b8144ee8217",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.SampledPerWindow": {
+  "InferenceOnly.Assumptions.SampledPerWindow": {
    "owner": "@training",
    "digest": "77104bd85c50c8f0996b5b055c8263f036328b6ed9d9730b5ec70e223843542d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.SourceHard": {
+  "InferenceOnly.Assumptions.SourceHard": {
    "owner": "@training",
    "digest": "b4b411c3d977a74a745755ede9735c9bce7b83e332c5c971637bfbed2f748260",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.SourcesCover": {
+  "InferenceOnly.Assumptions.SourcesCover": {
    "owner": "@training",
    "digest": "1b88f3a9f96ca3119443da4b877d624e82d0da310a960193c81efc048238d7bb",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.TerminalDetection": {
+  "InferenceOnly.Assumptions.TerminalDetection": {
    "owner": "@lean",
    "digest": "8ed5bc6c9f877e1d994af693541c6e1be76f4708ae20468313c71f656cb2a0b8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ThetaRegistered": {
+  "InferenceOnly.Assumptions.ThetaRegistered": {
    "owner": "@compute-accounting",
    "digest": "82b2b8424ff21842f1d09245654262b8bae5cee97ef914b1697bb79c34a4a467",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.UnmonitoredAtMost": {
+  "InferenceOnly.Assumptions.UnmonitoredAtMost": {
    "owner": "@training",
    "digest": "a2f3af521431f3a9eb4420c21e04149188f6bcfdb664984c54505a4d514502c2",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.WeightsIncompressible": {
+  "InferenceOnly.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "0638192a04fd4bde84e03375d0bbdd858e3c1c95630bba389eb297b46cd80420",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.WeightsIncompressibleSlots": {
+  "InferenceOnly.Assumptions.WeightsIncompressibleSlots": {
    "owner": "@lean",
    "digest": "b0f96342adb0eff4b869a392676d0ebcbddc94d93d7d8db25d9c8ad05e5fe970",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.WindowLength": {
+  "InferenceOnly.Assumptions.WindowLength": {
    "owner": "@lean",
    "digest": "b88a4399e57fec983f33b9108140c60973f74a6c19df53ed3345a650cda9940a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.WindowsHold": {
+  "InferenceOnly.Assumptions.WindowsHold": {
    "owner": "@lean",
    "digest": "05d3f99ad636dda34c9d92cc4c56cee029364a7e7adf70614357df19b374e68f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.WithinCompute": {
+  "InferenceOnly.Assumptions.WithinCompute": {
    "owner": "@lean",
    "digest": "735d0cf81585b0377ce2d2bb7dd63273807df65d48dd77c31592a0710d7ddb57",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Capability.Consumers.OverlapWeights": {
+  "InferenceOnly.Capability.Consumers.OverlapWeights": {
    "owner": "@training",
    "digest": "67fd0381a6d22e3df9462d31aee8c2fb53d78a03ef3ccf7262ac549c65f30313",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Capability.Consumers.RequiresState": {
+  "InferenceOnly.Capability.Consumers.RequiresState": {
    "owner": "@training",
    "digest": "b6284d74c738e31004e961b08225fefd8fb49030b47739e363c502344ad442e8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Capability.Consumers.Upstream": {
+  "InferenceOnly.Capability.Consumers.Upstream": {
    "owner": "@training",
    "digest": "eb8367f381166e28864222741be0201193858a4010150fa5bd0e23acab48c757",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Capability.HeldPriceAtMost": {
+  "InferenceOnly.Capability.HeldPriceAtMost": {
    "owner": "@training",
    "digest": "5344e552ed3f9d96c26f35e4ea3f5a00f624b7c37bfcdec70e169545364b78bd",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Capability.Selects": {
+  "InferenceOnly.Capability.Selects": {
    "owner": "@training",
    "digest": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.CompliesRate": {
+  "InferenceOnly.CompliesRate": {
    "owner": "@lean",
    "digest": "10446223528278047c50b7f61094dcb5bb4f13eb5fb1355a1ff091250905b45e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Cover.Assumptions.BlockFits": {
+  "InferenceOnly.Cover.Assumptions.BlockFits": {
    "owner": "@training",
    "digest": "6c8a39590d5ed889ee6d76adba07cee9e4ce74f76ad35fd00388552b0cf4a1fd",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Cover.Assumptions.CapBelowDepth": {
+  "InferenceOnly.Cover.Assumptions.CapBelowDepth": {
    "owner": "@training",
    "digest": "4a59a4806a27c95100ab3b95c905c33acb34c61829b50f990a197d9ea06dc17d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Cover.Assumptions.UpdateHardness": {
+  "InferenceOnly.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Cover.MulBlocks.Upstream": {
+  "InferenceOnly.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Covering.Covers": {
+  "InferenceOnly.Covering.Covers": {
    "owner": "@compute-accounting",
    "digest": "9c96012ae81b0ff1a9f66f26485d7cd844a7b00cd5e99fd4e72ecc0d6fc3035a",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Small": {
+  "InferenceOnly.Small": {
    "owner": "@lean",
    "digest": "d057e71af9c6c2f99175fcc7730e51de3d671050bd1d3cac675e4474c2a00f24",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Threading.Threaded": {
+  "InferenceOnly.Threading.Threaded": {
    "owner": "@lean",
    "digest": "ad71302f706ba1cfb69e2003ee6e271c6e8674351dbad5703165d02118059905",
    "issue": "LEAN-186",
@@ -3428,9 +3428,9 @@
   "Definitions.Core",
   "Definitions.Core.Assumptions",
   "Definitions.Core.Guarantees",
-  "Definitions.Nci",
-  "Definitions.Nci.Assumptions",
-  "Definitions.Nci.Guarantees",
+  "Definitions.InferenceOnly",
+  "Definitions.InferenceOnly.Assumptions",
+  "Definitions.InferenceOnly.Guarantees",
   "Definitions.Pouw",
   "Definitions.Pouw.Assumptions",
   "Definitions.Pouw.Guarantees",
@@ -3517,11 +3517,11 @@
   "CoreComposition",
   "CoreOnsite",
   "CoreRemote",
-  "NciCheck.Check",
-  "NciCheck.Theta",
-  "NciCheck.Desc",
-  "NciCheck.Protocol",
-  "NciCheck.DefinitionDigest",
+  "InferenceOnlyCheck.Check",
+  "InferenceOnlyCheck.Theta",
+  "InferenceOnlyCheck.Desc",
+  "InferenceOnlyCheck.Protocol",
+  "InferenceOnlyCheck.DefinitionDigest",
   "NetworkCheck",
   "NetworkCertifier",
   "CertifierDevice",
@@ -3562,7 +3562,7 @@
   "Properties.Challenger",
   "Properties.Verity.Idle",
   "Properties.Remote",
-  "Properties.Nci"
+  "Properties.InferenceOnly"
  ],
  "claims": {
   "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],
@@ -4144,38 +4144,38 @@
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
   },
-  "Nci.SecurityProofs.CapabilityFloor": {
-   "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
-   "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
+  "InferenceOnly.SecurityProofs.CapabilityFloor": {
+   "honest": ["InferenceOnly.SecurityProofs.CapabilityFloorHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.CapabilityFloorNontrivial"
   },
-  "Nci.SecurityProofs.HeldBudget": {
-   "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial",
+  "InferenceOnly.SecurityProofs.HeldBudget": {
+   "honest": ["InferenceOnly.SecurityProofs.HeldBudgetHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.HeldBudgetNontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ImportOrRecompute": {
-   "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
-   "nontrivial": "Nci.SecurityProofs.ImportOrRecomputeNontrivial",
+  "InferenceOnly.SecurityProofs.ImportOrRecompute": {
+   "honest": ["InferenceOnly.SecurityProofs.ImportOrRecomputeHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ImportOrRecomputeNontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.RecomputeByGates": {
-   "honest": ["Nci.SecurityProofs.RecomputeByGatesHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial",
+  "InferenceOnly.SecurityProofs.RecomputeByGates": {
+   "honest": ["InferenceOnly.SecurityProofs.RecomputeByGatesHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.RecomputeByGatesNontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.RecomputeByState": {
-   "honest": ["Nci.SecurityProofs.RecomputeByStateHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecomputeByStateNontrivial",
+  "InferenceOnly.SecurityProofs.RecomputeByState": {
+   "honest": ["InferenceOnly.SecurityProofs.RecomputeByStateHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.RecomputeByStateNontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.RecoveredBudget": {
-   "honest": ["Nci.SecurityProofs.RecoveredBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecoveredBudgetNontrivial",
+  "InferenceOnly.SecurityProofs.RecoveredBudget": {
+   "honest": ["InferenceOnly.SecurityProofs.RecoveredBudgetHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.RecoveredBudgetNontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.StatHeldBudget": {
-   "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial",
+  "InferenceOnly.SecurityProofs.StatHeldBudget": {
+   "honest": ["InferenceOnly.SecurityProofs.StatHeldBudgetHonest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.StatHeldBudgetNontrivial",
    "kind": "exclusion"
   },
   "Flock.SecurityProofs.RecursiveKSDeployed": {
@@ -4254,39 +4254,39 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKSEvery_nontrivial"
   },
-  "Nci.Cover.SecurityProofs.CoverTraining": {
-   "honest": ["Nci.Cover.SecurityProofs.CoverTraining_honest"],
-   "nontrivial": "Nci.Cover.SecurityProofs.CoverTraining_nontrivial",
+  "InferenceOnly.Cover.SecurityProofs.CoverTraining": {
+   "honest": ["InferenceOnly.Cover.SecurityProofs.CoverTraining_honest"],
+   "nontrivial": "InferenceOnly.Cover.SecurityProofs.CoverTraining_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.DampenerRemote": {
-   "honest": ["Nci.SecurityProofs.DampenerRemote_honest"],
-   "nontrivial": "Nci.SecurityProofs.DampenerRemote_nontrivial",
+  "InferenceOnly.SecurityProofs.DampenerRemote": {
+   "honest": ["InferenceOnly.SecurityProofs.DampenerRemote_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.DampenerRemote_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.DampenerThreaded": {
-   "honest": ["Nci.SecurityProofs.DampenerThreaded_honest"],
-   "nontrivial": "Nci.SecurityProofs.DampenerThreaded_nontrivial",
+  "InferenceOnly.SecurityProofs.DampenerThreaded": {
+   "honest": ["InferenceOnly.SecurityProofs.DampenerThreaded_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.DampenerThreaded_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.DampenerThreadedSlots": {
-   "honest": ["Nci.SecurityProofs.DampenerThreadedSlots_honest"],
-   "nontrivial": "Nci.SecurityProofs.DampenerThreadedSlots_nontrivial",
+  "InferenceOnly.SecurityProofs.DampenerThreadedSlots": {
+   "honest": ["InferenceOnly.SecurityProofs.DampenerThreadedSlots_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.DampenerThreadedSlots_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.LayeredTraining": {
-   "honest": ["Nci.SecurityProofs.LayeredTraining_honest"],
-   "nontrivial": "Nci.SecurityProofs.LayeredTraining_nontrivial",
+  "InferenceOnly.SecurityProofs.LayeredTraining": {
+   "honest": ["InferenceOnly.SecurityProofs.LayeredTraining_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.LayeredTraining_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedTraining": {
-   "honest": ["Nci.SecurityProofs.ThreadedTraining_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedTraining_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedTraining": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedTraining_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedTraining_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedTrainingOn": {
-   "honest": ["Nci.SecurityProofs.ThreadedTraining_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedTrainingOn_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedTrainingOn": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedTraining_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedTrainingOn_nontrivial",
    "kind": "exclusion"
   },
   "Claims.SamplingGeneric.compilerKSTwo": {
@@ -4328,34 +4328,34 @@
    "honest": ["Flock.SecurityProofs.LoopInnerRound0Own_honest"],
    "nontrivial": "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"
   },
-  "Nci.Formalism.SecurityProofs.Counting": {
-   "honest": ["Nci.Formalism.SecurityProofs.Counting_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.Counting_nontrivial",
+  "InferenceOnly.Formalism.SecurityProofs.Counting": {
+   "honest": ["InferenceOnly.Formalism.SecurityProofs.Counting_honest"],
+   "nontrivial": "InferenceOnly.Formalism.SecurityProofs.Counting_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Formalism.SecurityProofs.TokenCap": {
-   "honest": ["Nci.Formalism.SecurityProofs.TokenCap_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.TokenCap_nontrivial",
+  "InferenceOnly.Formalism.SecurityProofs.TokenCap": {
+   "honest": ["InferenceOnly.Formalism.SecurityProofs.TokenCap_honest"],
+   "nontrivial": "InferenceOnly.Formalism.SecurityProofs.TokenCap_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Formalism.SecurityProofs.Slowdown": {
-   "honest": ["Nci.Formalism.SecurityProofs.Slowdown_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+  "InferenceOnly.Formalism.SecurityProofs.Slowdown": {
+   "honest": ["InferenceOnly.Formalism.SecurityProofs.Slowdown_honest"],
+   "nontrivial": "InferenceOnly.Formalism.SecurityProofs.Slowdown_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Formalism.SecurityProofs.Security": {
-   "honest": ["Nci.Formalism.SecurityProofs.Security_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.Security_nontrivial",
+  "InferenceOnly.Formalism.SecurityProofs.Security": {
+   "honest": ["InferenceOnly.Formalism.SecurityProofs.Security_honest"],
+   "nontrivial": "InferenceOnly.Formalism.SecurityProofs.Security_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Formalism.SecurityProofs.FitServing": {
-   "honest": ["Nci.Formalism.SecurityProofs.FitServing_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
+  "InferenceOnly.Formalism.SecurityProofs.FitServing": {
+   "honest": ["InferenceOnly.Formalism.SecurityProofs.FitServing_honest"],
+   "nontrivial": "InferenceOnly.Formalism.SecurityProofs.FitServing_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Formalism.SecurityProofs.FitTraining": {
-   "honest": ["Nci.Formalism.SecurityProofs.FitTraining_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
+  "InferenceOnly.Formalism.SecurityProofs.FitTraining": {
+   "honest": ["InferenceOnly.Formalism.SecurityProofs.FitTraining_honest"],
+   "nontrivial": "InferenceOnly.Formalism.SecurityProofs.FitTraining_nontrivial",
    "kind": "exclusion"
   },
   "Verity.SecurityProofs.CKSize": {
@@ -4371,24 +4371,24 @@
    "honest": ["Claims.RecGeneric.compilerKS_honest"],
    "nontrivial": "Claims.RecGeneric.compilerKS_nontrivial"
   },
-  "Nci.Cut.SecurityProofs.Bound": {
-   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
-   "nontrivial": "Nci.Cut.SecurityProofs.Bound_nontrivial",
+  "InferenceOnly.Cut.SecurityProofs.Bound": {
+   "honest": ["InferenceOnly.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "InferenceOnly.Cut.SecurityProofs.Bound_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Cut.SecurityProofs.Slowdown": {
-   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
-   "nontrivial": "Nci.Cut.SecurityProofs.Slowdown_nontrivial",
+  "InferenceOnly.Cut.SecurityProofs.Slowdown": {
+   "honest": ["InferenceOnly.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "InferenceOnly.Cut.SecurityProofs.Slowdown_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Cut.SecurityProofs.HE": {
-   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
-   "nontrivial": "Nci.Cut.SecurityProofs.HE_nontrivial",
+  "InferenceOnly.Cut.SecurityProofs.HE": {
+   "honest": ["InferenceOnly.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "InferenceOnly.Cut.SecurityProofs.HE_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.Cut.SecurityProofs.HEShared": {
-   "honest": ["Nci.Cut.SecurityProofs.Cut_honest"],
-   "nontrivial": "Nci.Cut.SecurityProofs.HEShared_nontrivial",
+  "InferenceOnly.Cut.SecurityProofs.HEShared": {
+   "honest": ["InferenceOnly.Cut.SecurityProofs.Cut_honest"],
+   "nontrivial": "InferenceOnly.Cut.SecurityProofs.HEShared_nontrivial",
    "kind": "exclusion"
   },
   "Pouw.SecurityProofs.MonitoringPeriodBindingPerProver": {
@@ -4538,34 +4538,34 @@
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial"
   },
-  "Nci.SecurityProofs.ThreadedThrottled": {
-   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedThrottled_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedThrottled": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedThrottled_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedThrottledDark": {
-   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedThrottledDark": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedThrottledDark_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
-   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedThrottledDarkSlots": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedThrottledOn": {
-   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedThrottledOn": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedThrottledOn_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
-   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedThrottledOnSlots": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedThrottledOnSlots_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ThreadedThrottledSlots": {
-   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
-   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial",
+  "InferenceOnly.SecurityProofs.ThreadedThrottledSlots": {
+   "honest": ["InferenceOnly.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.ThreadedThrottledSlots_nontrivial",
    "kind": "exclusion"
   },
   "WeightSecurity.SecurityProofs.TheftServedReq": {
@@ -4587,14 +4587,14 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedTiedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedTiedNontrivial"
   },
-  "Nci.Cut.SecurityProofs.CountHE": {
-   "honest": ["Nci.Cut.SecurityProofs.CountHE_honest"],
-   "nontrivial": "Nci.Cut.SecurityProofs.CountHE_nontrivial",
+  "InferenceOnly.Cut.SecurityProofs.CountHE": {
+   "honest": ["InferenceOnly.Cut.SecurityProofs.CountHE_honest"],
+   "nontrivial": "InferenceOnly.Cut.SecurityProofs.CountHE_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.DampenerRemotePeriod": {
-   "honest": ["Nci.SecurityProofs.DampenerRemotePeriod_honest"],
-   "nontrivial": "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
+  "InferenceOnly.SecurityProofs.DampenerRemotePeriod": {
+   "honest": ["InferenceOnly.SecurityProofs.DampenerRemotePeriod_honest"],
+   "nontrivial": "InferenceOnly.SecurityProofs.DampenerRemotePeriod_nontrivial",
    "kind": "exclusion"
   },
   "Accounting.SecurityProofs.TableReadBinding": {
@@ -5411,39 +5411,39 @@
    "type_hash": "1ad81857586f7b7d31994f0793364f85a65fc836785f058f640191a61ecff010",
    "unfolded_hash": "8524892026b1b282ba08d6b63be4769043e76a59c7d1dc9bc3253a3007a67bf5"
   },
-  "Nci.SecurityProofs.CoveringBound": {
+  "InferenceOnly.SecurityProofs.CoveringBound": {
    "type_hash": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c",
    "unfolded_hash": "89e15dcf70554fc9470ba6917de8e61cc1559b41393895f0362bbf31ff6d8595"
   },
-  "Nci.SecurityProofs.CoveringBoundTwoCosts": {
+  "InferenceOnly.SecurityProofs.CoveringBoundTwoCosts": {
    "type_hash": "977691a65aeb1cef599392e0fb308271d5502f07cbe550f93624f75e7e1ddc6a",
    "unfolded_hash": "4ac15a5114cba7328b3c433614b9b77a1d550ae1fabfa1accef111a5aca2ae47"
   },
-  "Nci.SecurityProofs.FitBound": {
+  "InferenceOnly.SecurityProofs.FitBound": {
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0",
    "unfolded_hash": "c4beca85935eb4a65f01c5af1ea1b27f84cd9757c51ff969c0d2615762c590d8"
   },
-  "Nci.SecurityProofs.FitBoundSlots": {
+  "InferenceOnly.SecurityProofs.FitBoundSlots": {
    "type_hash": "3c31f9877b2753b9bd067ce2f820b64cf846a13f3cb0d77a894bbde938f2e2bd",
    "unfolded_hash": "def7f025f93801e9c53b2db97fdc4c59034a5f037d5dd8bdaff1261e733e341f"
   },
-  "Nci.SecurityProofs.FitRate": {
+  "InferenceOnly.SecurityProofs.FitRate": {
    "type_hash": "4ad0e8c3c012b570f1e87d47bbda107dce81f9772c33432b68aabccbf103a0da",
    "unfolded_hash": "2b5ca1219727bee684ddc883d7315af41791455f10d8f6f6109d5ef26cde0b5c"
   },
-  "Nci.SecurityProofs.ReferenceThreaded": {
+  "InferenceOnly.SecurityProofs.ReferenceThreaded": {
    "type_hash": "14031cc870afb5d46cab9fe5d4401dd018bc2db17e335f114a2e75adc1343bb5",
    "unfolded_hash": "32550bc9bbf0687f87388e8bc3a97f716e1d334dc9fd36d25b44f79e6f4dd9ed"
   },
-  "Nci.SecurityProofs.ThreadedOfLayered": {
+  "InferenceOnly.SecurityProofs.ThreadedOfLayered": {
    "type_hash": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f",
    "unfolded_hash": "2906003a4dc064dc7e6bbccaf0fcb662e288c9e2fda039d48699b0688094b5f4"
   },
-  "Nci.SecurityProofs.ThreadedReads": {
+  "InferenceOnly.SecurityProofs.ThreadedReads": {
    "type_hash": "795b67c8f7715b8007f162c603941e1adeed26249c63bc4292dca5a8520b2de5",
    "unfolded_hash": "c9296126e8f6206e4fb4dd3f244b9023991f861c8644985e3dd159b503e0eb5c"
   },
-  "Nci.SecurityProofs.ThreadedReadsSlots": {
+  "InferenceOnly.SecurityProofs.ThreadedReadsSlots": {
    "type_hash": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
    "unfolded_hash": "ee45792a2ddd9b39460192763c6b0a2a49454fdb7a3f6cea27b86889dc2c4a61"
   },
@@ -5683,34 +5683,34 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
   },
-  "Definitions.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
+  "Definitions.InferenceOnly": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.InferenceOnly"],
    "except": [],
    "why": "the policy is stated over core's model and imports no proofs"
   },
-  "Definitions.Nci.Assumptions": {
+  "Definitions.InferenceOnly.Assumptions": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
     "Definitions.Core.Assumptions",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions"
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions"
    ],
    "except": [],
    "why": "a named assumption reads the protocol, never a proof",
    "sealed": true
   },
-  "Definitions.Nci.Guarantees": {
-   "except": ["Definitions.Nci.Guarantees.FitRate"],
+  "Definitions.InferenceOnly.Guarantees": {
+   "except": ["Definitions.InferenceOnly.Guarantees.FitRate"],
    "imports": [
     "Mathlib",
     "Definitions.Core",
     "Definitions.Core.Assumptions",
     "Definitions.Core.Guarantees",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions",
     "Definitions.Assumptions",
-    "Definitions.Nci.Guarantees"
+    "Definitions.InferenceOnly.Guarantees"
    ],
    "sealed": true,
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
@@ -5880,8 +5880,8 @@
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions",
     "Definitions.Pouw",
     "Definitions.Pous.P2.Cost",
     "Definitions.Pouw.Assumptions",
@@ -5951,14 +5951,14 @@
    "except": [],
    "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
-  "Definitions.Nci.Guarantees.FitRate": {
+  "Definitions.InferenceOnly.Guarantees.FitRate": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions",
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions",
     "Definitions.Accounting",
-    "Definitions.Nci.Guarantees.FitRate"
+    "Definitions.InferenceOnly.Guarantees.FitRate"
    ],
    "except": [],
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
@@ -6017,7 +6017,7 @@
     "Definitions.Hash",
     "Definitions.Core",
     "Definitions.Accounting",
-    "Definitions.Nci",
+    "Definitions.InferenceOnly",
     "Definitions.Pouw",
     "Definitions.WeightSecurity",
     "Definitions.WeightSecurity.Assumptions",
@@ -6101,7 +6101,7 @@
   }
  },
  "four_names": [
-  "Nci",
+  "InferenceOnly",
   "NetTiming",
   "Pous",
   "Pouw",
@@ -27291,7 +27291,7 @@
    "Definitions.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises",
    "Proofs.Flock.Soundness.Premises",
-   "Definitions.Nci.Assumptions.Fit",
+   "Definitions.InferenceOnly.Assumptions.Fit",
    "Definitions.Core.Assumptions.DeviceFigures",
    "Proofs.Accounting.TS.Session.Group.Premises"
   ],
@@ -27865,34 +27865,34 @@
    "FlockSoundness.Audit.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
    "Accounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.ThreadedReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.Throttles (security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
-   "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDark (security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
-   "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (security/Definitions/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Nci.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (security/Definitions/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
+   "InferenceOnly.SecurityProofs.ThreadedReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.Throttles (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
+   "InferenceOnly.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
+   "InferenceOnly.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
+   "InferenceOnly.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (security/Definitions/InferenceOnly/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "InferenceOnly.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (security/Definitions/InferenceOnly/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "InferenceOnly.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to InferenceOnlyCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
    "Accounting.SecurityProofs.Actual.ServerBlocksAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
-   "Nci.SecurityProofs.FitBound": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (security/Definitions/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
-   "Nci.SecurityProofs.ThreadedOfLayered": "frozen (no-function): It is about an arbitrary keyed reference circuit (Layered, security/Definitions/Nci/Layered.lean) and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.LayeredTraining": "frozen (no-function): It is about an arbitrary keyed reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ReferenceThreaded": "frozen (conjecture,no-function): It rests on the open conjecture ReferenceLayered, that the reference circuit is keyed at Kimi K2's shapes (security/Definitions/Nci/Assumptions/Layered.lean), and is about an arbitrary reference circuit and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.FitRate": "frozen (conjecture,no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (security/Definitions/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
-   "Nci.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (security/Definitions/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
+   "InferenceOnly.SecurityProofs.FitBound": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (security/Definitions/InferenceOnly/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
+   "InferenceOnly.SecurityProofs.ThreadedOfLayered": "frozen (no-function): It is about an arbitrary keyed reference circuit (Layered, security/Definitions/InferenceOnly/Layered.lean) and a threading of it, not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.LayeredTraining": "frozen (no-function): It is about an arbitrary keyed reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (security/Definitions/InferenceOnly/Assumptions/Threads.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ReferenceThreaded": "frozen (conjecture,no-function): It rests on the open conjecture ReferenceLayered, that the reference circuit is keyed at Kimi K2's shapes (security/Definitions/InferenceOnly/Assumptions/Layered.lean), and is about an arbitrary reference circuit and a threading of it, not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.FitRate": "frozen (conjecture,no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (security/Definitions/InferenceOnly/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
+   "InferenceOnly.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (security/Definitions/InferenceOnly/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Accounting.SecurityProofs.Actual.ThreadedRateSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.ThreadedReadsSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottledSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesSlots (security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
-   "Nci.SecurityProofs.ThreadedThrottledOnSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Theta.lean), under the named WeightsIncompressibleSlots (security/Definitions/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedThrottledDarkSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Theta.lean), under the named WeightsIncompressibleSlots (security/Definitions/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots (security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
-   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.DampenerThreadedSlots": "frozen (no-function): It composes the compute dampener with ThreadedThrottledSlots discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/Nci/Assumptions/Threads.lean), weights charged per parameter slot, with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
-   "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (security/Definitions/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
-   "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (security/Definitions/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
-   "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (Nci.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (security/Definitions/Nci/Assumptions/Remote.lean) and (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "InferenceOnly.SecurityProofs.ThreadedReadsSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/InferenceOnly/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ThreadedThrottledSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/InferenceOnly/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
+   "InferenceOnly.SecurityProofs.ThreadedThrottledOnSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressibleSlots (security/Definitions/InferenceOnly/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ThreadedThrottledDarkSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named WeightsIncompressibleSlots (security/Definitions/InferenceOnly/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots (security/Properties/InferenceOnly/Threads.lean) joins it to InferenceOnlyCheck.Properties.Witnesses, so a verdict of compliance of InferenceOnlyCheck.evaluate carries its bound.",
+   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, security/Definitions/InferenceOnly/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
+   "InferenceOnly.SecurityProofs.DampenerThreadedSlots": "frozen (no-function): It composes the compute dampener with ThreadedThrottledSlots discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (security/Definitions/InferenceOnly/Assumptions/Threads.lean), weights charged per parameter slot, with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to InferenceOnlyCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
+   "InferenceOnly.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (security/Definitions/InferenceOnly/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
+   "InferenceOnly.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (security/Definitions/InferenceOnly/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
+   "InferenceOnly.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (InferenceOnly.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (security/Definitions/InferenceOnly/Assumptions/Remote.lean) and (H) and (E) (InferenceOnly.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Flock.SecurityProofs.EndToEndRegisteredRows": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.SoundAtBridge": "frozen (no-function,hash,world-unlisted,scope): A bound on the proof layer's ProofLayer.SoundAt over a window's paths, not a run of a Lean function. It takes EndToEndRegisteredRows' finders' collision bounds at every session (RowsSession.CR: TableCRZ, LinkCRZC, RowsCRZC and the registered reads' cr/sha-512) as hypotheses instead of a collision disjunct tied to the run, live-verifier custody and scope through RowsSession's fields, and the four bridge premises (WindowLaw, AcceptedLive, OpenedPlurAt, RelOfRows), none on the premises list.",
    "Flock.SecurityProofs.ServedRowsLinked": "frozen (no-function,world-unlisted): A pointwise implication at one accepted outcome of a C-Flock session, not a bound on a run of a Lean function; it takes the service's registration of its served trees as ports of own (RowsSession.ServedRegistered), a premise that isn't on the list.",
@@ -27920,10 +27920,10 @@
    "Accounting.SecurityProofs.TS.CheckedSessionSound": "frozen (no-function,world-unlisted): SessionSoundAt realized at the checked layer (checkedLayer, PouwH1TileZy_v1 with its ok port registered) over every window of fully checked C-Flock sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR), the window's law (WindowLaw) and RowsSession.ServedRegistered as hypotheses, which are not on the premises list, and proves SessionSoundAt's AcceptedLive, ServedChecksHold and ServedRootsLinked (at 0) of the layer.",
    "Accounting.SecurityProofs.TS.HeldSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the held layer (heldLayer: flock-verify --zk --registered with its known-content check, Registered.checkKnownAll), whose relation concludes Accounting.Served.Held of the declared circuit at every drawn unit, not a Lean function; it takes CheckedSessionSound's hypotheses, the registered file's known ok rows each the word 1, and Accounting.Assumptions.TS.OkRealizes (the key program's ok wires carry the declared unit's checks) as hypotheses, which are not on the premises list, and proves the ok rows from the verifier's refusal (FlockC3.RegLevels.knownColl_spec).",
    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
-   "Nci.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, security/Definitions/Nci/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (security/Definitions/Nci/Assumptions/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (InferenceOnly.Covering.MulBlocks) and a covering by inference blocks (InferenceOnly.Covering.Covers, security/Definitions/InferenceOnly/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (security/Definitions/InferenceOnly/Assumptions/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content, complete and known-read checks, Flock.Registered.checkKnownAll, checkComplete and Flock.KnownRead.check; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's collision bounds and law at each of the 33 sessions as the named premises SessionsCR and WindowLaws (Proofs.Accounting.TS.Session.Group.Premises, on the premises list), RowsSession.ServedRegistered being proved from the reads built from own and the one-read check, and its premises LaneLowers and CombineLowers (the circuits computing their pieces' compositions at their port rows; Proofs.Accounting.TS.Session.Lanes.Lane) are not on it. The leaf it opens and the receipt it checks are the ones the sessions' committed rows decode to (leafOf, receiptOf), so nothing is assumed of the rows; the lanes that read one A or B row read it in full at one registered tree (readFull, read_bits). Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved as LeafGroupSound is (Accounting.TS.Group.group_soundAt: CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row, RowsSession.rowsReg_eq_portRead, and a union bound) at leafLayer and its 33 statements, at 33 delta, with LeafGroupSound's premise GroupRealizes proved there from LaneLowers and CombineLowers, the lanes' cover of the leaf and the decodes (groupRealizes_lanes32).",
    "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
-   "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (InferenceOnly.Covering.MulBlocks) and a covering by inference blocks (InferenceOnly.Covering.Covers, security/Definitions/InferenceOnly/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (security/Definitions/InferenceOnly/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link and Finish (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws; LeanRelease.withFiles, Loop.filesE: each rep's Finish.proofFile on what the loop holds of it, and the record the auditor assembles, recordJson of the streams it saw), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), every input the loop takes from its host and operating system being the tape's (Loop.Src, flock-firewall-os-src: its level-0 inputs, Loop.Level0Src, and its rep draws, Loop.RepSrc), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
@@ -27957,7 +27957,7 @@
    "Verity.SecurityProofs.SoundBind": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Nci.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, security/Definitions/Nci/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named BaselineRegistered, security/Definitions/Nci/Assumptions/Theta.lean), under the named UpdateHardness on the bit view (security/Definitions/Nci/Assumptions/Cover.lean), not about the NCI check's code; security/Proofs/Nci/Cover/Checked.lean joins it to a verdict (coverTrained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
+   "InferenceOnly.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, security/Definitions/InferenceOnly/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named BaselineRegistered, security/Definitions/InferenceOnly/Assumptions/Theta.lean), under the named UpdateHardness on the bit view (security/Definitions/InferenceOnly/Assumptions/Cover.lean), not about the NCI check's code; security/Proofs/InferenceOnly/Cover/Checked.lean joins it to a verdict (coverTrained, from InferenceOnlyCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pous.SecurityProofs.BackgroundRebuildExcluded": "frozen (no-function,hash): an ideal-permutation bound whose precondition, an abort past `auditCap`, neither Lean verdict checks.",
@@ -28061,15 +28061,15 @@
    "Verity.SecurityProofs.BlockDescription": "frozen (no-function): It is the working draft's Lemma 1, about an arbitrary committed declaration of a (c,k)-partition, a decoder and an extraction rule that a fixed evaluator performs (Verity.Committed, Verity.Decoder, Verity.LDL, Verity.Evaluates, security/Definitions/Core/Formalism.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Verity.SecurityProofs.CountingSum": "frozen (no-function): It is the working draft's Theorem 3 summed over any partition (Verity.Partition, security/Definitions/Core/Partition.lean) with per-block allowances, about an arbitrary circuit, not about a function's code; the serving-block bound applies it to the actual circuit's partitions.",
    "Verity.SecurityProofs.Counting": "frozen (no-function): It is the working draft's Theorem 3, about an arbitrary partition (the draft's is a (c,k)-partition), counted gates and an allowance, each block priced at c gates (Verity.Partition, security/Definitions/Core/Partition.lean; Verity.slowdown, security/Definitions/Core/Formalism.lean), not about a function's code; the NCI check joined to it is what would give it an acceptance.",
-   "Nci.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Nci.Covering.Covers, security/Definitions/Nci/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (InferenceOnly.Covering.Covers, security/Definitions/InferenceOnly/Covering.lean), not about the NCI check's code; joining it to InferenceOnlyCheck.Properties.Witnesses is what would give it an acceptance.",
    "Verity.SecurityProofs.ExpandEval": "frozen (no-function): It is about an arbitrary multi-bit circuit and its bit-level expansion (Verity.Circuit.expand, security/Definitions/Core/Expand.lean), the expansion computing the circuit bit for bit, not about a function's code; the NCI check's layout property joined to it is what would give the NCI check's circuit the draft's Boolean form.",
    "Verity.SecurityProofs.ExpandBits": "frozen (no-function): It is about an arbitrary circuit's bundles (Verity.Circuit.bits) read through its bit-level expansion (security/Definitions/Core/Expand.lean), not about a function's code.",
    "Verity.SecurityProofs.ExpandBoolean": "frozen (no-function): It is about an arbitrary circuit whose computed gates of positive width read a gate of positive width (Verity.Circuit.BitFaninPos, security/Definitions/Core/Expand.lean): its expansion is Boolean in the working draft's sense; not about a function's code.",
    "Verity.SecurityProofs.ExpandSize": "frozen (no-function): It is about an arbitrary registered circuit, a partition of it and their expansions (Verity.RegisteredCircuit.expand, Verity.Partition.expand, security/Definitions/Core/Expand.lean): sizes become widths and a block's unregistered reads do not grow; not about a function's code.",
    "Verity.SecurityProofs.ServingBlockSum": "frozen (no-function): It is the working draft's Theorem 3 at the serving blocks, the serving-block bound's per-block minimum summed over any partition with a dark remainder (Verity.Partition, security/Definitions/Core/Partition.lean), about an arbitrary circuit, not about a function's code.",
    "Verity.SecurityProofs.InferenceCap": "frozen (no-function): It is the serving-block bound's inference cap, about an arbitrary circuit with inference blocks refining serving blocks (Verity.Partition.Refines, security/Definitions/Core/Partition.lean), not about a function's code.",
-   "Nci.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (Nci.CompliesRate, security/Definitions/Nci.lean), whose division into inference blocks is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; NciCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
-   "Nci.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit registered circuit that complies with the inference-only policy at a rate (Nci.CompliesRate, security/Definitions/Nci.lean) and its bit-level expansion (Verity.RegisteredCircuit.expand, security/Definitions/Core/Expand.lean), not about the NCI check's code.",
+   "InferenceOnly.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean), whose division into inference blocks is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; InferenceOnlyCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit registered circuit that complies with the inference-only policy at a rate (InferenceOnly.CompliesRate, security/Definitions/InferenceOnly.lean) and its bit-level expansion (Verity.RegisteredCircuit.expand, security/Definitions/Core/Expand.lean), not about the NCI check's code.",
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary registered circuit, a partition of it and their expansions (Verity.Circuit.andSize, Verity.RegisteredCircuit.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
@@ -28085,9 +28085,9 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "frozen (no-function): It is a counting fact about an arbitrary circuit's counted operations and a partition refining another (Verity.Partition.Refines), with no premise, not about a function's acceptance.",
    "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of the honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables and publishes pairwise distinct domains for its ports, PortRoots.dupId, each conjunct as a recorded run evaluated it with the verifier's compiled functions on the two files, beside verify --zk accepting that session: two ports, each published domain 64 bytes, no two equal, and dupId true once one port's domain is set to the other's), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH, dupId); it reads SampledKSLiveHonest (security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
-   "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (security/Definitions/Nci/Assumptions/Remote.lean) and (H) and (E) on each declared day's work (security/Definitions/Assumptions.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds) and each day's count verdict (Nci.CompliesAtMost, what NciCheck.Properties.DescCountsCK gives a published complies) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
-   "Nci.SecurityProofs.DampenerRemotePeriod_honest": "frozen (no-function): It states that DampenerRemotePeriod's premises hold at a constructed honest developer over one window at p = 3 * 2^-40, a value no guarantee gives, and eps' = 2p/10^-6, with one declared day, the toy Nci.Cut.Toy complying with CompliesAtMost 1 2 2 under (H) at unit costs and (E) at b = 2, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
-   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate and no declared day, every other premise of DampenerRemotePeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
+   "InferenceOnly.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (security/Definitions/InferenceOnly/Assumptions/Remote.lean) and (H) and (E) on each declared day's work (security/Definitions/Assumptions.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds) and each day's count verdict (InferenceOnly.CompliesAtMost, what InferenceOnlyCheck.Properties.DescCountsCK gives a published complies) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
+   "InferenceOnly.SecurityProofs.DampenerRemotePeriod_honest": "frozen (no-function): It states that DampenerRemotePeriod's premises hold at a constructed honest developer over one window at p = 3 * 2^-40, a value no guarantee gives, and eps' = 2p/10^-6, with one declared day, the toy InferenceOnly.Cut.Toy complying with CompliesAtMost 1 2 2 under (H) at unit costs and (E) at b = 2, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
+   "InferenceOnly.SecurityProofs.DampenerRemotePeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate and no declared day, every other premise of DampenerRemotePeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
    "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance.",
    "NetTiming.SecurityProofs.PooledLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (recordingCode: certifierCode and the record of its cells, in any record format RecordFormat whose cells read back on the schedules it holds, RecordFormat.fits, which every schedule in Ss meets, hfit, certifier_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬PooledGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting PooledGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
    "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a monitoring period's server-time blocks, EndToEndHidden at every session, with the state a block carries across a wipe read at its carried leaves. So it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses, A3 (the verifier's IO.getRandomBytes is uniform), live-verifier custody (RecordCustodyZKJ) and hscope (scopeOk). At each carried leaf it also takes ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states.",
@@ -28098,13 +28098,13 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Nci.SecurityProofs.HeldBudget": "frozen (no-function): It is Lemma 1 with description hardness, about an arbitrary registration of a (c,k)-partition, item family, decoder and evaluator (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.DescriptionHard, security/Definitions/Nci/Capability/Items.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
-   "Nci.SecurityProofs.StatHeldBudget": "frozen (no-function): It is the statistical held budget, about an arbitrary registration of a (c,k)-partition, item family and distribution of honest runs (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.MinEntropyHard, security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
-   "Nci.SecurityProofs.RecoveredBudget": "frozen (no-function): It is Lemma 1 with a recoverable hard source, about an arbitrary registration of a (c,k)-partition, decoder, evaluator and source (Nci.Assumptions.SourceHard, Nci.Assumptions.Recovers, security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
-   "Nci.SecurityProofs.ImportOrRecompute": "frozen (no-function): It is about an arbitrary registration's proof blocks and consumers under the upstream certificate and overlap weights (Nci.Capability.Consumers.Upstream, Nci.Capability.Consumers.OverlapWeights, security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
-   "Nci.SecurityProofs.RecomputeByGates": "frozen (no-function): It is double counting over an arbitrary declaration's consumers with overlap weights, within any gates (Nci.Capability.Consumers.OverlapWeights, security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
-   "Nci.SecurityProofs.RecomputeByState": "frozen (no-function): It is about an arbitrary registration's proof blocks, a held budget and consumers whose recomputation needs state priced above it (Nci.Capability.HeldPriceAtMost, Nci.Capability.Consumers.RequiresState, security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
-   "Nci.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Slowdown.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Nci.Assumptions.CoversEfficientMethods, security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
+   "InferenceOnly.SecurityProofs.HeldBudget": "frozen (no-function): It is Lemma 1 with description hardness, about an arbitrary registration of a (c,k)-partition, item family, decoder and evaluator (InferenceOnly.Capability.HeldPriceAtMost, InferenceOnly.Assumptions.DescriptionHard, security/Definitions/InferenceOnly/Capability/Items.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.StatHeldBudget": "frozen (no-function): It is the statistical held budget, about an arbitrary registration of a (c,k)-partition, item family and distribution of honest runs (InferenceOnly.Capability.HeldPriceAtMost, InferenceOnly.Assumptions.MinEntropyHard, security/Definitions/InferenceOnly/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.RecoveredBudget": "frozen (no-function): It is Lemma 1 with a recoverable hard source, about an arbitrary registration of a (c,k)-partition, decoder, evaluator and source (InferenceOnly.Assumptions.SourceHard, InferenceOnly.Assumptions.Recovers, security/Definitions/InferenceOnly/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "InferenceOnly.SecurityProofs.ImportOrRecompute": "frozen (no-function): It is about an arbitrary registration's proof blocks and consumers under the upstream certificate and overlap weights (InferenceOnly.Capability.Consumers.Upstream, InferenceOnly.Capability.Consumers.OverlapWeights, security/Definitions/InferenceOnly/Capability/Consumers.lean), not about a function's code.",
+   "InferenceOnly.SecurityProofs.RecomputeByGates": "frozen (no-function): It is double counting over an arbitrary declaration's consumers with overlap weights, within any gates (InferenceOnly.Capability.Consumers.OverlapWeights, security/Definitions/InferenceOnly/Capability/Consumers.lean), not about a function's code.",
+   "InferenceOnly.SecurityProofs.RecomputeByState": "frozen (no-function): It is about an arbitrary registration's proof blocks, a held budget and consumers whose recomputation needs state priced above it (InferenceOnly.Capability.HeldPriceAtMost, InferenceOnly.Capability.Consumers.RequiresState, security/Definitions/InferenceOnly/Capability/Consumers.lean), not about a function's code.",
+   "InferenceOnly.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Slowdown.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (InferenceOnly.Assumptions.CoversEfficientMethods, security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
@@ -28122,18 +28122,18 @@
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (monitoringPeriodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
-   "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (security/Definitions/Assumptions.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Nci/Formalism/Training.lean), a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), under the named CutCost and TokenWork (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.FitServing": "frozen (no-function): Fit's construction for running θ': it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (Nci.Formalism.TrainingBlocks, security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), under the named CutCost, TokenWork and EfficiencyFloor (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Cut.SecurityProofs.Bound": "frozen (no-function): It is about an arbitrary registered circuit, its charged work (Nci.Cut.Work, security/Definitions/Nci/Cut.lean) and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet, and stating that join among the properties is what would give it an acceptance.",
-   "Nci.Cut.SecurityProofs.Slowdown": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), each priced at c, with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet.",
-   "Nci.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
-   "Nci.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
+   "InferenceOnly.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (InferenceOnly.Formalism.Caps, security/Definitions/InferenceOnly/Formalism/Inference.lean), kinds that each give a bound for the whole partition (InferenceOnly.Formalism.PartitionBound, security/Definitions/InferenceOnly/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (InferenceOnly.Formalism.Annotation, security/Definitions/InferenceOnly/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (InferenceOnly.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/InferenceOnly/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (security/Definitions/Assumptions.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (InferenceOnly.Formalism.Annotation, security/Definitions/InferenceOnly/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (InferenceOnly.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/InferenceOnly/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from the token-work bound: it is about an arbitrary declaration, an annotation of its training (InferenceOnly.Formalism.Annotation, security/Definitions/InferenceOnly/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (InferenceOnly.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/InferenceOnly/Formalism/Training.lean), a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (InferenceOnly.Formalism.Caps, security/Definitions/InferenceOnly/Formalism/Inference.lean), kinds that each give a bound for the whole partition (InferenceOnly.Formalism.PartitionBound, security/Definitions/InferenceOnly/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), under the named CutCost and TokenWork (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.FitServing": "frozen (no-function): Fit's construction for running θ': it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (InferenceOnly.Formalism.SessionBlocks, security/Definitions/InferenceOnly/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (InferenceOnly.Formalism.SessionBlocks, security/Definitions/InferenceOnly/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (InferenceOnly.Formalism.TrainingBlocks, security/Definitions/InferenceOnly/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (InferenceOnly.Formalism.Run, security/Definitions/InferenceOnly/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), under the named CutCost, TokenWork and EfficiencyFloor (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (InferenceOnlyCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "InferenceOnly.Cut.SecurityProofs.Bound": "frozen (no-function): It is about an arbitrary registered circuit, its charged work (InferenceOnly.Cut.Work, security/Definitions/InferenceOnly/Cut.lean) and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet, and stating that join among the properties is what would give it an acceptance.",
+   "InferenceOnly.Cut.SecurityProofs.Slowdown": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), each priced at c, with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet.",
+   "InferenceOnly.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (InferenceOnly.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
+   "InferenceOnly.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Pouw.SecurityProofs.MonitoringPeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (SampledLayer.BindingAt at Declared.monitoringPeriodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
    "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed stage order (SamplingDeploy.codeTwoStage, a second stage of R rounds), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform, StageUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
@@ -28207,8 +28207,8 @@
    "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "Accounting.SecurityProofs.RateWindowSample": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling's one round at M = P * N, for a chained window of abstract chip programs in the random-oracle model whose single draw opens d of all its passes' receipts after the last root (security/Definitions/Accounting/RateAuditHorizon.lean, WindowCoins, Chain.correctAll), not the rate audit's code.",
    "Accounting.SecurityProofs.RateRunSample": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for a session of such windows, each a function of the earlier windows' coins and draws (security/Definitions/Accounting/RateAuditHorizon.lean, Session), each window's correct receipts its good set, and again with every window's receipts good but the first holding at most K_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
-   "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
-   "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (InferenceOnly.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (InferenceOnly.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Remote.PooledSample": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher (claim prf/sha-512: SHA-512's keyed stream as a PRF, a term of the statement's error that no premise assumes and nothing prices), one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "Accounting.SecurityProofs.Remote.LiveCoinsSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledSample at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "Accounting.SecurityProofs.Remote.HeldSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
@@ -28229,11 +28229,11 @@
    "NetTiming.SecurityProofs.SampledLeakCarried": "frozen (no-function): It is SampledLeakChecked for one run that reads an opened row at its opening gates (OpensAtInputs) and leaves one at its closing gates, stated over the sampled audit's statement as Definitions.NetworkCertifier states it, at every compiled sampled verifier where Claims.SamplingGeneric.Compiled.KS holds (its proof reads the proved SampledAuditAccepted), on the statements whose check misses with probability at most εchk (CheckedWitness); its relation (RLeakCarried) reads both rows off the extracted witness, and it bounds AccSeqsCarried, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run from a fixed opened row, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered, checked and opening inputs (freeInputs \\ (reg ∪ chk ∪ prow)).",
    "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
-   "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
+   "InferenceOnly.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (InferenceOnly.CompliesAtMost); the join from a published complies of the count to that verdict is InferenceOnlyCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
    "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
-   "Nci.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: Nci.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (Nci.Cut.SecurityProofs.CountsOn, security/Proofs/Nci/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
-   "Nci.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Nci.Cut.Toy, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
-   "Nci.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
+   "InferenceOnly.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: InferenceOnly.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (InferenceOnly.Cut.SecurityProofs.CountsOn, security/Proofs/InferenceOnly/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
+   "InferenceOnly.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy InferenceOnly.Cut.Toy, stated with HECharged; its theorem InferenceOnly.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
+   "InferenceOnly.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem InferenceOnly.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): as WorkSoundH200, over every card table, menu and host row; the statements at the two cards are its consequences.",
    "NetTiming.Guarantees.MonitoringPeriodLeakChecked": "unstated: MonitoringPeriodLeakAccepted with each window's checked inputs left out of the count (the check held to the run at the network certifier's rows, CheckedWitness at certifierRun) and the client's view read from the records under a registered parameter (RecordFormat.ReadsBy), so the count is the registered parameters' times the windows'; stated first, and its theorem NetTiming.SecurityProofs.MonitoringPeriodLeakChecked is not proved yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's monitoring period of sampled audits, pooled (RealizesCommOfPooledLeakAccepted), from PooledLeakAccepted's first conjunct at the run's coins: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
@@ -28279,17 +28279,17 @@
     "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
     "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*. On the B200's two readings it is false at every certificate too (RT3-LOGIC-6: ♭'s fold with each IMAD as 32 ALU shift-adds); on the H200's three (DC-90-ri's at 1/2 and its (I3) twin at 3/5 among them) that fold breaks it at no certificate, since the H200's menu holds each route with LI's multiplies as IMAD.WIDE and N_w times one of those prices at most that fold on every row. The data-center headlines' test of it prices ♭'s fold and that one at each of the five pi* and checks both facts. At those pi* it is open on all five, and every class a fold route issues prices above 0 at each (a free class would make it harder to meet, not easier: HB-PROOF's M1). On the H200 the cheater's menu holds every counted fold known to come near the bit-exact loops, none built: RT4-SHEET-13's and -14's moves of LI on li and each loop (its XORs as a memory round trip of three issue slots, its multiplies as IMAD.WIDE, or both), their classes at the JI90 lines the H200 measured beside the IGMMA, and li-bulk at its measured cost with its counted BT1024 and trimmed infinite-W members (RT4-SHEET-17, -22), so there it is a premise only about folds off the cheater's menu, and a counted fold priced below what it would cost built only lowers the proved credit (1 - epsilon)·B_flat, which reads w* and phi* at pi* and not B_flat (RT4-SHEET-27); B_flat doesn't move with it, since flat folds by the built routes alone. The two-slot round trip is off the menu: li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two. At the (I3) twin's pi* it doesn't follow from FOLD-OPT at 1/2's (HB-PROOF's M1), and phi* there is li-bulk's trimmed member."
    },
-   "Nci.Assumptions.ReferenceLayered": {
+   "InferenceOnly.Assumptions.ReferenceLayered": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_tiers.py::test_reference_layered_at_kimi_k2",
     "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\"), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) in the steps of the declared BF16 GEMM (GEMM_HOPPER's HopperBF16WgmmaDot16, 16 activations a step, verity/definitions/ops/boolean/gemm.py), at capacity factor 1 and with bf16 embeddings, neither of which any workload declares, and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
    },
-   "Nci.Assumptions.Reach": {
+   "InferenceOnly.Assumptions.Reach": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
     "why": "Reach is a predicate on the threading T (FitBoundSlots for ReachSlots, Reach counted in parameter slots). fit.py's rungs use it at token threads (reuse 2), where ASK-68 (19 Oct) adopts it for dense recipes, each of whose tokens uses all its weights; there it is false for a token-routed MoE, Kimi K2 (about 32B active) and GLM-5.3 (about 40B) being under N* = 87.6B. At sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound, twice the sequence length, which voids the rungs. Open over all recipes (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
    },
-   "Nci.Assumptions.ReachSlots": {
+   "InferenceOnly.Assumptions.ReachSlots": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
     "why": "Reach is a predicate on the threading T (FitBoundSlots for ReachSlots, Reach counted in parameter slots). fit.py's rungs use it at token threads (reuse 2), where ASK-68 (19 Oct) adopts it for dense recipes, each of whose tokens uses all its weights; there it is false for a token-routed MoE, Kimi K2 (about 32B active) and GLM-5.3 (about 40B) being under N* = 87.6B. At sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound, twice the sequence length, which voids the rungs. Open over all recipes (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
@@ -29269,19 +29269,19 @@
    "FlockSoundness.Audit.audit_work_whole_stratum": {
     "(FlockSoundness.Audit.Law.stratum σ s).Nonempty": "FlockSoundness.Audit.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.CapabilityFloor": {
+   "InferenceOnly.SecurityProofs.CapabilityFloor": {
     "∀ (C : In → Accounting.Actual.Run L) (x : In), Set.instMembership.mem 𝒜 { fst := C, snd := x } → Core C x → instLENat.le Lc (cost (C x))": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.CertificateSlack": {
+   "InferenceOnly.SecurityProofs.CertificateSlack": {
     "Real.instLE.le (Finset.univ.sum fun i => c i) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.CoveringBound": {
+   "InferenceOnly.SecurityProofs.CoveringBound": {
     "Real.instLT.lt k.cast (instHMul.hMul (instHMul.hMul r b) D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.CoveringBoundTwoCosts": {
+   "InferenceOnly.SecurityProofs.CoveringBoundTwoCosts": {
     "Real.instLT.lt k.cast (instHMul.hMul cw D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.Dampener": {
+   "InferenceOnly.SecurityProofs.Dampener": {
     "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) Md) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29289,7 +29289,7 @@
     "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHAdd.hAdd Mr.cast Md.cast) (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ μ) C) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.DampenerRemote": {
+   "InferenceOnly.SecurityProofs.DampenerRemote": {
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω) (b : β), SetLike.instMembership.mem (bad ω) b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω) (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) (bad ω)).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29297,7 +29297,7 @@
     "∀ (ω : Ω), Real.instLE.le (Mu ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω), Real.instLE.le (Mx ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.DampenerThreaded": {
+   "InferenceOnly.SecurityProofs.DampenerThreaded": {
     "Real.instLE.le (d.D.size d.D.computed).cast C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) T.M.card) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29306,7 +29306,7 @@
     "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 dd.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.DampenerThreadedSlots": {
+   "InferenceOnly.SecurityProofs.DampenerThreadedSlots": {
     "Real.instLE.le (d.D.size d.D.computed).cast C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) T.M.card) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29315,7 +29315,7 @@
     "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 dd.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.DampenerWindows": {
+   "InferenceOnly.SecurityProofs.DampenerWindows": {
     "instLENat.le M (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd Mu Mr) Md) Mx)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mu.cast (instHDiv.hDiv (instHMul.hMul κ U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29324,21 +29324,21 @@
     "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMul.hMul (instHMul.hMul α F) L) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le e (instHDiv.hDiv (instHMul.hMul reuse (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 d) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul b_a (instHAdd.hAdd Mr.cast Md.cast)) (instHMul.hMul (instHMul.hMul n.cast (Nat.ceil (instHDiv.hDiv H L)).cast) (instHMul.hMul (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) (Nci.Dampener.Lambda reuse e d b_w (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (instHMul.hMul b_a (instHAdd.hAdd Mr.cast Md.cast)) (instHMul.hMul (instHMul.hMul n.cast (Nat.ceil (instHDiv.hDiv H L)).cast) (instHMul.hMul (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) (InferenceOnly.Dampener.Lambda reuse e d b_w (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)))))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.ExpandComplies": {
+   "InferenceOnly.SecurityProofs.ExpandComplies": {
     "∀ (g : Fin d.D.N), Eq (d.D.isInput g) Bool.false → instLENat.le 1 (d.D.w g)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Fin d.D.N), instLENat.le (d.D.w g) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.FitBound": {
+   "InferenceOnly.SecurityProofs.FitBound": {
     "Real.instLT.lt S (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Fin k), Real.instLE.le (Nci.freshInput c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (j : Fin k), Real.instLE.le (InferenceOnly.freshInput c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.FitBoundSlots": {
+   "InferenceOnly.SecurityProofs.FitBoundSlots": {
     "Real.instLT.lt S (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Fin k), Real.instLE.le (Nci.freshInput c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (j : Fin k), Real.instLE.le (InferenceOnly.freshInput c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.FitRate": {
+   "InferenceOnly.SecurityProofs.FitRate": {
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i j : Fin n), Ne i j → Disjoint (X i) (X j)": "a disequality, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : Fin κ.J), instLENat.le (instHSub.hSub (κ.τ j.succ) (κ.τ j.castSucc)) ω": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29346,22 +29346,22 @@
     "∀ (i : Fin n) (j : Fin κ.J), Real.instLE.le (A.stateIn (X i) (κ.τ j.castSucc) (Finset.map { toFun := M.emb, inj' := ⋯ } (Finset.booleanAlgebra.compl c.θ))).cast R": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLT.lt (instHAdd.hAdd R (instHMul.hMul r ω.cast)) (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.HeldBudget": {
-    "∀ (U : Fin R.d.n → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.d.n), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.d.𝓘.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "brought by PRs on `next` beside the rule (#5805, #5125, #6636), inline when the rule came: name it or state it as a guarantee's conclusion"
+   "InferenceOnly.SecurityProofs.HeldBudget": {
+    "∀ (U : Fin R.d.n → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.d.n), And (InferenceOnly.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (InferenceOnly.Capability.holds R.d.D (R.d.𝓘.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => InferenceOnly.Capability.selectionBits T (U u) σ)": "brought by PRs on `next` beside the rule (#5805, #5125, #6636), inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.RecomputeByGates": {
+   "InferenceOnly.SecurityProofs.RecomputeByGates": {
     "∀ (c : κ), Real.instLE.le g (K.G c).card.cast": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.RecoveredBudget": {
+   "InferenceOnly.SecurityProofs.RecoveredBudget": {
     "instLENat.le e.length aBlk": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.ReferenceThreaded": {
+   "InferenceOnly.SecurityProofs.ReferenceThreaded": {
     "Real.instLE.le S (instHMul.hMul 2 (instHPow.hPow 10 7))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.ThreadedOfLayered": {
+   "InferenceOnly.SecurityProofs.ThreadedOfLayered": {
     "Real.instLT.lt S (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.VerdictLag": {
+   "InferenceOnly.SecurityProofs.VerdictLag": {
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), SetLike.instMembership.mem bad b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) bad).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"

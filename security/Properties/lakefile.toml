@@ -35,8 +35,8 @@ name = "pouw_pearlplus"
 path = "../../verity/protocols/accounting/pouw/verifier/lean/pearlplus"
 
 [[require]]
-name = "nci_check"
-path = "../../verity/protocols/policy/inference_only/verifier/nci/lean"
+name = "inference_only_check"
+path = "../../verity/protocols/policy/inference_only/verifier/inference_only/lean"
 
 [[require]]
 name = "certifier_device"
@@ -92,7 +92,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
   "Properties.Pouw.Credit", "Properties.Pouw.PearlPlus",
-  "Properties.Pouw.PearlPlusDraw", "Properties.Pouw.PearlPlus.Witnesses", "Properties.Nci", "Properties.Nci.Threads",
+  "Properties.Pouw.PearlPlusDraw", "Properties.Pouw.PearlPlus.Witnesses", "Properties.InferenceOnly", "Properties.InferenceOnly.Threads",
   "Properties.NetworkCertifier.Device", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
@@ -100,8 +100,8 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.Component",
   "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.TransferBlocks",
   "Properties.NetworkCertifier.DeviceOutput", "Properties.NetworkCertifier.DeviceOutput.Runs",
-  "Properties.Hash.Identity", "Properties.Attest", "Properties.Annot", "Properties.Nci.Desc",
-  "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Theta", "Properties.Nci.Count",
+  "Properties.Hash.Identity", "Properties.Attest", "Properties.Annot", "Properties.InferenceOnly.Desc",
+  "Properties.InferenceOnly.Desc.Verdict", "Properties.InferenceOnly.Desc.Cover", "Properties.InferenceOnly.Theta", "Properties.InferenceOnly.Count",
   "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits", "Properties.Spot.Interval",
   "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck", "Properties.Spot.Halt", "Properties.Spot.Second",
   "Properties.Spot.Wires", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.HistoryTable",
@@ -114,8 +114,8 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.Remote.Subprotocol", "Properties.Accounting.Remote.SubprotocolDeployed",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
-  "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
+  "Properties.Flock.Circuit", "Properties.InferenceOnly.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
-  "Properties.Flock.Nets", "Properties.Remote", "Properties.Nci.Record", "Properties.Pous.WipeSigned",
+  "Properties.Flock.Nets", "Properties.Remote", "Properties.InferenceOnly.Record", "Properties.Pous.WipeSigned",
   "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet",
   "Properties.Assumptions"]

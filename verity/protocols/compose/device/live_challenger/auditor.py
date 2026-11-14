@@ -116,8 +116,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   registration θ is read from, all four or none (part of them is refused): `--policy ID` (`policy`), the id of the
   protocol whose params read α and Γ, which names their form and unit (`POLICIES`; another id is refused);
   `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
-  (`NciCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
-  the deployment's first registration record (`NciCheck.Theta.digest`), the one θ's provenance cites. The open's
+  (`InferenceOnlyCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
+  the deployment's first registration record (`InferenceOnlyCheck.Theta.digest`), the one θ's provenance cites. The open's
   `by` is who gave them, the lane's key or vy-admin; an open with none of the four commits no policy. With
   `--policy-name NAME` in place of the first three, the open signs the id, α and Γ of the policy vy-admin registered
   under that name (the policy registry) and the name (`policy_name`), which no open carries otherwise: the auditor's
@@ -415,7 +415,7 @@ LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]{0,7})")
 #: beside a lanes-form K's files, each one's leaf Program's descriptor digest, PoUW's `credit.LEAF_PROGRAMS`
 LEAF_PROGRAMS = "leaf_programs"
 #: the inference-only policies a period-open may name, each the id of the protocol whose params read its α and Γ
-#: (`NciCheck.Protocol.protocolId`): the id fixes their form and their unit, so another form or unit is another id
+#: (`InferenceOnlyCheck.Protocol.protocolId`): the id fixes their form and their unit, so another form or unit is another id
 POLICIES = ("verity/inference-only/v0",)
 #: a natural as an inference-only policy's α and Γ are given: plain decimal, at most 39 digits, no sign or leading zero
 NATURAL = re.compile(r"0|[1-9][0-9]{0,38}")
@@ -791,7 +791,7 @@ def policy_name_of(s: str) -> str:
 
 def alpha_of(s: str) -> list[int]:
     """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most novel bits a gate the inference-only
-    policy lets an isolation unit read, as its check's params read it (`NciCheck.Protocol`: naturals, D at least 1). It
+    policy lets an isolation unit read, as its check's params read it (`InferenceOnlyCheck.Protocol`: naturals, D at least 1). It
     is signed as given, never reduced; or Refused."""
     n, slash, d = s.partition("/")
     if not (slash and NATURAL.fullmatch(n) and NATURAL.fullmatch(d) and int(d)):
@@ -802,7 +802,7 @@ def alpha_of(s: str) -> list[int]:
 
 def gamma_of(s: str) -> int:
     """A period-open's Γ (`--gamma`, written as `gamma`): the most gates the inference-only policy lets an isolation
-    unit hold, a natural as its check's params read it (`NciCheck.Protocol`), or Refused."""
+    unit hold, a natural as its check's params read it (`InferenceOnlyCheck.Protocol`), or Refused."""
     if not NATURAL.fullmatch(s):
         raise Refused(f"--gamma {s[:200]!r}: the inference-only policy's Γ, a natural in plain decimal of at most 39 "
                       "digits with no sign or leading zero")
@@ -811,7 +811,7 @@ def gamma_of(s: str) -> int:
 
 def registration_of(s: str) -> str:
     """A period-open's registration (`--registration`, written as `registration`): the digest of the deployment's first
-    registration record, the one that registers θ and that θ's provenance cites (`NciCheck.Theta.digest`: SHA-512
+    registration record, the one that registers θ and that θ's provenance cites (`InferenceOnlyCheck.Theta.digest`: SHA-512
     of the record's format, a zero byte and its canonical JSON), in lowercase hex, or Refused."""
     if not ROOT.fullmatch(s):
         raise Refused(f"--registration {s[:200]!r}: the digest of the deployment's first registration record, which "
