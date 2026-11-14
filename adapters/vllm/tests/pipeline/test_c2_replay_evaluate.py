@@ -18,9 +18,9 @@ import pytest
 
 import verity_vllm.pipeline.c2_replay as C2
 from verity_vllm.check.replay import driver as SR
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.commit import executed_prefix as EPX
 from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.records import replay_codes as RC
 
 Record = dict[str, Any]
 Lines = Callable[[], list[str]]
