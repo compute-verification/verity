@@ -908,13 +908,37 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
-def _composite(public: Path, x: str, product: str, verdict: str | None, **more) -> None:
+#: the toy registration record R of the window the record tests' sampled proofs audit sampled against
+WINDOW_RECORD = {"format": "toy-registration", "window": 1}
+WINDOW_DIGEST = REG.digest(WINDOW_RECORD)
+
+
+def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
+    """The sampled proofs audit ``audit``'s v1 case, committing to the registration record ``rec``."""
+    from verity.circuits import codec
+
+    (audit / "window").mkdir(parents=True, exist_ok=True)
+    (audit / "window" / "case.json").write_text(json.dumps({"params": {"verifier": "toy"}, "evidence": "",
+                                                            "commitment": codec.canonical_json(dict(rec)).hex()}))
+    return audit
+
+
+def _composite(public: Path, x: str, product: str, verdict: str | None, window: str | None = WINDOW_DIGEST,
+               **more) -> str:
     """composite.py's public composite.json of ``product`` under ``public/x``, its Lean answering ``verdict`` (its
-    ``none`` when None)."""
+    ``none`` when None), its sampled proofs case naming ``window`` and PoUW's its period, and its commitment their
+    `composite.bind`, which it returns."""
+    import composite as C
+
     out = {"id": product, "verdict": verdict or "none", **({"refusal": "components"} if verdict != "accept" else {})}
+    cases = [{"id": i, "commitment": d, "params_sha512": "00" * 64, "verdict": "accept"}
+             for i, d in (("verity/pouw/period/v1", "ef" * 64), (S.WINDOW_CASE, window))]
+    commitment = C.bind(product, [(c["id"], bytes.fromhex(c["commitment"] or "")) for c in cases]).hex()
     (public / x).mkdir(parents=True, exist_ok=True)
-    (public / x / "composite.json").write_text(json.dumps({"product": product, "commitment": "ab" * 8, "missing": [],
-                                                           "verdict": out, "exceptions": [], "cases": [], **more}))
+    (public / x / "composite.json").write_text(json.dumps(
+        {"product": product, "commitment": commitment, "missing": [], "verdict": out, "exceptions": [], "cases": cases,
+         **more}))
+    return commitment
 
 
 def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_one_is_no_composite(tmp_path):
@@ -923,11 +947,43 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
     c = tmp_path / "composite"
     _composite(c, "remote", "verity/remote/v0", "accept")
     (c / "logs").mkdir()
-    assert S.composite_answer(c, "remote")[0]["verdict"] == "accept"
+    assert S.composite_answer(c, "remote", WINDOW_DIGEST)[0]["verdict"] == "accept"
     (c / "remote-v1").mkdir()
     (c / "remote-v1" / "composite.json").write_text("{")
-    answer, why = S.composite_answer(c, "remote")
+    answer, why = S.composite_answer(c, "remote", WINDOW_DIGEST)
     assert answer is None and why.startswith("remote-v1/composite.json doesn't parse"), why
+
+
+def test_the_window_record_is_the_one_the_sampled_proofs_audit_sampled_against(tmp_path):
+    """`window_digest` is the digest of the registration record R the audit's v1 case commits to, and None, saying
+    why, for an audit with no case."""
+    assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
+    digest, why = S.window_digest(tmp_path / "none")
+    assert digest is None and why.startswith(f"the sampled proofs audit {tmp_path / 'none'} names no window record"), why
+
+
+@pytest.mark.parametrize("change, why", [
+    ({"window": REG.digest({**WINDOW_RECORD, "window": 2})},
+     f"its verity/sampled-proofs/v1 case names ['{REG.digest({**WINDOW_RECORD, 'window': 2})}'], not this window's"),
+    ({"window": None}, "its verity/sampled-proofs/v1 case names no record, not this window's"),
+    ({"commitment": "ab" * 64}, "its commitment is not the bind of its cases' digests"),
+    ({"cases": []}, "its verity/sampled-proofs/v1 case names no record, not this window's"),
+])
+def test_a_composite_of_another_window_is_refused_whatever_its_lean_said(tmp_path, change, why):
+    """A composite whose sampled proofs case names another window's record, or none, or whose commitment doesn't bind
+    its cases' digests, is refused (`CompositeRefused`), its Lean's accept not taken; one that names this window's
+    record R and binds it is taken."""
+    c = tmp_path / "composite"
+    window = change.pop("window", WINDOW_DIGEST)
+    _composite(c, "remote-v1", "verity/remote/v1", "accept", window=window, **change)
+    with pytest.raises(S.CompositeRefused) as e:
+        S.composite_answer(c, "remote", WINDOW_DIGEST, "the audit")
+    assert str(e.value).startswith("remote-v1/composite.json is refused, not this window's composite: ") and why in str(
+        e.value), e.value
+    with pytest.raises(S.CompositeRefused, match="there is no window record to tie it to"):
+        S.composite_answer(c, "remote", None, "the audit")
+    _composite(c, "remote-v1", "verity/remote/v1", "accept")
+    assert S.composite_answer(c, "remote", WINDOW_DIGEST, "the audit")[0]["verdict"] == "accept"
 
 
 @pytest.mark.parametrize("composites, pouw, composed, rc, lean", [
@@ -948,6 +1004,8 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
     ({"onsite": ("verity/onsite/v0", "accept")}, "accept", "pending", 2, "0 composites of the remote check"),
     ({"remote": ("verity/remote/v0", "accept")}, "reject", "reject", 1, "verity/remote/v0's Lean check"),
     ({"remote": ("verity/remote/v0", "reject")}, None, "reject", 1, "verity/remote/v0's Lean check"),
+    ({"remote-v1": ("verity/remote/v1", "accept", {"window": REG.digest({**WINDOW_RECORD, "window": 2})})}, "accept",
+     "pending", 1, "remote-v1/composite.json is refused, not this window's composite: its verity/sampled-proofs/v1 case"),
 ])
 def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only_for_its_accept(
         tmp_path, monkeypatch, capsys, composites, pouw, composed, rc, lean):
@@ -956,7 +1014,8 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
     accepted. Its reject rejects, exit 1, whatever the rows say; a piece about this node that rejects rejects whatever
     the Lean says (Python only refuses). No composite of the product's check, two, one whose Lean gave no answer, an
     undecided one or a development one (composed on the served node, which claims no record) leaves it pending, exit 2,
-    and the line and the report say, as ``lean``, where the answer was read or why there is none."""
+    and the line and the report say, as ``lean``, where the answer was read or why there is none. A composite of
+    another window than the one the sampled proofs audit sampled against is refused: pending, exit 1."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     (p := tmp_path / "pieces" / "pouw").mkdir(parents=True)
@@ -967,12 +1026,12 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
         (p / "answer.json").write_text(json.dumps(a))
         (p / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     c = tmp_path / "composite"
-    for x, (product, verdict, *more) in composites.items():
-        _composite(c, x, product, verdict, **(more[0] if more else {}))
+    bound = {x: _composite(c, x, product, verdict, **(more[0] if more else {}))
+             for x, (product, verdict, *more) in composites.items()}
     (tmp_path / "serve").mkdir()
     got = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
-                  str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"),
-                  "--node", "vy-dc-h200", "--product", "remote", "--composite", str(c)])
+                  str(_window_case(tmp_path / "audit")), "--pieces", str(tmp_path / "pieces"), "--out",
+                  str(tmp_path / "record"), "--node", "vy-dc-h200", "--product", "remote", "--composite", str(c)])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     assert (got, line["composed"], line.get("check", {})) == (rc, composed, {}), line
@@ -987,7 +1046,7 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
         (x, (product, verdict, *_)), = composites.items()
         assert rec["composed"]["answer"] == {"protocol": product, "verdict": verdict,
                                              "reason": None if verdict == "accept" else "components",
-                                             "commitment": "ab" * 8}
+                                             "commitment": bound[x]}
     else:
         assert composed == "pending"
 
@@ -3906,23 +3965,27 @@ DEFERRED_READS = ("weights_registration.json", f"window-circuit-w7-{VTAG}-tie.js
                   "sampled-proofs-served/window/registration.json", "sampled-proofs-served/runs.json",
                   "private/pouw/period/case.json", "private/pouw/period/answer.json")
 #: `served_verdicts.py record` as the shell runs it: its verdict the Lean answer of the composite under its
-#: ``--composite`` (``pending`` without one), and its exit `S.RECORD_EXIT`'s
+#: ``--composite`` (``pending`` without one, or with a development one), and its exit `S.RECORD_EXIT`'s
 FAKE_RECORD = '''import glob, json, os, sys
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
 open(os.environ["ORDER"] + ".record", "w").write(json.dumps(a))
-said = [json.load(open(f))["verdict"]["verdict"] for f in glob.glob(a[a.index("--composite") + 1] + "/*/composite.json")
+docs = [json.load(open(f)) for f in glob.glob(a[a.index("--composite") + 1] + "/*/composite.json")
         ] if "--composite" in a else []
+said = [d["verdict"]["verdict"] for d in docs if not d.get("development")]
 composed = {"undecided": "pending"}.get(said[0], said[0]) if said else "pending"
 print("RECORD " + json.dumps({"composed": composed, "window": 7}))
 sys.exit(''' + repr(S.RECORD_EXIT) + '''[composed])
 '''
-#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json
+#: `served_composite.sh`, its product's Lean answering $LEAN (no answer when unset) in its public composite.json, which
+#: carries $COMPOSE_DEVELOPMENT as its ``development`` where it is set
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
 printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
+printf "%s" "${COMPOSE_DEVELOPMENT:-}" > "$ORDER.development"
 if [ -n "${LEAN:-}" ]; then
   mkdir -p "$2/composite/remote"
-  echo "{\\"product\\": \\"verity/remote/v0\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v0\\", \\"verdict\\": \\"$LEAN\\"}}" \\
+  dev=${COMPOSE_DEVELOPMENT:+", \\"development\\": \\"$COMPOSE_DEVELOPMENT\\""}
+  echo "{\\"product\\": \\"verity/remote/v0\\", \\"verdict\\": {\\"id\\": \\"verity/remote/v0\\", \\"verdict\\": \\"$LEAN\\"}$dev}" \\
     > "$2/composite/remote/composite.json"
 fi
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
@@ -4037,20 +4100,21 @@ def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[s
     ({}, "(this tree's)"),
     ({"RESEARCH_SOURCE_SHA": "cd" * 20, "FOLLOW_ANY_TREE": "1"}, f"(this tree is {'cd' * 20}: FOLLOW_ANY_TREE)"),
 ])
-@pytest.mark.parametrize("lean, exit", [(None, 2), ("accept", 0), ("reject", 1), ("undecided", 2)])
+@pytest.mark.parametrize("lean", [None, "accept", "reject", "undecided"])
 def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_composes_the_final_record_there(
-        tmp_path, extra, tree, lean, exit):
+        tmp_path, extra, tree, lean):
     """The follow-on of a deferral made under COMPOSE_OFF_NODE=0, at the settings the deferral recorded: the copy held to
     the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
     tree's, and the commit H1 bound, held as there), V3c's audit and period, the composite, told the served node, so it
     says it composed elsewhere, and then the final record about the served node from the pieces it read, V3c's audit,
-    the sampled-proofs audit of record and that composite's Lean answer, whose verdict is the run's exit: 0 only for the
-    Lean's accept, 2 while no Lean answered or it is undecided, 1 for its reject. Another tree runs only under
-    FOLLOW_ANY_TREE, which its line names. $OUT names no window."""
+    the sampled-proofs audit of record and that composite. This node is a prover node, which the prover controls, so the
+    composite is a development check (COMPOSE_DEVELOPMENT) and no Lean answer of it is the record's, whatever it says:
+    the record is pending and the run's exit 2. Another tree runs only under FOLLOW_ANY_TREE, which its line names.
+    $OUT names no window."""
     assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
     rc, lines, order, limits = _follow(tmp_path, **extra, LEAN=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
-    assert rc == exit and order == ["audit", "period", "composite", "record"], (lines, order)
+    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
     assert lines.pop(0) == V3C_ENTRY
     assert lines[:2] == [
         "FOLLOW-ON on cpu-6, 755 GB: V3c's audit and the composite, which the served node vy-dc-h200 deferred, from its "
@@ -4061,7 +4125,12 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "COMPOSITE:", "RECORD"]
     assert lines[-2] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
-    assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == {"undecided": "pending"}.get(lean, lean or "pending")
+    assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == "pending"
+    assert (tmp_path / "order.development").read_text().startswith(
+        "composed by a deferral's follow-on on cpu-6, a prover node, which the prover controls: a development check")
+    if lean:
+        assert json.loads((out / "composite" / "remote" / "composite.json").read_text())["development"].startswith(
+            "composed by a deferral's follow-on on cpu-6")
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
@@ -4155,7 +4224,7 @@ def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_a
     sums = {f: h for h, f in (x.split("  ", 1) for x in (dd / "inputs.sha256").read_text().splitlines())}
     assert sums["private/deferred/day-log.json"] == hashlib.sha256((d / "private/deferred/day-log.json").read_bytes()).hexdigest()
     rc, lines, order, _limits = _follow(tmp_path, records_audit=_day_tree(tmp_path), **extra, LEAN="accept")
-    assert rc == 0 and order == ["audit", "period", "composite", "record"], (lines, order)
+    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
     assert lines[1].endswith("(the serve dir's private/deferred/inputs.sha256): PASS")
     assert lines[2] == _held(entry, f"PASS (day 3, program {'5d' * 8}…, declaration {_named(entry)[:16]}…)")
     assert _audited(tmp_path, DAYS) == {"--day": "3", "--day-log": str(dd / "day-log.json"),
@@ -4550,6 +4619,7 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
                                                                          "--tree", SHA, "--composite",
                                                                          str(out / "composite")])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
+    assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
 
@@ -5478,6 +5548,13 @@ sys.exit(1)
         "audit inputs and the cases written here from it, not from the parties that produced them")
     assert not any("DEVELOPMENT" in x for x in said)
     assert json.loads((p / "remote" / "private" / "development.json").read_text()) is None
+    (out / "verdicts.txt").unlink()
+    for x in (out / "composite", p, v2):
+        shutil.rmtree(x)
+    env["COMPOSE_DEVELOPMENT"] = "composed by a deferral's follow-on on a prover node"
+    assert run().returncode == 0
+    assert (out / "verdicts.txt").read_text().splitlines()[0] == f"COMPOSITE DEVELOPMENT: {env['COMPOSE_DEVELOPMENT']}"
+    assert json.loads((p / "remote" / "private" / "development.json").read_text()) == env.pop("COMPOSE_DEVELOPMENT")
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)

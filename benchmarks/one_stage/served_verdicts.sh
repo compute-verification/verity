@@ -84,18 +84,21 @@
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), `reject` where a piece about this node rejects or errs, and otherwise the
 #     verdict of the product's compiled Lean check (onsite's, or remote's) on the run's cases: the answer `composite.py`
-#     wrote to the composite's public output, which the record reads (--composite) only where the composite ran before it
-#     and is of record, off the served node (`compose` and the deferral's follow-on); any other server's answer is
-#     carried as elsewhere. The certifier's chain files that list or count the window's requests (CERTIFIER_PRIVATE) then
-#     move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
+#     wrote to the composite's public output, which the record reads (--composite) where the composite ran before it,
+#     and takes only where it is of record, composed on an auditor host off the served node (`compose`; the deferral's
+#     follow-on composes on a prover node, so its composite is a development check), and names the window's
+#     registration record R that the record's sampled proofs audit sampled against: one of another window, or bound to
+#     no record, is refused, exit 1; any other server's answer is carried as elsewhere. The certifier's chain files
+#     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
 #     composite.py) or whose Lean didn't answer fails the run. On the served node no composite is of record (under
 #     COMPOSE_OFF_NODE=0 it is a development check), so this record is `pending`; under COMPOSE_OFF_NODE=1, the default,
 #     it says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
 #     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
 #     The run's exit is the record's verdict: 0 only where it is the compiled Lean check's accept, 2 where it is
-#     `pending` (always on the served node, and in a follow-on that only writes the hand-off), and otherwise nonzero:
-#     1 where it is `reject` or a step around it failed, the step's own code where one stopped the run before it.
+#     `pending`, no composite of record yet (always on the served node and in a deferral's follow-on), and otherwise
+#     nonzero: 1 where it is `reject`, a composite is refused or a step around it failed, the step's own code where one
+#     stopped the run before it.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
@@ -266,10 +269,11 @@
 # window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, and after V3c's audit writes the compose hand-off
 # there (above; a compose follow-on refuses a serve dir holding the copy's value files, so COMPOSE_NODE is then another
 # node), its exit then 2 (pending: the record is composed off it), or under COMPOSE_OFF_NODE=0 composes the composite
-# (`served_composite.sh`, SERVED_NODE the served node) and then the final record, whose verdict is that composite's Lean
-# answer (`record --node` the served node `--composite`, so its composed_on names the host it composed on, served_node
-# false, and that it read a prover-side copy), its exit the record's verdict (step 5); its $OUT is published as every
-# run's is.
+# (`served_composite.sh`, SERVED_NODE the served node) and then the final record (`record --node` the served node
+# `--composite`, so its composed_on names the host it composed on, served_node false, and that it read a prover-side
+# copy). That node is a prover node, which the prover controls, so its composite is a development check
+# (COMPOSE_DEVELOPMENT), never the record's verdict: the record stays pending and the exit is 2 at best (step 5); only
+# the compose follow-on's composite, on an auditor host, is of record. Its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
@@ -1242,8 +1246,8 @@ print(f"day {day}, program {program[:16]}…, declaration {want[:16]}…")' \
   return "$rc"
 }
 follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
-  # step 6's audit, and the composite and the final record from it here rather than on the served node, or under
-  # COMPOSE_OFF_NODE=1 the compose hand-off for a node of neither
+  # step 6's audit, and the composite, a development check on this prover node, and the final record here rather than on
+  # the served node, the record pending, or under COMPOSE_OFF_NODE=1 the compose hand-off for a node of neither
   local rc vrc rec comp=0 TPY=$TREE/.venv/bin/python
   (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
   rc=$?
@@ -1274,7 +1278,11 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   fi
   local lean=()
   if [ -n "${COMPOSITE-1}" ]; then
-    TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+    local why="composed by a deferral's follow-on on $(hostname -s), a prover node, which the prover controls: a"
+    why+=" development check, no claim of record (only the compose follow-on's composite, off the served node on an"
+    why+=" auditor host, is the record's)"
+    TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_DEVELOPMENT=$why bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
+      || comp=1
     lean=(--composite "$OUT/composite")
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/$(sampled_of_record)" \

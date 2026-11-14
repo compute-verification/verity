@@ -154,10 +154,13 @@ where one about this node rejects or errs the composed verdict is ``reject`` and
 the verdict is the block record's, which is the compiled Lean ``onsite check``'s or ``remote check``'s (``remote-v1``'s
 under Pearl+) answer, as `composite.py` wrote it to the public composite under ``--composite`` (`served_composite.sh`'s
 $OUT/composite, `composite_answer`); a Lean rejection there rejects whatever the rows say. Without one composite of the
-product's check, one whose Lean answered, or with a development one (composed on the served node), no Lean answer is
-the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name
-``pending``; each says, as ``lean``, where its answer was read or why there is none. Python accepts nothing here: the
-exit is 0 only for the Lean's accept, 1 for a reject (or a block record `block_record.check` refuses), 2 for pending.
+product's check, one whose Lean answered, or with a development one (composed on the served node or on a prover node),
+no Lean answer is the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line
+name ``pending``; each says, as ``lean``, where its answer was read or why there is none. A composite not of the
+record's window is refused (`composite_tie`): its sampled proofs case must name the digest of the registration record
+R that ``--sampled-proofs``'s audit sampled against (`window_digest`), and its commitment must bind its cases' digests.
+Python accepts nothing here: the exit is 0 only for the Lean's accept, 1 for a reject, a refused composite or a block
+record `block_record.check` refuses, 2 for pending.
 The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
 product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and in no block record's
 ``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
@@ -226,10 +229,13 @@ REPORT_FORMAT = "verity/all-protocols-window/v1"
 #: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
 WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
-#: accept; 1 for a reject (or a block record its own check refuses), 2 for pending
+#: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
+#: the composite's case that names the window: sampled proofs', which commits to its registration record R
+#: (`served_cases.SAMPLED`)
+WINDOW_CASE = "verity/sampled-proofs/v1"
 
 #: each subprotocol after sampled proofs, by its runner name: (its name, its component, its verifier's owner, what its piece
 #: does), in the chain's order
@@ -2055,13 +2061,53 @@ def served_compare_line(path: Path) -> str:
     return str(line)
 
 
-def composite_answer(public: Path, product: str) -> tuple[dict[str, Any] | None, str]:
+class CompositeRefused(ValueError):
+    """A composite that is not the record's window's: `record` takes no answer from it and exits 1."""
+
+
+def window_digest(audit: Path) -> tuple[str | None, str]:
+    """The digest of the window's registration record R, the record the sampled proofs audit ``audit`` sampled against
+    and every case of the window commits to (`served_cases.window_case`, `served_cases.record_of`), and where it was
+    read; or None and why there is none."""
+    import served_cases as SC
+
+    try:
+        return SC.record_of(SC.window_case(audit))[1], f"{audit}/window/case.json"
+    except SC.Refused as e:
+        return None, f"the sampled proofs audit {audit} names no window record: {e}"
+
+
+def composite_tie(doc: Mapping[str, Any], window: str | None, read: str) -> str | None:
+    """Why the public composite ``doc`` is not of the window whose registration record has digest ``window`` (read
+    from ``read``), or None when it is: its sampled proofs case (`WINDOW_CASE`) names that digest, and its commitment is
+    `composite.bind` of its cases' digests, so the commitment its Lean judged binds that window. The Lean ties the other
+    cases to the same record (`Core.Composition.same`, `Core.Remote.windows`)."""
+    import composite as C
+
+    if window is None:
+        return f"there is no window record to tie it to ({read})"
+    cases = [c for c in doc.get("cases") or [] if isinstance(c, dict)]
+    named = [c["commitment"] for c in cases if c.get("id") == WINDOW_CASE and c.get("commitment")]
+    if named != [window]:
+        return (f"its {WINDOW_CASE} case names {named or 'no record'}, not this window's record R "
+                f"{window[:16]}… ({read})")
+    if all(c.get("commitment") for c in cases):
+        bound = C.bind(str(doc.get("product")), [(str(c.get("id")), bytes.fromhex(c["commitment"]))
+                                                  for c in sorted(cases, key=lambda c: str(c.get("id")))]).hex()
+        if doc.get("commitment") != bound:
+            return "its commitment is not the bind of its cases' digests (composite.bind)"
+    return None
+
+
+def composite_answer(public: Path, product: str, window: str | None = None,
+                     read: str = "no window record was read") -> tuple[dict[str, Any] | None, str]:
     """``product``'s Lean check's answer as `composite.py` wrote it to its public output under ``public`` (a directory
     per composite run, `served_composite.sh`'s $OUT/composite), in the block record's form (`block_record.answer_of`:
     the protocol, the verdict, the refusal's public name as the reason, and the composite's commitment), and where it was
     read; or None and why there is no answer to take: a composite.json that doesn't parse, no composite of one of the
     product's checks (`block_record.CHECKS`) or more than one, one whose Lean gave no answer, or one composed as a
-    development check, which claims no record."""
+    development check, which claims no record. `CompositeRefused` where the composite is not of the window whose
+    registration record has digest ``window`` (`composite_tie`)."""
     from verity_e2e_demo import block_record as BR
 
     found = []
@@ -2079,6 +2125,8 @@ def composite_answer(public: Path, product: str) -> tuple[dict[str, Any] | None,
     where = f"{d.name}/composite.json"
     if doc.get("development"):
         return None, f"{where} is a development check, which claims no record: {str(doc['development'])[:400]}"
+    if (tie := composite_tie(doc, window, read)) is not None:
+        raise CompositeRefused(f"{where} is refused, not this window's composite: {tie}")
     v = doc.get("verdict") if isinstance(doc.get("verdict"), dict) else {}
     if v.get("id") != doc["product"] or v.get("verdict") not in BR.VERDICTS:
         return None, f"{where}: its Lean gave no answer ({json.dumps(v, sort_keys=True)[:200]})"
@@ -2479,7 +2527,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
                  if a.sampled_lean else spot_row(a.sampled_proofs, run))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
-    answer, lean = composite_answer(a.composite, a.product) if a.composite else (None, "no composite was read")
+    refused = False
+    try:
+        answer, lean = (composite_answer(a.composite, a.product, *window_digest(a.sampled_proofs)) if a.composite
+                        else (None, "no composite was read"))
+    except CompositeRefused as e:
+        answer, lean, refused = None, str(e), True
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
@@ -2491,7 +2544,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if rec is not None:
         (a.out / "block-record.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True) + "\n")
     print("RECORD " + json.dumps(line, sort_keys=True), flush=True)
-    if rec is not None and line["check"]:
+    if refused or (rec is not None and line["check"]):
         return 1
     return RECORD_EXIT.get(line["composed"], 1)
 
