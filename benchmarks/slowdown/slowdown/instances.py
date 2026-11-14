@@ -1,15 +1,15 @@
 """Concrete instances: model architectures and the training runs whose target the adversary wants to reach.
 
-A `Model` carries what its architecture fixes: sizes, `Keyed`'s token structure (legs, fan-out, vocabulary) and its
+A `Model` carries what its architecture fixes: sizes, `Keyed`'s token structure (fan-in, fan-out, vocabulary) and its
 weight matrices by group, from which a family that trains part of the model (an adapter, a subset)
 derives its state and its counted products. A `Run` is a target: train `model` on `tokens` tokens, which the reference
 algorithm does in `compute = 6 · n_active · tokens` FLOPs unless the run says otherwise, of a `kind` in `RUN_KINDS`.
 Families read both (`families.Family.profile`).
 
-`legs` and `fanout` are derived from the matrices, the same way for every architecture (`derived_legs`,
+`fanin` and `fanout` are derived from the matrices, the same way for every architecture (`derived_fanin`,
 `derived_fanout`):
 
-* `legs` (`Keyed`'s `d`): the narrowest contraction among the counted products, the least `d_in` of a layer's matrices
+* `fanin` (`Keyed`'s `d`): the narrowest contraction among the counted products, the least `d_in` of a layer's matrices
   (Kimi K2's 512 is MLA's kv latent into kv_b; a dense model's is `d_model`).
 * `fanout` (`aOut`): the most counted products one activation value reaches, the larger of the widest matrix output
   (one value of a matrix's input meets `d_out` products) and the MLP input, which feeds the router and every active
@@ -71,8 +71,8 @@ class Model:
     d_model: int
     layers: int
     vocab: int
-    #: `Keyed`: legs of a token's accumulation chain (`d`) and counted products per activation value (`aOut`)
-    legs: int
+    #: `Keyed`: a token's accumulation chain's length, its fan-in (`d`), and counted products per activation value (`aOut`)
+    fanin: int
     fanout: float
     #: weight matrices by group: `attention`, `dense` (the MLP of dense layers), `experts` (routed), `shared`, `router`,
     #: `head` (the LM head; the embedding is a lookup, `vocab · d_model` more parameters unless tied to the head)
@@ -120,8 +120,8 @@ class Run:
         return self.compute or 6 * model.n_active * self.tokens
 
 
-def derived_legs(m: Model) -> int:
-    """`legs` from the matrices: the least `d_in` among the layers' matrices."""
+def derived_fanin(m: Model) -> int:
+    """`fanin` from the matrices: the least `d_in` among the layers' matrices."""
     return int(min(x.d_in for x in m.group(LAYERED)))
 
 

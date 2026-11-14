@@ -1,21 +1,21 @@
 """The exclusion bound: the server-block bound with its local minima (the working draft's §8, which states it).
 
 Everything here is in gates and counted weight. A **block** has a budget `(c, k)` (`Budget`): its gates and its
-unregistered input bits. A training class gives a per-block cap `q_T(c, k)` (`Cap`), the most counted weight a block
+fresh input bits. A pricing argument gives an inference-block yield `q(c, k)` (`Yield`), the most counted weight a block
 with that budget holds; an attack gives a construction's count instead. A **server block** (`ServerBlock`) is one
 server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
-its uncertified gates `U` by route, and an argument of the bound's minimum:
+its free compute `U` by route, and an argument of the bound's minimum:
 
-* `serving`, one block `(c_S, k_S)`, its cap `q_T(c_S, k_S)` and the boundary term `ω_max μ k_S` (`Cut.boundary`);
-* `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q_T(c, k) + q_U(U_S)`.
+* `serving`, one block `(c_S, k_S)`, its yield `q(c_S, k_S)` and the boundary term `ω_max μ k_S` (`Cut.boundary`);
+* `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q(c, k) + q_U(U_S)`.
 
-`q_U(U) = ω_max U / s_×` is the elementary uncertified cap, `u U` with `u` the most weight a gate can hold (`ω_max /
+`q_U(U) = ω_max U / s_×` is the elementary free-compute yield, `u U` with `u` the most weight a gate can hold (`ω_max /
 s_×`, `classes.Structure`), and no block holds more than `u c`. Under a bound each server block contributes the least
 of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`
 (`Accounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
 remote regime):
 
-    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S) + ω_max μ k_S, n_S q_T(c, k) + q_U(S)} + q_U(unregistered)
+    Σ_v ω_v ≤ Σ_S min{q(c_S, k_S) + ω_max μ k_S, n_S q(c, k) + q_U(S)} + q_U(unregistered)
 
 With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every server block), the
 bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its server blocks are a server over
@@ -38,14 +38,14 @@ GPU-hours over the reference's, `T_0 / (MFU₀ Φ)`, at least 1 (Lean's `hardwar
 `multiple_bound(MFU₀, s, x)`, `max(1, 1/(s + a x))`, with the unregistered leaves `s` training like the reference and the
 monitored share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
 assumption: no run uses the hardware more efficiently than the reference, so free compute counts at `MFU₀`), and
-`1/MFU₀` without it, free compute at peak, which is Lean's `remoteSlowdown` (`InferenceOnly.Guarantees.SlowdownRemote` states it
+`1/MFU₀` without it, free compute at peak, which is Lean's `remoteSlowdown` (`Slowdown.Guarantees.SlowdownRemote` states it
 for the remote composition). A construction's is its padded size ratio times `MFU₀`, since its circuit already carries
 the capacity it leaves idle (it trains at `MFU₀`, as the assumption has it).
 The time to the target, wall-clock, is then at least the overhead times `T_0 / (MFU₀ Φ_total)`
 (`scenario.Scenario.seconds`).
 
 This module knows no GPU, protocol or training class: `envelopes` builds the server blocks from the physical model,
-`classes` and `attacks` give the caps, and `families` the algorithm's profile.
+`classes` and `attacks` give the yields, and `families` the algorithm's profile.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Budget:
-    """`(c, k)`: a block's gates and its unregistered input bits, and the bits that may cross its narrowest declared
+    """`(c, k)`: a block's gates and its fresh input bits, and the bits that may cross its narrowest declared
     forward cut (`math.inf` where the policy declares none: an inference block; an episode of the proof of forward
     computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
 
@@ -67,9 +67,9 @@ class Budget:
     cut: float = math.inf
 
 
-#: `q_T(c, k)`: the most counted weight one block with this budget holds, a cap for a bound and a construction for an
-#: attack. `math.inf` is no cap (a class whose premises fail at this budget).
-Cap = Callable[[Budget], float]
+#: `q(c, k)`: the inference-block yield, the most counted weight one block with this budget holds, an upper bound for a
+#: bound and a construction for an attack. `math.inf` is no bound (a class whose premises fail at this budget).
+Yield = Callable[[Budget], float]
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class Blocks:
 
 @dataclass(frozen=True)
 class Cut:
-    """One valid partition of a server block: its blocks, and its uncertified gates by route (`U`, which no block
+    """One valid partition of a server block: its blocks, and its free compute by route (`U`, which no block
     constrains), valid under `cites` (the Lean guarantees and premises that put every gate in a block or in `U`)."""
 
     name: str
@@ -132,14 +132,14 @@ class Share:
 Side = Literal["bound", "attack"]
 
 
-def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = None,
+def terms(block: ServerBlock, cut: Cut, block_yield: Yield, w: float, u: float | None = None,
           per_bit: float | None = None) -> dict[str, float]:
     """`cut`'s argument of the minimum, term by term, over `w c_S`: each block kind's `n · min(q(c, k), u c)`, each
     route's `q_U(U) = u U` (`u` defaults to `w`), and its boundary term `ω_max μ k` at `per_bit = ω_max μ`
     (`classes.Structure.per_bit`)."""
     u = w if u is None else u
     full = w * block.gates
-    out = {b.kind: b.count * min(cap(b.budget), u * b.budget.gates) / full for b in cut.blocks}
+    out = {b.kind: b.count * min(block_yield(b.budget), u * b.budget.gates) / full for b in cut.blocks}
     for route, gates in cut.uncertified.items():
         out[route] = out.get(route, 0.0) + u * gates / full
     if cut.boundary:
@@ -150,7 +150,7 @@ def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = No
     return out
 
 
-def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None,
+def local(block: ServerBlock, block_yield: Yield, w: float, side: Side = "bound", u: float | None = None,
           per_bit: float | None = None) -> Share:
     """The server-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
     at `mfu`. Never more than the block's own gates hold (`u c_S`, or `mfu` of `w c_S` for a construction)."""
@@ -160,14 +160,14 @@ def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float
     if block.gates <= 0:
         return best
     for cut in block.cuts if side == "bound" else (block.layout,) if block.layout else ():
-        t = terms(block, cut, cap, w, u, per_bit)
+        t = terms(block, cut, block_yield, w, u, per_bit)
         total = math.fsum(t.values())
         if total < best.value:
             best = Share(total, cut.name, t)
     return best
 
 
-def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
+def aggregate(partition: Partition, block_yield: Yield, w: float, u: float | None = None,
               per_bit: float | None = None) -> dict[str, Share]:
     """The minimum of the global bounds: each cut name's terms summed over every server block (a block without that
     cut, or whose cut holds more than its capacity, at its capacity), the least of those sums, as each block's share."""
@@ -180,7 +180,7 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
         shares = {}
         for b in partition.serving:
             cut = next((c for c in b.cuts if c.name == name), None)
-            t = terms(b, cut, cap, w, u, per_bit) if cut and b.gates > 0 else {}
+            t = terms(b, cut, block_yield, w, u, per_bit) if cut and b.gates > 0 else {}
             v = math.fsum(t.values())
             shares[b.name] = Share(v, name, t) if cut and v < capacity.value else capacity
         s = math.fsum(weights[n] * v.value for n, v in shares.items())
@@ -191,7 +191,7 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
 
 @dataclass(frozen=True)
 class Slowdown:
-    """The overhead for one algorithm under one cap, `value` (the hardware multiple at `mfu`), from the padded size ratio
+    """The overhead for one algorithm under one yield, `value` (the hardware multiple at `mfu`), from the padded size ratio
     `padded = efficiency / (unregistered + (1 − ε_unreg) g)`, with each server block's share and `g`'s terms summed over server
     blocks (each a share of the reference's weight in the monitored fleet at capacity). `unregistered` is the unregistered leaves'
     weight over the reference's in the whole inventory: `(u/w) ε_unreg` under a bound (`q_U(unregistered)`), and `ε_unreg` times
@@ -243,7 +243,7 @@ class Slowdown:
         return {"unregistered": unregistered} | {t: (1 - self.eps_unreg) * v * scale for t, v in self.terms.items()}
 
 
-def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
+def slowdown(partition: Partition, block_yield: Yield, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
              reference_efficiency: bool = True, per_bit: float | None = None) -> Slowdown:
     """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
@@ -254,9 +254,9 @@ def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
     weights = {b.name: b.count * b.gates for b in partition.serving}
     total = math.fsum(weights.values())
     if aggregate_only and side == "bound":
-        shares = aggregate(partition, cap, w, u, per_bit)
+        shares = aggregate(partition, block_yield, w, u, per_bit)
     else:
-        shares = {b.name: local(b, cap, w, side, u, per_bit) for b in partition.serving}
+        shares = {b.name: local(b, block_yield, w, side, u, per_bit) for b in partition.serving}
     out: dict[str, float] = {}
     for name, s in shares.items():
         for term, v in s.terms.items():
@@ -276,16 +276,16 @@ def padded(unregistered: float, g: float, efficiency: float = 1.0, eps_unreg: fl
 
 def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = True) -> float:
     """`max(1, 1/(s + a x))`: the hardware multiple a developer needs over an unconstrained one at `MFU₀ = mfu`
-    (`hardwareMultiple`), when the unmonitored share `s` trains like it and the other terms `x`, shares of capacity,
+    (`hardwareMultiple`), when the unregistered share `s` trains like it and the other terms `x`, shares of capacity,
     convert into its work at `a`. Under reference efficiency (`GLOSSARY.md`: no run uses the hardware more efficiently
     than the reference) free compute runs at `MFU₀` too, so `a = 1`; without it `x` counts at peak, `a = 1/MFU₀`, Lean's
-    `InferenceOnly.Slowdown.remoteSlowdown mfu s x` (`InferenceOnly.Guarantees.SlowdownRemote`, `SlowdownRemoteMonitoringPeriod`). Below
+    `Slowdown.Slowdown.remoteSlowdown mfu s x` (`Slowdown.Guarantees.SlowdownRemote`, `SlowdownRemoteMonitoringPeriod`). Below
     `x = (1 − s)/a` it is 1: those terms alone outrun the unconstrained developer."""
     rate = s + (x if reference_efficiency else x / mfu)
     return max(1.0, 1 / rate) if rate > 0 else math.inf
 
 
-def least(*caps: Cap) -> Cap:
-    """Several bounds on the same block at once: each caps the same counted weight, so the least of them does, under
+def least(*yields: Yield) -> Yield:
+    """Several bounds on the same block at once: each bounds the same counted weight, so the least of them does, under
     the union of their premises."""
-    return lambda budget: min((a(budget) for a in caps), default=math.inf)
+    return lambda budget: min((a(budget) for a in yields), default=math.inf)

@@ -1,7 +1,7 @@
 """Attacks: constructions that finish counted products in a block, reported beside the overhead's lower bound.
 
 An attack is an `Argument` on the `attack` side: `allowance(profile)` is what the construction finishes in a block with
-that budget (never more than the block's compute, which `theorem.terms` caps), in the FLOP model as the classes are
+that budget (never more than the block's compute, which `theorem.terms` bounds), in the FLOP model as the classes are
 (`classes.FlopBudget`). Its `cites` are the analyses it rests on (`draft:`). The best attack for an algorithm is its
 best known attack (`FamilyResult.best_attack`), a construction and not an end of an interval; a bound above an attack's
 achieved count means a premise is false for that algorithm at that budget, and `scenario.evaluate` reports it as a

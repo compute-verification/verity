@@ -6,7 +6,7 @@ to apply (all of them unless it lists some). Every choice is a registry key (`sc
 can vary a choice like any number.
 
 `evaluate` gives, for each family, the overhead under each bound alone and under every bound it meets at once (`lo`,
-the lower bound: each block gets the least of the caps whose premises aren't refuted at its bits, under the union of
+the lower bound: each block gets the least of the yields whose premises aren't refuted at its bits, under the union of
 those bounds' premises), and under each attack (`best_attack`: the best known construction, reported beside the bound,
 not as an end of it). The lower bound takes only the bounds a lock states (`bounds.lock_only`): a bound one of whose own
 citations is a `draft:` statement sets it at no block size, and is still reported alone, labeled draft. The cuts'
@@ -15,13 +15,13 @@ least `min_A lo_A`. A bound above an attack is a contradiction: one of the bound
 algorithm, and `contradictions` names it.
 
 The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
-at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `InferenceOnly.Guarantees.SlowdownRemote` bounds
+at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds
 (`theorem.Slowdown`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
 the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
-A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
-cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
+A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary free-compute
+yield's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
 gates at more than one gate an operation cites its straddling premise, and the runs that measured `s_×`.
 """
 
@@ -50,7 +50,7 @@ from slowdown.families import Family, family
 from slowdown.instances import Model, Run
 from slowdown.params import PERIODS, Registry
 from slowdown.profile import Profile
-from slowdown.theorem import Budget, Cap, Slowdown, Partition, least, slowdown
+from slowdown.theorem import Budget, Yield, Slowdown, Partition, least, slowdown
 
 #: core's monitoring period of a year, in seconds
 YEAR = float(PERIODS["year"])
@@ -66,7 +66,7 @@ class Scenario:
     families: tuple[Family, ...]
     bounds: tuple[Argument, ...]
     attacks: tuple[Argument, ...]
-    #: the elementary uncertified cap a bound counts uncertified and unregistered gates at
+    #: the elementary free-compute yield a bound counts uncertified and unregistered gates at
     structure: Structure
     #: `data/premises.toml` by cited name (`classes.premises`), read from the scenario's registry
     premises: Mapping[str, Mapping] = field(default_factory=dict)
@@ -93,7 +93,7 @@ class Scenario:
 
     @property
     def reference(self) -> float:
-        """`T_0`: the reference circuit's gates to the run's target (its FLOPs through `hardware.Units`)."""
+        """`T_0`: the reference training algorithm's gates to the run's target (its FLOPs through `hardware.Units`)."""
         return self.context.units.gates(self.run.target(self.model))
 
     def seconds(self, overhead: float) -> float:
@@ -132,7 +132,7 @@ class Estimate:
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: the overhead inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's overhead
+    #: the overhead inside one inference block `(c, k)` alone: `w c / q(c, k)`, the registered circuit's overhead
     declared: float = math.nan
     #: every bound at once only: the bounds left out at a block that binds, their premises refuted there
     excluded: tuple[str, ...] = ()
@@ -236,19 +236,19 @@ def _rated(name: str, side: str, cites: tuple[str, ...], s: Slowdown, partition:
 
 
 def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, block: Budget,
-              table: Mapping[str, Mapping], st: Structure, mfu: float, ref: bool) -> tuple[Estimate, Cap | None]:
+              table: Mapping[str, Mapping], st: Structure, mfu: float, ref: bool) -> tuple[Estimate, Yield | None]:
     try:
-        cap = per_block(arg.allowance(p), ctx.units)
+        block_yield = per_block(arg.allowance(p), ctx.units)
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
     w = weight_per_gate(p, ctx.units)
-    s = slowdown(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref,
+    s = slowdown(partition, block_yield, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref,
                  per_bit=st.per_bit)
-    return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(cap, w, block), table, st), cap
+    return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(block_yield, w, block), table, st), block_yield
 
 
-def _declared(cap: Cap, w: float, block: Budget) -> float:
-    n = cap(block)
+def _declared(block_yield: Yield, w: float, block: Budget) -> float:
+    n = block_yield(block)
     return max(1.0, w * block.gates / n) if n > 0 else math.inf
 
 
@@ -256,9 +256,10 @@ def _refuted(cites: tuple[str, ...], k: float, table: Mapping[str, Mapping]) -> 
     return premise_status(cites, k, table=table) == STANDINGS[-1]
 
 
-def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) -> Cap:
-    """`cap` at a block where the premises among `cites` aren't refuted at its bits, and no cap where they are."""
-    return lambda b: math.inf if _refuted(cites, b.inputs, table) else cap(b)
+def _admitted(block_yield: Yield, cites: tuple[str, ...], table: Mapping[str, Mapping]) -> Yield:
+    """`block_yield` at a block where the premises among `cites` aren't refuted at its bits, and no bound where they
+    are."""
+    return lambda b: math.inf if _refuted(cites, b.inputs, table) else block_yield(b)
 
 
 def draft(cites: tuple[str, ...]) -> bool:
@@ -266,25 +267,26 @@ def draft(cites: tuple[str, ...]) -> bool:
     return any(lean.status(c) == "draft" for c in cites)
 
 
-def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
+def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Yield | None]], p: Profile, ctx: Context,
              partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure, mfu: float,
              ref: bool, lock_only: bool) -> Estimate:
-    """Every bound met at once, the lower bound: each block gets the least of the caps whose premises aren't refuted at
+    """Every bound met at once, the lower bound: each block gets the least of the yields whose premises aren't refuted at
     its bits (a bound refuted there doesn't bound it, and is still reported alone, tagged refuted), under the union of
     the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one. Under
     `lock_only` a bound one of whose own citations is a `draft:` statement bounds no block (it is still reported alone,
     labeled draft), and `drafts` names those."""
-    met = [(a, cap) for a, (_, cap) in zip(args, bounds, strict=True) if cap is not None]
+    met = [(a, block_yield) for a, (_, block_yield) in zip(args, bounds, strict=True) if block_yield is not None]
     drafts = tuple(a.name for a, _ in met if lock_only and draft(a.cites))
     met = [m for m in met if m[0].name not in drafts]
-    cap = least(*(_admitted(c, a.cites, table) for a, c in met))
+    block_yield = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
-    s = slowdown(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref, per_bit=st.per_bit)
+    s = slowdown(partition, block_yield, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref,
+                 per_bit=st.per_bit)
     ks = _binding_ks(partition, s) or (0.0,)
     refuted = {a.name: [_refuted(a.cites, k, table) for k in ks] for a, _ in met}
     used = [a for a, _ in met if not all(refuted[a.name])]
     e = _rated("+".join(a.name for a in used) or "none", "bound", tuple(c for a in used for c in a.cites), s,
-               partition, _declared(cap, w, block), table, st)
+               partition, _declared(block_yield, w, block), table, st)
     return replace(e, excluded=tuple(n for n, r in refuted.items() if any(r)), drafts=drafts)
 
 

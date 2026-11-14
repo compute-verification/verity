@@ -1,22 +1,26 @@
 """The egress pacer (`pacer`): a process of its own that releases each bucket it is handed to its links' sockets, in
 order, and reports each bucket's release and then its writes; a link that refuses a write gets nothing more. A link
 slow to read holds its own bytes and nothing else: never a later bucket's release, nor another link's bytes. Every
-bucket here is handed a time long past on the host's monotonic clock, so the pacer releases it at once and the test
-reads no clock."""
+bucket here is handed a time long past on the pacer's clock, the host's monotonic one or its raw one, so the pacer
+releases it at once and the test reads no clock."""
 
 import asyncio
+import os
 import socket
 
-from verity.protocols.accounting.certifier.verifier.pacer import Pacer
+import pytest
+
+from verity.protocols.accounting.certifier.verifier import pacer as pacer_module
+from verity.protocols.accounting.certifier.verifier.pacer import CLOCKS, ClockRefused, Pacer, _end, raw_clock
 
 
-async def _paced(buckets: list[tuple[int, bytes]], refuse: bool = False):
+async def _paced(buckets: list[tuple[int, bytes]], refuse: bool = False, clock: str = "monotonic"):
     """Run a pacer on one end of a socket pair, hand it `buckets` (bucket t's time t ms after the clock's start), and
     return its exit, its reports, `behind` just after the last hand at two times, and the pair's other end. With
     `refuse`, the other end is closed first."""
     link, peer = socket.socketpair()
     link.setblocking(False)
-    pacer = await Pacer.start({0: link.fileno()})
+    pacer = await Pacer.start({0: link.fileno()}, clock=clock)
     link.close()
     if refuse:
         peer.close()
@@ -52,12 +56,13 @@ def _pair(buffer: int | None = None) -> tuple[socket.socket, socket.socket]:
     return link, peer
 
 
-def test_the_pacer_writes_every_bucket_in_order_and_reports_each():
+@pytest.mark.parametrize("clock", sorted(CLOCKS))
+def test_the_pacer_writes_every_bucket_in_order_and_reports_each(clock):
     """The link carries every bucket's bytes in order and nothing else; each bucket is reported released, then
     written, in order: it reached the pacer after its time, so its release started then, and the link took it. Until
-    its writes are reported, a bucket whose time has come is behind."""
+    its writes are reported, a bucket whose time has come is behind. So on each clock a starter names."""
     buckets = [(t, bytes([t]) * (512 + t)) for t in range(4)]
-    code, reports, behind, peer = asyncio.run(_paced(buckets))
+    code, reports, behind, peer = asyncio.run(_paced(buckets, clock=clock))
     assert code == 0 and behind == (0, 2)
     assert _read(peer) == b"".join(data for _, data in buckets)
     released = [r for r in reports if r.end is None]
@@ -126,6 +131,68 @@ def test_each_link_holds_only_its_own_bytes_and_a_last_part_closes_its_link():
     assert fast_got == b"a" * 300 + b"b" * 200
     assert [(r.t, r.written) for r in written] == [(0, True), (1, True)]
     assert slow_got == slow_sent
+
+
+def test_a_last_part_ends_its_links_stream_though_the_handing_process_keeps_its_socket():
+    """Two links whose sockets the handing process keeps open. One's part is its last: once the bucket is written
+    its peer has the part and then the stream's end, and what the peer sends after still reaches the handing
+    process. The other's part is not: its peer has the part and no end."""
+
+    async def run():
+        pacer = await Pacer.start()
+        (going, going_peer), (staying, staying_peer) = _pair(), _pair()
+        pacer.add(1, going.fileno())
+        pacer.add(2, staying.fileno())
+        reports = pacer.reports()
+        pacer.hand(0, 0.0, [(1, b"the last", True), (2, b"more to come", False)])
+        got = [await anext(reports), await anext(reports)]
+        going_peer.setblocking(False)
+        staying_peer.setblocking(False)
+        read = [going_peer.recv(64), going_peer.recv(64), staying_peer.recv(64)]
+        try:
+            read.append(staying_peer.recv(64))
+        except BlockingIOError:
+            read.append(None)
+        going_peer.sendall(b"after")
+        read.append(going.recv(64))
+        await pacer.close()
+        return got, read
+
+    got, read = asyncio.run(run())
+    assert [(r.t, r.end is None, r.written) for r in got] == [(0, True, True), (0, False, True)]
+    assert read == [b"the last", b"", b"more to come", None, b"after"]
+
+
+def test_a_link_that_takes_its_last_part_and_not_the_streams_end_leaves_the_bucket_unwritten():
+    """A socket connected to nothing, the state a peer's reset leaves a link in, takes no end of stream, and neither
+    does a link that is no socket: `_end` says so of each and raises nothing, and of a connected one that it took
+    the end. The pacer writes a pipe's last part, reports its bucket unwritten, and goes on to the next."""
+    alone = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    (link, peer), (other, other_peer), (reading, writing) = _pair(), _pair(), os.pipe()
+    peer.setblocking(False)
+    took = [_end(alone.fileno()), _end(writing), _end(link.fileno())]
+    assert took == [False, False, True] and peer.recv(64) == b""
+    peer.sendall(b"still read")
+    assert link.recv(64) == b"still read" and os.write(writing, b"open") == 4
+    alone.close()
+
+    async def run():
+        pacer = await Pacer.start()
+        pacer.add(1, writing)
+        pacer.add(2, other.fileno())
+        reports = pacer.reports()
+        pacer.hand(0, 0.0, [(1, b" pipe", True)])
+        pacer.hand(1, 0.001, [(2, b"next", False)])
+        got = [await anext(reports) for _ in range(4)]
+        code = await pacer.close()
+        return code, got
+
+    code, got = asyncio.run(run())
+    os.close(writing)
+    assert code == 0 and os.read(reading, 64) == b"open pipe" and os.read(reading, 64) == b""
+    assert other_peer.recv(64) == b"next"
+    assert sorted((r.t, r.end is None, r.written) for r in got) == [(0, False, False), (0, True, True),
+                                                                   (1, False, True), (1, True, True)]
 
 
 def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
@@ -202,3 +269,29 @@ def test_a_link_past_the_backlog_is_closed_and_its_parts_are_unwritten():
     assert [(r.t, r.end is None, r.written) for r in got] == [(0, True, True), (1, True, True), (0, False, False),
                                                                 (1, False, False)]
     assert fast_got == b"ab" and len(slow_got) < 1 << 20
+
+
+def test_a_pacer_runs_on_a_clock_its_starter_names_and_the_raw_clock_refuses_where_the_host_has_none(monkeypatch):
+    """The clocks are the two named, and a pacer on any other is not started. The raw clock is the host's
+    `CLOCK_MONOTONIC_RAW` and nothing else: where the host refuses the read, or has no such clock, it refuses by name
+    and gives no other clock's reading."""
+    assert sorted(CLOCKS) == ["monotonic", "raw"] and CLOCKS["raw"] is raw_clock
+
+    async def start():
+        await Pacer.start(clock="realtime")
+
+    with pytest.raises(ValueError, match="a pacer's clock is one of"):
+        asyncio.run(start())
+    asked = []
+    monkeypatch.setattr(pacer_module.time, "clock_gettime", lambda clock_id: asked.append(clock_id) or 7.25)
+    assert raw_clock() == 7.25 and asked == [pacer_module.time.CLOCK_MONOTONIC_RAW]
+
+    def refuse(clock_id):
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(pacer_module.time, "clock_gettime", refuse)
+    with pytest.raises(ClockRefused, match=r"no raw monotonic clock \(OSError\)"):
+        raw_clock()
+    monkeypatch.delattr(pacer_module.time, "CLOCK_MONOTONIC_RAW")
+    with pytest.raises(ClockRefused, match=r"no raw monotonic clock \(AttributeError\)"):
+        raw_clock()

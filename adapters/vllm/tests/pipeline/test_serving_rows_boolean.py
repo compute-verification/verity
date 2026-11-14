@@ -20,7 +20,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.periods import rows as CS
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P

@@ -1,9 +1,9 @@
 """Protocol soundness, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the
 working draft's §8).
 
-An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
-summed over server blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
-uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' samples and the
+An envelope `𝒜_a` narrows the feasible set `𝓕` if its verifier accepts, except with probability `δ_a`
+summed over server blocks. Each one here carries its parameters, the free compute it leaves (`U`, shares of capacity by
+route, which no inference block constrains) and its `delta`, split into the coins' samples and the
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
@@ -24,16 +24,16 @@ cryptography's advantage:
 * `Certifier`: a server block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
-  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
-  set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed cap.
-* The inference-only check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
+  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network certifier form's public parameters
+  set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed bound.
+* The inference-only check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
 A **regime** is the envelopes that run: `Remote` (PoUW, detection and the inference-only check; no wipe or certifier, so its
 server block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
 and the certifier, whose server block between two wipes gets the serving cut too). `Regime.partition` gives the server
 blocks (`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and
-server blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a
+server blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the free compute a
 strategy that never cheats can use (`ABIDING`), at the training MFU.
 
 A regime's table is flat: each key is a field of one of its envelopes (or the regime's own `form`), and a table may name
@@ -51,7 +51,7 @@ from slowdown.hardware import Fleet, Location, MonitoringPeriod, Units
 from slowdown.params import Registry
 from slowdown.theorem import Blocks, Budget, Cut, Partition, ServerBlock
 
-#: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
+#: the routes of free compute, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
 #: Lean's `χ` as `exfil`)
 ROUTES = ("undecl", "skip", "break", "exfil")
 
@@ -110,9 +110,9 @@ class Delta:
 
 @dataclass(frozen=True)
 class Pouw:
-    """PoUW's envelope. Each field is `benchmarks/nci/tiers.py`'s parameter of the same name."""
+    """PoUW's envelope. Each field is `benchmarks/nci/tiers.py`'s parameter of the same name (`residual` is its `free`)."""
 
-    #: the GPUs' share of capacity outside the floor credit (`tiers` `residual`)
+    #: the GPUs' share of capacity outside the floor credit (`tiers` `free`)
     residual: float
     #: `ε_W`: PoUW's deficit, a share of certified work credited without its running
     eps_w: float
@@ -128,7 +128,7 @@ class Pouw:
     #: (`GLOSSARY.md`), 1 without that assumption
     host: float = 0.0
 
-    CITES = ("InferenceOnly.Assumptions.PouwSound", "InferenceOnly.Guarantees.CertificateSlack")
+    CITES = ("Slowdown.Assumptions.PouwSound", "Slowdown.Guarantees.CertificateSlack")
 
     def audited(self, loc: Location) -> float:
         """`r̂ = 1 − W_cert/C`: the GPUs' uncredited share, their clock above the credited one, and the host CPUs."""
@@ -167,13 +167,13 @@ class Detection:
     step_bits: float = math.nan
     floor_steps: float = math.nan
     #: counted multiplications per injected bit (`tiers.chord` at the injected bits), at `chord_kappa` products per
-    #: FLOP: what turns `χ`'s products into the uncertified gates a cut carries
+    #: FLOP: what turns `χ`'s products into the free compute a cut carries
     chord: float = math.nan
     chord_kappa: float = math.nan
     #: `χ` given directly, in place of SPOT's closed form (None: the closed form)
     cheat: float | None = None
 
-    CITES = ("InferenceOnly.Assumptions.TerminalDetection", "InferenceOnly.Assumptions.SampledDetection", "InferenceOnly.Guarantees.VerdictLag")
+    CITES = ("Slowdown.Assumptions.TerminalDetection", "Slowdown.Assumptions.SampledDetection", "Slowdown.Guarantees.VerdictLag")
 
     def __post_init__(self) -> None:
         unset = [k for k in SAMPLING if self.sampled and not math.isfinite(getattr(self, k))]
@@ -275,7 +275,7 @@ class Wipe:
         return n * self.game_delta_coin, n * self.prf_advantage
 
 
-#: the warden form's public parameters the declared I/O bound reads (`Certifier.declared`)
+#: the network certifier form's public parameters the declared I/O bound reads (`Certifier.declared`)
 DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "outputs", "bucket_s", "window_buckets")
 
 
@@ -289,7 +289,7 @@ RATIO_BITS = clog2(10 ** 7)
 #: a name the scan checks only for form (`io_request._name_ok`) and doesn't store: a quote, up to 62 of the 93 printable
 #: ASCII characters but `"` and `\`, a quote and spaces
 NAME_BITS = clog2(sum(93 ** k for k in range(63)))
-#: the bits of a warden-form id request besides its prompt ids that the ingress scan leaves free, each field's
+#: the bits of a network-certifier-form id request besides its prompt ids that the ingress scan leaves free, each field's
 #: (`verity/protocols/accounting/certifier/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
 REQUEST_HEAD = {
     "connection ordinal": 32,     # the cell header's u32, which `ingress_scan.step` checks only above the last
@@ -312,8 +312,8 @@ class Certifier:
     """A network certifier on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the warden form's public parameters (the `WardenParams` of
-    `benchmarks/network_traces/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
+    inference block runs on a single server (ruled). At the network certifier form's public parameters (the `WardenParams` of
+    `verity/protocols/accounting/certifier/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
         requestBits = Σ REQUEST_HEAD + (K0 + (C − 1) K) IDB,   K0 = ⌊(B − 9 − 367) / 11⌋,   K = ⌊(B − 9) / 11⌋
@@ -331,7 +331,7 @@ class Certifier:
     `draft:per-server-ingress`, not yet in Lean; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
-    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
+    `incorrect_block_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
     the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
@@ -348,19 +348,19 @@ class Certifier:
     side: float = 0.0
     #: each server's ingress at most its inference blocks' declared inputs, at the parameters below
     declared: bool = False
-    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the warden's line rate); lanes a server; `C`, cells a
+    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the network certifier's line rate); lanes a server; `C`, cells a
     #: request
     cell_bytes: float = math.nan
     cell_rate: float = math.nan
     lanes: float = math.nan
     cells: float = math.nan
-    #: `IDB`, bits an id; `D`, a slot held `D + 1` buckets from its admission (the warden's `delay`); `KO`, outputs a
+    #: `IDB`, bits an id; `D`, a slot held `D + 1` buckets from its admission (the network certifier's `delay`); `KO`, outputs a
     #: request; `τ_b`, seconds a bucket
     id_bits: float = math.nan
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
-    #: `T`, buckets a link-window (the warden's `window`), the length the per-server bound is stated per
+    #: `T`, buckets a link-window (the network certifier's `window`), the length the per-server bound is stated per
     window_buckets: float = math.nan
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
@@ -405,7 +405,7 @@ class Certifier:
         return int(self.lanes) * clog2(self.cell_rate + 2)
 
     @property
-    def faulty_unit_bits(self) -> float:
+    def incorrect_block_bits(self) -> float:
         """Bits an incorrect ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
         sampled: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""
@@ -434,8 +434,8 @@ class Certifier:
         return self.window_bits(self.window_buckets)[1] / (self.window_buckets * self.bucket_s)
 
     @property
-    def warden_rate(self) -> float:
-        """The warden's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
+    def line_rate(self) -> float:
+        """The network certifier's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
         return self.lanes * self.cell_rate * 8 * self.cell_bytes / self.bucket_s
 
     def prompts(self, ctx: Context) -> float:
@@ -452,7 +452,7 @@ class Certifier:
         return self.prompts(ctx) / (ctx.policy.k / ctx.c * ctx.location.phi)
 
     def rate_in(self, ctx: Context) -> float:
-        """`r_in + r_side`: bit/s of unregistered input into a location."""
+        """`r_in + r_side`: bit/s of fresh input into a location."""
         return self.prompts(ctx) + ctx.location.hosts * (self.timing + self.side)
 
     def delta(self, ctx: Context) -> tuple[float, float]:
@@ -472,7 +472,7 @@ def _unreg(ctx: Context) -> dict[str, float]:
 
 
 @dataclass(frozen=True)
-class Unmonitored:
+class Unregistered:
     """No protocol: every server block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
@@ -494,13 +494,13 @@ class Remote:
     pouw: Pouw
     detection: Detection
     #: a window, one round of the deployment's live coins, in seconds, and its SPOT's knowledge error
-    #: `ks_t = ε_ks + δ_link`: `SlowdownRemoteMonitoringPeriod`'s `δ` sums it over the period's windows
+    #: `ks_t = ε_ks + ε_bind`: `SlowdownRemoteMonitoringPeriod`'s `δ` sums it over the period's windows
     window_s: float = math.nan
     window_ks: float = 0.0
 
-    #: the inference cut: the remote composition, `InferenceOnly.Guarantees.SlowdownRemote`, term for term, its envelopes'
+    #: the inference cut: the remote composition, `Slowdown.Guarantees.SlowdownRemote`, term for term, its envelopes'
     #: premises, and the registration
-    CITES = ("InferenceOnly.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
+    CITES = ("Slowdown.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the server-block bound each of its cuts is an argument of: the inference-block yield alone
     BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
@@ -524,12 +524,12 @@ class Remote:
         return Blocks("inference", Budget(ctx.c, ctx.policy.k), n)
 
     def inference(self, ctx: Context, gates: float) -> Cut:
-        """`n_S q_T(c, k) + q_U(U_S)`: the inference blocks and the uncertified gates by route."""
+        """`n_S q(c, k) + q_U(U_S)`: the inference blocks and free compute by route."""
         return Cut("inference", (self.blocks(ctx, gates),), {k: v * gates for k, v in self.slack(ctx).items()},
                    self.CITES + self.BOUND)
 
     def abiding(self, ctx: Context, gates: float) -> dict[str, float]:
-        """The uncertified gates a strategy that never cheats trains with in `gates` of a location, at the training
+        """The free compute a strategy that never cheats trains with in `gates` of a location, at the training
         MFU."""
         used = gates * ctx.fleet.mfu_train
         return {k: v * used for k, v in self.slack(ctx).items() if k in self.ABIDING}
@@ -559,7 +559,7 @@ FORMS = ("certified", "links")
 @dataclass(frozen=True)
 class Onsite(Remote):
     """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
-    gets the serving cut `q_T(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
+    gets the serving cut `q(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
 
     #: the server-block bound, both its cuts' minimum
     BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
@@ -626,7 +626,7 @@ class Onsite(Remote):
         return Partition((block,), **_unreg(ctx))
 
 
-KINDS: Mapping[str, type] = {"unmonitored": Unmonitored, "remote": Remote, "onsite": Onsite}
+KINDS: Mapping[str, type] = {"unregistered": Unregistered, "remote": Remote, "onsite": Onsite}
 #: each envelope a regime holds, by its field name
 PARTS: Mapping[str, type] = {"pouw": Pouw, "detection": Detection, "wipe": Wipe, "certifier": Certifier}
 

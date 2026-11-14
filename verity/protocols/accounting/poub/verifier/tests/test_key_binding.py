@@ -9,7 +9,7 @@ import dataclasses
 import hashlib
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.accounting.poub.prover import audit_prover

@@ -25,7 +25,7 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `sl
   (`PERIOD_PREMISES`), the escape's tail and the windows' knowledge errors (`pooled`);
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
-  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
+  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary yield). A proof
   block's output bits are ranked over the public size classes as the size class's limit (`LIMITS`), not as a premise.
 
 `--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its
@@ -72,14 +72,14 @@ LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provis
 #: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
 #: fleet's capacity over the period, and the premises it takes in place of `SlowdownRemote`'s per-window ones, each
 #: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
-PERIOD_BOUND = "InferenceOnly.Guarantees.SlowdownRemoteMonitoringPeriod"
+PERIOD_BOUND = "Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod"
 #: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
 PER_BLOCK_BOUND = Remote.CITES[0]
 PERIOD_PREMISES = {"InferenceOnly.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
                    "InferenceOnly.Assumptions.SampledPerWindow": "the escape share and its tail",
-                   "InferenceOnly.Assumptions.IdentitySchedule": "same",
-                   "InferenceOnly.Assumptions.UnmonitoredAtMost": "`s`",
-                   "InferenceOnly.Assumptions.CheatingAtMost": "`χ`"}
+                   "Slowdown.Assumptions.IdentitySchedule": "same",
+                   "Slowdown.Assumptions.UnmonitoredAtMost": "`s`",
+                   "Slowdown.Assumptions.CheatingAtMost": "`χ`"}
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
@@ -437,8 +437,7 @@ def main() -> None:
 
 #: the metric's id (`metrics.toml` beside this file), the scenario whose lower bound it is, and its unit
 METRIC, METRIC_SCENARIO = "training/slowdown-onsite-h200", "reference-onsite-h200"
-UNIT = ("the slowdown's lower bound over a year of the world's compute: the adversary's GPU-hours to the target over "
-        "the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1")
+UNIT = "GPU-hours a reference GPU-hour"
 
 
 def write_metric(out: Path, rows: list[dict]) -> None:

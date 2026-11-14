@@ -30,7 +30,7 @@ from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Coll, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
+from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
 from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import F32Neg

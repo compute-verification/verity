@@ -2,7 +2,7 @@
 and the piece's Python are stand-ins on PATH, the library is one named already (P2_LIB) and HOME holds no elan. The
 library is loaded once by the piece's Python with no card to see, and one it doesn't load, or a node that refuses
 `setarch -R` and so builds none, ends the piece before anything else. The two Lean verifiers that decide,
-`pous-run-protocol` and `remote-audit-p2-protocol`, are built in a scratch copy of ``verity/`` before the card is asked
+`pous-run-protocol` and `poub-p2-protocol`, are built in a scratch copy of ``verity/`` before the card is asked
 for and go to `served_piece.py` as ``--case-exe`` and ``--bw-case-exe``; ones named already (POUS_EXE, BW_CASE_EXE) are
 passed as they are and nothing is built; one that doesn't build is no answer, and neither the card nor the piece is
 started. The piece's Python then runs twice: its sessions under the lease (the node's `gpu-lease`, else the tree's own;
@@ -24,7 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "benchmarks" / "pous" / "served_piece.sh"
 CHECK, AUDIT = "verity/protocols/accounting/pous/verifier/check", "verity/protocols/accounting/poub/verifier/lean"
-RUN_EXE, BW_EXE = "pous-run-protocol", "remote-audit-p2-protocol"
+RUN_EXE, BW_EXE = "pous-run-protocol", "poub-p2-protocol"
 #: the tree's own lease script, which the piece takes where the node has no `gpu-lease`
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 

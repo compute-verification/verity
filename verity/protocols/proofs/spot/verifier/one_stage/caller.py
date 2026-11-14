@@ -103,6 +103,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     log = list(log)
     pool = R._pool(pool, registered or {}, supplied, pinned, outputs, schemas)
     supplied, outputs, schemas = R.pool_values(pool, program, supplied, outputs, schemas, log)
+    supplied = R.with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
     v2 = bool(registered) or bool(R._certified(certified, registered or {}, sup))
     pins = R._pins(pinned, registered or {}, sup)

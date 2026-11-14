@@ -38,13 +38,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# PoUB's opening draw (trusted)
+# PoUB's opening sample (trusted)
 
-The draw `audit.pooled` reads, as the verifier runs it. A session has `n` windows, in order. Window `t` registers its
+The sample `audit.pooled` reads, as the verifier runs it. A session has `n` windows, in order. Window `t` registers its
 `U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then
 the challenger releases window `t`'s
 openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
-the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
+the `U_t` (`Poub.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
 `i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
 `("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
@@ -52,14 +52,14 @@ the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t,
 `2^w − (2^w mod N)`, reduced mod `N` (`Actual.wordIndex`). The stream's first block holds its first `⌊512 / w⌋` words,
 at least 4 for `N < 2^64`.
 
-* `Blocks m`: a window's first blocks, draw `i`'s first SHA-512 block as its big-endian value. The deployed function from
+* `Blocks m`: a window's first blocks, sample `i`'s first SHA-512 block as its big-endian value. The deployed function from
   window `t`'s coin to its first blocks is the guarantees' `prf t`.
 * `wordAt N j b`: word `j` of a block at `N`, the `width N` bits below its top `j·width N`; `pick N b` is the sampler
-  on the block's `512 / width N` words, the first it accepts, and `offset N r b` its draw, or `r` when it rejects them
-  all (what it then draws from the stream's later blocks, left free).
+  on the block's `512 / width N` words, the first it accepts, and `offset N r b` its sample, or `r` when it rejects them
+  all (what it then samples from the stream's later blocks, left free).
 * `arrange j i`: the partial Fisher–Yates' arrangement after `i` swaps, positions to receipts, as `Key.subset` keeps it
   (`swapped`); `openings U k b r` is the set of the receipts at its first `k` positions, the window's openings.
-* `test U k C b`: the window test on first blocks `b`: when the sampler accepts a word of each of the `k` draws' first
+* `test U k C b`: the window test on first blocks `b`: when the sampler accepts a word of each of the `k` samples' first
   blocks at `U`, whether the openings lie in `C`, and otherwise true. It reads `b`'s first `k` blocks and runs the
   Fisher–Yates.
 * `below δ P u`: the threshold coin. `u`, 512 uniform bits, falls below `min(1, δ/P)` rounded down to a multiple of
@@ -80,7 +80,7 @@ at least 4 for `N < 2^64`.
   played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
   `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
   they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
-  (`Properties.RemoteAudit.Line.recordCommitted`).
+  (`Properties.Poub.Line.recordCommitted`).
 * `Run.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
   coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
 * `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`
@@ -106,11 +106,11 @@ at least 4 for `N < 2^64`.
   have, and on uniform blocks each lands with probability at most its bound given the windows before.
 * `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
   the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
-  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two laws, so the sampled window's forking lemma reads
+  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma reads
   it.
 * `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
   `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
-  released (`RemoteAudit.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
+  released (`Poub.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
   window opens it. `Shows D prf rest t p ω v`: the window opens `p` at `ω` and the verifier accepts the presented
   opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
   root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s
@@ -137,7 +137,7 @@ namespace Accounting.Remote.Draw
 open Finset
 open scoped ENNReal
 
-/-- A window's first blocks: draw `i`'s first SHA-512 block of its stream, read as its big-endian value. -/
+/-- A window's first blocks: sample `i`'s first SHA-512 block of its stream, read as its big-endian value. -/
 abbrev Blocks (m : ℕ) : Type := Fin m → Pous.Bits 512
 
 /-- The sampler's word width at `N`: `8 ⌈(bitlen N + 64) / 8⌉` bits (`Key._uniform`). -/
@@ -154,7 +154,7 @@ rejects them all. -/
 def pick (N : ℕ) (b : Pous.Bits 512) : Option (Fin N) :=
   (List.range (512 / width N)).findSome? fun j => Actual.wordIndex N (wordAt N j b)
 
-/-- A draw's offset at `N`: the sampler's on the block's words when it accepts one, else `r`. -/
+/-- A sample's offset at `N`: the sampler's on the block's words when it accepts one, else `r`. -/
 def offset (N r : ℕ) (b : Pous.Bits 512) : ℕ := ((pick N b).map Fin.val).getD r
 
 /-- The arrangement after `i` swaps, positions to receipts: step `l` swaps positions `l` and `l + j l`
@@ -163,19 +163,19 @@ def arrange (j : ℕ → ℕ) : ℕ → Equiv.Perm ℕ
   | 0 => 1
   | i + 1 => arrange j i * Equiv.swap i (i + j i)
 
-/-- The offsets of a window of `U` receipts with first blocks `b` and fallbacks `r`: step `i` draws below `U − i`. -/
+/-- The offsets of a window of `U` receipts with first blocks `b` and fallbacks `r`: step `i` samples below `U − i`. -/
 def offsets {m : ℕ} (U : ℕ) (b : Blocks m) (r : ℕ → ℕ) (i : ℕ) : ℕ :=
   if h : i < m then offset (U - i) (r i) (b ⟨i, h⟩) else r i
 
-/-- The receipts a window of `U` opens with `k` draws: those at the arrangement's first `k` positions. -/
+/-- The receipts a window of `U` opens with `k` samples: those at the arrangement's first `k` positions. -/
 def openings {m : ℕ} (U k : ℕ) (b : Blocks m) (r : ℕ → ℕ) : Finset ℕ :=
   (range k).image (arrange (offsets U b r) k)
 
-/-- Every one of the `k` draws of a window of `U` takes its offset from a word of its first block. -/
+/-- Every one of the `k` samples of a window of `U` takes its offset from a word of its first block. -/
 def accepted {m : ℕ} (U k : ℕ) (b : Blocks m) : Prop :=
   ∀ i : Fin m, (i : ℕ) < k → (pick (U - i) (b i)).isSome = true
 
-/-- **The window test**: when the sampler accepts a word of each of the `k` draws' first blocks at `U`, whether the
+/-- **The window test**: when the sampler accepts a word of each of the `k` samples' first blocks at `U`, whether the
 openings lie in `C`; true when it rejects every word of one. -/
 def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
   accepted U k b → openings U k b (fun _ => 0) ⊆ C
@@ -184,7 +184,7 @@ def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
 def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u < ⌊δ * 2 ^ 512 / P⌋₊
 
 /-- A session's coins: the other coins and window `t`'s openings coin. Not the live coins (`Verity.Coins`): each
-openings coin seeds a draw without replacement over its window's own receipts, and the other coins hold the prover's. -/
+openings coin seeds a sample without replacement over its window's own receipts, and the other coins hold the prover's. -/
 abbrev DrawCoins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
 /-- A session of `n` windows of at most `m` receipts, window `t` sampling `min(s_t, U_t)` of its `U_t`. -/
@@ -207,10 +207,10 @@ namespace Run
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Run n m s κ X)
 
-/-- Window `t`'s draw count, `min(s_t, U_t)`. -/
+/-- Window `t`'s sample count, `min(s_t, U_t)`. -/
 def samples (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
 
-/-- The receipts window `t` opens at coins `ω`: its draw on the first blocks `prf t` gives its coin, with the fallbacks
+/-- The receipts window `t` opens at coins `ω`: its sample on the first blocks `prf t` gives its coin, with the fallbacks
 `rest ω t` where the sampler rejects every word of a first block. -/
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : DrawCoins n κ X) : Finset ℕ :=
@@ -224,7 +224,7 @@ def good (t : Fin n) (ω : DrawCoins n κ X) : ℕ :=
 noncomputable def bound (t : Fin n) (ω : DrawCoins n κ X) : ℝ :=
   if D.samples t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.samples t ω else 0
 
-/-- Window `t`'s test at outcome `ω` on first blocks `b`: its draw of `s'_t` of its `U_t` lands in its correct
+/-- Window `t`'s test at outcome `ω` on first blocks `b`: its sample of `s'_t` of its `U_t` lands in its correct
 receipts. -/
 def lands (t : Fin n) (ω : DrawCoins n κ X) (b : Blocks m) : Prop :=
   test (D.size t ω) (D.samples t ω) (D.correct t ω) b
@@ -245,7 +245,7 @@ def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
 def incorrect (ω : DrawCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
 
-/-- The session's pooled bound at `δ`, at the sizes and draw counts of outcome `ω`. -/
+/-- The session's pooled bound at `δ`, at the sizes and sample counts of outcome `ω`. -/
 noncomputable def pooled (δ : ℝ) (ω : DrawCoins n κ X) : ℝ :=
   Draw.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
 

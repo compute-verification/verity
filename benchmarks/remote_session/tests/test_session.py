@@ -162,7 +162,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
-    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `node` its
+    they end. With `store` (a `poub.store.Store`) the prover's blocks are that store's, and with `node` its
     ledgers are on that node."""
     clock = PassClock()
     vconn, pconn = clock.conns()
@@ -518,7 +518,7 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     """Two sessions over one registration, each beside a serving trace of memory-map/v1 steps (2 pages every 4th pass
     over a pool of 10 slots): an honest one is accepted, its record counting the appends, releases and post-seed reads
     the verifier saw, which its ledger leaves uncredited without a property verdict; then one whose prover drops the
-    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 draws a window
+    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 samples a window
     the second's chance of sampling no dropped page is below 2^-30 at the passes these sessions make."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, dropping), (ph, pd) = run("kv:2,kvdrop:2", sessions=2, samples=16, kv_every=4, kv_pool=8)
@@ -579,7 +579,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
 
 
 def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
-    """A window with no draws (none a session makes) settles `malformed` whatever its batches' results, as
+    """A window with no samples (none a session makes) settles `malformed` whatever its batches' results, as
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
@@ -727,7 +727,7 @@ def test_a_pipelined_prover_that_overwrites_a_freed_block_before_its_pass_reads_
     session's fence holds serving's writes until no pass to come holds the block, and it is accepted; one whose writes
     skip the fence (`kvoverwrite`) lands pages over blocks the pass in flight still has to read, and is rejected at a
     receipt of one of them.  Each of its passes but the second (whose steps write the pool's empty slots) misreads 2
-    of its at most 17 blocks, so at 96 draws a window its chance of sampling none in either window is below 2^-30."""
+    of its at most 17 blocks, so at 96 samples a window its chance of sampling none in either window is below 2^-30."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, over), (ph, po) = run("kv:1,kvoverwrite:1", sessions=2, windows=2, samples=96, kv_every=1, kv_pool=8,
                                    ahead=2, fill=True, kv_headroom=1)
@@ -753,7 +753,7 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
     credited only on the property's verdict and the session's schedule check (its verdict stood in here: the check's
-    own tests are `remote_bandwidth`'s), then less its carriers; the share and residual are of the node's HBM.
+    own tests are `poub`'s), then less its carriers; the share and residual are of the node's HBM.
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -856,7 +856,7 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
 
 def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot(monkeypatch):
     """Both forms of the memory line on a store of 8 weights blocks and 8 of filler, every pass reading all 16, at 200
-    draws a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
+    samples a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
     ≈ 44 blocks, its rebuilds and the chip's block, more than the store, and credits nothing.  On average a window
     loses f_t·U_t/P_t ≈ 2 blocks, its rebuilds and the chip's block, so it credits the weights less those; with the
     rebuilds spread over its passes, less again only f_t·N and the chip.  The node line carries both forms and both
@@ -974,7 +974,7 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
-    (`audit.AuditRun.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
+    (`audit.AuditRun.close`), which the loop sends before that root: each group's samples go out as that root arrives, the
     last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
     not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
@@ -1405,7 +1405,7 @@ def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(
 
 def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_sample(monkeypatch):
     """A window's verdict is the Lean's, set on `audit.AuditRun` (`Checks.settle`): the Lean's accepting window 1 read
-    as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
+    as a rejection at a sample rejects the session there, at that sample, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
@@ -1427,8 +1427,8 @@ def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_sample(monkey
 
 def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch):
     """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
-    through `RemoteAudit.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
-    the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
+    through `Poub.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
+    the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
@@ -1475,9 +1475,9 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
 
 def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
         tmp_path, monkeypatch):
-    """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each sampled at its last window's
+    """`--groups-per-coin 4` over five windows: two samples, windows 0–3 and window 4, each sampled at its last window's
     close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
-    first draw's two receipts leave at least two of its windows a share of none, which the close accepts and no
+    first sample's two receipts leave at least two of its windows a share of none, which the close accepts and no
     openings follow; the Lean verifier agrees at every event and on the record, which names g, and the session's
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
@@ -1571,9 +1571,9 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
 
 
 def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_samples_of_the_record_it_makes(tmp_path):
-    """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three draws. Its line
-    of record reads the same twelve groups and, for its pooled bound, the three draws, each four windows' receipts and
-    draws summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
+    """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three samples. Its line
+    of record reads the same twelve groups and, for its pooled bound, the three samples, each four windows' receipts and
+    samples summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
     the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
     the record's pace at one window in flight it has no line (`line.SHARED`)."""
     import copy
@@ -1696,7 +1696,7 @@ def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or
     """The driver waits on no Lean answer while a session runs: with every request to the Lean from the session's
     first event held back until the prover's passes are done (`HeldLean`), with its openings after its passes or
     beside them (`--overlap-openings`), a paced session runs the schedule it runs with a Lean that answers at once,
-    every coin, boundary, root and draw at the same tick, and is still accepted only on the Lean's verdict of each of
+    every coin, boundary, root and sample at the same tick, and is still accepted only on the Lean's verdict of each of
     its windows and its record."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     pace = verifier.pace_of("1:4:40:2", 1.0)
@@ -1738,7 +1738,7 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
     """`Verifier.append` answers an append's message with its first index and its coin, flipped then, once: the same
-    root sent again draws none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
+    root sent again samples none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
     its root with its plan change and its step; a plan that still holds a block the message released, or one
     appended by no message, is the session's `plan` rejection, a root with no step or one not above the last pass's
     is its `step` rejection, and a message the session cannot read, a root's carrying appends among them, is

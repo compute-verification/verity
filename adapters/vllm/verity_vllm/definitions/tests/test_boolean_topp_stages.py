@@ -20,7 +20,7 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_words
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.numerics import topp_stage_twins as TW
 from verity_vllm.definitions.registry import boolean_topp_stages as BT
 from verity_vllm.definitions.registry import gumbel_boolean as GB

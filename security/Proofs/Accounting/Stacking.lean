@@ -42,7 +42,7 @@ runs the device with its carrier reads answered from the circuit's values (`PICh
 `RemoteRunConservationRelay` bounds its session, which is the stacked session's event.
 
 `Accounting.SecurityProofs.StackedRequirementSketchDeployed` and `Accounting.SecurityProofs.StackedRequirementRelay`
-bound a declared circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the plans
+bound a registered circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the plans
 are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
 shortfall against the requirement is one against the store.
 -/
@@ -878,7 +878,7 @@ theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedRun n P N m �
           ring
 
 /-- **The samples are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
-sampled before the session: both pooled-draw readings of `pr_samples_le_map`, for correct sets `cor` in place of one
+sampled before the session: both pooled-sample readings of `pr_samples_le_map`, for correct sets `cor` in place of one
 store's. -/
 theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
@@ -1172,7 +1172,7 @@ theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservati
   · simp only [div_eq_mul_inv]
     ring
 
-/-- **Stacked PoUB at the deployed parameters, read against a declared circuit's requirement**,
+/-- **Stacked PoUB at the deployed parameters, read against a registered circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
@@ -1186,7 +1186,7 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
   simp only [Nat.cast_mul, Nat.cast_ofNat] at h
   exact h
 
-/-- **Stacked PoUB with relaying side sources, read against a declared circuit's requirement**,
+/-- **Stacked PoUB with relaying side sources, read against a registered circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
