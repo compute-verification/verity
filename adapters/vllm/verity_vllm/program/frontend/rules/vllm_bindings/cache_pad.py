@@ -8,7 +8,7 @@ from verity.circuits.types import Array, Value
 
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import dtype_is, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
@@ -39,7 +39,7 @@ class CachePadRule(StateRule):
             return "live is neither a bool value collection nor a statically known bool tensor"
         if not isinstance(zero, torch.fx.Node) or not isinstance(ctx.val(zero), Coll) or not dtype_is(ctx, zero, BF16):
             return "zero is not a bf16 value collection"
-        if int(torch.Size(shape(ctx, zero)).numel()) != 1:
+        if int(torch.Size(known(shape(ctx, zero))).numel()) != 1:
             return f"zero has {shape(ctx, zero)} elements, not one"
         if not isinstance(slot, int):
             return "slot is not static"
@@ -58,7 +58,7 @@ class CachePadRule(StateRule):
         hist = ctx.state["kv_history"]
         owner = ctx.state.get("kv_owner", {})
         c = _materialize_bits(ctx, live, self, node)
-        cflat = c.reshape(Array(int(torch.Size(shape(ctx, live)).numel()), Value(1)))
+        cflat = c.reshape(Array(int(torch.Size(known(shape(ctx, live))).numel()), Value(1)))
         if cflat.type.n != 1:
             refuse("shape", node, mp, f"live has {cflat.type.n} elements; the step's cache clear is keyed on one bit")
         zc = ctx.coll(zero)

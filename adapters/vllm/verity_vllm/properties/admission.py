@@ -214,7 +214,7 @@ COMMANDS = {"produce": ProduceOptions, "check": CheckOptions}
 
 
 def main(a: ProduceOptions | CheckOptions) -> int:
-    if a.cmd == "produce":
+    if isinstance(a, ProduceOptions):
         m = produce(a.adapter, a.n, a.seed, Path(a.out), a.device)
         print(f"[difftest] produced {len(m['cases'])} cases for {m['semantic_id']} -> {a.out}", file=sys.stderr)
         return 0
