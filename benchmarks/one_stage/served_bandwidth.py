@@ -19,7 +19,7 @@ any other answer, 2 on none.
 
 ``answer``: the session of `served_bandwidth.sh`, over a store of the node's own on its disk.
 
-The PoUB session's record (`benchmarks/pous/p2_v1/bandwidth.py session`'s ``session.json``) as a core answer
+The PoUB session's record (`verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py session`'s ``session.json``) as a core answer
 in ``DIR/answer.json`` (`answer`): the verifier's answer, held to the verifier's own record of it where the session has
 one, in the core interface's form (`p2_parties.core_answer`), with γ against ``R``. The session runs on the card after
 window K was served, beside it: serving is not hooked, so its reads are the session's own, not the engine's reads of the

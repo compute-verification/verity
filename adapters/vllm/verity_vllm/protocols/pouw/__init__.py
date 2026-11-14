@@ -179,7 +179,7 @@ class Settings:
     rows: int | None = None
     steps: int | None = None
     #: H1's admissions and rounds (`pouw_h1.H1Run.admit`): the engine's model runner (Model Runner V2, whose
-    #: ``decode_query_len`` orders a step's rows, `pouw_h1_requests.batch_order`), whose ``execute_model`` gets each step's
+    #: ``decode_query_len`` orders a step's rows, `h1_hooks.batch_order`), whose ``execute_model`` gets each step's
     #: scheduler output, the requests it admits and schedules among it; and the execution phase's round coins, a `LiveRecord` over a
     #: live challenger's round family (`verity.protocols.accounting.pouw.verifier.window.live_challenger`), which opens round s's coin
     #: after round s's root.  Pearl-C's device path ends each pass at that ``execute_model`` too

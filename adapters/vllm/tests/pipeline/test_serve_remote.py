@@ -16,7 +16,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_remote as SR
-from verity_vllm.protocols.remote_bandwidth import remote
+from verity_vllm.protocols.poub import remote
 
 VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
 

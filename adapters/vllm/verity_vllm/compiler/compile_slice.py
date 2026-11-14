@@ -129,8 +129,9 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
 from verity.protocols.accounting.certifier.verifier import arith_encode as AE, charge_chain as CC
 from verity_vllm.compiler import cache_step as CST
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC, replay_step as RS
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _part
+from verity_vllm.compiler import replay_chain as RC, replay_step as RS
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.trace import part as _part
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "CN", "CTW", "CU")
 #: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceRowGroups`), G < P

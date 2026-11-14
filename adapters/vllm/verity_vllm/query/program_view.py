@@ -44,8 +44,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits import codec, refs
+from verity.circuits.defs import DefinitionTable
 from verity.circuits.program import is_input
-from verity.circuits.types import RecordType
+from verity.circuits.types import RecordType, Type
 from verity.circuits.types import Tuple as TupleT
 from verity.circuits.call_scope import spec_base, spec_statics
 
@@ -54,7 +55,8 @@ from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
-           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows"]
+           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows",
+           "specialization"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -526,9 +528,9 @@ class _Builder:
 # spec ids and types
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def ports_of_type(t) -> tuple[Port, ...]:
+def ports_of_type(t: Type) -> tuple[Port, ...]:
     """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    def one(name: str, lo: int, ty) -> Port:
+    def one(name: str, lo: int, ty: Type) -> Port:
         n = ty.leaves
         return Port(name, lo, lo + n, n, ty.homogeneous_width())
 
@@ -730,7 +732,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     return b.view((), doc.get("digest"), "instances", check_cids=_check_calls(doc))
 
 
-def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) -> ProgramView:
+def from_descriptor(desc: dict[str, Any] | str, registry: DefinitionTable | None = None, checks: int = 0) -> ProgramView:
     """A Program descriptor (dict, or a path to `descriptor.json[.gz]`), decoded by `codec.decode_program` -> ProgramView of its
     program function's body, or of the root's body when the program function is inlined into the root (a request Build's
     descriptor).  Names from the decoded annotations' `node_hints` (node index -> hint); ports from each node's own output type;

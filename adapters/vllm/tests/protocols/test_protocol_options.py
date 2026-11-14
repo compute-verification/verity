@@ -390,10 +390,10 @@ def test_an_adapter_that_installs_another_entry_leaves_nothing_installed(monkeyp
 def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
     """A protocol serving drives by flag (`driver`, PoUB's ``--remote-verifier``) is imported by name, so a tree without its
     package refuses the flag by name rather than failing to import."""
-    monkeypatch.setitem(PO.DRIVERS, "remote-bandwidth", "not_landed_here")
-    with pytest.raises(PO.Refused, match=r"remote-bandwidth: its driver verity_vllm\.protocols\.not_landed_here\.remote is "
+    monkeypatch.setitem(PO.DRIVERS, "poub", "not_landed_here")
+    with pytest.raises(PO.Refused, match=r"poub: its driver verity_vllm\.protocols\.not_landed_here\.remote is "
                                          "not on this tree"):
-        PO.driver("remote-bandwidth", "remote")
+        PO.driver("poub", "remote")
     with pytest.raises(PO.Refused, match="no driver of protocol 'pous'"):
         PO.driver("pous", "remote")
 

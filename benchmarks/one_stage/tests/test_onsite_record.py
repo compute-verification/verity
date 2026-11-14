@@ -107,10 +107,12 @@ LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
 #: the auditor's record of its network certifier's key, as `record_files.public_json` writes one, and session; and
-#: the period's params stating them, as `scan_period.rows_case` does
+#: the period's params stating them, as `scan_period.rows_case` does: one listed entry, whose stretch holds the
+#: period's execution phase
 CERT_KEY = {"params": [64, 8, 10], "public": "c3" * 64, "key_id": "1d" * 16}
 SESSION = "5e" * 32
-CERTIFIER = {"key": CERT_KEY["public"], "lms": {"H": 10, "N": 64, "W": 8, "toy": False}, "session": SESSION}
+ENTRY = {"key": CERT_KEY["public"], "session": SESSION, "start": 0}
+CERTIFIER = {"first": 0, "keys": [ENTRY], "lms": {"H": 10, "N": 64, "W": 8, "toy": False}}
 
 
 def key_record(key: dict = CERT_KEY, session: str = SESSION) -> dict:
@@ -230,6 +232,8 @@ UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 #: the guarantees of `RESTS_ON` as they are, and those no statement of which is pinned yet
 RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
 UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
+#: PeriodTiedCount, stated as it is to be restated (`OR.RESTATE_TIED`)
+TIED = "NetTiming.SecurityProofs.PeriodTiedCount"
 ACCEPTED = "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted"
 #: the theorem that discharges the free-input count's premise
 (COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
@@ -607,28 +611,26 @@ def held_both(out: Path) -> dict:
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
     """A lock listing the pinned guarantees the tight K rests on and none of the theorems that discharge its premises,
-    with PeriodTiedCount, not yet stated, unlisted, and the premises with no discharge named: every premise is open, by
+    with PeriodTiedCount, to be restated, unlisted, and the premises with no discharge named: every premise is open, by
     name, and so is PeriodTiedCount, so the figure of record charges ℓ_a + 1 for the tied audit, with no tight K beside
-    it. certifier-key alone closes, by PeriodLeakRegistered's pin taking the auditor's record and the run's check of
-    it, though PeriodLeakRegistered's other premises stay open: the network certifier's verdict is accepted, and the
-    figure and its cells are conditional on nothing."""
+    it. certifier-key alone closes, by PeriodLeakRegistered at the fixture's stand-in pin taking the auditor's record
+    and the run's check of it, though PeriodLeakRegistered's other premises stay open: the network certifier's verdict
+    is accepted, and the figure and its cells are conditional on nothing."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
-    for g in UNPINNED:
-        monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
-    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g not in UNPINNED})))
+    monkeypatch.setitem(OR.RESTS_ON, TIED, RESTS_ON[TIED])
+    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g != TIED})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"] and OR.CERTIFIER_KEY not in UNNAMED
+    assert TIED in UNPINNED and OR.CERTIFIER_KEY not in UNNAMED
     assert (of["held"], of["open"], of["K"]) == (
-        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
+        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), TIED], K + 2 ** 23 + 1)
     assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"])
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
-    assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
-                                                       "takes": RESTS_ON[UNPINNED[0]]["takes"],
-                                                       "restate": OR.RESTATE_TIED}
+    assert of["premises"]["rests_on"][TIED] == {"missing": "not in the lock", "takes": RESTS_ON[TIED]["takes"],
+                                                "restate": OR.RESTATE_TIED}
     assert "conditional_on" not in of and "conditional_on" not in rec["periods"] and of["tight"] == OR.TIGHT
     assert rec["verdicts"]["the network certifier"]["verdict"] == "accept"
     assert rec["checked"][OR.AUDITOR_RECORD]["holds"] is True
@@ -727,7 +729,7 @@ def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_condi
     checks are held and every premise discharged, with no tight K beside it."""
     rec, cond = with_coins(tmp_path, said), [OR.COINS_OPEN]
     parts = [x.partition("sampled proofs: ")[2].partition(";")[0] or None for x in said]
-    assert rec["coins"] == {"open": True, "sampled_proofs": parts, "from": "verdicts.txt COINS", "is": OR.COINS,
+    assert rec["coins"] == {"open": True, "spot": parts, "from": "verdicts.txt COINS", "is": OR.COINS,
                             "open_draws": ["sampled proofs' draw"], "draws": ALL_DRAWN} | (
         {} if said else {"missing": OR.NO_COINS})
     of = rec["bound"]["of_record"]
@@ -747,7 +749,7 @@ def test_coins_a_line_names_live_add_no_condition_and_the_tight_K_is_of_record(t
     the coins closed: nothing is conditional on them, and with both checks held and every premise discharged the tight
     K is of record. A record written before the record read the coins is conditional on them in its line."""
     rec = with_coins(tmp_path, [coins_line(GATE, lead)])
-    assert rec["coins"] == {"open": False, "sampled_proofs": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS,
+    assert rec["coins"] == {"open": False, "spot": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS,
                             "open_draws": [], "draws": ALL_DRAWN}
     of = rec["bound"]["of_record"]
     assert not any("conditional_on" in x for x in (rec["verdicts"]["sampled proofs"], rec["of_record"], of,
@@ -889,7 +891,7 @@ def test_a_guarantee_the_tight_K_rests_on_with_no_statement_pinned_is_open_even_
         tmp_path, lock, monkeypatch):
     """PeriodTiedCount, listed before what it takes was read at its statement: open by its name, whatever the lock
     states it as."""
-    (g,) = UNPINNED
+    g = TIED
     monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
     write_lock(lock, stated={g: "toy"})
     of = held_both(tmp_path)["bound"]["of_record"]
@@ -901,7 +903,7 @@ def test_period_tied_count_is_open_to_be_restated_at_any_statement_and_the_figur
     """PeriodTiedCount as stated (its tie half with no scope premise, its count half over the stripped view) discharges
     nothing: pinned at the very statement the lock lists, it stays open with why it is to be restated, and the figure
     of record is the conservative one, ℓ_a + 1 charged for the tied audit, as with it unlisted."""
-    (g,) = UNPINNED
+    g = TIED
     assert RESTS_ON[g]["restate"] == OR.RESTATE_TIED and "scope premise" in OR.RESTATE_TIED
     assert g not in {t for p in OR.PREMISES.values() for t in p["discharged_by"]}
     monkeypatch.setitem(OR.RESTS_ON, g, dict(RESTS_ON[g], statement="toy"))
@@ -941,14 +943,19 @@ def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_st
 
 def test_at_the_trees_lock_certifier_key_closes_where_the_runs_check_of_the_auditors_record_holds_and_only_there(
         monkeypatch):
-    """The tree's Properties lock holds PeriodLeakRegistered at the statement `RESTS_ON` pins, which takes hA, hr and
-    hkey, the auditor's record, as auditor-record: certifier-key closes where the run's check of it holds, and stays
+    """Once the tree's Properties lock holds PeriodLeakRegistered at the statement `RESTS_ON` pins, taking hA, hr and
+    hkey, the auditor's record, as auditor-record, certifier-key closes where the run's check of it holds, and stays
     open, with why, where it doesn't or no run's inputs were checked. sampled-leg-bridge and reg-opens-at, which that
     statement takes too, stay open on their own."""
     monkeypatch.undo()
     r = OR.RESTS_ON[OR.PERIOD_REGISTERED]
     assert {k for k, v in r["takes"].items() if v == OR.AUDITOR_RECORD} == {"hA", "hr", "hkey"}
     ok = OR.premises(OR.LOCKS, checked={OR.AUDITOR_RECORD: {"holds": True}})
+    got = ok["rests_on"][OR.PERIOD_REGISTERED]
+    assert "statement" in got and r["statement"] is not None, (
+        "waits on PeriodLeakRegistered: stated in Lean, tying the accepted period's commitment and evidence to the leak "
+        "bound's quantities (onsite_record.RESTATE_PERIOD), proved, held by the tree's Properties lock, and pinned in "
+        f"RESTS_ON at that statement with what it takes; the lock gives {got}")
     assert ok["unread"] == [] and ok["rests_on"][OR.PERIOD_REGISTERED]["statement"] == r["statement"]
     assert not {"missing", "restated", "restate"} & set(ok["rests_on"][OR.PERIOD_REGISTERED])
     assert OR.CERTIFIER_KEY not in ok["open"] and {"sampled-leg-bridge", "reg-opens-at"} <= set(ok["open"])
@@ -1032,24 +1039,20 @@ RECORDED = {"audits": [{"circuit": "c0" * 64, "order": {}, "pins": {}, "program"
 
 
 @pytest.mark.parametrize("stands", [True, False])
-def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_its_state_free_charge_stands(
+def test_a_tied_audit_with_a_circuit_record_is_charged_its_state_free_only_where_rows_state_held_stands(
         tmp_path, lock, monkeypatch, stands):
-    """A tied audit whose parameters state its circuit record may be charged its stateFree, less than its free. Where
-    RowsStateHeld stands over the activations entry, that charge is the figure's; where it doesn't, the public doesn't
-    separate the two, so there is no figure of record and no period cells, the bound's K still stated."""
+    """A tied audit whose parameters state its circuit record is charged its stateFree where RowsStateHeld stands over
+    the activations entry, and otherwise its whole free inputs, as the period check charges it, naming each digest
+    the lock gives that isn't pinned. The figure of record and its period cells stand either way."""
     monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
     if stands:
         with_state_held(lock, STATE_TOY)
     rec = record(accepted(tmp_path, params=RECORDED))
     of = rec["bound"]["of_record"]
     charge = {"charge": "stateFree" if stands else "free", "is": OR.STATE_CHARGE, "tied": [0], "with_record": [0]} | (
-        {} if stands else {"unpinned": {g: None for g in STATE_TOY}, "missing": OR.STATE_UNCOVERED})
+        {} if stands else {"unpinned": {g: None for g in STATE_TOY}})
     assert of["state_charge"] == charge and rec["bound"]["K"] == K
-    if stands:
-        assert of["K"] == KR and "missing" not in rec["periods"]
-        return
-    assert of == {"missing": OR.STATE_UNCOVERED, "state_charge": charge}
-    assert rec["periods"] == {"missing": f"no figure of record: {OR.STATE_UNCOVERED}"}
+    assert of["K"] == KR and "missing" not in rec["periods"]
 
 
 def test_at_the_trees_locks_the_charge_is_the_whole_free_inputs(monkeypatch):
@@ -1565,7 +1568,7 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
     (None, "accept", OR.NOT_ESTABLISHED),
     (None, None, "missing"),
 ])
-def test_sampled_proofs_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_records_audits_v1_row(
+def test_spot_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_records_audits_v1_row(
         tmp_path, subprotocol, row, verdict):
     """SPOT's verdict is the outcome of remote's SPOT case in the composite of record
     (VStar.Recursive.Sampled on OneStageZk's case), whatever the window report's integrity row, the records audit's
@@ -1595,7 +1598,7 @@ def test_sampled_proofs_verdict_is_its_subprotocol_in_the_composite_of_record_ne
                              "why": f"{OR.V1_UNREAD}, and {unread.get(subprotocol)}", "credit": UNESTABLISHED},
         "missing": {"verdict": "missing", "why": unread[None], "credit": CREDITED}}[verdict]
     assert v == expect
-    assert ("per_window" in rec["sampled_proofs"]) is (verdict == "accept")
+    assert ("per_window" in rec["spot"]) is (verdict == "accept")
     assert ("sampled proofs" in rec["of_record"]["not_established"]) is (verdict == OR.NOT_ESTABLISHED)
     assert OR.summary(rec)["verdicts"]["sampled proofs"] == verdict
 
@@ -1704,7 +1707,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
         auditor_args(out)["site_registration"].unlink()
     else:
         case = json.loads((out / OR.CASE).read_text())
-        (out / OR.CASE).write_text(json.dumps(case | {"params": case["params"] | {"key": ANOTHER}}))
+        (out / OR.CASE).write_text(json.dumps(case | {"params": case["params"] | {"keys": [dict(ENTRY, key=ANOTHER)]}}))
         auditor_files(out, key=key_record(dict(CERT_KEY, public=ANOTHER)), site=site_registration(ANOTHER))
     assert main([str(out)]) == 0
     rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.CERTIFIER_KEY]
@@ -1754,10 +1757,13 @@ REFUSED_INPUTS = {
                   "the period's lms isn't the auditor's record's"),
     "another key and session": (key_record(dict(CERT_KEY, public=ANOTHER), "6f" * 32), site_registration(ANOTHER),
                                 CERTIFIER, "the period's key and session aren't the auditor's record's"),
-    "no key in the period": (key_record(), site_registration(), {k: v for k, v in CERTIFIER.items() if k != "key"},
-                             f"the period's parameters ({OR.CASE}'s params) state no LMS parameters, key and session"),
-    "no period": (key_record(), site_registration(), None,
-                  f"the period's parameters ({OR.CASE}'s params) state no LMS parameters, key and session"),
+    "no keys in the period": (key_record(), site_registration(), {k: v for k, v in CERTIFIER.items() if k != "keys"},
+                              OR.NO_KEYS),
+    "the single key's form": (key_record(), site_registration(),
+                              {"key": CERT_KEY["public"], "lms": CERTIFIER["lms"], "session": SESSION}, OR.NO_KEYS),
+    "no period": (key_record(), site_registration(), None, OR.NO_KEYS),
+    "no entry holds the phase": (key_record(), site_registration(), dict(CERTIFIER, keys=[dict(ENTRY, start=1)]),
+                                 OR.NO_ENTRY),
     "a log its check refuses": (key_record(), site_registration(placed=ANOTHER), CERTIFIER,
                                 "the auditor's registration log doesn't check: entry 0: owner"),
     "another composite": (key_record(), site_registration() | {"params": site_registration(composite="remote")["params"]},
@@ -1787,7 +1793,8 @@ def test_auditor_record_holds_where_the_auditors_record_and_registration_hold_th
 def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_periods_and_says_why(tmp_path, how):
     """auditor-record doesn't hold, saying why, where the run gives no record or registration of the auditor's or one
     can't be read, where the record isn't a certifier-key/v1 record or its key, LMS parameters or session aren't the
-    period's (a toy LMS included), where the period states none, where the registration log is one its check refuses or
+    period's (a toy LMS included), where the period lists none readable or no listed entry's stretch holds its
+    execution phase, where the registration log is one its check refuses or
     of another composite than its params', or isn't a registration's params and log, and where its auditor holds the
     record's key for no network certifier its log places."""
     key, site, params, why = REFUSED_INPUTS[how]
@@ -1799,6 +1806,22 @@ def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_period
     got = OR.auditor_record(params, sha512_of(params), *files)
     assert (got["is"], got["holds"], got["why"]) == (OR.CHECKED[OR.AUDITOR_RECORD], False, why)
     assert "certifier" not in got
+
+
+def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_holds_the_periods_execution_phase(tmp_path):
+    """A rows-form period's parameters list each session of the network certifier from its start on (the period
+    check's accepted case with two sessions is this shape): with two listed and the period's execution phase in the
+    second's stretch, auditor-record holds the second's key and session to the auditor's record, the entry
+    NetworkCheck.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
+    first = {"key": ANOTHER, "session": "6f" * 32, "start": 0}
+    params = dict(CERTIFIER, first=4, keys=[first, dict(ENTRY, start=3)])
+    a = auditor_files(tmp_path / "second")
+    got = OR.auditor_record(params, sha512_of(params), a["certifier_key"], a["site_registration"])
+    assert (got["holds"], got["certifier"]) == (True, "cert0"), got
+    b = auditor_files(tmp_path / "first", key=key_record(dict(CERT_KEY, public=ANOTHER), first["session"]),
+                      site=site_registration(ANOTHER))
+    got = OR.auditor_record(params, sha512_of(params), b["certifier_key"], b["site_registration"])
+    assert (got["holds"], got["why"]) == (False, "the period's key and session aren't the auditor's record's"), got
 
 
 @pytest.mark.parametrize("composed, why", [
@@ -2149,7 +2172,7 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
             "protocol": SAMPLED_V1, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
             "from": "composite/remote-network-no-pouw/composite.json cases", "open": [OR.REGISTERED_FILES],
             "why": OR.FILES_UNMET, "credit": UNESTABLISHED}
-        assert rec["sampled_proofs"]["missing"] == (
+        assert rec["spot"]["missing"] == (
             f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
     if why is None:
         assert "K" in rec["bound"] and line["K"] is not None
@@ -2224,7 +2247,7 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
      OR.NO_COMPLETION),
     (None, [], None, f"the run published no audit record ({OR.AUDIT})"),
 ])
-def test_sampled_proofs_credits_only_members_whose_registered_file_was_completed_and_names_each_other(
+def test_spot_credits_only_members_whose_registered_file_was_completed_and_names_each_other(
         tmp_path, capsys, audit, credited, not_credited, missing):
     """SPOT credits a drawn member only where its audit completed the member's --registered file at the
     window's committed roots and the member's Lean verdict of record accepted it reporting exactly its reads: a member
@@ -2302,7 +2325,7 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
     assert record(with_onsite(out, sampled="reject"))["of_record"]["holds"] is False
 
 
-def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
+def test_spot_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
         tmp_path, capsys):
     """subset:1 over a window's 16 proof blocks at δ = 2^-40: the window's bound is 15, ε = 15/16, and pooled at most
     ⌊16 · ln 2^40⌋ = 443 incorrect proof blocks over any number of windows (IntegrityHorizon). Each monitoring period
@@ -2311,7 +2334,7 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
     window's ε beside each pooled cell, never alone."""
     out = accepted(tmp_path)
     assert main([str(out)]) == 0
-    g = json.loads((out / "record" / "onsite.json").read_text())["sampled_proofs"]
+    g = json.loads((out / "record" / "onsite.json").read_text())["spot"]
     assert (g["is"], g["refused"], g["from"], "conditional_on" in g) == (
         OR.SAMPLED, OR.MULTI, "record/verdicts.json protocols.integrity.answer", False)
     assert g["per_window"] == {"units": N, "law": {"subset": 1}, "delta": str(DELTA), "bound": N - 1, "epsilon": "15/16",
@@ -2338,7 +2361,7 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
     text, line = (out / "record" / "onsite.json").read_text(), capsys.readouterr().out.strip()
     assert SV.public_doc(text) == text and SV.public_line(line) == line
     assert "member" not in g and "open_in_lean" not in json.loads(line[7:])
-    line = json.loads(line[7:])["sampled_proofs"]
+    line = json.loads(line[7:])["spot"]
     assert line["per_window"] == {"epsilon": "15/16", "delta": str(DELTA), "units": N, "law": {"subset": 1}}
     assert line["pooled"] == {"incorrect_at_most": 443, **{
         name: {where: {k: p[name][where][k] for k in ("incorrect_at_most", "share")} for where in links}
@@ -2359,7 +2382,7 @@ def test_the_pooled_count_is_the_floor_of_ln_links_over_delta_over_q_past_a_floa
 
 
 def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cells(tmp_path):
-    g = record(with_onsite(served_out(tmp_path)))["sampled_proofs"]
+    g = record(with_onsite(served_out(tmp_path)))["spot"]
     assert (g["per_window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
     assert g["pooled"]["periods"] == {"missing": f"no {OR.CASE}: a window's length is an execution phase's, its params' "
                                                  "schedule (`WINDOW_S`)"}
@@ -2372,7 +2395,7 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
     IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names the window of
     several members such a draw needs as one a run of record doesn't have: its case is the per-member one, which Lean
     refuses."""
-    g = record(with_onsite(served_out(tmp_path, draw=STRATIFIED1, bound=14)))["sampled_proofs"]
+    g = record(with_onsite(served_out(tmp_path, draw=STRATIFIED1, bound=14)))["spot"]
     assert g["per_window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
                                                                   {"name": "B", "size": 8, "k": 1}]}
     assert (g["per_window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
@@ -2381,23 +2404,23 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
 
 
 @pytest.mark.parametrize("coins", [None, "a local development challenger session"])
-def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
+def test_spot_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
     """The guarantee reads the records audit's answer's profile and bound only once SPOT's verdict, its subprotocol in
     the composite of record, accepted: rejected there, or not established, it states no bound."""
     out = with_onsite(served_out(tmp_path, coins=coins))
-    g = record(out)["sampled_proofs"]
+    g = record(out)["spot"]
     assert (g["conditional_on"], g["per_window"]["epsilon"]) == ([OR.COINS_OPEN], "15/16")
     f = out / "record" / "verdicts.json"
     report = json.loads(f.read_text())
     report["protocols"]["integrity"]["answer"] = {}
     f.write_text(json.dumps(report))
-    assert record(out)["sampled_proofs"]["error"] == ("its answer's profile or public lacks a field: KeyError: "
+    assert record(out)["spot"]["error"] == ("its answer's profile or public lacks a field: KeyError: "
                                                          "'profile'")
-    g = record(with_onsite(out, sampled="reject"))["sampled_proofs"]
+    g = record(with_onsite(out, sampled="reject"))["spot"]
     assert g["missing"] == "sampled proofs' verdict is reject: only its accepted answer states a bound"
     assert "per_window" not in g and OR.guarantee(g) == {"missing": g["missing"]}
     (out / "composite" / "remote-network" / "composite.json").unlink()
-    assert record(out)["sampled_proofs"]["missing"] == (
+    assert record(out)["spot"]["missing"] == (
         f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
 
 
@@ -2413,7 +2436,7 @@ def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_it
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), draws=None if n2 is None else chain_report(n2, scan))
     assert main([str(out)]) == 0
     rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.COINS_OPEN]
-    assert (rec["coins"]["open"], rec["coins"]["open_draws"], rec["coins"]["sampled_proofs"]) == (True, named, [GATE])
+    assert (rec["coins"]["open"], rec["coins"]["open_draws"], rec["coins"]["spot"]) == (True, named, [GATE])
     assert rec["coins"]["draws"].get("missing") == (None if n2 else OR.NO_CHAIN_REPORT)
     of = rec["bound"]["of_record"]
     assert (of["open"], of["conditional_on"], of["K"]) == (cond, cond, KR)
@@ -2523,7 +2546,7 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
                                        "per_phase": run["per_phase"]["bits"]}
         assert all(r["periods"][n][w] == {k: rec["periods"][n][w][k] for k in ("bits", "share", "how")}
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
-        assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
+        assert r["spot"] == OR.guarantee(rec["spot"]) and "year" in r["spot"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
     said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")

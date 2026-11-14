@@ -591,9 +591,9 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
         sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
         drawn, q = sum(s["k"] for s in law["strata"]), min(Fraction(s["k"], m) for s, m in zip(law["strata"], sizes))
         if q == 0 or sum(sizes) != n:
-            raise SystemExit(f"--audit {d}: a stratified law whose strata cover its {n} units, each drawn, not {law}")
+            raise SystemExit(f"--audit {d}: a stratified sampling design whose strata cover its {n} units, each drawn, not {law}")
     else:
-        raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
+        raise SystemExit(f"--audit {d}: K's q is a subset or stratified sampling design's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
             "units": n, "drawn": drawn, "q": str(q), "free": terms["free"], "inputs": terms,
             "held": sorted(IF.held_params(pins, roots))}

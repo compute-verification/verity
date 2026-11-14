@@ -8,7 +8,7 @@ meta import CoreProtocol.Protocol
 /-!
 # The inference-only policy as a core protocol: `verity/inference-only/v0`
 
-The inference-only policy (`InferenceOnly.CompliesRate Γ α`, `Security/Definitions/InferenceOnly.lean`) asks that the registered circuit
+The inference-only policy (`InferenceOnly.CompliesRate Γ α`, `security/Definitions/InferenceOnly.lean`) asks that the registered circuit
 divide into inference blocks of at most `Γ` gates, each reading at most `α` bits of fresh input per gate: input from
 outside the block that is not registered information. `InferenceOnlyCheck.Theta.evaluate` is the policy's check: the division's
 check at the size of the description (`InferenceOnlyCheck.Desc.evaluate`), then the provenance of the registered information

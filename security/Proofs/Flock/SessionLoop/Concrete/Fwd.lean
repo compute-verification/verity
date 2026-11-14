@@ -41,12 +41,6 @@ theorem forIn_array_yield {α β ε : Type} (xs : Array α) (b : β) (f : α →
     (h : ∀ a r, f a r = .ok (.yield (g r a))) : forIn xs b f = .ok (xs.foldl g b) := by
   rw [← Array.forIn_toList, forIn_list_yield _ _ _ g h, Array.foldl_toList]
 
-/-- A duplicate-name check on no names (`Circuits.Program`'s `paramsOf`) finds none: the kernel doesn't reduce a
-`Std.HashSet`'s size, so a walk through an empty parameter list takes this step as a rule. -/
-theorem foldl_size_bne_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → β → Std.HashSet α) :
-    ((Array.foldl f (∅ : Std.HashSet α) (#[] : Array β)).size != (#[] : Array β).size) = false := by
-  simp
-
 meta structure Cfg where
   rules : Array AbstractMVarsResult
   blocked : NameSet

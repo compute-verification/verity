@@ -44,19 +44,19 @@ from pathlib import Path
 
 import pytest
 import verity_difftest as D
-from verity_vllm.commit import memory_map as MM
-from verity_vllm.program.predict.build import build_program
-from verity_vllm.program.predict.phi import Phi
+from verity.circuits import requirement as R
+from verity.circuits.census import census, step_ends, step_of
+from verity.circuits.program import REGISTRATION, Program, is_input
 from verity.protocols.accounting.poub.prover.node_store.interface import PageLayout
 from verity.protocols.accounting.poub.prover.node_store.memory_map import Lines
 from verity.protocols.accounting.poub.prover.node_store.registry import _page_blocks
-from verity_vllm.query.required import SAMPLING_EVENTS
-
-from verity.circuits.program import REGISTRATION, Program, is_input
-from verity.circuits import requirement as R
-from verity.circuits.census import census, step_ends, step_of
 from verity.protocols.accounting.poub.verifier import codec
 from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
+
+from verity_vllm.commit import memory_map as MM
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.query.required import SAMPLING_EVENTS
 
 #: The requirement suite's difftest, whose Port, instance format and Programs this test shares; a file of another suite,
 #: so loaded by its path.

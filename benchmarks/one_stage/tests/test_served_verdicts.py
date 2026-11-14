@@ -133,7 +133,7 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
 #: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
 #: holding a number, a list or a map of numbers, in text
 _OWN = "windows|users|engine_steps|every_slot|population|bits_by_window|advice_bits"
-_NUMBERED = "window|steps|window_steps|requests|refused"
+_NUMBERED = "window|steps|requests|refused"
 
 
 def _published(rule: str) -> str:
@@ -345,7 +345,7 @@ def test_publish_holds_pearlpluss_exclusion_tiles_count_and_ids_and_leaves_its_o
             "pieces/pearlplus/pearlplus-lean.json": {"verdict": "accept", "drawn": 2, "verdicts": tiles, "work": work,
                                                      "tie": answer["public"]["tie"]},
             "pieces/pearlplus/verify.json": {"answer": answer, "verdicts": tiles, "accepted": True},
-            "record/record.json": {"verdicts": {"pouw": "accept", "sampled_proofs": "accept"}, "tiles": 4,
+            "record/record.json": {"verdicts": {"pouw": "accept", "spot": "accept"}, "tiles": 4,
                                    "rows": [{"protocol": "pouw", "answer": answer}]}}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     for rel, doc in docs.items():
@@ -1942,6 +1942,22 @@ def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_window
     assert S.publish(out, private) == []
 
 
+def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_serving_setting(tmp_path):
+    """`publish` holds ``window_steps`` by its path, ``load.window_steps``, and not as a bare key: the caller's own
+    serving setting, ``serving.window_steps`` (`onsite_record.py --window-steps`), is published as written, in a document
+    and in a line, at any depth, beside a tied Pearl+ piece's load, which is held."""
+    serving = {"serving": {"window_steps": 16, "max_tokens": 4}}
+    doc = {"run": {**serving, "load": {"window_steps": 3}}}
+    assert S.public_json(serving) == serving and S.public_json(doc) == {"run": {**serving, "load": {}}}
+    line = f"ONSITE {json.dumps(serving)}"
+    assert S.public_line(line) == line and S.public_doc(json.dumps(serving)) == json.dumps(serving)
+    said = json.loads(S.public_line(f"POUW-DEV {json.dumps(doc)}").removeprefix("POUW-DEV "))
+    assert said == {"run": {**serving, "load": {}}}
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "onsite.json").write_text(json.dumps(serving))
+    assert S.publish(tmp_path / "out", tmp_path / "private") == []
+
+
 @pytest.mark.parametrize("reserved, joined", [
     ({"session": SID, "by": "vllm", "period": "pearlplus-r1"},
      "reserved under lane vllm's key into its Pearl-C period pearlplus-r1"),
@@ -2084,7 +2100,7 @@ def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_it
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "class held")
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert row["verdict"] == "accept" and "development" not in row
     assert row["answer"]["public"]["work"] == {**PEARL_LEAN_WORK, "give_up": 96}
     assert "exact_work" not in json.dumps(row)
@@ -2766,8 +2782,11 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     lowest terms and Γ = c of the policy's own numbers, in the unit of its c, with the count rule's (c, k, n) and the
     policy file's SHA-512, or the run's ALPHA and GAMMA where both are set (in the unit LIMITS_UNIT states), and the
     line says which, and that the developer wrote them. What the run's own two numbers prove is in the file and the
-    line where LIMITS_PROVE says it, and nowhere for the policy's own. A policy that names no c writes none and says
-    so, and the policy step still passes."""
+    line where LIMITS_PROVE says it, and nowhere for the policy's own. Where the run sets both HELD_ALPHA and
+    HELD_GAMMA, the file's ``held`` and one clause of the line state the record form's pair beside them, in lowest
+    terms, with its unit and whose weights θ is, and v0's pair is as it was; half a pair states none, and so does a
+    pair that is no limits (a gamma of 0, or text that is no number), whose clause names both values, the file still
+    v0's whole. A policy that names no c writes none and says so, and the policy step still passes."""
     policy = json.dumps({"c": 14, "k": 6, "n": 16})
     rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
     assert rc == 0 and lines[1:] == [
@@ -2795,6 +2814,30 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     assert rc == 0 and lines[1] == (
         "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID)
     assert "proves" not in json.loads((tmp_path / "half" / "out" / "inference-only-limits.json").read_text())
+    run = {"ALPHA": "2/4", "GAMMA": "100", "LIMITS_UNIT": "Program gates in a block", "LIMITS_PROVE": none}
+    rc, lines, _ = _inference_only(tmp_path / "held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8",
+                                   HELD_GAMMA="25", **run)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none}); held for the record "
+        "form, a block a slot and theta the serve's first registration record's weights, alpha = 3/4 and gamma = 25, "
+        "which no verdict of the run reads" + LIMITS_SAID]
+    held = json.loads((tmp_path / "held" / "out" / "inference-only-limits.json").read_text())
+    assert held.pop("held") == {
+        "alpha": [3, 4], "gamma": 25,
+        "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma in a block's gates",
+        "theta": "the weights the serve's first registration record registers (deployment-registration.json)"}
+    assert held == json.loads((tmp_path / "proves" / "out" / "inference-only-limits.json").read_text())
+    rc, lines, _ = _inference_only(tmp_path / "half-held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8", **run)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none})" + LIMITS_SAID]
+    assert "held" not in json.loads((tmp_path / "half-held" / "out" / "inference-only-limits.json").read_text())
+    for name, ha, hg in (("zero-held", "6/8", "0"), ("text-held", "abc", "xyz")):
+        rc, lines, _ = _inference_only(tmp_path / name, "inference-policy", IO_WRITE=policy, HELD_ALPHA=ha,
+                                       HELD_GAMMA=hg, **run)
+        assert rc == 0 and lines[1:] == [
+            f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none}); the held alpha "
+            f"{ha} and gamma {hg} are no limits, so the file states no held pair" + LIMITS_SAID]
+        assert json.loads((tmp_path / name / "out" / "inference-only-limits.json").read_text()) == held
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
                                            "is at the run's ALPHA and GAMMA, or at what it reads off the served "
@@ -2883,6 +2926,25 @@ W63K4 = "8,32,4,4,16"
 #: V3c's default rules (`served_verdicts.sh`'s V3C_LAW), which its window-commit and its audit both take: a rate, and
 #: under H1_TIE a stratified rate
 RULE, TIED_RULE = "rate:1/3481648", "stratified-rate:1/3481648"
+#: the toy tree's `window_commit.py`: the tree's own prove_path.py, run under the name served_verdicts.sh's calls record
+WINDOW_COMMIT = '''import runpy, sys
+from pathlib import Path
+sys.argv[0] = str(Path(__file__).parents[2] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py")
+runpy.run_path(sys.argv[0], run_name="__main__")
+'''
+
+
+def _one_stage(tree: Path, *, linked: bool = True) -> None:
+    """The toy tree's benchmarks/one_stage: this directory's files (``linked``), but a window_commit.py that runs the
+    tree's own prove_path.py rather than SPOT's."""
+    one = tree / "benchmarks" / "one_stage"
+    one.mkdir(parents=True, exist_ok=True)
+    for f in HERE.parent.iterdir() if linked else ():
+        if f.name != "window_commit.py":
+            (one / f.name).symlink_to(f, target_is_directory=f.is_dir())
+    (one / "window_commit.py").write_text(WINDOW_COMMIT)
+
+
 FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
@@ -2973,6 +3035,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
+    _one_stage(tree, linked=False)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -3094,7 +3157,7 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
@@ -3721,7 +3784,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
         p.mkdir(parents=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    _one_stage(tree)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
     _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
                              f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
@@ -4039,24 +4102,65 @@ def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_strati
     0 < NUM <= DEN: the tied window's sampling design has no default, and the harness's preflight refuses such a launch
     (`NO_PEARL_RULE`), which the rehearsal would learn only on the serve node. The refusal names the design and the form
     in the preflight's words; settings that state one are held."""
+    rc, said, err = _rehearsal_settings(tmp_path, V3C_LAW=design)
+    if held:
+        assert rc == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (rc, said, err)
+    else:
+        assert (rc, said) == (3, [
+            f"SETTINGS refused: the sampling design is {design or 'unset'}: under PEARLPLUS_TIE it has no default, and the "
+            "launch states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
+            "proof block of each template while none holds more than DEN"]), (rc, said, err)
+
+
+HELD_FORM = {"HELD_ALPHA": "the record form's alpha is a positive number P/Q or P, each a whole number with no sign or "
+                           "leading zero",
+             "HELD_GAMMA": "the record form's gamma is a positive whole number with no sign or leading zero"}
+
+
+@pytest.mark.parametrize("pair", [
+    {"HELD_ALPHA": "3/4", "HELD_GAMMA": "25"}, {"HELD_ALPHA": "1", "HELD_GAMMA": "25"},
+    {"HELD_ALPHA": None, "HELD_GAMMA": None}, {"HELD_GAMMA": None},
+    *({"HELD_ALPHA": a} for a in ("abc", "0", "0/4", "-3/4", "3/0", "03/4", "0.75")),
+    *({"HELD_GAMMA": g} for g in ("xyz", "0", "-25", "025", "2.5", "25/1"))])
+def test_the_rehearsals_settings_state_the_record_forms_pair_in_the_form_the_limits_held_step_writes(tmp_path, pair):
+    """`rehearsal.sh settings FILE` holds HELD_ALPHA and HELD_GAMMA to values, not only to being set: HELD_ALPHA a
+    positive P/Q or P and HELD_GAMMA a positive whole number, each without a sign or a leading zero, the form `check`'s
+    limits-held step writes to its record.env.add; so a pair that is no limits (a gamma of 0, text that is no number)
+    never reaches the serve. A pair not both set is refused naming both and where to set them, and a pair set but in
+    another form is refused by the setting's name, saying the form; settings in that form are held."""
+    rc, said, err = _rehearsal_settings(tmp_path, **pair)
+    got = {"HELD_ALPHA": "3/4", "HELD_GAMMA": "25", **pair}
+    if None in got.values():
+        assert (rc, said) == (3, [
+            f"SETTINGS refused: HELD_ALPHA is {got['HELD_ALPHA'] or 'unset'} and HELD_GAMMA is "
+            f"{got['HELD_GAMMA'] or 'unset'}: set both in {tmp_path / 'record.env'}, beside ALPHA and GAMMA, to the "
+            "record form's pair of the class, the two lines `rehearsal.sh check` writes to its record.env.add "
+            "(limits.json's held)"]), err
+    elif len(pair) == 1:
+        (name, value), = pair.items()
+        assert (rc, said) == (3, [f"SETTINGS refused: {name} is {value}, and {HELD_FORM[name]}, as `rehearsal.sh check` "
+                                  "writes it to its record.env.add"]), err
+    else:
+        assert rc == 0 and len(said) == 1, (rc, said, err)
+        assert f"the record form's pair {got['HELD_ALPHA']} and {got['HELD_GAMMA']}, " in said[0]
+
+
+def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, list[str], str]:
+    """`rehearsal.sh settings` on settings a Pearl+-tied rehearsal's serve holds, but for ``changed`` (None: unset): its
+    exit status, its lines and its stderr."""
     for name in ("main.txt", "key.json", "day-params.json"):
         (tmp_path / name).write_text("x\n")
     settings = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "ROW": "stand-in",
                 "PP_CHALLENGER": "gate:nobody@gate.invalid", "PP_PEER": "stand-in", "MAIN_FILE": tmp_path / "main.txt",
                 "PP_CHALLENGER_KEY": tmp_path / "key.json", "ALPHA": "1/2", "GAMMA": "4", "LIMITS_UNIT": "a unit",
                 "LIMITS_PROVE": "what they prove", "DAY": "0", "DAY_PROGRAM": "00" * 64, "DAY_LOG": tmp_path / "day-log.json",
-                "DAY_PARAMS": tmp_path / "day-params.json", **({} if design is None else {"V3C_LAW": design})}
+                "DAY_PARAMS": tmp_path / "day-params.json", "V3C_LAW": "stratified-rate:1/977", "HELD_ALPHA": "3/4",
+                "HELD_GAMMA": "25"}
+    settings = {k: v for k, v in {**settings, **changed}.items() if v is not None}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
     run = subprocess.run(["bash", str(HERE.parent / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
                          env={"PATH": os.defpath}, capture_output=True, text=True, check=False)
-    said = run.stdout.splitlines()
-    if held:
-        assert run.returncode == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (run.returncode, said, run.stderr)
-    else:
-        assert (run.returncode, said) == (3, [
-            f"SETTINGS refused: the sampling design is {design or 'unset'}: under PEARLPLUS_TIE it has no default, and the "
-            "launch states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
-            "proof block of each template while none holds more than DEN"]), (run.returncode, said, run.stderr)
+    return run.returncode, run.stdout.splitlines(), run.stderr
 
 
 def _no_transfer_gates(part: str, sampling_design: str, templates: list[str]) -> str:
@@ -4857,6 +4961,26 @@ def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve
     assert S.witness(listed) == []
     sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
     assert sums[first] == hashlib.sha256((d / first).read_bytes()).hexdigest()
+
+
+def test_a_hand_off_carries_every_windows_pearl_plus_record_and_audit_record_the_serve_dir_holds(tmp_path):
+    """The inference-only case's log is walked among the serve's docket records, so the hand-off lists and hashes
+    each one the serve dir holds: every window's Pearl+ record W (pearlplus/w<k>/registration.json, the audited window's
+    and each earlier one's) and every window's record R as its audit wrote it, of whatever class, beside the serve's
+    first. Each hides roots and names alone: `served_verdicts.py witness` refuses nothing of the list, and of Pearl+'s
+    directories it lists nothing else (no pass, no row)."""
+    records = ("deployment-registration.json", "pearlplus/w6/registration.json", "pearlplus/w7/registration.json",
+               f"v3c-w6-{VTAG}/audit/window/registration.json", f"v3c-w7-{VTAG}/audit/window/registration.json")
+    rows = ("pearlplus/w7/pass-0/rows.bin", "pearlplus/w7/registration.json.d/x", f"v3c-w6-{VTAG}/window/registration.json")
+    run = _handed(tmp_path, files={**{f: {"format": "verity/registration/v2", "previous": None} for f in records},
+                                   **{f: {} for f in rows}})
+    assert run.returncode == 0, run.stderr
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    listed = dc.joinpath("inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([*records, *HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
+    assert S.witness(listed) == []
+    sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
+    assert all(sums[f] == hashlib.sha256((d / f).read_bytes()).hexdigest() for f in records)
 
 
 def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):

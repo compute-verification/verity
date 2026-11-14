@@ -49,7 +49,6 @@ files = ["**/check/opened.py",
          "**/program/test_derived_rows.py",
          "**/program/test_fp8.py",
          "**/program/test_harden_alias.py",
-         "**/program/test_lifted_tiny.py",
          "**/program/test_target_profile.py",
          "**/properties/test_difftest.py",
          "**/properties/test_quarantine_lint.py",
@@ -96,16 +95,6 @@ files = ["**/check/opened.py",
          "**/numerics/fp8_twins.py",
          "**/numerics/gemm_relation.py",
          "**/numerics/rms_triton_model.py",
-         "**/numerics/rows.py",
-         "**/registry/__init__.py",
-         "**/registry/b1.py",
-         "**/registry/b1_tp2.py",
-         "**/registry/dense.py",
-         "**/registry/fp8.py",
-         "**/registry/nvfp4.py",
-         "**/registry/prims.py",
-         "**/registry/sampling_topp_difftest.py",
-         "**/registry/serve3.py",
          "**/tests/test_fp8_twins.py",
          "**/tests/test_pouw_pearl_c4.py"]
 [words_in.words]
@@ -154,6 +143,9 @@ patterns = ["\\d{8}T\\d{4}Z/production\\b"]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
 # digest pins (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, the Glossary's row and the lint's lists
 # of the word, and infra's service, whose "production" is its Vercel deployment.
+# The kernel Definitions' registry too: `registry_version` hashes `prims` and `b1` whole, and its `conformance` texts are
+# copied into recorded tables; with it, the adapter's test that quotes `prims`'s sentence.
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "**/*.lock", "GLOSSARY.md", "tests/test_retired_terms.py",
-           "tests/lint/test_repo_retired_terms.py", "infra/slack-events/**"]
+           "tests/lint/test_repo_retired_terms.py",
+           "**/definitions/registry/**", "**/program/test_lifted_tiny.py", "infra/slack-events/**"]

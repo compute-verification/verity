@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from verity.channel import Message, MessageTypes
+from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.accounting.certifier.prover import workload as certifier
 from verity.protocols.accounting.pous.prover import workload as pous
 from verity.protocols.accounting.pouw.prover import workload as pouw
@@ -21,7 +21,9 @@ TYPES = MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *pous.MESSAGES, *certifier
 def body(type_: str, data: bytes) -> bytes:
     """``data`` as the body of a ``type_`` message, unchanged; `verity.channel.Refused` when its declaration refuses
     it."""
-    TYPES.encode(Message(type_, body=data))
+    msg = Message(type_, body=data)
+    if (why := TYPES.schema(msg.type, msg.version).why(msg.head(), msg.body)) is not None:
+        raise Refused(*why)
     return data
 
 

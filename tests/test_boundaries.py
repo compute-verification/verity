@@ -156,9 +156,8 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
-                    "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
+    "adapters/vllm/tests/protocols/pouw_h1_circuits.py": "compute-accounting: H1's prover and the auditor's lowering "
+                                                        "(`benchmarks/pouw/h1_prove`, `hidden_zk`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`verity/protocols/accounting/certifier/device/load_relay.py`), "
@@ -1565,7 +1564,16 @@ def _hold_distributions(dirs: Set[str], loads: Iterable[Load], listing: Listing,
                        f"reason, or is no longer listed; delete them: {named}")
     gone = sorted(set(listing.distributions) - dirs)
     assert not gone, f"directories of `distribution` (tests/import_order.toml) that hold no tracked file; delete them: {gone}"
-    loaded = _into_distributions(loads, listing)
+    unreasoned = sorted(d for d, e in listing.distributions.items() if e.get("known") and not e.get("known_reason"))
+    assert not unreasoned, ("a `distribution`'s `known` (tests/import_order.toml) says why in its `known_reason`, with its "
+                            f"owner and the day it goes: {unreasoned}")
+    into = _into_distributions(loads, listing)
+    known = {d: set(e.get("known", ())) for d, e in listing.distributions.items()}
+    stale = sorted(f"{d}: {f}" for d, fs in known.items() for f in fs
+                   if not any(x.loader == f and _distribution(x.loaded, listing) == d for x in into))
+    assert not stale, ("files a `distribution`'s `known` (tests/import_order.toml) lists, each by its path, that don't load "
+                       f"it; the list only shrinks, and names no directory or glob: delete them: {stale}")
+    loaded = [x for x in into if x.loader not in known[_distribution(x.loaded, listing)]]
     assert not loaded, ("`verity` loads no other distribution, one under verity/ included (`distribution` in "
                         "tests/import_order.toml): move what both read into `verity`, or pass it in:\n" + "\n".join(map(str, loaded)))
 
@@ -1670,7 +1678,8 @@ def test_verity_loads_no_distribution_of_its_own() -> None:
     loads none of them by name, a verifier's Python least of all: no Python of ``verity`` (``_source``) loads a file of
     one, by its own name or as a module of ``verity``.  A load by file is read only into ``benchmarks/``.  The list only
     shrinks: a listed directory with no tracked file fails, and a directory not listed is ``verity``'s, held to its
-    rules."""
+    rules.  The files a distribution's ``known`` lists, each by its path with its ``known_reason``, are its loaders
+    until the day the reason names: the list only shrinks, and a file it doesn't name is refused."""
     dirs, loads, _ = _tree_loads()
     _hold_distributions(dirs, loads, _listing())
 
@@ -1744,7 +1753,9 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     Lean script's of the prover; and what a place it loads gains, from a file no load of the verifier's reaches.  Into
     a trusted place: a prover's file, a prover's test, for a place the listing marks, a binding, and a file in a
     device's directory that the listing gives to an untrusted place; not a device's file.  Where the listing names a
-    file of a device as a place of its own: that file's load of the rest of its directory.  And the generator writes
+    file of a device as a place of its own: that file's load of the rest of its directory.  Into a distribution: a file
+    its ``known`` doesn't list, and a ``known`` naming a directory, a glob or a file that doesn't load it, or giving no
+    ``known_reason``; not a listed file's load.  And the generator writes
     a listing the checks hold, and without ``--grow`` holds back each line of a list that only shrinks."""
     for f, text in ORDER_TREE.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
@@ -1893,6 +1904,21 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         and written.places[party]["reaches"] >= parts.places[party]["reaches"]
     with pytest.raises(AssertionError, match="loads no other distribution.*\n.*package_above.py:1: python package"):
         hold_distributions(tree.dirs, loads, held)
+    flock, above = "verity/protocols/proofs/flock", "verity/hardware/package_above.py"
+
+    def knowing(*files: str, why: str = "a toy's") -> Listing:
+        return held._replace(distributions=own | {flock: own[flock] | {"known": list(files), "known_reason": why}})
+
+    hold_distributions(tree.dirs, loads, knowing(above))
+    seventh = Load("verity/protocols/proofs/spot/seventh.py", "verity/protocols/proofs/flock/prover/stage.py", 1, "python import",
+                   "verity.protocols.proofs.flock.prover.stage")
+    with pytest.raises(AssertionError, match="loads no other distribution.*\n.*seventh.py:1: python import"):
+        hold_distributions(tree.dirs, (*loads, seventh), knowing(above))
+    for listed in ("verity/hardware", "verity/hardware/*.py", "verity/hardware/gone.py"):
+        with pytest.raises(AssertionError, match=f"names no directory or glob: delete them: \\['{flock}: {re.escape(listed)}'\\]"):
+            hold_distributions(tree.dirs, loads, knowing(above, listed))
+    with pytest.raises(AssertionError, match=f"says why in its `known_reason`.*\\['{flock}'\\]"):
+        hold_distributions(tree.dirs, loads, knowing(above, why=""))
     for entry in ({"reason": "no owner"}, {"owner": "proofs", "date": "2026-11-18", "reason": "both"}, {"owner": "proofs", "date": "soon"}):
         with pytest.raises(AssertionError, match=r"its owner and exactly one of.*: \['verity/protocols/proofs/flock'\]"):
             hold_distributions(tree.dirs, (), held._replace(distributions=own | {"verity/protocols/proofs/flock": entry}))

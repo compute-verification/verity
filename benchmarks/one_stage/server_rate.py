@@ -396,7 +396,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                  "verify_ahead": a.ahead,
                  "warm": a.warm, "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
     ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1, wide_leaf=a.wide_leaf,
-                     env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
+                     env={"FC_ZK_SERVER": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
     provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
     verifiers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("verifier-"))  # noqa: E731

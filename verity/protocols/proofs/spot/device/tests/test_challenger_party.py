@@ -1,22 +1,19 @@
 """The challenger's host (`challenger_party.py`): the verifier's `a5_coins.Loopback` opens and finishes a session on it
 over loopback TCP, and each refused op (a second open while one is open, a root opened twice, a finish with nothing
 open, a malformed root, an unknown op) reaches the verifier as a `CoinError` naming its reason; `Host` serves it on a
-thread from `start` until `stop`. The host is a stand-in for `a5_coins.Local` (no serve.py), so only the wire is
-tested."""
+thread from `start` until `stop`. The host's session is a stand-in for `local_challenger.Local` (no serve.py), so only
+the wire is tested."""
 
 from __future__ import annotations
 
 import socket
-import sys
 import threading
 from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
-from verity.protocols.proofs.spot.device import challenger_party as CP  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC
+from verity.protocols.proofs.spot.device import challenger_party as CP
 
 ROOT_A, ROOT_B = "ab" * 64, "cd" * 64
 
@@ -36,9 +33,8 @@ class FakeLocal:
 
 
 @pytest.fixture
-def party(tmp_path, monkeypatch):
-    monkeypatch.setattr(CP.AC, "Local", FakeLocal)
-    p = CP.Party(tmp_path / "host", ["f" * 40])
+def party(tmp_path):
+    p = CP.Party(tmp_path / "host", ["f" * 40], FakeLocal)
     srv = socket.create_server(("127.0.0.1", 0))
     address = "%s:%d" % srv.getsockname()[:2]
     t = threading.Thread(target=CP.serve, args=(p, srv))
@@ -81,16 +77,14 @@ def test_each_refused_op_reaches_the_verifier_by_its_reason(party, tmp_path):
         lb._ask({"op": 3})
 
 
-def test_a_host_root_is_made_once(tmp_path, monkeypatch):
-    monkeypatch.setattr(CP.AC, "Local", FakeLocal)
+def test_a_host_root_is_made_once(tmp_path):
     (tmp_path / "host").mkdir()
     with pytest.raises(SystemExit, match="exists"):
-        CP.Party(tmp_path / "host", ["f" * 40])
+        CP.Party(tmp_path / "host", ["f" * 40], FakeLocal)
 
 
-def test_the_host_serves_from_start_until_stop(tmp_path, monkeypatch):
-    monkeypatch.setattr(CP.AC, "Local", FakeLocal)
-    host = CP.Host(tmp_path / "host", ["f" * 40])
+def test_the_host_serves_from_start_until_stop(tmp_path):
+    host = CP.Host(tmp_path / "host", ["f" * 40], FakeLocal)
     at = host.start()
     assert at["pin"] == "f" * 40 and at["address"].startswith("127.0.0.1:")
     assert AC.Loopback(at["address"]).open(ROOT_A, [["work", 1]])[2] == "c0" * 64

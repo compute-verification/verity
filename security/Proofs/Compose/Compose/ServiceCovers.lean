@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Compose.Guarantees.Compose
-public import Proofs.Pouw.TS.Drawn
+public import Proofs.Pouw.TS.Sampled
 public import Proofs.Accounting.Lemmas.Compose
 
 /-!

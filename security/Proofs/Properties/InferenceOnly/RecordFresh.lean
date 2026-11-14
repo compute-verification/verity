@@ -33,7 +33,7 @@ rows' bits, are together within the bits of all the rows.
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 open InferenceOnlyCheck.Properties.Record.SecurityProofs (inputsOf_decls wired_of_read wire_shape shape_spec cover_apart
   fill_of_cover tmpls_named tmpl_grids tmpl_slot_units)

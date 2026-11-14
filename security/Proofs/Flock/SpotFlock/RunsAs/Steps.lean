@@ -4,7 +4,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
-public import all Spot.Run
+public import Spot.Run
+import all Spot.Run
 public import Spot.Record
 import Proofs.Flock.Claims.Sampling.Select.Code
 

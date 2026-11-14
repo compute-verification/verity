@@ -17,7 +17,7 @@ reads, its rate rule `failure` on that one pair, and its layout `layoutOf`'s. Wh
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 
 /-- **The record check's form**: what `Record` exports, as the statements about a record check read it. -/
