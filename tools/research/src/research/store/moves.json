@@ -2473,6 +2473,11 @@
         "benchmarks/hash/dither/numabind.py": "benchmarks/kernels/numabind/numabind.py",
         "benchmarks/hash/dither/tests/test_numabind.py": "benchmarks/kernels/numabind/tests/test_numabind.py"
       }
+    },
+    {
+      "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
     }
   ]
 }
