@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 public import Proofs.Pouw.PearlC.DeviceFp4Gap
 public import Proofs.Pouw.PearlC.Fp4IssueGap

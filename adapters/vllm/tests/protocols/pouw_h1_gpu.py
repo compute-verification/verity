@@ -29,14 +29,14 @@ first alone in a second (`<out>/solo/`). It records each window's step rows agai
 u (`H1Run.utilization`), the credit gate's verdict, each step's seconds (at linear 0 of the next) and tokens/s, and the
 static schedule's check (`engine.static_schedule.check`) of every request. Compile is `--compile-from` on each record.
 
-``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor host's
+``--challenger HOST:PORT --session JSON --gate CMD`` takes the window's salt and round coins from the auditor device's
 challenger, in the challenge phase the challenger gate reserved for the window (``--session``, the gate's reserve answer), which the
 window opens through ``CMD open --session S --root R`` on its window-open root once round 0 is admitted
 (`gate_command`; `pouw_h1_window.Window`; on PEER, the port the gate forwards), one challenge phase a window, so the fill
 workload serves only the 64's window. With ``--peer NAME`` in place of ``--session`` each window the run serves reserves
 a challenge phase of its own (`window_sessions`: ``CMD reserve --peer NAME``) just before it is installed, and the next is
 reserved only once that challenge phase's end entry is in the gate's ``status`` (`session_end`), so ``--commit``'s windows
-and the solo window all take the auditor host's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
+and the solo window all take the auditor device's coins. ``--check-challenger CALLS_JSON DIR --key-sha512 HEX --ledger HEAD [--ledger HEAD
 ...] --pins HEAD [--pins HEAD ...] --main FILE`` is the verifier's side on no GPU, ``--ledger`` given once per head
 the gate published, ``--pins`` once per head of the host's pins log the gate published and ``--main`` the auditor's ``git
 rev-list --first-parent origin/main`` (without them every window is refused). With ``--window WINDOW_JSON``
@@ -324,7 +324,7 @@ class WindowSessions:
 
 def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
-    before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
+    before the window is installed, since the auditor device's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
     is refused (ValueError), as is a reserve the gate refuses. Each window's sample session is reserved with it
     (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
@@ -430,7 +430,7 @@ def model_key_of(gate: Any, model: str, circuit: str) -> Any:
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
                 draw_session: Any = None, **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
-    the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
+    the window's coins, its salt coin and one live round coin a step: the auditor device's at `challenger` (``HOST:PORT``, one
     challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate`
     opens on the window's open root, and its sampling coin from the `draw_session` the gate reserved beside it, which `gate`
     opens withheld on the window's sample root; else held in this process, which no verifier trusts and which credits
@@ -1250,7 +1250,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
-    when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete,
+    when every window's coins are the auditor device's from a challenge phase of its own that ended closed and complete,
     and the honest Commit window's gate passes rows and refuses none of its calls, its sample's challenge phase ended
     closed and complete too (a refused negative may never open its own)."""
     wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
@@ -1562,7 +1562,7 @@ def main(argv: list[str] | None = None) -> int:
                          "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
-    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
+    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor device's "
                                                               "challenger (verity/protocols/compose/device/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")

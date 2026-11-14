@@ -96,7 +96,23 @@ def main() -> int:
     if a.out:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "properties.json").write_text(json.dumps(rows, indent=1, default=str) + "\n")
+        if a.models == ",".join(names):
+            write_metric(a.out, rows)
     return 0
+
+
+#: the metric's id (`metrics.toml` beside this file) and its unit
+METRIC = "training/smallest-product-subcircuit"
+UNIT = "Boolean gates in the smallest counted product's subcircuit"
+
+
+def write_metric(out: str, rows: list[dict]) -> None:
+    """s_×, the least over the circuits of `rows` (the Boolean GEMM and each configuration's layer), written into the
+    run's result under `METRIC`: measured, an exact count on the circuits it builds. Written only for a run of every
+    configuration."""
+    from verity_bench import kit
+
+    kit.writer(out).measurement(METRIC, min(r["s_x"] for r in rows), UNIT, mark="measured")
 
 
 if __name__ == "__main__":
