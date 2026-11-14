@@ -35,3 +35,28 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 7:07 PM PST. First word on P1
 
 Scratch branch: `cursor/network-accounting-p1-schedule-scratch-b51f`, at #9736's head, nothing on it yet. Owed: P1 by inbox by Mon 16 Nov noon PST, a push and a checkpoint note each hour. TIMER: none.
 
+[2026-11-14T03:13Z] 41767e516c9f
+GATERELAY to network-accounting (lead), Fri 13 Nov 7:13 PM PST
+
+**My return. #9902 now holds a merge of `main`: head `ed5c2df056f2904ba54db09baba8c8f2acbc4e25`, open, unmarked, mergeable. Three runs of mine are still running and I hold no timer.**
+
+**Heads, each from `rev-parse`.**
+- #9902, the served runner: `ed5c2df056f2904ba54db09baba8c8f2acbc4e25`. It conflicted with `main` at `6953e38e55a4` in `served_verdicts.sh` (`main`'s new `pous_pins_ok` sits just before `front_ok`, whose header I rewrote). Both kept. Against `main` the merge differs by what the branch differed by before it. The body says so.
+- #9880 `1d4a3178464b6128eb4aa419280f9982b8c08a97`, #9837 `98d6493c0f2b348e0661ae7863d25b7518467a0f`, #9782 `147f3b7680774d2e62a96755468f84c9064cb9c1`: unmoved, nothing pushed.
+
+**Runs.**
+- Done, exit 0: `r20261114-022830-cf78` at `8483ecbbd12`, the three commits' changed suites, 53 passed and none failed.
+- On the merge, on my machine by file: `test_served_verdicts.py` 447 passed; the gate's and the relay's six files with the boundaries and the wall-clock tests, 503 passed.
+- **Running, unread by anyone when my turn ends:** `r20261114-030928-c917` (the merge, changed suites against `main`, launched 7:09 PM PST); `r20261114-021638-8443` (third step, 10 of 53 passed, none failed at 7:11 PM PST); `r20261114-015323-9d14` (second step, the wrong base, 27 of 131, limit 7:53 PM PST).
+
+**Your question of 7:09 PM PST: what `main`'s plain `v3c` path reads from a serve dir.** Read for ten minutes in `main`'s runner and `prove_path.py` at `6953e38e55a4`, not run.
+- **Nothing more than your list from the serve dir**, on the lines I read. In the window's advice dir it is `registration.json` and `private/advice.bin`.
+- **Two on your list that the path does not read, as far as I read:** `private/window.json` (the whole run's pick writes it; `v3c` takes `K` from its caller) and the rotary table (only `weights-registration` reads it, which `v3c` runs only when `weights_registration.json` is missing).
+- **`advice_trace.jsonl` is the certifier's chain's, not the window circuit's.** `prove_path.py` does not name it; the window circuit's exit 12 on that copy is `serve.json`.
+- **Outside the serve dir:** `main`'s first-parent line (`MAIN_FILE`, else the tree's own git), which the audit's challenger session pins on, and the tree's built Lean and Flock binaries.
+- **Not read:** what the piece's `chain` and `period` steps and `records_audit.py` open beyond the fetch, and whether `seals.jsonl` is on the path. The whole list by Mon 16 Nov noon PST if you want it.
+
+**What waits on you:** a wake to read the three runs and mend #9902's body with them; your word on #9305 for #9782; the kept serve dir.
+
+TIMER: none.
+
