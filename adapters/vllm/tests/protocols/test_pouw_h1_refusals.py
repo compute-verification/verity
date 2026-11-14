@@ -827,7 +827,7 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
     `resume` refuses a file that isn't a saved window's before it reads the stream's descriptor."""
     run = _driven()
     for refuse in (lambda: HO.client_of(run), lambda: HO.suspend(run, tmp_path / "saved")):
-        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor host's session hands off$"):
+        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor device's session hands off$"):
             refuse()
     assert not (tmp_path / "saved").exists()
     (tmp_path / HO.FILE).write_bytes(pickle.dumps({"schema": "another/v1"}))
