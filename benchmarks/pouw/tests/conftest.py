@@ -32,11 +32,25 @@ NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
 #: derive and report)
 AHEAD = ("harness",)
+#: the script directories that moved into PoUW's package, whose tests stay in this suite
+KERNELS = POUW.parents[1] / "verity/protocols/accounting/pouw/prover/kernels"
+MOVED = tuple(KERNELS / d for d in ("served_zk",))
+
+
+def rel(p: Path) -> Path:
+    """A script's path from ``benchmarks/pouw/``, or from the kernels' directory for one of `MOVED`'s."""
+    return p.relative_to(KERNELS if p.is_relative_to(KERNELS) else POUW)
+
+
+def at(file: str | Path) -> Path:
+    """`rel`'s inverse: ``FILE`` under ``benchmarks/pouw/``, else in one of `MOVED`'s directories."""
+    return POUW / file if (POUW / file).exists() or not (KERNELS / file).exists() else KERNELS / file
 
 
 def scripts() -> list[Path]:
-    """Every script under ``benchmarks/pouw/``."""
-    return sorted(p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1]))
+    """Every script under ``benchmarks/pouw/``, and in `MOVED`'s directories."""
+    return sorted([p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1])]
+                  + [p for d in MOVED for p in d.glob("*.py") if p.name != "__init__.py"])
 
 
 def script_dirs() -> list[Path]:
@@ -78,7 +92,7 @@ def load(file: str) -> ModuleType:
     file under this name."""
     name = load_name(file)
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, POUW / file)
+        spec = importlib.util.spec_from_file_location(name, at(file))
         sys.modules[name] = module = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(module)

@@ -265,7 +265,7 @@ def install(model, args, coins):
                               whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
-        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
+        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/served_zk" / "statement.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         run.statement = mod.Statement(run, args.statement)

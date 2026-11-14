@@ -43,19 +43,19 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     for path in [*CT.scripts(), *sorted(TESTS.glob("*.py"))]:
         for name in sorted(imported(path) & shared.keys()):
             first, beside = shared[name][0], path.parent in shared[name]
-            where = ", ".join(str(d.relative_to(POUW)) for d in shared[name])
-            entry = (path.parent.relative_to(POUW).as_posix(), name)
+            where = ", ".join(str(CT.rel(d)) for d in shared[name])
+            entry = (CT.rel(path.parent).as_posix(), name)
             if beside and path.parent != first and entry in EXCUSED - excused:
                 excused.add(entry)
             elif first not in ahead:
-                wrong.append(f"{path.relative_to(POUW)} imports {name}, which {where} hold and conftest.AHEAD gives to "
+                wrong.append(f"{CT.rel(path)} imports {name}, which {where} hold and conftest.AHEAD gives to "
                              f"none: put the directory whose scripts import it by name in AHEAD, or load() the file")
             elif beside and path.parent != first:
-                wrong.append(f"{path.relative_to(POUW)} imports {name} beside its own {name}.py, and under the suite "
-                             f"that is {first.relative_to(POUW)}'s: load it from its file")
+                wrong.append(f"{CT.rel(path)} imports {name} beside its own {name}.py, and under the suite "
+                             f"that is {CT.rel(first)}'s: load it from its file")
             elif not beside and path.parent != TESTS:
-                wrong.append(f"{path.relative_to(POUW)} imports {name} by name from outside {where}: under the suite "
-                             f"that is {first.relative_to(POUW)}'s, so the script loads the file it means")
+                wrong.append(f"{CT.rel(path)} imports {name} by name from outside {where}: under the suite "
+                             f"that is {CT.rel(first)}'s, so the script loads the file it means")
             else:
                 used.add(first)
     assert not wrong, "\n".join(wrong)
@@ -75,7 +75,7 @@ def test_no_script_is_another_suites_unless_this_suites_inputs_hold_it():
 
 
 def test_load_names_each_script_apart():
-    names = Counter(CT.load_name(p.relative_to(POUW)) for p in CT.scripts())
+    names = Counter(CT.load_name(CT.rel(p)) for p in CT.scripts())
     assert not [name for name, n in names.items() if n > 1]
     assert not names.keys() & CT.holders().keys()
 

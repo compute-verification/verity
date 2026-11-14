@@ -87,7 +87,7 @@ def store_runs(into: Path) -> list[Path]:
     """Every served_zk `job.sh` attempt's run record ``out/``, fetched under `into` (empty for a record without one, a job
     that failed before writing it)."""
     rows = research("data", "sql", "select a.id, o.artifact from attempts a join attempt_outputs o on o.attempt = a.id "
-                    "where a.manifest_json like '%../../verity/protocols/accounting/pouw/prover/kernels/served_zk/job.sh%' and o.name = 'run_record' order by a.start_utc")
+                    "where a.manifest_json like '%served_zk/job.sh%' and o.name = 'run_record' order by a.start_utc")
     runs = []
     for line in rows.splitlines()[1:]:
         run, art = line.split("\t")

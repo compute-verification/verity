@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # served_zk's served hm96 path on an RTX PRO 6000 node: GPU 1's ship (build.sh) and hm96_rows.cubin built on the node's
 # CPUs, then window.sh with the served row's switches (-h2, rows form s, whole step, deferred tile hashing, both
-# arms graphed) and STATEMENT, which adds e2e.py's pearlc-zk mode (../../verity/protocols/accounting/pouw/prover/kernels/served_zk/statement.py) and its gate.
+# arms graphed) and STATEMENT, which adds e2e.py's pearlc-zk mode (statement.py) and its gate.
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
 #     --env GPU_LEASE_WHO=LANE [--env MODE=window] -- bash verity/protocols/accounting/pouw/prover/kernels/served_zk/zk_window.sh
 # MODE: smoke (the default; untimed, both engines resident, the gates, each mode's first sampling calls) or window (the gates,
