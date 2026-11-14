@@ -554,10 +554,10 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     return Verdict(True, (), {}, verifiers)
 
 
-def check_draw(draw: Any, registration: Mapping[str, Any], sampling_design: Mapping[str, Any]) -> Verdict:
+def check_draw(draw: Any, docket: Mapping[str, Any], sampling_design: Mapping[str, Any]) -> Verdict:
     """`draw.check_draw` by the verifier."""
-    py = D.check_draw(draw, registration, sampling_design)
-    got = lean("check_draw", {"draw": draw, "population": registration.get("population"), "law": dict(sampling_design)})
+    py = D.check_draw(draw, docket, sampling_design)
+    got = lean("check_draw", {"draw": draw, "population": docket.get("population"), "law": dict(sampling_design)})
     return _decide(got, py, whole=True)
 
 
@@ -606,7 +606,7 @@ def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
     return {"accepted": r["accepted"], "failed": [k for k, c in r["checks"].items() if not c["ok"]]}
 
 
-def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
+def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  sampling_design: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
@@ -619,11 +619,11 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
     certified = sorted(certified)
-    opened = audit.held_reads(verdicts, registration, window_values)
-    py = audit.audit_record(registration, receipt, draw, sampling_design, list(proved_units), instances, statement, verdicts, delta,
+    opened = audit.held_reads(verdicts, docket, window_values)
+    py = audit.audit_record(docket, receipt, draw, sampling_design, list(proved_units), instances, statement, verdicts, delta,
                             sessions, served, session_roots, opened, certified)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    got = lean("record", {"registration": dict(registration), "receipt": dict(receipt), "draw": dict(draw),
+    got = lean("record", {"registration": dict(docket), "receipt": dict(receipt), "draw": dict(draw),
                           "law": dict(sampling_design), "proved_units": list(proved_units), "instances": instances,
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),

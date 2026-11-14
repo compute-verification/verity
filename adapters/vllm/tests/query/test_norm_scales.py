@@ -20,13 +20,13 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.pipeline import manifest_verify as MV
 from verity_vllm.query import norm_scales as NS
+from verity_vllm.query import program_view as PV
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.manifest import verify as V
 from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
 from verity_vllm.query.units import ValueRef
-from verity_vllm.query import program_view as PV
 
 W = "model.model"
 H = 8

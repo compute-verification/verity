@@ -74,7 +74,7 @@ theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := 
   rw [keys_lanes]
   decide +kernel
 
-theorem law_lanes : PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesLaw :=
+theorem samplingDesign_lanes : PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign :=
   ok_of_toOption (by decide +kernel)
 
 end Properties.Pouw.Credit.SecurityProofs

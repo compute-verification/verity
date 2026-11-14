@@ -26,7 +26,7 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
   and probability;
 * `SamplingDesign`, a sampling design over units, and its missProb (`L.missProb B`), the probability that its sample misses a set, both core's
-  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' laws each sampled on its own coins, the product distribution that
+  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' sampling designs each sampled on its own coins, the product distribution that
   distinct contexts give (M1);
 * `auditReg`: the registration, then the coin of the sampling design at that registration, then the session on its sample (C1);
 * `WUnit`, `slice`, `seqCalls`, `executionPhaseSession`: a window's units (a call and a unit of that call), a call's share of a
@@ -53,8 +53,8 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
   served with probability at most a term of the window's state;
 * the deployed sample, SPOT (`verity/protocols/accounting/pouw/verifier/window.py`): `subsetDraw`, one uniform `K`-of-`N`
-  tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
-  the `N` tiles; `share` and `sessionLaw`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
+  tile subset; `sessions`, `chunk` and `serviceSamplingDesign`, its rank-ordered sessions, each a call of the window whose units are
+  the `N` tiles; `share` and `sessionSamplingDesign`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `IncorrectCopyClosed`,
   statements whose incorrect sets are copy-closed.
 -/
@@ -297,7 +297,7 @@ noncomputable def coll {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n))
     (fun c τc => g c (slice ((Lw R).draw ω) c) R τc) (List.finRange C) (τ ω)
 
 /-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle claim's, with gap
-(4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its laws, sessions
+(4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its sampling designs, sessions
 and state terms at each oracle), every prover's plays `σ H` whose sessions make at most `q` oracle calls by the count
 `qs` have collision term at most `f q` on average over the oracle.
 
@@ -416,7 +416,7 @@ def chunk {N : ℕ} (cap : ℕ) (D : Finset (Fin N)) (σ : ℕ) : Finset (Fin N)
 
 /-- **The service's sample**: a uniform permutation's `K`-subset, each sampled tile a unit of the one session that holds its
 rank. -/
-def serviceLaw (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K cap) => N) where
+def serviceSamplingDesign (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K cap) => N) where
   Ω := Equiv.Perm (Fin N)
   draw π := Finset.univ.sigma fun σ => chunk cap (subsetDraw K π) σ.val
 
@@ -424,7 +424,7 @@ def serviceLaw (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K c
 def share (K cap σ : ℕ) : ℕ := min cap (K - σ * cap)
 
 /-- **Session `σ`'s own sampling design**: a uniform `share K cap σ`-subset of the `N` tiles, on coins of its own. -/
-def sessionLaw (N K cap σ : ℕ) : SamplingDesign (Fin N) where
+def sessionSamplingDesign (N K cap σ : ℕ) : SamplingDesign (Fin N) where
   Ω := Equiv.Perm (Fin N)
   draw π := subsetDraw (share K cap σ) π
 

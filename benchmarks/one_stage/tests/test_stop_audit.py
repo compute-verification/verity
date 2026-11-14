@@ -643,10 +643,17 @@ def test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relatio
     unsampled.write_text(json.dumps({**hand, "stop": {"error": "refused"}}))
     out = tmp_path / "stopped"
     monkeypatch.setattr(T.TS, "template_fn", lambda _id: T.PAIR)
+    k = T.FC.pinned_key()
+    (key := tmp_path / "challenger-key.json").write_text(json.dumps(
+        {"schema": "challenger-key/v1", "W": k.W, "H": k.H, "pubkey": k.public.hex(),
+         "pubkey_sha512": hashlib.sha512(k.public).hexdigest()}))
+    (main := tmp_path / "main.txt").write_text("".join(f"{x}\n" for x in T.FC.MAIN))
     assert SA.main(["--handoff", str(unsampled), "--boundary", str(tmp_path), "--stop", json.dumps(T.STOP.to_json()),
-                    "--design", DESIGN, "--bin", "none", "--lean", "none", "--out", str(out)]) == 1
+                    "--design", DESIGN, "--main", str(main), "--challenger-key", str(key), "--bin", "none",
+                    "--lean", "none", "--out", str(out)]) == 1
     stopped = json.loads((out / "summary.json").read_text())
-    assert stopped["accepted"] is False and stopped["reason"] is None and "error" in stopped and "verdicts" not in stopped
+    assert stopped["accepted"] is False and stopped["reason"] is None and "verdicts" not in stopped
+    assert "registered or sampled no stop block: refused" in stopped["error"], stopped
 
 
 def test_the_control_is_the_accepted_class_with_its_stop_word_changed_and_nothing_else(tmp_path, monkeypatch):

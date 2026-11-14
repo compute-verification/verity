@@ -91,8 +91,9 @@ def test_the_next_batch_is_mains_tip_with_each_head_merged_in_order_read_against
     args = calls[0]
     work = args[args.index("--") + 1:]
     assert work == LP.workload(c["main"], [c["a"], c["b"]]) and work[3:] == [LP.NAME, c["main"], c["a"], c["b"]]
-    assert args[:args.index("--source")] == ["run", "--id", "r20260101-000000-abcd", "--on", "vy-node", "--pool", "research", "--as",
-                                             "ci", "--project", "verity", "--mem-gb", "200", "--timeout", f"{LP.TIMEOUT_S:g}"]
+    assert args[:args.index("--source")] == ["run", "--id", "r20260101-000000-abcd", "--on", "vy-node", "--stay", "--pool", "research",
+                                             "--as", "ci", "--project", "verity", "--mem-gb", "200", "--timeout", f"{LP.TIMEOUT_S:g}"], \
+        "it stays on the machine whose caches it fills"
     assert "--send" not in args and args[args.index("--cwd") + 1] == "source"
     assert _git(r, "worktree", "list").count("\n") == 0, "the shipped worktree is removed once the run is launched"
 

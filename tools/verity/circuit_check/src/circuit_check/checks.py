@@ -536,15 +536,15 @@ def _bounds(rs: Sequence, full: Callable) -> list:
     return [(lo, hi, p.bound, w) for lo, hi, p, w in rs if p.bound is not None and not full(p.bound, w)]
 
 
-def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tuple[int, int] | None] = ()) -> list:
-    """`arrays` with each parameter's leaves folded into its sampled interval (`draw[j]`), else each leaf of a bounded parameter
+def _folded(arrays: list, params: Sequence, pt: Any, n: int, sample: Sequence[tuple[int, int] | None] = ()) -> list:
+    """`arrays` with each parameter's leaves folded into its sampled interval (`sample[j]`), else each leaf of a bounded parameter
     into its bound: an interval's two ends first, then the vectors' values within it."""
     from verity.circuits import ports as P
 
     out = list(arrays)
     for j, rs in enumerate(pt.params):
         a = np.array(out[j]).reshape(n, -1)
-        iv = draw[j] if j < len(draw) else None
+        iv = sample[j] if j < len(sample) else None
         runs = [(0, a.shape[1], iv, _one_width(params[j]))] if iv is not None else _bounds(rs, P.full)
         for lo, hi, (b0, b1), w in runs:
             for i in range(n):
@@ -579,34 +579,34 @@ def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
         rec = {"vectors": n, "intervals": [[lo, hi, list(iv)] for lo, hi, iv, _w in outs], "outside": len(outside)}
     if pt.transfer is not None:
         r, w_ret = random.Random(opts.seed), _one_width(ret)
-        drawn = outside_t = 0
+        sampled = outside_t = 0
         for d in range(TRANSFER_DRAWS):
-            draw: list[tuple[int, int] | None] = []
+            sample: list[tuple[int, int] | None] = []
             for pty, rs in zip(params, pt.params):
                 w, bs = _one_width(pty), _bounds(rs, P.full)
                 whole = bs[0][2] if len(bs) == 1 and bs[0][:2] == (0, pty.leaves) else None
                 if w is None or (bs and whole is None) or (not bs and r.random() < 0.25):
-                    draw.append(None)
+                    sample.append(None)
                     continue
                 lo, hi = whole or ((-(1 << (w - 1)), (1 << (w - 1)) - 1) if r.random() < 0.5 else (0, (1 << w) - 1))
                 x = r.randint(lo, hi)
                 y = r.randint(lo, hi) if r.random() < 0.5 else min(hi, x + r.randint(0, 255))
-                draw.append((min(x, y), max(x, y)))
-            iv = pt.transfer(*draw)
+                sample.append((min(x, y), max(x, y)))
+            iv = pt.transfer(*sample)
             if iv is None:
                 continue
-            drawn += 1
+            sampled += 1
             if not (isinstance(iv, (tuple, list)) and len(iv) == 2 and iv[0] <= iv[1] and P.reading(tuple(iv), w_ret) == tuple(iv)):
-                F.fail("ports", "transfer", t.id, f"its transfer gives {iv!r} on {draw}, no interval of a Value<{w_ret}>")
+                F.fail("ports", "transfer", t.id, f"its transfer gives {iv!r} on {sample}, no interval of a Value<{w_ret}>")
                 continue
-            ref, _raised = reference_outputs(t, params, _folded(vectors(params, n, opts.seed + 1 + d), params, pt, n, draw))
-            bad = [{"instance": i, "operands": draw, "value": out[0], "interval": list(iv)}
+            ref, _raised = reference_outputs(t, params, _folded(vectors(params, n, opts.seed + 1 + d), params, pt, n, sample))
+            bad = [{"instance": i, "operands": sample, "value": out[0], "interval": list(iv)}
                    for i, out in enumerate(ref) if out is not None and not P.holds(iv, w_ret, out[0])]
             outside_t += len(bad)
             if bad:
-                F.fail("ports", "transfer", t.id, f"{len(bad)} of {n} returns outside the interval its transfer gives on {draw}",
+                F.fail("ports", "transfer", t.id, f"{len(bad)} of {n} returns outside the interval its transfer gives on {sample}",
                        examples=bad[:_EXAMPLES])
-        rec["transfer"] = {"draws": TRANSFER_DRAWS, "vectors": n, "intervals": drawn, "outside": outside_t}
+        rec["transfer"] = {"draws": TRANSFER_DRAWS, "vectors": n, "intervals": sampled, "outside": outside_t}
     return rec
 
 

@@ -116,7 +116,6 @@ files = [
   "security/Properties/Flock/Circuit.lean",
   "security/Properties/Flock/Circuit/*",
   "security/Properties/Flock/Nets.lean",
-  "security/Properties/Flock/ReadNet.lean",
   "security/Properties/Hash/*",
   "security/Properties/Spot*",
   "security/Properties/Spot.lean",

@@ -27,6 +27,7 @@ import pytest
 
 from goals_page import DOWN, PAGE, serve
 import research.queue as Q
+from research import settings
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
 from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files, credential_args,
@@ -1778,7 +1779,7 @@ class _GitHTTP(BaseHTTPRequestHandler):
             return
         path, _, query = self.path.partition("?")
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        env = {"PATH": os.environ["PATH"], "GIT_PROJECT_ROOT": str(self.root), "GIT_HTTP_EXPORT_ALL": "1", "REMOTE_USER": "u",
+        env = {"PATH": settings.need("PATH"), "GIT_PROJECT_ROOT": str(self.root), "GIT_HTTP_EXPORT_ALL": "1", "REMOTE_USER": "u",
                "PATH_INFO": path, "QUERY_STRING": query, "REQUEST_METHOD": self.command, "CONTENT_LENGTH": str(len(body)),
                "CONTENT_TYPE": self.headers.get("Content-Type", ""), "HTTP_CONTENT_ENCODING": self.headers.get("Content-Encoding", ""),
                "GIT_PROTOCOL": self.headers.get("Git-Protocol", "")}
@@ -1850,7 +1851,7 @@ def test_credential_args_take_the_checkouts_own_settings_else_gh_where_no_helper
     bin_dir.mkdir()
     (bin_dir / "gh").write_text("#!/bin/sh\n")
     (bin_dir / "gh").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{settings.need('PATH')}")
     gh = ("-c", "credential.helper=", "-c", f"credential.helper=!{shlex.quote(str(bin_dir / 'gh'))} auth git-credential")
     assert credential_args(repo, url) == credential_args(tmp_path, url) == gh, "no helper anywhere, in a checkout or not: gh's"
     assert credential_args(repo, "/srv/origin.git") == credential_args(repo, "git@github.com:o/r") == (), "not http: no credentials"
@@ -4116,7 +4117,7 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
         assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
         (launch, left), (fetch, _) = argvs
         assert left == 100 and fetch == ["fetch", rid, "--on", node, "--all"]
-        assert launch == ["run", "--on", node, *flags, *tail]
+        assert launch == ["run", "--on", node, "--stay", *flags, *tail], "it builds that node's tree and reads its run there"
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
@@ -4273,7 +4274,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     (bin_ / "lake").write_text('#!/bin/sh\necho "$PWD $*" >> "$FAKE_LAKE_LOG"\n[ -z "$FAKE_LAKE_FAIL" ] || exit 1\n'
                                'mkdir -p .lake && echo built > .lake/built\n')
     (bin_ / "lake").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{settings.need('PATH')}")
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/check/suites.py", "--quick"])
     monkeypatch.setenv("FAKE_SEEN", str(seen))
     monkeypatch.setenv("FAKE_LAKE_LOG", str(ran))
@@ -4499,7 +4500,7 @@ class Machine:
             (key := self.root / "requests" / rid / "custody").mkdir(parents=True)
             (key / "store.toml").write_text('[remote]\nkind = "s3"\n')
             (key / "cred.json").write_text("{}\n")
-        (Path(os.environ["RESEARCH_RUNS"]) / rid).mkdir(parents=True)
+        (Path(settings.need("RESEARCH_RUNS")) / rid).mkdir(parents=True)
         if self.outcome is not None:
             self.outcome(run, rid, head)
         else:
@@ -5129,7 +5130,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
                     '[ "$w" = warm ] && [ -n "$FAIL_WARM" ] && exit 3\nmkdir -p .lake && echo x > .lake/warm\n')
     lake.chmod(0o755)
     log = tmp_path / "log"
-    env = {"HOME": str(tmp_path / "home"), "PATH": os.environ["PATH"], "LOG": str(log), "CHECK_SLOT": "a"}
+    env = {"HOME": str(tmp_path / "home"), "PATH": settings.need("PATH"), "LOG": str(log), "CHECK_SLOT": "a"}
     d = "verity/protocols/proofs/flock/verifier"
 
     def run(n, **extra):

@@ -14,6 +14,13 @@ def enumerators() -> set[tuple[str, str]]:
             (__name__, "load_catalog")}
 
 
+def handed_packages() -> tuple[str, ...]:
+    """The packages and modules whose circuits circuit-check is handed and names none of: the served Definitions' package and
+    PoUW's four Pearl-C tile modules, whose sidecars hand their circuits as the catalog's do."""
+    pouw = "verity.protocols.accounting.pouw.prover.circuit"
+    return ("verity_vllm.definitions", *(f"{pouw}.pearl_c_{m}" for m in ("call", "forming", "noise", "tile")))
+
+
 def load_catalog() -> None:
     """Import every module of the registry and the kernels of the replay's rows and twins, which register with core."""
     import verity_vllm.definitions.registry as R

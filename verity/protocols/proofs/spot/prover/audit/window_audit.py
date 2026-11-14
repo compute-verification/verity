@@ -2376,6 +2376,12 @@ def proving_of(handle: Session | None) -> dict[str, Any]:
             "prove_seconds_source": "busy"}
 
 
+def device_env(env: dict, devices: list | None) -> dict:
+    """``env``, a session's prover environment behind the ZK server, for provers on ``devices``: the ZK server refuses a
+    session whose witness the device would build (live PROTOCOL.md §10.4), so on a device the host builds it."""
+    return {**env, "FC_HOST_WITNESS": "1"} if devices and any(d is not None for d in devices) else env
+
+
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
     """Why a plain audit (``a.plain``) of ``mine`` is outside `PLAIN_SCOPE`, refused before the sample; None inside it (and for
     a `--zk` audit)."""
@@ -2573,7 +2579,7 @@ def main() -> int:
     ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice-opening: the registered compiler (traced: the "
                     "stand-in, each rank's Programs of record under --build-root, advice_windows.Traced)")
     ap.add_argument("--transfer-gate", action="append", default=[], help="with --advice-opening: a template the registered compiler "
-                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN)")
+                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN)")
     ap.add_argument("--other-advice-opening", help="with --advice-opening: the opening of advice that disagrees with the registered, "
                     "given to the verifier (a negative)")
     ap.add_argument("--other-windows", help="with --advice-opening: the windows committed under the other advice, rank<r>/ each (a "
@@ -2613,7 +2619,7 @@ def main() -> int:
     ap.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history, a commit a line "
                     "(`git rev-list --first-parent origin/main`), never the host's or the prover's")
     ap.add_argument("--plain", action="store_true", help="with --challenger: plain sessions, not --zk, "
-                    "under the partition's stratified law, a window of one member with no registered reads or shared rows "
+                    "under the partition's stratified sampling design, a window of one member with no registered reads or shared rows "
                     "(PLAIN_SCOPE)")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
