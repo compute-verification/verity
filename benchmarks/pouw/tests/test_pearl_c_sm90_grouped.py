@@ -16,9 +16,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier.audit import weights_root  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import weights_root  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import Challenger  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402

@@ -2,7 +2,7 @@
 
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
-outside help (a deployment accounts for help: `../../verity/protocols/pous/verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
+outside help (a deployment accounts for help: `../../verity/protocols/accounting/pous/verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
 `security/`, listed below by their paths there. Declarations kept their names
 (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
@@ -145,7 +145,7 @@ then review the records' diff).
 files `Sanity.lean` imports) or adding a `.lean` file under
 `Definitions/Pous`, regenerating it from this directory (`tools/verity/check/pins.py --regen` runs this command, and
 `--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
-starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/pous/verifier/tests/test_pous_trusted.py` names it):
+starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/protocols/accounting/pous/verifier/tests/test_pous_trusted.py` names it):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
