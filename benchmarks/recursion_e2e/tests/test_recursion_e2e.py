@@ -1,10 +1,10 @@
 """The recursion bench's reader (`rec_profile`), table (`rec_table`) and CLI (`run.py`) on records written in
 85-rec-reprice.sh's formats: the timed runs' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's
-UPSTREAM line and Lean's VERDICT. No GPU, node or store: the job's own records are made here."""
+UPSTREAM line and Lean's VERDICT. No GPU, node or store: the job's own records are made here, by `job`, which
+`test_run.py` (the CLI's launches and commands) and `test_headline.py` (an accepted recursive run) use too."""
 from __future__ import annotations
 
 import json
-import shlex
 import shutil
 from pathlib import Path
 
@@ -228,39 +228,6 @@ def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     assert "Slowest row (a run's e2e, else a tool's wall): lean L0" in md
 
 
-def test_result_command_writes_both_files(tmp_path: Path) -> None:
-    o = job(tmp_path)
-    assert RUN.main(["result", "--dir", str(o), "--out", str(tmp_path / "p.json"), "--md", str(tmp_path / "t.md")]) == 0
-    doc = json.loads((tmp_path / "p.json").read_text())
-    assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion bench: K = 4096")
-
-
-def test_a_gpu_run_is_a_gpu_host_job_on_node_1s_queue(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--N", "16", "--steps", "lean,build", "--modes", "dev"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert cmd[:6] == ["research", "run", "--queue", "--on", "vy-nebius-1", "--gpu-host"]
-    assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
-    assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion_e2e/job.sh"]
-    assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
-    assert "--preemptible" not in cmd
-    assert RUN.main(["run", "--dry-run", "--node", "vy-nebius-2", "--preemptible", "--oprove-gpu", "1"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert cmd[4] == "vy-nebius-2" and "--preemptible" in cmd[:cmd.index("--")]
-
-
-def test_env_passes_through_and_must_be_key_value(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--env", "LEVELS=L0", "--env", "GPU_PREEMPTIBLE="]) == 0
-    tail = capsys.readouterr().out.split(" -- ")[1].split()
-    assert tail[-2:] == ["LEVELS=L0", "GPU_PREEMPTIBLE="]
-    with pytest.raises(SystemExit, match="not KEY=VALUE"):
-        RUN.main(["run", "--dry-run", "--env", "levels"])
-
-
-def test_unknown_step_is_refused() -> None:
-    with pytest.raises(SystemExit, match="ostage"):
-        RUN.main(["plan", "--steps", "build,ostage"])
-
-
 def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path: Path, capsys) -> None:
     a = RP.read(job(tmp_path / "a")) | {"ref": "rA"}
     o = job(tmp_path / "b")
@@ -278,27 +245,6 @@ def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path:
     assert RUN.main(["table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
     md = capsys.readouterr().out
     assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, the inner's 3 timed runs" in md
-
-
-def test_a_run_id_is_read_from_its_records_not_its_result_file(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("load ran a command"))
-    out = tmp_path / ".research" / "runs" / "r20261024-000000-abcd"
-    job(out)
-    (out / "out" / "recursion_e2e.json").write_text(json.dumps({"schema": RP.SCHEMA, "rows": [], "stale": True}))
-    doc = RUN.load("r20261024-000000-abcd")
-    assert "stale" not in doc and doc["run"] == "r20261024-000000-abcd" and row(doc, "inner M0")["ok"] is True
-
-
-def test_a_run_id_whose_records_arent_fetched_is_refused_with_the_fetch(tmp_path: Path, monkeypatch) -> None:
-    """`load` reads the records `research fetch` put under RESEARCH_RUNS_DIR and fetches nothing itself."""
-    monkeypatch.setenv("RESEARCH_RUNS_DIR", str(tmp_path / "runs"))
-    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("load ran a command"))
-    with pytest.raises(SystemExit, match=r"r20261024-000000-beef: .*runs/r20261024-000000-beef/out holds neither "
-                                         r"recursion_e2e\.json nor steps/.*`research fetch --all r20261024-000000-beef`"):
-        RUN.load("r20261024-000000-beef")
-    job(tmp_path / "runs" / "r20261024-000000-beef")
-    assert RUN.load("r20261024-000000-beef")["run"] == "r20261024-000000-beef"
 
 
 def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -319,12 +265,6 @@ def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, c
     assert "## r20261024-000000-cafe" in md and "Verdict: **not a whole recursive run**" in md
     assert "| outer L1 | oprove |" in md and "no run finished before the step stopped" in md
     assert "oprove ?" in md
-
-
-def test_table_refuses_another_schema(tmp_path: Path) -> None:
-    (tmp_path / "x.json").write_text(json.dumps({"schema": "proof-throughput/v1"}))
-    with pytest.raises(SystemExit, match="not recursion-e2e/v1"):
-        RUN.main(["table", str(tmp_path / "x.json")])
 
 
 def negative(o: Path, refusals: dict[str, dict[str, bool | None]]) -> None:
@@ -355,174 +295,6 @@ def test_a_flipped_coin_is_refused_when_one_statement_refuses_it_and_every_one_h
     assert ch["note"] == "refused by alg-p0; accepted by L0 (reads no flipped coin)" and ch["extra"]["why"] == ["rec: v disagrees"]
     assert q["ok"] is False and q["extra"]["no_verdict"] == ["alg-p0"]   # a statement that never judged it: not refused
     assert doc["headline"]["negative_refused"] == {"challenge": True, "query": False} and doc["headline"]["ok"] is False
-
-
-def test_headline_is_a_whole_run_only_when_every_step_ran(tmp_path: Path) -> None:
-    o = job(tmp_path)
-    assert RP.read(o)["headline"]["complete"] is False                     # no vcap: no RecCap, no V* verdict
-    (o / "steps" / "vcap" / "r1" / "out").mkdir(parents=True)
-    (o / "steps" / "vcap" / "r1" / "rc").write_text("0\n")
-    doc = RP.read(o)
-    assert doc["headline"]["complete"] is True and doc["headline"]["ok"] is False      # every step ran; alg-p0 is refused
-    assert "Verdict: one whole recursive run, **not accepted**" in RT.markdown(doc)
-    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS})
-    assert h["complete"] is True and h["parts_ok"] is True and h["ok"] is False      # its parts passed; nothing composed
-    h = RP.headline([RR.compose_row([{"composed": True, "accepted": True, "why": ""}])], {"not_ok": []},
-                    {s: ["0"] for s in RP.E2E_STEPS})
-    assert h["complete"] is True and h["parts_ok"] is True and h["ok"] is True
-    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS if s != "lean"})
-    assert h["complete"] is False and h["parts_ok"] is False and h["ok"] is False
-    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS} | {"lean": ["0", "1"]})
-    assert h["complete"] is True and h["parts_ok"] is False and h["ok"] is False
-    shutil.rmtree(o / "steps" / "oprove")
-    assert "Verdict: **not a whole recursive run**" in RT.markdown(RP.read(o))
-
-
-def whole(tmp: Path, *left: dict | str | None, modes: str = "dev") -> Path:
-    """A job's out/ of one whole run whose parts all passed (`job` with vcap and without its refused alg-p0), under oprove
-    modes ``modes``. Each of the lean step's two invocations left what ``left`` says of its composition (the last entry
-    for the rest): the step's record (a dict), its log's line alone as before that record (a str), or neither (None)."""
-    o = job(tmp)
-    (o / "params.txt").write_text((o / "params.txt").read_text().strip() + f" modes={modes}\n")
-    (o / "steps" / "vcap" / "r1" / "out").mkdir(parents=True)
-    (o / "steps" / "vcap" / "r1" / "rc").write_text("0\n")
-    shutil.rmtree(o / "steps" / "oprove" / "r1" / "out" / "oprove" / "alg-p0-dev")
-    for i, r in enumerate(sorted((o / "steps" / "lean").glob("r*"))):
-        (r / "out" / "lean" / "alg-p0.log").write_text('VERDICT {"accepted": true, "why": ""}\n')
-        c = left[min(i, len(left) - 1)]
-        if isinstance(c, dict):
-            (r / "out" / "lean" / RL.COMPOSITION).write_text(json.dumps(c))
-        elif c is not None:
-            (r / "step.log").write_text(f"lean L0: exit 0, accepted true, why ''\n{c}\nlean: 2/2 accepted\n")
-    return o
-
-
-ACCEPTED = {"composed": True, "accepted": True, "why": ""}
-NOT_ACCEPTED_RUN = "its outer proofs accepted and its recursive statement {}, so not an accepted recursive run (oprove modes {}"
-
-
-def test_a_composed_and_accepted_run_is_an_accepted_recursive_run(tmp_path: Path) -> None:
-    doc = RP.read(whole(tmp_path, ACCEPTED))
-    c = row(doc, "compose")
-    assert c["step"] == "lean" and c["ok"] is True and c["note"] == "" and c["extra"] == {"composed": True, "accepted": True}
-    h = doc["headline"]
-    assert (h["complete"], h["parts_ok"], h["composed"], h["not_composed"], h["ok"]) == (True, True, True, None, True)
-    assert h["refused"] is None and "Verdict: one whole recursive run, accepted." in RT.markdown(doc)
-
-
-def test_a_composed_and_refused_run_is_not_accepted(tmp_path: Path) -> None:
-    """Lean composed V*'s parts and refused: not accepted whatever the steps' exits (a forced retry's lean step exits 0)."""
-    why = "part 1: 2 sessions opened in the run record: a part is never retried"
-    doc = RP.read(whole(tmp_path, ACCEPTED, {"composed": True, "accepted": False, "why": why}))
-    c = row(doc, "compose")
-    assert c["ok"] is False and c["note"] == "refused: " + why and c["extra"] == {"composed": True, "accepted": False}
-    h = doc["headline"]
-    assert doc["steps"]["lean"] == ["0", "0"] and "compose" in doc["summary"]["not_ok"]
-    assert (h["complete"], h["parts_ok"], h["composed"], h["ok"], h["refused"]) == (True, False, True, False, why)
-    assert f"Verdict: one whole recursive run, **not accepted**: Lean refused its recursive statement ({why})." in RT.markdown(doc)
-
-
-RETRIED = "a forced retry of L0 (RETRY=L0): part 0: 2 sessions opened in the run record: a part is never retried"
-
-
-@pytest.mark.parametrize("left", [
-    {"composed": True, "accepted": False, "why": RETRIED},
-    ('lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
-     '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}'),
-], ids=["the step's record", "a step log from before the record"])
-def test_a_forced_retry_is_not_accepted_and_the_table_names_the_retry(tmp_path: Path, left) -> None:
-    """85's RETRY proves a part again on purpose and Lean refuses the composition for it: the lean step exits 0 and the
-    run is not an accepted recursive run, with the retry as the reason in the headline and in the table's line."""
-    doc = RP.read(whole(tmp_path, left))
-    h = doc["headline"]
-    assert doc["steps"]["lean"] == ["0", "0"] and (h["composed"], h["ok"], h["refused"]) == (True, False, RETRIED)
-    assert f"Verdict: one whole recursive run, **not accepted**: Lean refused its recursive statement ({RETRIED})." in RT.markdown(doc)
-
-
-@pytest.mark.parametrize("why", ["1 of V*'s 3 parts run", "no interactive-run record: its parts are not shown to be one run"])
-def test_a_run_not_composed_is_not_an_accepted_recursive_run(tmp_path: Path, why: str) -> None:
-    """The lean step exited 0 on its parts and composed nothing: the row has no verdict, the headline is not ``ok``, and
-    the table says the outer proofs were accepted and the recursive statement was not composed, with the modes and why."""
-    doc = RP.read(whole(tmp_path, {"composed": False, "accepted": None, "why": why}))
-    c = row(doc, "compose")
-    assert c["ok"] is None and c["note"] == "not composed: " + why and c["extra"] == {"composed": False, "accepted": None}
-    h = doc["headline"]
-    assert all(rc == "0" for v in doc["steps"].values() for rc in v) and doc["summary"]["not_ok"] == []
-    assert (h["complete"], h["parts_ok"], h["composed"], h["not_composed"], h["ok"]) == (True, True, False, c["note"], False)
-    md = RT.markdown(doc)
-    assert "Verdict: one whole run, " + NOT_ACCEPTED_RUN.format("**not composed**", "dev") + f": {why})." in md
-    assert "recursive run, accepted" not in md
-
-
-def test_one_invocation_not_composed_is_no_accepted_run(tmp_path: Path) -> None:
-    doc = RP.read(whole(tmp_path, ACCEPTED, {"composed": False, "accepted": None, "why": "1 of V*'s 3 parts run"}))
-    assert row(doc, "compose")["ok"] is None and doc["headline"]["composed"] is False and doc["headline"]["ok"] is False
-
-
-def test_a_lean_step_that_left_no_composition_is_no_accepted_run(tmp_path: Path) -> None:
-    """No record and no line of the composition (the step was not asked to compose): not recorded as composed."""
-    doc = RP.read(whole(tmp_path, ACCEPTED, None, modes="host"))
-    c = row(doc, "compose")
-    assert c["ok"] is None and c["extra"] == {"composed": None, "accepted": None}
-    assert c["note"] == "no record of the composition (rec-compose.json)"
-    h = doc["headline"]
-    assert (h["parts_ok"], h["composed"], h["not_composed"], h["ok"]) == (True, None, c["note"], False)
-    assert "Verdict: one whole run, " + NOT_ACCEPTED_RUN.format("**not recorded as composed**", "host") in RT.markdown(doc)
-
-
-def test_a_record_lean_gave_no_answer_in_is_no_accepted_run(tmp_path: Path) -> None:
-    doc = RP.read(whole(tmp_path, {"composed": True, "accepted": None, "why": "exit 2: 'usage'"}))
-    c = row(doc, "compose")
-    assert c["ok"] is None and c["note"] == "no answer: exit 2: 'usage'" and doc["headline"]["ok"] is False
-    (tmp_path / "out" / "steps" / "lean" / "r1" / "out" / "lean" / RL.COMPOSITION).write_text("{not json")
-    assert row(RP.read(tmp_path / "out"), "compose")["extra"]["composed"] is None
-
-
-@pytest.mark.parametrize("line, composed, accepted", [
-    ('lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}', True, True),
-    ('lean compose: REC-COMPOSE {"accepted": false, "why": "part 1: x", "parts": 3}  <- FAILS', True, False),
-    (('lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
-      '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}'), True, False),
-    ("lean compose: 1 of V*'s 3 parts run, so the recursive statement is not composed", False, None),
-    (("lean compose: no interactive-run record (rec-run.json), so the recursive statement is not composed: its parts are "
-      "not shown to be one run (C10 OneRun)"), False, None),
-    ("lean compose: exit 2: 'usage'  <- FAILS", True, None),
-    ('lean compose forged-top-L0: REC-COMPOSE {"accepted": false, "why": "x", "parts": 3}', None, None),
-])
-def test_a_run_from_before_the_record_is_read_from_its_step_log(tmp_path: Path, line: str, composed, accepted) -> None:
-    """A lean step from before its record left only its log's line on the honest parts, read as the record is; a
-    forgery's line is no composition of the honest parts."""
-    doc = RP.read(whole(tmp_path, line))
-    c = row(doc, "compose")
-    assert c["extra"] == {"composed": composed, "accepted": accepted} and c["ok"] is accepted
-    assert doc["headline"]["ok"] is (accepted is True)
-
-
-def test_the_record_is_read_ahead_of_the_log(tmp_path: Path) -> None:
-    o = whole(tmp_path, {"composed": False, "accepted": None, "why": "1 of V*'s 3 parts run"})
-    for r in (o / "steps" / "lean").glob("r*"):
-        (r / "step.log").write_text('lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}\n')
-    assert RP.read(o)["headline"]["composed"] is False
-
-
-def test_a_result_from_before_the_composition_is_not_printed_as_accepted(tmp_path: Path) -> None:
-    """A stored result whose headline has ``ok`` and no ``composed`` records no composition, and neither does a merge
-    of rows without the composition's."""
-    assert RT.verdict({"complete": True, "ok": True}, "host,dev") == (
-        "one whole run, " + NOT_ACCEPTED_RUN.format("**not recorded as composed**", "host,dev") + ")")
-    assert RT.verdict({"complete": True, "ok": False}, "dev") == "one whole recursive run, **not accepted** (see ok and the steps' exits)"
-    doc = RP.read(whole(tmp_path, ACCEPTED)) | {"ref": "rA"}
-    assert RP.merge([doc])["headline"]["ok"] is True
-    doc["rows"] = [r for r in doc["rows"] if r["stage"] != "compose"]
-    h = RP.merge([doc])["headline"]
-    assert (h["parts_ok"], h["composed"], h["ok"]) == (True, None, False)
-
-
-def test_release_1_without_a_report_is_not_its_parts_passing(tmp_path: Path) -> None:
-    o = whole(tmp_path, ACCEPTED)
-    (o / "params.txt").write_text((o / "params.txt").read_text() + "release=1\n")
-    h = RP.read(o)["headline"]
-    assert (h["composed"], h["parts_ok"], h["ok"]) == (True, False, False)
 
 
 def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
@@ -563,57 +335,6 @@ def test_each_statement_has_its_own_lease_from_its_firewalled_release(capsys) ->
     assert cmd[cmd.index("--mem-gb") + 1] == "200"
 
 
-def test_a_firewalled_run_is_a_plain_run_on_a_cpu_node(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--steps", "vcap", "--repeat", "1"]) == 0
-    cmd = capsys.readouterr().out.split()
-    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
-    assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-2"] and "--queue" not in head and "--gpu-host" not in head
-    assert head[head.index("--timeout") + 1] == f"{RUN.SETUP_MIN + 1}m"     # a plain run's limit is its --timeout
-    assert job[:5] == ["taskset", "-c", "0-31", "bash", "benchmarks/recursion_e2e/job.sh"]
-    assert "GPU=0" in job and f"FLOCK_WORK={RUN.CPU_WORK}" in job
-    assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-5", "--cores", "32-63", "--env", "FLOCK_WORK=/x"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert cmd[3] == "vy-nebius-cpu-5" and cmd[cmd.index("taskset") + 2] == "32-63" and cmd[-1] == "FLOCK_WORK=/x"
-    with pytest.raises(SystemExit, match="only through its slots"):
-        RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-1"])
-    with pytest.raises(SystemExit, match="has no GPU"):
-        RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-2", "--oprove-gpu", "1"])
-
-
-def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--e2e", "--cpu", "--K", "64", "--N", "16", "--modes", "dev"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert "--gpu-host" not in cmd and cmd[3] == "vy-nebius-cpu-2"
-    assert "STEPS=build,inner,vstage,vcap,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
-    assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
-
-
-def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
-    assert RUN.main(["run", "--dry-run", "--steps", "oprove"]) == 0
-    plain = capsys.readouterr().out.split()
-    assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
-    assert "RELEASE_BUDGET=1" in cmd
-    limit = {c: int(x[x.index("--timeout") + 1][:-1]) for c, x in (("plain", plain), ("release", cmd))}
-    assert limit["release"] - RUN.RELEASE_LEAD_MIN > 1.9 * limit["plain"] - 2 * RUN.SETUP_MIN
-
-
-def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypatch, capsys) -> None:
-    (tmp_path / "a.json").write_text(json.dumps(RP.read(job(tmp_path / "a")) | {"ref": "rA"}))
-    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("store ran a command"))
-    art = tmp_path / "art"
-    assert RUN.main(["store", str(tmp_path / "a.json"), "--merge", "--dir", str(art)]) == 0
-    cmd = shlex.split(capsys.readouterr().out)
-    assert cmd[:3] == ["research", "data", "put"] and cmd[cmd.index("--kind") + 1] == RUN.KIND
-    assert cmd[cmd.index("--tree") + 1] == str(art) and "--preserve" in cmd
-    assert sorted(p.name for p in art.iterdir()) == ["merged.json", "rA.json", "table.md"]
-    meta = json.loads(cmd[cmd.index("--meta") + 1])
-    assert meta["benchmark"] == "recursion_e2e" and meta["results"] == ["rA"]
-    with pytest.raises(SystemExit, match="not empty"):
-        RUN.main(["store", str(tmp_path / "a.json"), "--dir", str(art)])
-
-
 def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> None:
     o = job(tmp_path)
     (o / "params.txt").write_text("commit=abc K=4096 N=2 WARM=1 RUNS=3 REPEAT=2\n"
@@ -624,56 +345,6 @@ def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> No
     assert "V* statements 1 at a time" in RT.markdown(doc)
     assert RUN.main(["run", "--dry-run", "--oprove-gpu", "1"]) == 0
     assert "OPROVE_GPU=1" in capsys.readouterr().out.split()
-
-
-def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> None:
-    def job_env(*argv: str) -> list[str]:
-        assert RUN.main(["run", "--dry-run", *argv]) == 0
-        cmd = capsys.readouterr().out.split()
-        return cmd[cmd.index("--") + 1:]
-
-    env = job_env("--forge", "coef,sum")
-    assert "STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative" in env
-    assert "FORGE=coef,sum" in env and "FORGE_AFTER=coef" in env
-    assert "STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative" in job_env()   # no forgery, no forge-after
-    assert "FORGE=" in job_env() and not any(e.startswith("FORGE_AFTER") for e in job_env("--forge", "sum"))
-    assert "forge-after" not in " ".join(job_env("--forge", "coef", "--no-forge-after"))
-    assert "forge-after" not in " ".join(job_env("--forge", "coef", "--steps", "build,inner"))   # nothing to forge after
-    # asked for by name, it forges every kind it knows (job.sh's FORGE_AFTER default)
-    assert "STEPS=lean,forge-after" in job_env("--steps", "forge-after,lean") and "FORGE_AFTER=" in job_env("--steps", "lean,forge-after")
-    def limit(*argv: str) -> int:
-        assert RUN.main(["run", "--dry-run", *argv]) == 0
-        cmd = capsys.readouterr().out.split()
-        return int(cmd[cmd.index("--timeout") + 1][:-1])
-
-    assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.FW_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
-    # the message forgery proves alg-p1, which it leaves honest, beside alg-p0
-    alg = RUN.FW_S["alg-p0"] + RUN.FW_S["alg-p1"]
-    assert limit("--forge", "message") - limit() == pytest.approx(RUN.MARGIN * alg / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
-    assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.FW_S["L0"] + RUN.FW_S["L3"] + alg) / 60, abs=1)
-    assert all(RUN.statements(name) for v in RUN.FORGED.values() for name in v.split(","))   # each names a measured statement
-    with pytest.raises(SystemExit, match="--forge: nope"):
-        RUN.main(["run", "--dry-run", "--forge", "coef,nope"])
-    assert RUN.main(["run", "--dry-run", "--steps", "lean,forge-after", "--repeat", "1"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert cmd[cmd.index("--timeout") + 1] == f"{RUN.SETUP_MIN + RUN.OTHER_MIN['lean'] + RUN.OTHER_MIN['forge-after']}m"
-
-
-def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statement(capsys) -> None:
-    def launched(*argv: str) -> list[str]:
-        assert RUN.main(["run", "--dry-run", *argv]) == 0
-        return capsys.readouterr().out.split()
-
-    def limit(*argv: str) -> int:
-        cmd = launched(*argv)
-        return int(cmd[cmd.index("--timeout") + 1][:-1])
-
-    assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")
-    big = max(RUN.FW_S.values())
-    assert limit("--env", "REC_LINKS=1") - limit() == pytest.approx(RUN.MARGIN * 2 * big / 60, abs=1)
-    assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
-        RUN.MARGIN * 3 * big / 60, abs=1)
-    assert limit("--env", "REC_LINKS=1", "--env", "REC_LINKS=0") == limit()
 
 
 def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:
