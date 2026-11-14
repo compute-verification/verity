@@ -6,7 +6,7 @@ public import Definitions.Poub.Bandwidth.Game
 # PoUB's per-pass lemma: what an accepted pass read
 
 PoUB bounds each pass's reads by this statement, the bandwidth audit v0's game read for one pass. The game is
-`Security/Definitions/Poub/Bandwidth/Game.lean`; the proof is in `Security/Proofs/Poub/Bandwidth/`.
+`security/Definitions/Poub/Bandwidth/Game.lean`; the proof is in `security/Proofs/Poub/Bandwidth/`.
 No named assumption: the device's bounds (on-chip state `S`, side-source bits `c`, regenerations `G`, oracle queries
 `q`) define the class of devices the guarantee quantifies over, and deployment premises name, for a deployed device,
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the

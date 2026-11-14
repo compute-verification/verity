@@ -60,6 +60,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import settings
+import window_tie as WT
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
@@ -81,8 +82,6 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 K, M, CALLS, ROUNDS = 2048, 32, 3, 2
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": K, "intermediate_size": 256,
@@ -219,8 +218,7 @@ def _flipped(run) -> SimpleNamespace:
     return _window(a, {s: np.array(run.tables[TABLES.ids(s)].rows[:], np.uint16) for s in range(ROUNDS)})
 
 
-@pytest.fixture(scope="module")
-def toy() -> SimpleNamespace:
+def make_toy() -> SimpleNamespace:
     """The toy's window circuit, its honest rows from one served slot (a prompt of 32, 2 outputs) and H1's window over the
     same values."""
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=TARGET), default_seed=7)
@@ -232,6 +230,11 @@ def toy() -> SimpleNamespace:
              for row, _ in WRS.scan_slots(low, state.rows)]
     rows = WRS.Rows(low, slots, values)
     return SimpleNamespace(low=low, values=values, slots=slots, rows=rows, h1=_window(*_h1_tables(low, rows, slots[0])))
+
+
+@pytest.fixture(scope="module")
+def toy() -> SimpleNamespace:
+    return make_toy()
 
 
 @pytest.mark.slow
@@ -291,7 +294,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.h1.W))
-    mine, _doc = IF.of_records(out, SAMPLING_DESIGN, RA.catalog_resolve)
+    mine, _doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
                            leaf_layer=CS.leaf_layer(publics))
@@ -362,6 +365,15 @@ def test_the_records_accept_a_flipped_table_row_so_only_its_readers_proof_refuse
     assert CR._arow(_rounds(toy.h1), toy.h1.W["registered"], R2["registered"], _layout(), SV.PREFIX) is not None
     assert CT.reused(toy.h1, toy.h1.W, R2) is not None
     assert list(_check(written, toy, toy.h1.W, R2).codes) != []
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _no_scope():
+    """The toy's Lean checks run under no memory limit of their own (`served_cases.NO_SCOPE`), as on a development
+    host: a test's host may make no scope."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("CHECK_SCOPE", "none")
+        yield
 
 
 def _one_stage() -> SimpleNamespace:

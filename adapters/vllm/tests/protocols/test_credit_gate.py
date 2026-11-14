@@ -375,7 +375,7 @@ def test_the_int8_arm_under_h1_serves_scaled_mm_zy_and_is_credited(auditor):
     takes ``zy_rows`` back off."""
     arm = ZyArm()
     y, run = _serve(arm, remote=True, n=64)
-    assert arm.zy_rows is None and auditor.ended() is None and run.coin_source == PH.CHALLENGER
+    assert arm.zy_rows is None and auditor.ended() is None and run.coins_from == PH.CHALLENGER
     (v,) = run.verdicts.values()
     assert v["credit"] and "reason" not in v
     assert (v["kernel"], v["y_from"], v["z_from"]) == (ZY,) * 3 and v["gemms"] == [ZY]
@@ -436,7 +436,7 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
     'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
-    assert v["credit"] and run.coin_source == "in-process"
+    assert v["credit"] and run.coins_from == "in-process"
     c = run.credit()
     assert c["gate_passed"] == {"rows": 0, "macs": 0} and c["coins"] == "in-process"
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
@@ -454,7 +454,7 @@ def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing
     monkeypatch.setitem(globals(), "Challenger", named)
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()
-    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coin_source == "in-process"
+    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coins_from == "in-process"
     assert "coins-not-the-auditors" in PH.IN_PROCESS and run.credit()["refused"]["reasons"] == {PH.IN_PROCESS: 1}
 
 

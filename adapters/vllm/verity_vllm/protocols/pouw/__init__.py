@@ -179,7 +179,7 @@ class Settings:
     rows: int | None = None
     steps: int | None = None
     #: H1's admissions and rounds (`pouw_h1.H1Run.admit`): the engine's model runner (Model Runner V2, whose
-    #: ``decode_query_len`` orders a step's rows, `pouw_h1_requests.batch_order`), whose ``execute_model`` gets each step's
+    #: ``decode_query_len`` orders a step's rows, `h1_hooks.batch_order`), whose ``execute_model`` gets each step's
     #: scheduler output, the requests it admits and schedules among it; and the execution phase's round coins, a `LiveRecord` over a
     #: live challenger's round family (`verity.protocols.accounting.pouw.verifier.window.live_challenger`), which opens round s's coin
     #: after round s's root.  Pearl-C's device path ends each pass at that ``execute_model`` too
@@ -564,7 +564,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     source = H1_CHALLENGER if session is not None else "in-process"
     run = H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
                    transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
-                   admission=settings.admission or ROUND0, coin_source=source, opener=opener, served=settings.served,
+                   admission=settings.admission or ROUND0, coins_from=source, opener=opener, served=settings.served,
                    session=session.reserved["session"] if session is not None else None, graphs=settings.graphs,
                    commit_record=settings.commit_record)
     run.commits.update(weights_root=wroot.hex(), coin_source=source)

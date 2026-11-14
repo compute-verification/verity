@@ -43,7 +43,7 @@ def lean_draw(monkeypatch):
 
 
 class Coins:
-    """A coin source with a `commit`, as a remote challenger's: what it was committed to, and when it was read."""
+    """Coins with a `commit`, as a remote challenger's: what it was committed to, and when it was read."""
 
     def __init__(self, byte: int = 0x5a) -> None:
         self.byte, self.events = byte, []

@@ -63,7 +63,7 @@ and what it writes.
 | `cwrun.sh` | `cwgemm.cu` | `cwgemm_ref.py` | the same linear with the weight edit formed inside the GEMM, against the edit as a pass |
 | `cpvrun.sh` | `cpv.cu` | `cpv_ref.py` | Dither-C's P V, a unit at a time |
 | `aprun.sh` | `apv.cu` | `apv_ref.py` | the adopted P V and its V producers alone; ends with `eps_profile.py`'s and `vprod_profile.py`'s profiles |
-| `fattnrun.sh` | `fattn.cu`, with `apv.cu`, `cgemm.cu` and `cwgemm.cu` | `fattn_ref.py`, `apv_ref.py`, `cgemm_ref.py` | attention with S never stored, the four linears, and plain attention by `flash_ref.py` (torch) |
+| `benchmarks/pouw/edited_gemm_profile/fattnrun.sh` | `fattn.cu`, with `apv.cu`, `cgemm.cu` and `cwgemm.cu` | `fattn_ref.py`, `apv_ref.py`, `cgemm_ref.py` | attention with S never stored and the four linears, timed beside plain attention (`flash_ref.py` there) |
 | `d2srun.sh` | `d2sgemm.cu` | `d2sgemm_ref.py` | Dither-2S's linear, and Q Kᵀ with both operands dithered |
 | `run80.sh` | `egemm80.cu` | `egemm80_ref.py` | the edited GEMM on one A100: `egemm80.py`'s SASS gate, the bit-exact gate, the bench, and each receipted arm held for its steady clock |
 | `profile.sh` | `prof.cu` | none | where `lpgemm.cu`'s edited GEMM spends its time at o_proj: its parts, the interleaving against plain cuBLASLt, and `ncu`; `prof_summary.py` renders it |
@@ -121,5 +121,5 @@ as the int8 attention's oracle, and the ACCEL model's honest profiles under `ben
 written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The Python here touches no GPU; the job scripts do
 the rest. What measures these kernels rather than judging them is in `benchmarks/pouw/edited_gemm_profile/`:
 `eps_profile.py` and `vprod_profile.py` (a run's `ncu` sections as executed instructions by class, against the ACCEL
-model) and `flash_ref.py` (plain attention's time under torch, `fattn.cu`'s baseline), which the job scripts run from
-there, with their tests in the pouw suite.
+model), `flash_ref.py` (plain attention's time, `fattn.cu`'s baseline) and `fattnrun.sh`, the job that times `fattn.cu`
+beside it; the job scripts run them from there, and their tests are in the pouw suite.

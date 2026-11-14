@@ -125,8 +125,9 @@ width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits
 at each power of two to 2^32 − 1."""
     from types import SimpleNamespace
 
-    from verity.protocols.accounting.certifier.verifier import served_rows as SR
-    from verity.protocols.accounting.certifier.prover import compile_slice_v7 as V7, window_charge as WC
+    from verity_vllm.compiler import served_rows as SR
+    from verity_vllm.compiler import compile_slice_v7 as V7
+    from verity.protocols.accounting.certifier.prover import window_charge as WC
     from verity_vllm.pipeline.advice_code.arith import width
 
     book = next(s for s in json.loads(ARITH.read_text())["streams"]

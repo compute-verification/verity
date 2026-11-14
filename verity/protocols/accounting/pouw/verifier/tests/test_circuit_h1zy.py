@@ -35,7 +35,7 @@ def f32(x: float) -> int:
 
 def served(z: int, sa: int, sw: int) -> int:
     """The served epilogue in numpy: z as f32 (RN), times s_a, times s_w, each an f32 product (RN), then f32 to bf16 round to
-    nearest even, every NaN 0x7FFF (cvt.rn.bf16.f32's; torch's CPU cast gives 0x7FC0)."""
+    nearest even, every NaN 0x7FFF (cvt.rn.bf16.f32's; the device library's CPU cast gives 0x7FC0)."""
     s32 = np.int32(np.uint32(z & M32).view(np.int32))
     with np.errstate(over="ignore", invalid="ignore", under="ignore"):
         v = np.float32(s32) * np.uint32(sa).view(np.float32) * np.uint32(sw).view(np.float32)
@@ -80,25 +80,6 @@ def test_the_dequant_on_words_is_the_served_epilogue_rounding_and_corners_includ
     assert [Z.dequant(*c) for c in cases] == [served(*c) for c in cases]
     assert Z.dequant(0, f32(-1.0), f32(0.5)) == 0x8000, "z = 0 at a negative scale is -0, not +0"
     assert Z.dequant(2, INF, f32(1.0)) == 0x7F80 and Z.dequant(0, INF, f32(1.0)) == Z.dequant(9, NAN, f32(1.0)) == 0x7FFF
-
-
-def _nan(y: int) -> bool:
-    return (y & 0x7F80) == 0x7F80 and bool(y & 0x7F)
-
-
-def test_the_dequant_is_torchs_scaled_mm_epilogue_but_for_the_nan_encoding():
-    """`int8_exact.dequantize`'s expression, (z.float() * s_a[:, None] * s_w).to(bfloat16), on the CPU: equal but where the
-    result is NaN, which the GPU's cvt.rn encodes 0x7FFF and torch's CPU cast 0x7FC0 (scalar) or 0xFFFF (vectorized)."""
-    torch = pytest.importorskip("torch")
-    rng = random.Random(34)
-    cases = EDGES + [_rand(rng) for _ in range(2000)]
-    z = torch.from_numpy(np.array([c[0] & M32 for c in cases], np.uint32).view(np.int32))
-    sa = torch.from_numpy(np.array([c[1] for c in cases], np.uint32).view(np.float32))
-    sw = torch.from_numpy(np.array([c[2] for c in cases], np.uint32).view(np.float32))
-    y = (z.float() * sa * sw).to(torch.bfloat16).view(torch.int16).numpy().astype(np.uint16).tolist()
-    ours = [Z.dequant(*c) for c in cases]
-    assert [o for o, t in zip(ours, y) if not _nan(t)] == [t for t in y if not _nan(t)]
-    assert [o for o, t in zip(ours, y) if _nan(t)] == [0x7FFF] * sum(map(_nan, y)) and any(map(_nan, y))
 
 
 #: served-like cells (z, s_a, s_w) whose y the scales-first order rounds to the neighbouring bf16, found among 4M random

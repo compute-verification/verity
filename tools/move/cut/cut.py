@@ -24,7 +24,8 @@ the cut can't redirect, ``x.NAME`` of a module a function hands back (``x = f()`
 longer holds the name and noted where it holds it only because it reads it itself.
 
 The script edits ROOT's working tree and commits nothing. It refuses, changing nothing and naming the fix, where a
-name of the table is not a top-level definition of its file, where two definitions of one name meet in a module, where
+Python file it reads doesn't parse, before the cut or as the cut leaves it, where a name of the table is not a top-level
+definition of its file, where two definitions of one name meet in a module, where
 a moved definition reads one that stays, where a module under ``verity/`` would import a file of ``bare``, where an
 edit does not match once, where a file still names the path of one that moves whole, where a ``pyproject.toml``
 names a file by its path and not the new file it comes to import, and where a moved definition is named by a string
@@ -270,11 +271,13 @@ _files: dict[str, File | None] = {}
 
 
 def file(rel: str) -> File | None:
-    """The tree's file `rel` as it was before the cut, or None where it doesn't parse."""
+    """The tree's file `rel` as it was before the cut, or None where it doesn't parse, which the cut refuses."""
     if rel not in _files:
         try:
             _files[rel] = File(rel, TEXT[rel])
-        except SyntaxError:
+        except SyntaxError as e:
+            problems.append(f"{rel}:{e.lineno}: doesn't parse ({e.msg}), so the cut can't see what it reads or redirect it: "
+                            "fix it first")
             _files[rel] = None
     return _files[rel]
 
@@ -861,7 +864,9 @@ for rel in sorted(READERS):
         continue
     try:
         f = File(rel, text)
-    except SyntaxError:
+    except SyntaxError as e:
+        problems.append(f"{rel}:{e.lineno}: doesn't parse as the cut leaves it ({e.msg}): write the line it should be "
+                        "in an `edits` row of the table")
         continue
     toks = code_tokens(text)
     import_lines = {ln for x, _ in f.imports for ln in range(x.lineno, x.end_lineno + 1)}
@@ -912,12 +917,12 @@ LISTS = "tests/lint/allowlists/"  # the counted lints' rows, which `allow.py` mo
 
 
 def text_after(rel: str) -> str | None:
-    """A tracked file's text as the cut leaves it."""
+    """A tracked file's text as the cut leaves it, or None for one that isn't UTF-8 text: `git grep -l` lists binaries too."""
     if rel in CHANGED or rel in TEXT:
         return CHANGED.get(rel, TEXT.get(rel))
     try:
-        return (ROOT / rel).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        return (ROOT / rel).read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
         return None
 
 
@@ -1083,10 +1088,7 @@ MADE = set(new_modules) | set(WHOLE.values())
 
 def imported_files(rel: str, text: str, held: set[str]) -> set[str]:
     """The files of `held` that the module `rel` imports directly, by any import its text has."""
-    try:
-        tree = ast.parse(text, filename=rel)
-    except SyntaxError:
-        return set()
+    tree = ast.parse(text, filename=rel)
     out = set()
     for stmt in ast.walk(tree):
         if isinstance(stmt, ast.Import):

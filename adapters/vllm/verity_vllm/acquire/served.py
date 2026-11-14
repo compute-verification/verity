@@ -53,8 +53,6 @@ import re
 from typing import Any
 
 import numpy as np
-from verity_vllm.definitions.registry import b1, cublas_bf16, cublas_gemv
-from verity_vllm.definitions.registry import inductor as IR
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
@@ -63,6 +61,8 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
+from verity_vllm.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity_vllm.definitions.registry import inductor as IR
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.query.manifest.bind import split_name
 from verity_vllm.query.manifest.format import SCHEMA, SERVED_FAMILY, manifest_digest

@@ -19,7 +19,7 @@ without them the host paths run. Every other name loads its module when first re
 To manage a window: `in_process_coins` (coins held in this process, which credit nothing), `reserve_salt` and `gate_of`
 (a salt session at infra's gate), `PearlCKernel` (Pearl-C's kernel, loaded), `ready_verifier` (the Lean verifier's
 executable, built), and `served_passes`, `coins_of` and `SERVED_SCHEMA` (what a served Pearl-C window records). A
-workload's own GPU commitments build on the row-table kernels: `RowTableLibrary`, `row_table_host_lib`, `hm_tables`,
+workload's own GPU commitments build on the row-table kernels: `row_table_host_lib`, `row_table_nvcc`, `hm_tables`,
 `leaf_prefixes` and the other ``row_table``/``ROW_TABLE`` names. The rest of `__all__` names the runs, their schemes and
 settings."""
 from __future__ import annotations
@@ -85,7 +85,6 @@ _LAZY = {
     "Served": (f"{_SERVING}.h1.served", "Served"),
     "Shape": (f"{_POUW}.verifier.protocol", "Shape"),
     "Workload": (f"{_POUW}.verifier.audit", "Workload"),
-    "batch_order": (f"{_SERVING}.h1.requests", "batch_order"),
     "challenger_address": (f"{_SERVING}.h1.challenger", "address"),
     "closed_on_error": (f"{_SERVING}.h1.window", "closed_on_error"),
     "commit_committed": (f"{_SERVING}.h1.commit", "committed"),
@@ -99,7 +98,6 @@ _LAZY = {
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
     "live_epoch_reason": (f"{_POUW}.verifier.window", "live_epoch_reason"),
     "ncp_scheme": (f"{_PROVER}.schemes", "get"),
-    "new_requests": (f"{_SERVING}.h1.requests", "new_requests"),
     "numpy_of": (f"{_SERVING}.h1", "numpy_of"),
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
     "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "new_salt_key"),
@@ -138,8 +136,8 @@ _LAZY = {
     "declared_layout": (f"{_SERVING}.h1.served", "declared_layout"),
     "descriptor": (f"{_SERVING}.h1.served", "descriptor"),
     "draw_k": (f"{_SERVING}.h1.challenger", "draw_k"),
-    "drawn_reads": (f"{_SERVING}.h1.serve_draw", "drawn_reads"),
-    "drawn_units": (f"{_SERVING}.h1.serve_draw", "drawn_units"),
+    "drawn_reads": (f"{_SERVING}.h1.serve_sample", "drawn_reads"),
+    "drawn_units": (f"{_SERVING}.h1.serve_sample", "drawn_units"),
     "dump_live": (f"{_SERVING}.h1.live", "dump"),
     "h1_units": (f"{_SERVING}.h1", "units"),
     "kept_bytes": (f"{_SERVING}.h1.prover", "kept_bytes"),
@@ -155,17 +153,15 @@ _LAZY = {
     "session_of": (f"{_SERVING}.h1.challenger", "session_of"),
     "unit_of": (f"{_SERVING}.h1.served", "unit_of"),
     "weights_of": (f"{_SERVING}.h1.served", "weights_of"),
-    "window_units": (f"{_SERVING}.h1.serve_draw", "units"),
+    "window_units": (f"{_SERVING}.h1.serve_sample", "units"),
     "write_program": (f"{_SERVING}.h1.served", "write_program"),
     "y_value": (f"{_SERVING}.pearl_c.window", "y_value"),
     "RowTableArgs": (f"{_SERVING}.row_table_kernels", "Args"),
-    "RowTableLibrary": (f"{_SERVING}.row_table_kernels", "DeviceLibrary"),
     "ROW_TABLE_CUDA_DIR": (f"{_SERVING}.row_table_kernels", "CUDA_DIR"),
     "ROW_TABLE_SEG_BYTES": (f"{_SERVING}.row_table_kernels", "SEG_BYTES"),
     "ROW_TABLE_TAB_WORDS": (f"{_SERVING}.row_table_kernels", "TAB_WORDS"),
     "row_table_host_lib": (f"{_SERVING}.row_table_kernels", "host_lib"),
     "row_table_nvcc": (f"{_SERVING}.row_table_kernels", "nvcc"),
-    "row_table_side_stream": (f"{_SERVING}.row_table_kernels", "side_stream"),
     "hm_tables": (f"{_SERVING}.row_table_kernels", "hm_tables"),
     "leaf_prefixes": (f"{_SERVING}.row_table_kernels", "leaf_prefixes"),
     "table_width": (f"{_SERVING}.row_table_kernels", "table_width"),

@@ -60,7 +60,7 @@ case "${JOB:-tests}" in
     [ "${COMMIT:-1}" = 0 ] && commit=
     cd adapters/vllm
     # shellcheck disable=SC2086
-    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served $commit --receipts "$so" $j10r \
+    "$PY" ../../benchmarks/pouw/served_h1/h1_gpu.py --workload fill --served $commit --receipts "$so" $j10r \
       --declare "${DECLARE:-32,3,32,4}" ${WINDOW_ARGS:-} --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
       | tee "$OUT/window.log"
     exit "${PIPESTATUS[0]}" ;;

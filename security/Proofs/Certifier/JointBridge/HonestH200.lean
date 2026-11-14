@@ -6,7 +6,7 @@ public import Mathlib.RingTheory.WittVector.IsPoly
 public import Mathlib.Tactic.Polynomial.Basic
 public import Mathlib.Tactic.ReduceModChar
 public import Proofs.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
-public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.MonitoringPeriod.Honest
 public import Proofs.Pouw.Prob
 import Definitions.Pouw.TS
 import Definitions.Claims
@@ -62,11 +62,11 @@ import Proofs.Pouw.TS.Stages
 import Proofs.Poub.Tag.Basic
 import Proofs.Poub.Tag.LittlewoodOfford
 import Proofs.Poub.Tag.Signs
-import Proofs.Pouw.Period
-import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.MonitoringPeriod
+import Proofs.Pouw.MonitoringPeriod.Sort
 import Proofs.Pouw.Receipt
 import Proofs.Properties.Pouw.Check
-import Proofs.Properties.Pouw.Draw
+import Proofs.Properties.Pouw.Sample
 import Proofs.Properties.Pouw.Grid
 import Proofs.Properties.Poub.Remote.Sort
 import Spot.Record
@@ -75,7 +75,7 @@ import Spot.Record
 # `WorkOfH1CheckedCreditMonitoringPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
 
 The positive twin of `Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriodH200`, and of `WorkOfCreditedWords`
-at its instance: `Properties.Pouw.Period.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` executionPhases, 128 words
+at its instance: `Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` executionPhases, 128 words
 live and fixed a window, run by a device that spends `512` INT8 tensor-core multiply-adds on each word and outsources
 no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `2048` multiply-adds a unit and
 `b_unit = 1024`, with the work certificate the whole priced credit, `W = 512·credit` (`meets`, `h200_sound`,
@@ -84,8 +84,8 @@ no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `
 * The period (`honestRun`): one coin coordinate, PoUW's, which is H1's paths; one account; the empty circuit; a window
   of one tick, in which the compute account runs `512·128·n` tensor-core multiply-adds and nothing else, the device's
   whole rate (`device`). PoUW's verdict is the deployed check's (`checkedAccepts`): the compiled PoUW check,
-  `PouwCheck.protocol.check` (`verity/core/protocols/pouw/lean/check`, held to the Python verifier by its difftest),
-  accepts every window of the period, as `Properties.Pouw.Period.Accepts` reads it. The period's play
+  `PouwCheck.protocol.check` (`verity/protocols/accounting/pouw/verifier/lean/check`, held to the Python verifier by its difftest),
+  accepts every window of the period, as `Properties.Pouw.MonitoringPeriod.Accepts` reads it. The period's play
   (`checkedPlay`) is H1's honest play with that acceptance, so PoUW's verdict on the run is the play's at the run's
   coin by definition. No other subprotocol runs in the period, so none accepts. The network certifier's claim at
   `K` is that the bits it saw the node move, none in this period, are within `K`.
@@ -104,7 +104,7 @@ there at any error below one (`WorkOfH1CheckedCreditMonitoringPeriodH200_nontriv
 
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -269,7 +269,7 @@ theorem helpWithin (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
 /-- **The honest period on the H200 meets every hypothesis of `WorkOfH1CheckedCreditMonitoringPeriodH200`**, in its order, at
 any SHA-512 and fetch price, `n ≥ 1` executionPhases and `δ_s > 0`, with `δ_bind = δ_ks = 0`, and the deployed check accepts
 the period on every path: the realization at the deployed check's verdict, the two bridge premises, and
-`HonestH1.h1_meets`'s premises of `H1CheckedCreditPeriod` at the checked play. -/
+`HonestH1.h1_meets`'s premises of `H1CheckedCreditMonitoringPeriod` at the checked play. -/
 theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     Nonempty (Accounting.RealizesCreditedWords (honestRun n) (cert n δs) (Accounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
@@ -347,7 +347,7 @@ end Accounting.SecurityProofs.Bridge.HonestH200
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 open HonestH200

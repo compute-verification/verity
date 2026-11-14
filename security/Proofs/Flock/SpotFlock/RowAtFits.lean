@@ -1,6 +1,7 @@
 module
 
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 
 /-!
 # The bisection finds a unit's run

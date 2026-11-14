@@ -74,7 +74,7 @@ form, bits and efficiency are the compiled sampled verifier's at the deployed re
   of the descriptor is total (Flock's verifier has no `partial` def); what remains is its map from each word gate to
   that word gate's bit gates in `prog`, under which its `Q_word` evaluation is `partition`.
 * `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
-  port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
+  port of `verity.circuits.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
   gates compute `PrivateCircuit.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
 * `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); at the deployed record,

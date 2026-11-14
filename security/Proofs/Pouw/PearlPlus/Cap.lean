@@ -1,22 +1,22 @@
 module
 
-public import Proofs.Pouw.PearlPlus.Draw
-public import Proofs.Pouw.PearlPlus.Debit
-public import Proofs.Pouw.PearlC.Cap.SaltDead
+public import Proofs.Pouw.PearlPlus.Sample
+public import Proofs.Pouw.PearlPlus.InertWork
+public import Proofs.Pouw.PearlC.InertBound.SaltDead
 public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, part (c): a passed tile is within the game's inert-work bound
 
-The bound the game reads is `TileGood`'s first conjunct, `capOK` of `pearlCTilesDevRev1 devH100` at the deployed
-semantics and `ρ = 1/400`: the tile's replayed inert work (`tileDebitRev1`: its flagged atom-words, its later promotions
+The bound the game reads is `TileGood`'s first conjunct, `inertBoundOK` of `pearlCTilesDevRev1 devH100` at the deployed
+semantics and `ρ = 1/400`: the tile's replayed inert work (`tileInertWorkRev1`: its flagged atom-words, its later promotions
 into a +0 total, its forming and its words' mends) on its rows that pass the rules and all its columns is at most
-`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Draw` puts a sampled tile with good words in
-`goodDeclTiles` within the bound and in `overCapTiles` over it. The credit does: the tolerant audit's deduction grows
-with the samples on `overCapTiles`, and a passed tile within the bound keeps those to the samples the check finds over
+`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Sample` puts a sampled tile with good words in
+`goodDeclTiles` within the bound and in `overInertBoundTiles` over it. The credit does: the tolerant audit's deduction grows
+with the samples on `overInertBoundTiles`, and a passed tile within the bound keeps those to the samples the check finds over
 its own bound.
 
-The check's bound (`Rule.capCheck`, as `TileKeepsTheCap` states it) is on the record's credited rows and columns under
+The check's bound (`Rule.inertBoundCheck`, as `TileKeepsTheInertBound` states it) is on the record's credited rows and columns under
 the band rule (`UnitRecord.credited`: a real row neither excluded nor in a 64-row band with a voluntary A row, and a
 column whose 64-column block holds no excluded or voluntary B row). It counts `n` times each credited word's replayed
 inert work and mends (`Rule.wordMend`) and `64·|cc|` per forming element of a credited row (`Rule.rowElements`). A tile
@@ -24,7 +24,7 @@ that keeps a row and a column carries a ticket (`CarriesATicket`). Such a tile h
 voluntary column, its filler rows are zero and fail the rules, and its excluded rows fail them, so the check's credited
 rows are the tile's `passRows` and its credited columns all its columns.
 
-* `tilePassGivesTheCap`: a passed tile that carries a ticket is within the bound. The check's inert work per word is
+* `tilePassGivesTheInertBound`: a passed tile that carries a ticket is within the bound. The check's inert work per word is
   the game's chain (`wordFlagsIsTheReplay`, `codes_eq`) on rows that pass the rules exactly when the game's do
   (`RowsAreTheRules`).
   The check's element count covers the game's forming elements (`formingElems_le`, `row_forming`): an element the game
@@ -32,9 +32,9 @@ rows are the tile's `passRows` and its credited columns all its columns.
   `saltDead_of_ends`), and an element whose block every column's word flags the check counts by those flags. The
   check's mends cover the game's (`MendSim.wordMend_le`, `MendSim.row_ends`): its end codes are the game's `endRow`
   (`endCodes_eq`), and its cut flags on them the game's `chainCuts` (`MendSim.wordCuts_eq`). The forming and the mends
-  are the rest of the game's inert work (`tileDebitRev1_split`), and the check's credit per credited row,
+  are the rest of the game's inert work (`tileInertWorkRev1_split`), and the check's credit per credited row,
   `creditOf(1, kKept, n)`, is at most `creditDevRev1`'s (`credit_le`), with equality at `kKept = k`.
-* `tilePassGivesTheChainCap`: the chain's part of the game's inert work (`tileChainDebit`) is within the bound.
+* `tilePassGivesTheChainInertBound`: the chain's part of the game's inert work (`tileChainInertWork`) is within the bound.
 -/
 
 @[expose] public section
@@ -49,14 +49,14 @@ def CarriesATicket (p : Pass) (tid : ℕ) : Prop :=
     (p.records[pos]!.credited rows cols).1 ≠ [] ∧ (p.records[pos]!.credited rows cols).2 ≠ []
 
 open Classical in
-/-- The chain's part of `tileDebitRev1`: `debitDev` of the tile's flagged atom-words, and its words' later promotions
+/-- The chain's part of `tileInertWorkRev1`: `inertWorkDev` of the tile's flagged atom-words, and its words' later promotions
 into a +0 total at the add price. -/
-noncomputable def tileChainDebit {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
+noncomputable def tileChainInertWork {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let AB := sem.unitChain H s U u act
   let fl := d.flags AB.1 AB.2
-  debitDev d ⟨∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
+  inertWorkDev d ⟨∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
       ((range (sh.k / 32)).filter fun t => fl e.1 e.2 t = true).card, 0⟩ +
     d.prices.add * ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
       (laterZeroPromos d AB.1 AB.2 e.1 e.2 : ℚ)
@@ -73,14 +73,14 @@ noncomputable def formingElems {Q R S : Type} (sem : PearlCSem Q R S) (d : Pearl
     (d.saltDead sem.alpha sem.beta sh.k (X e.1) e.2 ∨
       ∀ j : Fin sh.n, (j : ℕ) ∈ cols → fl e.1 j ((e.2 : ℕ) / 32) = true)).card
 
-/-- The forming part of `tileDebitRev1`: `fs` per forming element, at the tile's share of the columns. -/
-noncomputable def tileFormingDebit {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
+/-- The forming part of `tileInertWorkRev1`: `fs` per forming element, at the tile's share of the columns. -/
+noncomputable def tileFormingInertWork {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   (d.prices.costs.fs : ℚ) * (cols.card / (U.layout.shape u).n) * formingElems sem d H s U u rows cols act
 
 open Classical in
-/-- The mend part of `tileDebitRev1`: its words' `wordMend` at one MAC each. -/
-noncomputable def tileMendDebit {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (U : Pouw.PearlC.Workload)
+/-- The mend part of `tileInertWorkRev1`: its words' `wordMend` at one MAC each. -/
+noncomputable def tileMendInertWork {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (U : Pouw.PearlC.Workload)
     (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
@@ -88,17 +88,17 @@ noncomputable def tileMendDebit {Q R S : Type} (sem : PearlCSem Q R S) (d : Pear
       (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) e.2) : ℚ)
 
 /-- A tile's replayed inert work is its chain's, its forming's and its mends'. -/
-theorem tileDebitRev1_split {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
+theorem tileInertWorkRev1_split {Q R S : Type} (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) :
-    sem.tileDebitRev1 d H s U u rows cols act =
-      tileChainDebit sem d H s U u rows cols act + tileFormingDebit sem d H s U u rows cols act +
-        tileMendDebit sem d U u rows cols act := by
-  unfold PearlCSem.tileDebitRev1 PearlCSem.tileDebitDev tileChainDebit tileFormingDebit formingElems tileMendDebit
+    sem.tileInertWorkRev1 d H s U u rows cols act =
+      tileChainInertWork sem d H s U u rows cols act + tileFormingInertWork sem d H s U u rows cols act +
+        tileMendInertWork sem d U u rows cols act := by
+  unfold PearlCSem.tileInertWorkRev1 PearlCSem.tileInertWorkDev tileChainInertWork tileFormingInertWork formingElems tileMendInertWork
   exact congrArg (· + _) (add_right_comm _ _ _)
 
-/-- **(c) A passed tile's chain is within the inert-work bound**: a tile as in `TilePassGivesTheCap` has the chain's
-part of its replayed inert work (`tileChainDebit`) within the game's bound at `ρ = 1/400`. -/
-def TilePassGivesTheChainCap : Prop :=
+/-- **(c) A passed tile's chain is within the inert-work bound**: a tile as in `TilePassGivesTheInertBound` has the chain's
+part of its replayed inert work (`tileChainInertWork`) within the game's bound at `ρ = 1/400`. -/
+def TilePassGivesTheChainInertBound : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
@@ -114,14 +114,14 @@ def TilePassGivesTheChainCap : Prop :=
       let tl := auditTiling 64 64 U.layout
       let sh := U.layout.shape (tl.unit g)
       let P := (semH3 saltOf rootOf : PearlCSem Q R S).passRows sh c.act (tl.rows g)
-      tileChainDebit (semH3 saltOf rootOf) devH100 H s U (tl.unit g) P (tl.cols g) c.act ≤
+      tileChainInertWork (semH3 saltOf rootOf) devH100 H s U (tl.unit g) P (tl.cols g) c.act ≤
         1 / 400 * creditDevRev1 devH100 sh * tileShare sh P (tl.cols g)
 
 /-- **(c) A passed tile is within the inert-work bound**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
 under the semantics' salt and fixed operand's root, whose fixed-operand rows all pass the rules (`TileGood`'s second conjunct, as (d)
 takes it), whose openings are its unit's commitment `c`, that carries a ticket under the band rule, and that
 `checkTile` passes on its fixed operand's noise, has its replayed inert work within the game's bound at `ρ = 1/400`. -/
-def TilePassGivesTheCap : Prop :=
+def TilePassGivesTheInertBound : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
@@ -134,7 +134,7 @@ def TilePassGivesTheCap : Prop :=
         (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c → CarriesATicket p tid →
     checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass →
-      (tilesH3 saltOf rootOf (1 / 400) : Pouw.PearlC.TileRules Q R S).capOK H s U g c.act
+      (tilesH3 saltOf rootOf (1 / 400) : Pouw.PearlC.TileRules Q R S).inertBoundOK H s U g c.act
 
 end Pouw.PearlPlus.Bridge
 
@@ -146,14 +146,14 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset
 
 theorem tile_nodup {p : Pass} {tid pos : ℕ} {rows cols : List ℕ} (h : p.tile? tid = some (pos, rows, cols)) :
     rows.Nodup ∧ cols.Nodup := by
-  obtain ⟨hp, x, hx, -, hg⟩ := Draw.tile?_some h
-  have h1 : (Draw.grid p.scheme p.records[pos])[x]? = some (rows, cols) := by
-    rw [List.getElem?_eq_getElem hx, ← getElem!_pos (Draw.grid p.scheme p.records[pos]) x hx, hg]
-  rw [Draw.grid, Draw.tiles_getElem?] at h1
+  obtain ⟨hp, x, hx, -, hg⟩ := Sample.tile?_some h
+  have h1 : (Sample.grid p.scheme p.records[pos])[x]? = some (rows, cols) := by
+    rw [List.getElem?_eq_getElem hx, ← getElem!_pos (Sample.grid p.scheme p.records[pos]) x hx, hg]
+  rw [Sample.grid, Sample.tiles_getElem?] at h1
   split at h1
   · simp only [Option.some.injEq, Prod.mk.injEq] at h1
     obtain ⟨rfl, rfl⟩ := h1
-    exact ⟨Draw.block_nodup _ _ _, Draw.block_nodup _ _ _⟩
+    exact ⟨Sample.block_nodup _ _ _, Sample.block_nodup _ _ _⟩
   · cases h1
 
 theorem rows_band {L : Pouw.PearlC.Layout} {g i i' : ℕ} (hi : i ∈ (auditTiling 64 64 L).rows g)
@@ -207,7 +207,7 @@ theorem rowsFailure_filler {r : UnitRecord} {rows cols : List ℕ} {ops : Words.
   dsimp only [Id.run, bind, pure] at h
   split at h
   · rename_i r' heq
-    have hs := Draw.forIn_some ?_ heq
+    have hs := Sample.forIn_some ?_ heq
     · obtain ⟨m, rfl⟩ := hs
       cases h
     · intro a
@@ -215,7 +215,7 @@ theorem rowsFailure_filler {r : UnitRecord} {rows cols : List ℕ} {ops : Words.
       repeat' split
       all_goals first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩
   · rename_i heq
-    have hall := Draw.forIn_none _ _ ?_ heq
+    have hall := Sample.forIn_none _ _ ?_ heq
     rotate_left
     · intro a
       try dsimp only
@@ -240,7 +240,7 @@ theorem rowsFailure_excluded {r : UnitRecord} {rows cols : List ℕ} {ops : Word
   dsimp only [Id.run, bind, pure] at h
   split at h
   · rename_i r' heq
-    have hs := Draw.forIn_some ?_ heq
+    have hs := Sample.forIn_some ?_ heq
     · obtain ⟨m, rfl⟩ := hs
       cases h
     · intro a
@@ -248,7 +248,7 @@ theorem rowsFailure_excluded {r : UnitRecord} {rows cols : List ℕ} {ops : Word
       repeat' split
       all_goals first | exact Or.inl rfl | exact Or.inr ⟨_, rfl⟩
   · rename_i heq
-    have hall := Draw.forIn_none _ _ ?_ heq
+    have hall := Sample.forIn_none _ _ ?_ heq
     rotate_left
     · intro a
       try dsimp only
@@ -273,9 +273,9 @@ theorem rowsFailure_excluded {r : UnitRecord} {rows cols : List ℕ} {ops : Word
 
 /-- A tile whose rows keep the rules and that is within the check's bound passes `check_opened`. -/
 theorem checkOpened_none {s : Scheme} {r : UnitRecord} {rows cols : List ℕ} {ops : Words.Ops}
-    (hr : Rule.rowsFailure r rows cols ops = none) (hc : Rule.capCheck s r rows cols ops = .ok none) :
+    (hr : Rule.rowsFailure r rows cols ops = none) (hc : Rule.inertBoundCheck s r rows cols ops = .ok none) :
     Rule.checkOpened s r rows cols ops = none := by
-  simp only [Rule.checkOpened, Rule.capFailure, hr, hc, Option.orElse_none]
+  simp only [Rule.checkOpened, Rule.inertBoundFailure, hr, hc, Option.orElse_none]
 
 theorem zero_of_any {x : Array ℕ} (h : (x.any fun w => w != 0) = false) (l : ℕ) : x[l]! = 0 := by
   by_cases hl : l < x.size
@@ -303,7 +303,7 @@ theorem formV1_stats {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h 
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   rw [← Array.forIn_toList] at hr
-  have := Draw.forIn_inv_idx (fun n (o : Words.Formed) => o.x.size = n ∧ o.rho.size = n ∧ o.alpha.size = n ∧
+  have := Sample.forIn_inv_idx (fun n (o : Words.Formed) => o.x.size = n ∧ o.rho.size = n ∧ o.alpha.size = n ∧
       o.beta.size = n ∧ ∀ j < n, o.x[j]! = (rows.zip eRows).toList[j]!.1 ∧
         ∃ s, Words.s5Stats o.x[j]! = .ok (s, o.rho[j]!, o.alpha[j]!, o.beta[j]!)) _ _ 0 _ _
     ⟨rfl, rfl, rfl, rfl, fun j hj => absurd hj (Nat.not_lt_zero _)⟩ ?_ hr
@@ -326,13 +326,13 @@ theorem formV1_stats {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h 
     refine ⟨_, rfl, by simp [hx], by simp [hrho], by simp [halpha], by simp [hbeta], fun j hj => ?_⟩
     simp only [Nat.zero_add] at hx hrho halpha hbeta hall hj ha ⊢
     rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | hj
-    · rw [Draw.push_get!_lt _ _ (by omega), Draw.push_get!_lt _ _ (by omega), Draw.push_get!_lt _ _ (by omega),
-        Draw.push_get!_lt _ _ (by omega)]
+    · rw [Sample.push_get!_lt _ _ (by omega), Sample.push_get!_lt _ _ (by omega), Sample.push_get!_lt _ _ (by omega),
+        Sample.push_get!_lt _ _ (by omega)]
       exact hall j hj
-    · have g1 : (s.x.push x)[j]! = x := by rw [hj, ← hx]; exact Draw.push_get!_eq _ _
-      have g2 : (s.rho.push rho)[j]! = rho := by rw [hj, ← hrho]; exact Draw.push_get!_eq _ _
-      have g3 : (s.alpha.push alpha)[j]! = alpha := by rw [hj, ← halpha]; exact Draw.push_get!_eq _ _
-      have g4 : (s.beta.push beta)[j]! = beta := by rw [hj, ← hbeta]; exact Draw.push_get!_eq _ _
+    · have g1 : (s.x.push x)[j]! = x := by rw [hj, ← hx]; exact Sample.push_get!_eq _ _
+      have g2 : (s.rho.push rho)[j]! = rho := by rw [hj, ← hrho]; exact Sample.push_get!_eq _ _
+      have g3 : (s.alpha.push alpha)[j]! = alpha := by rw [hj, ← halpha]; exact Sample.push_get!_eq _ _
+      have g4 : (s.beta.push beta)[j]! = beta := by rw [hj, ← hbeta]; exact Sample.push_get!_eq _ _
       rw [g1, g2, g3, g4]
       refine ⟨?_, fst, hst⟩
       rw [List.getElem!_eq_getElem?_getD, hj, ha]
@@ -459,14 +459,14 @@ theorem foldl_map_eq {α : Type} (f : α → ℕ) : ∀ (L : List α) (a : ℕ),
   | [], a => by simp
   | b :: L, a => by rw [List.foldl_cons, foldl_map_eq f L, List.map_cons, List.sum_cons, Nat.add_assoc]
 
-theorem debitUnits_eq (n c a z e : ℕ) : Rule.debitUnits n c a z e = n * (40 * a + 32 * z) + 64 * c * e := by
+theorem inertWorkUnits_eq (n c a z e : ℕ) : Rule.inertWorkUnits n c a z e = n * (40 * a + 32 * z) + 64 * c * e := by
   show n * ((32 + 32 / 4) * a + 32 * z) + 64 * c * e = _
   norm_num
 
-/-- The check's inert work on a tile, summed as `TileKeepsTheCap` sums it, is `n` times its words' `40·F + 32·Z` and
+/-- The check's inert work on a tile, summed as `TileKeepsTheInertBound` sums it, is `n` times its words' `40·F + 32·Z` and
 `64·|cc|` per element. -/
-theorem rowDebit_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ) (h : ws.length = es.length) :
-    ((ws.zip es).map fun (we : List (Array Bool × ℕ) × ℕ) => Rule.debitUnits n c
+theorem rowInertWork_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ) (h : ws.length = es.length) :
+    ((ws.zip es).map fun (we : List (Array Bool × ℕ) × ℕ) => Rule.inertWorkUnits n c
       (we.1.foldl (fun t w => t + (w.1.filter id).size) 0) (we.1.foldl (fun t w => t + w.2) 0) we.2).foldl
         (· + ·) 0 =
       n * (ws.map fun w => 40 * (w.map fun v => (v.1.filter id).size).sum + 32 * (w.map fun v => v.2).sum).sum +
@@ -482,16 +482,16 @@ theorem rowDebit_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : Li
     | nil => simp at h
     | cons e es =>
       simp only [List.zip_cons_cons, List.map_cons, List.sum_cons]
-      rw [ih es (by simpa using h), debitUnits_eq, foldl_map_eq (fun v : Array Bool × ℕ => (v.1.filter id).size),
+      rw [ih es (by simpa using h), inertWorkUnits_eq, foldl_map_eq (fun v : Array Bool × ℕ => (v.1.filter id).size),
         foldl_map_eq (fun v : Array Bool × ℕ => v.2)]
       ring
 
-/-- The check's inert work with its mends, as `TileKeepsTheCap` sums it: `rowDebit_sum` and `n` times every credited
+/-- The check's inert work with its mends, as `TileKeepsTheInertBound` sums it: `rowInertWork_sum` and `n` times every credited
 word's `wordMend`. -/
-theorem rowDebit_sum_mend (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ)
+theorem rowInertWork_sum_mend (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ)
     (eA eB : List (Array ℕ × Array ℕ × Array Bool)) (h : ws.length = es.length) (h' : es.length = eA.length) :
     (((ws.zip es).zip eA).map fun (we : (List (Array Bool × ℕ) × ℕ) × (Array ℕ × Array ℕ × Array Bool)) =>
-      Rule.debitUnits n c (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+      Rule.inertWorkUnits n c (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
         (we.1.1.foldl (fun t w => t + w.2) 0) we.1.2 + n * eB.foldl (fun t eb => t + Rule.wordMend we.2 eb) 0).foldl
         (· + ·) 0 =
       n * (ws.map fun w => 40 * (w.map fun v => (v.1.filter id).size).sum + 32 * (w.map fun v => v.2).sum).sum +
@@ -513,7 +513,7 @@ theorem rowDebit_sum_mend (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es
       | nil => simp at h'
       | cons ea eA =>
         simp only [List.zip_cons_cons, List.map_cons, List.sum_cons]
-        rw [ih es eA (by simpa using h) (by simpa using h'), debitUnits_eq,
+        rw [ih es eA (by simpa using h) (by simpa using h'), inertWorkUnits_eq,
           foldl_map_eq (fun v : Array Bool × ℕ => (v.1.filter id).size), foldl_map_eq (fun v : Array Bool × ℕ => v.2),
           foldl_map_eq (Rule.wordMend ea)]
         ring
@@ -582,14 +582,14 @@ theorem sum_fin_filter {β : Type} [AddCommMonoid β] {m n : ℕ} (P C : Finset 
 
 /-- At the H100 record a tile's chain inert work is `40` per flagged atom and `32` per later +0 promotion, summed over
 its cells. -/
-theorem tileChainDebit_cells {Q R S : Type} (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload)
+theorem tileChainInertWork_cells {Q R S : Type} (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload)
     (u : ℕ) (act : Codes) (P C : Finset ℕ) (hP : ∀ i ∈ P, i < (U.layout.shape u).m)
     (hC : ∀ j ∈ C, j < (U.layout.shape u).n) :
-    Bridge.tileChainDebit sem devH100 H s U u P C act =
+    Bridge.tileChainInertWork sem devH100 H s U u P C act =
       ((∑ i ∈ P, ∑ j ∈ C, (40 * cellF sem H s U u act i j + 32 * cellZ sem H s U u act i j) : ℕ) : ℚ) := by
   have hG : devH100.G = 4 := rfl
   have hadd : devH100.prices.add = 32 := rfl
-  simp only [Bridge.tileChainDebit, debitDev, hG, hadd, ite_eq_right (show (4 : ℕ) ≠ 0 by decide), Nat.cast_sum,
+  simp only [Bridge.tileChainInertWork, inertWorkDev, hG, hadd, ite_eq_right (show (4 : ℕ) ≠ 0 by decide), Nat.cast_sum,
     Nat.cast_zero, mul_zero, add_zero]
   rw [sum_fin_filter P C hP hC, sum_fin_filter P C hP hC, Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
   refine Finset.sum_congr rfl fun i hi => ?_
@@ -610,10 +610,10 @@ noncomputable def cellM {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.
   else 0
 
 /-- A tile's mends are its cells'. -/
-theorem tileMendDebit_cells {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes)
+theorem tileMendInertWork_cells {Q R S : Type} (sem : PearlCSem Q R S) (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes)
     (P C : Finset ℕ) (hP : ∀ i ∈ P, i < (U.layout.shape u).m) (hC : ∀ j ∈ C, j < (U.layout.shape u).n) :
-    Bridge.tileMendDebit sem devH100 U u P C act = ((∑ i ∈ P, ∑ j ∈ C, cellM sem U u act i j : ℕ) : ℚ) := by
-  simp only [Bridge.tileMendDebit]
+    Bridge.tileMendInertWork sem devH100 U u P C act = ((∑ i ∈ P, ∑ j ∈ C, cellM sem U u act i j : ℕ) : ℚ) := by
+  simp only [Bridge.tileMendInertWork]
   rw [sum_fin_filter P C hP hC]
   push_cast
   refine Finset.sum_congr rfl fun i hi => Finset.sum_congr rfl fun j hj => ?_
@@ -759,7 +759,7 @@ theorem step_code {acc : ℕ} {a b : List ℕ} {D c : ℕ} (P : ℕ) (hP : Words
     (hPstep : ∃ acc' l l', P = hopperE4m3K32.step acc' l l') (hD : Rule.step acc a b = .ok D)
     (hc : Words.toFp8 D = .ok c) :
     c = (e4m3Word P).val ∧ e4m3 (PearlC.wordVal P) = e4m3Word P ∧ (e4m3Word P).isNaN = false := by
-  obtain ⟨rfl, hf⟩ := DebitSim.step_ok hD
+  obtain ⟨rfl, hf⟩ := InertWorkSim.step_ok hD
   obtain ⟨-, rfl⟩ := WordsSim.toFp8_ok hc
   rw [hP] at hf ⊢
   obtain ⟨acc', l, l', rfl⟩ := hPstep
@@ -836,14 +836,14 @@ theorem endCodes_eq {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (hα : Accum
     rw [List.map_replicate, ← List.ofFn_const]
     congr 1
     funext t
-    rw [Pouw.PearlC.Cap.flatLineF_eq]
+    rw [Pouw.PearlC.InertBound.flatLineF_eq]
     rfl
   have hFm : (List.replicate 32 Rule.F_MINUS).map TileCircuit.code =
       List.ofFn (Pouw.PearlC.SaltDead.flatLineF fun _ => true) := by
     rw [List.map_replicate, ← List.ofFn_const]
     congr 1
     funext t
-    rw [Pouw.PearlC.Cap.flatLineF_eq]
+    rw [Pouw.PearlC.InertBound.flatLineF_eq]
     rfl
   have hacc := mul_fp32Value hα hw hy
   have hstep : ∀ (F : List ℕ) (f : Fin 32 → Code), F.map TileCircuit.code = List.ofFn f →
@@ -873,14 +873,14 @@ theorem endsAgree_of_endCodes {αw βw cb w : ℕ} {c : ℕ × ℕ} {y : ℚ} (h
     (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
     (hc : Rule.endCodes αw cb w = .ok c)
-    (hE : Pouw.PearlC.Cap.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) :
+    (hE : Pouw.PearlC.InertBound.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) :
     Rule.endsAgree c.1 c.2 = true := by
   obtain ⟨⟨hcp', hEp, hnp⟩, ⟨hcm', hEm, hnm⟩⟩ := endCodes_eq hα hβ hβpos hw hy hcb hc
   have hE' : codeVal (e4m3Word (endStep αw βw y false)) = codeVal (e4m3Word (endStep αw βw y true)) := by
     rw [← hEp, ← hEm]
     exact hE
   rw [hcp', hcm']
-  exact endsAgree_of ((Pouw.PearlC.Cap.codeVal_eq_iff _ _ hnp hnm).1 hE')
+  exact endsAgree_of ((Pouw.PearlC.InertBound.codeVal_eq_iff _ _ hnp hnm).1 hE')
 
 /-- **An element the game finds salt-dead the check finds salt-dead**: on a row whose α and β are step words, β
 positive, where `flat_code` and `salt_dead` are values, the support's two ends agree in the game
@@ -889,7 +889,7 @@ theorem saltDead_of_ends {αw βw cb w : ℕ} {d : Bool} {y : ℚ} (hα : AccumP
     (hβ : AccumProofs.StepWord βw)
     (hβpos : 0 < PearlC.wordVal βw) (hw : w < 2 ^ 32) (hy : wordQ w = some y) (hcb : Rule.flatCode βw = .ok cb)
     (hd : Rule.saltDead αw cb w = .ok d)
-    (hE : Pouw.PearlC.Cap.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) : d = true := by
+    (hE : Pouw.PearlC.InertBound.EndsAgree hopperE4m3K32 (PearlC.wordVal αw) y (PearlC.wordVal βw)) : d = true := by
   unfold Rule.saltDead at hd
   obtain ⟨c, hc, hd⟩ := WordsSim.bind_ok hd
   obtain rfl := WordsSim.pure_ok hd
@@ -920,7 +920,7 @@ theorem rowElements_covers {αw βw k e : ℕ} {x : Array ℕ} {flags : List (Ar
     obtain ⟨dead, hdead, hre⟩ := WordsSim.bind_ok hre
     have he := WordsSim.pure_ok hre
     obtain ⟨-, hdA⟩ := WordsSim.mapM_ok hdead
-    rw [← he, DebitSim.length_filter_range, hx]
+    rw [← he, InertWorkSim.length_filter_range, hx]
     refine Finset.card_le_card fun l hl => ?_
     simp only [Finset.mem_filter] at hl ⊢
     have hlk : l < k := Finset.mem_range.1 hl.1
@@ -966,7 +966,7 @@ theorem row_forming {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → L
     intro cb d hcb hd
     rw [(hW l hl).1] at hd
     obtain ⟨y, hy⟩ := Option.isSome_iff_exists.1 (hW l hl).2.2
-    have hE0 := (Pouw.PearlC.Cap.saltDeadP_iff_ends_hopper (semH3 saltOf rootOf : PearlCSem Q R S).alpha
+    have hE0 := (Pouw.PearlC.InertBound.saltDeadP_iff_ends_hopper (semH3 saltOf rootOf : PearlCSem Q R S).alpha
       (semH3 saltOf rootOf : PearlCSem Q R S).beta k (wordsVal m k act ⟨i, hi'⟩) ⟨l, hl'⟩).1 hsd
     have hαv : (semH3 saltOf rootOf : PearlCSem Q R S).alpha k (wordsVal m k act ⟨i, hi'⟩) = PearlC.wordVal αw := by
       rw [hα]
@@ -1184,7 +1184,7 @@ theorem row_ends {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List
     rw [getElem!_map _ _ (by omega), hrow true l hl y hyv, hE]
     exact hc
   · obtain ⟨y, hy, hyv, h32⟩ := hel l hl
-    have hE0 := (Pouw.PearlC.Cap.saltDeadP_iff_ends_hopper (semH3 saltOf rootOf : PearlCSem Q R S).alpha
+    have hE0 := (Pouw.PearlC.InertBound.saltDeadP_iff_ends_hopper (semH3 saltOf rootOf : PearlCSem Q R S).alpha
       (semH3 saltOf rootOf : PearlCSem Q R S).beta k (wordsVal m k act ⟨i, hi⟩) ⟨l, hl⟩).1 hsd
     rw [hαv, hβv, hyv] at hE0
     show (ends.map _)[l]! = true
@@ -1206,7 +1206,7 @@ theorem wordMend_le {Q R S : Type} (sem : PearlCSem Q R S) {k : ℕ} {x w : Fin 
     (B := Mend.endRow hopperE4m3K32 sem.alpha sem.beta k w true) ha2 hb2 ham hbm
   show _ ≤ ((List.range ea.2.2.size).filter fun l => (ea.2.2[l]! && eb.2.2[l]!) ||
     ((Rule.wordCuts ea.1 eb.1).getD l false && (Rule.wordCuts ea.2.1 eb.2.1).getD l false)).length
-  rw [DebitSim.length_filter_range, ha3, hcp, hcm]
+  rw [InertWorkSim.length_filter_range, ha3, hcp, hcm]
   unfold wordMend
   refine Finset.card_le_card_of_injOn (fun l : Fin k => (l : ℕ)) ?_ ?_
   · intro l hl
@@ -1221,7 +1221,7 @@ theorem wordMend_le {Q R S : Type} (sem : PearlCSem Q R S) {k : ℕ} {x w : Fin 
 
 end MendSim
 
-open DebitSim in
+open InertWorkSim in
 /-- **A word's codes**: where `k` is whole promotion groups, the check's A′ and B̃ rows of a word whose rows pass the
 rules are `unitChain`'s codes at `semH3`'s noise, whose lines and bases are the check's (`seedsAreTheSpec`,
 `lineIsTheSpec`, `fixedNoiseIsTheSpec`). -/
@@ -1272,12 +1272,12 @@ theorem codes_eq {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List
   rw [hA, hB, hU1, hU2]
   exact ⟨rfl, rfl⟩
 
-/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), the check's inert-work bound (`TileKeepsTheCap`),
+/-- **(c)** from what a passed tile establishes (`TileAcceptMeans`), the check's inert-work bound (`TileKeepsTheInertBound`),
 what a loaded pass's records keep (`load_facts`), the per-row rules (`RowsAreTheRules`), the replay
 (`wordFlagsIsTheReplay`, `codes_eq`), the forming count (`formingElems_le`, `row_forming`) and the mends
-(`MendSim.row_ends`, `MendSim.wordMend_le`): a tile as in `TilePassGivesTheCap` has its chain's inert work, its forming
+(`MendSim.row_ends`, `MendSim.wordMend_le`): a tile as in `TilePassGivesTheInertBound` has its chain's inert work, its forming
 and its mends within the game's bound. -/
-theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Properties.Pouw.PearlPlus.TileKeepsTheCap)
+theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound)
     (hR : RowsAreTheRules) {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit)
@@ -1290,13 +1290,13 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
         (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j)
     (hopen : OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c) (hticket : CarriesATicket p tid)
     (hpass : checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass) :
-    tileChainDebit (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
+    tileChainInertWork (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
         ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
           ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g) c.act +
-      tileFormingDebit (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
+      tileFormingInertWork (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
         ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
           ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g) c.act +
-      tileMendDebit (semH3 saltOf rootOf : PearlCSem Q R S) devH100 U ((auditTiling 64 64 U.layout).unit g)
+      tileMendInertWork (semH3 saltOf rootOf : PearlCSem Q R S) devH100 U ((auditTiling 64 64 U.layout).unit g)
         ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
           ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g) c.act ≤
       1 / 400 * creditDevRev1 devH100 (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) *
@@ -1309,9 +1309,9 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
   obtain ⟨rfl, rfl, rfl⟩ := htile'
   try dsimp only at hrest
   obtain ⟨-, -, -, -, -, -, hform, -, hchk, hcapC, -⟩ := hrest
-  obtain ⟨hp, -⟩ := Draw.tile?_some htile
+  obtain ⟨hp, -⟩ := Sample.tile?_some htile
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
-  obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
+  obtain ⟨-, -, hkept0, hkept⟩ := Sample.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
   obtain ⟨hKmax, hK128⟩ := Assembly.record_domain htile (.inl hpass)
   obtain ⟨wn', hwn, henc, -⟩ := Assembly.formed_ok hform
   rw [Assembly.noiseOf_eq htile, ← hk, ← hwid] at hwn
@@ -1347,8 +1347,8 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
     intro x hx
     have him := hrowsm _ (List.getElem_mem hx)
     obtain ⟨hparse, s', hst⟩ := Cap.encode_stats (by simp) henc x hx
-    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Draw.rowBytesOf_eq] at hparse
-    obtain ⟨hsz, hwords⟩ := Draw.parseRow_wordBytes hparse
+    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Sample.rowBytesOf_eq] at hparse
+    obtain ⟨hsz, hwords⟩ := Sample.parseRow_wordBytes hparse
     have hW : ∀ l < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k,
         (ops.a.x[x]!)[l]! = c.act rows[x] l ∧ c.act rows[x] l < 2 ^ 32 ∧ (wordQ (c.act rows[x] l)).isSome := by
       intro l hl
@@ -1371,8 +1371,8 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
       ∃ s', Words.s5Stats ops.b.x[z]! = .ok (s', ops.b.rho[z]!, ops.b.alpha[z]!, ops.b.beta[z]!) := by
     intro z hz
     obtain ⟨hparse, s', hst⟩ := Cap.encode_stats_b (by simp) henc z hz
-    rw [getElem!_pos _ z (by simpa using hz), List.getElem_map, Draw.rowBytesOf_eq] at hparse
-    obtain ⟨hsz, hwords⟩ := Draw.parseRow_wordBytes hparse
+    rw [getElem!_pos _ z (by simpa using hz), List.getElem_map, Sample.rowBytesOf_eq] at hparse
+    obtain ⟨hsz, hwords⟩ := Sample.parseRow_wordBytes hparse
     refine ⟨hsz, fun l hl => ?_, s', hst⟩
     have h32 := hwt cols[z] (List.getElem_mem hz) l hl
     obtain ⟨hxl, hfin⟩ := hwords l hl
@@ -1392,7 +1392,7 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
     constructor
     · rintro ⟨hi, hc⟩
       obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
-      exact ⟨hi, (hrow x hx).2.2.2.1 (Draw.rowsFailure_credited hchk hx (banded_row hc))⟩
+      exact ⟨hi, (hrow x hx).2.2.2.1 (Sample.rowsFailure_credited hchk hx (banded_row hc))⟩
     · rintro ⟨hi, hok⟩
       obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
       have hlt : rows[x] < p.records[pos]!.realRows := by
@@ -1573,8 +1573,8 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
       Rule.wordMend ea eb
     simp only [Cap.cellM, dif_pos h]
     exact MendSim.wordMend_le _ hA (hendB j eb hq' hjn)
-  rw [Cap.rowDebit_sum_mend _ _ words elems endsA endsB hlen (hle.trans hlA.symm), hsumW] at hcap
-  simp only [Rule.CAP_NUM, Rule.CAP_DEN, Nat.one_mul] at hcap
+  rw [Cap.rowInertWork_sum_mend _ _ words elems endsA endsB hlen (hle.trans hlA.symm), hsumW] at hcap
+  simp only [Rule.INERT_BOUND_NUM, Rule.INERT_BOUND_DEN, Nat.one_mul] at hcap
   rw [← hn] at hcap
   have hD' := (Nat.mul_comm _ _).trans_le hcap
   have hP : cr.toFinset = (semH3 saltOf rootOf : PearlCSem Q R S).passRows
@@ -1593,47 +1593,47 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
   have hn0 : (0 : ℚ) < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).n :=
     Nat.cast_pos.2 (Nat.lt_of_le_of_lt (Nat.zero_le _) (hcolsn j0 hj0))
   have hcred := Cap.credit_le (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) hKk hk128 hk0
-  unfold tileFormingDebit
-  rw [← hP, hcols, Cap.tileChainDebit_cells (semH3 saltOf rootOf) H s U ((auditTiling 64 64 U.layout).unit g) c.act
-    _ _ hPm hCn, Cap.tileMendDebit_cells (semH3 saltOf rootOf : PearlCSem Q R S) U
+  unfold tileFormingInertWork
+  rw [← hP, hcols, Cap.tileChainInertWork_cells (semH3 saltOf rootOf) H s U ((auditTiling 64 64 U.layout).unit g) c.act
+    _ _ hPm hCn, Cap.tileMendInertWork_cells (semH3 saltOf rootOf : PearlCSem Q R S) U
     ((auditTiling 64 64 U.layout).unit g) c.act _ _ hPm hCn, tileShare, List.toFinset_card_of_nodup hcrnd,
     List.toFinset_card_of_nodup hcolsnd]
   exact Cap.bound_glue_mend hm0 hn0 (Nat.cast_nonneg _) (Nat.cast_nonneg _)
     (by rw [show devH100.prices.costs.fs = 64 from rfl]; norm_num) (Nat.cast_le.2 hFE) (Nat.cast_le.2 hM)
     (by exact_mod_cast hD') hcred
 
-/-- **(c)'s chain part** from `TileAcceptMeans`, the check's cap (`TileKeepsTheCap`) and `RowsAreTheRules`:
+/-- **(c)'s chain part** from `TileAcceptMeans`, the check's cap (`TileKeepsTheInertBound`) and `RowsAreTheRules`:
 `tile_bound` less its forming and its mends, which are nonnegative. -/
-theorem tilePassGivesTheChainCap (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
-    (hK : Properties.Pouw.PearlPlus.TileKeepsTheCap) (hR : RowsAreTheRules) : TilePassGivesTheChainCap := by
+theorem tilePassGivesTheChainInertBound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
+    (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound) (hR : RowsAreTheRules) : TilePassGivesTheChainInertBound := by
   intro Q R S saltOf rootOf H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hticket hpass
   have h := tile_bound hT hK hR saltOf rootOf H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hticket
     hpass
-  have h0 : 0 ≤ tileFormingDebit (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
+  have h0 : 0 ≤ tileFormingInertWork (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
       ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
         ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g) c.act := by
-    unfold tileFormingDebit
+    unfold tileFormingInertWork
     positivity
-  have h1 : 0 ≤ tileMendDebit (semH3 saltOf rootOf : PearlCSem Q R S) devH100 U ((auditTiling 64 64 U.layout).unit g)
+  have h1 : 0 ≤ tileMendInertWork (semH3 saltOf rootOf : PearlCSem Q R S) devH100 U ((auditTiling 64 64 U.layout).unit g)
       ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
         ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g) c.act := by
-    unfold tileMendDebit
+    unfold tileMendInertWork
     exact Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _
   exact le_trans (le_add_of_nonneg_right h0) (le_trans (le_add_of_nonneg_right h1) h)
 
-/-- **(c)** from `TileAcceptMeans`, the check's cap (`TileKeepsTheCap`) and `RowsAreTheRules`: `tile_bound`, whose
-chain, forming and mends are `tileDebitRev1`. -/
-theorem tilePassGivesTheCap (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
-    (hK : Properties.Pouw.PearlPlus.TileKeepsTheCap) (hR : RowsAreTheRules) : TilePassGivesTheCap := by
+/-- **(c)** from `TileAcceptMeans`, the check's cap (`TileKeepsTheInertBound`) and `RowsAreTheRules`: `tile_bound`, whose
+chain, forming and mends are `tileInertWorkRev1`. -/
+theorem tilePassGivesTheInertBound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
+    (hK : Properties.Pouw.PearlPlus.TileKeepsTheInertBound) (hR : RowsAreTheRules) : TilePassGivesTheInertBound := by
   intro Q R S saltOf rootOf H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hticket hpass
-  show (semH3 saltOf rootOf : PearlCSem Q R S).tileDebitRev1 devH100 H s U ((auditTiling 64 64 U.layout).unit g)
+  show (semH3 saltOf rootOf : PearlCSem Q R S).tileInertWorkRev1 devH100 H s U ((auditTiling 64 64 U.layout).unit g)
       ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
         ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g) c.act ≤
     1 / 400 * creditDevRev1 devH100 (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) *
       tileShare (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
         ((semH3 saltOf rootOf : PearlCSem Q R S).passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act
           ((auditTiling 64 64 U.layout).rows g)) ((auditTiling 64 64 U.layout).cols g)
-  rw [tileDebitRev1_split]
+  rw [tileInertWorkRev1_split]
   exact tile_bound hT hK hR saltOf rootOf H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hticket hpass
 
 end Pouw.PearlPlus.Bridge

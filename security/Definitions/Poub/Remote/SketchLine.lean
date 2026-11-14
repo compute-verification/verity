@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Poub.Remote.Sample
-public import Definitions.Poub.Remote.Sample
 public import Definitions.Poub.Remote.Outside
 public import Definitions.Poub.Remote.Sketch
 import Mathlib.Algebra.Order.Floor.Extended

@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.PearlPlus
-public import Properties.Pouw.PearlPlusDraw
+public import Properties.Pouw.PearlPlusSample
 public import Definitions.Core.Interaction
 public import Flock.Hash
 
@@ -250,11 +250,11 @@ def TileTiedAtW (w : Lean.Json) (rounds : Option (List ℕ)) (passes : List Pass
 tiles, then its exclusion tiles), the prover opens each and `checkTile` passes it on its weight's noise, or, under
 `over_cap` `uncredited`, finds it only over its inert-work bound. It is what `AcceptMeans` gives of an accepted
 verdict's tiles. -/
-def TilesAccepted (passes : List Pass) (m : OverCap) (opener : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
+def TilesAccepted (passes : List Pass) (m : OverInertBound) (opener : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
   ∀ (pi tid : ℕ), (pi, tid) ∈ todo passes drawn → ∃ (p : Pass) (o : TileOpening),
     passes[pi]? = some p ∧ opener pi tid = .ok o ∧
     (checkTile p (noiseOf p tid) tid o = .pass ∨
-      m = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why)
+      m = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overInertBound why)
 
 /-- One row of one of W's trees as a tile's opening opens it: W's value, the tree's domain and root as `checkTile`
 reads them from the pass, and the opening. -/
@@ -301,7 +301,7 @@ structure Run where
   w : Lean.Json
   rounds : Option (List ℕ)
   dropped : List ℕ
-  overCap : OverCap
+  overInertBound : OverInertBound
   table : Table
 
 /-- **The run is held to W**: its passes are `load`'s of its manifests under the epoch's coins, and `tieOf` answers
@@ -313,7 +313,7 @@ def Run.HeldToW (R : Run) : Prop :=
 /-- **The run is accepted on the sample `drawn` with the openings `o`**: it is held to W and every tile the verdict
 opens is accepted. -/
 def Run.Accepts (R : Run) (o : Opener) (drawn : List (ℕ × ℕ)) : Prop :=
-  R.HeldToW ∧ TilesAccepted R.passes R.overCap o drawn
+  R.HeldToW ∧ TilesAccepted R.passes R.overInertBound o drawn
 
 /-- **The run's table holds what `o` opens on the sample `drawn`**: for every row of W's trees the openings of the
 verdict's tiles open (`tileRows`), the table holds an opening of that position at that value which opens against the
@@ -353,7 +353,7 @@ def msgPair (xy : ByteArray × ByteArray) : _root_.Claims.Msg × _root_.Claims.M
 /-- The run a verdict's input is, with its loaded passes, the registration record it names and a table. -/
 def runOf (i : Input) (passes : List Pass) (w : Lean.Json) (T : Table) : Run :=
   { coins := i.coins, manifests := i.manifests, passes := passes, w := w, rounds := i.rounds, dropped := i.dropped,
-    overCap := i.overCap, table := T }
+    overInertBound := i.overInertBound, table := T }
 
 /-- **An accepted verdict on an input that names W is a run held to W**: the plan's passes are W's by `tieOf`, the
 verdict answers with that tie, and, where the tie's weights are tied, the run (`runOf`, at any table) is accepted on

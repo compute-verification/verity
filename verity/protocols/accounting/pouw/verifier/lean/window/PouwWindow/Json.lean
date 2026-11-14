@@ -1,6 +1,6 @@
 module
 
-public import PouwWindow.Draw
+public import PouwWindow.Sample
 public import PouwWindow.Public
 public import Lean.Data.Json.Basic
 

@@ -7,7 +7,7 @@
 #
 # One PoUB session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
 # only ever read), each pass one engine step's weight reads from it through kernels' staging decode on the card, its
-# receipts sketched from the rows the decode reads (`benchmarks/pous/p2_v1/bandwidth.py session`), under a gpu-lease of
+# receipts sketched from the rows the decode reads (`verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
 # never a process on this node: the `p2_parties --listen` that the auditor device's gate starts for BW_PARTY, reached at
@@ -26,14 +26,13 @@
 # it; lake-build.log in DIR), and one that doesn't build runs no session. DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_store/store.py layout`), held to the store's setup.json; the lib is kernels' build
-# (`benchmarks/torch_gpu/p2_stage/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
+# (`verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
 # built lib/ directory. Both are written to scratch under DIR, which is removed: DIR keeps only records. A toy on the
 # CPU: BW_STORE, BW_LAYOUT, BW_REGISTRATION and BW_NODE name it, BW_DEVICE=cpu, BW_REF_DECODE=1 and BW_LEASE_MIN=0
 # (no lease, no lib). Exits 0 iff the session's answer is an accept; DIR/rc.txt has each step's exit code.
 set -uo pipefail
 SERVE=$1 K=$2 O=$3
 mkdir -p "$O"
-P2=benchmarks/pous/p2_v1
 PY=${PY:-/workspace/cp/venv312/bin/python}
 STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
@@ -64,7 +63,7 @@ EOF
 fi
 LIB=${BW_LIB:-unused}
 if [ "$DEVICE" != cpu ] && [ -z "${BW_LIB:-}" ]; then
-  bash benchmarks/torch_gpu/p2_stage/build.sh "$S/lib" > "$O/build.log" 2>&1 \
+  bash verity/protocols/accounting/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1 \
     && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256)
   step lib $?
   cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/dev/null
@@ -89,12 +88,12 @@ args=(session --store "$STORE" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --
 [ "${BW_REF_DECODE:-0}" = 1 ] && args+=(--ref-decode)
 [ -n "${BW_WORKERS:-}" ] && args+=(--workers "$BW_WORKERS")
 [ "${BW_CHEAT:-}" = cache ] && args+=(--cache)
-export PY P2 O
+export PY O
 run() {
   date -u +%Y-%m-%dT%H:%M:%SZ > "$O/started.txt"
   nvidia-smi --query-gpu=index,uuid,name,memory.total ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} --format=csv,noheader \
     > "$O/gpu.txt" 2>/dev/null
-  "$PY" "$P2/bandwidth.py" "$@" > "$O/session.log" 2> "$O/session.err"
+  "$PY" verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py "$@" > "$O/session.log" 2> "$O/session.err"
   local rc=$?
   date -u +%Y-%m-%dT%H:%M:%SZ > "$O/ended.txt"
   return $rc

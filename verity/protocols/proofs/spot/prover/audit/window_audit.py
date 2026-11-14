@@ -232,6 +232,7 @@ sys.path.insert(0, str(HERE))
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import check_memo as AM  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -459,7 +460,7 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
                              **registering(a, history)),
         stream, coins, draw, outcome, a.window_root)
     checks = (result or {}).get("checks") or {}
-    record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
+    record = {"source": stream.coins_from, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
 
@@ -862,7 +863,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     if plain(a):
-        summary.update(zk_server=None, arm=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER})
+        summary.update({"firewall": None, "arm": None, "plain": {"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_ZK_SERVER}})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
@@ -1043,6 +1044,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
+        mm["st"][a0.ARCHIVE_LINK] = bool(getattr(a, "archive_link", False))
 
     relay = MT.Relay(tree_coins(a), MT.listener()) if trees else None
     summary["coin_trees"] = "window" if trees else "own"
@@ -1180,7 +1182,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             (out / "lean-verify").mkdir(exist_ok=True)
             keys = a0.archive_put(a.lean, out / "lean-verify" / "archive",
                                   [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
-                                  out / "lean-verify" / "archive-put.log", archived)
+                                  out / "lean-verify" / "archive-put.log", archived,
+                                  [a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)[0] for s in statements
+                                   if s["mm"]["st"].get(a0.ARCHIVE_LINK)])
             if a.zk_server and not plain(a):
                 kept = a0.VerifyMembers(a.lean, out / "lean-verify" / "archive",
                                         keys.get(Path(statements[0]["mm"]["st"]["program_file"]), ""),
@@ -1410,7 +1414,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 def own_replay():
     """The `replay.py` beside this file, loaded by its path and never by its name: a process with `network_traces` on
     its path, as the audit over a network certifier's run has, holds that directory's `replay` under the name."""
-    return AC._module("one_stage_replay", HERE / "replay.py")
+    return LC._module("one_stage_replay", HERE / "replay.py")
 
 
 def write_case(out: Path, program, query: dict, sampling_design: dict, ports: dict, leaf_layer: str | None, delta: float,
@@ -1687,6 +1691,8 @@ def streamed(a: argparse.Namespace) -> bool:
 ZK_SERVER_HELP = ("the core protocols' path, Lean's flock-zk-server: every session's prover runs behind the ZK server's send check "
                  "(FC_ZK_SERVER=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
+ARCHIVE_LINK_HELP = ("link each member's circuit file into the archive under its SHA-512 rather than copying it "
+                     "(a0.archive_put): the archive holds no second copy, and Lean still holds the object to its key")
 #: the ZK server's Lean session loop's executable, beside Lean's verity-verify-proof in its package
 ZK_SERVER_LOOP = "flock-zk-server"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
@@ -2273,6 +2279,13 @@ def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[s
 NVIDIA_SMI_ORDER = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
 
 
+def device_env(env: dict, devices: list | None) -> dict:
+    """``env``, a session's prover environment behind the ZK server, for provers on ``devices``: the ZK server rechecks
+    the untrusted device's level-0 root against a witness of its own and refuses a session whose witness the device
+    would build (live PROTOCOL.md §10.2, §10.4), so on a device the host builds it (``FC_HOST_WITNESS=1``)."""
+    return {**env, "FC_HOST_WITNESS": "1"} if devices and any(d is not None for d in devices) else env
+
+
 def devices(a: argparse.Namespace) -> list[int] | None:
     """The cards the audit's proof server proves on (``a.gpus``, `cards`'s), by nvidia-smi's indices
     (`NVIDIA_SMI_ORDER`); None: on the CPU. The command line is the only place an audit takes cards from: it reads no
@@ -2328,8 +2341,8 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     every verifier on the window's challenger session through it, one session at a time. Where the audit's sessions are
     behind the ZK server so is its prover: one `prove --zk --stream` process a card of `devices` (else one on the CPU)
     that starts a Lean session loop for each session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as
-    the process's environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on
-    it. None where a session is one it doesn't prove (plain, or members that don't agree): each session is then a
+    the process's environment says (`a0.prover_env`, with the host's witness on a card: `device_env`), so only where
+    the sampled members' statements ``sts`` agree on it. None where a session is one it doesn't prove (plain, or members that don't agree): each session is then a
     process pair of its own (`a0.session`), which takes its tree through ``relay`` too, and takes no card
     (`devices_refusal`)."""
     if why := devices_refusal(a):
@@ -2342,7 +2355,7 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     order = {} if devices(a) is None else NVIDIA_SMI_ORDER
     if not zk_server:
         return ProofServer(a.bin, out / "proof-server", devices=devices(a), env={**a0.DIRECT, **order}, **trees)
-    envs = [a0.prover_env(zk_server, st) for st in sts]
+    envs = [device_env(a0.prover_env(zk_server, st), devices(a)) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
     return ProofServer(a.bin, out / "proof-server", devices=devices(a), env={**envs[0], **order},
@@ -2517,7 +2530,8 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
         manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
-                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
+                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key,
+                                              local=LC.Local)
         summary["challenger"] = {"challenger": a.challenger, "rule": a.rule}
     try:
         for r, row in tp_ranks(a, sets, out, world, ranks):
@@ -2583,6 +2597,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    ap.add_argument("--archive-link", action="store_true", help=ARCHIVE_LINK_HELP)
     lean_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one ZK server session of a MoE "

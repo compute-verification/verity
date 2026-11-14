@@ -7,7 +7,7 @@ on that buffer.
 - `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_store/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's load buffer. `Weights` is the plaintext, the seeded
-  weights stream (`benchmarks.torch_gpu.p2_stage.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
+  weights stream (`verity.protocols.accounting.pous.prover.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
   rows to it by P2's reference decode of one label (`p2_store/store.py`'s `decode_block`), the check's ground truth.
   `open_store` takes the store: memory-accounting's encoded store (`p2_store/store.py encode`'s segment files, read by
   `segment_rows`), under `store_salt`, `setup.sample_salt` of the coin and commitment its `setup.json` is held to; or a
@@ -46,7 +46,8 @@ on that buffer.
   stage pass, timed with the sketch and without; `bw_ref.py` checks it on the CPU afterwards (every y and the root
   from the pass's σ, and the σ of a sample of units from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).
-- `build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's own Makefile. `session.sh` is one run on
+- `verity/protocols/accounting/pous/prover/p2/p2_store/build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's
+  own Makefile; the scripts here run on its `lib/`. `session.sh` is one run on
   an H200 under an untimed `gpu-lease`, from PoUS's encoded store (`ENCODED=1`, the layer's segment files sent
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded
   store in place, read only. Each script's header gives its command line.

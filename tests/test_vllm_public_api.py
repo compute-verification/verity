@@ -255,9 +255,12 @@ PUBLIC = {
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, and a Stack attached to them (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.remote_bandwidth.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
+    "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
                                                      "weights it binds (model_weights, WeightRegion, Every), which "
                                                      "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
+    "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
+                                                     "pipeline.remote_session reaches through protocols.driver and "
+                                                     "benchmarks/remote_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
                                          "consumer shares (load_program), which benchmarks/prove_path reads",
 }
@@ -274,6 +277,17 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.opening",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
+    # the compile slice and its pieces (`verity_vllm.compiler`), which the network certifier's drivers under `benchmarks/`
+    # imported from `verity` before the compiler's move into the adapter
+    "verity_vllm.compiler.cache_step",
+    "verity_vllm.compiler.cache_step_v3",
+    "verity_vllm.compiler.compile_slice",
+    "verity_vllm.compiler.compile_slice_v4",
+    "verity_vllm.compiler.compile_slice_v6",
+    "verity_vllm.compiler.compile_slice_v7",
+    "verity_vllm.compiler.served_rows",
+    "verity_vllm.compiler.served_statics",
+    "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
     # move into the adapter; vllm takes these down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov)
     "verity_vllm.definitions.encoding",
@@ -389,7 +403,6 @@ KNOWN = frozenset({
     "verity_vllm.program.predict.batch",
     "verity_vllm.program.predict.build",
     "verity_vllm.program.predict.score",
-    "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.program_view",
 })
 
@@ -400,6 +413,30 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
+
+_SHARED_WORDS = "until the shared word primitives move below both adapters"
+
+#: Single imports of a module neither PUBLIC nor KNOWN: (file, module) -> why it stands. Move the import and delete it.
+KNOWN_SITES = {
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py", "verity_vllm.definitions.registry.layer_norm"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _SHARED_WORDS,
+}
 
 
 @dataclass(frozen=True)
@@ -537,7 +574,7 @@ def test_outside_code_imports_only_public_names_and_known_modules():
             if s.name is not None and s.name not in exported(s.module):
                 bad.append(f"{s.file}:{s.line}: {s.name} is not in {s.module}.__all__ (import a listed name, or list it there "
                            "if it is part of that interface)")
-        elif s.module not in KNOWN:
+        elif s.module not in KNOWN and (s.file, s.module) not in KNOWN_SITES:
             public = ", ".join(sorted(PUBLIC))
             bad.append(f"{s.file}:{s.line}: imports {s.module}, which is not a public interface of {PACKAGE}: import from one of "
                        f"{public} (or grow the interface the import needs, with __all__ and annotations, and add it to PUBLIC in "
@@ -552,9 +589,12 @@ def test_the_allowlists_are_exact():
     private = {(s.module, s.name) for s in sites() if s.name is not None and s.name.startswith("_")}
     gone = sorted(KNOWN - reached)
     gone_private = sorted(KNOWN_PRIVATE - private)
-    assert not (gone or gone_private), ("nothing outside the integration imports these any more; delete them from tests/"
-                                        "test_vllm_public_api.py:\n" + "\n".join([*(f'    "{m}",' for m in gone),
-                                                                                *(f"    {p!r}," for p in gone_private)]))
+    gone_sites = sorted(set(KNOWN_SITES) - {(s.file, s.module) for s in sites()})
+    assert not (gone or gone_private or gone_sites), (
+        "nothing outside the integration imports these any more; delete them from tests/test_vllm_public_api.py:\n"
+        + "\n".join([*(f'    "{m}",' for m in gone), *(f"    {p!r}," for p in gone_private),
+                     *(f"    {p!r}: ...," for p in gone_sites)]))
+    assert not {m for _, m in KNOWN_SITES} & (KNOWN | set(PUBLIC)), "a KNOWN_SITES module is KNOWN or PUBLIC: delete its sites"
     assert not KNOWN & set(PUBLIC), f"a public module is not also KNOWN: delete {sorted(KNOWN & set(PUBLIC))} from KNOWN"
 
 

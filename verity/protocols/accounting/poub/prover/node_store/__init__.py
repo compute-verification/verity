@@ -1,6 +1,6 @@
 """The node's store: one registry of everything the prover registers for PoUB, the small interface a protocol driver
 talks to, and the session that serves it. A serving system's adapter keeps it current (vLLM's:
-`verity_vllm.protocols.remote_bandwidth`).
+`verity_vllm.protocols.poub`).
 
 Terms are the design's (store, block, tier, registration, receipt, pass, window, commitment, opening):
 

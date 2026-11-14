@@ -41,7 +41,8 @@ whole as its body (`Lines`), so the Lean reads every line the prover sent as it 
 it waits for whatever its key, one it can't name as `Malformed`. `session` and the prover's `prove` step each side over
 the channel with PoUS's loop (`drive`, `challenger_session.run`), the verifier's side handed a failed write as its
 channel failing (`broken`). The runtime starts the verifier from a configuration and its deploy bindings (`start`,
-`STARTS`): its closer's key is refused unless the configuration pins it (`pinned_signer`).
+`starts`): its closer's key is refused unless the configuration pins it (`pinned_signer`), by the pin check what starts
+it beside PoUS's device hands in.
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `poub-verifier` (`p2_lean.py`,
@@ -56,7 +57,8 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 `python -m verity.protocols.accounting.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
-log in `--challenger`'s directory (`pous.device.onsite.device_key`) signing the close of the one session the auditor
+log in `--challenger`'s directory (the key loaded by the `device_key` the caller hands `main`, PoUS's device's
+`onsite.device_key` in the auditor's gate) signing the close of the one session the auditor
 named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
@@ -83,7 +85,7 @@ from typing import Any, BinaryIO
 
 from verity.channel import Body, Message, Refused, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
-from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start
+from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start, Starter
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -936,7 +938,7 @@ def _keep(path: Path, case: Mapping[str, Any]) -> None:
     os.chmod(path, 0o600)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.LmsSigner] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     held = ap.add_mutually_exclusive_group(required=True)
     held.add_argument("--registration", type=Path, help="the auditor's registration with its plan (registration_json)")
@@ -959,8 +961,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the Lean verifier (default: built "
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
-    ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key and "
-                                                    "session log (`pous.device.onsite.device_key`), which sign the "
+    ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key, which "
+                                                    "the caller's `device_key` loads, and session log, which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
                                       "challenger for this session; without them, no session has a case")
@@ -973,6 +975,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--session is a session id, 64 lowercase hex digits")
     if a.session is not None and a.listen is not None and a.sessions != 1:
         ap.error("--session names one session: --sessions 1")
+    if a.challenger is not None and device_key is None:
+        ap.error("--challenger needs the memory challenger's key loader handed to main (device_key): run the party as "
+                 "the auditor's gate does (live_verifier/host.py's bw_party)")
     data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
     cases = None
     if a.device is not None:
@@ -1005,9 +1010,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     closer = None
     if a.challenger is not None:
-        from verity.protocols.accounting.pous.device import onsite
-
-        signer = onsite.device_key(a.challenger)
+        signer = device_key(a.challenger)
         closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
 
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
@@ -1043,41 +1046,53 @@ def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any])
     raise NotImplementedError(GOAL)
 
 
-def pinned_signer(configuration: Mapping[str, Any], directory: Path) -> mc.LmsSigner:
-    """The key that signs each session's close: the memory challenger's PoUS key, in its device's `directory`, refused
-    unless the configuration pins it for PoUS (`onsite.pin`, `onsite.signer`). A directory holding no key is refused,
-    never given a new one, which no pin could name."""
-    from verity.protocols.accounting.pous.device import onsite
+type Pin = Callable[[Mapping[str, Any], str, str], str]
+"""`pin(configuration, party, protocol)`: the SHA-512 of the key the configuration pins for the party in the protocol,
+in hex, `Refused` (``pin``) when it pins none (PoUS's device's `onsite.pin`)."""
+type Load = Callable[[Path, str], mc.LmsSigner]
+"""`signer(directory, key_sha512)`: the memory challenger's signer from its device's directory, `Refused` (``pin``)
+before its key is read unless its public key's SHA-512 is `key_sha512` (PoUS's device's `onsite.signer`)."""
 
-    key_sha512 = onsite.pin(configuration, CS.CHALLENGER, CS.COMPONENT)
+
+def pinned_signer(configuration: Mapping[str, Any], directory: Path, pin: Pin, signer: Load) -> mc.LmsSigner:
+    """The key that signs each session's close: the memory challenger's PoUS key, in its device's `directory`, refused
+    unless the configuration pins it for PoUS, by the check its starter hands in (`pin`, `signer`). A directory holding
+    no key is refused, never given a new one, which no pin could name."""
+    key_sha512 = pin(configuration, CS.CHALLENGER, CS.COMPONENT)
     if not (directory / "seed").is_file():
         raise Refused("state", f"{directory} holds no memory challenger's key; its setup makes one")
-    return onsite.signer(directory, key_sha512)
+    return signer(directory, key_sha512)
 
 
-def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
-    """The verifier's start on the auditor's host (`ProtocolDef.starts`), from the configuration, its deploy bindings
-    (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's PoUS device
-    directory on this host) and its own `state` directory: the closer's key, pinned (`pinned_signer`); its case digests
-    under `state`'s `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the session parameters `SESSION`; and
-    the runtime's own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It
-    raises `NotImplementedError(GOAL)` past the key: the registration (PoUS setup's record on that device,
-    `pous_record`, for the setup's session id), the session id the auditor gives the memory challenger, and the Lean
-    process holding the registration (`hold`) have no source the runtime gives a party."""
-    pinned_signer(configuration, Path(bound["challenger"]))
+def starts(pin: Pin, signer: Load) -> dict[str, Starter]:
+    """The verifier's start (`start`) with the memory challenger's pin check handed in, by what starts the verifier
+    beside PoUS's device (`verity_cli.served_table`'s `POUB`)."""
+    return {VERIFIER: lambda configuration, bound, state: start(configuration, bound, state, pin=pin, signer=signer)}
+
+
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None, *, pin: Pin,
+          signer: Load) -> Start:
+    """The verifier's start on the auditor's host (`ProtocolDef.starts`, through `starts`), from the configuration, its
+    deploy bindings (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's
+    PoUS device directory on this host) and its own `state` directory: the closer's key, pinned by the check handed in
+    (`pinned_signer`); its case digests under `state`'s `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the
+    session parameters `SESSION`; and the runtime's own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which
+    `Twin`'s windows are timed on. It raises `NotImplementedError(GOAL)` past the key: the registration (PoUS setup's
+    record on that device, `pous_record`, for the setup's session id), the session id the auditor gives the memory
+    challenger, and the Lean process holding the registration (`hold`) have no source the runtime gives a party."""
+    pinned_signer(configuration, Path(bound["challenger"]), pin, signer)
     raise NotImplementedError(GOAL)
 
 
-STARTS = {VERIFIER: start}
-PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier}, STARTS)}
+PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
 
 
 __all__ = ["Books", "CASE_DIGESTS", "COIN_BYTES", "COMPONENT", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
-           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "STARTS", "Twin",
+           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "Pin", "Load", "SESSION", "Twin",
            "VERIFIER", "VERSION", "Verifier", "answer", "broken", "case_digest", "core_answer", "deployed_request",
            "drive", "held_json", "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of",
            "pinned_signer", "plan_of", "pous_record", "recv", "registration_json", "registration_of",
-           "registration_of_setup", "request_of", "send", "session", "start", "verdict_json"]
+           "registration_of_setup", "request_of", "send", "session", "start", "starts", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())

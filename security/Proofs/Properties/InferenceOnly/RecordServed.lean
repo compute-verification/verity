@@ -33,7 +33,7 @@ public import Proofs.Properties.InferenceOnly.RecordWired
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 
 /-- `front` reads each template's leaves off its own Program. -/

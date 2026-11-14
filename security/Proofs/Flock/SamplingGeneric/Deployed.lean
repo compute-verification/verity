@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.Sampling.SessionTo
 `ofDeploy D iroots`: a frozen sampled record `D` (`Claims.Sampling.Deploy`) as a compiled sampled verifier over Flock
 at its deployed decoder (`Compiled _ (Arg.ofFlock D.flock)`), at the roots a run shows for a proof block's interior
 values (`iroots`, which the frozen record leaves to its hypotheses). Its verifier, parser, scope check, partition,
-commitment, sample layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
+commitment, sample layout (`secondStage`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
 are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots the frozen hypotheses read); a proof
 block's shape is the record's inner waits, truncation and `N₀` and its session's rounds (`sh`); and the bounds on its
 session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight (`κb`, `γb`). It is
@@ -86,7 +86,7 @@ noncomputable def ofDeployAt (D : Claims.Sampling.Deploy Coin Col T) (iroots : M
   scopeCheck := D.scopeCheck
   partition := D.partition
   commit := D.commit
-  stage2 := D.stage2
+  secondStage := D.secondStage
   checked x r := (D.checked x r).take (Claims.Sampling.nPU D x)
   sh x u := (D.innerWaits x, D.innerCap x, (D.rounds x u).card, n₀ x u)
   κb x u := κFAt D x (n₀ x u)
@@ -189,7 +189,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 sample. -/
 theorem fixed_ofDeployAt (hf : Claims.Sampling.SampleFixed D) (x : Msg)
     (r : Fin ((ofDeployAt D iroots n₀).V.k x) → Coin) (u : ℕ) (hu : u ∈ (ofDeployAt D iroots n₀).checked x r) :
-    (ofDeployAt D iroots n₀).rounds x u ⊆ (ofDeployAt D iroots n₀).stage2 x ∧
+    (ofDeployAt D iroots n₀).rounds x u ⊆ (ofDeployAt D iroots n₀).secondStage x ∧
       ∀ d, (ofDeployAt D iroots n₀).checked x (forkOn ((ofDeployAt D iroots n₀).rounds x u) r d) =
         (ofDeployAt D iroots n₀).checked x r := by
   obtain ⟨hsub, hkeep⟩ := hf x r u ((mem_ofDeployAt_checked D iroots n₀).1 hu)
@@ -314,7 +314,7 @@ def Code.SampleDesign (c : Code) : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ Finset.range Pt.blocks.length, ∃ esc : (Fin (c.V.k x) → FlockDeploy.Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (c.V.k x) → FlockDeploy.Coin => ∀ v ∈ B, ∀ p : Fin (units c x),
-          (c.checked x (forkOn (c.stage2 x) r d))[p.val]? ≠ some v) ≤ esc r) ∧
+          (c.checked x (forkOn (c.secondStage x) r d))[p.val]? ≠ some v) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa Pt B
 
 /-- **Refuses**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
@@ -325,12 +325,12 @@ def Code.Refuses (H : Msg → Msg) (c : Code) : Prop :=
 /-- **Interior fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
 def Code.InteriorFixed (H : Msg → Msg) (c : Code) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
-    iroots x (run H P c.V x ω (forkOn (c.stage2 x) r d)).seen v = iroots x (run H P c.V x ω r).seen v
+    iroots x (run H P c.V x ω (forkOn (c.secondStage x) r d)).seen v = iroots x (run H P c.V x ω r).seen v
 
 /-- **Sample fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
 def Code.SampleFixed (c : Code) : Prop :=
   ∀ x r u, (∃ p : Fin (units c x), (c.checked x r)[p.val]? = some u) →
-    c.rounds x u ⊆ c.stage2 x ∧ ∀ d, c.checked x (forkOn (c.rounds x u) r d) = c.checked x r
+    c.rounds x u ⊆ c.secondStage x ∧ ∀ d, c.checked x (forkOn (c.rounds x u) r d) = c.checked x r
 
 section Compiled
 

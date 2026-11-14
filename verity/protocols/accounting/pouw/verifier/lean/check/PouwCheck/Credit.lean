@@ -12,7 +12,7 @@ public import PouwCheck.Json
 public import PouwCheck.Opening
 public import PouwCheck.Pass
 public import PouwCheck.Rounds
-public import PouwWindow.Draw
+public import PouwWindow.Sample
 public import PouwWindow.Rounds
 public import Spot.ChallengerCoins
 public import Spot.ChallengerSession
@@ -23,7 +23,7 @@ public import Identity.Domains.Pouw
 /-!
 # A served execution phase's credited set, its sampled proof blocks and their outcome, its A rows and its period (`credit.py`)
 
-The verifier of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
+The verifier of `verity/protocols/accounting/pouw/verifier/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
 
 **`executionPhase` and `periodCredit` are the only entries.** On one execution phase's evidence and one round log, `executionPhase` runs every
@@ -2278,17 +2278,5 @@ example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
 example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
-
-/-- Why a check below refuses: its Lean is not yet written (`compute-accounting/pouw-verdict-from-main`). -/
-def NOT_WRITTEN : String :=
-  "this check of record is not yet written in Lean, so it refuses everything (compute-accounting/pouw-verdict-from-main)"
-
-/-- A credit period's presented roots, exactly the sessions its close lists (`credit.period_twin`'s rule): refuses every
-period until its check is written. -/
-def periodRoots (_key _ledger _name _roots : Json) : R Unit := throw ("period", NOT_WRITTEN)
-
-/-- A Pearl-C credit period's credit over its passes (`credit.pearl_c_period_credit_twin`'s rule): refuses every period
-until its check is written. -/
-def pearlCMonitoringPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
 end PouwCheck.Credit

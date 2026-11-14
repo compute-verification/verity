@@ -1,5 +1,5 @@
 /-
-**A joined circuit's ranks** (`verity.commitments.windows.interface.Ranks`, the record's `ranks`): the record of a node's
+**A joined circuit's ranks** (`verity.commitments.periods.interface.Ranks`, the record's `ranks`): the record of a node's
 circuit joined from its ranks states, in rank order, each rank's window by its circuit's digest `H_r` (the SHA-512 of the
 canonical JSON of its record less its run's fields, `circuit_of`), its units of each template and the count of the joined
 wires that are its own. Serving commits one window a rank, never the join; the verifier reads the joined record as its
@@ -97,10 +97,17 @@ structure Member where
 /-- Rank `q`'s units of template `t`, none for a template it doesn't name. -/
 def Rank.unitsOf (q : Rank) (t : String) : Nat := ((q.units.find? (·.1 == t)).map (·.2)).getD 0
 
+/-- Template `t`'s first unit of each rank in the joined circuit, then its count: the earlier ranks' come first. -/
+def Ranks.bounds (rs : Ranks) (t : String) : Array Nat :=
+  rs.of.foldl (fun b q => b.push ((b.back?.getD 0) + q.unitsOf t)) #[0]
+
+/-- Rank `r`'s units `[lo, hi)` by `Ranks.bounds`' `b`. -/
+def segmentIn (b : Array Nat) (r : Nat) : Nat × Nat :=
+  let lo := b.getD (min r (b.size - 1)) 0
+  (lo, b.getD (r + 1) lo)
+
 /-- Rank `r`'s units of template `t` in the joined circuit, `[lo, hi)`: the earlier ranks' come first. -/
-def Ranks.segment (rs : Ranks) (t : String) (r : Nat) : Nat × Nat :=
-  let lo := ((rs.of.extract 0 r).map (·.unitsOf t)).foldl (· + ·) 0
-  (lo, lo + ((rs.of[r]?).map (·.unitsOf t)).getD 0)
+def Ranks.segment (rs : Ranks) (t : String) (r : Nat) : Nat × Nat := segmentIn (rs.bounds t) r
 
 /-- One rank of the record's `ranks` field: exactly `units`, `window` and `wires`, its window 128 lowercase hex digits,
 its units an object of naturals and its wires a natural; `none` otherwise. -/
@@ -263,9 +270,12 @@ def rankPrefix (r : Nat) : String := "r" ++ toString r ++ "/"
 /-- Rank `r`'s first unit of template `t` in the joined circuit. -/
 def Ranks.first (rs : Ranks) (t : String) (r : Nat) : Nat := (rs.segment t r).1
 
+/-- The rank whose units `[b[r], b[r + 1])` (`Ranks.bounds`) hold units `lo` to `hi`, both included. -/
+def rankIn (b : Array Nat) (lo hi : Nat) : Option Nat :=
+  (List.range (b.size - 1)).find? fun r => decide (b.getD r 0 ≤ lo) && decide (lo ≤ hi) && decide (hi < b.getD (r + 1) 0)
+
 /-- The rank whose units of template `t` hold units `lo` to `hi`, both included. -/
-def Ranks.rankOf (rs : Ranks) (t : String) (lo hi : Nat) : Option Nat :=
-  (List.range rs.of.size).find? fun r => decide ((rs.segment t r).1 ≤ lo) && decide (hi < (rs.segment t r).2)
+def Ranks.rankOf (rs : Ranks) (t : String) (lo hi : Nat) : Option Nat := rankIn (rs.bounds t) lo hi
 
 /-- Rank `r`'s wires of its record `doc` as the joined record holds them: each one's reader units and its writers
 moved by rank `r`'s first unit of their template. -/
@@ -276,17 +286,19 @@ def shiftedWires (rs : Ranks) (r : Nat) (doc : Json) : Array Json :=
 /-- A wire of the join's: it reads at least one reader unit, every one in some rank's units, and in each rank whose
 units it reads, its writers of those units (`Spot.Wires.Wire.box` on their indices) are not all that rank's: a read
 within one rank is that rank's own wire, which its window states. A wire may read several ranks' units, as `join`'s
-coalesced wires do; the check is one box per wire and rank. -/
+coalesced wires do; the check is one box per wire and rank, over each template's bounds summed once a wire. -/
 def joinWireOk (rs : Ranks) (j : Json) : Bool :=
   match Spot.Wires.Wire.ofJson j with
   | .ok w =>
-    decide (w.readerUnits ≥ 1) && decide (w.start + w.readerUnits ≤ (rs.segment w.reader (rs.of.size - 1)).2) &&
+    let br := rs.bounds w.reader
+    let bw := rs.bounds w.writer
+    decide (w.readerUnits ≥ 1) && decide (w.start + w.readerUnits ≤ (segmentIn br (rs.of.size - 1)).2) &&
       (List.range rs.of.size).all fun r =>
-        let (lo, hi) := rs.segment w.reader r
+        let (lo, hi) := segmentIn br r
         if !w.readsIn (w.reader, lo, hi - lo) then true else
         let (a, b) := w.indicesIn lo (hi - lo)
         let (x, y) := w.box a b
-        !(decide (0 ≤ x) && rs.rankOf w.writer x.toNat y.toNat == some r)
+        !(decide (0 ≤ x) && rankIn bw x.toNat y.toNat == some r)
   | .error _ => false
 
 def WIRES_WHY : String :=

@@ -9,7 +9,7 @@ import Mathlib.Basic.ENNReal.Real
 
 Under PoUS as an obligation the device's memory holds the weights' P2 encoding while the prover serves, each block under
 the key pair of its tag, its coin flipped by the memory challenger, and a block re-encoded later under a fresh tag
-(`Security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
+(`security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
 the window's start, so the window is `PeriodHeld`'s period with that snapshot as `C*`. The store's oracle is the ring's
 labeling and a key pair per tag. The window's capacity coins are the snapshot's primitive (`Mutable.snap`) and the
 memory challenger's coins. The key pairs of every other tag (`Mutable.rest`: earlier versions, pages outside the
