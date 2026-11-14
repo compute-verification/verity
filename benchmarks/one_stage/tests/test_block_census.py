@@ -107,6 +107,35 @@ def test_a_fitting_row_past_its_familys_whole_bound_is_cut_like_its_longer_rows_
         assert (k, [(u["spec"], u["n"]) for u in got]) == (kind, [(row, 1)] if kind == "row" else [(one["spec"], n)])
 
 
+@pytest.mark.parametrize("t", [4, 9])
+def test_a_split_row_past_its_bound_takes_a_scores_unit_a_key_block_and_head_and_its_values_and_ends_per_column_block(t):
+    """Each head's key blocks (``ceil(T / BN)``) a scores unit and ``DV / CHAIN_COLS`` values units at ``NVIS = T``, and each
+    head ``DV / CHAIN_COLS`` ends of one column block: the row's counts, as serving names them."""
+    row = CHAIN_ROW.replace("T=272,NS=5", f"T={t},NS=1")
+    st = B.spec_statics(row)
+    blocks, cols = st["NH"] * -(-t // st["BN"]), st["DV"] // B.CHAIN_COLS
+    units, _ways = _chain_units(row)
+    kind, got, _why = B.cut(row, family(row, units, est_log=27))
+    assert kind == "split" and sorted((B.spec_base(u["spec"]), u["n"]) for u in got) == [
+        ("SparseMlaHeadEnd_v1", st["NH"] * cols), ("SparseMlaHeadScores_v1", blocks), ("SparseMlaHeadValues_v1", blocks * cols)]
+    for u in got:
+        base, s = B.spec_base(u["spec"]), B.spec_statics(u["spec"])
+        if base == "SparseMlaHeadEnd_v1":
+            assert s["DV"] == B.CHAIN_COLS
+        else:
+            assert (s["NVIS"], s["FIRST"], s.get("G", B.CHAIN_COLS)) == (t, True, B.CHAIN_COLS)
+
+
+@pytest.mark.parametrize("n", [37, 60])
+def test_a_sliced_row_past_its_bound_takes_n_units_of_one_slice(n):
+    """Serving's unit templates of the row (`serving_rows.unit_templates`) past itself, cut: ``N`` units at ``N = 1``."""
+    row = f"DsaMqaLogits_v3{{N={n},H=32,D=128}}"
+    templates = B.ST.unit_templates(row)
+    assert (B.spec_statics(templates[0][0]), templates[0][1]) == (B.spec_statics(row), 1)
+    kind, got, _why = B.cut(row, family(row, [unit(s, k) for s, k in templates[1:]], est_log=27))
+    assert (kind, [(B.spec_statics(u["spec"]), u["n"]) for u in got]) == ("split", [({"N": 1, "H": 32, "D": 128}, n)])
+
+
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
     """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit its Boolean form), so
     the planner's card and the served partition hold one cut of the row."""
