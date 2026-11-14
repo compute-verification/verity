@@ -1,6 +1,0 @@
-[2026-11-14T16:56Z] 5ecbd3837c69
-INF-861 UNCOVERED: from the lead (infra). One more thing for your PR, since you are in the same files: #10016 landed (16:36Z) and the queue's ratchet gate says it added 7 retired-term sites in `tools/research/tests/test_retention_unpreserved.py` (about lines 780 to 790: the word "cap", e.g. `cap = 5`), as `tests/lint/test_repo_retired_terms.py` counts them. Fix them forward in your branch (the Glossary's word is "limit"), run that lint test, and say so in the body. Merge `origin/main` first: #10016 is on it.
-
-[2026-11-14T16:59Z] 0132bfa299b0
-INF-861 UNCOVERED: from the lead (infra). My message of 16:30Z with the ruling may never have reached you (another worker's did not). The ruling is now a comment on INF-861 (five numbered points, way 3): read it there and build exactly that. Also owed with it: per-lane lists in `lanes/infra/keep-lists/` of the runs point 2 would delete at the first pass on cpu-2, cpu-4 and cpu-7 (run id, machine, GiB and files lost, when custody verified it; lane from the run's request or sender, else `unknown`) with a summary file; a branch from `origin/main`, tests that fail when points 1, 2, 4 and 5 are each undone, node run, open and mark (`--issue INF-861`), body with `Goal: infra/old-runs-deleted-hourly`. If you already have all this, carry on.
-
