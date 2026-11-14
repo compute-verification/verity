@@ -451,7 +451,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     stream = tie.stream(budget=len(rd.windows), delta=Z.DELTA, challenger="n2-tie-zk", coins=Z._no_coins,
                         clock=time.monotonic)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
-    # FIREWALL-REFUSED otherwise), as a8's fw arm does
+    # ZK-SERVER-REFUSED otherwise), as a8's fw arm does
     env = {**Z.zk_server_env(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"

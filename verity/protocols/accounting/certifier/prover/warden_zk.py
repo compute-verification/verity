@@ -42,7 +42,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   - ``swapped``: made for proof blocks 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
     Program's: the header names the swapped proof blocks' wiring.
   Each is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved
-  `--zk` behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition
+  `--zk` behind the ZK server (``FC_ZK_SERVER=1``, ``FC_ZK_SERVER_LEAN``) and held by Lean `verify --zk --partition
   --program --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered
   reads.
 * **What the verifier receives**, scanned for every 16-byte piece of every opened row and every salt of the
@@ -310,11 +310,11 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
 
 
-def firewall(M, m: dict) -> dict:
-    """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``)."""
-    if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (verity-verify-proof's flock-firewall)")
-    return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
+def zk_server(M, m: dict) -> dict:
+    """A zk_served prover's environment (`FC_ZK_SERVER=1`, its Lean frame named by ``FC_ZK_SERVER_LEAN``)."""
+    if not os.environ.get("FC_ZK_SERVER_LEAN"):
+        raise SystemExit("FC_ZK_SERVER_LEAN names no Lean ZK server frame (verity-verify-proof's flock-zk-server)")
+    return {"FC_ZK_SERVER": "1", **M.a0.zk_server_env(m)}
 
 
 def committed_roots(m: dict) -> tuple[dict, list]:
@@ -371,7 +371,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=zk_server(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

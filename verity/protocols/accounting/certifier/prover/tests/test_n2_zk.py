@@ -91,5 +91,5 @@ def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
     argv = ["prove", "--warden-run", "r", "--out", "o", "--dry"]
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
-    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+    with pytest.raises(SystemExit, match="outer proofs go through the ZK server one at a time"):
         n2.main([*argv, "--jobs", "2"])

@@ -28,7 +28,7 @@ holds these units yet (`verity.protocols.accounting.certifier.prover.egress`).
   Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
   swapped to match, so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each
   is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved ``--zk``
-  behind the ZK server (``FC_FIREWALL=1``)
+  behind the ZK server (``FC_ZK_SERVER=1``)
   and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
   its public salt.
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
@@ -302,7 +302,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=WZ.firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=WZ.zk_server(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
