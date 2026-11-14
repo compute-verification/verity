@@ -2975,10 +2975,11 @@ class Loop:
 
     def _plain(self, ready: list[Ready], main: str) -> dict[int, str]:
         """The plain PRs of ``ready``, by number at their heads: each with a land verdict of its own at its head
-        (`World.reviewed`), no Lean change, no Lean input of the tree changed and no move, and its change low-risk under
-        drive.toml's `lowrisk_excludes` at ``main`` (`queue.lowrisk`: none of the Lean, locks, verifiers, soundness-path Python
-        or the guards; with no excludes, none is plain)."""
-        excludes = flags_at(self.world.repo, main).lowrisk_excludes
+        (`World.reviewed`), no Lean change, no Lean input of the tree changed and no move, and its change meeting nothing
+        drive.toml's `verdict_excludes` at ``main`` names (read as `queue.lowrisk` reads the low-risk lane's own list, which
+        this gate doesn't read: Lean, its locks and Lake files, the check, and the code that lands and reverts; with no
+        excludes, none is plain)."""
+        excludes = flags_at(self.world.repo, main).verdict_excludes
         return {x.number: x.head for x in ready if x.number in self.world.reviewed and not (x.lean or x.lean_input or x.move)
                 and lowrisk(x.files, excludes)}
 

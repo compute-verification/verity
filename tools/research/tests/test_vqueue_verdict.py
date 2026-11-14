@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -15,10 +17,11 @@ from research.digest import REVERT_SUBJECT
 from research.merge import REVERTS
 from research.queue import DRIVE_FLAGS
 from test_queue import AUTHORED, NAMED, OWN, _git, _who
-from test_vqueue_loop import NEW, Env, Runs, _acts, _main_to, _row
+from test_vqueue_loop import NEW, Env, Runs, _acts, _main_to, _move, _row
 
-#: drive.toml on `main` in these tests: the low-risk lane on, keeping Lean and the verifiers off it
-DRIVE = 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "verity/core/"]\n'
+#: drive.toml on `main` in these tests: the low-risk lane on, keeping Lean and the verifiers off it, and those two off the
+#: quick tier where the land verdicts gate
+DRIVE = 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "verity/core/"]\nverdict_excludes = ["*.lean", "verity/core/"]\n'
 #: a change failing suite pkg's new test
 FAILING = {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"}
 
@@ -119,11 +122,11 @@ def test_under_gate_verdict_a_plain_candidate_lands_on_its_land_verdicts_and_the
     assert not [r for r in env.lines() if r["action"] in ("revert", "fallback")] and not env.posts
 
 
-@pytest.mark.parametrize("how", ["a Lean change", "a lowrisk_excludes path", "no land verdict of its own"])
+@pytest.mark.parametrize("how", ["a Lean change", "a verdict_excludes path", "no land verdict of its own"])
 def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_check(env, monkeypatch, how):
-    """A PR changing Lean or a path drive.toml's `lowrisk_excludes` names, or one taken on its ready mark alone with no land
+    """A PR changing Lean or a path drive.toml's `verdict_excludes` names, or one taken on its ready mark alone with no land
     verdict at its head, makes its candidate take the whole check before `main`, as under `--gate check`: no quick tier."""
-    files = {"a Lean change": {"Lib/A.lean": "def a := 1\n"}, "a lowrisk_excludes path": {"verity/core/v.py": "x = 1\n"},
+    files = {"a Lean change": {"Lib/A.lean": "def a := 1\n"}, "a verdict_excludes path": {"verity/core/v.py": "x = 1\n"},
              "no land verdict of its own": {"a.txt": "1\n"}}[how]
     head = env.put(1, files)
     if how == "no land verdict of its own":
@@ -133,6 +136,35 @@ def test_under_gate_verdict_a_candidate_that_is_not_plain_still_takes_the_whole_
     sha = built["sha"]
     assert built["members"] == [1] and started["record"]["gate"] == "check" and quick.launches == []
     assert [kw["shard"] for kw in _shards_of(runs, sha)] == ["1/3", "2/3", "3/3"]
+
+
+@pytest.mark.parametrize("what, files, gate", [
+    ("the root's tests", {"tests/test_tree.py": "x = 1\n"}, vqueue_slim.QUICK),
+    ("the circuit language", {"verity/circuits/program.py": "x = 1\n"}, vqueue_slim.QUICK),
+    ("a Lean source", {"Lib/A.lean": "def a := 1\n"}, "check"),
+    ("a lock", {"pkg/lean-audit.json": "{}\n"}, "check"),
+    ("a move", {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"}, "check"),
+    ("the loop", {"tools/research/src/research/vqueue_loop.py": "x = 1\n"}, "check"),
+], ids=["the root's tests", "the circuit language", "a Lean source", "a lock", "a move", "the loop"])
+def test_under_gate_verdict_what_is_plain_is_what_the_tree_s_verdict_excludes_leaves_whatever_lowrisk_excludes_names(
+        env, monkeypatch, what, files, gate):
+    """`main`'s drive.toml holds this tree's own `verdict_excludes`, and a `lowrisk_excludes` naming the root's tests and the
+    circuit language, as the low-risk lane's does.  A PR with a land verdict of its own that changes either is plain all the
+    same, and its candidate takes the quick tier: the gate reads `verdict_excludes` alone.  One changing a Lean source, a
+    lock or the loop's own code, which `verdict_excludes` names, takes the whole check, as does a move, whatever it touches."""
+    real = tomllib.loads((Path(__file__).resolve().parents[3] / DRIVE_FLAGS).read_text())["verdict_excludes"]
+    _main_to(env, {DRIVE_FLAGS: 'lowrisk_lane = true\nlowrisk_excludes = ["*.lean", "tests/", "verity/circuits/"]\n'
+                                f"verdict_excludes = {json.dumps(real)}\n"})
+    if what == "a move":
+        _move(env, 1, files)
+    else:
+        env.put(1, files)
+    loop, runs, quick = _verdict(env, monkeypatch)
+    logged = loop.tick()
+    built = next(r for r in logged if r["action"] == "build")
+    started = next(r for r in logged if r["action"] == "slim" and r["sha"] == built["sha"])
+    assert built["members"] == [1] and started["record"]["gate"] == gate
+    assert (len(quick.launches), len(_shards_of(runs, built["sha"]))) == ((1, 0) if gate == vqueue_slim.QUICK else (0, 3))
 
 
 def test_under_gate_verdict_a_plain_candidate_whose_quick_tier_fails_is_a_red_of_its_own_and_ejects_its_member(env, monkeypatch):
