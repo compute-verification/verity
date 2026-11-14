@@ -34,3 +34,34 @@ For the lead to read
 - routes/subset.py:118-124: `embed`/`gain_lr` grouping, which the PR says doesn't branch a step.
 - test_entries.py:405-407: the precedent for SHOULD FIX 1.
 
+[2026-11-14T08:02Z] 3e3894a26e0d
+NOT READY 1 — read at 0d6dbc683514f2732a42365526f0ce5b1bb85afa (#9964; replaces my earlier, longer message)
+
+MUST FIX
+1. tests/synthetic.py:218-220. The PR's own rule (body; comment :191-195) makes blocks frozen below trained ones a separate kind. All 16 library QAT configs train the top 2-4 of six blocks with the rest frozen below. The three QAT kinds use a one-block start, every block trained. There is no case or reason for frozen-below. Cure: `"blocks": 2` and targets `blocks.1.w*.weight` on them, or a stated reason. RAN: scratch probes of that shape pass (6.5 s, 6.9 s). READ: config map from attacks/*.toml with each route's DIALS.
+
+SHOULD FIX
+1. Nothing fails when a new kind lacks a case. KINDS is kept by hand. List of record: attacks/*.toml, routes/*.py, subset.WHOLE/MATRICES, qat.GRAD_CODES. Cure: a test mapping each `library.entries()` config to a JOBS key, as test_entries.py:405 does for REFERENCES. READ.
+2. test_run.py:655-656. The testing skill says "A test over about 5 s gets `@pytest.mark.slow`", so the rule asks for a slow mark, not a docstring. AGENTS.md's docstring rule (a test adding more than about a minute) is met at :681-686. The run lists 15 unmarked tests over 5 s, six of them new. Cure: `pytest.param(job, 3, marks=pytest.mark.slow)` for those six. READ/RAN.
+
+NOTE
+- 1 (READ): the two sides are independent for all 23 kinds. One is `flops.Counter` dispatching the real run (`job_counted`). The other is `capture_steps` on fake tensors (`traced_step`). They share the `opnames` tables and the `gates` prices, so an error there moves both sides unseen. Shampoo's eigh is the n³ rule on both sides, coded separately.
+- 3 (RAN; one-line breaks in `flops.py` only, reverted, worktree clean):
+  - Lion's `sign` ×2 failed only `[lion-3]`.
+  - Fused AdamW +1 failed `[grow-3]`, `[muon-whole-fused-3]`, `[fullmuon-3]`, `[muon-fused-3]`, `[fullmuon-fe-3]`, `[depthshare-3]`, `[depthshare-top-3]`, `[strideshare-3]`, `[ema-fullmuon-3]` and `[ema-fullmuon-fe-3]`.
+  - Linalg approx +1 failed `[shampoo-3]`, `[shampoo-decay-3]` and `[shampoo-whole-3]`.
+- 4 (READ): no tolerance, rounding, skip or xfail. :700 compares gates exactly.
+- RAN:
+  - The trace test passes 31/31 and the record test 30/30 (new cases under 2.2 s).
+  - Two probes pass: QAT's rtn8 code with low-width state, which tests the body's 8-bit-equals-4-bit reason, and LoRA on every matrix.
+- 6 (RAN): run r20261114-062721-fad6 has state `done`, rc 0 and tree_sha equal to the head. Its stdout.log says "787 passed", and its last line matches the body's (plus a logs path). The durations and "six of ten" match. The 23 kinds and 64 configs match (READ).
+- 7 and 8 (READ): only the two test files change; no ids, dates or names.
+- No message addressed to @training arrived.
+
+For the lead to read
+- synthetic.py:191-220: which dials the PR says branch a step.
+- test_run.py:613-614: QAT counts as Muon by route name.
+- test_run.py:707: approx_macs is keyed to `opt == "shampoo"` alone.
+- routes/subset.py:118-124: `embed`/`gain_lr` grouping, which the PR says doesn't branch a step.
+- test_entries.py:405-407: the precedent for SHOULD FIX 1.
+
