@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import JOBS, KINDS, LORA, kind_of, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import JOBS, KIND_DIALS, KINDS, LORA, OTHER_DIALS, kind_of, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
@@ -730,7 +730,16 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
 def test_every_config_of_the_library_takes_a_kind_of_step_a_job_takes():
     """Every config of the library (`attacks/`) takes a kind of step (`synthetic.kind_of`, at its start's blocks) one
     of `JOBS` takes, so the test above holds its count to its traced circuit; and no two jobs take one kind. A config
-    whose kind no job takes fails here by name, with the kind its job would take."""
+    whose kind no job takes fails here by name, with the kind its job would take, and so does a route's dial that
+    `kind_of` doesn't read and no set states takes no branch of the step."""
+    assert not KIND_DIALS & OTHER_DIALS
+    unread = {route: sorted((set(mod.DIALS) | set(getattr(mod, "FIXED", {}))) - KIND_DIALS - OTHER_DIALS)
+              for route in sorted(p.stem for p in config.ROUTES.glob("*.py") if not p.stem.startswith("_"))
+              for mod in [config.route(route)]}
+    assert not any(unread.values()), "".join(
+        f"\n{route}: dials {dials} are in neither synthetic.KIND_DIALS nor OTHER_DIALS; add each to OTHER_DIALS if it "
+        "takes no branch of the step, else read its branch in synthetic.kind_of and add it to KIND_DIALS"
+        for route, dials in unread.items() if dials)
     assert len(set(JOB_KINDS.values())) == len(JOBS), "two jobs of synthetic.JOBS take one kind of step"
     have = set(JOB_KINDS.values())
     missing = {}
