@@ -1412,12 +1412,12 @@ def min_cut():
 
 @dataclass(frozen=True)
 class Priced:
-    """The bound at a policy on the sub-work the calculator chose: which groups, their ω (None where a group states
-    no arrays), and the calculator's `Bound`."""
+    """The bound at a policy on the sub-work the calculator chose: which groups, their ω, and the calculator's
+    `Bound`."""
 
     bound: object
     groups: tuple[Group, ...]
-    omega: int | None
+    omega: int
     N: float
     O: float
 
@@ -1425,11 +1425,11 @@ class Priced:
 def products(work: Work) -> list:
     """``work``'s charged groups as the calculator's products (`min_cut.Product`), priced as this reading charges them:
     a token-indexed group's MACs at the work's `keep`, an output at most bf16's 16 bits, each operand at its `β` with
-    which is a weight, its contraction, and the pairs of arrays it multiplies (None where it states none). A Program
-    doesn't say which products are forward ones or weight gradients."""
+    which is a weight, its contraction, and the pairs of arrays it multiplies. A Program doesn't say which products are
+    forward ones or weight gradients."""
     mc = min_cut()
     return [mc.Product(g.macs * (1.0 if all(g.weight) else work.keep), g.wires, g.beta, g.weight,
-                       min(mc.BF16, g.out_width), g.k_dim, pairs=g.edges or None) for g in work.groups]
+                       min(mc.BF16, g.out_width), g.k_dim, pairs=g.edges) for g in work.groups]
 
 
 def bound(work: Work, c: float, n: float | None = None) -> Priced | None:

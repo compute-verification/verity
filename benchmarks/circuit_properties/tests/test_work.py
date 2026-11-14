@@ -11,6 +11,7 @@ row; a rank-4 bottleneck between two carried weights; each operand's β at min(1
 from __future__ import annotations
 
 import json
+import math
 import sys
 from collections import Counter
 from pathlib import Path
@@ -318,6 +319,22 @@ def test_the_bound_is_the_calculators_at_the_groups_beta():
     whole = MC.bound(C, KB, N=w.N, O=w.O, size=w.gates, beta_w=bk, beta_x=bk, b=MC.BF16, F=MC.share(2))
     assert (best.bound.beta_w, best.bound.beta_x, best.bound.b) == (bk, bk, MC.BF16)
     assert best.bound.blocks == pytest.approx(whole.blocks) and best.N == w.N
+
+
+def test_a_long_contraction_alone_binds_where_a_short_one_holds_most_of_the_wires():
+    """Two groups, the first of short contractions with most of the wires: the second alone binds, a sub-work only a
+    threshold at a contraction length gives. Its bound is the count's least `m` on the second group, solved here."""
+    k, c, gates = 65536.0, 1e12, 2e15
+    short = WK.Group("a", (16, 16), (True, False), 16, 4, 10 ** 12, 4 * 10 ** 12, frozenset({frozenset("AF")}),
+                     beta=(4.0, 8.0))
+    long = WK.Group("b", (16, 16), (False, True), 8, 256, 10 ** 12, 31_250_000_000, frozenset({frozenset("FD")}),
+                    beta=(1.0, 2.0))
+    best = WK.bound(WK.Work(k, gates, [short, long]), c)
+    q, b, N, O = 2.0 * 1.0, 8.0, 1e12, 3.125e10
+    A, D = k + math.sqrt(k ** 3 / (q * b)) / 2, (k / 2) * math.sqrt(O / q)
+    m = ((-D + math.sqrt(D * D + 4 * A * N)) / (2 * A)) ** 2
+    assert best.groups == (long,) and best.omega == 2
+    assert best.bound.blocks == pytest.approx(m) and best.bound.slowdown == pytest.approx(m * c / gates)
 
 
 def test_every_operand_is_at_most_bf16_and_beta_k():

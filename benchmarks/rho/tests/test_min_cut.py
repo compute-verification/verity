@@ -516,7 +516,7 @@ def test_one_product_is_the_bound_at_its_pair_and_past_the_rows_the_bound_at_non
 
 
 def test_the_sub_work_that_binds_is_the_largest_term_at_its_own_pair_and_f():
-    """The chosen sub-work's term is the largest of the three, and its `Bound` is `bound` at what it chose: `N` and
+    """The chosen sub-work's term is the largest of them, and its `Bound` is `bound` at what it chose: `N` and
     `O` are `scale` times its products' sums, and the weight gradients alone are at `F` = 1."""
     for scale in (1.0, 0.25):
         got = min_cut.slowdown_of(C, TIED, size=C, work=layer(), scale=scale)
@@ -542,16 +542,26 @@ def test_f_is_the_graphs_where_the_pairs_are_stated_else_the_kinds_and_a_given_f
     assert given.F == 1.3 and given.omega is None and given.bound.F == 1.3
 
 
-def test_the_second_sub_work_leaves_out_the_contractions_below_k_thr():
-    """`K_thr` is taken on the whole work's choice, and the second sub-work is the whole work's choice on the
-    products whose contraction is at least it."""
+def test_the_second_and_fourth_sub_works_are_the_best_cuts_at_a_contraction_length():
+    """`K_thr` is taken on the whole work's choice. The second sub-work is the best of the whole work's choice on the
+    products whose contraction is at least `K_thr` or at least a product's; the fourth, the best of it on the products
+    with a weight operand, or those without, cut so."""
     got = min_cut.slowdown_of(C, TIED, size=C, work=layer())
     assert got.K_thr == pytest.approx((got.F * TIED / 2) ** 2 * got.b_y
                                       / (got.beta_w * got.beta_x * (TIED + got.alpha)), rel=1e-12)
     short = [*layer(), replace(layer()[1], k_dim=got.K_thr / 2, macs=MACS / 3)]
     cut = min_cut.slowdown_of(C, TIED, size=C, work=short)
-    assert cut.terms[min_cut.SUBWORKS[1]] == got.terms[min_cut.SUBWORKS[0]]
     assert cut.terms[min_cut.SUBWORKS[0]] != got.terms[min_cut.SUBWORKS[0]]
+
+    def best(sub, lengths):
+        terms = [min_cut.slowdown_of(C, TIED, size=C, work=[p for p in sub if p.k_dim >= K0]).terms[min_cut.SUBWORKS[0]]
+                 for K0 in lengths]
+        return max(t for t in terms if t is not None)
+
+    lengths = {p.k_dim for p in short}
+    assert cut.terms[min_cut.SUBWORKS[1]] == best(short, {cut.K_thr} | lengths) >= got.terms[min_cut.SUBWORKS[0]]
+    kinds = [[p for p in short if any(p.weight) == w] for w in (True, False)]
+    assert cut.terms[min_cut.SUBWORKS[3]] == max(best(s, lengths) for s in kinds if s)
 
 
 def test_the_class_reads_the_files_rows_so_other_rows_in_the_registry_are_refused():

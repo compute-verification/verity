@@ -1,14 +1,15 @@
-"""One slowdown calculator: every slowdown the tree computes comes from one function of the calculator's `min_cut`,
+"""One slowdown calculator: every slowdown the calculator's callers compute comes from one function of its `min_cut`,
 `slowdown_of`, which goes from a work to a slowdown.
 
 The calculator is the directory holding the package of the one tracked `min_cut.py` outside a test directory.  A file
 outside it reaches `min_cut` where it imports it (a statement or an import-call string), loads it by file (a path
 ending in `min_cut.py` handed to a load or put on `sys.path`, `test_boundaries._path_loads`), or calls with no
-argument a door some file defines to return it (`calculator._min_cut()`, `work.min_cut()`).  Every such file is in
-`ALLOWED`, which only shrinks, with what of `min_cut` past its one function it reads and why.  No file that is not a
-test reads `bound`, `blocks_at_least` or `slowdown_at_least` (`FORBIDDEN`), and none passes `F` to `slowdown_of`,
-which is for a test's comparison at one `F`; a test that reads them holds the one function to them, a reference.  The
-period's bound and its parts (`SIBLINGS`) are read only where `ALLOWED` says.  Nothing is executed (AST only)."""
+argument a door some file defines to return it (`calculator._min_cut()`, `work.min_cut()`) or a name bound to one.
+Every such file is in `ALLOWED`, which only shrinks, with what of `min_cut` past its one function it reads and why.
+No file that is not a test reads `bound`, `blocks_at_least` or `slowdown_at_least` (`FORBIDDEN`), and none passes `F`
+to `slowdown_of`, which is for a test's comparison at one `F`; a test that reads them holds the one function to them,
+a reference.  The period's bound and its parts (`SIBLINGS`) are read only where `ALLOWED` says.  Nothing is executed
+(AST only).  `nci/slowdown.py`'s thread-theorem and construction bounds are a separate calculation it does not hold."""
 
 from __future__ import annotations
 
@@ -50,7 +51,7 @@ ALLOWED = {
     "benchmarks/circuit_properties/tests/test_work.py":
         (("bound",), "reference: the reading's bound is `bound` at its products' sums"),
 }
-FIX = ("every slowdown comes from the calculator's `min_cut.slowdown_of`: read your work into its `Product`s and call "
+FIX = ("every slowdown the calculator's callers compute comes from its `min_cut.slowdown_of`: read your work into its `Product`s and call "
        "it, keeping only how you read the work, and add your file to `ALLOWED` in tests/test_one_slowdown.py with why "
        "(it only shrinks); a test that holds the one function to `bound` lists the names it reads as references")
 
@@ -92,9 +93,13 @@ def reads(texts: dict[str, str], where: Path, package: str) -> dict[str, dict[st
              if not rel.startswith(inside) and "min_cut" in text}
     doors = {fn.name for nodes in trees.values() for fn in nodes
              if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and _loads(list(ast.walk(fn)), package)}
+    trees |= {rel: list(ast.walk(ast.parse(text, filename=rel))) for rel, text in texts.items()
+              if rel not in trees and not rel.startswith(inside) and any(d in text for d in doors)}
     out = {}
     for rel, nodes in trees.items():
-        door_calls = [n for n in nodes if _call_name(n) in doors and not n.args and not n.keywords]
+        opens = _bound_from(_assigned(nodes), doors, lambda e, names: isinstance(e, ast.Name) and e.id in names or
+                            isinstance(e, ast.Attribute) and e.attr in names)
+        door_calls = [n for n in nodes if _call_name(n) in opens and not n.args and not n.keywords]
         if not (_loads(nodes, package) or door_calls):
             continue
         seeds = {a.asname or a.name for n in nodes if isinstance(n, ast.ImportFrom) and n.module == package
@@ -107,7 +112,7 @@ def reads(texts: dict[str, str], where: Path, package: str) -> dict[str, dict[st
                 return e.id in names
             if isinstance(e, ast.Attribute):
                 return e.attr == "min_cut" and isinstance(e.value, ast.Name) and e.value.id == package
-            return _call_name(e) in doors | {"module_from_spec"} and not e.keywords and (
+            return _call_name(e) in opens | {"module_from_spec"} and not e.keywords and (
                 not e.args or _call_name(e) == "module_from_spec")
 
         names = _bound_from(_assigned(nodes), seeds, module)
@@ -180,18 +185,21 @@ TOY = {
     "benchmarks/toy/toy/tied.py": "from {p}.min_cut import capped, blocks_at_least\n",
     "benchmarks/toy/tests/test_toy.py": "from {p} import min_cut\n\ndef test_x():\n    assert min_cut.bound\n",
     "benchmarks/toy/toy/other.py": "def _min_cut(flow, cut):\n    return 0\n\nx = _min_cut(1, 2)\n",
+    "benchmarks/toy/toy/alias.py": "from toy import door as D\n\nopen_ = D._mc\n\ndef slow(w):\n"
+                                   "    return open_().bound(1, 2, N=w, O=w, size=3)\n",
 }
 
 
 def test_a_second_caller_is_found() -> None:
     """The check isn't vacuous: a second chooser that imports `min_cut` and calls `bound`, one that loads it by file
-    behind a door and passes `F`, one that imports the siblings by name, and a test, are each found; a function that
-    only shares the name is not."""
+    behind a door and passes `F`, one that calls the door under another name, one that imports the siblings by name,
+    and a test, are each found; a function that only shares the name is not."""
     where, package = calculator()
     texts = {rel: text.format(p=package) for rel, text in TOY.items()}
     found = reads(texts, where, package)
     assert set(found) == set(TOY) - {"benchmarks/toy/toy/other.py"}, found
     assert set(found["benchmarks/toy/toy/door.py"]) == {"slowdown_of", "F"}
+    assert found["benchmarks/toy/toy/alias.py"] == {"bound": [6]}
     bad = offenders(found, {"benchmarks/toy/toy/tied.py": (("capped",), "toy")})
     assert "benchmarks/toy/toy/second.py: reaches the calculator's min_cut and is not in ALLOWED" in bad, bad
     assert "benchmarks/toy/toy/tied.py:1: calls min_cut.blocks_at_least, which only slowdown_of may call outside " \

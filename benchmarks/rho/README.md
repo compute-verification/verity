@@ -148,12 +148,13 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)` (between two rows the next
   row's, the most the rows allow there), and no bound past their last `k`; `F = 1` (`HE`: at most two of forward,
   input-gradient and weight-gradient products), `share(3)` for all three (`HEShared`).
-- `min_cut.slowdown_of(c, k, n, size=…, work=[Product, …])` is the one way from a work to a slowdown: no source
+- `min_cut.slowdown_of(c, k, n, size=…, work=[Product, …])` is the one way the calculator's callers go from a work to a slowdown: no source
   outside this directory calls `bound`, `blocks_at_least` or `slowdown_at_least`. Each `Product` states its MACs, output wires, operands' `β`
   as its caller charges them, which operand is a weight, `b_y`, contraction length, whether it is forward or a weight
   gradient, and the pairs of arrays it multiplies where known. It returns the `Bound` of the sub-work it binds at
   with what it chose (`Chosen`). The sub-works (`SUBWORKS`) are the work, the work without its contractions below
-  `K_thr`, and the weight gradients alone, each at the threshold on `β_w β_x` where its term is largest; `F` is
+  `K_thr` or any product's contraction, the weight gradients alone, and the products with a weight operand or
+  without, each less its contractions below any product's, each at the threshold on `β_w β_x` where its term is largest; `F` is
   `share(ω)` of the arrays' graph (`clique`) where every product states its pairs, else the kinds' rule. The
   training benchmark's calculator, `circuit_properties.work.bound` and the inference-only policy read their works
   into products and call it; `tests/test_one_slowdown.py` at the root holds every other file away from `bound`.

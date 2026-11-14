@@ -234,7 +234,7 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
       counted them.
 
     The work is M at the policy's k (the record's own, or a trace's at each k of the console's dial,
-    `work.classified_at`), the best of the calculator's three choices of it (`min_cut.SUBWORKS`). A weight's β is at most the run's code
+    `work.classified_at`), the best of the calculator's choices of it (`min_cut.SUBWORKS`). A weight's β is at most the run's code
     bits over M's trained weights where M counts them, and τ is the run's. The bound needs no summation order and no
     premise that blocks hold whole multiply cells (a block's split MACs are charged k a block), so a step that writes
     products with elementwise ops has one (they are left out of M, and stay in |C|), and so does a circuit that

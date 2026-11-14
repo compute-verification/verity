@@ -50,7 +50,7 @@ guarantee states.
 that read more than a threshold of them charged whole. `capped` is either one beside the share of the work no block
 is credited for, which no count here covers.
 
-`slowdown_of` is the one way from a work to a slowdown: a caller states its work's products (`Product`), each priced
+`slowdown_of` is the one way the calculator's callers go from a work to a slowdown: a caller states its work's products (`Product`), each priced
 as it reads them, and `slowdown_of` chooses the sub-work and the `F` the bound is largest at and asks `bound`.
 """
 
@@ -89,8 +89,8 @@ BF16 = 16.0
 #: an untied output word's bits: the fresh input one is to the block that reads it, at most
 WORD = 32.0
 #: the sub-works `slowdown_of` takes the best of, M the work its caller states: all of it, it less its short
-#: contractions, and its weight gradients alone
-SUBWORKS = ("M", "M without its short contractions", "the weight gradients alone")
+#: contractions, its weight gradients alone, and the products of one operand kind (with a weight, without)
+SUBWORKS = ("M", "M without its short contractions", "the weight gradients alone", "one operand kind")
 
 
 def alpha(k: float, q: float, b: float) -> float:
@@ -298,14 +298,17 @@ class Chosen:
 def slowdown_of(c: float, k: float, n: float | None = None, *, size: float, work: Sequence[Product],
                 scale: float = 1.0, F: float | None = None) -> Chosen:
     """The bound at the policy `(c, k, n)` on a circuit of `size` gates whose charged work is `work`: the sub-work and
-    `F` it is largest at, and `bound` there. The one way from a work to a slowdown.
+    `F` it is largest at, and `bound` there. The one way the calculator's callers go from a work to a slowdown.
 
-    The sub-works are the three of `SUBWORKS`, each at its best threshold `q`: of its products, those whose
+    The sub-works are the four of `SUBWORKS`, each at its best threshold `q`: of its products, those whose
     `β_w β_x` is at least `q`, charged at the pair of the first product at `q`, the least pair among them, which `F`
     needs where the arrays differ in `β` (Motzkin–Straus sums `u_r u_s / (β_r β_s)` over the pairs multiplied), and at
-    their least `b_y`. The second leaves out of the work the products whose contraction is below `K_thr`, taken on the
-    first's choice; the third is the weight gradients alone. The sub-work that binds is the one whose term is largest,
-    the first of them on a tie.
+    their least `b_y`. The second leaves out of the work the products whose contraction is below a length, `K_thr`
+    (taken on the first's choice) or any product's contraction, at whichever is largest; the third is the weight
+    gradients alone; the fourth is the products with a weight operand, or those without, each less the products whose
+    contraction is below any product's contraction. The sub-work that binds is the one whose term is largest, the first
+    of them on a tie. Each is a set of the work's products, so the statement `bound` cites holds on it, and the largest
+    over them is a bound on the work.
 
     `F` is `share(ω)`, `ω` the largest set of arrays the sub-work's products multiply pairwise (at least 2), wherever
     every product states its `pairs`: where the arrays are stated, their graph is the rule. Where one doesn't, the
@@ -354,15 +357,25 @@ def slowdown_of(c: float, k: float, n: float | None = None, *, size: float, work
                        "omega": omega}
         return out
 
+    def longest(first: list | None, *works: list) -> dict | None:
+        out = None if first is None else best(first)
+        for sub in works:
+            for K0 in sorted({p.k_dim for _, _, p in sub}):
+                s = best([x for x in sub if x[2].k_dim >= K0])
+                if s is not None and (out is None or s["term"] > out["term"]):
+                    out = s
+        return out
+
     whole = best(priced)
     K_thr = None
     subs = [whole]
     if whole is not None:
         K_thr = (whole["F"] * k / 2) ** 2 * whole["b_y"] / (whole["beta_w"] * whole["beta_x"] * (k + whole["alpha"]))
-        subs.append(best([x for x in priced if x[2].k_dim >= K_thr]))
+        subs.append(longest([x for x in priced if x[2].k_dim >= K_thr], priced))
     else:
         subs.append(None)
     subs.append(best([x for x in priced if x[2].dw], alone=True))
+    subs.append(longest(None, [x for x in priced if any(x[2].weight)], [x for x in priced if not any(x[2].weight)]))
     terms = {name: None if s is None else max(0.0, s["term"]) for name, s in zip(SUBWORKS, subs)}
     on = [(s["term"], -i, name, s) for i, (name, s) in enumerate(zip(SUBWORKS, subs)) if s is not None]
     if not on:

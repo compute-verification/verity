@@ -16,7 +16,7 @@ from training_slowdown import formalism as F
 from training_slowdown.gates import per_mac
 
 FIXTURES = Path(__file__).parent / "fixtures"
-#: the calculator's three choices of the work, the subsets of M the entry point's figure names
+#: the calculator's choices of the work, the subsets of M the entry point's figure names
 SUBWORKS = calculator._min_cut().SUBWORKS
 
 
