@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 
 import pytest
+from research import settings
 from research.pods import registry
 
 SKY = Path(registry.__file__).resolve().parent / "nebius" / "sky"
@@ -20,7 +20,7 @@ def row(model: str) -> dict:
 
 
 def test_the_pilot_estimates_a_bundle_as_the_pacer_does_once_the_pacer_has_learned_its_model(monkeypatch):
-    sizes = Path(os.environ["VY_BUNDLE_SIZES"])               # conftest points it away from node 1's mirror
+    sizes = Path(settings.need("VY_BUNDLE_SIZES"))            # conftest points it away from node 1's mirror
     spec = importlib.util.spec_from_file_location("commit_pack_sizes", SKY / "commit_pack.py")
     pilot = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, "commit_pack_sizes", pilot)

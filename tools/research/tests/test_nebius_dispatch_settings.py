@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from research import settings
 from research.pods import registry
 
 DISPATCH = Path(registry.__file__).resolve().parent / "nebius" / "dispatch.py"
@@ -38,7 +39,7 @@ def test_each_tick_reads_dispatch_env_as_it_is_now_and_a_removed_key_drops_out(t
     mod = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(mod)              # as the loop does at its start: dispatch.env into its own os.environ
-        assert os.environ["VY_PROVER_CPUS"] == "128-191" and mod.PROVER_CPUS == "128-191"
+        assert settings.need("VY_PROVER_CPUS") == "128-191" and mod.PROVER_CPUS == "128-191"
 
         seen, rcs, real_run = [], iter([0, 0, 0, 1, mod.TICK_FAILED]), subprocess.run
 

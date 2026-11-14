@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from research import notes
+from research import notes, settings
 from research.store import labels_sync as LS
 from research.store import parity as PA
 from research.store import preserved as P
@@ -148,9 +148,9 @@ def test_d5_a_rebuild_killed_partway_leaves_the_previous_catalog_answering(env, 
     with monkeypatch.context() as m, pytest.raises(KeyboardInterrupt):
         m.setattr(Index, "rebuild", dies)
         LocalStore().reindex()
-    fresh = LocalStore(os.environ["RESEARCH_STORE"])
+    fresh = LocalStore(settings.need("RESEARCH_STORE"))
     assert fresh.index.artifact(art) == before and fresh.index.replicas(art)["remote"]["verified_utc"]
-    assert not list(Path(os.environ["RESEARCH_STORE"]).glob(".catalog.sqlite.rebuild-*"))
+    assert not list(Path(settings.need("RESEARCH_STORE")).glob(".catalog.sqlite.rebuild-*"))
     assert LocalStore().reindex()["artifacts"] == 1
     assert st.index.replicas(art)["remote"]["verified_utc"], "replicas survive the swap; an open store sees the new file"
 

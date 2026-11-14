@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from research import settings
 from research.store import bucket_index as BI
 from research.store import canon, ids
 from research.store.model import Label
@@ -282,7 +283,7 @@ def test_postgres_index_hands_psql_the_url_only_in_its_environment_and_names_the
 @pytest.fixture
 def postgres(tmp_path):
     """A throwaway cluster, owned like Neon's `store`: the schemas are another role's, the indexer may only use and create in them."""
-    if not os.environ.get("VERITY_RESEARCH_POSTGRES"):
+    if not settings.get("VERITY_RESEARCH_POSTGRES"):
         pytest.skip("starts a Postgres server (a few seconds; needs initdb): set VERITY_RESEARCH_POSTGRES=1")
     import glob
     import subprocess

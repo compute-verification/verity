@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from research import settings
 from research.pods import registry
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
@@ -344,7 +345,7 @@ def test_start_runs_a_timing_job_unpreemptible_at_nice_0_in_a_top_level_scope_an
     unit = fr.running["nw-chunk.sh"]["unit"]
     root, user = cmd[:cmd.index("setpriv")], cmd[cmd.index("setpriv"):]
     assert unit.startswith("fill-timing-") and root == [
-        "sudo", "-n", "--preserve-env", "env", f"PATH={os.environ.get('PATH', '')}", f"HOME={me.pw_dir}", f"USER={me.pw_name}",
+        "sudo", "-n", "--preserve-env", "env", f"PATH={settings.get('PATH', '')}", f"HOME={me.pw_dir}", f"USER={me.pw_name}",
         f"LOGNAME={me.pw_name}", "systemd-run", "--quiet", "--scope", "--collect", "--slice=vy-timing.slice", "--unit", unit,
         "--nice=0", "-p", "AllowedCPUs=124-139", "-p", "MemoryMax=48G", "-p", "MemorySwapMax=0", "--"]
     assert user[:user.index("--")] == ["setpriv", f"--reuid={os.getuid()}", f"--regid={os.getgid()}", "--init-groups"]
