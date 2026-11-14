@@ -21,7 +21,7 @@ no encoding.
 
 `commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
 `--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
-(`Generated`: `benchmarks.torch_gpu.p2_stage.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
+(`Generated`: `verity.protocols.accounting.pous.prover.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
@@ -123,7 +123,7 @@ STAGING_ALIGN = 256
 TOY_SOURCE = hashlib.sha512(b"verity-pous/p2-store/toy/setup-source").digest()
 TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 SETUP_FORMAT = "verity-pous/p2/store/v1"
-GENERATOR = "benchmarks.torch_gpu.p2_stage.served_weights"
+GENERATOR = "verity.protocols.accounting.pous.prover.served_weights"
 TIE_TAG = "verity-pous/p2/store-tie/v1"
 TIE_FIELDS = ("manifest", "program", "stream_bytes", "layout_sha512", "commitment", "salt", "root", "w_root", "registration")
 SPOTS_PER_SEGMENT = 2
@@ -402,7 +402,7 @@ def git_blob(path: str) -> str | None:
 
 
 class Generated:
-    """`W` from a seeded weights generator (`benchmarks.torch_gpu.p2_stage.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
+    """`W` from a seeded weights generator (`verity.protocols.accounting.pous.prover.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
     `model_id`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
     back to back, each part an s8 tensor of the layout tensor's `K` columns. `program` is the generator's name of the
     weights (its `model_id`, its manifest's `"model"`), named as `setup.json` and the tie hold it."""

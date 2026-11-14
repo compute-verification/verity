@@ -1904,7 +1904,8 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
                  str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
-                 "--checkpoint-dir", "unread", "--sampling-design", "rate:1/4", "--out", str(out)])
+                 "--checkpoint-dir", "unread", "--sampling-design", "rate:1/4", "--out", str(out)],
+                kept_ingress=lambda serve_dir: None, scan_state_file="unread")
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
     assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
     assert not list(Path(s.a.row_dir).glob("build_request*"))
@@ -1961,6 +1962,14 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
     p.write_bytes(bytes(31))
     with pytest.raises(ValueError, match="32 bytes, not 31"):
         PP.committer_key(p)
+
+
+def test_window_commit_without_the_certifiers_reader_or_state_file_is_refused_by_name():
+    """SPOT imports neither the certifier nor a benchmark, so window-commit takes the reader of the run a serve kept and
+    the name the certifier's scan reads the opened scan state under from its caller, and refuses by name without them."""
+    for given in ({}, {"kept_ingress": lambda serve_dir: None}, {"scan_state_file": "unread"}):
+        with pytest.raises(ValueError, match="by what its caller passes .*run benchmarks/one_stage/window_commit.py"):
+            PP.window_commit_of_builds(argparse.Namespace(), **given)
 
 
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):

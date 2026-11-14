@@ -514,6 +514,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
     "verity/runtime",
 ]
 
@@ -747,6 +748,7 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/certifier/prover/window_charge.py",
+    "verity/protocols/accounting/pous/prover/served_weights.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
@@ -839,6 +841,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_on_node.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",
