@@ -338,10 +338,10 @@ theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hready : I.SessionsReady) (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
+    (hready : I.SessionsReady) (hSr : I.SessionRegistered .remote)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
-  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
+  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) I.registeredFiles
     (I.sessionAt_of_registered .remote hSr) (I.logOpensRecorded .remote) hW hI
 
 open scoped ENNReal in
@@ -349,12 +349,10 @@ open scoped ENNReal in
 reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
 premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
 theorem remote_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionsReady ∧ (Instance.Honest.inst ⊤ fun _ => none).RegisteredFiles ∧
-      (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles_none ⊤,
-    Instance.Honest.sessionRegistered_none ⊤ .remote,
+    (Instance.Honest.inst ⊤).SessionsReady ∧ (Instance.Honest.inst ⊤).SessionRegistered .remote ∧
+      (Instance.Honest.inst ⊤).base.PouwSound .remote ∧
+      (Instance.Honest.inst ⊤).base.InferenceOnlySound .remote :=
+  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.sessionRegistered_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,

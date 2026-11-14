@@ -63,6 +63,6 @@ end Instance
 open scoped ENNReal in
 /-- At no session v2's session at the registered files holds of every session, there being none. -/
 theorem Instance.Honest.sessionRegistered_none (δ : ℝ≥0∞) (k : Verity.Registration.Composite) :
-    (Instance.Honest.inst δ fun _ => none).SessionRegistered k := fun _ _ h => by simp [Instance.Honest.inst] at h
+    (Instance.Honest.inst δ).SessionRegistered k := fun _ _ h => by simp [Instance.Honest.inst] at h
 
 end Verity.Sampled
