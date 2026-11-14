@@ -21,4 +21,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_mockdc_seal.py"]
 # graph.py exports datacenter's declarations and records.py replays network_traces' active_replay; neither directory is
 # an installed package, so both are imported by path. The tests pin the declared tensor-core rates to the census.
-inputs = ["benchmarks/datacenter", "benchmarks/network_traces", "benchmarks/census/hardware.json"]
+# mockdc.py and datacenter's examples.py read the RTX PRO 6000 node's file and its cards (load_node reads every card).
+inputs = ["benchmarks/datacenter", "benchmarks/network_traces", "benchmarks/census/hardware.json", "hardware/cards",
+          "hardware/nodes/rtx-pro-6000-server-x8.toml"]
