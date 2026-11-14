@@ -49,7 +49,8 @@ VARIABLES = {
                  f"start-side --trusted-sha512 {KEY}",
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "PRECISION": "verity_int8",
     "REPO": "verity-int8/Llama-3.2-1B-INT8", "REV": "15b0976d400d796ee589e7737d03a919526bf800",
-    "SERVE_ARGS": "--remote-verifier 192.0.2.2:7002", "SLOTS": "4", "V3C_LAW": "subset:1", "WINDOW_STEPS": "16",
+    "SERVE_ARGS": "--remote-verifier 192.0.2.2:7002 --protocol ids --id-payload 503", "SLOTS": "4",
+    "V3C_LAW": "subset:1", "WINDOW_STEPS": "16",
     "WIPE_ADDRESS": "192.0.2.1:7001", "WIPE_CHALLENGER": "auditor-1",
     "WIPE_CMD": 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"', "WIPE_COMMAND": "start-wipe",
     "WIPE_KEY_SHA512": "1" * 128,
@@ -170,7 +171,8 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
                                                                     NC.NETWORK_CERTIFIER, ("gate",))
-    assert set(side.variables(cfg, BINDINGS)) == {"CERTIFIER_FRONT", "CERTIFIER_CMD"} and device.runs == T.GATE
+    assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD"}
+    assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
     assert len(gates) == 6
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
