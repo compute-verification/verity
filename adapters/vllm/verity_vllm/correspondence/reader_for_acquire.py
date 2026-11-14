@@ -20,7 +20,7 @@ Under `correspondence` every module-site Value is CONFIRMED against the record (
 listed `unconfirmed` in the plan -- a finding, not a changed site: the manifest's op_path stands either way, so the plan's content is the
 same under both sources and the plan digest (which excludes the `correspondence` provenance block) says whether anything changed.
 
-The runtime side is `records.runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
+The runtime side is `records.runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS).
 """
 from __future__ import annotations
 
@@ -38,7 +38,6 @@ from verity_vllm.records.runtime_tree import (
     RUNNER_PATH,
     RuntimeTree,
     runtime_tree_from_paths,
-    runtime_tree_of,
 )
 
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
@@ -186,4 +185,4 @@ class AcquireCorrespondence:
 
 
 __all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence",
-           "RuntimeTree", "RUNNER_PATH", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
+           "RuntimeTree", "RUNNER_PATH", "runtime_tree_from_paths", "RuntimeCorrespondence"]
