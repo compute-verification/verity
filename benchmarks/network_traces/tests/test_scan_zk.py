@@ -539,7 +539,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
-    and two row registrations, each named by the registration's roots. The period's mirror reads the block's
+    and two row registrations, each named by the registration's roots, and the deployment's signed start, the listed
+    entry's session's, certified under its key in its session. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
@@ -550,8 +551,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
     swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
     entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, and a run in the bytes
-    egress form, are refused by name. Slow
+    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, a run in the bytes
+    egress form, and a run whose deployment holds no signed start are refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
     import scan_period as SP
@@ -630,6 +631,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     ev = json.loads(bytes.fromhex(case["evidence"]))
     (x,) = ev["windows"]
     assert ev["audits"] == [audit["answer"]]
+    # the one listed entry's session's signed start, the deployment's, which the period check holds the entry to
+    (start,) = PC.evidence(bytes.fromhex(case["evidence"]))[2]
+    (entry,) = PC.params(p).entries
+    assert ev["starts"] == [dep["start"]] and start.base_ms == 0
+    assert start.refusal(entry.key, entry.session, WS.LINK, PC.params(p).schedule.digest) is None
     assert x["answer"] == answer and x["registrations"] == [regs["ingress", 0], regs["egress", 0]]
     assert [(c["link"], c["direction"], c["window"]) for c in x["certificates"]] == [
         ("warden", "ingress", 0), ("warden", "egress", 0), ("warden-fails", "egress", 0)]
@@ -678,6 +684,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         SP.rows_case(run, scan)
     (run / "deployment.json").write_text(json.dumps({**dep, "params": {**dep["params"], "egress": "bytes"}}))
     with pytest.raises(SystemExit, match="the period check's schedule is the id egress form's, not 'bytes''s"):
+        SP.rows_case(run, scan)
+    (run / "deployment.json").write_text(json.dumps({k: v for k, v in dep.items() if k != "start"}))
+    with pytest.raises(SystemExit, match="deployment.json holds no signed start"):
         SP.rows_case(run, scan)
 
 
