@@ -136,7 +136,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
-CANONICAL["Record"] = ("verity/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
+CANONICAL["Record"] = ("verity/protocols/interface/CoreProtocol/Record.lean::Core.Record", "verity/channel.py::Record")
 #: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
 CONCEPTS += ("Extractor", "Simulator")
 CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
@@ -674,9 +674,9 @@ KNOWN: dict[str, str] = {
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
-    "verity/protocols/accounting/pouw/clear/clear_audit.py::Transcript":
+    "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
-    "verity/protocols/accounting/pouw/clear/clear_audit.py::Verdict":
+    "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
     "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",

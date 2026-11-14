@@ -4504,24 +4504,11 @@
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
-   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
-   "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"
+   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"]
   },
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
    "nontrivial": "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial"
-  },
-  "Flock.SecurityProofs.SampledKSLivePub": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
-  },
-  "Flock.SecurityProofs.SampledKSLiveV2": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
-  },
-  "Flock.SecurityProofs.SampledKSLiveV3": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest"]
-  },
-  "Flock.SecurityProofs.SampledKSLiveV5": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
   },
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
    "honest": ["Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest"],
@@ -4555,6 +4542,10 @@
   "NetTiming.SecurityProofs.SampledLeakChecked": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
@@ -4636,10 +4627,6 @@
   "NetTiming.SecurityProofs.SampledLeakCarried": {
    "honest": ["NetTiming.Witness.SampledLeakCarried_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakCarried_nontrivial"
-  },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
   },
   "WeightSecurity.SecurityProofs.TheftServedTied": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedTiedHonest"],
@@ -4745,17 +4732,6 @@
    "honest": ["Flock.SecurityProofs.StreamStopBudget_honest"],
    "nontrivial": "Flock.SecurityProofs.StreamStopBudget_nontrivial"
   },
-  "Verity.Sampled.remote_soundness_deployedReady": {
-   "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
-   "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
-  },
-  "Flock.SecurityProofs.SpotFirstHitTwo": {
-   "nontrivial": "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial"
-  },
-  "Flock.SecurityProofs.MaskedKSTable": {
-   "honest": ["Flock.SecurityProofs.MaskedKSTable_honest"],
-   "nontrivial": "Flock.SecurityProofs.MaskedKSTable_nontrivial"
-  },
   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
    "honest": ["NetTiming.Witness.ConstantRate_honest"],
    "nontrivial": "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial"
@@ -4813,6 +4789,29 @@
    "honest": ["NetTiming.Witness.Ingress_honest"],
    "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial",
    "kind": "acceptance"
+  },
+  "Flock.SecurityProofs.SpotFirstHitTwo": {
+   "nontrivial": "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial"
+  },
+  "Flock.SecurityProofs.MaskedKSTable": {
+   "honest": ["Flock.SecurityProofs.MaskedKSTable_honest"],
+   "nontrivial": "Flock.SecurityProofs.MaskedKSTable_nontrivial"
+  },
+  "Flock.SecurityProofs.SampledKSLivePub": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
+  },
+  "Flock.SecurityProofs.SampledKSLiveV2": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
+  },
+  "Flock.SecurityProofs.SampledKSLiveV3": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
+  "Flock.SecurityProofs.SampledKSLiveV5": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
+  },
+  "Verity.Sampled.remote_soundness_deployedReady": {
+   "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
+   "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5420,6 +5419,11 @@
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
+   "type_hash": "4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f",
+   "missing": "nontrivial",
+   "why": "the lemma on main shows the conclusion failing at a session without tables, not at the deployed session the guarantee's domain hypothesis fixes, so the guarantee is not witnessed as nontrivial at its own instance until the lemma is restated there"
+  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
   "Flock.SecurityProofs.SpotExfilTwo": {
@@ -16553,24 +16557,6 @@
     "reads": []
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
-  },
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial :",
-    "  Not",
-    "    (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKServer.Loop.noTables Claims.ZKServer.Loop.noVals",
-    "      (Claims.ZKServer.Loop.leakL (Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.NT)) Claims.ZKServer.Loop.noReal",
-    "      Claims.ZKServer.Loop.noWk (fun x x_1 => True) 2)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4506aaf50fe9d724a2ecc5ccff7ae1a40d56f6a54eaa63d3409e35ea9944a3d2"
   },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
@@ -27954,6 +27940,10 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -27964,10 +27954,6 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
-    "outcome": "accept"
-   },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
    "Accounting.SecurityProofs.TableReadBinding": {
@@ -28342,7 +28328,6 @@
    "Verity.SecurityProofs.PackSoundComplete": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.Compose": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.CorrectOfOpening": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.ContainsImplements": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundAnd": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundMono": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
@@ -28447,7 +28432,7 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, with the count of the missing labels' sets (security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R, at its threshold B(n, r, k, R) (security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R at the 5 GB point, B(n, r, k, R) <= 4e10 bits (security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on one H200 as measured on vy-dc-h200-2, a 148.48 GB fill with 2.276 GB outside it, at the deployed r = 62 and k = 5500 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on one H200 as measured, a 148.48 GB fill with 2.276 GB outside it, at the deployed r = 62 and k = 5500 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM, a 1,128 GB fill with 3.9 GB outside it, at r = 1050 and k = 93,843 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM and host RAM, a 3,128 GB fill with 3.9 GB outside it, at r = 2922 and k = 261,229 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on a whole 8xH200 server, a 15,128 GB fill of every tier with 3.9 GB outside it, at r = 14,183 and k = 1,268,143 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
@@ -28622,6 +28607,7 @@
    "WeightSecurity.SecurityProofs.TheftServedMinEntropy": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Served.lean) by two to the served channel's covert capacity in bits less the weights' min-entropy under honest use, stated as honest-use hardness against every party (WeightSecurity.Assumptions.HonestUseHard at Set.univ), and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term; it reads no function's acceptance.",
    "NetTiming.SecurityProofs.PooledLeakCarried": "frozen (obligation,no-function,world-unlisted): It is PooledLeakAccepted's bound with the leak relation with checked inputs over runs that carry the pool (LeakAtCarried for LeakAt), each run opening the row the record rule names (PoolChained: the previous run's closing row, or a genesis row at a restart), where serving picks the restarts (chains) and opened rows (genesis) at each secret and sample of the coins, from a registered finite set Cs wherever every audit accepts (ResetsIn), each run pinning its checked inputs (CheckedUnique) and its closing row (CheckedClosing) and, wherever every audit accepts, opening the root the record rule names at the pattern picked (CarriedRoots), conditional on the period's inputs as named hypotheses (MonitoringPeriodChannel, MonitoringPeriodAdaptive, MonitoringPeriodEscapes, and MonitoringPeriodLeaksCarried, which a live SampledLeakCarried would give at each run), not discharged; with trusted-host (TrustedHost) it bounds Pr[every run accepts ∧ ¬PooledGoodCarried at the pattern picked] by (1 − q)^Fmax + Σ e_i + Σ e'_i + Σ_i Pr[PoolColl i], the last a SHA-512 collision between two rows with one root, and counts the secrets whose audits all accept and that meet PooledGoodCarried at the pattern picked for them at each draw of the coins by #Cs · #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i ∪ prow_i)) · Dj^k_i, #Cs charging the pattern as advice (m + 1 patterns in a week's period under the public restart rule), so a restart the rule makes after a refused run is not charged; it is not a run of the sampled verifier, the challenger's draw or the network check's code. At the empty pool, with no opening or closing gate and the one pattern that restarts no run, it states the bound over windows that each hold a pool of their own, at their leak relations with a valid run (PooledGoodChecked, MonitoringPeriodLeaksChecked), with no collision term, but counts only the secrets whose audits all accept; NetTiming.pooledLeakChecked_of_carried proves that bound there with the count over every secret, from NetTiming.encard_pooledCarried_le at the one pattern.",
    "NetTiming.SecurityProofs.SampledLeakCarried": "frozen (no-function): It is SampledLeakChecked for one run that reads an opened row at its opening gates (OpensAtInputs) and leaves one at its closing gates, stated over the sampled audit's statement as Definitions.NetworkCertifier states it, at every compiled sampled verifier where Claims.SamplingGeneric.Compiled.KS holds (its proof reads the proved SampledAuditAccepted), on the statements whose check misses with probability at most εchk (CheckedWitness); its relation (RLeakCarried) reads both rows off the extracted witness, and it bounds AccSeqsCarried, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run from a fixed opened row, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered, checked and opening inputs (freeInputs \\ (reg ∪ chk ∪ prow)).",
+   "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
    "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
@@ -28637,9 +28623,6 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
-   "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
-   "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean): every definition it reads matches the hardware or is stricter, none looser, so the bound holds on the H200 a fortiori at any price table meeting Floor c. Floor c is the hypothesis: the H200's table meets it at c = 32 on every priced form, and the census's 26 unpriced forms keep h100Floor's marker (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean) until they are priced.",
    "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
@@ -28663,7 +28646,10 @@
    "Pouw.Guarantees.Lead.Nontrivial": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.nontrivial; that guarantee is unlisted and the lead gets no new Lean",
    "Pouw.Guarantees.Lead.NontrivialTail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.nontrivialTail; that guarantee is unlisted and the lead gets no new Lean",
    "Pouw.Guarantees.Lead.TailAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.tailAt; that guarantee is unlisted and the lead gets no new Lean",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
+   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -28694,7 +28680,7 @@
    "Nci.Assumptions.ReferenceLayered": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_tiers.py::test_reference_layered_at_kimi_k2",
-    "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\", https://app.notion.com/p/3fe399515d9e81108139f66cfd33db94), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) in the steps of the declared BF16 GEMM (GEMM_HOPPER's HopperBF16WgmmaDot16, 16 activations a step, verity/definitions/ops/boolean/gemm.py), at capacity factor 1 and with bf16 embeddings, neither of which any workload declares, and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
+    "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\"), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) in the steps of the declared BF16 GEMM (GEMM_HOPPER's HopperBF16WgmmaDot16, 16 activations a step, verity/definitions/ops/boolean/gemm.py), at capacity factor 1 and with bf16 embeddings, neither of which any workload declares, and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
    },
    "Nci.Assumptions.Reach": {
     "status": "open",
@@ -46803,7 +46789,7 @@
    }
   },
   "MemoryChallenger.StreamedWipe": {
-   "digest": "7a7335e55cff78ec1030e45f255fce397a2919543d73a3d7dede966ecc17f5d3",
+   "digest": "eb1fc152650b452c21b00f838c2f5ddf4899f98fac306b53c955c4694068f696",
    "definitions": {
     "MemoryChallenger.StreamedWipe.Batch": "c41fb834ea7b752afa45114c300050fe7328c6ed51abb498123e584d9ffdf6af",
     "MemoryChallenger.StreamedWipe.Batch.b": "721183a276bad453e26b8c0e2453c4b40f5eaf062b9f6113542e38dbc6762b07",
@@ -46815,21 +46801,21 @@
     "MemoryChallenger.StreamedWipe.Batch.sendNs": "e4fd754e53dc9724c7e1cc55dbb88df0b2925ef1b03d9fac43374e0cdaf8cff5",
     "MemoryChallenger.StreamedWipe.Batch.value": "f45e7dcbbe5d6404e9c957227f657e7da860401e19181b660565c36f29490c88",
     "MemoryChallenger.StreamedWipe.Batch.wrong": "9847fe2c51f5fa77eea58411f716e0bcc923515f26e25f68e73b5e0a3913f63c",
+    "MemoryChallenger.StreamedWipe.CLOCK": "2f93b339985fd50f5f5f53de6eb41d1c7dc7758259f8509241469834f573b4b3",
     "MemoryChallenger.StreamedWipe.COMPLETE": "1d2d336e1407d724b0d02cce9f782355267399e5971c7bba385eaf6720a02928",
     "MemoryChallenger.StreamedWipe.Commitment": "b3701cfabf1d5f9ff1be0429b19a43baab4a67cbf6ca3c78de4d31ccff82f8c4",
     "MemoryChallenger.StreamedWipe.Commitment.casesOn": "a5b125bbf36f21871504d50fe535b6eef69e6f95c9e792939eff0550688999c4",
-    "MemoryChallenger.StreamedWipe.Commitment.headerFields": "57117b81cc03f953ad1f40ccc1336f42c267760785ce9dab8f0fa97f61da85f4",
+    "MemoryChallenger.StreamedWipe.Commitment.headerFields": "ba49018548cb0283d1086c98f5ee97f64e72244a6797776af30a10edd9493aa2",
     "MemoryChallenger.StreamedWipe.Commitment.params": "e9e530aa066265d26b817a014d70807af1651944ca9cba66529f105d411fdf21",
     "MemoryChallenger.StreamedWipe.Commitment.rec": "4b7e6d703fba700e42e78766ceec083d8f10ea48f36d21b0c4c2ca2fde2cecce",
     "MemoryChallenger.StreamedWipe.Commitment.server": "bbbebc508bea4eefc6b84b32f742d61352e15ff36b2efdd18431d805aa98e21e",
     "MemoryChallenger.StreamedWipe.Commitment.session": "528ffc655f8c844e7aa0820ae186db219a65acc1a0f6d2e2bed57951efc46a49",
     "MemoryChallenger.StreamedWipe.EGRESS_MAX_UNITS": "fd66233b7d1103a2562cad2658882e12d4000001bd3d52633fc352ed9be0e61d",
-    "MemoryChallenger.StreamedWipe.EGRESS_UNIT_BITS": "e268270910b8070cc6773c9fed9c1d061fbf78630f54fed92dbf1cad65756a5c",
-    "MemoryChallenger.StreamedWipe.Findings": "5c5a223b6e1d1bf2d601aac6642b4404bc4e5740409d1c401e217b6827eeedec",
-    "MemoryChallenger.StreamedWipe.Findings.egressMib": "535dd9634f943a8ad7984aa143bf7cbce554391da1ce848c5e4378a905c9ba72",
+    "MemoryChallenger.StreamedWipe.Findings": "ad7bc5115bcd213f0cc8fdd844a352de3e57f580beebbbabc51744990b9b5b87",
     "MemoryChallenger.StreamedWipe.Findings.reasons": "25bce2db1bc5401e1c2ad9e3bd6afbf758be9a4ceab8be35e6d0ffbb1944687f",
     "MemoryChallenger.StreamedWipe.LABEL_BYTES": "22927ca68fabffe8ed8e5754f79631934cdb8fe6874392905532236dce12e447",
-    "MemoryChallenger.StreamedWipe.PROTOCOL": "4ca98b1a15c347981fad755bab8e18609d6ed793d0a5b26bd16cba15bbbbf972",
+    "MemoryChallenger.StreamedWipe.MARK_BYTES": "4c2da9eb11353c76be62ebde359144f79c9bf2dd53fc32862fc88874e98edff2",
+    "MemoryChallenger.StreamedWipe.PROTOCOL": "4d3994fcc0abe1e99b0acdc3e025ad3f3279177e7c19d6b047cdb9c589031da1",
     "MemoryChallenger.StreamedWipe.Params": "c11aa781bc20b607fbda0cde159d297aa89b74ed55243d48d54f35addf63841e",
     "MemoryChallenger.StreamedWipe.Params.batch": "9df978bb0957d7ec33abc28fa1a954d4407075754a1394c2775a9300f899eb0c",
     "MemoryChallenger.StreamedWipe.Params.batches": "05d1a6b2b644b4252266f9b242fc38a0d8a4be4b7fe247cefab1a7cdfcdca31c",
@@ -46844,32 +46830,30 @@
     "MemoryChallenger.StreamedWipe.RECORDS_TREE": "85e93016b7d575cddbe28b851b2a5cca7a5319086ecf0e8a88bf9b42ba9f200e",
     "MemoryChallenger.StreamedWipe.RECORD_BINDING": "613255ae0532debbc21ee3e67f2874c45e18f1eefaf167f50e04107222636b28",
     "MemoryChallenger.StreamedWipe.RECORD_SCHEMA": "4a31071823cc6bfd4048c1a948d819e6618858ab93632a4ee77f6f65dda0b117",
-    "MemoryChallenger.StreamedWipe.SESSION_TAG": "23aac4602b161b7dbc0c7403bb677f551e822106121d7d3a540cf48dcaf3e8d4",
-    "MemoryChallenger.StreamedWipe.Signed": "a52d9086c2537e7f1b53f2e5cc90eb60a01e551769316de3a66c31afd8af79cc",
-    "MemoryChallenger.StreamedWipe.Signed.batches": "43dc705a5a64efc44c0ca0c5e55a79a4c745d0cd504bacdb4b6a07e548597aa8",
+    "MemoryChallenger.StreamedWipe.SESSION_TAG": "8f241bd72b8f9136a5d2ac9a05713758e9c834e991aedc66da8bf0e484478fd7",
+    "MemoryChallenger.StreamedWipe.Signed": "3205ff1b9d724d2db6b293e96c589604131e74384df3988a916bb19623897da5",
+    "MemoryChallenger.StreamedWipe.Signed.batches": "d70c3c6e8471b26a09a829e278d4b5836ee7454b57ef49b9f19ba7213e188e86",
     "MemoryChallenger.StreamedWipe.Signed.commitment": "192658f6b35c771dfb4109ce440f80db8c693e6913aec66153b8f117465ba885",
-    "MemoryChallenger.StreamedWipe.Signed.egressBits": "291cc876dfdefa677fbc7f2c55260bca284215fb808ec62ef69c2c13b7b186ec",
     "MemoryChallenger.StreamedWipe.Signed.ended": "4bef46e7d59ba47c4d549fc1d5fc92a85419e9416cf733c0dbb2d6f09c49889f",
-    "MemoryChallenger.StreamedWipe.Signed.fillEndNs": "b0343bc2c2c79f321813a56abfffaa7080078fe6bdc4e9c3701e151ea09494b6",
-    "MemoryChallenger.StreamedWipe.Signed.fillStartNs": "beee0751814bb27d7fc2c9b0351290dee0fe6dc38d124eef9db558c6d72bd756",
-    "MemoryChallenger.StreamedWipe.Signed.message": "66756927db4bcf1847a4d9610907440215c6f4db409f0a0c8db7e95f6bd366bb",
+    "MemoryChallenger.StreamedWipe.Signed.fillEndNs": "52ef44275ac4031651568717651da1d6b6883e559ff3751ef597859d1c92c8b0",
+    "MemoryChallenger.StreamedWipe.Signed.fillStartNs": "422582a32ff333d1ccc28026e79ed28ebef0297fb39243beb2c7ae699a6daa53",
+    "MemoryChallenger.StreamedWipe.Signed.message": "fc2a9246067b2230f519f1ef97cb2ba109574b4313dfd66a68d1737c9e33c037",
     "MemoryChallenger.StreamedWipe.Signed.publicKey": "9eab0b73dbf1724534a8c1d243f8b9336457936add4f5dcdfb9d800965ed1d85",
     "MemoryChallenger.StreamedWipe.Signed.scheme": "6bd8a02cff3b60ad6bcc66fec59e231c34fb91915bf292f4973a3d120c0de286",
     "MemoryChallenger.StreamedWipe.Signed.signature": "ccb3862ecf7aa29d4219315c82ee713ef708f0f9d06d154f1bce5c1725dab539",
+    "MemoryChallenger.StreamedWipe.Signed.startMark": "fcbdae3c79661b5ab7e6a4e1b7f2184c3e584cb414eac9726083d71f77cbf84b",
     "MemoryChallenger.StreamedWipe.Verdict": "4d047f10a9e694cf17e4371d1eec0355fa8e608fe7de1bb7898020af65015b12",
     "MemoryChallenger.StreamedWipe.Verdict.accepted": "59560cad77dc6bc7a0b7dc6399ef7b9914adc49ffd9ba45f6e2922b8e34c4627",
-    "MemoryChallenger.StreamedWipe.Verdict.egressMib": "c90facf947dee5a0cdc51835fc5c6ccbc05af2cdcc810bfe0f0dafa2b084eb4b",
     "MemoryChallenger.StreamedWipe.Verdict.reasons": "58ffc667482238727cde43ad7846373c774367f66a1b020239d629dc4d1eb1c5",
     "MemoryChallenger.StreamedWipe.beInt": "91b6bfde81c18973d6c59892f7196bf6ab32592bc4e171e119b13197efa99f21",
-    "MemoryChallenger.StreamedWipe.egressUnits": "dd77626d710790013e5d6771e231d252e4cf0b5f5f7168c8f962f959c5aef14a",
-    "MemoryChallenger.StreamedWipe.header": "842c8088c4d1a3a40ee759aef00aa05b9d8955279490ae39d9bf42bdfc28640e",
+    "MemoryChallenger.StreamedWipe.header": "68744bb070d9fab829829453e184f257b24c5ade05bd884efb98ec5b58e124b3",
     "MemoryChallenger.StreamedWipe.instBEqCommitment": "928e36b1efcf4cb3c6bdcb4704984c18608a16cf64288d829cdd34fe13892545",
     "MemoryChallenger.StreamedWipe.instBEqCommitment.beq": "838722453b1efd4bb5ed04b31145a2701d60f4e1f04ad35bffb28b2392c4ae70",
     "MemoryChallenger.StreamedWipe.instBEqParams": "4053d49dc7f63f5f8a3c2d6a306008b0e5b75e9350c7c7ade57e8166f0560097",
     "MemoryChallenger.StreamedWipe.instBEqParams.beq": "60dff064f63de87fbab50e6969b26d333e817cce999291a34ab1dba193e1924b",
-    "MemoryChallenger.StreamedWipe.message": "a9758ed2dfc566bc89fd24e8141c75c778cfd6bfe3f66353dbf70133f7b584f9",
+    "MemoryChallenger.StreamedWipe.message": "1295ef47e0d098af4c8327358afb3b78484d65fd0dd0b376e9215c31a0acee2a",
     "MemoryChallenger.StreamedWipe.recordsRoot": "acb971907c65610ca5826abfd54d42cdffc4b85ffcd9d3397de1f1330760373b",
-    "MemoryChallenger.StreamedWipe.verdict": "0fd9157ca92180fd48dc6f826dc0524dc7b2c7742b51209cf9b70a37df53d8a0",
+    "MemoryChallenger.StreamedWipe.verdict": "64e86e3afbdf7387d50fa006d688b42c56936ba60c5658d69d9875aee28aad32",
     "_private.MemoryChallenger.StreamedWipe.0.MemoryChallenger.StreamedWipe.tiersJson": "a07126bb220dfad16c4d7a2cce138538eef27de97b52477903549e2a0b16ea9f"
    }
   },
@@ -46899,14 +46883,14 @@
    }
   },
   "MemoryChallenger.WipeJudge": {
-   "digest": "784903aa174b64e35eda320d37bf78b6d2009bba05affaa2e06979dd0788f9b2",
+   "digest": "2c58a8c8288da8e1b0c9b3cc1cdc6d880102497d8dc5e184fea79c1b5a4b446c",
    "definitions": {
     "MemoryChallenger.StreamedWipe.Batch.ofJson": "18299b08a8f2c16d63386d60e7a8fa727a27538ee0af5a8499d02011b5b5fa16",
     "MemoryChallenger.StreamedWipe.Batch.toJson": "4ec6a8077c7ca846ff9c160ef6455d103d63cfb4c2b6d21f1ec22706741da75e",
     "MemoryChallenger.StreamedWipe.Commitment.ofJson": "d59da38bc0225be808bb942cabbb26acde89443162da37641087192c0a997e40",
-    "MemoryChallenger.StreamedWipe.Commitment.toJson": "8aec678367b8c384039c45605043056b2e61baf08542b67036856cdd3e485b1e",
-    "MemoryChallenger.StreamedWipe.Signed.ofJson": "44dffeb6b125ed0936b08b3bd876155e2b8eb389e7b0ddb6300b28f2183e63aa",
-    "MemoryChallenger.StreamedWipe.Signed.toJson": "a1e5e86913eb2aee8b40b1abe660c96da97e0c1ca176e0c5ebc74326ce9a0fd2",
+    "MemoryChallenger.StreamedWipe.Commitment.toJson": "198425288e71b049d1a65174938ebcb6c2c8f04d65fe74001ce7a33e3c2948e4",
+    "MemoryChallenger.StreamedWipe.Signed.ofJson": "a0a3a740b47d764ed8b1d2a21f8cebbff30c34365e289210c4d617e497cfa0a5",
+    "MemoryChallenger.StreamedWipe.Signed.toJson": "db34814223a2ec88286fbe758ad84d2c6aa801966270a886dc15ce109a32ea3a",
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.hexJ": "d762bfacb778ace058f6c070c88fab74270d40ef5af392759046c7831cc08c31",
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.intField": "32c10d81a0a819f13293677617643a6115c4ab63f52052d720e1334899088cf8",
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.intJ": "83089091dfa1e2ec4c839299fa798acf5057ae5648cfda7f318bf7bc40d0f888",
@@ -46914,13 +46898,15 @@
    }
   },
   "MemoryChallenger.WipeProtocol": {
-   "digest": "825c13c5a97cdd565370bd0d5a9ca06190259a4e794152103055944197d193c6",
+   "digest": "b9bec8d0e908b0541e1119a108a429a965cb41e45e7c0e8e1e0491aaf7ab2e5e",
    "definitions": {
     "MemoryChallenger.WipeProtocol.EPS": "3531a8db9b9865dca0216151f8cd12d96646f4f742bffc1f22bcf747a9ab0383",
     "MemoryChallenger.WipeProtocol.EXPERIMENTAL": "dda750b69b6a3dce5216ff99221e1a320df9f6ebbc871ff9f1a844fcd1e41ab0",
-    "MemoryChallenger.WipeProtocol.Evidence": "5ddd3ec888e055bcdc0385948ada000a27b53b67cfe10812e5f128d2374d62b1",
+    "MemoryChallenger.WipeProtocol.Evidence": "db9be82ac106f5299a2c093b4e4368756a10b889b3e442cdd828d01dfd9a57a3",
+    "MemoryChallenger.WipeProtocol.Evidence.egress": "a2c0fed8c3fc3baa0ca1c9f02dae6b7420fa812104d6aece31cba8f8a67bfed0",
+    "MemoryChallenger.WipeProtocol.Evidence.egressMib": "03cb67f49a203489f674c3486012612e27a638fa0ab3aaa0bd020e964ec8aa79",
     "MemoryChallenger.WipeProtocol.Evidence.signed": "36a3eb1978c22d1cae8c104ca1b10392f19eb059a350d5d12a47bbcb457bd884",
-    "MemoryChallenger.WipeProtocol.Evidence.toJson": "481739c3603a7e1a202acb91b4ee5f147f68d0b022e62364287685218e78b359",
+    "MemoryChallenger.WipeProtocol.Evidence.toJson": "ea79b416d78b308cd09b26ee91d424ef9960e75450f39e9a03bd550cce0d2dda",
     "MemoryChallenger.WipeProtocol.ID": "5e0991bb3801b583e04c379edb41b61b81ee77e15cc5cc1bb9ae17ea098cb11a",
     "MemoryChallenger.WipeProtocol.MAX_READS": "8af5a750e886c09459339aedd2975d185c38bc245b03ce658f42fbac3abc521c",
     "MemoryChallenger.WipeProtocol.Params": "685abdfda10157070d82a5c2c36fc420263a31f8ad2dc82815352b741c9c849b",
@@ -46939,9 +46925,9 @@
     "MemoryChallenger.WipeProtocol.Public.toJson": "2d56369132b68dddb856b3e5b42dad607562ee5f31a4fdb2ccbc01ad006e5be3",
     "MemoryChallenger.WipeProtocol.UNIT_BITS": "c4b7d4e610401af58c38eda64d2115b264377f918ad6ecfaa4372534dcda1ba8",
     "MemoryChallenger.WipeProtocol.certify": "072ab9c2de8386c35209c9cde07faef7acffe6fe24cf7b643ba447c1edfe6c8a",
-    "MemoryChallenger.WipeProtocol.check": "f38b7ea1425990053a1f7b106ac551a13e9333356fa8368df5ad26189ce06a78",
+    "MemoryChallenger.WipeProtocol.check": "b38a26e3a22a8989f734174689a399c413b75704c3af3e3f883d3cd8f30254b1",
     "MemoryChallenger.WipeProtocol.decodeCommitment": "70a5253e2776f0a06ea1a8fe30555ae0f605646a6a1cf1bbacbf9d218b0d278f",
-    "MemoryChallenger.WipeProtocol.decodeEvidence": "c99cdc4cf52283ad24b11a22eb0fbba277bd663e5270aba41994fba141919285",
+    "MemoryChallenger.WipeProtocol.decodeEvidence": "066012f7df43bb9e7edcb607272b8dadf02496c5a9b2e4e426966e38e2d8eb6f",
     "MemoryChallenger.WipeProtocol.decodeParams": "893750fef1fb7a4ad238fac7bc4e864fc226fba03048b40b6c6fb183faf57676",
     "MemoryChallenger.WipeProtocol.digest": "bd72e20433f1edb69d9ccb3f527c90de15d3ac7e31687ddb74e31805036bfb43",
     "MemoryChallenger.WipeProtocol.fillBits": "2e0c25f793835b270b0a7b5cf2ac43531072cd93754991996be96b14a9cfa45a",
@@ -46950,12 +46936,14 @@
     "MemoryChallenger.WipeProtocol.memoryBits": "e3db7869d85dbda0befcefa074fb025c0ad1904bffb010fa10348a96b74260c7",
     "MemoryChallenger.WipeProtocol.mkProtocol": "1ef346d63f26cc061cfa2480be577c0d42d709d5818508427afbe5abcf072714",
     "MemoryChallenger.WipeProtocol.outsideBits": "ff895eefb5cb61ce41e8ea0e9ecba4149e6cc022c53cbbfbe419fa2fc8b504df",
-    "MemoryChallenger.WipeProtocol.profileJson": "e04be875ba1cbaf11613a7df1450a03340e84d388e058fa2a0d6347b50449e7f",
+    "MemoryChallenger.WipeProtocol.profileJson": "4d8597e28044557da2cc8f513025811b6f81078885457e5a375499b175040bff",
     "MemoryChallenger.WipeProtocol.protocol": "bf874585a67c80848e44e7fc4749789d46e55bd571c5490488b00b8b8b81c174",
     "MemoryChallenger.WipeProtocol.ratio": "c777dbab595c379dcb0f151dfc26f99db623ed03640bfffac3e44ef11a319248",
     "MemoryChallenger.WipeProtocol.ratioOf": "ead0d9b00b59e4cbd2917faf07df7214127f4fd9d9db0f0d0aa7246f28db7f44",
     "MemoryChallenger.WipeProtocol.ratioSearch": "d28316fceffcd02b4774b9e8642791c0980c3619418182e598841a2adb0270f5",
     "MemoryChallenger.WipeProtocol.samples": "7a145ac3840232f5e62e20ad5f71db9989984c8bc67b8f5d18d1db9c447713e0",
+    "MemoryChallenger.WipeProtocol.uncounted": "f8377fb93b754c89929752667d6ddf7f8c7952761a1135e168b6ec01fbf67126",
+    "MemoryChallenger.WipeProtocol.writerGap": "dc84c1538f781c772179c3c885505b72a9ab41a3aa99a84eeabb420701cb3c66",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.hexJ": "d1ca30893491681448632d04d8023bdb929531cf409e6162a2124e8a2d1deb9f",
     "_private.MemoryChallenger.WipeProtocol.0.MemoryChallenger.WipeProtocol.natJ": "e8727017f342ed9865812bb9541059197bd40dd29953092439507393e12349aa"
    }
@@ -51912,12 +51900,6 @@
     "FlockSoundness.Discharge.ZkHidden.ZkTab.table": "6f20306952c62b0ee0a1af2e4276fbe303cd768c3902a140754e4b2f40aa2747"
    }
   },
-  "Proofs.Flock.Claims.ZK.NonVacuous": {
-   "digest": "468bd4762d92aca19aa8c4dce88fe740aab90a219a01c7bb7d84408806f587e0",
-   "definitions": {
-    "Claims.ZKMal.witMsg": "ca5489c145ec1db67e2961ff54bae441d7e6f3c0603bfcd19119fe5c63f63911"
-   }
-  },
   "Proofs.Flock.Claims.ZK.OneTape": {
    "digest": "7f8eebcf22964d014e6223d0ef180f9ccec077a98cd6d813d804a48e568f0dfc",
    "definitions": {
@@ -53850,10 +53832,9 @@
    }
   },
   "Proofs.Flock.SessionLoop.Leak": {
-   "digest": "841b149912da2e88b62c251001128c0e806be26b38fdfc9144e8e939b9173373",
+   "digest": "b006b305b23a7b8f74c2cdc07a6e50790151df083a4bd9b84c53da7733a0decb",
    "definitions": {
-    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d",
-    "Claims.ZKServer.Loop.leakL": "a7fdd5ffefdec54ad40305a1741d46f3d4e125ea34ccacdc21cd39c6ed78a9ce"
+    "Claims.ZKServer.Loop.helloRej": "46102b645a80082cd192ce32ee56619a55d33860c7ad622ff68814a66b40962d"
    }
   },
   "Proofs.Flock.SessionLoop.Level0SrcSat": {
@@ -53962,17 +53943,6 @@
     "Claims.ZKServer.Loop.tapeL₀": "b03609278486f0b28e924abccdbeaf10bf2c443b8af5983f60c4f55924d82123",
     "Claims.ZKServer.Loop.tapeRel": "48b8729493eef3c04c5a01c688090bd4d1319bdddddfa86e619c80630e892542",
     "Claims.ZKServer.Loop.tapeWk": "e10ebd23253fc1e3b3e6a9c40b58f4eed799a5aa8c801a51e23f6edf9042532a"
-   }
-  },
-  "Proofs.Flock.SessionLoop.ZkAnyNontrivial": {
-   "digest": "f41582d29993e7845a9e6017a9f107899b2d423ff46f66eb138ff9869ba723ad",
-   "definitions": {
-    "Claims.ZKServer.Loop.NT": "bd4adb1e9c5a4b03874622e36e24826368b973bca1778d6e811b86081a2f21c3",
-    "Claims.ZKServer.Loop.constRel": "99d08792904a28e4834c36dd1a91cfa076776209d0ad41c2f020b39a2a0714a4",
-    "Claims.ZKServer.Loop.noReal": "0e7b6d955ea32ea3ff3a979982f5566f8d92f7ff06dcb78cc25e1c7a37afc253",
-    "Claims.ZKServer.Loop.noTables": "0cb04796bf0048e9dc32287254a280be0c7a0df0c287edf7691360da01b48d43",
-    "Claims.ZKServer.Loop.noVals": "177ca5a2a097553bdc0cf48243a3861ad08eecb53583b09d57c0c335d8526e6b",
-    "Claims.ZKServer.Loop.noWk": "af81cbf8063345139740a15c63b960b72994a7153b9d6cb557fcb87e3f4f2887"
    }
   },
   "Proofs.Flock.SoundAtBridge.Served": {

@@ -17,9 +17,7 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
-from verity_vllm.query.manifest.format import identity_rows
-
-from verity_vllm.query.manifest.format import query_id_digest
+from verity_vllm.query.manifest.format import identity_rows, query_id_digest
 
 FAMILY = "vocab_range"
 MEMBER = "vocab_range"

@@ -13,7 +13,7 @@ import dataclasses
 import hashlib
 import random
 import struct
-from functools import lru_cache
+from functools import cache
 
 import pytest
 
@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.proofs.spot.verifier.one_stage import partition as OP
 
-V1, V8, V16, V32 = Value(1), Value(8), Value(16), Value(32)
+V1, V8, V32 = Value(1), Value(8), Value(32)
 M32 = (1 << 32) - 1
 LAYER = ((2048, 21504), (8192, 2048))
 REDUCED = ((2048, 3), (8192, 2))
@@ -237,7 +237,7 @@ def _coord(K):
     return bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _layer(members):
     """One Program per population, built once: `mixed_population_program` makes a new `TemplatePopulations_v1` each call."""
     return OP.mixed_population_program([(_coord(K), n) for K, n in members])

@@ -39,7 +39,7 @@ summaries can't count exactly (one value bound to two activation leaves above th
 
 ## The min-cut bound's work
 
-`work.read(program, k)` reads off a word Program what `min_cut.bound` takes of a circuit at a policy's k: |C| in
+`work.read(program, k)` reads off a word Program what `min_cut.slowdown_of` takes of a circuit at a policy's k: |C| in
 Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
 each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
 multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
@@ -90,8 +90,8 @@ weights against a stated constant, rows equal only where an input's word is nega
 a submitter found by trying circuits against the point's seed, which is public (SHA-512 of the Program's digest); and
 two nodes that compute rows from one array's words into two arrays give each
 distinct rows.
-`work.bound(work, c)` is the most blocks over its
-sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
+`work.bound(work, c)` hands the charged products (`work.products`: MACs at `keep`, outputs at most 16 bits) to the
+calculator's `min_cut.slowdown_of`, which chooses the sub-work, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
 training loop's reading beside its trace's, never above it.
 

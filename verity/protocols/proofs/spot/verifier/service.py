@@ -175,6 +175,7 @@ from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityPr
 from . import second_stage as SS
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
+from verity.protocols.proofs.spot.device.challenger import ChallengerKey
 from verity.protocols.proofs.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -1497,7 +1498,11 @@ class Stream:
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
     coins' evidence (`outcome`'s `coins`), refusing a sample without it, and holds it to the family the stream read the
     sample from (`family`: the coins' `label` at the sample; a family's coins follow one registration, so each
-    registration's sample, and a second stage's, reads a family of its own). A stream that reads no coins (`All`, or one a
+    registration's sample, and a second stage's, reads a family of its own). `key` is the challenger's key and `main`
+    the verifier's copy of main's first-parent history, which the stream is made with and holds every outcome's evidence
+    to: the evidence names no key, and the copy of main's history it carries must be the stream's
+    (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's under the key the stream
+    holds, and a stream made without a key rejects every sample that read coins (failing `run`). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
     their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
@@ -1551,7 +1556,8 @@ class Stream:
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
-                 coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
+                 coins: ChallengerCoins | None = None, key: ChallengerKey | None = None, main: Sequence[str] = (),
+                 clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
                  values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
                  replay: SpecializedDefinition | None = None, program: Program | None = None,
@@ -1622,6 +1628,7 @@ class Stream:
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
         self.rounds, self.values, self.span_values, self.program = rounds, values, span_values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
+        self.key, self.main = key, tuple(main)
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
@@ -2289,9 +2296,10 @@ class Stream:
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
         no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence
-        (`coins.coins_reason`'s `{key, ledger, main, pins, segment, session}`) and the bytes it read are exactly the
+        (`coins.coins_reason`'s `{ledger, main, pins, segment, session}`) and the bytes it read are exactly the
         coins of the family the stream read them from (`family`) that the session the ledger opens for the
-        registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
+        registration's window (`register`'s `window_root`) under the stream's key (`Stream(key=)`), from main's code
+        (`challenger.pinned_session`, on the stream's copy of main's history, `Stream(main=)`), released
         after the registration's digest, each checked against its
         commitment and every one read, the family's log showing no other root; missing evidence, or a registration
         without its window root, is a reject failing `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
@@ -2302,7 +2310,8 @@ class Stream:
         `proved_units`, `instances` and `served` are its, `session_roots` is held port by port to the registration
         whose port it names (the boundary values the sessions opened to the registration's audit record, when they
         opened any, and the rest to the interior registration's), `coins` is the first stage's evidence and
-        `interior_coins` the second stage's. `statements` are the second-stage sessions' (`second_stage`), which round 2
+        `interior_coins` the second stage's, held to the stream's key and history too: both stages' sessions are one
+        challenger's. `statements` are the second-stage sessions' (`second_stage`), which round 2
         holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
         and sample a verdict names), the interior registration and the second stage's cells as the interior
         registration's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
@@ -2402,7 +2411,7 @@ class Stream:
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
                       value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
-                      history=e.history, family=e.family)
+                      history=e.history, family=e.family, key=self.key and self.key.to_json(), main=self.main)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2469,7 +2478,8 @@ class Stream:
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
-                      tied=self.spec.check.tied or None, family=e.family,
+                      tied=self.spec.check.tied or None, family=e.family, key=self.key and self.key.to_json(),
+                      main=self.main,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,
