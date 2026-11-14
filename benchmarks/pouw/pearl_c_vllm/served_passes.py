@@ -25,7 +25,7 @@ keys of `serve_pearl.CONFIG` alone, the server sampling each window's coins and 
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
 ``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
 ``DIR/coins.json`` before the engine starts.  With ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER`` set the epoch's
-salt coin is a live session's on the auditor host instead (`bench_arm.live_coins`: a salt-only session reserved under
+salt coin is a live session's on the auditor device instead (`bench_arm.live_coins`: a salt-only session reserved under
 ``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes at
 ``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
 ``coins`` says which (`pearl_c.window.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
@@ -92,7 +92,7 @@ domain; a W that states no version, written before W registered the weights, tie
 untied, `verify_run.WEIGHTS_UNTIED`), and with ``--class SLOTS,PROMPT,OUTPUTS`` (the window's class, read only beside
 ``--tie``) refuses passes whose rows by round aren't that class's fixed load (`verify_run.held_to_load`), then
 takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
-set, a sample session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
+set, a sample session's on the auditor device opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
 ``PEARLC_CHALLENGER_LANE`` once that lane has no period open, and as its first reserve after the Pearl-C period the salt
 session joined closed (``served.json``'s ``coins.reserved.period``); else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
