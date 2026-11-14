@@ -69,6 +69,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Spot", "Proofs.Properties.Spot.Halt", "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
   "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
+  "Proofs.Properties.Spot.Streamed",
   "Proofs.Properties.NetworkCertifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement", "Proofs.Properties.NetworkScan",

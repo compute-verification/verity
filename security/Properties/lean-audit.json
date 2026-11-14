@@ -50,6 +50,7 @@
   "Properties.Spot.PlanCheck",
   "Properties.Spot.Wires",
   "Properties.Spot.Tables",
+  "Properties.Spot.Streamed",
   "Properties.Spot.HistoryTable",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
@@ -1084,6 +1085,7 @@
   "Properties.Composition",
   "CoreComposition",
   "CoreProtocol.Blobs",
+  "CoreProtocol.Stream",
   "CoreProtocol.Live",
   "VStar.Cli",
   "Properties.Verity",
@@ -1321,6 +1323,10 @@
   "Properties.Spot.SecurityProofs.tablesRegistered": {
    "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
+  },
+  "Properties.Spot.SecurityProofs.streamIsCheck": {
+   "honest": ["Properties.Spot.SecurityProofs.streamIsCheck_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.streamIsCheck_nontrivial"
   },
   "Properties.Spot.SecurityProofs.historyRootIsModel": {
    "honest": ["Properties.Spot.SecurityProofs.historyRootIsModel_honest"],
@@ -10512,6 +10518,15 @@
    },
    "type_hash": "e78a406fd43371a0b9b40868521e379c60220b3a9f3b5cf5ab3a9a9f93974e86"
   },
+  "Properties.Spot.SecurityProofs.streamIsCheck": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.streamIsCheck_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.streamIsCheck_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Spot.SecurityProofs.tablesRegistered": {
    "owner": "@soundness",
    "signature": ["Properties.Spot.SecurityProofs.tablesRegistered : Properties.Spot.TablesRegistered"],
@@ -13043,6 +13058,10 @@
    "Properties.Spot.wiresAcyclic": {
     "function": "Spot.Wires.check",
     "outcome": "accept"
+   },
+   "Properties.Spot.SecurityProofs.streamIsCheck": {
+    "function": "Spot.OneStageZk.Streamed.stream",
+    "outcome": "none"
    },
    "Properties.Spot.SecurityProofs.tablesRegistered": {
     "conjuncts": [

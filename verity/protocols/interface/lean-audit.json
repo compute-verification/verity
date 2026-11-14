@@ -31,6 +31,11 @@
    "except": [],
    "why": "the interface is spec: a protocol that reads content-addressed files (`BlobProtocol`, `Blobs`) is stated over the same `Protocol`, `Outcome` and `Answer`, so this imports only them (through the protocol's command line) and C-Flock's hash"
   },
+  "CoreProtocol.Stream": {
+   "imports": ["CoreProtocol.Blobs"],
+   "except": [],
+   "why": "the interface is spec: a protocol that reads its content-addressed files one at a time (`Stream`, `StreamProtocol`) is stated over the same `BlobProtocol`, `Blobs` and `Outcome`, so this imports only them"
+  },
   "CoreProtocol.Site": {
    "imports": ["Lean.Data.Json", "Base.Canon", "Base.Hash", "CoreProtocol.Ratio"],
    "except": [],

@@ -200,9 +200,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   file and, for a member a statement names, its session's record and rep files). It keeps of each blob what the files'
   pass and the sessions' verdicts read, and its finish is `checkBlobs`' order on what was kept.
   `Streamed.streamSound` (`Spot/OneStageZkStreamKept.lean`, over `Spot/OneStageZkStreamSound.lean`) proves that on a
-  feed in that order the stream decides what `checkBlobs` decides on the blobs fed. No executable calls the stream:
-  `benchmarks/one_stage/stream_case.sh` builds a probe whose main is its `plan` and `check-stream`. The executable's
-  `members` (`Spot/MembersParse.lean`,
+  feed in that order the stream decides what `checkBlobs` decides on the blobs fed. The executable's `plan` and
+  `check-stream` are the stream's commands (`Spot/ZkMain.lean`): `plan` prints the order, and `check-stream` reads the
+  blobs a list names in that order and answers as `check` does; `benchmarks/one_stage/stream_case.py` runs both beside
+  `check` on a case. The executable's `members` (`Spot/MembersParse.lean`,
   `proofs.members_parsed`) prints what its parsers read of a case, with no verdict, as its module's docstring says. A
   window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).

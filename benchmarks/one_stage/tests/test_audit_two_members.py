@@ -170,6 +170,15 @@ def _evidence_hex(evidence: dict) -> str:
     return json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode().hex()
 
 
+def _streamed(d: Path, case: Path) -> dict[str, dict]:
+    """`stream_case.py` on the case file ``case``, its files under ``d`` -> its row for each command it ran: ``check``,
+    ``plan``, ``check-stream`` on the plan's order, and ``check-stream`` on its two bad feeds (``swapped``, ``changed``)."""
+    p = subprocess.run([sys.executable, str(HERE / "stream_case.py"), str(d), "--case", str(case)], cwd=ROOT,
+                       capture_output=True, text=True)
+    assert p.returncode == 0, f"{p.stdout[-4000:]}\n{p.stderr[-4000:]}"
+    return {r["command"]: r for r in map(json.loads, p.stdout.splitlines()) if "command" in r}
+
+
 def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
@@ -225,11 +234,13 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
-    window's session's. On that case Lean's check accepts, with exit 0; with one proof file of the first session
-    changed after its closing round, it rejects for the session's coins as the driver's check of the log does; and with
-    the second session left out, the log shows a tree no session records, which both refuse
-    (`challenger.UNUSED_TREE`). The Python run of the form (`members.members_run`) answers the same on all three:
-    every session accepted with the units it proved, the changed file's reason, and the unused tree's."""
+    window's session's. On that case Lean's check accepts, with exit 0, and so does its streamed check on the blobs in
+    its plan's order, with ``check``'s own line, where a feed with two blobs swapped and one with a byte of a blob
+    changed are rejected at that blob (`_streamed`); with one proof file of the first session changed after its closing
+    round, the check rejects for the session's coins as the driver's check of the log does; and with the second session
+    left out, the log shows a tree no session records, which both refuse (`challenger.UNUSED_TREE`). The Python run of
+    the form (`members.members_run`) answers the same on all three: every session accepted with the units it proved,
+    the changed file's reason, and the unused tree's."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -267,6 +278,14 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_acc
     assert refused is None and run.all and sorted(run.proved) == evidence["proved_units"], (run, refused)
     assert [f.session for f in run.findings] == evidence["sessions"] and all(f.units for f in run.findings)
     assert M.case_check(case) == ("accept", M.run_reason(run, refused)) == ("accept", None)
+    rows = _streamed(tmp_path / "streamed", out / "window" / "case-v2-members.json")
+    assert [rows[c]["rc"] for c in ("check", "plan", "check-stream")] == [0, 0, 0], rows
+    assert rows["plan"]["planned_missing"] == 0 and rows["check-stream"]["same_line_as_check"] is True, rows
+    assert json.loads(rows["check-stream"]["line"])["verdict"] == "accept"
+    for bad in ("swapped", "changed"):
+        line = json.loads(rows[bad]["line"])
+        assert (rows[bad]["rc"], line["verdict"]) == (M.EXITS["reject"], "reject"), rows[bad]
+        assert line["reason"].startswith(f"blob {rows['plan']['tables_in_case'] + 1}: "), line
     # the second member's statement and its session taken out of the evidence, everything else as the audit wrote it
     first = {**evidence, "sessions": evidence["sessions"][:1],
              "proofs": {"statements": evidence["proofs"]["statements"][:1]}}
