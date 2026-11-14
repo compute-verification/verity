@@ -46,6 +46,7 @@ BOOKKEEPING = {
                                  "test_oversize_skills_only_shrink", "test_markdown_size_caps",
                                  "test_allowlists_name_tracked_files", "test_owned_paths_exist", "test_every_path_has_owner",
                                  "test_no_ignore_line_covers_a_tracked_file"),
+    "tests/test_workload_messages.py": ("test_every_exception_is_current",),
 }
 
 
