@@ -189,6 +189,11 @@ means = "one proof system's verifier proved in another's proofs, and the ZK serv
 protocol = true
 
 [[tree]]
+path = "verity/protocols/proofs/spot_flock/"
+means = "SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's lists for the proofs, with the recursive audit"
+protocol = true
+
+[[tree]]
 path = "verity/protocols/accounting/pouw/"
 means = "proof of useful work"
 protocol = true
@@ -294,12 +299,6 @@ owner = "top"
 day = "2026-11-15"
 
 [[not_yet]]
-path = "verity/hardware/record.py"
-to = "into the hardware file"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
 path = "verity/hardware/lean.py"
 to = "deleted, once the Lean takes a card as a parameter"
 owner = "compute-research"
@@ -323,12 +322,6 @@ path = "fixtures/"
 to = "beside its reader, each file"
 owner = "proofs"
 day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/accounting/pouw/clear/"
-to = "verity/protocols/accounting/pouw/verifier/"
-owner = "compute-accounting"
-day = "2026-11-19"
 
 [[not_yet]]
 path = "verity/protocols/proofs/flock/sigma/"

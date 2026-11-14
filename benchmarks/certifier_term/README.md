@@ -33,7 +33,7 @@ under the label: the row's own `with_set_time_card` is the label, where every ot
 print the row's name with the label.
 
 The card is an input of the document, `set_time_card`, the one input marked `simulated`. Its source is what a
-figure under the label rests on, a clause of `trusted-host`: the network certifier's card releases each bucket at
+figure under the label rests on, a clause of `trusted-device`: the network certifier's card releases each bucket at
 the tick its record names, whatever the host and the server send it. The clause holds only of a calibrated hardware
 card; no such card is deployed, and the software pacer that stands in for it does not meet it.
 
@@ -43,11 +43,12 @@ With `--out DIR` the runner also writes its result, through the harness kit's wr
 and through nothing else. The kit says where the file is, `DIR/result.json` outside a research run
 (`benchmarks/harness/README.md`). The result holds the amounts every resource's benchmark reports, for the row the
 term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints. What
-it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
+it prints doesn't change. Every measurement is the model's, and its mark (`modeled`) and every name but the metric's
+say so; none is computed from a run's K.
 
-- `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
-  Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
-  scan's over the world's year, whichever rows the command prints.
+- `network-accounting/certifier-term`, the metric's id: the term of record, the document's `value`, in GB, against
+  the document's target. Its verdict, `within target` or `over target`, is the document's multiple of the target in
+  words. Its row is the scan's over the world's year, whichever rows the command prints.
 - `certifier_term/modeled/simulated/metric`: the card's figure, the same row's term at D_j = 1, which the document
   gives as `with_set_time_card`, in GB, against the same target. It is no term of record. Its name says `simulated`,
   the card's mark, and its `inputs` open with the row it is of and the card as the document states it, whose source
@@ -57,7 +58,8 @@ it prints doesn't change. Every measurement is the model's and its name says so;
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
   the period, the scope's machines × a registered uplink's `beta` × the period's ticks. `beta` is bits a tick each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
-  registration log, `--registration FILE` (`verity.hardware.registration`'s committed log): the boundary link of its
+  registration log, `--registration FILE`
+  (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the boundary link of its
   one host that a network certifier splits. The log is read as given, and one that registers anything but the
   model's machine, one host behind one network certifier, is refused. Every machine of the scope is taken as
   registered like that one, which is the model's statement and no registration's. With no `--registration` the
@@ -99,7 +101,7 @@ it. No term depends on it: only the errors move with it.
 `--scan-delta D` gives another δ, as a fraction or a decimal. No error is then set (`eps_target` is null), a row's ε
 is what `D` sums to, and a row whose ε is 1 or more has no bound at its period, since a union bound of 1 bounds
 nothing. In the result its `free` and `verified` are written with no value and the reason, `no bound at this period`,
-in their `inputs`, and so are `metric` and the card's figure where the row is the term of record's. Its `error` is
+in their `inputs`, and so are the metric and the card's figure where the row is the term of record's. Its `error` is
 written with its value, and its `capacity`, which no error enters. What the command prints is the calculator's
 still, those rows' terms among it.
 

@@ -146,7 +146,7 @@ coins.
     loop), not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger samples each
     session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
-    (`verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
+    (`verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-device`.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
     nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
     consistently); each leaf moves it by at most

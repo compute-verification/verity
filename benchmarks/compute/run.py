@@ -81,8 +81,9 @@ Through the harness kit's writer (`verity_bench.kit`) it also writes the run dir
 and `$OUT/result.json` outside one where `OUT` is set, with the
 fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
 recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
-the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
-are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
+the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). The metric is
+named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
+resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
 peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
 run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
@@ -104,11 +105,13 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_config.settings import SHARED
 
-__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
-           "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable", "amounts",
-           "capacity", "from_run", "main", "model_macs"]
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
+           "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
+           "amounts", "capacity", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
+#: the number's id in metrics.toml beside this file, the name result.json records it under
+METRIC = "compute-accounting/verified-compute-share"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
@@ -481,7 +484,7 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
 
 def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None) -> list[dict]:
     """The result a document `doc` gives in the fields every resource's benchmark reports, as the kit writer's
-    measurements: the metric (`metric`, the printed number in its unit, beside its target), the verified amount
+    measurements: the metric (`METRIC`, the printed number in its unit, beside its target), the verified amount
     (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
     registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
     and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
@@ -489,7 +492,7 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     the recorded run."""
     inputs = [doc["run"]] if doc["run"] else []
     verified = doc["credited_macs"]
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
+    out = [{"name": METRIC, "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
             "verdict": "at or above target" if doc["met"] else "below target", "inputs": inputs},
            {"name": "verified", "value": verified, "unit": "MAC", "inputs": inputs}]
     if site is None or span_s is None:
@@ -531,8 +534,8 @@ def _m(v: str | int | Fraction) -> str:
 
 def per_call_text(got: dict, model_macs: int) -> list[str]:
     """The printed lines of a document's `per_call`: its give-up by cause, then its top calls."""
-    lines = [f"  per call: the model gives up {got['give_up']:,} of its MACs ({100 * got['give_up'] / model_macs:.2f}%); "
-             f"by cause, from the verifier's split of its {got['calls']} calls ({got['source']}):"]
+    lines = [(f"  per call: the model gives up {got['give_up']:,} of its MACs ({100 * got['give_up'] / model_macs:.2f}%); "
+              f"by cause, from the verifier's split of its {got['calls']} calls ({got['source']}):")]
     width = max(len(CAUSES[c["cause"]]) for c in got["causes"])
     lines += [f"    {CAUSES[c['cause']]:<{width}}  {_m(c['macs']):>17} MACs  {100 * c['share']:6.2f}%" for c in got["causes"]]
     lines.append("  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most "
@@ -548,9 +551,9 @@ def per_call_text(got: dict, model_macs: int) -> list[str]:
 def text(doc: dict) -> str:
     """The printed lines of a document: the number, what accepted it, and what it is made of."""
     macs, cls, tokens, record = doc["macs"], doc["class"], doc["tokens"], doc["record"]
-    lines = [f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
-             f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
-             f"{100 * doc['target']:g}% target"]
+    lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
+              f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
+              f"{100 * doc['target']:g}% target")]
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
@@ -612,7 +615,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         (Path(out) / "compute.json").write_text(line + "\n")
         writer = kit.writer(out)
         for m in measured:
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     return 0
 
 

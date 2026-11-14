@@ -2,7 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.DeviceFp4Gap
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.Lemmas.PearlC
 
 /-!

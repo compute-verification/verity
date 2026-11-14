@@ -9,7 +9,7 @@
 #     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
 #
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
-#                        run but the size and the placement (trusted-host unmet)
+#                        run but the size and the placement (a rehearsal, no bound)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
 #   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is 64 MiB);
 #                        the whole device is declared, so what the fill doesn't reach counts in
@@ -22,19 +22,21 @@
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
 #                        there, e.g. 'python -m verity.protocols.accounting.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
-#                        --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
+#                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
-#                        challenger here signs under a key this run makes, trusted without it
+#                        challenger here signs under a key this run makes, trusted without it. trusted-device holds only
+#                        under the key wipe_party.AUDITOR_KEYS pins for the challenger's host; under any other the
+#                        record reads "rehearsal: key not the auditor's pinned key, no bound"
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
-#                        `simulated`, the premise assumed; its key in this run's scratch all the same)
+#                        `simulated`, a label; its key in this run's scratch, so a rehearsal all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
-#   --egress-bits N      the network certifier's egress count over the session, which a challenger here signs
-#                        (default: UNCOUNTED, the bound vacuous); a challenger on its own host signs the count its
-#                        --challenger-command starts it with
+#   --egress-bits N      the network certifier's egress count over the session, in bits, which the verifier's check
+#                        takes as evidence in whole MiB, wherever the challenger runs (default: none, the bound
+#                        vacuous); no challenger is given it and the session signs none
 #   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names
 #                        uncounted (repeatable); the control link (`control`: the default route's NIC, which ssh and
 #                        research run reach the node by) is always named, and the challenger's from the connection made
@@ -68,8 +70,8 @@
 # filesystems, swap and each disk's driver), lake-build.log, period.json, wipe.json, wipe.case.json, summary.json.
 # summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
 # connected, the session signed), and its `uncertified` what the bound doesn't cover (the placement's links and
-# undeclared tiers, an uncounted egress). Scratch (the challenger's key and session log, the built streamer) is a
-# mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
+# undeclared tiers, the egress: uncounted, or the evidence writer's count, which certifies no wipe). Scratch (the
+# challenger's key and session log, the built streamer) is a mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
 set -euo pipefail
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)
@@ -126,8 +128,8 @@ else
   [ -z "$TRUSTED" ] || [[ $TRUSTED =~ ^[0-9a-f]{128}$ ]] || {
     echo "demo.sh: --trusted-sha512 is a key's SHA-512 in 128 lowercase hex digits, not $TRUSTED"; exit 2; }
   [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
-  [ -n "$EGRESS" ] && [ -n "$CH" ] && {
-    echo "demo.sh: --egress-bits reaches only a challenger here; the one on $CH signs the count its --challenger-command starts it with"; exit 2; }
+  command -v ip > /dev/null || {
+    echo "demo.sh: this host has no \`ip\` (iproute2), which names the node's links: apt-get install iproute2" >&2; exit 3; }
   read -r CTRL_DEV CTRL_SRC < <(ip -o route get 1.1.1.1 2>/dev/null | sed -nE 's/.* dev ([^ ]+).* src ([^ ]+).*/\1 \2/p') || true
   CTRL_MBPS=$(cat "/sys/class/net/${CTRL_DEV:-none}/speed" 2>/dev/null || echo)
   [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }

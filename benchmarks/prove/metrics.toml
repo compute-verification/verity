@@ -3,19 +3,33 @@
 
 [[metric]]
 id = "benchmarks/prover-gpus-per-serving-gpu"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPUs for each serving GPU"
+title = "Prover GPUs per serving GPU"
 owner = "benchmarks"
 unit = "prover GPUs a serving GPU"
+axis = "GPUs proving for each GPU serving GLM-5.3, under SPOT at its chosen sampling plan."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
 goal = "benchmarks/proof-system-performance"
 
 [[metric]]
+id = "benchmarks/prover-gpus-per-serving-gpu-at-record"
+title = "Prover GPUs per serving GPU, modeled"
+owner = "benchmarks"
+unit = "prover GPUs a serving GPU"
+axis = "GPUs proving for each GPU serving GLM-5.3, modeled at the design the exfiltration capacity assumes."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+tags = ["modeled"]
+
+[[metric]]
 id = "benchmarks/prover-gpu-seconds-per-token"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPU-seconds for each served token"
+title = "Prover GPU-seconds per token"
 owner = "benchmarks"
 unit = "prover GPU-seconds a served token"
+axis = "GPU-seconds of proving for each token GLM-5.3 serves, under SPOT."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
@@ -23,9 +37,10 @@ goal = "benchmarks/proof-system-performance"
 
 [[metric]]
 id = "benchmarks/lean-verifier-seconds-per-token"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: the Lean verifier's seconds for each served token"
+title = "Verifier seconds per token"
 owner = "benchmarks"
 unit = "Lean verifier seconds a served token"
+axis = "Seconds the Lean verifier spends on each token GLM-5.3 serves, under SPOT."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"
@@ -33,9 +48,10 @@ goal = "benchmarks/proof-system-performance"
 
 [[metric]]
 id = "benchmarks/proof-bytes-per-token"
-title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: proof bytes for each served token"
+title = "Proof bytes per token"
 owner = "benchmarks"
 unit = "proof bytes a served token"
+axis = "Bytes of proof for each token GLM-5.3 serves, under SPOT."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
 every = "7d"

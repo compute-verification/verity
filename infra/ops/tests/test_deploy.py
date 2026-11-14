@@ -795,7 +795,7 @@ def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_
 
 
 def test_an_admin_only_node_is_read_only_when_named(world, capsys):
-    """The auditor host's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
+    """The auditor device's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
     manifest = world["manifest"]
     manifest.write_text(manifest.read_text().replace("[nodes.n]\n", f'[nodes.a]\nadmin = true\nrecord = "{world["node"]}/a.jsonl"\n\n'
                                                                        "[nodes.n]\n", 1))
@@ -923,16 +923,21 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
+UNPRESERVED_DROPIN = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
+
+
 def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
     """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
-    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record."""
+    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record. A staged one goes without the collector's
+    unpreserved-runs drop-in, which deletes runs only on vy-nebius-2 and cpu-1 to cpu-15."""
     nodes = deploy.load()
     twin = nodes["vy-nebius-cpu-12"]
     want = sorted(twin.entries, key=lambda e: e.path)
-    assert want
+    assert want and UNPRESERVED_DROPIN in {e.path for e in want}
     for n in range(14, 18):
         node = nodes[f"vy-nebius-cpu-{n}"]
-        assert sorted(node.entries, key=lambda e: e.path) == want, node.name
+        expect = want if node.staged is None else [e for e in want if e.path != UNPRESERVED_DROPIN]
+        assert sorted(node.entries, key=lambda e: e.path) == expect, node.name
         assert (node.managed, node.record, node.admin, node.quiet) == (twin.managed, twin.record, twin.admin, twin.quiet), node.name
 
 

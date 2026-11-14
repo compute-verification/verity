@@ -42,10 +42,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
+
 from verity_vllm.commit import history_tables as H
-from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
+from verity_vllm.records.boundary_tables import (
+    ASSIGN,
+    ROOTS,
+    TableAssignment,
+    TableRoots,
+)
 
 __all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "Served",
            "StepHook", "assignment", "class_rows", "computed", "fill", "key", "layers_of", "load", "mla_layers", "name",
@@ -286,7 +291,7 @@ class Builder:
 
     def build(self, doc: Mapping[str, Any]) -> dict[str, Any]:
         """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (`TableRoots`)."""
-        head = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
+        head: dict[str, Any] = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
         try:
             return TableRoots(**head, tables=tuple(self._tables(TableAssignment.of(doc, ASSIGN))), error=None).dump()
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
@@ -544,7 +549,8 @@ class LocalChannel:
     """`Channel` in one process: `assign` builds at once."""
 
     def __init__(self, builder: Builder) -> None:
-        self.builder, self.done = builder, {}
+        self.builder = builder
+        self.done: dict[str, dict[str, Any]] = {}
 
     def assign(self, doc: Mapping[str, Any]) -> None:
         self.done[_stem(doc["window"], doc["run"], doc["prompt"], doc["outputs"])] = self.builder.build(doc)

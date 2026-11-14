@@ -18,7 +18,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (profile.py, which imports verity.circuits) and the inference-only policy's calibrations (rho/params.py). It reads
 # no census: data/ states the reference datacenter's machines and the world's active parameters, and
 # tests/test_params.py and tests/test_hardware.py hold them to the census's deployments and adversary.
-inputs = ["security/lean-audit.json", "security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
+# `periods.py` writes its metric into the run's result with the harness kit's writer (`benchmarks/harness/verity_bench`:
+# `kit` and its `settings`, which read `verity_config.settings`).
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
+          "security/lean-audit.json", "security/Properties/lean-audit.json", "benchmarks/nci/tiers.py",
           "security/Definitions/Nci/Remote.lean", "security/Definitions/Nci/Guarantees/Remote.lean",
           "security/Definitions/Nci/Cut.lean", "security/Definitions/Nci/Guarantees/Cut.lean",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/nci/slowdown.py",

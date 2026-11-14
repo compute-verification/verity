@@ -72,8 +72,6 @@ cpu and the served h1u build's kh_lanes) to each other and to the receipts, and 
 from __future__ import annotations
 
 import ctypes as C
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -89,8 +87,6 @@ import h1c as H1CM
 from dither_fused import CM, CR, H1R, Call, unwords
 from h1c import Dom, Tab
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
-import exactlin as ELH
 from verity_config.settings import of
 
 if TYPE_CHECKING:
@@ -170,7 +166,7 @@ def exactlin_quant_rows_dithera(x_ptr, q_ptr, s_ptr, slot_ptr, scale_ptr, S_ptr,
     p = ((254 - (sb >> 23)) << 23).to(tl.float32, bitcast=True)
     xs = x * p
     small = tl.abs(xs) < 0.25
-    q = ELH._rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1, (BLOCK_K,))))
+    q = EL.rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1, (BLOCK_K,))))
     q = tl.where(small, 0, q)
     q = tl.minimum(tl.maximum(q, -127), 127).to(tl.int8)
     tl.store(q_ptr + row * stride_q + offs, q, mask=mask)
@@ -188,9 +184,9 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
                       ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
     mask_m = offs_m < M
     mask_n = offs_n < N
-    ELH._epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
+    EL.epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
     if (flags & 1) != 0:    # F_DUMP: the served y into the execution phase's dump too
-        ELH._epilogue(acc, sa_ptr, sb_ptr, d_ptr, offs_m, offs_n, mask_m, mask_n, N)
+        EL.epilogue(acc, sa_ptr, sb_ptr, d_ptr, offs_m, offs_n, mask_m, mask_n, N)
     if ZL != 0:
         if (flags & 2) == 0:    # F_NW_TILES: no z (nor y leaf)
             live = (offs_m < m)[:, None]
@@ -278,11 +274,11 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
             mask = mask_m[:, None] & mask_n[None, :]
             ws_ptrs = ws_ptr + offs_m[:, None] * N + offs_n[None, :]
             tl.atomic_add(ws_ptrs, acc, mask=mask, sem="relaxed")
-            ELH._membar_gl(pid)
+            EL.membar_gl(pid)
             tl.debug_barrier()
             done = tl.atomic_add(cnt_ptr + pid, 1, sem="acq_rel")
             if done == SPLIT_K - 1:
-                ELH._membar_gl(pid)
+                EL.membar_gl(pid)
                 tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
                 tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
                 _dithera_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)

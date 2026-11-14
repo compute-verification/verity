@@ -32,17 +32,18 @@ What code outside this directory may use. Everything else here is internal.
 
 | party | principal | machine | its pieces (`served_table.PARTIES`) |
 | --- | --- | --- | --- |
-| `workers` | developer | `prover-node` | the served window, `benchmarks/one_stage/served_verdicts.sh`, run once with every piece's hooks; sampled proofs' commitment and proofs; PoUW's H1 on the engine |
+| `workers` | developer | `prover-node` | the served window, `benchmarks/one_stage/served_verdicts.sh`, run once with every piece's hooks; sampled proofs' commitment and proofs; PoUW's H1 on the engine; the certifier's developer side, its front and its piece (`benchmarks/network_traces/certifier_piece.py`) |
 | `firewall` | developer | `prover-node` | the Lean ZK server of the records audit, inside the served window |
 | `prover` | developer | `prover-node` | PoUS's served piece, PoUB's served session and the wipe, inside the served window |
 | `challenger` | auditor | `gate-host` | the gate: sampled proofs' live challenger and PoUW's H1 coins |
-| `network-certifier` | auditor | `gate-host` | the network certifier in front of the endpoint and its piece, reached through the gate |
+| `network-certifier` | auditor | `gate-host` | the network certifier in front of the endpoint, reached through the gate |
 | `memory-challenger` | auditor | `auditor-host` | PoUS's and the wipe's timed reads, on its own coins and clock, signing the session |
 | `bandwidth-verifier` | auditor | `auditor-host` | PoUB's verifier, on its own coins and clock |
 | `verifier` | auditor | `auditor-host` | the onsite check over the served window's public record |
 
-The channels are the subprotocols' declarations (`served_table.MANIFESTS`, sampled proofs' and the wipe's from core's
-`MANIFEST`s), merged per sender and receiver; `verity run --dry-run` prints each.
+The channels are the subprotocols' declarations (`served_table.MANIFESTS`, sampled proofs', the network certifier's and
+the wipe's from core's `MANIFEST`s, as are their parties and the inference-only policy's), merged per sender and
+receiver; `verity run --dry-run` prints each.
 
 ## The hooks
 
@@ -57,10 +58,13 @@ deploy bindings:
 | `H1_GATE`, `H1_PEER`, `H1_KEY_SHA512` | PoUW | `challenger.pouw`: `gate` (the gate command), `peer`, `key-sha512`; `POUW_CMD` is the runner's default then |
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
-| `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`) |
+| `SERVE_ARGS` (`--protocol ids --id-payload 503`), `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`); the front sends its requests in the id form, which serve-openai answers only under those flags, every other request as before |
 | `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND`, `WIPE_KEY_SHA512` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command`, `key-sha512` |
+| `COMPOSITE` (empty) | the run | set unless the caller's environment names `COMPOSITE` or `COMPOSE_OFF_NODE=0`: the runner composes off the node, where onsite's composite can't be made, so the run asks for none (`served_table.composite`) |
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
+`SERVE_ARGS` holds serve-openai's flags, so it is every listed piece's joined, in the pieces' order
+(`served_table.JOINED`); every other variable is one piece's.
 `BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing and composes `pending` while it is.
 The inference-only policy has no hook: no served window produces the declared division yet, so the record has no row
 for it, and the onsite check's verdict stays `undecided` while a listed subprotocol has no row.
@@ -109,8 +113,8 @@ their bindings:
 
     verity run demos/onsite_served/config.toml --on prover-node --bindings BINDINGS --state STATE
 
-The gate's and the auditor host's sides are started by their gates when the prover's pieces open them, so
-`verity run --on gate-host` starts nothing. On the auditor host, with `STATE/out` holding the served window's public
+The gate's and the auditor device's sides are started by their gates when the prover's pieces open them, so
+`verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the served window's public
 record, the onsite check and the period's verdict:
 
     verity run demos/onsite_served/config.toml --on auditor-host --state STATE

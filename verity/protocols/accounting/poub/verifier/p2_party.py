@@ -1,5 +1,5 @@
 """The verifier and its challenger of a PoUB session over PoUS's P2 store (`p2.py`) as a party of their own,
-so they run on a host the developer doesn't control (`trusted-host`) while the prover serves on its node.
+so they run on a host the developer doesn't control (`trusted-device`) while the prover serves on its node.
 
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
@@ -49,8 +49,9 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
-(`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case too, a line of
-`private/cases.jsonl` (0700, the file 0600). `prove(reader, writer, prover)` is the prover's: it answers each
+(`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
+digest too, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`; 0700, the file 0600), and none of the
+case's values. `prove(reader, writer, prover)` is the prover's: it answers each
 message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns, and hands the case to its
 `case`, if it has one. It also reads a verifier that
 sends each challenge as the coin's whole opening and discloses no coins at the end, the form before `Released`: the
@@ -60,6 +61,7 @@ challenge is read as its released part, and `end` never comes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -83,6 +85,8 @@ from .receipts import Plan
 
 MODULE = "verity.protocols.accounting.poub.verifier.p2_party"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
+CASE_DIGESTS = "case-digests.txt"
+"""The file under a party's ``private/`` that `_keep` appends each session's `case_digest` to."""
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
 SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 * 10**9, "windows": 6}
 """The auditor's session parameters, which a request must carry as they are (`params_of`): the served bandwidth piece's
@@ -730,13 +734,19 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
         log(f"{kind} answered")
 
 
+def case_digest(case: Mapping[str, Any]) -> str:
+    """The SHA-512, as 128 lowercase hex digits, of `case`'s JSON line: its keys sorted, then a newline."""
+    return hashlib.sha512((json.dumps(dict(case), sort_keys=True) + "\n").encode()).hexdigest()
+
+
 def _keep(path: Path, case: Mapping[str, Any]) -> None:
-    """`case` appended to `path` as one JSON line, its directory 0700 and the file 0600: the verifier's own record."""
+    """`case_digest(case)` appended to `path` as one line, its directory 0700 and the file 0600: the verifier's own
+    record of the case, which holds none of its values."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(path.parent, 0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "a") as f:
-        f.write(json.dumps(dict(case), sort_keys=True) + "\n")
+        f.write(case_digest(case) + "\n")
     os.chmod(path, 0o600)
 
 
@@ -771,7 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
         a.answer = a.device / "answers.jsonl"
-        cases = a.device / "private" / "cases.jsonl"
+        cases = a.device / "private" / CASE_DIGESTS
 
     def log(m: str) -> None:
         print(f"p2_party {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
@@ -818,10 +828,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer", "core_answer",
-           "held_json", "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record",
-           "prove", "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of",
-           "session", "verdict_json"]
+__all__ = ["Books", "CASE_DIGESTS", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer",
+           "case_digest", "core_answer", "held_json", "hold", "main", "message", "opening_json", "opening_of",
+           "params_of", "plan_of", "pous_record", "prove", "registration_json", "registration_of",
+           "registration_of_setup", "released_of", "request_of", "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
