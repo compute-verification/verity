@@ -360,7 +360,7 @@ def proved(draw: Mapping[str, Any]) -> list[int]:
     return sorted([*draw["units"], *draw.get("closure", ())])
 
 
-def check_draw(draw: Any, registration: Mapping[str, Any], sampling_design: Mapping[str, Any], tables: int = 1) -> Verdict:
+def check_draw(draw: Any, docket: Mapping[str, Any], sampling_design: Mapping[str, Any], tables: int = 1) -> Verdict:
     """The sample is well formed, over the registered population, under the verifier's sampling design (for `stratified` and `work`,
     the expanded sampling design of `derive`), and a session of `tables` tables can split it (`tables_problem`)."""
     c = _Collect()
@@ -379,8 +379,8 @@ def check_draw(draw: Any, registration: Mapping[str, Any], sampling_design: Mapp
         c.fail("tables", why)
     if not same_design(sampling_design_of(draw), dict(sampling_design)):
         c.fail("law", {"drawn": sampling_design_of(draw), "verifier": dict(sampling_design)})
-    if n != registration["population"]:
-        c.fail("population", {"drawn": n, "registered": registration["population"]})
+    if n != docket["population"]:
+        c.fail("population", {"drawn": n, "registered": docket["population"]})
     if not isinstance(units, list) or not all(_int(u) for u in units):
         c.fail("units", units)
         return c.verdict()

@@ -36,7 +36,7 @@ import Proofs.Accounting.Requirement
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# A pass's credit against its tiles of the declared circuit
+# A pass's credit against its tiles of the registered circuit
 
 The piece of `Accounting.SecurityProofs.RegisteredCircuitRequirement` that reads a pass's credit pass by pass. `W`'s owned
 blocks at the pass's step are planned, at distinct positions of the pass's store, so the pass's tiles of `W` are as many

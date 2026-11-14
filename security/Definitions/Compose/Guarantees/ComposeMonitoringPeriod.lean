@@ -6,7 +6,7 @@ public import Definitions.Compose.Assumptions.Compose
 /-!
 # PoUW's work over a monitoring period of `n` windows (trusted)
 
-`CircuitWork` restated over a monitoring period of `n` windows of one declared circuit, each window with its own live
+`CircuitWork` restated over a monitoring period of `n` windows of one registered circuit, each window with its own live
 coins and its own sample, its words counted on its live tiles only. It changes what the live guarantee says: `ε` is
 quoted per monitoring period, and credited on live tiles up to the first refused window. Its credit in live words is
 `CircuitCreditMonitoringPeriod`.
@@ -46,7 +46,7 @@ namespace Accounting.Guarantees.ComposeMonitoringPeriod
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
-declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
+registered circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
 `CircuitWork`'s: the circuit's rounds in order, each round's noise coin live and released after its operands are
 committed, then the service's sample of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
 included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s sample. The
@@ -72,7 +72,7 @@ prefix, of `j = Outcomes.prefixLen` windows. Under:
 
 an accepted period (`Pl.accepts`, which may hold on every path: the record credits whatever prefix was accepted, the
 empty one included) has, over its accepted prefix of `j` windows, all but `(d_F + d₀)·N_w` of the prefix's live words
-fixed right and all but `d₀·N_w` folded, `N_w` the declared circuit's words a window, with
+fixed right and all but `d₀·N_w` folded, `N_w` the registered circuit's words a window, with
 `a·d_F + b·d₀ < Λ·ln(1/δ_s) + j·min(a, b)·D₀` (`LiveWorkAt` at `creditedLive` and `rOfPrefix`, against `n·fixed` and
 `n·folded`), except with probability `δ_s + n·(δ_bind + δ_ks)`. Per credited window the bound is
 `Λ·ln(1/δ_s)/j + min(a, b)·D₀`. At `n = 1` with every tile live, on a path whose window is accepted, it is
@@ -119,7 +119,7 @@ challenger session and counts toward the cap, and has at most one open and one e
 before its first coin (`pouw.salt.window_open_root` of the weights' root, the round-0 request table's root and the
 session; one session a root, ever), and the window's place is the ledger's order, not the requester's. The cap `n`
 (1 to 2^24) and the circuit are `period-open`'s, signed in its body before window 0's first coin, the circuit as the
-declared circuit's lowercase SHA-512, never a Program's id. A window reads only its own session's coins, and a
+registered circuit's lowercase SHA-512, never a Program's id. A window reads only its own session's coins, and a
 session that never ends is a recorded window, not a dropped one. Each window's first coin is opened after the
 previous window's sample (the challenger's `order_reason` over one family, below). The credit is the prefix, in ledger
 order, before the first refused window: the first whose proof is refused, whose reserve expired before its open

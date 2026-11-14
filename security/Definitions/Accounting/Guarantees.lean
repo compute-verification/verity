@@ -78,10 +78,10 @@ the obligations B1, B2 and B4, the sketch guarantees, Lemma B with (H-μ⁺) der
 for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
 receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, PoUB's per-pass lemma
 (the bandwidth audit's guarantee), their per-run forms, PoUW's work lower bound on an isolated node, PoUW's credit on an
-arbitrary declared circuit compiled to its templates, a declared circuit's live and read bits from the blocks the audit
+arbitrary registered circuit compiled to its templates, a registered circuit's live and read bits from the blocks the audit
 credits, PoUW's credits and help as its placed execution's gates, the grinding premium under hashed seeds and the
 deployed tile's moment, stacking's carrier lemma with PoUB as deployed for devices that read from carriers,
-also read against a declared circuit's requirement, and the composed guarantee for a declared circuit that passes the
+also read against a registered circuit's requirement, and the composed guarantee for a registered circuit that passes the
 stacking property: its credited live and read bits from an accepted stacked audit. -/
 
 @[expose] public section

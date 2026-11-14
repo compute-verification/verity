@@ -324,7 +324,7 @@ structure Form where
   unitRangeInBlock : Bool
 
 /-- **A V* session's sample record**, the sample as its record holds it: its sampling design's `k` when the sampling design is `subset` (`none` for
-another law), its population, its units and its closure. -/
+another sampling design), its population, its units and its closure. -/
 structure DrawRecord where
   subset : Option ℕ
   population : ℕ

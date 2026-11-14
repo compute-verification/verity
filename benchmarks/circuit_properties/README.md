@@ -55,7 +55,7 @@ beside the circuit. A gather's rows by the batch stay a gather's rows until one 
 a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
 The rule rests on one premise, `SHARED_PREFIX`'s (`training_slowdown.work.P_BATCH`): past each row's first
 position, no two positions of the batch hold
-equal words. The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens
+equal words. The point's second sample, word by word (`points`), meets `P_BATCH` by the construction of its tokens
 wherever a batch holds no more positions than the least table has rows, so it shows a specific operand's rows are not equal by an identity of the circuit (the attention's output plus -1 times
 itself is 0 for every input); that the served data meets `P_BATCH` stays the premise it is today. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
@@ -68,7 +68,7 @@ batch reads, or one whose own rows are shown distinct (a weight times a weight);
 a multiply by a stated 0 reaches nothing. Each charged operand whose rows these rules show distinct or specific is
 tested at a point (`points.check`): the Program evaluated once, θ's words generic (four binades about 2^-3, every sign)
 and every input's one positive word repeated, as a submitter may choose, and an operand specific and not distinct at a
-second point in the same pass, every input's words drawn on their own (an input that reaches a lookup's token,
+second point in the same pass, every input's words sampled on their own (an input that reaches a lookup's token,
 found by that use, as a permutation of its least table's rows, and every other as θ's are but positive), its rows
 compared across every activation whose other operand is the same there, and refused (`work.RepeatedRows`) where two
 rows are equal at enough points to hold 64 sampled bits a row, compared by their words with a row's two zeros one word

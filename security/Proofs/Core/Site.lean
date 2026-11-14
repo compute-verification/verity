@@ -505,7 +505,7 @@ def day0 : Declared := ⟨0, "program0"⟩
 /-- The onsite site, then its declaration of day 0. -/
 def declaredLog : Registration := [onsite, .declaration "genesis+" day0]
 
-/-- The onsite site with day 0 declared is valid, and day 0's declared circuit is `day0`. -/
+/-- The onsite site with day 0 declared is valid, and day 0's registered circuit is `day0`. -/
 theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 :=
   ⟨by decide +kernel, rfl⟩
 

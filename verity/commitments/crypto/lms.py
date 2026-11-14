@@ -219,7 +219,7 @@ def party_key_message(I: bytes, deployment: bytes, party: str, lower: bytes) -> 
 def period_root_message(I: bytes, deployment: bytes, party: str, attachment: bytes, link: str, period: int, count: int,
                         root: bytes) -> bytes:
     """The message a party's lower key (identifier ``I``) signs once per certification period: the tag
-    ``verity/period-root/v1``, the context the deployment's hash, the party's name, the attachment id the challenger drew,
+    ``verity/period-root/v1``, the context the deployment's hash, the party's name, the attachment id the challenger sampled,
     the link's name (for a party on no link, its device role), the period's index and the number of records under the root
     (u64 each, unprefixed), the record the root of the period's records tree (`verity.commitments.attest`)."""
     context = _period_context(deployment, party, attachment, link, period) + _u64(count, "a period's record count")
@@ -677,7 +677,7 @@ class PartyKey:
         self.attachment: bytes | None = None
 
     def start(self, attachment: bytes) -> None:
-        """Start this key's run of ``attachment`` (the attachment id the challenger drew), after the key's leaf state on
+        """Start this key's run of ``attachment`` (the attachment id the challenger sampled), after the key's leaf state on
         disk records it as started (`LeafState.start`), so that `period_root` and `liveness` sign for it; a no-op for the
         attachment already started here, and refused for one the state records already (this key's earlier run of it, or
         another signer's)."""

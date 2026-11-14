@@ -41,7 +41,7 @@ FIELDS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 STANDIN = ("today's --zk path under the ZK server on the prover's node (FC_ZK_SERVER=1: flock-circuit's checks and the Lean "
-           "flock-zk-server processes it starts), not the worker/server split: the masks and salts are drawn on the prover's "
+           "flock-zk-server processes it starts), not the worker/server split: the masks and salts are sampled on the prover's "
            "node, the witness is the host's (FC_HOST_WITNESS=1), the server checks the device's values on the same node")
 
 

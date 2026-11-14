@@ -281,7 +281,7 @@ def test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_ref
     no answer, and no entry exists: no negative is refused because a Lean process ended. Taken as Lean's refusal, as
     `verifier.lean` takes it, each entry would be ``refused: true`` beside Python's accept."""
     popen = subprocess.Popen
-    monkeypatch.setattr(V, "executable", lambda exe=V.EXE: Path(sys.executable))
+    monkeypatch.setattr(V, "executable", lambda exe=V.EXE, package=V.PACKAGE: Path(sys.executable))
     monkeypatch.setattr(V, "subprocess", SimpleNamespace(PIPE=subprocess.PIPE,
                                                          Popen=lambda argv, **kw: popen([*argv, "-c", ENDS], **kw)))
 
@@ -316,13 +316,14 @@ def test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker(tmp_p
     def history_root(name: str) -> dict[str, dict]:
         v = V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf, work_table=mine.work_table,
                     history=wrong)
-        return {name: {**a0.negative(v), "lean": v.verifiers["lean"]}}
+        return {name: {**a0.negative(v), "lean": v.detail[R.HISTORY]["lean"], "verifiers": v.verifiers["lean"]}}
 
     w = workers(2)
     got = w.entries([w.submit(n, functools.partial(history_root, n)) for n in ("history-a", "history-b")])
     for name in ("history-a", "history-b"):
         assert got[name]["refused"] and got[name]["codes"] == [R.HISTORY], got[name]
-        assert isinstance(got[name]["lean"]["refused"], str) and V.EXE not in got[name]["lean"]["refused"], got[name]
+        assert got[name]["verifiers"] == {"ok": False, "codes": [R.HISTORY]}, got[name]
+        assert isinstance(got[name]["lean"], str) and V.EXE not in got[name]["lean"], got[name]
     assert not multiprocessing.active_children()
 
 

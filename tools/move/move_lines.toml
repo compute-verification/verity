@@ -49,3 +49,13 @@ reason = "The move ran with --no-lock, as its subject says and its trailer doesn
 line = "Layout-move: tools/move/mla_inputs_map.toml --no-lock"
 hand = ["tools/move/mla_inputs_map.toml"]
 reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."
+
+["08a0828b2fe2bab7f7c123ef5b2c3ff0878f51ac"]
+line = "Layout-move: tools/move/vllm_poub_option_map.toml --no-lock"
+hand = ["adapters/vllm/README.md", "adapters/vllm/pyproject.toml", "adapters/vllm/verity_vllm/pipeline/serve_remote.py", "adapters/vllm/verity_vllm/protocols/README.md", "adapters/vllm/verity_vllm/protocols/__init__.py"]
+reason = "The move ran with --no-lock, as its trailer doesn't say, and also renamed by hand the sites layout.py can't read as the moved directory: the adapter's suite inputs (relative to adapters/vllm/), two READMEs' prose, serve_remote's package-relative module name and DRIVERS' package name."
+
+["e5ca33162035c59f4ac8bf2c10acda9fa662da5b"]
+line = "Layout-move: tools/move/properties_map.toml --no-lock"
+hand = ["tools/move/properties_map.toml"]
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."

@@ -22,7 +22,7 @@ from test_rec_live import SCHEDULE, _bytes, _domain, _label, _obs, _sq
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-LEAN = Path(__file__).resolve().parents[3] / "recursion" / "verifier" / "firewall"
+LEAN = Path(__file__).resolve().parents[3] / "recursion" / "verifier" / "zk_server"
 #: the flat GEMM selftest's shape, whose recorded session `test_zk_server_agreement` relays
 FLAT_SCHEDULE = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
 
