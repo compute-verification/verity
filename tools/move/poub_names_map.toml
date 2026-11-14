@@ -21,7 +21,8 @@
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "uv.lock",
-           "**/*.lock", "tools/research/src/research/store/moves.json"]
+           "**/*.lock", "tools/research/src/research/store/moves.json",
+           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
 
 [keep_in]
 "adapters/**" = ["remote_bandwidth"]
