@@ -49,11 +49,11 @@ open Lean (Json)
 /-- A record's own tag (`Flock.WindowRecord.tagOf`) is the one the policy's digest takes: both read its `format` field
 as a string. -/
 theorem tagOf_eq (j : Json) : Flock.WindowRecord.tagOf j =
-    if NciCheck.Baseline.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
+    if NciCheck.Theta.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
     else Flock.WindowRecord.FORMAT := by
-  have hv : (j.getObjValAs? String "format").toOption = NciCheck.Baseline.strAt j "format" := by
+  have hv : (j.getObjValAs? String "format").toOption = NciCheck.Theta.strAt j "format" := by
     show (Lean.fromJson? (j.getObjValD "format") : Except String String).toOption =
-      NciCheck.Baseline.strOf? (j.getObjValD "format")
+      NciCheck.Theta.strOf? (j.getObjValD "format")
     cases j.getObjValD "format" <;> rfl
   unfold Flock.WindowRecord.tagOf
   rw [hv]
@@ -62,13 +62,13 @@ theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
   apply ByteArray.ext
   simp [ByteArray.data_push, ByteArray.data_append]
 
-/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `NciCheck.Baseline.digest` is that
+/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `NciCheck.Theta.digest` is that
 function, or else tags the record by its `format` as `Flock.WindowRecord.tagOf` does and hashes its canonical text as
 `Flock.WindowRecord.digest` does, and either form is proved here. -/
-theorem baseline_digest (rec : Json) : NciCheck.Baseline.digest rec = Flock.WindowRecord.digestHex rec := by
+theorem baseline_digest (rec : Json) : NciCheck.Theta.digest rec = Flock.WindowRecord.digestHex rec := by
   first
     | rfl
-    | (unfold NciCheck.Baseline.digest Flock.WindowRecord.digestHex Flock.WindowRecord.digest
+    | (unfold NciCheck.Theta.digest Flock.WindowRecord.digestHex Flock.WindowRecord.digest
        rw [tagOf_eq]
        cases Flock.canon rec with
        | error e => rfl
