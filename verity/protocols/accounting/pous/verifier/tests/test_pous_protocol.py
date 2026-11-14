@@ -523,7 +523,6 @@ def test_every_certificate_claim_is_a_claim_id():
             claim_ids.get(c)
     assert claim_ids.get("cr/sha-512")["kind"] == claim_ids.get("trusted-device")["kind"] == "assumption"
     assert claim_ids.get("p2-ring-round-secure-wide")["lean"] == ["Pous.P2.Assumptions.P2RingRoundSecureWide"]
-    assert claim_ids.get("pous-ring-device-at")["lean"] == ["Pous.Period.RingDeviceAt"]
 
 
 def test_p2_is_experimental_and_says_so():

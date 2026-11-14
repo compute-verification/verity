@@ -396,7 +396,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -438,7 +437,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -476,7 +474,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -499,7 +496,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -529,7 +525,6 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -538,7 +533,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -590,7 +584,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -711,7 +704,6 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier/profile.py",
@@ -720,7 +712,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",

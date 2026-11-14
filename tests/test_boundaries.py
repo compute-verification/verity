@@ -88,7 +88,7 @@ DEPENDENCIES = {"numpy"}
 #: the hardware's cards, the Site's types, SPOT's planning beside its verifier, and a protocol's manifest with the
 #: monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
-               "verity/claims", "verity/device.py", "verity/protocols/proofs/spot",
+               "verity/commitments/claim_ids.py", "verity/device.py", "verity/protocols/proofs/spot",
                "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
