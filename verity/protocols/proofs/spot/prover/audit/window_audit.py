@@ -459,7 +459,7 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
                              **registering(a, history)),
         stream, coins, draw, outcome, a.window_root)
     checks = (result or {}).get("checks") or {}
-    record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
+    record = {"source": stream.coins_from, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
 
