@@ -176,7 +176,8 @@ theorem runGives : RunGives := by
     rw [Array.getElem?_eq_getElem hj] at this
     exact Option.some.inj this
   rw [Bool.eq_false_iff] at hrej
-  refine hrej (verdict_accepted_of (p := p) (m := sd.m) hp (by simpa [challengePhaseOf] using ht) hmsg ?_
+  refine hrej (verdict_accepted_of (p := p) (m := sd.m) hp
+    (List.contains_iff_exists_mem_beq.2 ⟨pk, ht, by show (pk.data == pk.data) = true; exact beq_self_eq_true _⟩) hmsg ?_
     (commitment_beq_self c) he hsz ?_)
   · show lmsVerify p pk c.session sd.m sg.sig = .ok true
     rw [← hm]
@@ -283,7 +284,8 @@ theorem runGives_honest : RunGivesHonest := by
     obtain rfl : j = 0 := by simp [honestCommitment] at hj; omega
     rfl
   · refine verdict_accepted_of (p := Lms.deployed) (m := m) hlook
-      (by simpa [challengePhaseOf] using List.mem_singleton_self k.publicKey)
+      (List.contains_iff_exists_mem_beq.2 ⟨k.publicKey, List.mem_singleton_self _,
+        by show (k.publicKey.data == k.publicKey.data) = true; exact beq_self_eq_true _⟩)
       hm hlms (commitment_beq_self _) rfl rfl ?_
     intro j hj
     obtain rfl : j = 0 := by simp [challengePhaseOf, constRun, V] at hj; omega
