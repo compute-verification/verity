@@ -35,12 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A declared circuit's proof blocks, commit coins, seed preimages and sample are the service's (`Spot.Slots.layout`, `Select.select`)
+# A registered circuit's proof blocks, commit coins, seed preimages and sample are the service's (`Spot.Slots.layout`, `Select.select`)
 
 `Accounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
 (`Definitions.Compose.Guarantees.Compose`) samples, proves and charges tiles by them, its sample `Pouw.Window.subsetDraw`
-(`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
+(`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the registered circuit is the service's on a
 program `p` and query:
 * **units**: the service samples and proves the units of the verifier's own partition of its program
   (`Spot.Slots.layout`: the population's proof blocks, each its unit and its gates, then the input

@@ -24,7 +24,7 @@ stated on these objects.
 * The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
   not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
   Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
-* **Credit** (`creditSize lower d`) is the AND count of the registered declared circuit under one public lowering,
+* **Credit** (`creditSize lower d`) is the AND count of the registered circuit under one public lowering,
   pinned at registration.
 * The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed in
   the execution phase, with the registered circuit (`Verity.RegisteredCircuit`) and the committed values of `θ`'s gates. Its
@@ -102,7 +102,7 @@ noncomputable def andSize (C : Circuit) (S : Finset (Fin C.N)) : ℕ := (S.filte
 
 end Circuit
 
-/-- **Credit**: the AND count of the registered declared circuit `d` under the one public lowering `lower`, pinned at
+/-- **Credit**: the AND count of the registered circuit `d` under the one public lowering `lower`, pinned at
 registration, never the prover's own lowering. Each credit record carries `lower`'s digest. -/
 noncomputable def creditSize (lower : RegisteredCircuit → Circuit) (d : RegisteredCircuit) : ℕ :=
   (lower d).andSize Finset.univ

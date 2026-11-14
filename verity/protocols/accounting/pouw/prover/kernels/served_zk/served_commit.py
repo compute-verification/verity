@@ -1554,8 +1554,9 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 
 def cmd_replay(a) -> int:
+    record = a.record(lean=False if a.python_record else None)
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   record=a.record(lean=False if a.python_record else None))
+                   record=record)
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1593,8 +1594,8 @@ def cmd_coin_variant(a) -> int:
 
 
 def cmd_check(a) -> int:
-    params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
     record = a.record(lean=False if a.python_record else None)
+    params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:
