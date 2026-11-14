@@ -26,8 +26,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `verity/protocols/inference_only/nci/` and `verity/protocols/inference_only/rho/`.
+    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -39,15 +38,17 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model, or time base), `nodes/` (one per kind of node), `site` (its
-    types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
-    top-level `hardware/` that holds data only, and the types in `verity/`'s `device.py`.
+  - `verity/hardware/`: the registered hardware: `cards` and `nodes` (the loaders of the data sheets, which are in the
+    top-level `hardware/{cards,nodes}/`), `registration` (the registration log) and `record` (a record entry); its
+    types are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
-  - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/composite/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+  - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
+    `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+- `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
+  base) and `nodes/` (one per kind of node). `verity.hardware.cards` and `verity.hardware.nodes` read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
@@ -56,7 +57,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
+- `artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
@@ -81,7 +82,7 @@ outside the trusted places only the files its `loaded_by` names import one, a te
 and the generator writes a line into one only under `--grow`. What the trusted places reach outside themselves is the
 soundness path, which only shrinks: `verity/circuits`, `verity/commitments`, `verity/commitments/crypto` and
 `verity/commitments/randomness` (the first two hold a few files outside those directories too, which their `paths`
-name); none reaches the catalog (`verity/definitions/ops/` and `silicon/`) or the kernels. The rest can't affect
+name); none reaches the catalog (`verity/circuits/ops/` and `silicon/`) or the kernels. The rest can't affect
 soundness. Python of `verity` in no place only groups packages and imports the standard library alone. A directory
 under `verity/` with an import root of its own is a distribution the listing names with its owner: `verity` loads none
 of them by name (a load by file is read only into `benchmarks/`) and imports no other distribution of the workspace.
@@ -359,7 +360,7 @@ and its parameters). What a run measured, what happened and who decided live out
   the published result.
 - **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
   outside the repository (the team skill).
-- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
+- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
 

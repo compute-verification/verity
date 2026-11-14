@@ -74,7 +74,7 @@ D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/
 BASE, CIRCUITS, COMMITMENTS = ("verity/circuits/base/Base/", "verity/circuits/lean/Circuits/",
                                "verity/commitments/lean/Commitments/")
 PROTOCOL = "verity/protocols/interface/CoreProtocol/Protocol.lean"
-REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
+REQ, REQ_PY = "verity/circuits/requirement/CircuitRequirement.lean", "verity/circuits/requirement.py"
 SITE_LEAN, SITE_PY = "verity/protocols/interface/CoreProtocol/Site.lean", "verity/device.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
@@ -106,7 +106,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": ("verity/definitions/private_circuits/universal.py::Netlist",),
+    "Netlist": ("verity/circuits/private_circuits/universal.py::Netlist",),
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
@@ -685,7 +685,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/harness/chain.py::Link":
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
-    "benchmarks/pouw/harness/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
+    "verity/protocols/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
@@ -722,10 +722,10 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
-    "verity/protocols/inference_only/rho/rho/circuits.py::Circuit":
+    "benchmarks/rho/rho/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
-    "verity/protocols/inference_only/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
-    "verity/protocols/inference_only/rho/rho/theorem.py::Partition":
+    "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
+    "benchmarks/rho/rho/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
@@ -909,7 +909,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/spot/verifier/one_stage/verdict.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/protocols/spot/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
+    "verity/protocols/spot/prover/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
     "verity/protocols/spot/device/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
     "verity/protocols/spot/verifier/service.py::Outcome":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
@@ -949,10 +949,10 @@ KNOWN: dict[str, str] = {
     "verity/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
     "verity/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/definitions/circuits/requirement.py::Layout":
+    "verity/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
-    "verity/definitions/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
-    "verity/definitions/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
+    "verity/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
+    "verity/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/circuits/units.py::Placement": "homonym, a unit's index in the partition: rename (proofs)",
     "verity/commitments/advice.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",

@@ -1997,7 +1997,7 @@ def a6(run: Run) -> Iterator[Case]:
     domain over its member's set (A6's row layout: x row-seg, w and o0 row-v2), and the leaf layer the SHA-512 of the
     map from member to its public file's SHA-512."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as OG
+    from verity.circuits.ops import gemm as OG
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     base = "out/a6"
     a = run.json(f"{base}/audit.json")
@@ -2126,7 +2126,7 @@ def a7(run: Run) -> Iterator[Case]:
     (`check3/`) is outside (`A7_CHECK3`)."""
     from types import SimpleNamespace
 
-    from verity.definitions.circuits import requirement_units as RU
+    from verity.circuits import requirement_units as RU
     from verity.circuits.defs import bind
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     base, tag = "out/a7", "verity/flock-circuit/binding/v2"

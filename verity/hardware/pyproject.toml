@@ -11,5 +11,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "security/Definitions/Core/Accel/Isa.lean",
           "security/Definitions/Core/Accel/H200.lean", "security/Definitions/Core/Accel/Sm120.lean",
           "security/Definitions/Accounting/Sheets/B200.lean",
-          "verity/protocols/inference_only/rho/data/hardware.toml",
-          "verity/device.py", "verity/channel.py"]
+          "benchmarks/rho/data/hardware.toml", "verity/device.py", "verity/channel.py", "hardware/cards",
+          "hardware/nodes"]

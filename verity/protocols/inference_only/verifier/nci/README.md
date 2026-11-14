@@ -6,7 +6,7 @@ The inference-only policy's check, in Lean only. This directory is `lean/` and t
 and no console script.
 
 - **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at `../../../certifier/verifier/lean`,
-  `verity/protocols/onsite/verifier`, `verity/protocols/remote/verifier` and `security/Properties` require by path.
+  `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
@@ -27,7 +27,7 @@ and no console script.
   the certifier.
 - **Not here**: its tests, `test_nci_*.py` and `test_inference_only_protocol.py`. They are in
   `../../../certifier/verifier/network/tests`, in the suite `verity/protocols/certifier/verifier/network`, with the
-  tests of the certifier's Lean check. The tests of `verity/protocols/remote/verifier/composition` load the second by
+  tests of the certifier's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
   path.
 
 ## Overview
@@ -38,10 +38,10 @@ every value outside the registered information θ, the models, code and data fix
 a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase, before
 any coin, B's output on the reported advice partitions that execution block into inference blocks, and the developer's
 ZK proof that B ran correctly and explains the committed trace can also show that each has at most c gates and reads
-at most k bits outside θ (`verity/protocols/remote/verifier/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
+at most k bits outside θ (`verity/protocols/compose/verifier/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
 check decides the policy at a rate, `Nci.CompliesRate` (below).
 
-The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/protocols/remote/verifier/composition`):
+The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/protocols/compose/verifier/lean`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the
@@ -57,7 +57,7 @@ rollout) reads an enormous amount, say 1 TB of new parameters, so training that 
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the slowdown lower bound"). Its numbers come from [`verity/protocols/inference_only/rho`](../../rho/README.md), whose
+the slowdown lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
@@ -120,12 +120,12 @@ of Flock's verifier.
 The check's agreement with `Nci.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
 compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
 every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
-accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `verity/protocols/inference_only/nci` holds the
+accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names
 
-The directory, the namespaces `Nci` and `NciCheck`, the `nci-*` executables, `verity/protocols/inference_only/nci` and the Lean's
+The directory, the namespaces `Nci` and `NciCheck`, the `nci-*` executables, `benchmarks/nci` and the Lean's
 docstrings keep the older names until they are renamed: "NCI" and "novel communication intensity" for the policy,
 "isolation unit" and "IU" for an inference block, "novel information" and `novelReads` for fresh input, and
 "baseline" for the registered information (`GLOSSARY.md`, Older names).

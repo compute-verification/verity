@@ -21,7 +21,7 @@ PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "tools/config", "infra/cluster/src", "infra/ops", "benchmarks/numerical/python",
               "benchmarks/harness", "adapters/vllm", "verity/protocols/flock/prover/python", "tools/verity/circuit_check/src",
               "benchmarks/machine_model", "tools/verity/cli", "tools/verity/graph", "tools/verity/landq",
-              "verity/difftest/python",
+              "tools/difftest/python",
               "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput"]
 
 
@@ -29,7 +29,7 @@ def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_pa
     d = P.import_roots_dir(REPO)
     assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["shim"] == ["verity"] and d["source"] == "pyproject.toml [tool.uv.workspace]"
     names = ["research", "verity_config", "cluster", "verity_ops", "verity", "verity.protocols.spot.verifier", "verity_vllm",
-             "verity_numerical", "verity_bench", "verity_flock", "circuit_check", "verity.circuits", "verity.definitions.kernels",
+             "verity_numerical", "verity_bench", "verity_flock", "circuit_check", "verity.circuits", "verity.circuits.kernels",
              "verity_difftest", "verity_machine_model", "verity_graph"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)

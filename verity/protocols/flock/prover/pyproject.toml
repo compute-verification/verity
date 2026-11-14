@@ -105,7 +105,7 @@ inputs = [
     "verity/protocols/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
     # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
-    "verity/difftest/python/verity_difftest", "verity/difftest/lean", "verity/protocols/recursion/verifier/firewall",
+    "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/recursion/verifier/firewall",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
@@ -157,7 +157,7 @@ paths = [
     "verity/circuits/lean",
     "verity/commitments/lean",
     "verity/commitments/lms/lean",
-    "verity/composite/device/live_challenger",
+    "verity/protocols/compose/device/live_challenger",
     "verity/protocols/interface",
     "verity/protocols/flock/verifier",
     "verity/protocols/spot/verifier/lean",
@@ -203,7 +203,7 @@ paths = ["verity/definitions/registry", "verity/protocols/flock/prover/python/ve
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/definitions/ops", "verity/definitions/registry", "verity/protocols/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "verity/definitions/registry", "verity/protocols/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]
@@ -262,7 +262,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/prover/pod", "verity/protocols/flock/prover/agreement", "verity/protocols/flock/prover/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -284,7 +284,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_sha512_leaves.py"]
 # nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
-paths = ["verity/definitions/kernels/sha512.cuh"]
+paths = ["verity/circuits/kernels/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]

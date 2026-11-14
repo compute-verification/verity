@@ -614,7 +614,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
-POUS = "verity/protocols/pous/lean"
+POUS = "tools/pous_grader"
 TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json"
 UP = posixpath.relpath("security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
@@ -3017,7 +3017,7 @@ def _fixture_tree(world: World) -> tuple[dict[str, str], str]:
     (src / "other.json").write_bytes(b"{}\n")
     art = F.fixture_id(src / "big.json")
     files = {".gitignore": f"__pycache__/\n{BIG_PATH}\nother/data/other.json\n",
-             "fixtures/artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
+             "artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
              "pyproject.toml": PREFLIGHT_FILES["pyproject.toml"].replace('["pkg"]', '["pkg", "other"]'),
              "other/pyproject.toml": PREFLIGHT_FILES["pkg/pyproject.toml"].replace('"pkg"', '"other"'),
              "other/tests/test_other.py": "def test_other():\n    pass\n",

@@ -30,8 +30,8 @@ from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.circuits import codec
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.gemm import S8_K_LIMIT
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.gemm import S8_K_LIMIT
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):

@@ -377,14 +377,14 @@ day = "2026-11-15"
 note = "two Lake packages move with Sunday's chain; its served part waits for the vLLM adapter's snapshot and may land 2026-11-16"
 
 [[not_yet]]
-path = "verity/difftest/"
+path = "tools/difftest/"
 to = "its Python to tools/difftest/, its Lake package to verity/circuits/difftest/"
 owner = "top"
 day = "2026-11-15"
 note = "its Lake package moves with Sunday's chain"
 
 [[not_yet]]
-path = "verity/composite/"
+path = "verity/protocols/compose/"
 to = "verity/protocols/compose/device/live_challenger/"
 owner = "top"
 day = "2026-11-14 12:00 PST"
@@ -410,7 +410,7 @@ arriving = true
 note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
 
 [[not_yet]]
-path = "fixtures/artifacts.json"
+path = "artifacts.json"
 to = "the root"
 owner = "top"
 day = "2026-11-14 12:00 PST"

@@ -10,7 +10,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-verifier-gate` (`command=`),
   which is this file's `gate` as root through one sudoers line, as on the challenger's host
-  (`verity/composite/device/live_challenger/auditor.py`). A lane's own key is forced with the lane's name (`vy-verifier-gate LANE`,
+  (`verity/protocols/compose/device/live_challenger/auditor.py`). A lane's own key is forced with the lane's name (`vy-verifier-gate LANE`,
   from `/etc/vy/verifier-gate-keys`, `vy-verifier-setup`), and only such a key starts, replays, stops a run or closes a
   registration: the run records that name as `by`. A key forced with no name (`-`) reads only: `status`, `fetch`. A lane
   names a run's parameters and gets a run; it never names code, a path, a host or a node's capacities. Infra's
@@ -134,7 +134,7 @@ HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[5]
 VERIFIER = TREE / "verity" / "protocols" / "poub" / "verifier" / "remote_session" / "verifier_process.py"
 REPLAY = TREE / "verity" / "protocols" / "poub" / "verifier" / "lean" / "tests"
-DIFFTEST = TREE / "verity" / "difftest" / "python"
+DIFFTEST = TREE / "tools" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 
 PORTS = range(7951, 7959)

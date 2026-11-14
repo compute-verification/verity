@@ -9,7 +9,7 @@ from verity.circuits import ports as P
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.population import population_program
 from verity.circuits.program import Program
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.pouw.prover.circuit import h1tile as Ht
 
 TILE = bind(Ht.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8), R=4, C=8,

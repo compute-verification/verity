@@ -27,9 +27,9 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.program import Program, input_id
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import PRODUCTS, census
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits import stacking as P
+from verity.circuits.census import PRODUCTS, census
+from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.pouw.prover.circuit import h1tile as H
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")

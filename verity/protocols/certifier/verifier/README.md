@@ -59,13 +59,13 @@ Open premises (`open`):
 - **Python**: `verity.protocols.certifier.verifier`. Code outside this directory imports every module but `boundary`,
   `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
-  `served_rows`, `warden`); `verity/composite/device/live_challenger`; the tests of `../../pouw/verifier` and
+  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; the tests of `../../pouw/verifier` and
   `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`,
   `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests (`network/tests`)
   and vector script (`lean/scripts`) import it too. `../../spot`, `../../flock` and `../../recursion` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
-  packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
+  packages at `../device/lean`, `../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
@@ -87,7 +87,7 @@ Open premises (`open`):
   `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
   `benchmarks/network_e2e/encodings` writes; `advice.py` (`benchmarks/network_e2e/encodings`); and in `network/tests`,
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
-  `test_inference_only_protocol.py` (the tests of `../../remote/verifier/composition`).
+  `test_inference_only_protocol.py` (the tests of `../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../flock/verifier`),
   `nci_check` (`../../inference_only/verifier/nci/lean`), `core_protocol` (`../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package.
@@ -409,7 +409,7 @@ From `verity`, `advice_check`, `compile_slice` and `served_statics` take the cir
 those and the hm96 leaves, and `charge_chain` and `window_charge` those and hm96, and from SPOT the produced rows.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 
-The coin link (`coin_link`, run by `verity/composite/device/live_challenger/coin_link.py`) carries a window's session
+The coin link (`coin_link`, run by `verity/protocols/compose/device/live_challenger/coin_link.py`) carries a window's session
 between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
 grids, exempts only the verified, expected, once-only coin openings, and counts everything else
 (`protocol/coin-link.md`).

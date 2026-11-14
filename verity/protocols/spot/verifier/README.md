@@ -9,9 +9,9 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
-`verity/protocols/remote/verifier/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
+`verity/protocols/compose/verifier/remote/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
 `verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) and the inference-only policy, and onsite
-(`verity/protocols/onsite/verifier/`) with the other protocols. Each configuration's verifier runs
+(`verity/protocols/compose/verifier/onsite/`) with the other protocols. Each configuration's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
 evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
@@ -189,9 +189,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`one_stage.closing`, `challenger.members_tree_reason`).
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
-  machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
+  machine only through that machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
-  as the far end of that coin link (`verity/composite/device/live_challenger/coin_link.py`).
+  as the far end of that coin link (`verity/protocols/compose/device/live_challenger/coin_link.py`).
   - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`. Under them
     a logged coin's sample misses a set fixed before it at most as the sampling design allows (`SampleAfterRecorded`, proved).
@@ -235,9 +235,9 @@ from verity.protocols.spot.verifier import service
 from verity.protocols.spot.verifier.one_stage import audit, draw, partition, registration
 from verity.protocols.spot.device.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
-from verity.protocols.spot.optimize import Candidate, CostModel, Objective, frontier, for_budget
-from verity.protocols.spot.candidates import Shape, cuts
-from verity.protocols.spot.costfit import fit
+from verity.protocols.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
+from verity.protocols.spot.prover.candidates import Shape, cuts
+from verity.protocols.spot.prover.costfit import fit
 ~~~
 
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and

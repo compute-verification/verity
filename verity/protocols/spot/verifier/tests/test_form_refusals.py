@@ -13,7 +13,7 @@ passed, so it says the session was otherwise accepted. The honest session under 
 `Flock.KsScope`'s own tests run its check functions on Lean values, and `flock-verify ks-form` runs the check alone; these are
 the tests that `verify --zk`'s verdict calls them. Each verify sets up an m = 25 table (about 10 s), so they are slow.
 
-The sessions are a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a
+The sessions are a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a
 missing fixture fails these tests rather than skipping them."""
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import pytest
 from verity.protocols.spot.verifier.one_stage import proofs as PF
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
-VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "agreement"
+VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "prover" / "agreement"
 ROOT = Path(__file__).resolve().parents[5]
 N = 4
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",

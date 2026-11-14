@@ -2536,12 +2536,12 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "flock" / "verifier",
-              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "pod", bin_, venv,
+              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
-    (tree / "verity" / "protocols" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    (tree / "verity" / "protocols" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
@@ -4969,6 +4969,18 @@ if __name__ == "__main__":
 '''
 
 
+def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
+    """served_composite.sh writes out each product's Lake package directory (`package`), and each is a package this tree
+    has. A directory built from the product's name follows no move of the packages, and the stand-in trees of the tests
+    below would go on agreeing with it."""
+    script = (HERE.parent / "served_composite.sh").read_text()
+    packages = re.findall(r"\) echo (verity/[\w/]+) ;;", script)
+    assert len(packages) >= 2 and 'exe "$x" "$(package "$x")"' in script, (
+        "served_composite.sh: write each product's package directory out in `package`, as a path a layout move rewrites")
+    gone = [d for d in packages if not (HERE.parents[2] / d / "lakefile.toml").is_file()]
+    assert not gone, f"served_composite.sh's `package` names {gone}: no Lake package of this tree"
+
+
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
     under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
@@ -5000,8 +5012,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     (out / "pieces" / "pous").mkdir(parents=True)
     (out / "pieces" / "pous" / "pous.json").write_text(json.dumps(
         {"window": 0, "verdict": "accept", "decided_by": {"program": "pous-run-protocol", "host": "the-served-node"}}))
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
-        (tree / "verity" / pkg).mkdir(parents=True)
+    for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
+        (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"
@@ -5167,8 +5179,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
-        (tree / "verity" / pkg).mkdir(parents=True)
+    for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
+        (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
 
@@ -5276,9 +5288,9 @@ DIGEST = "5e" * 64
 
 
 def _auditor():
-    """Infra's gate, ``verity/composite/device/live_challenger/auditor.py``, as a module of its own."""
+    """Infra's gate, ``verity/protocols/compose/device/live_challenger/auditor.py``, as a module of its own."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module

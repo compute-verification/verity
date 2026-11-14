@@ -14,7 +14,7 @@ public statement are verified (the honest session, which pins the statement dige
 statements, each under its own public file): a whole set takes minutes. `vectors.json`'s `live.sets` carry every case of
 the same records (`ci.py --live`).
 
-The sets are a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
+The sets are a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs and fails the suite
 when it cannot, so a missing set fails this test rather than skipping it."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the four sets (`flat/` and `typed/`, each `rope-head/` and `gemm-coordinate/`: the statement's `stage/` files and CASES'
 #: `records-cpu/`), recorded by 60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 (TYPED=1 for `typed/`) at 455a01049

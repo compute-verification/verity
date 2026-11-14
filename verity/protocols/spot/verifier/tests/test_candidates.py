@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.spot.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
-from verity.protocols.spot.optimize import CostModel, Objective, frontier
+from verity.protocols.spot.prover.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
+from verity.protocols.spot.prover.optimize import CostModel, Objective, frontier
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
@@ -88,7 +88,7 @@ def test_shape_of_reads_a_definitions_body():
     from pathlib import Path
 
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm, prims
+    from verity.circuits.ops import gemm, prims
 
     pins = json.loads((Path(prims.__file__).parent / "prims.circuit-check.json").read_text())["pieces"]
     pieces = {k: v["and"] for k, v in pins.items()}

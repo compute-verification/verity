@@ -9,7 +9,7 @@ units are the pinned lowering of :mod:`verity_flock.lowering`, wired in the same
 bytes are hashed from. Coins are the live verifier's (flock-128-r2: Fast100, two reps on one root).
 
 Prover and verifier are ``flock-pure`` (``verity/protocols/flock/prover/live/src/bin/flock-pure.rs``, built into a flock b684b12
-checkout with ``flock-link-b684b12.patch``; ``verity/protocols/flock/pod/20-pure.sh``).
+checkout with ``flock-link-b684b12.patch``; ``verity/protocols/flock/prover/pod/20-pure.sh``).
 """
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity.circuits.boolean import forms
-from verity.definitions.silicon import fp4, tc_step
-from verity.definitions.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
-from verity.definitions.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
+from verity.circuits.silicon import fp4, tc_step
+from verity.circuits.silicon.models import ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32
+from verity.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, Target
 
 from . import lowering
 
@@ -93,7 +93,7 @@ class Flock:
         if sub.k != 1536:
             return Unsupported(f"K = {sub.k}: the instance sets are K = 1536")
         if shutil.which(self.binary) is None:
-            return Unavailable(f"{self.binary} isn't built on this machine (verity/protocols/flock/pod/20-pure.sh)")
+            return Unavailable(f"{self.binary} isn't built on this machine (verity/protocols/flock/prover/pod/20-pure.sh)")
         return Supported(relation)
 
     def lower(self, sub: GemmSub) -> dict:

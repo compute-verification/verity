@@ -64,7 +64,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: manifest (append-only; most of its readers don't read the sibling manifests yet), the retired-terms lint's per-file list
 #: (shrink-only: a rename of a retired term prunes it). Each is capped at its size rounded up
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
-#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
@@ -72,7 +72,7 @@ ALLOWLIST = {
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
-    "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
@@ -84,7 +84,7 @@ AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB:
 #: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 
 
 def _tracked() -> list[str]:
@@ -217,7 +217,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Test files that need torch, a GPU or cargo, and were never part of `check`.
-UNSUITED_TEST_DIRS = ("verity/definitions/kernels/",)
+UNSUITED_TEST_DIRS = ("verity/circuits/kernels/",)
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 

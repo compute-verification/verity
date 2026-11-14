@@ -126,7 +126,7 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
 
 #: the analysis's packages, as an audit's log names each after its scratch directory
 SPEC, PROOFS = "security", "security/Proofs"
-LEAN_AUDIT_LOG = f"""lean-audit: verity/hardware/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+LEAN_AUDIT_LOG = f"""lean-audit: verity/protocols/interface/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
 AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/{PROOFS}: FAIL; built WITHOUT a sandbox
   build: exit 1
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
@@ -377,7 +377,7 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
-    assert forces_cold(["verity/definitions/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["verity/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/landing.py"])

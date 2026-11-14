@@ -139,7 +139,7 @@ part 4's slowdown is a consequence of it, not a further source of difficulty. Al
 count** in one convention: the product arguments count weighted multiplications, the recovery argument counts output
 observations, and an application of the argument fixes one convention for Ω_*, every q_I and Q_rem.
 
-The numbers come from the slowdown calculator (`verity/protocols/inference_only/rho`), not from this file.
+The numbers come from the slowdown calculator (`benchmarks/rho`), not from this file.
 
 ### Objects
 
@@ -485,7 +485,7 @@ to) and build or run Lean in a package's Lake environment. No outside package re
 - Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
 - The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
 - Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
-  in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  in `benchmarks/pouw/`; `verity/circuits/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
   `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
 
 ## The lock
@@ -539,7 +539,7 @@ PoUW has other guarantees, outside protocol soundness.
 
 ## The remote protocol in Lean
 
-Remote (`verity/protocols/remote/verifier`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
+Remote (`verity/protocols/compose/verifier/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the

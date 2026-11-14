@@ -6,7 +6,7 @@ honest and with a message changed, through `GfResiduals`'s reference and through
 moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it. And
 `Gf128Mul_v1` lowers to the rows rec-lean's Karatsuba lemma is about (`Recursion/Karatsuba.lean`).
 
-The set is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing set
+The set is a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a missing set
 fails these tests rather than skipping them."""
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import pytest
 
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gf2k as G
+from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.boolean.forms import Circuit
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
@@ -179,7 +179,7 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
 
 
 def test_a_nonzero_nonce_is_refused(session, monkeypatch):
-    """R4 (`Flock.Proof`, D21 in `verity/protocols/flock/agreement/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
+    """R4 (`Flock.Proof`, D21 in `verity/protocols/flock/prover/agreement/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
     verifier's `Reader.nonce0` does, with its reason."""
     rep = session[1][0]
     at, vec = {}, A._Reader.vec

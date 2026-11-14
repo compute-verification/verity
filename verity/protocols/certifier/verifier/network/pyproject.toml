@@ -14,14 +14,15 @@ untraced = [
     "tests/test_network_period_protocol.py",
     "tests/test_network_records_protocol.py",
 ]
-inputs = ["verity"]
+# `verity_difftest`, through which the network checks' tests speak to their Lean executables
+inputs = ["verity", "tools/difftest/python/verity_difftest"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nci_baseline_difftest.py"]
-paths = ["verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/certifier/prover", "verity/protocols/pous/prover", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows"]
+paths = ["verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/prover/pod", "verity/protocols/flock/prover/agreement", "verity/protocols/flock/prover/tool.py", "verity/protocols/certifier/prover", "verity/protocols/pous/prover", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows"]
 
 [[tool.verity.tests.reads]]
 tests = [
