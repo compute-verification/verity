@@ -41,14 +41,21 @@ import hashlib
 from itertools import chain, count
 
 import pytest
-
 import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
-from verity.protocols.accounting.poub.verifier import codec
-from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
+from verity_vllm.commit import memory_map as MM
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
+from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
+from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
+from verity_vllm.query.required import SAMPLING_EVENTS
+
+from verity.circuits.program import REGISTRATION, Program, is_input
 from verity.circuits import requirement as R
 from verity.circuits.census import census, step_ends, step_of
-from verity.circuits.program import REGISTRATION, Program, is_input
+from verity.protocols.accounting.poub.verifier import codec
+from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
 
 server = D.server_fixture(PORT)
 
@@ -58,9 +65,9 @@ server = D.server_fixture(PORT)
 def census_of(program: Program, schedule: R.Schedule) -> dict:
     """`program`'s census, its steps ending where `schedule`'s do."""
     nodes, off = program.root.body.nodes, program.root.body.offsets
-    I = sum(1 for nd in nodes if is_input(nd.fn))
-    steps = [schedule.call_step(off[k], off[k + 1]) for k in range(I, len(nodes))]
-    return census(program, [I + i + 1 for i in range(len(steps)) if i + 1 == len(steps) or steps[i + 1] != steps[i]])
+    n_in = sum(1 for nd in nodes if is_input(nd.fn))
+    steps = [schedule.call_step(off[k], off[k + 1]) for k in range(n_in, len(nodes))]
+    return census(program, [n_in + i + 1 for i in range(len(steps)) if i + 1 == len(steps) or steps[i + 1] != steps[i]])
 
 
 def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
@@ -68,8 +75,8 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
     produced at its producer's step, or a run input arriving at the first step that reads or selects it; then each root
     Call a step runs is a value of 0 bits at that step, whose operands are the values it reads or selects and which uses
     those it reads (and, `upper`, those it selects)."""
-    vals, I, off = c["values"], c["inputs"], R.census_offsets(c)
-    at = {k: s for k in range(I, len(off) - 1)
+    vals, n_in, off = c["values"], c["inputs"], R.census_offsets(c)
+    at = {k: s for k in range(n_in, len(off) - 1)
           if off[k] < off[k + 1] and (s := schedule.call_step(off[k], off[k + 1])) is not None}
     reads: dict[int, set[int]] = {}
     selects: dict[int, set[int]] = {}
@@ -78,14 +85,14 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
             reads.setdefault(k, set()).add(x)
     for k, xs in zip(c["selects"]["call"], c["selects"]["values"]):
         selects.setdefault(k, set()).update(xs)
-    binding = [c["classes"][c["callees"][k]]["binding"] for k in c["nodes"]["callee"][:I]]
-    registered = frozenset(x for x, j in enumerate(vals["producer"]) if j < I and binding[j] == REGISTRATION)
+    binding = [c["classes"][c["callees"][k]]["binding"] for k in c["nodes"]["callee"][:n_in]]
+    registered = frozenset(x for x, j in enumerate(vals["producer"]) if j < n_in and binding[j] == REGISTRATION)
     step: dict[int, int] = {}
     for x, j in enumerate(vals["producer"]):
         touched = [s for k, s in at.items() if x in reads.get(k, set()) | selects.get(k, set())]
-        if j >= I and j in at:
+        if j >= n_in and j in at:
             step[x] = at[j]
-        elif j < I and x not in registered and touched:
+        elif j < n_in and x not in registered and touched:
             step[x] = min(touched)
     width = dict(enumerate(vals["bits"]))
     ops: dict[int, tuple[int, ...]] = {}
@@ -94,7 +101,7 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
         width[g], step[g] = 0, s
         ops[g] = tuple(sorted(reads.get(k, set()) | selects.get(k, set())))
         uses[g] = frozenset(reads.get(k, set()) | (selects.get(k, set()) if upper else set()))
-    inputs = frozenset(x for x, j in enumerate(vals["producer"]) if j < I and x not in registered and x in step)
+    inputs = frozenset(x for x, j in enumerate(vals["producer"]) if j < n_in and x not in registered and x in step)
     return R.Execution(width, registered, step, ops, uses, {}, inputs=inputs)
 
 
@@ -176,9 +183,6 @@ def _payload(r: str, row) -> bytes:
 
 @pytest.fixture(scope="module")
 def requests() -> dict[str, Program]:
-    from verity_vllm.program.predict.build import build_program
-    from verity_vllm.program.predict.phi import Phi
-
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE},
               target={"compute_capability": [12, 0], "num_sms": 188}, workload={"requests": []})
     return {"r0": build_program(phi, "request", LP=4, T=5).program, "r1": build_program(phi, "request", LP=4, T=1).program}
@@ -195,8 +199,6 @@ def row_reads(program: Program, c: dict | None = None):
     """A KV row's group -> the request steps that read it, and those whose selections may: the requirement over the
     Program's census `c` (at its sampling events when not given), which `MM.rows` takes, at the census values the row's
     leaves are."""
-    from verity_vllm.query.required import SAMPLING_EVENTS
-
     c = census(program, step_ends(program, SAMPLING_EVENTS)) if c is None else c
     req = R.from_census(c)
 
@@ -239,8 +241,6 @@ def session_lines(pages: list, arrive: dict[str, int], blocks: int) -> list[Step
     `pages`, each block of each page (`map_case`): a slot's registered block is freed at the step a write first reaches
     it, and a whole block is appended at the step its last row is born, with its digest and its rows' last structural
     reader, a step's blocks one append by slot whose coin is back before the next step's reads (it lands at once)."""
-    from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
-
     reach: dict[int, list[int]] = {}
     done: dict[int, list[tuple[int, bytes, int]]] = {}
     for r, _, _, got, slot, off, whole, _ in pages:
@@ -266,10 +266,6 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
     request's census is its Program's at its sampling events unless `censuses` gives one. The registered store is the
     KV pool, a region a layer, and each slot is one request's."""
-    from verity_vllm.commit import memory_map as MM
-    from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-    from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
-
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}
     tables = first_need(rows, arrive)
@@ -401,8 +397,6 @@ def test_a_block_a_gather_may_select_stays_resident_through_the_last_step_that_m
     where Lean's `live` ends. The builder's record frees the page after step 5, and the link holds at every step. Freed
     after step 4, their last use, the page is out of the store at step 5, where its rows are live and credited though
     step 5 reads none of them: `StoreMatches` fails there alone, and `PlanMatches` holds."""
-    from verity_vllm.commit import memory_map as MM
-
     r0 = requests["r0"]
     c = MM.census_of(r0)
     first = set().union(*(census_values(r0, c, x.group) for kv in MM.rows(r0, c).layers for plane in kv for x in plane[:4]))

@@ -1,4 +1,4 @@
-"""GPU run of the norm-tap exactness property (`verity_vllm.properties.norm_tap_exactness`): check the tap build and the Triton copy on
+"""GPU run of the norm-tap exactness property (`tests.properties.norm_tap_exactness`): check the tap build and the Triton copy on
 this GPU against the installed vLLM kernels and the IR model, and the norm-scale source on vLLM's norm modules; write the sealed record
 `<out>/norm_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's digest and verdict without a GPU.
 
@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.properties import norm_tap_exactness as X
+from tests.properties import norm_tap_exactness as X
 
 
 def _sha256(path: str) -> str:
