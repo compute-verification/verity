@@ -1,10 +1,10 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.Leg
+public import Proofs.Properties.Verity.SampledTwo.Subprotocol
 public import Proofs.Core.Game.Tape
 
 /-!
-# The two-stage leg's projection, piece by piece
+# The two-stage subprotocol's projection, piece by piece
 
 `CouplingTargetTwo` reads a play of the period's game as a run of the two-stage verifier (`Live₂.L`, SPOT[Flock]'s
 `SpotFlock.V` at the held copies) at a prover built from the strategy. This module states that reading in pieces
@@ -232,7 +232,7 @@ def MajorityBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F :
         (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2.1).out = .acc ∧
           Claims.Rel.ext A.R x (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1) ≤ bind
 
-/-- **The coupling from the projection and the majority** (piece: the leg's assembly; its theorem is `coupling_of`):
+/-- **The coupling from the projection and the majority** (piece: the subprotocol's assembly; its theorem is `coupling_of`):
 at each strategy a statement in scope or a verdict that never accepts, a frame, a transcript and bounds such that the
 projection's bound and the majority's hold, and where `error`'s premises hold the session's error at the statement and
 the frame's prover plus the bounds is within the published `δ`, give the coupling at the two-stage form with the bounds

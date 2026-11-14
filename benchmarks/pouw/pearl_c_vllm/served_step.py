@@ -78,9 +78,9 @@ def _timed(fn, key: str):
 
 def _patch_pearl() -> None:
     """`PEARL_PHASES` on the class that defines each, before any run exists."""
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
     for name, key in PEARL_PHASES:
-        owner = next((c for c in PPD.PearlCDeviceRun.__mro__ if name in c.__dict__), None)
+        owner = next((c for c in PPDR.PearlCDeviceRun.__mro__ if name in c.__dict__), None)
         if owner is not None:
             setattr(owner, name, _timed(owner.__dict__[name], key))
 

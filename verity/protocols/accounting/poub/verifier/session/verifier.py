@@ -469,7 +469,7 @@ def ingress_bursts(ingress_bytes_per_s: float, figures: timing.Figures) -> float
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts on the node of `figures`: one rebuild batch in flight (S_chip),
     one second at the disks' measured rate (the charge up to `figures.disk_bytes_per_s`), and one link burst
-    (`figures.link_window_bytes`) when the charge is above that, the boundary links charged too."""
+    (`figures.phase_bytes`) when the charge is above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, figures.disk_bytes_per_s)
     n = ledger.Node.stated(figures, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
     return n.rebuild_burst_bytes + n.disk_burst_bytes + n.link_burst_bytes
@@ -1178,10 +1178,10 @@ class Verifier:
                 decide(t)
 
         def close(t: int) -> None:
-            """Window t's sample, at its sample's last window (`Params.draw_of`; every window at g = 1): each window's
+            """Window t's sample, at its sample's last window (`Params.sample_of`; every window at g = 1): each window's
             share goes to the prover, and one whose share is none is accepted as the close accepted it."""
             nonlocal failure
-            group = params.draw_of(t)
+            group = params.sample_of(t)
             if t != group[-1]:
                 return
             try:
@@ -1563,7 +1563,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link burst, charged with the links (default: `figures.link_window_bytes`)")
+                    help="one link burst, charged with the links (default: `figures.phase_bytes`)")
     ap.add_argument("--node", type=Path, metavar="FILE",
                     help="the node's capacities, as `ledger.Node.to_json` writes them (default: `ledger.Node.stated`'s, "
                          "with the disk and link flags, which a node handed in states itself)")
@@ -1614,7 +1614,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
                     help="each session's windows sampled on one openings coin (`audit.Params.groups_per_coin`): its "
                          "sample's last window's close samples them together, ⌈W/G⌉ openings coins in all, and the line "
-                         "of record's pooled bound reads its samples (`line.draws_of`); none is at one window in "
+                         "of record's pooled bound reads its samples (`line.samples_of`); none is at one window in "
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "

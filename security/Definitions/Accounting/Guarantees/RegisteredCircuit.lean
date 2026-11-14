@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Stacking
+public import Definitions.Compose.Guarantees.Stacking
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)

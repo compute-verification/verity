@@ -10,7 +10,7 @@ import all Init.Data.String.Slice
 public import Proofs.Flock.VBridge.Family.UnitName
 public import Proofs.Properties.Spot.DesignText
 public import Proofs.Flock.Claims.Sampling.Select.Design
-public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Std.Data.String.ToNat
 
 /-!
@@ -99,7 +99,7 @@ theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_
 
 theorem sort_samplingDesign_k :
     _root_.Spot.sortStrings #["k", "law"] = _root_.Spot.sortStrings #["law", "k"] :=
-  Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_eq_of_perm (List.Perm.swap "law" "k" []))
+  Array.toList_inj.1 (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_eq_of_perm (List.Perm.swap "law" "k" []))
 
 theorem keys_count (s : String) (K : ℕ) :
     _root_.Spot.keys? (Json.mkObj [("law", Json.str s), ("k", Lean.toJson K)]) =

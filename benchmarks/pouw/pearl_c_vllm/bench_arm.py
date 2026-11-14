@@ -249,6 +249,7 @@ class PearlCArm:
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
         from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 
         scheme = self.scheme
         sites = vllm_site.discover(target.model)
@@ -263,7 +264,7 @@ class PearlCArm:
         if self.gate_command is not None:
             self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
         salt_key = PPD.new_salt_key(scheme)
-        roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+        roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
         if self.session is not None:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
@@ -275,7 +276,7 @@ class PearlCArm:
         tiles, rows = self._capacity(target, kernel.run.TILE, PPD.ROW_ALIGN,
                                      [t.shape[0] for t in weights.values()], PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
         try:
-            run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+            run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                       commitment, opening, schedule=self.schedule,
                                       capacity=tiles, flag_rows=rows, salt_key=salt_key,
                                       pass_index=None if self.session is None else self.session.k, **self.run_options)
@@ -286,7 +287,7 @@ class PearlCArm:
         run.commits["coin_source"] = self.coins["source"]
         if self.session is not None:
             run.commits["session"] = self.session.carried
-        stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
+        stack = Stack([site for site, _ in sites], PPDR.PearlCExecutor(run))
         bad = stack.refusals()
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))

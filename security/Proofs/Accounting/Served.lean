@@ -1,7 +1,7 @@
 module
 
 public import Properties.Accounting.Served
-public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Compose.Compose.ServiceBudget
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Accounting.Lemmas.Compose
 

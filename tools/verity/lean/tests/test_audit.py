@@ -3213,7 +3213,7 @@ def test_a_premise_the_lock_does_not_list_fails():
 
 def test_a_premise_defined_anywhere_the_repository_builds_is_an_open_premise_and_a_dependencys_is_none():
     """A premise is listed wherever the repository defines it, not only in an assumptions module (`ProofLayer.SoundAt`, in
-    `Definitions/Accounting/TS`): a head in any module whose `.olean` a package of the repository builds
+    `Definitions/Pouw/TS`): a head in any module whose `.olean` a package of the repository builds
     is listed, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
     toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not. Declared outside `assumptions_module`, it is an open
     premise: an update lists it under `open` only with the issue `open_seed` gives it (and consumes the seed), and the

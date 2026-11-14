@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.SamplingGeneric.Guarantees
 
 /-!
-# The two-stage leg's claim, at inner blocks
+# The two-stage subprotocol's claim, at inner blocks
 
 `Claim` counts the claim in outer blocks (replay blocks): an outer block with one incorrect inner block counts whole,
 and the first stage sampling every outer block still leaves the second stage's miss of one inner block in each. This

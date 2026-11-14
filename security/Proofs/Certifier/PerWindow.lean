@@ -24,7 +24,7 @@ open Finset
 
 variable {L K S : ℕ} {Msg In Act Wire : Type}
 
-/-- The ingress bound at `n = m·T`, read per link-window. -/
+/-- The ingress bound at `n = m·T`, read per execution phase. -/
 theorem ingress_bound_eq_perExecutionPhase (r : Fin L → ℕ) (T m D : ℕ) :
     (∏ ℓ, (r ℓ + 1)) ^ (m * T) * D ^ (m * T) = ((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m := by
   rw [pow_mul', pow_mul', ← mul_pow, Finset.prod_pow]

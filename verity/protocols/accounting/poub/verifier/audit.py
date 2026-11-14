@@ -288,7 +288,7 @@ class Params:
         """W + ⌈W/g⌉: each window's challenge and each group's openings coin, 2W at g = 1."""
         return self.windows + coins.openings_coins(self.windows, self.groups_per_coin)
 
-    def draw_of(self, t: int) -> range:
+    def sample_of(self, t: int) -> range:
         """The windows window t is sampled with: its group's, t // g · g up to the group's last."""
         g = self.groups_per_coin
         return range(t // g * g, min((t // g + 1) * g, self.windows))
@@ -1080,9 +1080,9 @@ class AuditRun:
         last root.  Its rejection when it has fewer than
         `min_passes` roots, and, at the last window, `coin` if an append's coin went unused: no root followed it.
 
-        At `groups_per_coin` g > 1 the openings coin is group c's, c = t // g (`Params.draw_of`): only the group's last
-        window closes, and that makes every window of the group final (an earlier one's deadline is before t's), each
-        rejected `few` in order; its `s` receipts are sampled over the group's passes in order, numbered across its
+        At `groups_per_coin` g > 1 the openings coin is group c's, c = t // g (`Params.sample_of`): only the group's
+        last window closes, and that makes every window of the group final (an earlier one's deadline is before t's),
+        each rejected `few` in order; its `s` receipts are sampled over the group's passes in order, numbered across its
         windows, under the key of window c, and each window keeps its own share, (pass, position) in it, which `verify`
         checks.  A window whose share is none has nothing to open: the close accepts it, and `verify` refuses it.  At
         g = 1 that is the window's own sample, never none."""
@@ -1090,7 +1090,7 @@ class AuditRun:
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is not None:
             raise SessionError(f"window {t} is not open to draw")
-        group = self.params.draw_of(t)
+        group = self.params.sample_of(t)
         if t != group[-1]:
             raise SessionError(f"window {t} is sampled with its sample's last window, {group[-1]}")
         if any(v.draws is None for v in self.windows[:group[0]]):

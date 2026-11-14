@@ -30,7 +30,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 open InferenceOnlyCheck.Record (Case Front read finish sameSlot openingHeld Kind kindOf)
 open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text slotOf OneGrid slotIn_eq gridsOf_lookup sameSlot_sound
   text_digits)
-open InferenceOnlyCheck.RecordText (Row Decl Fill Inputs fillAt)
+open Spot.RecordText (Row Decl Fill Inputs fillAt)
 open Lean (Json)
 
 /-! ## One declaration fills a row -/
@@ -205,7 +205,7 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
           have hw'e : w' = w := by
             rw [hwires] at hw'm
             obtain ⟨i'', hi''⟩ := List.mem_iff_getElem?.1 hw'm
-            have hd'm : ({ w := w', bits := 16 * InferenceOnlyCheck.RecordText.rowWords c.f.ts text w', fill := .wire i'' } : Decl)
+            have hd'm : ({ w := w', bits := 16 * Spot.RecordText.rowWords c.f.ts text w', fill := .wire i'' } : Decl)
                 ∈ c.x.decls := by
               rw [hdecls]
               exact List.mem_append_left _ (List.mem_map.2 ⟨(w', i''), List.mem_zipIdx_iff_getElem?.2 hi'', rfl⟩)

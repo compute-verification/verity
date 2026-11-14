@@ -8,8 +8,8 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              sampled after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
-              the committed W (`setup.verifier_key_from_encoding`)
+              sampled after the commitment (`setup.sample_salt`) and the root the verifier built from the C* it decoded
+              to the committed W (`setup.verifier_key_from_encoding`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
               u32be k_s),  REGISTRATION_DOMAIN = "verity/remote-bandwidth/p2-registration/v0\\0"
@@ -141,9 +141,9 @@ class Registration:
 def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
              rows: int | None = None) -> Registration:
     """The verifier's registration of a node's P2 store from its PoUS setup: the salt it samples from its own secret
-    `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
+    `source` after the commitment (`setup.sample_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
-    salt = setup.draw_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
+    salt = setup.sample_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
     if type(vk) is not VerifierKey or type(vk.params) is not P2Params or vk.salt != salt:
         raise ValueError("vk is the verifier's own, built at PoUS's setup under the salt it drew after the commitment")
     rows = receipts.sketch_rows(receipts.SKETCH_SHA512, rows)

@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Binding
 public import VStarRecursive.SampledTwo
 
 /-!
-# The cut of the two-stage leg: the log the form's check read is the device's, or a break
+# The cut of the two-stage subprotocol: the log the form's check read is the device's, or a break
 
 `ProjectionOf` reads, beside the verdict, a `Good` on each play: the log the form's check read is the device's. This
 module defines it for the two-stage form (`LogIsDevice`) and bounds the accepted plays where it fails (`CutBound`) by
@@ -342,7 +342,7 @@ def PrintsTwo (dev : History) (w₁ w₂ : String) (log : List Release) : Prop :
 
 /-- **The two sessions' windows the parameters name**: the boundary registration's (`firstSamples`) and the interior
 audit's (`secondSamples`), each its open root. -/
-def windowsOf (θ : ByteArray) : Option (String × String) := do
+def executionPhasesOf (θ : ByteArray) : Option (String × String) := do
   let p ← (paramsAt θ).toOption
   let bp ← (boundaryOf p).toOption
   pure (← bp.verifier.windowRoot, ← p.audit.base.verifier.windowRoot)
@@ -352,7 +352,7 @@ at every history at each play whose runs print the play's log on the parameters'
 accepted play whose log the check read isn't the device's carries a break in one of the two records, or an opening
 collision. -/
 def BindsOfPrints (dev : Exchange → History) (θ : ByteArray) : Prop :=
-  (∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log) →
+  (∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log) →
     Binds dev θ
 
 /-! ## The cut -/

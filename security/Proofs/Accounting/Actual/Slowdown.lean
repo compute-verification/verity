@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual.Slowdown
+public import Definitions.Slowdown.Guarantees.Actual.Slowdown
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

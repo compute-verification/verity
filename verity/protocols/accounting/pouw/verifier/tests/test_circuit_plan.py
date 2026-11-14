@@ -65,31 +65,31 @@ def test_the_strata_are_the_verifiers_own():
     assert {s.role for s in lay.strata} == {"digest", "node", "key", "form_x", "tile", "dequant"}   # Y is the weight's
 
 
-def test_the_count_law_is_mains_stratified_rule():
+def test_the_count_sampling_design_is_mains_stratified_rule():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    sizes = PL.CountLaw(8).sizes(lay.strata)
+    sizes = PL.CountSamplingDesign(8).sizes(lay.strata)
     n = len(lay.units)                                     # 2 digests, 1 node, the key, 2 X strips, 4 tiles, 1,024 outputs
     assert n == 1034
     assert sizes == {s.name: 8 if s.role == "dequant" else 1 for s in lay.strata}   # round(8·1024/1036); the rest at one
 
 
-def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
+def test_the_work_sampling_design_sizes_tiles_by_work_and_the_rest_at_its_floor():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
-    assert PL.WorkLaw(3).sizes(lay.strata) == {s.name: 3 if s is tile else 1 for s in lay.strata}   # ⌈3·W/W⌉, floor of one
-    assert PL.WorkLaw(9).sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # capped at 4 tiles
+    assert PL.WorkSamplingDesign(3).sizes(lay.strata) == {s.name: 3 if s is tile else 1 for s in lay.strata}   # ⌈3·W/W⌉, floor of one
+    assert PL.WorkSamplingDesign(9).sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # capped at 4 tiles
 
 
-def test_the_work_law_is_roots_rule():
+def test_the_work_sampling_design_is_roots_rule():
     """The work rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
     samples 2 and 1; a floor of 3 on T2 samples 3. The rule's own example (`Commitments/Draw.lean`) also gives work to a second template (T1, 3 units of
     work 1), which a call's table may not (`hone`, `check_work_strata`), so the verifier refuses it."""
     t0, t1, t2 = (PL.StratumSpec("T0", "tile", (0, 1, 2), 9), PL.StratumSpec("T1", "tile", (3, 4, 5), 3),
                   PL.StratumSpec("T2", "dequant", (6, 7, 8, 9), 0))
-    assert PL.WorkLaw(2).sizes([t0, t2]) == {"T0": 2, "T2": 1}
-    assert PL.WorkLaw(2, floors=(("T2", 3),)).sizes([t0, t2]) == {"T0": 2, "T2": 3}
+    assert PL.WorkSamplingDesign(2).sizes([t0, t2]) == {"T0": 2, "T2": 1}
+    assert PL.WorkSamplingDesign(2, floors=(("T2", 3),)).sizes([t0, t2]) == {"T0": 2, "T2": 3}
     with pytest.raises(ValueError, match="one stratum"):
-        PL.WorkLaw(2).sizes([t0, t1, t2])
+        PL.WorkSamplingDesign(2).sizes([t0, t1, t2])
 
 
 def test_the_record_budget_is_27713():
@@ -101,8 +101,8 @@ def test_the_record_budget_is_27713():
 
 def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    plan = PL.draw(_key(), lay, PL.WorkLaw(2))
-    assert plan == PL.draw(_key(), lay, PL.WorkLaw(2))                    # the verifier's key fixes it
+    plan = PL.draw(_key(), lay, PL.WorkSamplingDesign(2))
+    assert plan == PL.draw(_key(), lay, PL.WorkSamplingDesign(2))                    # the verifier's key fixes it
     tiles = [u for u in plan.drawn if lay.units[u].role == "tile"]
     want = set(plan.drawn).union(*(lay.closure[t] for t in tiles))
     assert plan.proved_y == tuple(sorted({lay.y_strip[t] for t in tiles}))
@@ -112,16 +112,16 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 
 def test_the_work_table_and_design_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
-    `design_object` is the sampling design `verity-verify-proof draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    `design_object` is the sampling design `verity-verify-proof draw --work K` derives from it (`Draw.deriveWork`, `SamplingDesign.toJson`). A floor from the
     verifier's table raises a zero-work stratum's samples to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
     assert table == {s.name: {"work": lay.tile_work() if s is tile else 0, "floor": 1} for s in lay.strata}
-    law = PL.design_object(lay, PL.WorkLaw(3))
+    law = PL.design_object(lay, PL.WorkSamplingDesign(3))
     assert law == {"law": "work", "k": 3, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                       "floor": 1, "k": 3 if s is tile else 1} for s in lay.strata]}
-    floored = PL.WorkLaw(3, floors=((deq.name, 5),))
+    floored = PL.WorkSamplingDesign(3, floors=((deq.name, 5),))
     assert PL.work_table(lay, floored)[deq.name] == {"work": 0, "floor": 5}
     assert {s["template"]: (s["floor"], s["k"]) for s in PL.design_object(lay, floored)["strata"]}[deq.name] == (5, 5)
 
@@ -162,8 +162,8 @@ def test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_b
     call samples ⌈K·W_c/W_window⌉, so C equal calls sample about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
-    assert PL.WorkLaw().sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # K capped at its units
-    laws = PL.window_laws([lay] * 10_000)
+    assert PL.WorkSamplingDesign().sizes(lay.strata) == {s.name: 4 if s is tile else 1 for s in lay.strata}   # K capped at its units
+    laws = PL.window_sampling_designs([lay] * 10_000)
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     deq = _by_role(lay)["dequant"]                                   # y's floor ⌈K_y·1,024/(10,000·1,024)⌉ (option B)
     assert laws[0].sizes(lay.strata) == {s.name: 3 if s in (tile, deq) else 1 for s in lay.strata}
@@ -180,11 +180,11 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
     (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the execution phase pin states."""
     shapes = [ncp2.Shape(32, 64, 32)] * 3 + [ncp2.Shape(64, 64, 64)] * 2 + [ncp2.Shape(48, 64, 32)]
     lays = [PL.layout(s) for s in shapes] * 400
-    laws = PL.window_laws(lays)
+    laws = PL.window_sampling_designs(lays)
     n_y = [len(_by_role(lay)["dequant"].units) for lay in lays]
     big_n = sum(n_y)
     ks = []
-    tiled = PL.WorkLaw(PL.RECORD_K, window_work=sum(lay.work() for lay in lays))     # the tiles' K_c, without y's floors
+    tiled = PL.WorkSamplingDesign(PL.RECORD_K, window_work=sum(lay.work() for lay in lays))     # the tiles' K_c, without y's floors
     for lay, law, n_c in zip(lays, laws, n_y):
         deq, table = _by_role(lay)["dequant"], PL.work_table(lay, law)
         f_c = -(-PL.RECORD_K * n_c // big_n)
@@ -205,29 +205,29 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
             per_call *= ((n_c - b) / n_c) ** k_c
         assert per_call <= (1 - sum(bad) / big_n) ** PL.RECORD_K * (1 + 1e-9)
     lay = PL.layout(ncp2.Shape(32, 64, 32))
-    (alone,) = PL.window_laws([lay])
+    (alone,) = PL.window_sampling_designs([lay])
     assert alone.sizes(lay.strata)[_by_role(lay)["dequant"].name] == 32 * 32
 
 
 def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     """The execution phase pin's `covers_executionPhase` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
     a counterexample (4 units at work 2 and 2 at work 5, K = 8) samples 3 of the first where covering needs 3.6. The
-    verifier's own layouts give work to the tile template only, and `work_table`, `WorkLaw` and `window_laws`
+    verifier's own layouts give work to the tile template only, and `work_table`, `WorkSamplingDesign` and `window_sampling_designs`
     refuse any layout that doesn't."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     assert [s.role for s in lay.strata if s.work] == ["tile"]
-    PL.work_table(lay, PL.window_laws([lay] * 3)[0])
+    PL.work_table(lay, PL.window_sampling_designs([lay] * 3)[0])
     deq = _by_role(lay)["dequant"]
     two = dataclasses.replace(lay, strata=tuple(dataclasses.replace(s, work=len(s.units)) if s is deq else s
                                                  for s in lay.strata))
-    for refused in (lambda: PL.work_table(two), lambda: PL.WorkLaw().sizes(two.strata), lambda: PL.window_laws([lay, two]),
-                    lambda: PL.design_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
+    for refused in (lambda: PL.work_table(two), lambda: PL.WorkSamplingDesign().sizes(two.strata), lambda: PL.window_sampling_designs([lay, two]),
+                    lambda: PL.design_object(two, PL.WorkSamplingDesign()), lambda: PL.draw(_key(), two, PL.WorkSamplingDesign())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
     a, b = PL.StratumSpec("a", "tile", (0, 1, 2, 3), 2 * 4), PL.StratumSpec("b", "tile", (4, 5), 5 * 2)
     assert -(-6 * a.work // (a.work + b.work)) == 3 and 3 * 18 < 8 * a.work       # 3 sampled, 8·2·4/18 ≈ 3.6 needed
     with pytest.raises(ValueError, match="one stratum"):
-        PL.WorkLaw(8).sizes((a, b))
+        PL.WorkSamplingDesign(8).sizes((a, b))
     tile = _by_role(lay)["tile"]                                                 # a call's tiles split over two templates
     split = dataclasses.replace(lay, strata=tuple(x for s in lay.strata for x in (
         (dataclasses.replace(s, units=s.units[:1]), dataclasses.replace(s, name=s.name + "'", units=s.units[1:], work=0))
@@ -240,7 +240,7 @@ def test_the_red_team_s_capped_window_is_refused():
     """A capped execution phase: call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
     work 0 and 1 at work 1, and K = 5,000. Call 0's share 5,000 is capped at its 1,010 units, so its work-2 stratum would
     sample 169 of 1,000 (834 uncapped), and ten incorrect proof blocks there escape with 0.156 where the execution phase bound claims
-    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the execution phase: call 0 does work in two strata."""
+    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_sampling_designs` refuses the execution phase: call 0 does work in two strata."""
     shape = ncp2.Shape(16, 64, 16)
     call0 = PL.Layout(shape, (), (PL.StratumSpec("w2", "form_x", tuple(range(1000)), 2 * 1000),
                                   PL.StratumSpec("t0", "tile", tuple(range(1000, 1010)), 1000 * 10)), {})
@@ -253,40 +253,40 @@ def test_the_red_team_s_capped_window_is_refused():
     escape = comb(990, 169) / comb(1000, 169)
     assert 0.15 < escape < 0.16 and (1 - 20 / total) ** k < 2.5e-4
     with pytest.raises(ValueError, match="one stratum"):
-        PL.window_laws([call0, call1], k=k)
-    PL.window_laws([call1], k=k)                                                 # one work stratum a call: admitted
+        PL.window_sampling_designs([call0, call1], k=k)
+    PL.window_sampling_designs([call1], k=k)                                                 # one work stratum a call: admitted
 
 
 def test_a_window_that_does_no_work_is_refused():
-    """The execution phase pin's `hW`, 0 < W: `window_laws` refuses an execution phase whose calls do no work (every stratum at work 0), so
+    """The execution phase pin's `hW`, 0 < W: `window_sampling_designs` refuses an execution phase whose calls do no work (every stratum at work 0), so
     it is never sampled or accepted; one call's work is enough."""
     shape = ncp2.Shape(16, 64, 16)
     idle = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0,), 0), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
     busy = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0,), 5), PL.StratumSpec("y", "dequant", (1, 2), 0)), {})
     for window in ([idle], [idle, idle]):
         with pytest.raises(ValueError, match="does some work"):
-            PL.window_laws(window)
+            PL.window_sampling_designs(window)
     with pytest.raises(ValueError, match="at least one call"):
-        PL.window_laws([])
-    assert len(PL.window_laws([busy])) == 1
+        PL.window_sampling_designs([])
+    assert len(PL.window_sampling_designs([busy])) == 1
 
 
 def test_a_window_with_no_y_cells_is_refused():
-    """The execution phase pin's `hN`, 0 < N: `window_laws` refuses an execution phase with no dequantization units, so its y term is never
+    """The execution phase pin's `hN`, 0 < N: `window_sampling_designs` refuses an execution phase with no dequantization units, so its y term is never
     claimed over an empty population; the verifier's own layouts always have them."""
     shape = ncp2.Shape(16, 64, 16)
     dry = PL.Layout(shape, (), (PL.StratumSpec("t", "tile", (0, 1), 10), PL.StratumSpec("k", "key", (2,), 0)), {})
     for window in ([dry], [dry, dry]):
         with pytest.raises(ValueError, match="has y cells"):
-            PL.window_laws(window)
+            PL.window_sampling_designs(window)
     lay = PL.layout(shape)
     assert lay.work() > 0 and any(s.role == "dequant" for s in lay.strata)
-    assert len(PL.window_laws([lay, lay])) == 2
+    assert len(PL.window_sampling_designs([lay, lay])) == 2
 
-def test_the_window_law_is_the_window_pin_s():
+def test_the_window_sampling_design_is_the_window_pin_s():
     """`Audit/Window.lean`'s definitions, recomputed on ℕ from their formulas on random small execution phases, against
-    `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `executionPhaseK` = workRule(K_c, w_s, n_s, W_c, f_s)
-    is `WorkLaw.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
+    `window_sampling_designs`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkSamplingDesign.budget`, `executionPhaseK` = workRule(K_c, w_s, n_s, W_c, f_s)
+    is `WorkSamplingDesign.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
     the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_executionPhase_split_of_record` reads."""
     def ceil(a, b):                                           # Lean's (a + b - 1) / b on ℕ
         return (a + b - 1) // b
@@ -309,7 +309,7 @@ def test_the_window_law_is_the_window_pin_s():
                 at += size
             layouts.append(PL.Layout(shape, (), tuple(strata), {}))
         floors = tuple((z, rng.randint(1, 4)) for z in ("z0", "z1") if rng.random() < 0.5)
-        laws = PL.window_laws(layouts, k=k, floors=floors)
+        laws = PL.window_sampling_designs(layouts, k=k, floors=floors)
         big_w = sum(s.work for lay in layouts for s in lay.strata)
         big_n = sum(len(s.units) for lay in layouts for s in lay.strata if s.role == "dequant")
         for lay, law in zip(layouts, laws):
@@ -334,7 +334,7 @@ def test_a_tiles_closure_contains_the_tile_itself():
         tiles = {u.index for u in lay.units if u.role == "tile"}
         assert set(lay.closure) == tiles
         assert all(lay.closure[t][0] == t for t in tiles)
-        plan = PL.draw(_key(), lay, PL.WorkLaw(len(tiles)))                 # every tile sampled
+        plan = PL.draw(_key(), lay, PL.WorkSamplingDesign(len(tiles)))                 # every tile sampled
         assert tiles <= set(plan.drawn) <= set(plan.proved)
         assert all(set(lay.closure[t]) <= set(plan.proved) for t in tiles)
 
@@ -358,7 +358,7 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
         with pytest.raises(DomainError):
             t.check_layout(bad)
         with pytest.raises(DomainError):
-            PL.draw(_key(), bad, PL.WorkLaw())
+            PL.draw(_key(), bad, PL.WorkSamplingDesign())
 
 
 def _anchors(call, **kw):
@@ -381,7 +381,7 @@ def test_equal_calls_under_one_key_draw_different_tiles():
     an execution phase, under its one key, sample different tiles, and one call samples the same tiles under that key every time. The
     strata stay one per template of the call's partition; only the randomness is per call."""
     call = F.call(64, 64, 64)
-    t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4)
+    t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkSamplingDesign(4)
     ans = [_anchors(call)] + [_anchors(call, **kw) for kw in ({"forward": 4}, {"site": 3}, {"layer": 6})]
     _receipt, window = _window(t, ans)
     tiles = lambda plan: [u for u in plan.drawn if t.layout().units[u].role == "tile"]  # noqa: E731
@@ -399,7 +399,7 @@ def test_the_verifier_draws_over_its_own_layout():
     assert list(inspect.signature(Traced.draw).parameters) == ["self", "law", "anchors", "ledger"]
     an = _anchors(call)
     _receipt, window = _window(t, [an])
-    assert t.draw(PL.WorkLaw(2), an, window) == PL.draw(window.key, t.layout(), PL.WorkLaw(2), an.call_index)
+    assert t.draw(PL.WorkSamplingDesign(2), an, window) == PL.draw(window.key, t.layout(), PL.WorkSamplingDesign(2), an.call_index)
 
 
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
@@ -408,7 +408,7 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     `Ledger` before it samples: a call index already sampled, even with another weight id, is refused before `plan.draw`
     runs. A sample without a ledger is refused."""
     call = F.call(32, 64, 32)
-    t, law = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkLaw(2)
+    t, law = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkSamplingDesign(2)
     first = _anchors(call)
     twin = Anchors(call.salt, call.forward, call.layer, call.site, call.weight + 1, tuple(call.rowids), tuple(call.colids))
     assert twin.call_index == first.call_index
@@ -437,7 +437,7 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     (another index, the same index with other anchors, or another shape), before `plan.draw` runs. The digest binds each
     call's full anchors (salt, weight id, rows and columns), shape and commitment, and not the order they are listed in."""
     call = F.call(32, 64, 32)
-    t, law = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkLaw(2)
+    t, law = traced_as("ncp-v2-shift24", 32, 64, 32), PL.WorkSamplingDesign(2)
     a, b, unlisted = (_anchors(call, forward=f) for f in (1, 2, 3))
     source = bytes(range(32))
     receipt, window = _window(t, [a, b], source)
@@ -488,7 +488,7 @@ def test_a_caller_built_ledger_has_no_key():
         with pytest.raises(AttributeError):
             setattr(bare, name, value)
     with pytest.raises(DomainError, match="opened from its complete receipt"):
-        t.draw(PL.WorkLaw(2), an, bare)
+        t.draw(PL.WorkSamplingDesign(2), an, bare)
 
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
@@ -501,7 +501,7 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
     for name in ("key", "_key"):
         with pytest.raises(AttributeError):
             setattr(window, name, chosen)
-    assert window.key == derived and t.draw(PL.WorkLaw(2), an, window) == PL.draw(derived, t.layout(), PL.WorkLaw(2),
+    assert window.key == derived and t.draw(PL.WorkSamplingDesign(2), an, window) == PL.draw(derived, t.layout(), PL.WorkSamplingDesign(2),
                                                                                   an.call_index)
 
 
@@ -518,7 +518,7 @@ def test_an_opened_ledger_s_receipt_cannot_be_swapped():
             setattr(window, name, larger)
     assert window.receipt is receipt
     with pytest.raises(DomainError, match="not on the window's receipt"):
-        t.draw(PL.WorkLaw(2), late, window)
+        t.draw(PL.WorkSamplingDesign(2), late, window)
 
 
 def test_openings_are_checked_against_the_receipt_s_commitment():
@@ -535,7 +535,7 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
     other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows], salt_key=bytes(32), nonce=7)
     _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
     assert window.commitment(an) == tree.commitment.root
-    plan = t.draw(PL.WorkLaw(2), an, window)
+    plan = t.draw(PL.WorkSamplingDesign(2), an, window)
     opened = sorted(r for kind, r in plan.openings if kind == "a")
     t.check_openings(plan, an, window, domain, [tree.open(r) for r in opened])
     for bad in ([other.open(r) for r in opened], [tree.open(r) for r in opened[1:]],
@@ -557,16 +557,16 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
     t, a, b = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call, forward=1), _anchors(call, forward=2)
     source = bytes(range(32))
     receipt, window = _window(t, [a, b], source)
-    plan = t.draw(PL.WorkLaw(2), a, window)
+    plan = t.draw(PL.WorkSamplingDesign(2), a, window)
     with pytest.raises(DomainError, match="once its draw is sent"):
         window.record()
     window.sent()
     with pytest.raises(DomainError, match="sent"):
-        t.draw(PL.WorkLaw(2), b, window)
+        t.draw(PL.WorkSamplingDesign(2), b, window)
     record = window.record()
     assert record == {"domain": PL.DRAW_DOMAIN, "receipt": receipt.digest().hex(), "source": source.hex()}
     assert replay_key(record) == window.key
-    assert PL.draw(replay_key(record), t.layout(), PL.WorkLaw(2), a.call_index) == plan
+    assert PL.draw(replay_key(record), t.layout(), PL.WorkSamplingDesign(2), a.call_index) == plan
     with pytest.raises(DomainError):
         replay_key({**record, "domain": "verity/pouw/other/v1"})
 
@@ -591,7 +591,7 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
     _receipt, window = _window(t, [_anchors(call)])
-    plan = t.draw(PL.WorkLaw(2), _anchors(call), window)
+    plan = t.draw(PL.WorkSamplingDesign(2), _anchors(call), window)
     assert {cs for role, cs in plan.openings if role == "y"} == set(plan.proved_y) != set()
     weight_out = list(evaluate(ncp2.weight(call.shape), *call.weight_args()))
     args = call.args()

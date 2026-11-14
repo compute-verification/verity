@@ -46,7 +46,7 @@ def test_the_gpus_read_the_card_file():
 
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
-    effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
+    effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["counted_share"] for k in ("T1", "T2", "T3", "T4")]
     assert all(b <= a * (1 + 1e-12) for a, b in zip(effs, effs[1:]))
 
 
@@ -65,7 +65,7 @@ def test_without_memory_mechanisms_free_compute_trains_at_full_efficiency():
 
 
 def test_free_compute_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Slowdown.Guarantees.SlowdownRemote`'s bounds: a certificate
+    """r = r̂ + ε_W W_cert/C + ε′, the free-compute share inside `Slowdown.Guarantees.SlowdownRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
     p = T.DEFAULTS | {"free": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
@@ -82,7 +82,7 @@ def test_free_compute_charges_pouws_deficit_on_the_certified_work():
 
 
 def test_the_gpus_free_compute_leaves_pouws_deficit_to_eps_w():
-    """The C7 dossier's GPU residual 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
+    """The C7 dossier's GPU free-compute share 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
     takes PoUW's deficit off the credited time; `eps_w` charges it in `free_share`, so the default is that form at
     ε = 0 (0.323 at the locked clock, against C7's 0.326 at its ε = 0.54%), and the deficit is charged once."""
     q_sched, q_clock, phi = 1.482, 1.162, 0.345
@@ -101,13 +101,13 @@ def test_the_declared_computation_trains_at_the_thread_bound():
 
 
 def test_the_wipe_floor_is_the_closed_form():
-    """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
+    """With every gate windowed and the wipe period below R / r, the counted share is 4 R r / (kappa b_a b_w d Phi)."""
     p = KEYED | {"free": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
     closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
     assert r["memory_caps_free"]
-    assert r["efficiency"] == pytest.approx(closed, rel=1e-3)
+    assert r["counted_share"] == pytest.approx(closed, rel=1e-3)
 
 
 def test_memory_caps_free_compute_below_the_state_threshold():
@@ -140,7 +140,7 @@ def test_disks_left_in_place_count_as_state():
     """An unwiped disk is state a wipe leaves (8 TB of NVMe undoes the memory cap)."""
     p = KEYED | {"free": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
     assert T.evaluate(p, T.TIERS["T3"])["memory_caps_free"]
-    assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["efficiency"] > T.evaluate(p, T.TIERS["T3"])["efficiency"]
+    assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["counted_share"] > T.evaluate(p, T.TIERS["T3"])["counted_share"]
 
 
 def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():
@@ -168,7 +168,7 @@ def test_the_cheating_share_stops_at_the_fleets_capacity():
     sparse, batched = (T.evaluate(T.DEFAULTS | over, T.TIERS["T5"]) for over in ({}, BATCHED))
     worth = 2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, sparse["cheat_bits"]) * sparse["cheat_bits"]
     capacity = T.DEFAULTS["nodes"] * T.DEFAULTS["node_flops"] * T.DEFAULTS["years"] * T.YEAR
-    assert worth > capacity and sparse["cheat"] == 1.0 and sparse["efficiency"] > 1
+    assert worth > capacity and sparse["cheat"] == 1.0 and sparse["counted_share"] > 1
     assert 1 > batched["cheat"] == pytest.approx(
         2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, batched["cheat_bits"]) * batched["cheat_bits"] / capacity)
 
@@ -220,11 +220,11 @@ def test_an_injected_bit_buys_a_full_block_at_s_1():
 
 
 def test_the_amplifier_multiplies_every_term():
-    """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g."""
+    """A recipe g times better in counted multiplications per unit of loss multiplies the counted share by g."""
     for tier in ("T1", "T5"):
         base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
         amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
-        for term in ("efficiency", "unregistered", "free", "declared", "cheat"):
+        for term in ("counted_share", "unregistered", "free", "declared", "cheat"):
             assert amped[term] == pytest.approx(10 * base[term], rel=1e-9)
 
 
@@ -238,7 +238,7 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
 
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
-    """m scales nu, chi and the memory cap but not the residual or unregistered compute (C2 dossier)."""
+    """m scales nu, chi and the memory cap but not free or unregistered compute (C2 dossier)."""
     p = KEYED | BATCHED | {"unregistered": 0.01, "free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
@@ -253,8 +253,8 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
 def test_reference_layered_at_kimi_k2():
     """The falsification test of the conjecture `Slowdown.Assumptions.ReferenceLayered`: the parameters it states are Kimi
     K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `Slowdown.SecurityProofs.ReferenceThreaded`
-    derives from them at S = K. A keyed reference circuit written as the declarations are computes each matrix-product
-    entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
+    derives from them at S = K. A keyed circuit of the reference training algorithm, written as the declarations are,
+    computes each matrix-product entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
     on sm_90 and sm_120), whose width is the activations it reads; its roots are each chain's steps after the first,
     whose terms are the previous accumulator and the step's activations, so every inner dimension is a whole number of
     steps, at least two. A value's reach is its forward or gradient fan-out in products, over kappa.MODELS' top-k and
@@ -262,7 +262,7 @@ def test_reference_layered_at_kimi_k2():
     and the most is an MoE input value's; a lookup's column is an embedding column, vocab x `EMBED_BITS`; and at S = K
     the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with e_lk = 0, layer 0's
     attention-input projections uncounted. tiers.py counts products, a step's width to a step. It can't find a
-    reference circuit that isn't keyed: the class is checked against a transformer block on paper."""
+    circuit of the reference training algorithm that isn't keyed: the class is checked against a transformer block on paper."""
     gemm = (ROOT / "verity/circuits/ops/boolean/gemm.py").read_text()
     dot = re.search(r'^GEMM_HOPPER: dict = \{"DOT": (\w+)\}$', gemm, re.M).group(1)
     operand = re.search(rf'^{dot} = definition\(.*?\(\("acc", F32\), \("a", (\w+)\), \("b", \1\)\)', gemm, re.M | re.S)
@@ -285,7 +285,7 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "security" / "Definitions" / "InferenceOnly"
+    nci = ROOT / "security" / "Definitions" / "Slowdown"
     layered = (nci / "Assumptions/Layered.lean").read_text()
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * {EMBED_BITS}))" in layered
     stated = (nci / "Guarantees/Layered.lean").read_text()

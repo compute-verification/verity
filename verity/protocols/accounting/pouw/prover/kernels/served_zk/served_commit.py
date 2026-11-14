@@ -258,7 +258,7 @@ LAYOUT = (
 )
 
 
-def law_of(params: dict, ell: int) -> dict:
+def sampling_design_of(params: dict, ell: int) -> dict:
     return items_of(params, ell, None)["sampling"]["law"]
 
 
@@ -274,7 +274,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.SamplingDesign(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
+                  selection=S.SamplingDesign(f"rate:{sampling_design_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -750,7 +750,7 @@ def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> d
     except ValueError as e:
         raise _refused("level", str(e)) from None
     window = {"kind": "served", "context": params["context"], "public": {**commitment["items"], **extra}}
-    rec = R.record(prog, q, law_of(params, ell), S.SCHEME, commitment["roots"], window)
+    rec = R.record(prog, q, sampling_design_of(params, ell), S.SCHEME, commitment["roots"], window)
     for v in (S.check_public(spec_of(params, ell), rec), public_problem(params, rec)):
         if not v.ok:
             raise S.Refused(v)

@@ -711,7 +711,7 @@ def _registered_codes(monkeypatch):
     values itself (``filled``) or the prover registers them."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
@@ -726,7 +726,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(SS.check_twin(True, o, [stmt]).codes)
+        return list(check(True, o, [stmt]).codes)
     return codes
 
 

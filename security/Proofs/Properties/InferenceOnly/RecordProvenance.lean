@@ -36,7 +36,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
-open InferenceOnlyCheck.RecordText (Tmpl templatesOf)
+open Spot.RecordText (Tmpl templatesOf)
 open InferenceOnlyCheck.Record (layoutOf)
 open InferenceOnlyCheck.Record.SecurityProofs (form front_text tmplOf_spec ranges_spec)
 

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Carrier
+public import Definitions.Registration.Carrier
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

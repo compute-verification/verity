@@ -65,7 +65,7 @@ from verity.protocols.accounting.pous.verifier.streamed_wipe import (
     WipeParams,
     _sha512,
     batch_digest,
-    draw_indices,
+    sample_indices,
     label,
     labels,
     message,
@@ -172,7 +172,7 @@ class WipeMemoryChallenger:
         if self.indices is None:
             secret = self._coin_secret if self._coin_secret is not None else os.urandom(32)
             c = self.commitment
-            self.indices = draw_indices(secret, c.server, c.session, self.params.labels, self.params.k)
+            self.indices = sample_indices(secret, c.server, c.session, self.params.labels, self.params.k)
         b = len(self.batches)
         first = b * self.params.batch
         idx = self.indices[first:first + self.params.batch]

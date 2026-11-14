@@ -10,7 +10,7 @@ honest server) unless a test passes another, such as `wipe_store.keeping`. Then 
 it, and `session(side, request, prover)` is the prover's end of it: one session with the side, answered from `prover`
 (`answer`, over `wipe_party`'s frames), with the connection's two addresses as it saw them.
 
-`leg(period_dir, node, out, side_of=...)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s
+`subprotocol(period_dir, node, out, side_of=...)` is the wipe's subprotocol of `benchmarks/all_protocols`: one wipe as `period.json`'s
 `wipe` says (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the
 whole device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory
 outside the fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM
@@ -19,15 +19,15 @@ whose key and session log are beside the periods), its side handed in by the cal
 The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
-count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing either way (`wipe_period.uncounted`): its verdict
-is real and its quantity isn't. The leg's record says `trusted-device` holds only under a committed configuration, for
+count unless `wipe.egress_bits` names one, and an accepted subprotocol certifies nothing either way (`wipe_period.uncounted`): its verdict
+is real and its quantity isn't. The subprotocol's record says `trusted-device` holds only under a committed configuration, for
 a session signed under a key its `[[pin]]` entries give the memory challenger for the wipe (`period.json`'s
 `deployment`, `period.deployment`), never from the hosts' names: a session accepted under a key the run pinned itself
 is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
 session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), what the prover's store
 leaves out (`wipe_period.store_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
-`main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
+`main` runs the subprotocol on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
 through `wipe_on_node.py`, which hands it the runtime's `Side.of`). Run as a module, with no side to hand it, this file
 exits 1 naming `wipe_on_node.py`.
 """
@@ -220,9 +220,9 @@ of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound a
 `egress_bits` is the network certifier's count over the session, in bits, which the verifier's check is given as
 evidence in whole MiB (`streamed_wipe.egress_units`), wherever the challenger runs; `None` gives none, and the check
 takes `EGRESS_MAX_UNITS`, which bounds nothing. `reads` is the session's timed reads: a challenger on this node is started
-with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the leg refuses
+with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the subprotocol refuses
 a session at another count. `None`: whatever the challenger chooses (`READS` here). `links` are the links leaving the
-node besides the one to a challenger on its own host, which the leg adds from the connection it made: each `{"name",
+node besides the one to a challenger on its own host, which the subprotocol adds from the connection it made: each `{"name",
 "to", "via"}`, with `mbps` and `counted_by` (the network certifier that counts it) when known (`wipe_party.link`).
 `trusted_sha512` is the verifier's pin, the SHA-512 of the memory challenger's public key in 128 lowercase hex digits:
 the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
@@ -396,8 +396,8 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
     return out
 
 
-def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side]) -> dict[str, Any]:
-    """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`): one wipe as
+def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side]) -> dict[str, Any]:
+    """The wipe's subprotocol of `benchmarks/all_protocols` (`subprotocol(period_dir, node, out, side_of=...) -> answer`): one wipe as
     `period.json`'s `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `wipe_store.Prover`), the
     memory challenger a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local,
     what)`, which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process
@@ -529,13 +529,13 @@ def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side]) -> 
     ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
                     help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)
-    answer = leg(a.period, a.node, a.out, side_of=side_of)
+    answer = subprotocol(a.period, a.node, a.out, side_of=side_of)
     print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
     return 0 if answer["verdict"] == a.expect else 1
 
 
 __all__ = ["CONFIG", "DISK", "DRAM", "LINK_KEYS", "NOT_DISKS", "Side", "Wipe", "answer", "config", "disks",
-           "dram_available", "leg", "main", "run", "segments_of", "session", "store_of", "summary", "timing",
+           "dram_available", "subprotocol", "main", "run", "segments_of", "session", "store_of", "summary", "timing",
            "undeclared"]
 
 if __name__ == "__main__":
