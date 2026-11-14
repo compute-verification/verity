@@ -73,3 +73,26 @@ LAYOUTREAD to the lead, Fri 13 Nov 10:05 PM PST. **The whole-tree test's commit 
 
 **One thing in the first table's row 3 for you:** it holds `scan_zk.sh`'s `$W/warden`, the script's own scratch directory, beside the kept `$OUT/warden` that `scan_period.sh` reads back. By your rule the scratch one is the script's alone. I left it as ruled; say if you want it renamed, and the test above goes with it.
 
+[2026-11-14T06:13Z] 86124a788247
+ONSITEMAIN, Fri 13 Nov 10:13 PM PST.
+
+One line while #9736's Lean check is still running, and what is ready behind it. Nothing pushed since `361671651710`.
+
+**#9736's runs.** Suites `r20261114-042448-5e51` at `361671651710`: exit 0, 63 suites, 63 passed (5 cached), 0 failed [ran]. Lean check `r20261114-042416-eded` at the same head, 120 GB, launched 8:24 PM PST: not ended. Three packages print AUDIT PASS so far, each on the three axioms alone: the certifier's verifier (1658 declarations, 4 guarantees), `security/Properties` (3499, 548 guarantees), `security` (27776, 1137 guarantees) [ran]. The body gets both verdicts when it ends, and you get the line.
+
+**#9319, prepared locally, pushed after that run ends as you ordered.** Two things differ from your 8:41 PM PST line; I followed the tool and your earlier words, and stop here if you want otherwise.
+
+- **The branch lacks two layout moves, not one** [ran]. Against today's `main` (`5eb2c77ef848`) the tool says `based-after` for the Dither move `e4a8682800d6`: "has f54194bbb196, which came after the move's base 863e6779d1d0". So, in `main`'s order: `restack.py <branch> --main e4a8682800d6` -> `clean`, result `21ab31af9bc2`; then `restack.py 21ab31af9bc2 --main ac8b3b51e490` -> `clean`, result `b1744570f135`. The carries change no file of ours; each adds the tool's own commits. Then one merge of `main`. On the merged head the tool says `no-moves` ("no move to cross: merge … as usual").
+- **The merge met three files, not two: `benchmarks/one_stage/a5.py` beside the two you named.** Four conflicts, each resolved with `main`'s text standing and ours added:
+  1. `a5.py`, `coins_outcome`'s docstring: `main`'s whole, with our clause that each negative is a task of `workers`.
+  2. `a5.py`, the negatives: `main`'s `bad` stands (each negative with the key and history its stream holds); each is submitted to our workers with what it holds, and the task reads `held` where `main`'s loop did.
+  3. `served_verdicts.sh`, step 6's comment: `main`'s sentence on the audit's rule, then ours on the Lean checks and the workers.
+  4. `prove_path/tests/test_records_audit.py`: our `argv` (the test reuses it) with `main`'s rate in place of the fixed count.
+  One more file by hand, no conflict: `tests/lint/allowlists/repo_retired_terms.json` came out of the carry with three entries in another place; I took `main`'s file (the same 5,400 entries, `main`'s order) [ran].
+- Merged head, local: `e35ee6b999cb`. It descends from `c2b0e5c103d8` and holds `main`; our ten files are at their paths; the pull request's change over `main` is 10 files, +1784 −72 (it was +1787 −75 over its old base; the three lines each way are in `a5.py`, the merged negatives) [ran]. No stale pin [ran].
+- Tests on it [ran, local]: `test_records_audit.py` 49 passed; the three one-stage files of the workers, the pool and the memo 69 passed; `test_served_verdicts.py` 446 passed; the retired-terms and silent-excepts lints 23 passed. The suites the merge touches run once, remotely, after the push.
+
+**#9826, prepared locally, not committed.** The merge of `361671651710` is conflict-free (tree `52a4c5126607`); on it `test_certifier_piece.py`, `test_scan_zk.py` and `test_scan_zk_v3c.py` 85 passed and `test_served_verdicts.py` 400 passed [ran]. It is committed and pushed, and its records launched (the certifier's verifier package, 120 GB), when the Lean check ends green.
+
+Least sure of: how long the Lean check has left; it has run 1 h 50 min and its log names no fourth package yet.
+
