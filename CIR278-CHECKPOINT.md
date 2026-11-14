@@ -1,18 +1,17 @@
-# CIR-278 LINTFIX checkpoint, 2026-11-14T06:28:36Z
+# CIR-278 LINTFIX checkpoint, 2026-11-14T07:42:10Z
 
-LINTFIX on CIR-278, piece 1 (#9835 made again on today's main) and piece 2 (the rest sized).
+LINTFIX on CIR-278, the lead's 07:12Z brief: #9835's last verdicts, changes 1 and 2, then 3 to 5.
 
-Piece 1: branch `cursor/circuits-cir278-lint-self-fixes-6f04` at `7bc07334513b`, pushed. It merges with main `8e018c9331f1` with no stop; with the refactor line `b8fd8015802d` it stops only in `commit/row_tables_device.py`, outside the change, where main stops alone. Six-rule entries 124 -> 121.
+#9835: branch `cursor/circuits-cir278-lint-self-fixes-6f04` at `c7ecec3f5d971ec19cd854ee6b29f990a59e07e6` (repo_ruff.json back in main's order; its diff against main is the frozen.py line alone). Its repository run at that head: r20261114-071633-e289, waiting for a slot.
 
-Runs (ids only):
-- r20261114-055759-73c3: suites selection, done.
-- r20261114-055841-a543: gate, done; failures [].
-- r20261114-060030-384e: the 22 suites but verity-flock, running; 2 passed so far (flock/sigma, verity-bench).
-- r20261114-060151-8531: verity-flock, --timeout 21600, running.
-- r20261114-060637-c8c0: piece 2's mypy messages and retired-term sites, done.
+Change 1: branch `cursor/circuits-cir278-stale-terms-6f04` at `90917ec7584ff23fac47662f62ec2c93a1a04e60`, pushed: 12 circuits entries (28 uses) dropped from repo_retired_terms.json by hand, no other line moved. Its repository run: r20261114-071723-5e38, running. Pull request opens when it is read.
 
-Piece 2: posted on CIR-278 at 2026-11-14T06:28:36Z.
+Change 2: branch `cursor/circuits-cir278-cap-senses-6f04` at `f24cd5eecd61852566daa420f11e8c9fdd37a13d`, pushed, cut from change 1's head: six other senses of "cap" and two file lists; 1,302 sites no longer counted, none gained; circuits' entries: 27 removed, 31 lowered, by hand. Its repository run: launched.
 
-Left: read the suites run, rewrite #9835's body, return.
+Runs at #9835's former head 7bc0 (ids only):
+- r20261114-060030-384e: done, read on its node, source_sha 7bc07334513b: 22 suites, 22 passed.
+- r20261114-060151-8531: verity-flock, running.
+
+Left: read 5e38 and open change 1; read e289; 8531's verdicts on CIR-278; change 2's run and pull request by 11:00Z; changes 3 to 5 by 17:00Z.
 
 Stuck: nothing.
