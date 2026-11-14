@@ -18,11 +18,11 @@ import signers
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import replay_chain as RC
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, PLAIN, traffic
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import run
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import run
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.prover import lengths_row as LR
@@ -244,10 +244,10 @@ def signed(tmp_path_factory):
     registration read as the verifier reads it: by window, the opening, the head and domains the verifier derived,
     and the compute side's request rows, one a slot stride."""
     _, arrivals, answers = traffic()
-    warden, _, _ = run(answers, arrivals, params=LEN, windows=3)
+    network_certifier, _, _ = run(answers, arrivals, params=LEN, windows=3)
     issuer = Issuer(signers.signer(tmp_path_factory.mktemp("signer")), signers.SESSION)
     out = {}
-    for window, strides in dict(warden.lengths).items():
+    for window, strides in dict(network_certifier.lengths).items():
         opened, cert = CR.attest(issuer, LINK, window, strides, LEN, None)
         head, domains = CR.check_registration(CR.registration(opened.head, cert, LEN), issuer.signer.public_key(),
                                               signers.SESSION, LEN, LINK, window)
@@ -260,7 +260,7 @@ def signed(tmp_path_factory):
 
 def _refusal(opened, head, domains, table: str, rows, positions=range(T), reads_from=0) -> str | None:
     """The verifier's registered read of `rows` as the rows of `table` at `positions`, each under the network
-    certifier's salt and path for its position (`warden_rows.refusal` on `connection_rows.port`): None, or why not."""
+    certifier's salt and path for its position (`network_certifier_rows.refusal` on `connection_rows.port`): None, or why not."""
     reads = [LR.reads(opened.table(table), p) for p in positions]
     entry = {"value": reads[0].entry["value"], "positions": list(positions),
              "paths": [r.entry["paths"][0] for r in reads]}

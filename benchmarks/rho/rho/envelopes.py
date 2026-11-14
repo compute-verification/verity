@@ -299,7 +299,7 @@ class Certifier:
     """A network certifier on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the network certifier form's public parameters (the `WardenParams` of
+    inference block runs on a single server (ruled). At the network certifier form's public parameters (the `NetworkCertifierParams` of
     `benchmarks/network_traces/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
@@ -421,7 +421,7 @@ class Certifier:
         return self.window_bits(self.window_buckets)[1] / (self.window_buckets * self.bucket_s)
 
     @property
-    def warden_rate(self) -> float:
+    def network_certifier_rate(self) -> float:
         """The network certifier's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
         return self.lanes * self.cell_rate * 8 * self.cell_bytes / self.bucket_s
 

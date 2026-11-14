@@ -1496,15 +1496,15 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
     None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
-    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
+    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`network_certifier_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
+    from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
         import certifier_piece as CP
-        import warden_chain as WCH
-        import warden_serve as WSV
+        import network_certifier_chain as WCH
+        import network_certifier_serve as WSV
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None

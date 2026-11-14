@@ -27,7 +27,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     a bin and a uniform offset (binned, uniform), counted in one segment, then the length
     terms' tail (tailBits) (window), the carry the decisions' and the last order entry's
     position and rank, a run's charges (charges)
-../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
+../../Definitions/NetworkCertifier/Cells.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
     (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
     certifierCode), the fail cell (failCell) and the client's view (clientView)
 ../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
@@ -98,7 +98,7 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bit
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
     over the first `m` periods of `T` buckets: the factor per block and per period
-Warden.lean     the warden's code is the client view: its lane is the client view of its first late
+Cells.lean     the warden's code is the client view: its lane is the client view of its first late
     cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
     Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty

@@ -1,11 +1,11 @@
-"""The network chain on an active network certifier's run (`warden_chain`, `chain_record`'s network certifier path),
-here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
-under ``witness/``, its public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the
+"""The network chain on an active network certifier's run (`network_certifier_chain`, `chain_record`'s network certifier path),
+here the synthetic run published as `network_certifier_serve.Publisher` publishes a served one, in the gate's layout (its witness
+under ``witness/``, its public files under ``out/``, ``certificates.jsonl`` as `auditor.network_certifier_outcome` writes it): the
 certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
 refusing a changed one and a changed cell; the certified I/O read off the cells is the requests and responses served;
 N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through active.Proxy)
-is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
+is refused by name (`network_certifier_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
 network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
 and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
 run's."""
@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_scan_zk import published, sz  # noqa: E402
 
-import warden_chain as WC  # noqa: E402
+import network_certifier_chain as WC  # noqa: E402
 
 
 def _load(name: str):
@@ -44,7 +44,7 @@ PUBLIC = ("deployment.json", "cells.jsonl")
 
 def gate_run(d: Path) -> Path:
     """The synthetic network certifier run in the gate's layout: its files under ``witness/``, its public ones copied to
-    ``out/`` with ``certificates.jsonl``, each certified line's certificate or refusal (`auditor.warden_outcome`)."""
+    ``out/`` with ``certificates.jsonl``, each certified line's certificate or refusal (`auditor.network_certifier_outcome`)."""
     run = published(d / "flat")
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
@@ -56,7 +56,7 @@ def gate_run(d: Path) -> Path:
     return d / "gate"
 
 
-def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
+def test_a_network_certifier_runs_certificates_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got = WC.certificates(run)
     assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.W63.windows,
@@ -68,7 +68,7 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
     assert all(r["release"] is not None and r["frames"][0][1] >= r["release"] for r in io["records"])
     lw, dep, params = WC.link(run)
-    assert lw.warden.digest == params.digest and lw.charge == 0.0 and lw.windows == sz.W63.windows
+    assert lw.network_certifier.digest == params.digest and lw.charge == 0.0 and lw.windows == sz.W63.windows
     assert lw.grid(0) == lw.grid(1) and lw.link == "warden" and lw.run == dep["run_id"]
     pairs, refused = WC.pairs(run, dep)
     assert len(pairs) == sz.W63.windows and refused == []
@@ -122,7 +122,7 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
                  str(tmp_path / "n2x")])
 
 
-def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
+def test_n2_on_a_network_certifier_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--gpu", "--dry", "--out", str(tmp_path / "n2")]) == 0
     s = json.loads((tmp_path / "n2" / "summary.json").read_text())
@@ -134,7 +134,7 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
     assert s["draw"]["selection"] == "all" and n2.OTHER not in s["members"]
 
 
-def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_subset(tmp_path):
+def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_proves_another_subset(tmp_path):
     """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the sample holds refuse
     it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
     run = gate_run(tmp_path)
@@ -174,7 +174,7 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
         job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
 
 
-def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_certifier_rehearsals(tmp_path,
+def test_the_network_certifier_path_requires_every_step_on_one_network_certifier_run_and_refuses_a_certifier_rehearsals(tmp_path,
                                                                                                 certifier_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)

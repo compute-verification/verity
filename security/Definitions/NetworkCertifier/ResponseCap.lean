@@ -1,11 +1,11 @@
 module
 
-public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.Cells
 
 /-!
 # The response cap: each response at most its request's `max_tokens` tokens
 
-Definitions only. A run may register a response cap `cap` with its schedule (`warden.WardenParams.max_tokens_cap`,
+Definitions only. A run may register a response cap `cap` with its schedule (`network_certifier.NetworkCertifierParams.max_tokens_cap`,
 which the schedule's parameters digest, and so every record head, binds), in the id egress form, where each data cell
 is one id event, a token, and the end of the stream holds only the trailer (`io_tie`). The network certifier then reads
 each request's `max_tokens` from its first ingress cell, at the place `active.id_request` fixes for it

@@ -1,5 +1,5 @@
-"""The network certifier with lengths rows (`WardenParams.lengths`, `warden`'s "The lengths rows"), driven tick by tick
-on `test_network_certifier_warden`'s harness. Each test holds a schedule with lengths rows to one rule of that section
+"""The network certifier with lengths rows (`NetworkCertifierParams.lengths`, `network_certifier`'s "The lengths rows"), driven tick by tick
+on `test_network_certifier`'s harness. Each test holds a schedule with lengths rows to one rule of that section
 and the same schedule without them to what it did before they were a parameter."""
 
 from __future__ import annotations
@@ -12,15 +12,15 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, ID_REQUEST_HEAD, PAD, id_request
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
-from verity.protocols.accounting.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import EOF, reasons, records, request, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, NetworkCertifierParams,
                                                     audit, cells, read_reason, reason_frame)
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
-PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+PLAIN = NetworkCertifierParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                      ingress_buckets=3, egress_cells=9, every=2)
 LEN = dataclasses.replace(PLAIN, lengths=1)
 B, P, R, T, D, E = LEN.cell_bytes, LEN.payload, LEN.slots, LEN.window, LEN.delay, LEN.every
@@ -42,8 +42,8 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     egress form, the kinds and the reasons), so its digest, and every head and certificate that binds it, is unchanged;
     the form enters the digest of a schedule that has it, and is no integer field of the schedule the period check
     reads."""
-    assert WardenParams().lengths is None and PLAIN.lengths is None
-    assert WardenParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
+    assert NetworkCertifierParams().lengths is None and PLAIN.lengths is None
+    assert NetworkCertifierParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
     assert LEN.digest != PLAIN.digest and dataclasses.replace(LEN, lengths=None) == PLAIN
     assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words")
     assert not set(OPTIONAL_FIELDS) & set(INTEGER_FIELDS)
@@ -93,9 +93,9 @@ def answer(ids) -> list:
     return [(1, response(ids)), (2, EOF)]
 
 
-def request_cells(warden, ordinal: int) -> list[tuple[int, int, bytes]]:
+def request_cells(network_certifier, ordinal: int) -> list[tuple[int, int, bytes]]:
     """(bucket, kind, cell) of every ingress cell on `ordinal`, in order."""
-    return [(r.window * T + b, f[0], f) for r in records(warden)[0] for b, row in enumerate(r.grid) for f in row
+    return [(r.window * T + b, f[0], f) for r in records(network_certifier)[0] for b, row in enumerate(r.grid) for f in row
             if f is not None and HEADER.unpack_from(f)[1] == ordinal]
 
 
@@ -108,15 +108,15 @@ def test_a_connection_whose_client_failed_is_never_released():
     assert len(cells(id_req(2, 40), B)) == 2 * B
     arrivals = {0: [short], 1: [cells(whole, B)]}
     for params, released in ((PLAIN, True), (LEN, False)):
-        warden, _, server = run([[], answer((7, 8))], arrivals, params=params, windows=2)
-        log = {e["ordinal"]: e for e in warden.log}
+        network_certifier, _, server = run([[], answer((7, 8))], arrivals, params=params, windows=2)
+        log = {e["ordinal"]: e for e in network_certifier.log}
         assert (log[1]["failed"], log[1]["failed_at"]) == ("malformed", 0)
-        kinds = [k for _, k, _ in request_cells(warden, 1)]
+        kinds = [k for _, k, _ in request_cells(network_certifier, 1)]
         assert kinds == [PAD, PAD, END, PAD] if released else set(kinds) == {PAD}
         assert (log[1]["release"], log[2]["release"]) == ((0, 1) if released else (None, 0))
-        assert bool(server.conns[0].received) == released and warden.requests_released == 1 + released
+        assert bool(server.conns[0].received) == released and network_certifier.requests_released == 1 + released
         assert (log[2]["failed"], log[2]["egress_cells"]) == (None, 3)
-        assert [(o, why) for _, o, why in reasons(warden)] == [(1, "malformed")]
+        assert [(o, why) for _, o, why in reasons(network_certifier)] == [(1, "malformed")]
 
 
 # --- the lane ----------------------------------------------------------------------------------------------------
@@ -126,11 +126,11 @@ def test_a_connection_whose_client_failed_is_never_released():
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 
 
-def scanned(warden, outputs: dict[int, tuple[int, ...]]):
+def scanned(network_certifier, outputs: dict[int, tuple[int, ...]]):
     """The ingress proof blocks' reference over every bucket of the run's signed ingress rows (`ingress_scan.scan`,
     the Programs' outputs `outputs` by ordinal): None where a bucket's is refused."""
-    CLS.serves(warden.params)
-    rows = [row for r in records(warden)[0] for row in WR.window_rows(r, warden.params)]
+    CLS.serves(network_certifier.params)
+    rows = [row for r in records(network_certifier)[0] for row in WR.window_rows(r, network_certifier.params)]
     return IS.scan(CLS, rows, outputs)
 
 
@@ -158,18 +158,18 @@ def test_a_connection_that_is_never_released_holds_its_lane_through_its_delay(na
     answers = [answer(out), [], answer(out)]
 
     params = dataclasses.replace(LEN, **other)
-    warden, clients, server = run(answers, arrivals, params=params, windows=3)
-    log = {e["ordinal"]: e for e in warden.log}
+    network_certifier, clients, server = run(answers, arrivals, params=params, windows=3)
+    log = {e["ordinal"]: e for e in network_certifier.log}
     assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == (None, why, 0, D)
-    mine = request_cells(warden, 2)
+    mine = request_cells(network_certifier, 2)
     assert [t for t, _, _ in mine] == [t for t in range(D + 1) for _ in range(R)]
     assert END not in [k for _, k, _ in mine] and [k for _, k, _ in mine][2 * R:] == [PAD] * ((D - 1) * R)
     assert [(t, k) for t, k, _ in clients[1].cells()] == \
         [(t, PAD) for t in range(D) for _ in range(R)] + [(D, FAIL)] + [(D, PAD)] * (R - 1)
-    assert reasons(warden) == [(D, 2, why)] and not server.conns[1].received
+    assert reasons(network_certifier) == [(D, 2, why)] and not server.conns[1].received
     assert (log[3]["admitted"], log[3]["release"], log[3]["failed"]) == (D + 1, 1, None)
     assert (log[1]["ended"], log[1]["failed"]) == (D + 1, None)
-    assert scanned(warden, {1: out, 3: out}) is not None
+    assert scanned(network_certifier, {1: out, 3: out}) is not None
 
     without = dataclasses.replace(PLAIN, **other)
     plain, plain_clients, _ = run(answers, arrivals, params=without, windows=3)
@@ -198,13 +198,13 @@ def test_a_connection_that_is_never_released_fails_no_window_of_the_audit(name):
     data, other, why, _, _ = failed_clients()[name]
     params, out = dataclasses.replace(LEN, **other), (7, 8)
     arrivals, answers = {0: [cells(id_req(1, 3), B), data]}, [answer(out), []]
-    warden, _, _ = run(answers, arrivals, params=params, windows=2)
-    verdict = audit(params, *records(warden))
+    network_certifier, _, _ = run(answers, arrivals, params=params, windows=2)
+    verdict = audit(params, *records(network_certifier))
     assert verdict["accepted"] and not any(w["problems"] for w in verdict["windows"])
     entry = verdict["connections"][1]
     assert (entry["ordinal"], entry["ingress_end"], entry["failed"], entry["failed_at"]) == (2, None, why, 0)
     without = dataclasses.replace(params, lengths=None)
-    assert audit(without, *records(warden))["windows"][0]["problems"] == \
+    assert audit(without, *records(network_certifier))["windows"][0]["problems"] == \
         [f"connection 2 failed closed ({why}) at egress cell 0"]
     plain, _, _ = run(answers, arrivals, params=without, windows=2)
     assert "connection 2: its egress isn't padding to s + D, data in every slot, one END or FAIL, padding" in \
@@ -216,8 +216,8 @@ def test_the_audit_holds_each_failure_to_the_side_that_can_cause_it():
     which a client's reason goes with a released request, or a server's with one never released, are no records of
     this schedule."""
     arrivals = {0: [cells(id_req(1, 3), B), cells(id_req(2, 40), B)[:-10]], 8: [cells(id_req(3, 3), B)]}
-    warden, _, _ = run([answer((7, 8)), [], []], arrivals, params=LEN, windows=2)
-    ingress, egress, fails = records(warden)
+    network_certifier, _, _ = run([answer((7, 8)), [], []], arrivals, params=LEN, windows=2)
+    ingress, egress, fails = records(network_certifier)
     verdict = audit(LEN, ingress, egress, fails)
     assert [(c["ordinal"], c["failed"]) for c in verdict["connections"]] == [(1, None), (2, "malformed"), (3, "late")]
     assert [w["problems"] for w in verdict["windows"]] == [["connection 3 failed closed (late) at egress cell 0"], []]
@@ -256,7 +256,7 @@ def test_each_windows_releases_are_handed_by_slot_stride_once_the_next_windows_r
     after window w + 1's records, where every one of them has ended; the run's last window's never are."""
     reqs, arrivals, answers = traffic()
     order: list = []
-    warden, _, _ = run(answers, arrivals, params=LEN, windows=3,
+    network_certifier, _, _ = run(answers, arrivals, params=LEN, windows=3,
                        publish=lambda record, grid: order.append((record.link, record.window)),
                        lengths=lambda window, strides: order.append(("lengths", window, strides)))
     assert [e[:2] for e in order] == [
@@ -301,12 +301,12 @@ def test_a_window_whose_records_or_the_next_ones_are_not_published_complete_gets
 # --- the id form -------------------------------------------------------------------------------------------------
 
 
-def read_as_requests(warden, ordinal: int) -> tuple[int, int] | None:
+def read_as_requests(network_certifier, ordinal: int) -> tuple[int, int] | None:
     """The ingress proof block's reading of a connection's signed request cells, bucket by bucket from an empty carry
     (`io_request.lane_cut`): the carry after its last bucket, (bytes left, prompt fields), or None where a bucket's
     cells aren't pads and the next cells of a canonical id request."""
     carry, by_bucket = (0, 0), {}
-    for t, _, f in request_cells(warden, ordinal):
+    for t, _, f in request_cells(network_certifier, ordinal):
         by_bucket.setdefault(t, []).append(f)
     for t in sorted(by_bucket):
         carry = Q.lane_cut(Q.layout(B), by_bucket[t], ordinal, *carry)
@@ -370,22 +370,22 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
     alone, _, _ = run([answer(out)], {0: [cells(honest, B)]}, params=LEN, windows=3)
     assert [w for w, _ in alone.lengths] == [0, 1] and alone.lengths[0][1][1] == (Released(0, len(honest), 3, False),)
 
-    warden, clients, server = run(answers, arrivals, params=LEN, windows=3)
-    log = {e["ordinal"]: e for e in warden.log}
+    network_certifier, clients, server = run(answers, arrivals, params=LEN, windows=3)
+    log = {e["ordinal"]: e for e in network_certifier.log}
     assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == (None, "malformed", 0, D)
-    assert server.conns[1].received == b"" and warden.requests_released == 1
-    mine = request_cells(warden, 2)
+    assert server.conns[1].received == b"" and network_certifier.requests_released == 1
+    mine = request_cells(network_certifier, 2)
     assert [k for _, k, _ in mine] == [PAD, PAD] + [DATA] * prefix + [PAD] * ((D + 1) * R - 2 - prefix)
     assert [k for _, k, _ in clients[1].cells()] == [PAD] * (D * R) + [FAIL] + [PAD] * (R - 1)
-    assert reasons(warden) == [(D, 2, "malformed")]
+    assert reasons(network_certifier) == [(D, 2, "malformed")]
     assert (log[1]["release"], log[1]["failed"], log[1]["egress_cells"]) == (0, None, 4)
     # no audit fails: the signed request cells read, the scan takes every bucket, the records' read accepts
-    assert read_as_requests(warden, 1) == (0, 60) and read_as_requests(warden, 2) is not None
-    assert scanned(warden, {1: out}) is not None
-    assert audit(LEN, *records(warden))["accepted"]
+    assert read_as_requests(network_certifier, 1) == (0, 60) and read_as_requests(network_certifier, 2) is not None
+    assert scanned(network_certifier, {1: out}) is not None
+    assert audit(LEN, *records(network_certifier))["accepted"]
     # and no failure is the server's: the tables are the run's without it, and no slot of the fails table is set
-    assert warden.lengths == alone.lengths
-    for (_, strides), (_, alone_strides) in zip(warden.lengths, alone.lengths):
+    assert network_certifier.lengths == alone.lengths
+    for (_, strides), (_, alone_strides) in zip(network_certifier.lengths, alone.lengths):
         tables = CR.tables(LEN, strides)
         assert tables == CR.tables(LEN, alone_strides) and not any(any(row) for row in tables[CR.FAILS])
 
@@ -433,17 +433,17 @@ def test_every_id_request_is_cut_and_released_as_without_lengths_rows():
     arrivals = {4 * i: [cells(r, B)] for i, r in enumerate(reqs)}
     answers = [answer((i,)) for i in range(len(reqs))]
     runs = [run(answers, arrivals, params=p, windows=3, run_nonce=bytes) for p in (PLAIN, LEN)]
-    (plain, plain_clients, plain_server), (warden, clients, server) = runs
-    assert [(r.link, r.window, r.grid, r.status) for r in warden.records] == \
+    (plain, plain_clients, plain_server), (network_certifier, clients, server) = runs
+    assert [(r.link, r.window, r.grid, r.status) for r in network_certifier.records] == \
         [(r.link, r.window, r.grid, r.status) for r in plain.records]
     assert [c.writes for c in clients] == [c.writes for c in plain_clients]
     assert [c.received for c in server.conns] == [c.received for c in plain_server.conns]
-    assert warden.log == plain.log and [e["release"] for e in warden.log] == list(range(len(reqs)))
-    assert audit(PLAIN, *records(warden))["accepted"]
+    assert network_certifier.log == plain.log and [e["release"] for e in network_certifier.log] == list(range(len(reqs)))
+    assert audit(PLAIN, *records(network_certifier))["accepted"]
 
 
 def test_the_ingress_cut_reads_of_the_device_only_what_a_stand_in_holds():
-    """The proof blocks' traffic (`io_request.serve`) calls `Warden._ingress` on a stand-in that holds the schedule, the
+    """The proof blocks' traffic (`io_request.serve`) calls `NetworkCertifier._ingress` on a stand-in that holds the schedule, the
     release count and the run id, nothing else of the device: with lengths rows or without, it cuts every id request
     into the same cells and releases, and with them it cuts a request that is no id request only as far as it reads."""
     reqs = [id_req(i, n) for i, n in enumerate((1, 13, 58, 147), 1)]

@@ -15,11 +15,11 @@ import signers
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import connection_rows as C
-from verity.protocols.accounting.certifier.verifier import warden_rows as W
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as W
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, PLAIN, traffic
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import records, run
-from verity.protocols.accounting.certifier.verifier.warden import Released
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import records, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import Released
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 T, K = LEN.window // LEN.every, LEN.stride_releases
@@ -31,8 +31,8 @@ def handed():
     """The releases of the lengths tests' traffic, by window: two requests in one slot stride and one later, then two
     the server failed."""
     reqs, arrivals, answers = traffic()
-    warden, _, _ = run(answers, arrivals, params=LEN, windows=3)
-    return reqs, warden, dict(warden.lengths)
+    network_certifier, _, _ = run(answers, arrivals, params=LEN, windows=3)
+    return reqs, network_certifier, dict(network_certifier.lengths)
 
 
 def _attest(tmp_path, strides, window=0, session=signers.SESSION, seed=b"certifier"):
@@ -199,7 +199,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
     key, a table more, fewer or out of order, a root the certificate doesn't sign, another key, session or link-window,
     a schedule without lengths rows, or the wire record's or the cells' certificate of the same link-window, is
     refused."""
-    _, warden, by_window = handed
+    _, network_certifier, by_window = handed
     issuer, rows, cert = _attest(tmp_path / "a", by_window[1], window=1)
     doc = json.loads(json.dumps(C.registration(rows.head, cert, LEN)))
     key = issuer.signer.public_key()
@@ -245,7 +245,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
         C.check_registration(doc, key, signers.SESSION, LEN, LINK, 2)
     with pytest.raises(ValueError, match="no connection rows"):
         C.check_registration(doc, key, signers.SESSION, PLAIN, LINK, 1)
-    record = records(warden)[1][1]
+    record = records(network_certifier)[1][1]
     wire = issuer.certify(record, Direction.EGRESS, LEN.grid, LEN.digest).certificate
     _, cells_cert = W.attest(issuer, record, LEN, Direction.EGRESS)
     for foreign in (wire, cells_cert):

@@ -17,7 +17,7 @@ import pytest
 from verity import config as K
 from verity.protocol import Channel, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
@@ -191,7 +191,7 @@ def test_a_capped_certifier_configuration_round_trips():
     cfg = K.check(K.parse(K.render(capped(4))), REG.components, REG.workloads)
     table = cfg["params"]["verity/certifier/v0"]
     assert table["max_tokens_cap"] == 4
-    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
+    assert NetworkCertifierParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
     assert K.check(cfg, REG.components, REG.workloads) == cfg
     assert K.digest(cfg) != UNCAPPED_ONSITE
 
@@ -208,7 +208,7 @@ def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_sch
         cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
         table = cfg["params"]["verity/certifier/v0"]
         assert table["lengths"] == form and "max_tokens_cap" not in table
-        assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
+        assert NetworkCertifierParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
         assert K.check(cfg, REG.components, REG.workloads) == cfg
         digests.add(K.digest(cfg))
     assert len(digests) == 3

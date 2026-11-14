@@ -107,7 +107,7 @@ from verity.protocols.accounting.certifier.verifier.active import (CANONICAL_STR
                                                      encode_frame, id_event_data, id_request)
 from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
-from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import tie_service as TS, network_certifier as W  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.service import LinkWindows  # noqa: E402
 
@@ -115,14 +115,14 @@ FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.protocols.accounting.certifier.verifier.advice"
 IO_TIE_MODULE = "verity.protocols.accounting.certifier.verifier.io_tie"
 IO_REQUEST_MODULE = "verity.protocols.accounting.certifier.verifier.io_request"
-WARDEN_ROWS_MODULE = "verity.protocols.accounting.certifier.verifier.warden_rows"
+WARDEN_ROWS_MODULE = "verity.protocols.accounting.certifier.verifier.network_certifier_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
 TIE = "IoTieWindow"
 REQUEST_TIE = "IoTieRequest"
 #: the verifier's registered read of a network certifier cell at its position under the network certifier's signed root
-#: (`warden_rows.opens`, the Lean verifier's check of a proof block's registered port)
+#: (`network_certifier_rows.opens`, the Lean verifier's check of a proof block's registered port)
 WARDEN_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
@@ -197,26 +197,26 @@ def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
 
 def frames_edit(src: Path, dst: Path) -> Path:
     raise NotApplicable("the run keeps its frames' root only (`certified.jsonl`'s heads); the frames negative waits "
-                        "for a record that keeps the cells (the warden's: `warden_frame` on a warden-serve run), and "
+                        "for a record that keeps the cells (the warden's: `network_certifier_frame` on a warden-serve run), and "
                         "runs on the tie's fake upstream (--ids)")
 
 
 def cell_reads(WR, cells, k: int, row: bytes) -> bool:
-    """Whether `row`, opened at position `k` of the network certifier's committed `cells` (`warden_rows.Cells`, a row a
+    """Whether `row`, opened at position `k` of the network certifier's committed `cells` (`network_certifier_rows.Cells`, a row a
     bucket) under that position's salt and path, climbs to their root: the verifier's registered read
-    (`warden_rows.opens`)."""
+    (`network_certifier_rows.opens`)."""
     return WR.opens(cells.domain, cells.root, k, WR.bc(row, cells.salts[k]), cells.path(k))
 
 
-def warden_frame(run: Path, at: int | None = None) -> dict:
-    """`frame` on a warden-serve run's own cells (`warden_rows`: `cells.jsonl`'s registrations and the
+def network_certifier_frame(run: Path, at: int | None = None) -> dict:
+    """`frame` on a warden-serve run's own cells (`network_certifier_rows`: `cells.jsonl`'s registrations and the
     prover's `cells.salts`, the rows' salts and the wiring's): the first egress execution phase with a data cell, its
     registration (v2) checked under the network certifier's key and the schedule, and its record's bucket rows and
     wiring committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
     signed root and the changed one's doesn't (`WARDEN_READ`)."""
     try:
-        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("warden_serve")
+        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("network_certifier_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells: {err.name} isn't in this tree") from None
     link, direction = WS.CERTIFIED[WS.EGRESS]
@@ -224,7 +224,7 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
         raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept its registrations only (public), so "
                             "no unit can open its cells")
     dep = json.loads((run / "deployment.json").read_text())
-    params = WS.WardenParams(**dep["params"])
+    params = WS.NetworkCertifierParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {r.window: r for r in WS.read_records(run, params)[WS.EGRESS]}
     regs = {r["window"]: (r, salts, wiring_salt) for d, salts, wiring_salt in WS.read_cells(run)
@@ -803,7 +803,7 @@ def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, 
         arrivals.append(w * T + k[w] % (T - 1))
         k[w], at = k[w] + 1, at + c
     lanes = max([1, *(sum(a <= t <= a + 1 for a in arrivals) for t in range(len(received) * T))])
-    params = W.WardenParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
+    params = W.NetworkCertifierParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
     link = Q.serve(params, requests, arrivals, [len(r) for r in requests], buckets=len(received) * T)
     return Ingress(Q.Shape(frame_bytes, lanes, params.slots), tuple(tuple(r) for r in link.rows),
                    tuple(link.releases), T)
@@ -1585,7 +1585,7 @@ def main(argv=None) -> int:
         return 0
     if args.command == "warden":
         try:
-            out = warden_frame(args.run)
+            out = network_certifier_frame(args.run)
         except NotApplicable as err:
             raise SystemExit(str(err))
         print(json.dumps(out))

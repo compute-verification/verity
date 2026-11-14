@@ -31,7 +31,7 @@ inputs = [
     "verity/protocols/proofs/__init__.py",
     "verity/protocols/proofs/spot",
     "benchmarks/dsa_topk/dsa_topk.py",
-    "benchmarks/network_traces/warden_serve.py",
+    "benchmarks/network_traces/network_certifier_serve.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/nsys.py",
     "benchmarks/harness/verity_bench/overhead.py",

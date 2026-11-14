@@ -49,7 +49,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
      reject (`rehearsed`).
   2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
-     requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
+     requests (`network_certifier_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
@@ -105,7 +105,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   - ``front --session`` asks the gate for ``relay-session``: PORT is the endpoint's, ``--client-port`` the port of
     the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases.
     ``--height`` at the piece's default, 10, which signs 204 of them, is raised to the least whose key signs the
-    session's (`auditor.warden_height`), and ``--minutes`` is by default `auditor.session_minutes` at that height
+    session's (`auditor.network_certifier_height`), and ``--minutes`` is by default `auditor.session_minutes` at that height
     plus `served_session.MARGIN`, at most the gate's: for the longest session, 1119 execution phases, height 13,
     with ``--minutes`` 66 at the scan's 100 ms tick (59 min 40 s of them) and 126 at 200 ms (119 min 21 s). The
     gate refuses any other ``--height`` too low for the session. This tree's gate checks the request first. It
@@ -115,7 +115,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
     run, the client's address and that file. Exit 2 when the gate refused the request or a session is open already,
     1 when the session ended before its relay listened, the reason in OUT/session.json. The session then runs to
     its execution phases' end whatever its caller does: nothing ends it early, and its last connection is admitted
-    `WardenParams.span` + 1 buckets before that end.
+    `NetworkCertifierParams.span` + 1 buckets before that end.
   - ``close`` runs after the load: it waits for the session's end, keeps the lane's fetch where the piece reads it
     (SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz) and publishes to OUT what the rehearsal front does (``session.json``,
     ``bundle.tgz`` and ``status.json``, through the leak guard), with the front's exits: 0 when the gate's check
@@ -232,7 +232,7 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
     a.keep, a.out, a.at, a.window_per_group = keep, out, None, True
     if a.minutes is None:
         tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
-        a.minutes = SS.A.warden_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
+        a.minutes = SS.A.network_certifier_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
@@ -406,7 +406,7 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
         if a.warmup:
             raise SS.Refused("--session sends no request of its own: --warmup is the rehearsal front's")
         if a.height == HEIGHT:
-            a.height = SS.A.warden_height(a.windows)
+            a.height = SS.A.network_certifier_height(a.windows)
         if a.minutes is None:
             tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
             a.minutes = min(SS.A.session_minutes(a.windows, a.height, SS.A.SCAN["--window"] * tick) + SS.MARGIN,
@@ -720,10 +720,10 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
 
-def case_of(warden: Path, scan: Path, v3c: Path | None = None) -> dict:
+def case_of(network_certifier: Path, scan: Path, v3c: Path | None = None) -> dict:
     import scan_period as SP
     try:
-        return SP.rows_case(warden, scan, v3c=v3c)
+        return SP.rows_case(network_certifier, scan, v3c=v3c)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
@@ -731,7 +731,7 @@ def case_of(warden: Path, scan: Path, v3c: Path | None = None) -> dict:
 def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
     """The period step's case: `case_of` with V3C/period.json as its one compute audit, once the chain's scan read
     V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun` for a scan of no V3c window or another."""
-    def case(warden: Path, scan: Path) -> dict:
+    def case(network_certifier: Path, scan: Path) -> dict:
         try:
             read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("window")
         except (OSError, ValueError) as e:
@@ -739,7 +739,7 @@ def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
         if read != str(v3c / "window"):
             raise NotRun(f"the chain's scan read {read or 'no'} V3c window, not {v3c / 'window'}: run the chain step "
                          "on this V3c")
-        return case_of(warden, scan, v3c / "period.json")
+        return case_of(network_certifier, scan, v3c / "period.json")
     return case
 
 
@@ -772,17 +772,17 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
     chain step). `NotRun` when a step can't run."""
     import chain_record as CR
-    import warden_chain as WC
+    import network_certifier_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
     reqs = window_requests(serve_dir, window)
     unpacked = None
     try:
-        unpacked, warden = unpack(keep / run / "fetch.tar.gz")
-        rehearsed(warden)
+        unpacked, network_certifier = unpack(keep / run / "fetch.tar.gz")
+        rehearsed(network_certifier)
         try:
-            io = WC.io(warden)
-            dep, params = WC.deployment(warden)
+            io = WC.io(network_certifier)
+            dep, params = WC.deployment(network_certifier)
         except SystemExit as e:
             raise Rejected(f"the kept warden run: {e}") from None
         T = params.window
@@ -807,7 +807,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         in_link_window(certified, T, w)
         if check is None:
             return None, unpacked
-        got = check(case(warden, out / "scan"), d / "period")
+        got = check(case(network_certifier, out / "scan"), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked
