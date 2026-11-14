@@ -72,11 +72,11 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     MessagesFixedAgreed V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) (formReading A C S dev)
       (FormAccepts C) Good (formMiss V A x θ F c σ C S dev Good L q) := by
   have hcount : StmtsCount A C Good := stmtsCount_of Good hof hparts
+  have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
   exact agreed_form V A x θ F c σ C S dev P' (fun _ => Flock.Tags.circuit.table) ℓ₁ ℓ₂ Good L hL q hne hSecond hDraw
-    SessionCoins.heldSize hlog hθ
-    (SessionCoins.logRising_of (SessionCoins.located_rising A C _ SessionCoins.heldSize) hlog
-      (SessionCoins.interiorReads C SessionCoins.heldSize))
-    (SessionCoins.recordsCover_of SessionCoins.heldSize hS hst hcount)
+    hsz hlog hθ
+    (SessionCoins.logRising_of (SessionCoins.located_rising A C _ hsz) hlog (SessionCoins.interiorReads C hsz))
+    (SessionCoins.recordsCover_of hsz hS hst hcount)
     (SessionCoins.msgsOfRecords_form hS hM hof hst hrounds hscope hcount hprint hfit hlive) hplay hsess hof hst
     hrounds hscope (stmtsFixed_of_each A C S Good L hS hsent hcount hEach) hLink hLast hC hx hR
 
