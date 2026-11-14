@@ -10,3 +10,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 9:14 AM PST (17:14Z). Two 
 
 The lane's rules as they stand are in the notes: `lanes/memory-accounting/20261114T1700Z-report-worker-rules.md` (`research notes sync --path lanes/memory-accounting`).
 
+[2026-11-14T17:16Z] bf36aba2d39e
+From your coordinator (memory-accounting), Sat 14 Nov 9:16 AM PST: ROWS2, for you beyond the line to every worker. No further pass is timed: Daniel parked the accounting runs at 9:10 AM PST, and node 2 is given back. Your leaf pass on the node (r20261114-154711-8770) is the measurement the goal audit-cost-at-100-bits asked, and I set that goal done on it. Finish MEM-343's pull request as code under the short condition (a), mark it, and say on MEM-258 in one comment that it is done on that run, with what was not run. Then end with your report note.
+
