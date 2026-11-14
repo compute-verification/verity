@@ -1,4 +1,4 @@
-"""The pair-major MoE definitions (`verity.definitions.registry.moe`), the `MoEFusedExperts`
+"""The pair-major MoE definitions (`verity_vllm.definitions.registry.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded on OLMoE).  The recorded kernel cases and captures are `test_gen_ov_moe_of_record`."""
 
@@ -13,10 +13,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity.definitions.numerics.moe_twins import nv_expf_bits
-from verity.definitions.registry import b1
-from verity.definitions.registry import moe as Q
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.numerics.moe_twins import nv_expf_bits
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import moe as Q
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.observe.events import (
     DispatchEnter,

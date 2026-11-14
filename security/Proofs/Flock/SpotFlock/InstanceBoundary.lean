@@ -8,7 +8,7 @@ public import Spot.Partition
 public import Spot.Slots
 public import Spot.Select
 public import Spot.Draw
-public import Spot.Registration
+public import Spot.Docket
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.HashSet.Lemmas
 import Init.Data.Range.Lemmas
@@ -328,7 +328,7 @@ open Claims Claims.Sampling SamplingDeploy Properties.Spot
 
 /-- **The verifier's copies**: `program0`, `query0` and the sampling design `subset:1`, with no work table, ports,
 anchors or earlier records. -/
-def verifier0 : Spot.Registration.Verifier :=
+def verifier0 : Spot.Docket.Verifier :=
   { program := program0, query := query0, samplingDesign := subsetJ, workTable := none, scheme := "", ports := #[],
     leafLayer := none, anchors := #[], log := #[], partition := none }
 

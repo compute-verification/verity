@@ -4,9 +4,9 @@ public import Definitions.Accounting.Remote.Node
 public import Definitions.Pouw.Basic.Prob
 
 /-!
-# A remote audit's run, and the routes its guarantees compose (trusted)
+# A run of PoUB, and the routes its guarantees compose (trusted)
 
-A run of the remote audit on node `N` with parameters `a`, over the audit's coins `Ω` (the verifier's seeds σ_t, its
+A run of PoUB on node `N` with parameters `a`, over the audit's coins `Ω` (the verifier's seeds σ_t, its
 samples and the oracle), uniform (`Pouw.pr`). Each field is a quantity of the actual-circuit model at each outcome, over
 the audited interval `I = [t_0, t_P)`, where `t_j` is the tick of pass `j`'s oracle query `H(σ_t, root_{j−1})`, so that
 by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, t_{j+1})`:
@@ -54,7 +54,7 @@ within a pass, is the other route; each guarantee names the route it takes.
 
 namespace Accounting.Remote
 
-/-- A run of the remote audit on node `N` with parameters `a` over coins `Ω`. -/
+/-- A run of PoUB on node `N` with parameters `a` over coins `Ω`. -/
 structure Run {τ : Type} (N : Node τ) (a : Audit) (Ω : Type) where
   /-- the verifier's verdict -/
   accepts : Ω → Prop

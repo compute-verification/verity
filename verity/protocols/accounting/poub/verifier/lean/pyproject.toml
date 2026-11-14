@@ -10,13 +10,16 @@ untraced = [
     "tests/test_drawn.py",
     "tests/test_line.py",
     "tests/test_p2.py",
+    "tests/test_p2_parties.py",
     "tests/test_p2_party.py",
+    "tests/test_p2_signed_bytes.py",
     "tests/test_pooled.py",
     "tests/test_protocol.py",
     "tests/test_registry.py",
     "tests/test_replay.py",
     "tests/test_schedule.py",
     "tests/test_session.py",
+    "tests/test_span.py",
     "tests/test_units.py",
 ]
 # The references: the audit, its codec, receipts and coins, the store binding, the memory line and its pooled bound, on
@@ -43,12 +46,17 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/circuits/difftest",
           # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
-          # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; its sessions' party (`p2_party.py`), whose books
+          # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; its sessions' party (`p2_parties.py`), whose books
           # test_p2.py holds to `RemoteAudit.P2Session` and whose sessions test_p2_party.py runs on the Lean of record
           # (`p2_lean.py`), and their core case (`p2_case.py`), which test_p2_case.py holds to the session's answer and
           # to PoUS's store; the configurations of pous_check's other requires, which `lake` reads to resolve them; and
           # the committed C*, whose registration, openings and a session test_p2.py replays
-          "verity/protocols/accounting/poub/verifier/p2.py", "verity/protocols/accounting/poub/verifier/p2_party.py",
+          "verity/protocols/accounting/poub/verifier/p2.py", "verity/protocols/accounting/poub/verifier/p2_parties.py",
+          # the honest provers and the period's prover side (`period_prover.py`, on `verifier_party.py`'s lines)
+          "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/audit_prover.py",
+          "verity/protocols/accounting/poub/prover/p2_prover.py", "verity/protocols/accounting/poub/prover/period_prover.py",
+          "verity/protocols/accounting/poub/prover/p2_party_prover.py",
+          "verity/protocols/accounting/poub/verifier/verifier_party.py",
           "verity/protocols/accounting/poub/verifier/p2_lean.py", "verity/protocols/accounting/poub/verifier/p2_case.py",
           "verity/protocols/accounting/pous",
           "verity/protocols/accounting/pous/prover",
@@ -65,6 +73,13 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/commitments/lms/lean/lake-manifest.json", "verity/commitments/lms/lean/lean-toolchain",
           "verity/protocols/accounting/poub/verifier/tests/fixtures/p2-c-star.bin",
           "verity/protocols/accounting/poub/verifier/tests/fixtures/p2-store.json",
+          # a window decided from a span (`span.py`, `RemoteAudit.Span`): the opening unit's rows (`opening.py`,
+          # `commitments/gates/block_check.py`), and the sampled proof system's one-stage audit, which `lake` builds
+          "verity/protocols/accounting/poub/verifier/span.py", "verity/protocols/accounting/poub/verifier/opening.py",
+          "verity/protocols/accounting/poub/verifier/commitments",
+          "verity/protocols/proofs/spot/verifier/lean/Spot", "verity/protocols/proofs/spot/verifier/lean/lakefile.toml",
+          "verity/protocols/proofs/spot/verifier/lean/lake-manifest.json",
+          "verity/protocols/proofs/spot/verifier/lean/lean-toolchain",
           # the deployment layer and its wire, which the period hook's verifier side is started through
           # (`verity.runtime.stream.Side`)
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",

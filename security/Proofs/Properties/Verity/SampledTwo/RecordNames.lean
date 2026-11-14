@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.SampledTwo.JpWalk
 /-!
 # A registration check with no code names its registration's names
 
-`Registration.check rec v` collects R1–R8's failure codes for the record `rec` at the verifier `v`. Where it collects
+`Docket.check rec v` collects R1–R8's failure codes for the record `rec` at the verifier `v`. Where it collects
 none and `v` lists each port once, `rec` names `v`'s names (`recordOk_of_check`): its roots' ports are `v`'s ports and
 its registered values `v`'s registered values, each once. R3-ports holds the roots' distinct ports to `v`'s ports by
 count and membership, and R7-values the registered values to the verifier's own entries the same way; a record with no
@@ -24,7 +24,7 @@ The two checks with no code are walked down the one path that adds none (`JpWalk
 namespace SpotFlock.RecordNames
 
 open Lean (Json)
-open Spot.Registration
+open Spot.Docket
 open SpotFlock.HeldOf (namesOf)
 
 /-! ## Counting names -/
