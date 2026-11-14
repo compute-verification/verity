@@ -198,7 +198,7 @@ def s3(tmp_path):
     queries: list[dict] = []
 
     class H(http.server.BaseHTTPRequestHandler):
-        def log_message(self, *a):  # noqa: D102
+        def log_message(self, *a):
             pass
 
         def do_GET(self):

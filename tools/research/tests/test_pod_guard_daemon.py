@@ -269,10 +269,10 @@ class FakeRunPod:
                 self.end_headers()
                 self.wfile.write(body.encode())
 
-            def do_DELETE(self):  # noqa: N802
+            def do_DELETE(self):
                 self._answer(rest_status, "{}" if rest_status == 200 else '{"error": "forbidden"}')
 
-            def do_POST(self):  # noqa: N802
+            def do_POST(self):
                 self._answer(200, gql_body)
 
             def log_message(self, *a):
