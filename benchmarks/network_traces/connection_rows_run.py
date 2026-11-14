@@ -423,7 +423,7 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
         cs.load_key(key, height)
-        publish = ws.PublisherProcess(out, key, bytes(32), params)
+        publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0)  # a scratch key's first session
         try:
             for phase in range(phases):
                 handed: list = []

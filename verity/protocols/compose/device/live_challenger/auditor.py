@@ -351,11 +351,12 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
-  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
-  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
-  scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
-  the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
+  `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its session's start
+  (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer refuses
+  every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the least
+  height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal samples
+  each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger here
+  samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
@@ -470,6 +471,9 @@ WARDEN_REQUESTS = (4, 1700)
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`warden_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
+#: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
+#: there)
+START_LEAVES = 1
 #: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
 #: buckets of 100 ms)
 WARDEN_WINDOW_MS = 60_000
@@ -1586,9 +1590,15 @@ def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bu
 
 
 def warden_height(windows: int, heads: int = 0) -> int:
-    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
-    `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
-    return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
+    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's), then the
+    session's start (`START_LEAVES`) and then `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
+    return max(REHEARSAL_HEIGHT[0], (key_signatures(windows, heads) - 1).bit_length())
+
+
+def key_signatures(windows: int, heads: int = 0) -> int:
+    """The one-time signatures a rehearsal of `windows` execution phases takes of its key: a load's `heads`, its
+    session's start and five an execution phase."""
+    return heads + START_LEAVES + WARDEN_WINDOW_LEAVES * windows
 
 
 def load_heads(shape: str) -> int:
@@ -1603,8 +1613,9 @@ def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
     if height < (least := warden_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
         raise Refused(f"--height {height}: {what} take {windows} link-windows, "
-                      f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
-                      f"window{load}), past the key's {1 << height}: give --height {least} or more, or fewer --requests")
+                      f"{key_signatures(windows, heads)} one-time signatures (the session's start and "
+                      f"{WARDEN_WINDOW_LEAVES} a window{load}), past the key's {1 << height}: give --height {least} or "
+                      f"more, or fewer --requests")
 
 
 def scan_group_windows(tokens: int) -> int:
