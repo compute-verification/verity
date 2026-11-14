@@ -1000,7 +1000,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
-    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, bounds circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/protocols/proofs/flock/prover/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -1012,7 +1012,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
 
 
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
-    """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
+    """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 limits each to 240 GB); in a pod it is
     the namespace's root; MemAvailable bounds both."""
     scope = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/session-9.scope"
     scope.mkdir(parents=True)
@@ -2032,7 +2032,7 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
 
 
 def test_the_circuit_check_step_records_its_cache_as_counts(tmp_path):
-    """result.json's steps are its attempt's meta, which the store caps at 256 KiB: a circuit-check cache listing every target
+    """result.json's steps are its attempt's meta, which the store limits to 256 KiB: a circuit-check cache listing every target
     it could not store (each one, once its workers forked) made a passing check's attempt unpublishable. The step keeps counts;
     the lists stay in circuit-check.json, an artifact."""
     import json
