@@ -30,7 +30,7 @@ the fuzzer decides the statements as a cross-check of those proofs. Each is a `�
   steps.
 * `agree`, `DescAgrees` itself, on instances of the Program (`instanceOf`) and on any its line gives (`θ`, owners, `Γ`
   and `α` chosen with the Program, as the shared family chooses its inference blocks): wherever `Desc.evaluate` gives a verdict,
-  `InferenceOnlyCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `NciDesc.Expands`).
+  `InferenceOnlyCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `InferenceOnlyCheck.Properties.Expands`).
 
 Each `∀` over members, leaves or references enumerates all of them up to `Caps.enum`, else endpoints (every bound in
 `UpOk`, `DownOk` and `OpOk` is monotone in the member and the leaf, or periodic in a leaf block shorter than the
@@ -316,7 +316,7 @@ def instanceOf (text : String) (gates : Nat) (inp reg held : Array Bool) (seed :
   Json.mkObj [("program", Json.str text), ("theta", Json.arr theta), ("owner", Json.arr owner),
     ("gamma", toJson (gates / 2 + v)), ("alpha", Json.arr #[toJson (1 + v % 3), toJson 2])]
 
-/-- `NciDesc.Expands`: θ and the owners by root node, gate by gate. -/
+/-- `InferenceOnlyCheck.Properties.Expands`: θ and the owners by root node, gate by gate. -/
 def expand (P : Prog) (j : Json) : Json := Id.run do
   let offs := (P.defs[P.root]!).body.offsets
   let gs (k : Nat) := (Array.range (offs[k + 1]! - offs[k]!)).map (offs[k]! + ·)
