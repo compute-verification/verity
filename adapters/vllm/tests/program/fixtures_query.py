@@ -43,16 +43,16 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from functools import cache
 
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits import query_ast as QA
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.layout import Scope
 from verity.circuits.parts import Item, Part, n_members
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
-from verity.definitions.registry.prims import BF16, F32, I32
-from verity.circuits.types import Array, Tuple
+from verity.definitions.registry.prims import F32
 
 # ---------------------------------------------------------------------------------------------------------
 # registry programs (small statics)
@@ -71,8 +71,8 @@ def rmsnorm_fused_program(N: int = 32, EPS: float = 1e-5) -> Program:
     return Program(bind(b1.RMSNormFusedCuda, N=N, EPS=EPS))
 
 
-def silu_mul_program(I: int = 8) -> Program:
-    return Program(bind(b1.SiluMul, I=I))
+def silu_mul_program(inter: int = 8) -> Program:
+    return Program(bind(b1.SiluMul, I=inter))
 
 
 def bias_add_program(N: int = 8) -> Program:
