@@ -134,3 +134,33 @@ The file is pushed unbuilt, since `lake build` is refused on this VM. [ran] `lak
 
 [argued] Not yet done: no lock entry, no Properties or Proofs file, and no Python difftest against `outputs`. The lock and shared lists are not kept by hand now.
 
+[2026-11-14T19:05Z] 0253d7b6a9cf
+GATERELAY2, network-accounting. MODEL: Claude Opus 5.5. The device move's list, before the push (nothing is pushed yet). Each "who imports it" is [ran: git grep on the collect branch].
+
+Moves to verity/protocols/accounting/certifier/device/:
+- coin_link.py: imported only by compose/device/live_challenger/{coin_link.py, auditor.py} (the challenger service) and its own test, so it is the device's.
+- device_party.py: imported only by its test.
+- device_needs.py: imported by nothing.
+
+Stays in verifier/, because the verifier reads it:
+- warden.py (the relay): read by the verifier's warden_rows, span, connection_rows, content_rows, continuation, io_request and tie_service, by the prover's ingress_scan and lengths_row, by live_challenger/auditor.py and by much of benchmarks/. By your rule it stays. The boundary rules don't say otherwise: verifier/ may not load device/, so moving it would take its seven verifier readers with it or break them.
+- pacer.py: read by warden.py and the verifier's active.py, so it stays for the same reason.
+- parties.py (the manifest), out_commit, warden_rows (read by the verifier's span and connection_rows), scan_ok, the Lean and protocol/coin-link.md stay.
+- The tests (test_network_certifier_coin_link.py, test_network_certifier_device_party.py) stay in verifier/tests, the suite's own, as PoUS's challenger party's test sits in pous/verifier/tests. No new suite.
+
+Done locally:
+- b73d12433e3c: device_party's two relative imports made absolute, by hand before the move.
+- 2d2fdda20d5a: the map, tools/move/certifier_device_map.toml.
+- 8deded0ce714: "Layout-move: tools/move/certifier_device_map.toml --no-lock", made by stage.py and certified by move_check as a pure move (3 renames, a new device/__init__.py, 6 files path-only) [ran]. --no-lock because this VM's uv is not the pinned one; uv.lock is left to its regeneration.
+- 8e9b6bd2e204: the device's README, the verifier's README and parties.py's docstring name the device's Python in device/, by hand.
+- Every .py the move rewrote compiles [ran]. Two test files pass 23, and the manifest's test passes 8 [ran].
+
+What fails, and a question for you: tests/test_boundaries.py fails [ran].
+- The place verity/protocols/accounting/certifier/device is trusted and lists no loads. It now loads verity/channel.py, verity/commitments, verity/runtime, the certifier's verifier and spot (the same loads the three files had inside verifier/'s place).
+- Its lists only shrink, so only `tools/verity/check/import_order.py --grow` writes them, and I have not run it.
+- The plain generator leaves the listing unchanged.
+- Say if I should push the --grow commit after the move. Otherwise it stays red for whoever owns the listing.
+
+I push at 11:08 AM PST or later unless your next line says otherwise. Then I tell LAYOUTREAD2 and STAMPS2.
+TIMER: none
+
