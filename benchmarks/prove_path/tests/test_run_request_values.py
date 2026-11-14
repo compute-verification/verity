@@ -58,7 +58,8 @@ def test_a_serve_dirs_request_valued_records_never_reach_out(tmp_path):
                 "load.jsonl": [{"user": "u0", "prompt_ids": PROMPT}],
                 "advice/w0/private/opening.json": {"rows": [PROMPT]}})
     served = block("  served() {", "  }")
-    code = f'O={out}; PP=true; TG=(); run() {{ :; }}\n{served}served served {serve} 0\n'
+    names = next(line for line in RUN_SH.read_text().splitlines() if line.startswith("F_SETTINGS="))
+    code = f'O={out}; PP=true; TG=(); run() {{ :; }}\n{names}\n{served}served served {serve} 0\n'
     got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     assert published(out) == sorted(f"served-records/{f}" for f in (

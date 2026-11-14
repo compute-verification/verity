@@ -351,7 +351,7 @@ WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input 
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 #: ... by a file's name (`fnmatch`)
 WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.bin": "a private file (prover only)",
-                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", REQUESTS_FILE: "the requests' prompt and served ids, rows and seeds",
+                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
                  "request_users.jsonl": "the requests' users", "step_trace.jsonl": "the step trace (each request's rows)",
                  "advice_trace*.jsonl": "the advice trace (each request's rows)", "load*.jsonl": "the load's requests",
                  "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",

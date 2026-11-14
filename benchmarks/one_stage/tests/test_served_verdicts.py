@@ -2329,7 +2329,8 @@ def test_the_weights_step_writes_the_serves_first_registration_record_and_says_w
     assert first["previous"] is None and first == json.loads((out / "deployment-registration.json").read_text())
     assert json.loads((out / "weights_registration.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
     script = (HERE.parent / "served_verdicts.sh").read_text()
-    assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
+    assert "F_WEIGHTS=weights_registration.json " in script
+    assert "printf '%s\\n' \"$F_WEIGHTS\" deployment-registration.json " in script
     rc, lines = _weights(tmp_path / "refused", REFUSE="1")
     assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
     assert "the checkpoint is not of record" in lines[0]

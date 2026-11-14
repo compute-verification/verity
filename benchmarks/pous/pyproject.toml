@@ -19,7 +19,8 @@ untraced = [
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
-inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/workload.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py", "verity/protocols/accounting/pous",
           "verity/protocols/interface", "verity/protocols/accounting/pous/prover",
           "verity/protocols/proofs/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
