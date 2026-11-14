@@ -29,8 +29,8 @@ class FakeLinear:
     PJ1's M3, the active `projects`, the open issues the audit pages through (`open`), the team keys the credentials see
     (`visible`, default the teams'), the team and label names of the issue a comment reads (`team_key`, `issue_labels`),
     the issues' `relations` (an issue's id is `I-` and its identifier), the workspace's `users`, the asked team's active
-    projects (`team_projects`, with the team ids they were read for in `boards`), and each relation, project or milestone
-    mutation as it was sent (`wrote`)."""
+    projects (`team_projects`, with the team ids they were read for in `boards`), the comments an issue's comment pages
+    read (`thread`), and each relation, project or milestone mutation as it was sent (`wrote`)."""
 
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
@@ -44,7 +44,7 @@ class FakeLinear:
         self.relations, self.wrote, self.reviewed = [], [], None
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
-        self.team_projects, self.boards = [], []
+        self.team_projects, self.boards, self.thread = [], [], []
 
     def _project(self, pid: str) -> dict:
         name = next(p["name"] for p in PROJECTS if p["id"] == pid)
@@ -162,6 +162,12 @@ class FakeLinear:
             have = self.tags.setdefault(v["id"], set())
             have.discard(name) if m[1] == "issueRemoveLabel" else have.add(name)
             return {"data": {m[1]: {"issue": {"labels": {"nodes": [{"name": n} for n in sorted(have)]}}}}}
+        if m := re.search(r"issue\(id: \$id\) \{ comments\(first: (\d+)(?:, after: \"(\d+)\")?\)", q):
+            start = int(m[2] or 0)
+            page = self.thread[start:start + int(m[1])]
+            more = start + len(page) < len(self.thread)
+            return {"data": {"issue": {"comments": {"pageInfo": {"hasNextPage": more, "endCursor": str(start + len(page))},
+                                                    "nodes": page}}}}
         if "history(first" in q:
             self.ask_filter, start = v["f"], int(v["after"] or 0)
             page = self.asked[start:start + int(re.search(r"issues\(filter: \$f, first: (\d+)", q)[1])]
@@ -384,7 +390,45 @@ def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "infra")              # the owner on its own issue
     assert rc == 0 and "route" not in err and len(bells(fake, infra)) == 1
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "see this, @circuits", "--as", "proofs")
-    assert rc == 0 and "past its start" in err and len(bells(fake, circuits)) == 1                    # posted with a note; rings no one
+    assert rc == 2 and "starts with no name" in err and "(@circuits ...)" in err                    # it would ring @infra alone
+    assert len(lin.sent("commentCreate")) == 2
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "@infra see this, @circuits", "--as", "proofs")
+    assert rc == 0 and "past its start" in err and len(bells(fake, circuits)) == 1                    # posted with a note
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "see `@circuits`'s trace", "--as", "proofs")
+    assert rc == 0 and "past its start" not in err and len(bells(fake, circuits)) == 1                # named in code: no ring
+
+
+def test_a_comments_stamp_is_the_time_it_is_sent_and_a_second_stamp_is_refused(fake, registry, routes_dirs, capsys, lin, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 11, 14, 8, 0, 5, tzinfo=UTC))
+    lin.subscribers["I1"] = []
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "@circuits top, __STAMP__: the trace is up", "--as", "compute-accounting",
+                     "--dry-run")
+    assert rc == 0 and out.strip().endswith(": @circuits top, Sat 14 Nov 12:00 AM PST (08:00Z): the trace is up")
+    rc, _, _ = run(capsys, "linear", "comment", "INF-1", "@circuits top, __STAMP__: the trace is up", "--as", "compute-accounting")
+    assert rc == 0 and lin.sent("commentCreate")[0][1]["i"]["body"].endswith("Sat 14 Nov 12:00 AM PST (08:00Z): the trace is up")
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "@circuits __STAMP__, then __STAMP__", "--as", "compute-accounting")
+    assert rc == 2 and "__STAMP__ 2 times" in err and len(lin.sent("commentCreate")) == 1
+
+
+def test_comments_reads_an_issues_comments_whole_across_pages_oldest_first(fake, registry, capsys, lin, monkeypatch):
+    monkeypatch.setattr(linear, "COMMENT_PAGE", 2)
+    daniel = {"user": {"name": "Daniel Reuter"}, "botActor": None}
+    lin.thread = [{"id": "C3", "createdAt": "2026-11-14T08:10:00.000Z", "body": "@top: merged", "parent": {"id": "C1"}, **daniel},
+                  {"id": "C1", "createdAt": "2026-11-14T06:56:00.000Z", "body": "the run failed\nsee its log", "parent": None,
+                   "user": None, "botActor": {"userDisplayName": "infra"}},
+                  {"id": "C2", "createdAt": "2026-11-14T07:30:00.000Z", "body": "which run?", "parent": None, **daniel}]
+    rc, out, _ = run(capsys, "linear", "comments", "INF-1")
+    assert rc == 0 and out.strip() == ("--- 1/3 Fri 13 Nov 10:56 PM PST (06:56Z) infra\nthe run failed\nsee its log\n\n"
+                                       "--- 2/3 Fri 13 Nov 11:30 PM PST (07:30Z) Daniel Reuter\nwhich run?\n\n"
+                                       "--- 3/3 Sat 14 Nov 12:10 AM PST (08:10Z) top (a reply)\n@top: merged")
+    assert len(lin.sent("comments(first: 2")) == 2                                                    # two pages of two
+    rc, out, _ = run(capsys, "linear", "comments", "INF-1", "--since", "2026-11-14T07:00Z", "--author", "daniel", "--json")
+    assert rc == 0 and [(r["by"], r["reply"], r["body"]) for r in json.loads(out)] == [("Daniel Reuter", False, "which run?")]
+    assert [r["by"] for r in json.loads(run(capsys, "linear", "comments", "INF-1", "--author", "@top", "--json")[1])] == ["top"]
+    rc, _, err = run(capsys, "linear", "comments", "INF-1", "--since", "this morning")
+    assert rc == 2 and "--since 'this morning'" in err
+    lin.thread = []
+    assert run(capsys, "linear", "comments", "INF-9")[1].strip() == "INF-9: no comments"
 
 
 @pytest.fixture

@@ -53,6 +53,7 @@ FROM_LABEL = "from:"                                             # the handle th
 STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
               f"and a due date) or touched for {STRAY_H} h. If it is still wanted, its owner reopens it with a project and a date.")
 AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
+COMMENT_PAGE = 250                                               # Linear's largest page; `comments` asks for few fields
 AUDIT_CHILDREN = 50                                              # a parent's most recently updated children the audit reads
 LANE_LABEL = "lane:"                                             # a handle with no team of its own marks its issues so
 NO_LANE = "-"
@@ -782,6 +783,33 @@ class Linear:
             if not page["pageInfo"]["hasNextPage"]:
                 return issues
             after = page["pageInfo"]["endCursor"]
+
+    def comments(self, since: str) -> list[dict]:
+        """Every comment created after `since` (UTC ISO), on every team's issues these credentials read, COMMENT_PAGE a page:
+        {id, createdAt, body, user {name}, botActor {userDisplayName}, issue {identifier, url}}."""
+        q = ("query($f: CommentFilter!, $after: String) { comments(filter: $f, first: " + str(COMMENT_PAGE) + ", after: $after) "
+             "{ pageInfo { hasNextPage endCursor } nodes { id createdAt body user { name } botActor { userDisplayName } "
+             "issue { identifier url } } } }")
+        out, after = [], None
+        while True:
+            page = self.gql(q, {"f": {"createdAt": {"gt": since}}, "after": after})["comments"]
+            out += page["nodes"]
+            if not page["pageInfo"]["hasNextPage"]:
+                return out
+            after = page["pageInfo"]["endCursor"]
+
+    def issue_comments(self, issue: str) -> list[dict]:
+        """Every comment on the issue a team key and number identify, oldest first, COMMENT_PAGE a page: {id, createdAt, body,
+        parent {id}, user {name}, botActor {userDisplayName}}; `NoIssue` when Linear has none."""
+        out, after = [], None
+        while True:
+            got = self._issue(issue, f"comments(first: {COMMENT_PAGE}{f', after: {json.dumps(after)}' if after else ''}) "
+                                     "{ pageInfo { hasNextPage endCursor } nodes { id createdAt body parent { id } user { name } "
+                                     "botActor { userDisplayName } } }")["comments"]
+            out += got["nodes"]
+            if not got["pageInfo"]["hasNextPage"]:
+                return sorted(out, key=lambda c: c["createdAt"])
+            after = got["pageInfo"]["endCursor"]
 
     def comment(self, issue_id: str, sender: str, body: str) -> None:
         i = {"issueId": issue_id, "body": body if self.app else f"@{sender}: {body}"}
