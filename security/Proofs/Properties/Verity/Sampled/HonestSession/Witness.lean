@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Instance.HonestSession.Instance
+public import Proofs.Properties.Verity.Sampled.HonestSession.Instance
 
 /-!
 # `remote_soundness_deployedReady`'s premises at an instance that runs a session
