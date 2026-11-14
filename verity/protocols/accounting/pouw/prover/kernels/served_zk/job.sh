@@ -73,7 +73,7 @@ source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
 export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/tools/difftest/python
-SC="$Z/served_commit.py"
+SC="$SRC/benchmarks/pouw/served_zk/served_commit_run.py"   # served_commit.py with the checks of record's Lean side
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
 setup

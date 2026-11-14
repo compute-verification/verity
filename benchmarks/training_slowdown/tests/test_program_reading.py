@@ -1,6 +1,6 @@
 """A training circuit's work read off its Program (`circuit_properties.work`, which reads the circuit alone) beside this
 benchmark's reading of the same loop body from a trace (`capture_step`'s rows, `work.he_of_rows` and `calculator.slowdown`),
-on the lf model's tiny step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path) under AdamW, at each
+on the lf model's tiny step (`adapters/torch/tests/frontend/train_step_lf.py`, loaded by its path) under AdamW, at each
 k of `products.DIAL_K` at which (H) states β(k).
 
 The Program is the training-step frontend's step (`step_program`) as the body of a scan over iterations: the carry the

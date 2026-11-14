@@ -43,7 +43,7 @@ are replayed against.
   `interface` imports every module; PoUW's prover (`verity.protocols.accounting.pouw.prover`); Flock's prover (`verity_flock`), pod
   scripts and agreement with upstream's verifier (`verity/protocols/proofs/flock`); the script that writes the difftest
   vectors of the inference-only policy's check
-  (`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
+  (`verity/protocols/policy/inference_only/verifier/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
   module that has a sidecar; the vLLM integration (`verity_vllm`); and benchmarks. Tests across the tree import it too,
   verifiers' tests among them. No verifier loads it.
 - **Loads:** `verity.circuits` (its types, its Boolean forms, its census and its library), `verity.circuits.silicon`,

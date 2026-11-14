@@ -27,9 +27,9 @@ finishes with `report` (private: what it signs is witness), refused by name, and
 leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of labels (`schema`);
 parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW` frames at a time,
 letting the prover take each window before the next, so neither side holds more of it than that. `PROTOCOL` declares
-its one role, and `start` how a deployment starts it on the auditor's host: the wipe's request
-(`wipe_parties.deployed_request`), the raw clock its header names, and in its state directory its key, refused unless
-the configuration pins it for the wipe (`onsite.signer`), and its session log.
+its one role, and `start` how a deployment starts it on the auditor's host: first, in its state directory, its key,
+refused unless the configuration pins it for the wipe (`onsite.signer`), then its session log and the wipe's request
+(`wipe_parties.deployed_request`).
 """
 
 from __future__ import annotations
@@ -387,12 +387,11 @@ class MemoryChallengerParty:
 
 def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
     """The challenger's start on the auditor's host (`ProtocolDef.starts`, module docstring)."""
-    params = deployed_request(configuration, bound)
     signer = onsite.signer(state, onsite.pin(configuration, CHALLENGER, COMPONENT))
     if not (state / "sessions").exists():
         mc.SessionLog.create(state / "sessions")
-    return Start(params, {"signer": signer, "log": mc.SessionLog(state / "sessions"), "reads": WP.READS},
-                 sw.raw_clock_ns)
+    log = mc.SessionLog(state / "sessions")
+    return Start(deployed_request(configuration, bound), {"signer": signer, "log": log, "reads": WP.READS})
 
 
 PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: MemoryChallengerParty}, {CHALLENGER: start})

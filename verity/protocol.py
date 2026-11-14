@@ -13,7 +13,8 @@ to a deployment configuration (`config.Component`), which is where it says what 
 `ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`), and
 for a party a deployment starts on its machine, its starter (`starts`): from the configuration as data, the party's deploy
 bindings for the protocol (`[PARTY.COMPONENT]`, the hosts and addresses no configuration states) and its state directory,
-what the run hands it (`Start`): its parameters, its machine's capabilities by name and the reading its clock takes.
+what the run hands it (`Start`): its parameters and its machine's capabilities by name. The clock a party reads is
+the deployment's, by the name the party's header gives.
 
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
@@ -146,12 +147,11 @@ class Manifest:
 
 @dataclass(frozen=True)
 class Start:
-    """What a run hands a party it starts: its parameters, its machine's capabilities by name (`Identity.capabilities`),
-    and the reading its real clock takes, in ns (`clock`; None for the runtime's own)."""
+    """What a run hands a party it starts: its parameters and its machine's capabilities by name
+    (`Identity.capabilities`)."""
 
     params: Mapping[str, Any]
     capabilities: Mapping[str, Any] = field(default_factory=dict)
-    clock: Callable[[], int] | None = None
 
 
 type Starter = Callable[[Mapping[str, Any], Mapping[str, Any], Path | None], Start]
