@@ -39,7 +39,7 @@ open Lean (Json)
 open Claims.Sampling
 open Verity.Sampled.Trees (bind_ok)
 open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm partition_evaluate_tiles
-  laysOut_units length_popUnits lawObj kindOf flockLaw_cases deriveLaw_cases deriveLaw_none slotDesign_law bind_eq_ok
+  laysOut_units length_popUnits samplingDesignObj kindOf flockSamplingDesign_cases deriveSamplingDesign_cases deriveSamplingDesign_none slotDesign_samplingDesign bind_eq_ok
   throw_ne throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok not_mem_repr split1_colon split1_slash
   digits_repr toNat!_repr parseDesign_count parseDesign_bernoulli)
 open private split1 digits from Spot.Select
@@ -279,14 +279,14 @@ theorem slotDesign_samplingDesignText {v : _root_.Spot.Registration.Verifier} {n
   have hne : _root_.Spot.Select.Rule.samplingDesign (samplingDesignText (derived.getD parsed)) ≠ .all := nofun
   cases derived with
   | none =>
-    rcases flockLaw_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
-    · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_count "subset" (Or.inl rfl) k (hk k rfl))
-        (deriveLaw_none _ _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
-        (flockLaw_subset_text k n (hk k rfl) hkn)
-    · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_bernoulli a b hb hab)
-        (deriveLaw_none _ _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
-        (flockLaw_bernoulli_text a b n hb hab)
-    · rcases deriveLaw_cases _ _ _ _ _ hd with ⟨-, h, -⟩ | ⟨_, _, _, -, h, -⟩
+    rcases flockSamplingDesign_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
+    · exact slotDesign_samplingDesign _ _ _ _ n _ none _ hne hu (parseDesign_count "subset" (Or.inl rfl) k (hk k rfl))
+        (deriveSamplingDesign_none _ _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
+        (flockSamplingDesign_subset_text k n (hk k rfl) hkn)
+    · exact slotDesign_samplingDesign _ _ _ _ n _ none _ hne hu (parseDesign_bernoulli a b hb hab)
+        (deriveSamplingDesign_none _ _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
+        (flockSamplingDesign_bernoulli_text a b n hb hab)
+    · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, h, -⟩ | ⟨_, _, _, -, h, -⟩
       · exact absurd hs h
       · cases h
     · rcases deriveSamplingDesign_cases _ _ _ _ _ hd with ⟨-, -, h⟩ | ⟨_, _, _, -, h, -⟩

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.SessionAt
 public import Proofs.Properties.Verity.Sampled.ParamsProgram
-public import Proofs.Flock.Bridge.SampledLaw
+public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
@@ -23,7 +23,7 @@ derives them:
 
 * **The parameters** (`program_of_paramsAt`): the verifier's program is the one a descriptor parses to, as v2's
   parameters decode it (`Spot.OneStage.paramsParsed`).
-* **The sampling design** (`lawAt_designAt`): where v2 samples, the design `lawAt` reads off its parameters is
+* **The sampling design** (`lawAt_designAt`): where v2 samples, the design `samplingDesignAt` reads off its parameters is
   `designAt`'s at the verifier's descriptor, query, sampling design object and work table.
 * **The lookup tables** (`pinnedTables_eq`): on blobs that hold the registered circuit's lookup tables and no other
   pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), where the deployment registers a
@@ -83,7 +83,7 @@ theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params}
 
 /-- **v2's parameters in `θ` sample by a sampling design object of kind `subset`** (`paramsOfJson_subset`). -/
 theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
-    Properties.Spot.SecurityProofs.kindOf p.base.verifier.law = "subset" := by
+    Properties.Spot.SecurityProofs.kindOf p.base.verifier.samplingDesign = "subset" := by
   obtain ⟨_, -, x, -, hj⟩ := hp
   obtain ⟨_, -, hj⟩ := ebind_ok hj
   obtain ⟨_, hr⟩ := Binding.dispatch_params hj
@@ -92,19 +92,19 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
 
 /-! ## The sampling design -/
 
-/-- **Where v2 samples, `lawAt` reads `designAt`'s design**: at a verifier whose program the descriptor `desc` parses
-to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledLaw`'s design
-(`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `lawAt` reads: the design `deriveLaw` expands,
-else the one `flockLaw` parses from the object. -/
+/-- **Where v2 samples, `samplingDesignAt` reads `designAt`'s design**: at a verifier whose program the descriptor `desc` parses
+to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
+(`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `samplingDesignAt` reads: the design `deriveSamplingDesign` expands,
+else the one `flockSamplingDesign` parses from the object. -/
 theorem lawAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Registration.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : _root_.Spot.Draw.derive v.program v.query v.law v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
+    (hlo : _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.sampledFrom v lo n src = .ok r) :
-    lawAt v n = .ok (Flock.Bridge.designAt desc v.query v.law v.workTable n) := by
-  obtain ⟨law, ⟨hl, -⟩, -⟩ := Flock.Bridge.samplesUnder_of_sampledFrom hp hlo h
-  obtain ⟨p', derived, parsed, hp', hd, hpar, rfl⟩ := Flock.Bridge.sampledLaw_ok hl
+    samplingDesignAt v n = .ok (Flock.Bridge.designAt desc v.query v.samplingDesign v.workTable n) := by
+  obtain ⟨samplingDesign, ⟨hl, -⟩, -⟩ := Flock.Bridge.samplesUnder_of_sampledFrom hp hlo h
+  obtain ⟨p', derived, parsed, hp', hd, hpar, rfl⟩ := Flock.Bridge.sampledDesign_ok hl
   obtain rfl : p' = v.program := Except.ok.inj (hp'.symm.trans hp)
-  have hdes : Flock.Bridge.designAt desc v.query v.law v.workTable n = derived.getD parsed := by
+  have hdes : Flock.Bridge.designAt desc v.query v.samplingDesign v.workTable n = derived.getD parsed := by
     unfold Flock.Bridge.designAt
     rw [hl]
   rw [hdes]
@@ -112,8 +112,8 @@ theorem lawAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Registration.Verifie
   unfold _root_.Spot.Draw.derive at hlo'
   obtain ⟨derived', hd', hlo'⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 hlo'
   obtain rfl : derived' = derived := Except.ok.inj (hd'.symm.trans hd)
-  obtain rfl : Properties.Spot.SecurityProofs.lawObj v.law derived' = lo := Except.ok.inj hlo'
-  simp only [lawAt, hlo, hd, hpar, ok_bind]
+  obtain rfl : Properties.Spot.SecurityProofs.samplingDesignObj v.samplingDesign derived' = lo := Except.ok.inj hlo'
+  simp only [samplingDesignAt, hlo, hd, hpar, ok_bind]
   rfl
 
 /-! ## The lookup tables -/
@@ -394,14 +394,14 @@ theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
   simp only [Array.isEmpty_empty, ite_true]
   exact hS
 
-/-- **The design `designAt` reads samples `lawK` of it** wherever the registration's population is the descriptor's
+/-- **The design `designAt` reads samples `samplingDesignK` of it** wherever the registration's population is the descriptor's
 (`Live.hlaw`'s proof, at any parameters). -/
-theorem lawOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
+theorem samplingDesignOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
     (hpop : Flock.Bridge.PopMatches desc qr n) :
-    Flock.Bridge.LawOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
-      (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) := by
+    Flock.Bridge.SamplingDesignOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
+      (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) := by
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with h | h
-  · exact Flock.Bridge.lawOn_samplesUnder hpop h (Flock.Bridge.notBernoulli_samplesUnder h)
+  · exact Flock.Bridge.samplingDesignOn_samplesUnder hpop h (Flock.Bridge.notBernoulli_samplesUnder h)
   · rw [h]
     exact ⟨rfl, Nat.zero_le _⟩
 
@@ -502,13 +502,13 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
         (_root_.Core.Blobs.ofArray o.sent.blobs))) { record := record, proofs := proofs } p.base.verifier n ∧
       _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs) = pinnedTables T (V.circuitFile θ F) ∧
       _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
-      lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+      samplingDesignAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
         p.base.verifier.workTable n) ∧
       ∃ reg, Flock.ProvedScope.check (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own
           (V.circuitFile θ F) pubB (_root_.Core.Blobs.ofArray o.sent.blobs))) true (V.circuitFile θ F) pubB
         (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs)) 1 false reg = .ok () ∧
       ∃ recS units rd x, recordSampled (.subset units.size) n units recS ∧
-        units.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+        units.size = Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
           p.base.verifier.workTable n) ∧
         _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
           (_root_.Core.Blobs.ofArray o.sent.blobs)) rd (Flock.Witness.recordDraw recS) = .ok x := by
@@ -565,12 +565,12 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
     ⟨a, b, e, p₀, cm, ev, hcase, hacc0, ⟨lo, derived, fl, hlo, hnn ▸ hn', hder, hfl, rfl⟩, rfl, read, hdu⟩
   have hrd := sampleHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
   have hlawD := lawAt_designAt hdesc hlo hdf
-  have hlawL : lawAt p₀.base.verifier n = .ok (derived.getD fl) := by
-    simp only [lawAt, hlo, hder, hfl, ok_bind]
+  have hlawL : samplingDesignAt p₀.base.verifier n = .ok (derived.getD fl) := by
+    simp only [samplingDesignAt, hlo, hder, hfl, ok_bind]
     rfl
   have hLd := Except.ok.inj (hlawL.symm.trans hlawD)
   rw [hLd] at hdu
-  have hsize := Flock.Bridge.sampleUnits_size (lawOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
+  have hsize := Flock.Bridge.sampleUnits_size (samplingDesignOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
   subst hcf
   exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc, hlawD, reg, hsc,
     recS, sampledBlocks ev.base.draw, rd, x, hrd, hsize, hsetup⟩
@@ -599,10 +599,10 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
       Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok () ∧
       pubO.n = n ∧ _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
       Flock.Bridge.PopMatches desc p.base.verifier.query n ∧
-      lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+      samplingDesignAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
         p.base.verifier.workTable n) ∧
       ∃ recS units st, recordSampled (.subset units.size) n units recS ∧
-        units.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+        units.size = Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign
           p.base.verifier.workTable n) ∧
         Flock.Stmt.setupHidden (FlockSoundness.Discharge.Composed.inputsJ I 0).tags
           (FlockSoundness.Discharge.Composed.inputsJ I 0).circuitFile
@@ -659,9 +659,9 @@ population. -/
 def SubsetDesign (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → ∀ (desc : Claims.Msg) n,
     _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program →
-    Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n =
-      .subset (Flock.Bridge.lawK
-        (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n))
+    Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n =
+      .subset (Flock.Bridge.samplingDesignK
+        (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.samplingDesign p.base.verifier.workTable n))
 
 /-- **v2's registration samples by a subset design**: its parameters' sampling design object is of kind `subset`
 (`kindOf_paramsAt`), under which `designAt` is a subset design (`designAt_subset`). -/
@@ -707,7 +707,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
     simp [hcount]
   let A : Live :=
     { n, I, own := none, ht := htyp, D, hD := hDp, hU, hpi := hpiD, pub, hpub, pubO, hpubO, hscope, hdup, hn, hnO,
-      desc, qr := p.base.verifier.query, hpop, lj := p.base.verifier.law, tb := p.base.verifier.workTable,
+      desc, qr := p.base.verifier.query, hpop, lj := p.base.verifier.samplingDesign, tb := p.base.verifier.workTable,
       hsub := subsetDesign θ p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀,
       y₀ := Classical.choice hy,
       Ω := DeployedCoins, fΩ := inferInstance, nΩ := inferInstance, Lb := deployedLb, src := deployedSrc,
