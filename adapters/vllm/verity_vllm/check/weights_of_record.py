@@ -608,7 +608,7 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
                           supersedes: str | None = None) -> dict[str, Any]:
     """[Record repairs are LOGGED DERIVATIONS] the provenance line of a record written by this CLI: tool, the code that
     ran it (the repo's HEAD when this file sits in a git tree, else null, with `code_source` naming what failed), the SOURCE FILES the derivation read (the Program's instances.json.gz
-    + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (row_pod moves a
+    + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (the row's driver moves a
     stale / older record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
     code = None
     code_source = None

@@ -13,8 +13,8 @@ Each check of `OneStage.check` is a pipeline of failure codes (`addCode`, `push`
 `do` elaborates into join points. A proof lifts the join points out (`extract_lets`), moves each `if` into the argument of
 the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a time, and reads the codes' emptiness off
 the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts,
-`AcceptMeans`'s conclusion and the caller's facts (`CallerHeld`), and that it accepts all of it; `acceptMeans` and
-`callerHeld_of_accept` are its first half and `acceptMeans_complete` the converse.
+`AcceptMeans`'s conclusion, and that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete`
+the converse.
 -/
 
 @[expose] public section
@@ -111,8 +111,37 @@ theorem none_fail_base (d p : Check) :
     (∀ x ∈ #[("draw", d), ("proved", p)], Fails x = false) ↔ p.codes = #[] := by
   simp [Fails, Array.isEmpty_iff]
 
-theorem sameDict_iff (a b : Array (String × Json)) : Record.sameDict a b = true ↔ SameRoots a b := by
-  simp only [Record.sameDict, SameRoots, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
+theorem subDict_iff (a b : Array (String × Json)) : Record.subDict a b = true ↔ OpenedRegistered a b := by
+  simp only [Record.subDict, OpenedRegistered, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
+
+theorem none_fail_append (xs ys : Array (String × Check)) :
+    (∀ x ∈ xs ++ ys, Fails x = false) ↔ (∀ x ∈ xs, Fails x = false) ∧ ∀ x ∈ ys, Fails x = false := by
+  simp only [Array.mem_append, or_imp, forall_and]
+
+theorem none_fail_ite_nil (b : Bool) (y : String × Check) :
+    (∀ x ∈ (if b = true then (#[] : Array (String × Check)) else #[y]), Fails x = false) ↔
+      (b = false → Fails y = false) := by
+  cases b <;> simp
+
+/-- Each value `certified` names has a read among `opened`, a `{value: root}`: an entry of `opened` is of that value. A
+read reported under another value's name is no read of it. -/
+def CertifiedRead (certified : Array String) (opened : Array (String × Json)) : Prop :=
+  ∀ v ∈ certified, ∃ y ∈ opened, y.1 = v
+
+/-- What the record's checks hold of an accept: `UnitsProved`, and a reported read of each value the verifier holds a
+certified entry for (the check `certified`), which `AcceptMeans` does not state. -/
+def UnitsRead (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+  UnitsProved c e ∧
+    CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots c.record e.verdicts).getD #[])
+
+/-- The check `certified` holds exactly when each certified value has a reported read. -/
+theorem certifiedCheck_ok (certified : Array String) (opened : Option (Array (String × Json))) :
+    (∀ x ∈ Record.certifiedCheck certified opened, Fails x = false) ↔ CertifiedRead certified (opened.getD #[]) := by
+  unfold Record.certifiedCheck
+  rw [none_fail_ite_nil, fails_of_codes "certified" _ (by decide) rfl]
+  simp only [CertifiedRead, Bool.true_eq_false, imp_false, Bool.not_eq_false, Array.all_eq_true', Array.any_eq_true',
+    beq_iff_eq]
+  all_goals exact Iff.rfl
 
 theorem qsort_eq_empty {α : Type} (xs : Array α) (lt : α → α → Bool) : xs.qsort lt = #[] ↔ xs = #[] := by
   rw [← Array.size_eq_zero_iff, Verity.QSort.size_qsort, Array.size_eq_zero_iff]
@@ -127,10 +156,9 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
     (∀ s, served = some s → s.qsort (· < ·) = units.qsort (· < ·)) ∧
     (∀ roots, sessionRoots = some roots → roots ≠ #[] ∧
       ∀ pr ∈ roots, ∃ r, (Record.byPort reg).find? (·.1 == pr.1) = some r ∧ jeq (getD r.2 "root") pr.2 = true) ∧
-    ((field? reg "registered").isSome = true ∨ opened.isSome = true →
-      SameRoots (opened.getD #[]) (Record.registeredRoots reg)) := by
+    OpenedRegistered (opened.getD #[]) (Record.registeredRoots reg) := by
   unfold Record.checks
-  extract_lets o0 j3 want opened' wrong j2 registered j1 j0 o1
+  extract_lets o0 want opened' j3 wrong j2 registered j1 j0 o1
   rcases hs : served with _ | s <;> rcases hr : sessionRoots with _ | roots
   all_goals simp (config := {failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
   all_goals simp only [j0, hs]
@@ -148,7 +176,7 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
   all_goals simp only [Bool.true_eq_false, imp_false, Bool.not_eq_true, Bool.not_eq_false', Bool.or_eq_false_iff,
     none_fail_base, Bool.or_eq_true, bne_eq_false_iff_eq, Array.isEmpty_iff, Array.isEmpty_eq_false_iff,
     not_or, sortStrings, qsort_eq_empty, Array.filterMap_eq_empty_iff,
-    sameDict_iff, opened', registered,
+    subDict_iff, opened', registered,
     want, reduceCtorEq, false_implies, implies_true, and_true, true_and, Option.some.injEq, forall_eq', and_assoc]
   all_goals clear j0 j1 j2 j3 o0 o1 wrong want opened' registered
   case some.some =>
@@ -171,15 +199,16 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
       simp only [hr, hj, ↓reduceIte]
   all_goals exact Iff.rfl
 
-theorem recordChecks_nil (c : Commitment) (e : Evidence) :
-    OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[] ↔ UnitsProved c e := by
+theorem recordChecks_nil (p : Params) (c : Commitment) (e : Evidence) :
+    OneStage.recordChecks c.record (Flock.hexOf c.digest) e (p.verifier.certified.map (·.1.value)) = #[] ↔
+      UnitsRead p c e := by
   unfold OneStage.recordChecks
   simp only [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
   have hf : ∀ cs : Array (String × Check),
       (∀ x ∈ cs, ¬(match x with | (n, c) => n != "draw" && !c.codes.isEmpty) = true) ↔ ∀ x ∈ cs, Fails x = false := by
     intro cs; simp [Fails]
-  rw [hf, checks_ok, checkProved_nil]
-  unfold UnitsProved Receipt openedRoots
+  rw [hf, none_fail_append, checks_ok, certifiedCheck_ok, checkProved_nil]
+  unfold UnitsRead UnitsProved Receipt openedRoots
   simp only [Option.map_eq_some_iff, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, and_assoc]
   exact Iff.rfl
 
@@ -668,22 +697,24 @@ theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String �
       find_leaves_congr (h2 o.1) (fun n w b => EarlierIs log n w b o.2.1 o.2.2)))
 
 /-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port or value, and the rest of R7
-holds against the entries and held roots `applyOutputs` leaves. -/
+holds against the entries `applyOutputs` leaves, then the certified ones, and the held roots it leaves. -/
 theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
-    (outputs : Array (String × String × Registration.Earlier)) (log : Array Json) :
-    Registration.checkOutputs c got mine held supplied rootOf outputs log = #[] ↔ c = #[] ∧
+    (outputs : Array (String × String × Registration.Earlier)) (log : Array Json)
+    (certified : Array Registered.Entry) :
+    Registration.checkOutputs c got mine held supplied rootOf outputs log certified = #[] ↔ c = #[] ∧
       ∃ mine0 es mine' held', mine = .ok mine0 ∧ got = .arr es ∧
       (∀ o ∈ outputs, ∀ want, mine0.find? (·.value == o.1) = some want →
         EarlierIs log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
       (Registration.applyOutputs #[] mine0 held outputs log).2 = (mine', held') ∧
       (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
         keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
-      ValuesAre es mine' ∧
-      (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-        EntryIs e want (heldFor supplied held' want.value)) ∧
-      SuppliedIs es mine' supplied rootOf := by
+      ValuesAre es (mine' ++ certified) ∧
+      (∀ want ∈ mine' ++ certified, ∀ e,
+        es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+          EntryIs e want (heldFor supplied held' want.value)) ∧
+      SuppliedIs es (mine' ++ certified) supplied rootOf := by
   unfold Registration.checkOutputs
   rcases mine with err | mine0
   · simp [addCode_ne_nil]
@@ -831,25 +862,6 @@ theorem wiredHeld_iff (rec : Json) (ports : Array (String × Json)) :
   rw [Array.all_eq_true']
   exact forall_congr' fun pw => imp_congr_right fun _ => wiredOk_iff rec pw.1 pw.2
 
-/-- R6's pool codes (`Registration.poolMarks`) add none exactly when the window names the pool's reset, week and spent
-mark and no reset falls where the week's is spent before it. -/
-theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array Json) (c : Array String) :
-    Registration.poolMarks w pool log c = #[] ↔ c = #[] ∧
-      jeq (getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
-      jeq (getD w "pool_week") (match pool with | some p => Lean.toJson p.week | none => .null) = true ∧
-      jeq (getD w "pool_spent")
-        (match pool with | some p => .bool (p.reset || p.spentBefore log) | none => .null) = true ∧
-      (match pool with | some p => !(p.reset && p.spentBefore log) | none => true) = true := by
-  rw [Registration.poolMarks, kept_nil, kept_nil, kept_nil, kept_nil]
-  exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
-
-/-- R6's compiler codes (`Registration.compilerMarks`) add none exactly when the window names the log's compiler and
-advice within its length. -/
-theorem compilerMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
-    Registration.compilerMarks w b c = #[] ↔ c = #[] ∧ Registration.compilerOk w b = true ∧
-      Registration.adviceOk w b = true := by
-  rw [Registration.compilerMarks, kept_nil, kept_nil, and_assoc]
-
 /-- R8's codes (`Registration.r8Codes`) add none exactly when R8 holds. -/
 theorem r8Codes_nil (v : Registration.Verifier) (c : Array String) :
     Registration.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
@@ -880,25 +892,13 @@ theorem r2loop (g : String → Json) (a : Json) (oq : Flock.V String) (od : Opti
 
 theorem id_bind {α β : Type} (x : Id α) (f : α → Id β) : x >>= f = f x := rfl
 
-theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
-    (Registration.declaredCode (getD rec "program") v.declared).isSome = false ↔ DeclaredDay rec v := by
-  unfold DeclaredDay Registration.declaredCode
-  rcases v.declared with _ | ⟨day, ds⟩
-  · simp
-  · rcases h : Registration.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
-    · simp [h]
-    · by_cases hp : jeq (getD rec "program") (.str p) = true <;> simp [h, hp]
-    · simp [h]
-
-/-- R7's pool chain (`Registration.poolChained`) holds exactly when `PoolChained` does. -/
-theorem poolChained_iff (rec : Json) (v : Registration.Verifier) :
-    Registration.poolChained rec v = true ↔ PoolChained rec v := by
-  unfold Registration.poolChained PoolChained
-  rcases hp : v.pool with _ | p
-  · simp
-  · rcases he : Registration.entryOf rec p.pin with _ | e <;>
-      rcases ho : Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
-    exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
+/-- R7's certified roots (`Registration.certifiedHeld`) hold exactly when `CertifiedHeld` does. -/
+theorem certifiedHeld_iff (rec : Json) (v : Registration.Verifier) :
+    Registration.certifiedHeld rec v = true ↔ CertifiedHeld rec v := by
+  unfold Registration.certifiedHeld CertifiedHeld
+  rw [Array.all_eq_true']
+  refine forall_congr' fun x => imp_congr_right fun _ => ?_
+  rcases he : Registration.entryOf rec x.1.value with _ | e <;> simp [he]
 
 theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
   unfold Registration.linkRefused RL
@@ -914,13 +914,13 @@ theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRef
           fun ⟨_, _, h1, h⟩ => by cases h1; rw [hr] at h; exact Except.ok.inj h⟩
   · simp
 
-/-- The registration check finds nothing exactly where the registration keeps R1–R8 (`Registered`) and the caller's
-facts (`CallerHeld`): the one check holds both today. -/
+/-- The registration check finds nothing exactly where the registration keeps R1–R8 (`Registered`). The caller's facts
+(`CallerHeld`) are the caller's check's (`VStar.Recursive.Caller.check`), not this one's. -/
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
-    Registration.check rec v = #[] ↔ (∃ law, Registered v rec law) ∧ CallerHeld rec v := by
+    Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
   rw [Registration.check_eq_checkRef]
   unfold Registration.checkRef
-  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
+  extract_lets v2 get c0 w program part partDigest mine roots previous j14 j12 j11 j10 j9 j8 distinct j7 j6 j5 j4 j3 j2
     j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ R8 v ∧ RL v := fun c =>
     (step_ite (P := True) (RL v)
@@ -930,31 +930,15 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       (Registration.r8Codes v c)).trans
       ⟨fun ⟨h, l, _⟩ => ⟨((r8Codes_nil v c).1 h).1, ((r8Codes_nil v c).1 h).2, l⟩,
         fun ⟨h, r, l⟩ => ⟨(r8Codes_nil v c).2 ⟨h, r⟩, l, trivial⟩⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧
-      RunPoolSpent rec v ∧ PoolResetOnce v ∧ RunCompiler rec v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧
-      RL v := by
-    intro c
-    simp only [j13]
-    by_cases hv : v2 = true
-    · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, compilerMarks_nil, poolMarks_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, b⟩, q⟩, e⟩ => ⟨a, s, r, wk, p, o, cm, ⟨b, q⟩, e⟩,
-        fun ⟨a, s, r, wk, p, o, cm, ⟨b, q⟩, e⟩ => ⟨⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, b⟩, q⟩, e⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, compilerMarks_nil, kept_nil, poolMarks_nil]
-      exact ⟨fun ⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, e⟩ => ⟨a, s, r, wk, p, o, cm, trivial, e⟩,
-        fun ⟨a, s, r, wk, p, o, cm, _, e⟩ => ⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, e⟩⟩
-  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
-      jeq (getD (get "window") "stream") (.str sp.1) = true ∧
-      jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
-        RunCompiler rec v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v) := by
+  have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (v2 = true → R7 rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v := by
     intro c
     simp only [j12]
-    rcases hb : v.binding with _ | ⟨stream, prover⟩
-    · simp [h13]
-    · by_cases hs : jeq (getD (get "window") "stream") (.str stream) = true <;>
-        by_cases hp : jeq (getD (get "window") "prover") (.str prover) = true <;>
-        simp [hs, hp, h13, addCode_ne_nil]
+    by_cases hv : v2 = true
+    · simp only [hv, ↓reduceIte, true_implies]
+      rw [h14, kept_nil, checkOutputs_nil, certifiedHeld_iff]
+      exact ⟨fun ⟨⟨⟨a, b⟩, ch⟩, e⟩ => ⟨a, ⟨b, ch⟩, e⟩, fun ⟨a, ⟨b, ch⟩, e⟩ => ⟨⟨⟨a, b⟩, ch⟩, e⟩⟩
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14]
+      exact ⟨fun ⟨a, e⟩ => ⟨a, trivial, e⟩, fun ⟨a, _, e⟩ => ⟨a, e⟩⟩
   have h11 := step_ite (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) j11 j12 _ _ h12
     (fun _ => rfl) (any_false_iff _ _)
   have h10 := step_ite (jeq (getD rec "previous") previous = true) j10 j11 _ _ h11 (fun _ => rfl) (not_false_iff' _)
@@ -1023,11 +1007,10 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       rcases x with ⟨p, w⟩
       exact Array.any_eq_true')
   have h5 := step_ite (jeq (getD rec "scheme") (.str v.scheme) = true) j5 j6 _ _ h6 (fun _ => rfl) (not_false_iff' _)
-  have hD := step_ite (DeclaredDay rec v) jD j5 _ _ h5 (fun _ => rfl) (declaredCode_none_iff rec v)
-  have h5r := reset hD
+  have h5r := reset h5
   have h4 : ∀ c, j4 () c = #[] ↔ c = #[] ∧ (∀ x ∈ mine, ∀ m, x.2 = some m → jeq (get x.1) m = true) ∧
       (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (get "population") (Lean.toJson n) = true) ∧
-      jD () #[] = #[] := by
+      j5 () #[] = #[] := by
     intro c
     simp only [j4, id_bind]
     rcases hu : Partition.units v.program v.query with a | n
@@ -1110,33 +1093,33 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     · show #["keys"] = #[] ↔ _
       exact ⟨fun h => by simp at h, fun ⟨h, _⟩ => absurd (hk.2 h) (by decide)⟩
   refine (top _ _ bne_eq_false_iff_eq (not_and_false_iff _ _)).trans ?_
-  rw [h1 #[], hD #[]]
-  have hv2 : v2 = !v.registered.isEmpty := rfl
+  rw [h1 #[], h5 #[]]
+  have hv2 : v2 = !(v.registered.isEmpty && v.certified.isEmpty) := rfl
   have ek : (keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) ↔
-      keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) := by
-    rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
+      keys? rec =
+        some (if v.registered.isEmpty && v.certified.isEmpty then Registration.KEYS else Registration.KEYS_V2) := by
+    rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> exact Iff.rfl
   have ef : jeq (get "format")
         (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ↔
-      jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) =
+      jeq (getD rec "format")
+        (.str (if v.registered.isEmpty && v.certified.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) =
         true := by
-    rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
-  have e7 : (v2 = true → R7 rec v ∧ PoolChained rec v) ↔ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v) := by
-    unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
+    rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> exact Iff.rfl
+  have e7 : (v2 = true → R7 rec v ∧ CertifiedHeld rec v) ↔ (ExpectsV2 v → R7 rec v ∧ CertifiedHeld rec v) := by
+    unfold ExpectsV2; rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
-  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', hwd, h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, h7r, h8, hrl⟩
+  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports,
+      h7', hwd, h4', h5', h6a, h6b, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-    exact ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-        ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7', hwd (hbad.2 hroots)⟩, h4', h5',
-        ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1⟩, h8, hrl⟩,
-      hdecl, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => (h7r hv).2⟩
-  · rintro ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-        ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7', hwd⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩,
-      hdecl, h6c, h6d, h6e, h6f, h6g, h6h, h6i, hpool⟩
+    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7', hwd (hbad.2 hroots)⟩, h4', h5',
+      ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2⟩, h8, hrl⟩
+  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7', hwd⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
-      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7',
-      fun _ => hwd, h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h6i, fun hv => ⟨(h7r hv).1, hpool hv⟩, h8, hrl⟩
+      (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7',
+      fun _ => hwd, h4', h5', h6a, h6b, fun hv => ⟨(h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1328,20 +1311,18 @@ theorem checkDraw_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] 
 theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registered v rec law) :
     Draw.derive v.program v.query v.law v.workTable = .ok law := h.1.2.2.2.1
 
-/-- The check accepts exactly what `AcceptMeans` says it accepts where the record keeps the caller's facts
-(`CallerHeld`), which the registration check holds beside R1–R8. -/
+/-- The check accepts exactly what `AcceptMeans` says of an accept and a reported read of each certified value
+(`UnitsRead`). -/
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     OneStage.check p c e = .accept pub prof ↔
-      CallerHeld c.record p.verifier ∧
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsRead p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
   simp only []
   by_cases h1 : Registration.check c.record p.verifier = #[]
-  · obtain ⟨⟨law, hreg⟩, hcall⟩ := (registration_nil _ _).1 h1
-    refine Iff.trans ?_ (and_iff_right hcall).symm
+  · obtain ⟨law, hreg⟩ := (registration_nil _ _).1 h1
     have hd := registered_law hreg
     have uniq : ∀ law', Registered p.verifier c.record law' → law' = law := fun law' h' => by
       have := registered_law h'
@@ -1350,9 +1331,10 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     simp only [h1, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hd]
     by_cases h2 : Draw.checkDraw e.draw (getD c.record "population") law = #[]
     · simp only [h2, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[]
+      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e
+          (p.verifier.certified.map (·.1.value)) = #[]
       · simp only [h3, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-        have hu := (recordChecks_nil c e).1 h3
+        have hu := (recordChecks_nil p c e).1 h3
         have hdr := (checkDraw_nil _ _ _).1 h2
         rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
         · have hva := (verdictOf_accept _).1 hv
@@ -1385,11 +1367,12 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           rintro ⟨law', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
           rw [hv] at this; cases this
-      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e).isEmpty = false := by
+      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e
+            (p.verifier.certified.map (·.1.value))).isEmpty = false := by
           simpa [Array.isEmpty_iff] using h3
         simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
         rintro ⟨law', d', n', -, -, hu, -⟩
-        exact h3 ((recordChecks_nil c e).2 hu)
+        exact h3 ((recordChecks_nil p c e).2 hu)
     · have : (Draw.checkDraw e.draw (getD c.record "population") law).isEmpty = false := by
         simpa [Array.isEmpty_iff] using h2
       simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
@@ -1399,27 +1382,23 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
   · have : (Registration.check c.record p.verifier).isEmpty = false := by
       simpa [Array.isEmpty_iff] using h1
     simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
-    rintro ⟨hcall, law', d', n', hreg', -⟩
-    exact h1 ((registration_nil _ _).2 ⟨⟨law', hreg'⟩, hcall⟩)
+    rintro ⟨law', d', n', hreg', -⟩
+    exact h1 ((registration_nil _ _).2 ⟨law', hreg'⟩)
 
-theorem acceptMeans : AcceptMeans := fun p c e pub prof h => ((acceptMeans_iff p c e pub prof).1 h).2
+theorem acceptMeans : AcceptMeans := fun p c e pub prof h => by
+  obtain ⟨l, d, n, hr, hd, ⟨hu, -⟩, rest⟩ := (acceptMeans_iff p c e pub prof).1 h
+  exact ⟨l, d, n, hr, hd, hu, rest⟩
 
-/-- **The caller's facts at what the check accepts**: a record the check accepts keeps `CallerHeld` against the
-check's own verifier. The registration check holds them beside R1–R8, and `AcceptMeans` doesn't state them. -/
-theorem callerHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
-    (h : OneStage.check p c e = .accept pub prof) : CallerHeld c.record p.verifier :=
-  ((acceptMeans_iff p c e pub prof).1 h).1
-
-/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8 and the caller's facts, with a sample of
-the agreed law over the registered population, its units proved and served as sampled, and verdicts that accept, is
-accepted, publishing `publicOf` and the profile `profileOf`. -/
+/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of
+the agreed law over the registered population, its units proved and served as sampled with each certified value read
+(`UnitsRead`), and verdicts that accept, is accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
-    (hr : Registered p.verifier c.record law) (hc : CallerHeld c.record p.verifier)
+    (hr : Registered p.verifier c.record law)
     (hd : Drawn e.draw (getD c.record "population") law)
-    (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hu : UnitsRead p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
-  (acceptMeans_iff p c e _ _).2 ⟨hc, law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+  (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
 
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
@@ -1653,7 +1632,7 @@ theorem history_of_R7 (rec : Json) (v : Registration.Verifier) (h : R7 rec v) (u
   refine ⟨es, hes, fun e he => ⟨r, hr, ?_⟩⟩
   have hmem := Array.mem_of_find?_eq_some hw'
   rw [← hval] at he
-  obtain ⟨-, hel, -, hed, -, her⟩ := hentry want' hmem e he
+  obtain ⟨-, hel, -, hed, -, her⟩ := hentry want' (Array.mem_append_left _ hmem) e he
   have hheldFor : heldFor v.supplied held' want'.value = held' := by simp [heldFor, hval, hs]
   rw [hheldFor, hval, hfind] at her
   refine ⟨by rw [hroot]; exact her (u, root) rfl, ?_, ?_⟩
@@ -1682,6 +1661,6 @@ root. -/
 theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact (hr.2.2.2.2.2.2.1 hv).2
+  exact (hr.2.2.2.2.2.2.1 hv).2.1
 
 end Properties.Spot

@@ -25,7 +25,7 @@ the per-subcircuit bound, with the joint figure labelled unlocked.
 **The sample** is a handful: k = `HANDFUL` units sampled uniformly over the whole partition by
 the live coins, never sized to a proving budget; a block that drew another k says so in the caveats.
 
-**Part 3's H and B** are proofs' planner's (``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
+**Part 3's H and B** are proofs' planner's (``verity/protocols/proofs/spot/prover/cost/demo_a.py``), read from a recorded run
 of it: `spot.optimize.for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, its plan of
 record's ``free_compute`` and ``leak`` at δ = 1%. ``H_POOLED``, ``B_POOLED`` and ``PLANNER`` (the planner, its commit and
 its run) are filled together, each source naming the run.
@@ -252,7 +252,7 @@ MEASURED: dict[str, str] = {
     "ROW_SLOT_NS_B1024": "the same run: nanoseconds a step per row-slot",
     "STEP_S_KERNELS": "kernels' faster step at batch 512: seconds a step",
     "WORLD_GATES_YEAR": f"the world's compute, AND gates a year, labelled {WORLD_LABEL} (census entry pending)",
-    "PLANNER": "proofs' planner (`benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
+    "PLANNER": "proofs' planner (`verity/protocols/proofs/spot/prover/cost/demo_a.py`) at its commit, and the recorded run of it "
                "at 1% of a one-week sampling block (`--spans week`)",
     "H_POOLED": "PLANNER's run: `for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, the plan of "
                 "record's incorrect ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
@@ -430,7 +430,7 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
         runs = {n: set(RUN_ID.findall(values[n].source)) for n in planned}
         if len(planned) != len(PLANNED) or not all(runs.values()) or len(set.intersection(*runs.values())) == 0:
             raise ValueError(f"measurements: {', '.join(f'⟨{n}⟩' for n in PLANNED)} are filled together from one "
-                             f"recorded run of proofs' planner, each source naming that run (`benchmarks/sampling_plan/demo_a.py "
+                             f"recorded run of proofs' planner, each source naming that run (`verity/protocols/proofs/spot/prover/cost/demo_a.py "
                              f"--spans week`); got {sorted(planned)}")
     if "WORLD_GATES_YEAR" in values and values["WORLD_GATES_YEAR"].label != WORLD_LABEL:
         raise ValueError(f"measurements: ⟨WORLD_GATES_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")

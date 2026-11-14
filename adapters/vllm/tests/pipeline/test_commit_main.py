@@ -56,6 +56,7 @@ VOCAB = 16
 PROGRAM = program_field(hashlib.sha512(b"the stand-in engine's Program").hexdigest())
 PLUGIN = f"plugin:{__name__}:committer"
 PLUGIN_2 = f"plugin:{__name__}:committer_2"
+PLUGIN_LAID_OUT = f"plugin:{__name__}:committer_laid_out"
 #: Two requests of unequal `max_tokens`: three engine steps a run, the last with one request.
 WORKLOAD: Record = {"schema": "verity-vllm/workload/v2", "model": "org/model", "variants": {}, "engine": {},
                     "requests": [{"request_id": "a", "prompt_token_ids": [5, 6, 7], "max_tokens": 3},
@@ -306,6 +307,20 @@ def committer_2(eng: SimpleNamespace, run_id: str) -> Committer:
     return MADE[-1]
 
 
+class LaidOut(Committer):
+    """A committer that keeps its steps' layouts, the one kind `main` hands a value check."""
+
+    def __init__(self, eng: SimpleNamespace, run_id: str) -> None:
+        super().__init__(eng, run_id, **MAKE)
+        self._layouts: dict[int, list[Any]] = {}
+
+
+def committer_laid_out(eng: SimpleNamespace, run_id: str) -> Committer:
+    """``--committer plugin:<this module>:committer_laid_out``."""
+    MADE.append(LaidOut(eng, run_id))
+    return MADE[-1]
+
+
 @pytest.fixture
 def stand_ins(monkeypatch, tmp_path):
     """The stand-ins of the module docstring.  ``calls`` keeps what `main` handed each: the engine's build, each committer's
@@ -515,6 +530,57 @@ def test_a_full_collection_is_asked_for_once_before_each_run(tmp_path, stand_ins
     stand_ins.verdicts = [(True, None)]
     ended = run(tmp_path, capsys)
     assert ended.exit is None and len(ended.rows()) == 4 and stand_ins.collected == [6, 9, 12, 15]
+
+
+#: What a value check returns, as `main` reads it.
+VALUE_CHECK: Record = {"verdict": "PASS", "tensors": 3, "tap_equal": 3, "tap_mismatch_n": 0, "reexec_equal": 2, "reexec_tensors": 2,
+                       "reexec_mismatch_n": 0, "repeated_calls": ["head"], "missing_in_commit": ["head.out"], "not_verified_n": 0, "reexec_skipped": 1,
+                       "by_class": {"instance_outputs_native": 3}, "value_source": {"reads": 3, "bytes": 96, "seconds": 0.5}}
+
+
+@pytest.mark.parametrize("make, asked", [(PLUGIN_LAID_OUT, True), (PLUGIN, True), (PLUGIN_LAID_OUT, False)])
+def test_a_value_check_is_one_more_run_of_a_committer_that_keeps_its_layouts(tmp_path, stand_ins, capsys, monkeypatch, make, asked):
+    """``--value-check``: once the committers are set up, a committer that keeps its steps' layouts is handed to one value check
+    with a run of the workload and the check that the engine is left as it was; the check's record, with the run's facts, goes to
+    `value_check.json` and to one line.  A committer that keeps no layouts gets none, nor one not asked for."""
+    from verity_vllm.check import value_check
+
+    handed = []
+
+    def run_value_check(com, run, restore):
+        left = com.eng.model.register_forward_hook(lambda *_: None)
+        with pytest.raises(AssertionError, match="forward hooks present: 1 != baseline 0"):
+            restore()
+        left.remove()
+        stepped = com.eng.llm.llm_engine.steps
+        iterations = run()["iterations"]
+        handed.append((com, iterations, com.eng.llm.llm_engine.steps - stepped, restore()))
+        return copy.deepcopy(VALUE_CHECK)
+
+    monkeypatch.setattr(value_check, "run_value_check", run_value_check)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i: f"stand-in {i}")
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--committer", make, *["--value-check"] * asked)
+    [com] = MADE
+    assert ended.exit is None and ended.printed[-1] == PASS_LINE.format(n=2) and com.calls[-1] == "close"
+    if make == PLUGIN or not asked:
+        assert handed == [] and "value_check.json" not in ended.files()
+        return
+    assert handed == [(com, 3, 3, None)]
+    assert ended.doc("value_check.json") == VALUE_CHECK | {"committer": "stand_in", "case": "B0", "model": "org/model", "gpu": "stand-in 0",
+                                                           "label": "measured"}
+    assert ("[delta] VALUE CHECK PASS: 3 tensors, tap-equal 3, tap-mismatch 0; re-exec 2/2 equal, mismatch 0; repeated-call modules ['head']; "
+            "missing 1; not verified 0; skipped 1; by class {'instance_outputs_native': 3}; opened 3 reads / 96 B in 0.5 s") in ended.printed
+
+
+def test_a_switch_interval_asked_for_is_set_before_the_committers_and_said(tmp_path, stand_ins, capsys, monkeypatch):
+    """``VERITY_SWITCH``: the interpreter's switch interval for the GIL-interference experiment, set once and said."""
+    asked: list[tuple[float, int]] = []
+    monkeypatch.setattr(sys, "setswitchinterval", lambda interval: asked.append((interval, len(MADE))))
+    monkeypatch.setenv("VERITY_SWITCH", "0.001")
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and asked == [(0.001, 0)] and len(MADE) == 1 and ended.printed.count("[delta] sys.setswitchinterval(0.001)") == 1
 
 
 def test_only_the_control_arm(tmp_path, stand_ins, capsys):

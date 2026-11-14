@@ -21,7 +21,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-VLLM = "vllm @ d9105ea80"
 _LLAMA = "vllm/model_executor/models/llama.py"
 _QWEN2 = "vllm/model_executor/models/qwen2.py"
 _QWEN3 = "vllm/model_executor/models/qwen3.py"

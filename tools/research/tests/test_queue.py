@@ -504,7 +504,7 @@ def test_a_seeded_clone_gets_the_record_drivers_it_lacks_once_and_plain_git_then
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
     wd = world.tmp / "q" / "verity"
     _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
-    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
+    _git(wd, "config", "--local", "merge.lean-limits.driver", "true")
 
     def said() -> list[str]:
         return [x for x in world.logs if "set the record merge drivers" in x]
@@ -3306,7 +3306,7 @@ def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pi
 
 def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_checkout_it_runs_in(world, capsys):
     """A branch from before `merge.py --caps`, marked from its own checkout, merged onto `next` with that checkout's `merge.py`
-    as the `lean-caps` driver: it errored on `--caps`, and git reported a conflict in `tests/test_lean_packages.py` that the
+    as the `lean-limits` driver: it errored on `--caps`, and git reported a conflict in `tests/test_lean_packages.py` that the
     sync, with `next`'s driver, merges as counters.  The preflight runs `next`'s drivers, so the head merges cleanly."""
     from research.queue import MarkOnly, StoreLabels, base_drivers, merged_tree, ready
 
@@ -3320,11 +3320,11 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
     old = _move_main(world, {**PREFLIGHT_FILES, packages: counts(354, 184), "tools/verity/lean/merge.py":
                              "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
     _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
-                       ".gitattributes": f"{packages} merge=lean-caps\n"})
+                       ".gitattributes": f"{packages} merge=lean-limits\n"})
     world.gh.put(1, world.change({packages: counts(355, 184)}))
     assert [m.pr for m in world.queue().sync()[0]] == [1]
     world.gh.put(2, h2 := world.change({packages: counts(354, 185)}, base=old), ready=False)    # the checkout stays at #2's head
-    _git(world.dev, "config", "merge.lean-caps.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
+    _git(world.dev, "config", "merge.lean-limits.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
     next_ = _git(world.origin, "rev-parse", "refs/heads/next")
     raw = subprocess.run(["git", f"--attr-source={next_}", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h2],
                          cwd=world.dev, capture_output=True, text=True)
@@ -3348,7 +3348,7 @@ def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_c
         return f'UNWITNESSED = {{"security": {sec}, "security/Properties": {props}}}\n'
 
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
-    _move_main(world, {packages: counts(354, 184), ".gitattributes": f"{packages} merge=lean-caps\n",
+    _move_main(world, {packages: counts(354, 184), ".gitattributes": f"{packages} merge=lean-limits\n",
                        "tools/verity/lean/merge.py": "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
     world.gh.put(1, world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}))
     world.gh.put(2, world.change({packages: counts(355, 184)}))
