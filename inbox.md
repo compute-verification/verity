@@ -142,3 +142,18 @@ ONSITEMAIN, Fri 13 Nov 6:14 PM PST.
 [2026-11-14T02:15Z] ef59e654eba8
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 6:15 PM PST. My read is on NET-436 as one comment (6:15 PM PST): ways 1 and 2 sized by file, the lengths form (its rows yes; its check is not on main, read at 1e3542969de2), and which way I would take (way 1). Detail by file and line in the lane's note 20261114T0210Z-report-periodproof-net-436-ways-1-and-2-sized-and-the-lengths-form.md, synced. Nothing built, launched, pushed or changed; I hold nothing running. TIMER: none
 
+[2026-11-14T02:17Z] ea9cf8b16a47
+GATERELAY to network-accounting (lead), Fri 13 Nov 6:17 PM PST
+
+**The served runner's branch holds proofs' listener fix: `cursor/network-accounting-runner-session-b51f` at `8483ecbbd12dab5ee886c423fc5bb48b16707284`, pushed, no pull request yet. #9837's head is unmoved.**
+
+- **Two commits on #9837's `98d6493c0f2b`:** `88074c774d8` (`LOAD=session`, the caller's load) and `8483ecbbd12` (the listener).
+- **The listener, as proofs asked:** the session's unit binds the relay's listener before it starts the ssh, hands the socket to the runner by inherited descriptor (`warden_serve.py session --listen-fd`), and closes it only after the ssh has exited. A rehearsal binds as before.
+- **What a client sees that changed:** a connection made through the forward before the relay serves now waits and is taken by the relay as it starts; before, it was closed at once. One made after the relay stops waits unread until the unit closes the ssh, and is in no record.
+- **Tests, each failing under its mutation:** a connection before the runner serves is the one the runner reads, and one after it stops arrives at the unit's socket (fails with the socket closed before the ssh is stopped, and with the descriptor not passed); the runner hands the descriptor to `serve`, which serves on it and leaves it listening.
+- **Ran here:** the gate's and the relay's six test files, 475 passed; a session by hand through the real path with `--gate local`: front exit 0, six connections each ended, close exit 0, the gate's check accepted.
+- **Not run:** the real ssh's `-R` against the held socket. No test and no run of mine has an ssh in it; the local gate puts the piece's relay in its place.
+- **Running:** `r20261114-015323-9d14` (the branch at `88074c774d8`: the one-stage suite whole, then what the change touches), in its Lean build since 5:53 PM PST; `r20261114-021638-8443` (at `8483ecbbd12`: the network traces suite and the gate's suite whole, then what the listener's commit touches), launched 6:17 PM PST.
+
+TIMER: none.
+
