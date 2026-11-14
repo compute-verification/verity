@@ -18,9 +18,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 ## Entry points
 
-- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving; `replay.py` runs
-  honest traces through the reference protocol at calibrated parameters, and `stall_probe.py` finds what makes a tick
-  late.
+- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and `stall_probe.py`
+  finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.accounting.certifier.verifier.warden`, the network certifier
@@ -42,8 +41,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it), `leak_guard.py` (the record's leak guard, below) and `released_keys.py` (the keys a
-  record releases, each declared public by name, below). `block_certifier.py` decides a
-  period by `network-period check` and writes its accepted answer as the block record's certifier entry.
+  record releases, each declared public by name, below). `block_certifier.py` writes a period's accepted answer as the
+  block record's certifier entry.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** `load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
@@ -82,8 +81,9 @@ its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` 
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
 record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
-one of those execution phases is certified. The record is all the script writes: what the wipe's reader does with one is
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
+gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
+is certified. The record is all the script writes: what the wipe's reader does with one is
 its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
 
 ## The served session
@@ -340,8 +340,8 @@ It exits 0 when it read the capture and 2 when it refused it.
 The run of record takes the network chain end to end on the gate's machines:
 
 1. The network certifier signs every record with its LMS key, on an auditor machine, never on the developer's node.
-2. It certifies each execution phase's records and signs each execution phase's clock sync (a clock certificate).
-3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
+2. It certifies each execution phase's records.
+3. The client receives the certificates and keeps them (`certificates.jsonl`).
 4. The consistency proof blocks are proved by sampled Flock `--zk` and decided by the Lean verifier: N2's
    (each execution phase's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
    reads.
@@ -357,7 +357,7 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
-| certificates | each execution phase's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
+| certificates | each execution phase's two certified records, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.TransferBlocks.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads, under no sync (the network certifier's link declares none) |
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O off the network certifier's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
@@ -366,7 +366,7 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
 --warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
 rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
-client's `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own
+client's directory, with its `certificates.jsonl`, is `CR_CLIENT`, by default the network certifier rehearsal's own
 `client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
 fails or doesn't run says why.
 
@@ -449,8 +449,12 @@ docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
-`leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and execution phases) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each
+`leak_bounds` on the run's parameters (`deployment.json`), its traffic (the requests `request.json` asked for and
+`end.json`'s execution phases) and the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block
+unsampled. The end carries no count of the traffic: the gate takes an end as accepted only when its check counted the
+request's own number of requests and it ruled every line of the run, all of which are then in `out/`. So `leak`,
+which reads the end's `accepted` alone, refuses a run whose end isn't accepted, and a relay session, whose request
+asks for no number because its clients are the peer's. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per execution phase, whether its certificates, N2
 and the scan accepted.

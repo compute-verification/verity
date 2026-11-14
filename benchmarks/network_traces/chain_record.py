@@ -2,19 +2,20 @@
 (`chain_record.sh` runs it on a CPU machine). Each step reads what the step before it kept; none drives an endpoint.
 
     python benchmarks/network_traces/chain_record.py custody --gates DIR --out FILE
-    python benchmarks/network_traces/chain_record.py certs --warden-run DIR [--deployed] --out FILE
+    python benchmarks/network_traces/chain_record.py certs --warden-run DIR [--deployed] --out FILE [--witness FILE]
     python benchmarks/network_traces/chain_record.py endpoint --warden-run DIR --endpoint DIR --eos IDS --out FILE
     python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
       [--n2 SUMMARY ...] [--scan SUMMARY] [--tie SUMMARY] [--job FILE] [--audit WINDOW ...]
-      [--period-answer FILE [--period-case FILE] --server NODE] --out DIR
+      [--period-answer FILE [--period-case FILE]] --out DIR
     python benchmarks/network_traces/chain_record.py leak --warden-run DIR [--scan SUMMARY] --out FILE
 
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as the gate's ``fetch``
   writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
   files; it proves nothing about what the gate ran.
 * **certs** (``--warden-run``): the network certifier's own offline check rerun on its witness, and the public
-  ``certificates.jsonl`` held to the certified lines (`warden_chain.certificates`). ``--deployed`` refuses a key that
-  isn't LMS at `lms.DEPLOYED`.
+  ``certificates.jsonl`` held to the certified lines (`warden_chain.checked`). ``--deployed`` refuses a key that
+  isn't LMS at `lms.DEPLOYED`. Which execution phases were certified or refused, and how many problems the check
+  found, are the step's private side (`warden_chain.WITNESS_KEYS`), written to ``--witness`` and never to ``--out``.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
   `monitoringPeriodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
@@ -34,12 +35,11 @@
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
   that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
-  and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
+  and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. The report writes
+  no block record's certifier entry, and its ``block`` says why (`block_entry`): with ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
-  ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v2``),
-  `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
-  ``network-period check``'s own on its case (`decide_period`; `block_entry`).
+  ``certifier.case.json`` beside it or ``--period-case``) held to its case's commitment (`period_binding`), the
+  reason is `ROWS_FORM`.
 * **The network certifier path** (``--job``'s ``path``, `WARDEN`): every step reads an active network certifier's own
   run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
   whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
@@ -65,7 +65,6 @@ import decimal
 import hashlib
 import json
 import math
-import os
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -111,7 +110,7 @@ CERTIFIER_ONLY = "certifier-only"
 SCAN_ONLY = "scan only, N2 not given"
 #: the scan step's verdict, and the report's, when the scan's honest round accepted with tied values R8 let through
 #: (its registration verdict's ``rests_on_period_check``): no bare accept, since its acceptance rests on a period check;
-#: nor a K, since `block_entry` refuses the rows-form period answer, the one that would hold those rows
+#: nor a K, since `block_entry` writes none (`ROWS_FORM`)
 RESTS = "accepted on the period check"
 RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance rests on the network period check "
              "(NetworkCheck.Period's wired), which ties their rows to the audit that registered them and refuses "
@@ -148,8 +147,10 @@ OUT_BITS = 16
 POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
-NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
-                    "answer) beside each link-window's N2 registration, and this report has neither")
+NO_PERIOD_ANSWER = "no --period-answer: no certifier/v0 answer on the period"
+#: why a report writes no block entry for any answer the period check gives
+ROWS_FORM = ("the rows form's link-windows are the scan's registrations, which this chain does not hold, so no K is "
+             "written")
 #: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkCheck.Period`'s)
 PERIOD_TAG = "verity-network-certifier/period/v0"
 
@@ -191,10 +192,12 @@ def custody(gates: Path) -> dict:
             got = hashlib.sha512(f.read_bytes()).hexdigest() if f.is_file() else None
             if got != want:
                 bad[rel] = "missing" if got is None else "sha512 differs"
-        request = _json(root / "request.json") or {}
+        # a gate's fetch names no peer and no lane in the run's request (`auditor.REQUEST_WITHHELD`); a copy kept
+        # from a gate that still did loses the two here
+        request = {k: v for k, v in (_json(root / "request.json") or {}).items() if k not in ("peer", "by")}
         summary = _json(root / "out" / "summary.json") or {}
         runs.append({"gate_run": root.name, "dir": str(root.relative_to(gates)), "ended": doc.get("ended"),
-                     "ended_utc": doc.get("ended_utc"), "files": len(files), "mismatches": bad,
+                     "files": len(files), "mismatches": bad,
                      "request": request, "lms_height": summary.get("lms_height"), "windows": summary.get("windows"),
                      "profile": summary.get("profile"),
                      "strategies": {s: (r or {}).get("verdict") for s, r in (doc.get("runs") or {}).items()}})
@@ -641,18 +644,19 @@ def network_terms(cert: dict, endpoint: dict) -> dict:
     and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
-    return {"advice": advice, "syncs": None if syncs is None else math.ceil(len(cert.get("rows") or []) * syncs),
+    return {"advice": advice, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
             "cells": 0}
 
 
 def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
              audits: list[dict] | None = None) -> dict:
     import leak_bounds as LB
-    rows = cert.get("rows") or []
+    # each window certified is the certificates step's accept alone: which ones its signer refused is the private side's
+    windows = cert.get("windows") or 0
     honest = (n2.get("members") or {}).get("honest") or {}
-    acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
+    acc = [cert.get("verdict") == "accepted" and bool(honest.get("network_accepted"))] * windows
     network = network_terms(cert, endpoint or {})
-    steps = len(rows) * (cert.get("window_buckets") or 0)
+    steps = windows * (cert.get("window_buckets") or 0)
     if None in network.values():
         k = {"open": f"the network's terms aren't all computed: {network}"}
     elif not audits:
@@ -667,9 +671,9 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     return {"theorem": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted, KS as hypothesis",
             "K": k,
             "sum": "NetTiming.monitoringPeriodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
-            "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
+            "windows": windows, "acc": acc, "all_accepted": bool(acc) and all(acc),
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
-            "sum_eps": f"{len(rows)}·(δ + ε_ks + ε_bind)",
+            "sum_eps": f"{windows}·(δ + ε_ks + ε_bind)",
             "a": "log2 #Ss + Σ_c log2(cap_c + 1), charged once a period",
             "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
@@ -694,14 +698,18 @@ SCOPES = ("link", "datacenter", "world")
 
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
-    its gate run ``run`` (a fetched copy: its ``end.json`` and ``deployment.json``), for the scan's class
+    its gate run ``run`` (a fetched copy: its ``request.json``, ``end.json`` and ``deployment.json``), for the scan's class
     (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds`' scaling by links (`SCOPES`): one link
     certifying the run's own request rate (`leak_bounds.per_link`), and as many identical links summed
     (`leak_bounds.at_link_rate`) as the census's reference datacenter has machines (`leak_bounds.datacenter_links`)
     and as the world fleet has (`leak_bounds.world_links`), whatever those scopes serve. Each count is in both forms,
     the per-period form (`MonitoringPeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in both
     readings of the sampling block's free inputs (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its
-    share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+    share of ``weights`` (`leak_bounds.WEIGHTS`). The run's request rate is the requests its request asked for over
+    its execution phases: the end carries no count of the traffic, and the gate takes an end as accepted only when
+    its check counted the request's own number (`auditor.warden_outcome`). So K is counted only on an accepted run
+    of the device's own client; a relay session's request asks for no number, its clients being the peer's, and
+    nothing holds its requests to one."""
     import leak_bounds as LB
     from verity.protocols.accounting.certifier.verifier import scan_answer as SA
     import scan_zk as SZ
@@ -710,8 +718,15 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
-    if not dep or not v.get("windows") or not v.get("requests"):
-        raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
+    if not dep or not v.get("windows"):
+        raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows")
+    asked = (_json(run / "request.json") or {}).get("requests")
+    if type(asked) is not int or asked < 1:
+        raise SystemExit(f"leak: {run}'s request.json asks for no number of requests (a relay session's clients are "
+                         "the peer's), so nothing holds its requests to a count and K has no rate")
+    if v.get("accepted") is not True:
+        raise SystemExit(f"leak: {run}'s end isn't accepted, and the gate holds only an accepted end's requests to "
+                         "the number its request asked for")
     params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
     T, units = params.window, 2 * params.window + 1
@@ -719,10 +734,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     if drawn != units:
         raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "
                          f"are 0 only with every proof block drawn (scan_zk --draw {units})")
-    rate = v["requests"] / v["windows"]
+    rate = asked / v["windows"]
     window_s = T * params.bucket_ms / 1000
     at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
-    per_s = Fraction(v["requests"], v["windows"]) / (T * at["tau"])
+    per_s = Fraction(asked, v["windows"]) / (T * at["tau"])
     link = LB.link(cls, per_s, **at)
     links = {"link": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
 
@@ -751,7 +766,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": link.widths | {"entries": link.entries, "egress_row": 8 * cls.egress.R * cls.B},
             "draw": {"units": units, "drawn": drawn},
-            "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
+            "run": {"link_windows": v["windows"], "requests": asked, "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
                       "cap_per_request": link.cap, "free": free, "faulty": 0,
@@ -839,96 +854,34 @@ def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[
     return out
 
 
-def decide_period(case: dict) -> dict:
-    """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
-    executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as `block_certifier.check` decides a
-    period."""
-    from benchmarks.network_traces.block_certifier import check
-
-    exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
-    if not exe:
-        raise RuntimeError("no VERITY_NETWORK_PERIOD_EXE: no network-period executable to re-decide the case")
-    return check(exe, case)
-
-
-def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], audits: list[dict]) -> str | None:
-    """Why certifier/v0's period ``answer`` on ``case`` isn't this chain's, else None. The answer commits to its case's
-    commitment alone (`PERIOD_TAG`'s digest of each compute audit's and each execution phase's one-stage registration, a
-    execution phase's naming its index), so each execution phase it registers must be one the chain certified
-    (``cert``'s rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by execution
-    phase), and its
-    audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
-    that digest: its link must be ``cert``'s and its listed entries ``cert``'s key and session alone, their stretch
-    starting at execution phase 0, so the period's numbers are that session's own, and
-    `block_entry` re-decides the case. The rows form's execution phases are the scan's registrations, which no step here
-    holds, so that form is refused."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+def period_binding(answer: dict, case: dict) -> str | None:
+    """Why certifier/v0's period ``answer`` isn't ``case``'s, else None: the answer commits to its case's commitment
+    alone (`PERIOD_TAG`'s digest)."""
     from verity.commitments.identity import tagged_sha512
 
     try:
-        raw, params = bytes.fromhex(case["commitment"]), case["params"]
-        c = json.loads(raw)
+        raw = bytes.fromhex(case["commitment"])
     except (KeyError, TypeError, ValueError) as e:
         return f"the case doesn't decode: {type(e).__name__}: {e}"
     if tagged_sha512(PERIOD_TAG, raw).hex() != answer.get("commitment"):
         return "the case isn't the answer's: its commitment's digest is another"
-    if "sync_set" not in params:
-        return "a rows-form answer: its link-windows are the scan's registrations, which this chain doesn't hold"
-    mine = {"link": cert.get("link"), "keys": [{"key": (cert.get("key") or {}).get("public"),
-                                                 "session": cert.get("session"), "start": 0}]}
-    other = [k for k, v in mine.items() if params.get(k) != v]
-    if other:
-        return f"the case's {', '.join(other)}: not the chain's, so another certifier session's period"
-    try:
-        regs = [(int(r["window"]["window"]), r) for r in c["windows"]]
-    except (KeyError, TypeError, ValueError) as e:
-        return f"the commitment's link-windows don't name their index: {type(e).__name__}: {e}"
-    certified = {r["window"] for r in cert.get("rows") or [] if r.get("certified")}
-    missing = [w for w, _ in regs if w not in certified or w not in n2]
-    if missing:
-        return (f"the answer covers link-windows {missing} the chain doesn't have: it certified {sorted(certified)} "
-                f"and N2 registered {sorted(n2)}")
-    foreign = [w for w, r in regs if R.digest(r) != n2[w]]
-    if foreign:
-        return f"link-windows {foreign}: the answer's registrations aren't N2's on this chain (another period's or run's)"
-    if sorted(R.digest(r) for r in c["audits"]) != sorted(R.digest(r) for r in audits):
-        return (f"the answer's {len(c['audits'])} compute audits aren't this report's {len(audits)} --audit "
-                "registrations")
     return None
 
 
-def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server: str | None, runs: list[str],
-                chain: dict) -> dict:
-    """The block record's certifier entry: `block_certifier.block_leg` of certifier/v0's period ``answer`` on
-    ``server``, from ``runs``. Written only when the chain itself is accepted, the answer is held to it (`period_binding` on ``chain``:
-    its certificates, N2's registrations and the ``--audit`` registrations) and ``network-period check`` gives exactly
-    that answer on its ``case`` (`decide_period`), so neither a refused chain nor another period's answer carries a K;
-    else why not, `block_leg`'s refusal included."""
-    from benchmarks.network_traces.block_certifier import block_leg
-
+def block_entry(answer: dict | None, case: dict | None, verdict: str) -> dict:
+    """Why the report writes no block record's certifier entry for certifier/v0's period ``answer`` on ``case``: none
+    without an answer, an accepted chain and the answer's own case (`period_binding`), and none for any answer the
+    period check gives (`ROWS_FORM`)."""
     why = (NO_PERIOD_ANSWER if answer is None else
            f"the chain is {verdict}: only an accepted chain carries a K" if verdict != "accepted" else
-           "no --server: the node the block ran on" if not server else
            "no case: what the answer commits to can't be held to the chain" if case is None else
-           period_binding(answer, case, **chain))
-    if why:
-        return {"written": False, "why": why}
-    try:
-        again = decide_period(case)
-    except (OSError, RuntimeError) as e:
-        return {"written": False, "why": f"network-period check on the case: {e}"}
-    if again != answer:
-        return {"written": False, "why": f"network-period check on the case answers {again.get('verdict')} with K "
-                f"{(again.get('public') or {}).get('K')}, not the given answer: it isn't the verifier's on this case"}
-    try:
-        return {"written": True, "entry": block_leg(answer, server=server, runs=runs, source="real")}
-    except ValueError as e:
-        return {"written": False, "why": f"block_leg: {e}"}
+           period_binding(answer, case))
+    return {"written": False, "why": why or ROWS_FORM}
 
 
-def period_block(a, verdict: str, runs: list[str], *, cert: dict, n2: dict | None, audit_dirs: list[Path]) -> dict:
-    """`block_entry` on the report's ``--period-answer``, its case (``--period-case``, by default ``X.case.json``
-    beside ``X.answer.json``) and ``--server``."""
+def period_block(a, verdict: str) -> dict:
+    """`block_entry` on the report's ``--period-answer`` and its case (``--period-case``, by default ``X.case.json``
+    beside ``X.answer.json``)."""
     pa = getattr(a, "period_answer", None)
     if pa and not Path(pa).is_file():
         return {"written": False, "why": f"--period-answer {pa}: not a file"}
@@ -936,11 +889,7 @@ def period_block(a, verdict: str, runs: list[str], *, cert: dict, n2: dict | Non
     if pa and not Path(pc).is_file():
         return {"written": False, "why": f"no case at {pc} (--period-case): what the answer commits to can't be held "
                                          "to the chain"}
-    honest = ((n2 or {}).get("members") or {}).get("honest") or {}
-    chain = {"cert": cert, "n2": {int(w["window"]): w.get("registration") for w in honest.get("windows") or []
-                                  if "window" in w},
-             "audits": [json.loads((d / "registration.json").read_text()) for d in audit_dirs]}
-    return block_entry(_json(pa), _json(pc), verdict, server=getattr(a, "server", None), runs=runs, chain=chain)
+    return block_entry(_json(pa), _json(pc), verdict)
 
 
 def report(a) -> dict:
@@ -955,7 +904,7 @@ def report(a) -> dict:
           else n2_step(merged, cert, job))
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
             else scan_step(_json(a.scan), a.network_certifier_run, job))
-    certificates = {k: v for k, v in cert.items() if k != "rows"}
+    certificates = dict(cert)
     tie = None
     if warden:
         run_id, tie_doc = cert.get("warden_run"), _json(getattr(a, "tie", None))
@@ -994,8 +943,6 @@ def report(a) -> dict:
         raise SystemExit(f"--pins {pins}: no such file")
     audits = [audit_of(d, _json(pins)) for d in audit_dirs]
     verdict = ("scan " if scan_only else "") + ((RESTS if rests else "accepted") if accepted else "refused")
-    runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
-                              if r))
     why = ({k: ": ".join(str(x) for x in (steps[k].get("verdict") or "no verdict", steps[k].get("why")) if x)
             for k in required if steps[k].get("verdict") != "accepted"}
            | {k: f"stand-in: {steps[k]['stand_in']}" for k in ("n2", "scan") if steps[k].get("stand_in")})
@@ -1003,7 +950,7 @@ def report(a) -> dict:
             "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust, endpoint),
             "negatives_refused": negatives, "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits),
-            "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs), "why": why or None}
+            "block": period_block(a, verdict), "why": why or None}
 
 
 def markdown(r: dict) -> str:
@@ -1041,15 +988,7 @@ def markdown(r: dict) -> str:
                          f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}, "
                          f"the jitter term {h['jitter_term']}; {h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
-    b = r.get("block") or {}
-    if b.get("written"):
-        e, q = b["entry"], b["entry"]["quantity"]
-        at = "; ".join(f"at δ = {delta}: " + (f"K = {x['value']}" if x["holds"] else "not established")
-                       for delta, x in e["at"].items())
-        lines += ["", "## Block record", "", f"- certifier entry on {e['server']}: K = {q['value']} bits over "
-                  f"{q['windows']} link-windows, error {e['error']} ({e['error_from']}); {at}; runs {', '.join(e['runs'])}"]
-    else:
-        lines += ["", "## Block record", "", f"- no certifier entry: {b.get('why')}"]
+    lines += ["", "## Block record", "", f"- no certifier entry: {(r.get('block') or {}).get('why')}"]
     return "\n".join(lines) + "\n"
 
 
@@ -1059,11 +998,13 @@ def main(argv=None) -> int:
     c = sub.add_parser("custody", help="each gate run's files against its end.json")
     c.add_argument("--gates", required=True, type=Path)
     c.add_argument("--out", required=True, type=Path)
-    v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
+    v = sub.add_parser("certs", help="the client's kept certificates, verified")
     v.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
                    help="the network certifier path: an active network certifier's run (warden_chain)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
+    v.add_argument("--witness", type=Path, help="where the step's private side goes (warden_chain.WITNESS_KEYS): the "
+                                                "chain's, never the record")
     e = sub.add_parser("endpoint",
                        help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
     e.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path)
@@ -1084,10 +1025,9 @@ def main(argv=None) -> int:
                                   "an --audit window's reads of a parameter whose registered root is its pin leave its "
                                   "free inputs (chain_record.registered_bits); with none, every registered read counts")
     r.add_argument("--period-answer", help="certifier/v0's network-period check answer on the period "
-                                           "(certifier.answer.json), the block record's certifier entry's")
-    r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to this "
-                                         "chain and re-decided by network-period check")
-    r.add_argument("--server", help="the node the block ran on (the block record's server)")
+                                           "(certifier.answer.json)")
+    r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to the "
+                                         "answer's commitment")
     r.add_argument("--out", required=True, type=Path)
     k = sub.add_parser("leak", help="K per monitoring period on the network certifier run, for the scan's class and sample")
     k.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
@@ -1099,7 +1039,11 @@ def main(argv=None) -> int:
         doc = custody(a.gates)
     elif a.command == "certs":
         from benchmarks.network_traces import warden_chain as WC
-        doc = WC.certificates(a.network_certifier_run, a.deployed) | {"in_the_clear": CLEAR["warden_certificates"]}
+        doc, private = WC.checked(a.network_certifier_run, a.deployed)
+        doc |= {"in_the_clear": CLEAR["warden_certificates"]}
+        if a.witness is not None:
+            a.witness.parent.mkdir(parents=True, exist_ok=True)
+            a.witness.write_text(json.dumps(private, indent=1, sort_keys=True))
     elif a.command == "endpoint":
         doc = warden_endpoint(a.network_certifier_run, a.endpoint, [int(x) for x in a.eos.split(",")])
         doc["verdict"] = warden_endpoint_step(doc)["verdict"]
@@ -1114,8 +1058,6 @@ def main(argv=None) -> int:
         doc = report(a)
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "report.md").write_text(markdown(doc))
-        if doc["block"]["written"]:
-            (a.out / "block.json").write_text(json.dumps(doc["block"]["entry"], indent=1, sort_keys=True))
         a.out = a.out / "report.json"
     a.out.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     print(json.dumps({k: doc.get(k) for k in ("verdict", "scope", "why", "negatives_refused") if k in doc}))

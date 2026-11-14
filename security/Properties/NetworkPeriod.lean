@@ -6,30 +6,23 @@ public import Lms.Sign
 public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
-# The network period check's bound: what its `K` counts in each form (`NetworkCheck.Period`)
+# The network period check's bound: what its `K` counts (`NetworkCheck.Period`)
 
 On acceptance, `NetworkCheck.Period.check` publishes `K`, the sum of a ceiling of `log2` of each factor of
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`'s count at the number the check reads for it: `terms`'s in the clock form,
-`rowsTerms`'s in the rows form. A sum of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of
-the count, not equal to it; `ClockKBoundsCount` and `RowsKBoundsCount` say the count at the check's numbers is at most
-`2 ^ K`. `Proofs.Properties.NetworkPeriod` proves both.
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`'s count at the number the check reads for it, `rowsTerms`'s. A sum
+of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of the count, not equal to it;
+`RowsKBoundsCount` says the count at the check's numbers is at most `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves
+it.
 
 The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`
 windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k))`. A reader of `K` (the
 communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
-supplies each of the statement's quantities as at most the check's number:
-
-- in the clock form the windows are the compute audits: `#Ss ≤ #Σ_sync ^ (execution phases)` (each execution phase under
-  one sync of Σ_sync), an audit's free inputs at most its layout's (`free`), its incorrect sets at most the sets of at
-  most `b` of its `N` units, `β` at most `b · bits` with `bits` the most one of its Program's units commits
-  (`faulty_bits`), and
-  `Dj^k` at most `jitter ^ steps`;
-- in the rows form the windows are the execution phases' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
-  lengths), a window's free inputs at most its scan's Program's and its tied audits' (`free`: the egress renders the
-  outputs of the audits its scan's `prog` is tied to, so the bits the prover chose of their inputs are the window's),
-  each window's incorrect sets at most the sets of at most `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)`
-  (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block, every
-  slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
+supplies each of the statement's quantities as at most the check's number. The windows are the link-windows' scans:
+`#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes' lengths), a window's free inputs at most its scan's Program's and its
+tied audits' (`free`: the egress renders the outputs of the audits its scan's `prog` is tied to, so the bits the prover
+chose of their inputs are the window's), each window's incorrect sets at most the sets of at most `b` of its `N` units,
+`β` at most `b · max(b_ing, b_eg)` (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least
+one incorrect proof block, every slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
@@ -77,18 +70,6 @@ check, false at `acceptAllRows` too, and `pairParams 1` with `unnamedCommitment`
 namespace Properties.NetworkPeriod
 
 open NetworkCheck.Period
-
-/-- **The clock form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
-connections, `n` compute audits `a` and their facts `w`, the jitter bound `jitter`, `#Σ_sync` `syncs` and `windows`
-execution phases: `#Ss` at `syncs ^ windows` (`schedules`), `∏_c (cap_c + 1)` at `∏_j (caps j + 1)` (`cells`), and audit
-`i`'s `2^#(free inputs)` at `2 ^ (a i).free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · (a i).bits)` (each of
-its at most `b` incorrect proof blocks commits at most its Program's widest unit's bits) and `Dj^k` at `jitter ^ (a i).steps`,
-their product is at most `2 ^ K`. -/
-def ClockKBoundsCount : Prop :=
-  ∀ (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit) (w : Fin n → Facts),
-    syncs ^ windows * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (a i).free * atMost (w i).units (w i).wrong *
-        2 ^ ((w i).wrong * (a i).bits) * jitter ^ (a i).steps)) ≤
-      2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
 /-- **The rows form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, the facts `w` of `n` execution phases' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
@@ -292,8 +273,8 @@ and no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedInputWiredOf`
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
-/-- The public `pub` publishes the response cap of the period's schedule (`Form.maxTokensCap`): the rows form's
-`max_tokens_cap`, none when its schedule has none and in the clock form. -/
+/-- The public `pub` publishes the response cap of the period's schedule (`Form.maxTokensCap`): its
+`max_tokens_cap`, none when its schedule has none. -/
 def CapPublished (p : Params) (pub : Public) : Prop := pub.maxTokensCap = p.form.maxTokensCap
 
 /-- **The period check publishes its schedule's response cap.** If the check accepts a period, its public's
@@ -319,12 +300,11 @@ def cappedPeriod : Params :=
   ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 0, none⟩
 
 /-- The public `pub` charges the period's first start (`Public.start`): none where it is the run's first
-(`p.first = 0`), whose start `RowsStateEmpty` holds to the empty state, and in the rows form otherwise the scan's state's
-full width, the bits of the start unit's `sin` (`Scan.start`); none in the clock form. -/
+(`p.first = 0`), whose start `RowsStateEmpty` holds to the empty state, and otherwise the scan's state's full width,
+the bits of the start unit's `sin` (`Scan.start`). -/
 def StartCharged (p : Params) (pub : Public) : Prop :=
   pub.start = match p.form with
     | .rows _ _ scan => if p.first = 0 then 0 else scan.start
-    | .clock _ => 0
 
 /-- **The period check charges a period that does not begin the run its first start, at the state's full width.** If
 the check accepts a period, its public's `start` is the scan's state's full width where the period's first execution
@@ -476,7 +456,7 @@ def AnswersVerified : Prop :=
 
 /-! ## A key's listed sessions: the list is complete, unproved
 
-In the rows form a key may be listed in several sessions, each entry held to its session's signed start
+A key may be listed in several sessions, each entry held to its session's signed start
 (`startChecks`). `RowsSessionsComplete` states what the check holds of those starts: the listed sessions under one key
 are consecutive among its sessions, and each starts on the key's life where the list's execution phases put it, after
 every execution phase the list gives the one before it. It and its witnesses are unproved, and no guarantee reads
@@ -487,8 +467,7 @@ check again: their starts strictly increase, and two entries whose keys have one
 `I ‖ T[1]`, and its first 16 bytes are its LMS identifier `I`, which `check` compares a key by (`startRefusal`, and
 `startCheck`'s choice of the entry `heldTo` and `follows` read) while it verifies each signature under the whole key.
 Two LMS public keys can share an identifier (`I` is the key generator's to choose), so this is not assumed: the decoder
-refuses two listed keys with one identifier in the rows form and two entries with one in the clock form
-(`ParamsEntriesParsed`). -/
+refuses two listed keys with one identifier (`ParamsEntriesParsed`). -/
 def EntriesParsed (p : Params) : Prop :=
   (∀ (i : ℕ) (a b : Entry), p.entries[i]? = some a → p.entries[i + 1]? = some b → a.start < b.start) ∧
   ∀ (i j : ℕ) (a b : Entry), p.entries[i]? = some a → p.entries[j]? = some b →

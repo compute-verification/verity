@@ -14,7 +14,6 @@ import types
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.certifier.verifier import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -88,8 +87,6 @@ def test_a_chunk_becomes_frames_in_canonical_order_and_ingress_frames() -> None:
     assert cfg["ingress"][0]["arrival_ms"] == [50.0, 50.0, 99.9, WINDOW_MS + 50.0]
     (body,), _ = rec.build_trace(records, samples(2), name="t", windows=2, ingress="body")
     assert body["ingress"][0]["arrival_ms"] == [50.0] * 3 + [99.9] * 3 + [WINDOW_MS + 50.0] * 3
-    report = calibration.calibrate(rec.trace_doc(configs))
-    assert (report["egress"][0]["honest_windows"], report["egress"][0]["honest_misses"]) == (2, 0)
 
 
 def test_contamination_and_failures_drop_windows_and_split_the_chunk() -> None:

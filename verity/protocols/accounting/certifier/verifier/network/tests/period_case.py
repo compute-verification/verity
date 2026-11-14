@@ -4,23 +4,22 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 `answer(case)` is the outcome of one `serve` line in the core interface's answer format
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
-reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates,
-each under the listed entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its
-session, and that session's own number for the execution phase, the period's less the entry's start; a signer that is
-another listed key, outside its stretch, or that the parameters don't list is refused by name, `OUTSIDE`,
-`UNLISTED`), in the rows form each listed entry's session's signed start (`certifier.certificate`'s
-`CertifiedStart.refusal`, under the entry's key in its session; `_start_check`: an entry whose start is not where its
-session's signed base puts it after its key's first listed entry is refused by name, `NOT_SIGNED`, and one whose
-shown start its session did not certify, `UNCERTIFIED`), Σ_sync (`certifier.schedule`), one-stage's
-`registration.digest` (a
-registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
-the schedule (`warden.WardenParams`), the verifier's read of each row registration
+reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates, each under the listed
+entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its session, and that
+session's own number for the execution phase, the period's less the entry's start; a signer that is another listed key,
+outside its stretch, or that the parameters don't list is refused by name, `OUTSIDE`, `UNLISTED`), each listed entry's
+session's signed start (`certifier.certificate`'s `CertifiedStart.refusal`, under the entry's key in its session;
+`_start_check`: an entry whose start is not where its session's signed base puts it after its key's first listed entry
+is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
+`registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule
+(`warden.WardenParams`), the verifier's read of each row registration
 (`warden_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
 phase (`scan_ok.constants` and `held`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
-public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
-`MonitoringPeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
-and `eps`, the union of those deltas as an exact ratio string, and in the rows form the schedule's response cap
+public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
+check reads: parameters naming a `sync_set` (the clock form's) are refused before anything else is read. Public is `K`
+and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' scans, all at one δ), each with its
+`delta`, and `eps`, the union of those deltas as an exact ratio string, and the schedule's response cap
 (`max_tokens_cap`) when it has one.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
@@ -34,22 +33,18 @@ rows registration under the other listed entry, outside its stretch (`cert-outsi
 under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the other entry's session
 (`cert-other-session`, `reg-other-session`), or at the period's number where the session's belongs
 (`cert-period-number`, `reg-period-number`); and parameters whose `"keys"` don't read (`bad_entries`): no entry, entries
-out of order or with one start, one session twice, two keys under one key identifier (in the clock form, one key
-identifier twice), a period that starts before the first entry, or the earlier forms `"key"`, `"session"` and
-`"sessions"`. A rows-form period's evidence shows each listed entry's session's signed start, its base on its key's life
-sampled for a key's first listed entry and, for a later one, as many of the schedule's execution phases on as its start
-is, and its ordinal among its key's sessions, sampled for a key's first listed entry and the next for each later one.
-`restart` lists the signer's key in two sessions, each stretch holding some of the period, and is accepted. Refused:
-that list with the second session's base another (`start-not-signed`), or its ordinal not the first's next
-(`start-skipped`); a shown start that is not its session's certified
-start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); evidence that shows a start too
-few or too many, or none (`start-count`); and a clock-form period whose evidence shows one (`start-shown`). In the clock
-form: the execution phases of one link from the execution phase
-`first`, each registered under the link's Program with its provenance, certified at both ends by a small LMS key in a
-sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
-the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
-each execution phase's ingress and egress rows committed and registered under a small sampled schedule
-(`warden_rows.Cells.commit` and `registration`, signed by the same key; `capped`: a schedule with a response cap, and
+out of order or with one start, one session twice, two keys under one key identifier, a period that starts before the
+first entry, or the earlier forms `"key"`, `"session"` and `"sessions"`. A period's evidence shows each listed entry's
+session's signed start, its base on its key's life sampled for a key's first listed entry and, for a later one, as many
+of the schedule's execution phases on as its start is, and its ordinal among its key's sessions, sampled for a key's
+first listed entry and the next for each later one. `restart` lists the signer's key in two sessions, each stretch
+holding some of the period, and is accepted. Refused: that list with the second session's base another
+(`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a shown start that is not its session's
+certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
+shows a start too few or too many, or none (`start-count`). The link-windows of one link from the execution phase
+`first`, each link-window's ingress and egress rows committed and registered under a small sampled schedule
+(`warden_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
+`capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
 connection), and
@@ -73,9 +68,9 @@ one whose execution phase is not the run's first is accepted at any start, charg
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
 what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the
-compute audits (in the rows form at least one, whose registrations' `roots` hold the
+compute audits (at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
-8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
+8 to 320 bits, with its slot entries' (`audit_descriptor`), and answered with a subset or stratified
 sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's
 `prog` is tied to, or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part
 (`tied-partial`, a stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`,
@@ -91,16 +86,15 @@ A scan's answer that names only lanes' `prog<j>` tied is accepted in any shape (
 some, in another order, one twice, none, `TIED_HELD`), and one that names anything else, a tie the check does not
 wire, is refused (`answer-tied-unheld`: a name that is no lane's, or no list of names, `TIED_UNHELD`). An answer whose
 profile samples more than its level holds is refused
-in either form (`OVERSAMPLED`): a compute audit's (`audit-oversampled`, tied or not; `tied-oversampled`, the tied audit
-of the aimed scan) and a scan's (`answer-oversampled`), each under a registration that samples within its population.
+(`OVERSAMPLED`): a compute audit's (`audit-oversampled`, tied or not; `tied-oversampled`, the tied audit of the
+aimed scan) and a scan's (`answer-oversampled`), each under a registration that samples within its population.
 So is one with a stratum that samples more than the stratum holds in a level whose total still holds
 (`STRATUM_OVERSAMPLED`): the aimed scan's tied audit, sampled whole in two strata, with some of one stratum's sample
 moved to the other (`tied-stratum-oversampled`). So is one whose strata's sizes do not sum to its level's
 (`STRATA_SIZES`): that audit with a stratum holding more than it samples, each holding twice as many, or one holding
 and sampling one fewer (`tied-strata-sizes`).
-`case(kind, seed, form)` is a small period of the form aimed at a
-verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
-its answer, as a composition's difftest takes a real component's cases.
+`case(kind, seed)` is a small period aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed)` one of
+each with its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -121,12 +115,10 @@ import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.protocols.accounting.certifier.verifier import content_rows, io_request, scan_ok
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.certificate import (SALT_BYTES, Certificate, CertifiedStart, Direction,
-                                                            LmsKey, certificate_digest, clock_digest, start_digest,
-                                                            start_link)
+from verity.protocols.accounting.certifier.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
+                                                                        start_digest, start_link)
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
@@ -153,20 +145,17 @@ OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-PARAMS_KEYS = ["audits", "cells", "first", "jitter", "keys", "link", "lms", "program", "sync_set", "windows"]
 ROWS_PARAMS_KEYS = ["audits", "cells", "circuit", "first", "jitter", "keys", "link", "lms", "program", "scan",
                     "schedule", "windows"]
 ENTRY_KEYS = ["key", "session", "start"]
 #: What `params` says, as `paramsOf` does, of the entries the parameters list (`"keys"`): none; an entry that starts
 #: before the one listed before it; two entries with one start; two entries with one key identifier (a key's first 16
-#: bytes) and one session; in the clock form, which reads no session's signed start, two entries with one key
-#: identifier, and in the rows form two keys with one; a period that starts before the first entry's stretch; an entry
-#: that is no object; and the earlier forms, `"key"`, `"session"` and `"sessions"`
+#: bytes) and one session; two keys with one key identifier; a period that starts before the first entry's stretch; an
+#: entry that is no object; and the earlier forms, `"key"`, `"session"` and `"sessions"`
 NO_KEY = "keys: no key"
 OUT_OF_ORDER = "keys: out of order"
 OVERLAP = "their stretches overlap"
 TWICE = "keys: one session listed twice"
-ONE_ID = "keys: two entries with one key identifier"
 TWO_KEYS = "keys: two keys with one key identifier"
 BEFORE = "is before the first listed entry's stretch"
 NO_ENTRY = "keys: an entry is not an object"
@@ -179,16 +168,15 @@ SESSIONS_IN_ENTRY = "sessions: write each key's session in its entry"
 UNLISTED = "a signer that is not one of the listed keys"
 OUTSIDE = "a listed key outside its stretch"
 NO_STRETCH = "no listed entry's stretch holds execution phase"
-#: What a refusal says, as Lean's does (`startCheck`, `startChecks`), of a listed entry's start in the rows form: a
-#: start shown for it that is not its session's certified start, then why, by `CertifiedStart.refusal`'s code; an
-#: entry that does not start where its key's first listed entry and their sessions' signed bases put it; an entry whose
-#: session's ordinal is not the next after that of its key's entry listed before it (`follows`); evidence
-#: that does not show a start for each listed entry; and, in the clock form, evidence that shows one
+#: What a refusal says, as Lean's does (`startCheck`, `startChecks`), of a listed entry's start: a start shown for it
+#: that is not its session's certified start, then why, by `CertifiedStart.refusal`'s code; an entry that does not
+#: start where its key's first listed entry and their sessions' signed bases put it; an entry whose session's ordinal
+#: is not the next after that of its key's entry listed before it (`follows`); and evidence that does not show a start
+#: for each listed entry
 UNCERTIFIED = "a start its session did not certify"
 NOT_SIGNED = "a start that is not the one its session signed"
 SKIPPED = "a session that is not the one after its key's entry listed before it"
 STARTS_COUNT = "listed entries: show each listed entry's session's signed start"
-STARTS_CLOCK = "starts: the clock form reads no session's signed start"
 START_KEYS = ["base_ms", "certificate", "ordinal", "schedule"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 #: the keys a schedule has only where it sets them (`optionalScheduleKeys`)
@@ -197,14 +185,14 @@ OPTIONAL_SCHEDULE_KEYS = sorted(OPTIONAL_FIELDS)
 CONNECTION_ROWS = ("schedule: connection rows: the check reads no connection rows' registration, so it refuses a "
                    "schedule with lengths rows, content rows or request words (connectionRowsCheck)")
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
-CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
+#: `paramsOf`'s refusal of parameters naming a `sync_set`, the clock form's, which the check doesn't read
+CLOCK_FORM = "sync_set: the clock form is not one this check reads"
 ROWS_KEYS = ["cell_bytes", "certificate", "direction", "domain", "format", "layout", "link", "parameters", "root",
              "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"]
 LAYOUT_KEYS = ["buckets", "connection_slots", "first_bucket", "slots"]
 DIGEST = re.compile("[0-9a-f]{128}")
 U32 = 1 << 32
-FORMS = ("clock", "rows")
 SCHEMA = "verity-ir/descriptor/v1"
 INPUT_ID = re.compile(r"^(?:Registered)?Input([1-9][0-9]*)_v1$")
 #: the egress bucket's parameters in the generator form (`egress.EgressBucket`)
@@ -250,14 +238,13 @@ SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0eb
 @dataclasses.dataclass(frozen=True)
 class Audit:
     """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
-    SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
+    SHA-512, its units (its root's template instances) and its slot entries'
     templates (`entries`: each root template node calling `SlotEntry_v1` or `SelectEntry_v1`, by descriptor id, members
     and closure digest, `slot_entry_digest`)."""
     free: int
     steps: int
     program: str
     units: int
-    bits: int
     entries: tuple[tuple[str, int, str], ...] = ()
 
 
@@ -280,13 +267,11 @@ class Params:
     #: by their stretches' starts, which strictly increase
     entries: tuple[Entry, ...]
     program: str
-    #: the clock form's Σ_sync; None in the rows form
-    sync_set: SyncSet | None
     windows: int
-    #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
-    schedule: WardenParams | None = None
-    scan: Scan | None = None
-    #: the rows form's class circuit, its window circuit's Program's SHA-512; None in the clock form
+    #: the schedule and the scan's terms, read off its Program
+    schedule: WardenParams
+    scan: Scan
+    #: the class circuit, its window circuit's Program's SHA-512
     circuit: str | None = None
 
 
@@ -317,9 +302,7 @@ class Commitment:
 class Window:
     answer: dict
     certificates: list[Certificate]
-    #: the clock form's clock certificate, or the rows form's registrations
-    clock: Certificate | None
-    registrations: list[dict] | None = None
+    registrations: list[dict]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -347,24 +330,6 @@ def _of(v, kind, ctx: str):
     if not isinstance(v, kind) or isinstance(v, bool) != (kind is bool):
         raise D.Reject(f"{ctx}: not a {kind.__name__}")
     return v
-
-
-def _rho(j, ctx: str) -> Fraction:
-    if not isinstance(j, list) or len(j) != 2:
-        raise D.Reject(f"{ctx}: not [numerator, denominator]")
-    n, d = (_nat(x, ctx) for x in j)
-    if n < 1 or d < 1:
-        raise D.Reject(f"{ctx}: a numerator and a denominator of at least 1")
-    return Fraction(n, d)
-
-
-def _sync_set(j) -> SyncSet:
-    _exactly(j, ["deltas", "rhos"], "sync_set")
-    deltas = [_nat(x, "sync_set.deltas") for x in _of(j["deltas"], list, "sync_set.deltas")]
-    rhos = [_rho(x, "sync_set.rhos") for x in _of(j["rhos"], list, "sync_set.rhos")]
-    if not deltas or not rhos or len(set(deltas)) < len(deltas) or len(set(rhos)) < len(rhos):
-        raise D.Reject("sync_set: non-empty, each delta and each rho listed once")
-    return SyncSet(tuple(deltas), tuple(rhos))
 
 
 def rows_wf(s: WardenParams, windows: int) -> bool:
@@ -662,13 +627,12 @@ def _audit(a, ctx: str) -> Audit:
         raise D.Reject(f"{ctx}: program: not a Program's descriptor")
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
-    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in nodes
-             if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    units = [_members(x) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
     if not units:
         raise D.Reject(f"{ctx}: program: no template")
     entries = tuple((k, _members(x), slot_entry_digest(j, k)) for x in nodes
                     if (d := defs[k := callees[x["fn"]]])["form"] != "primitive" and d.get("id") in ENTRY_IDS)
-    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units), entries)
+    return Audit(free, steps, program_sha512(j), sum(units), entries)
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
@@ -793,11 +757,10 @@ def _entry(j, lp: lms.Params) -> Entry:
     return Entry(key, session, _nat(j["start"], "keys"))
 
 
-def _listed(j, lp: lms.Params, restarts: bool) -> tuple[Entry, ...]:
+def _listed(j, lp: lms.Params) -> tuple[Entry, ...]:
     """`certifierEntriesOf`: the listed entries, at least one, their starts strictly increasing, no two with one key
-    identifier and one session. Where the period reads each session's signed start (`restarts`, the rows form) a key
-    may be listed in several sessions and an identifier names one key; where it reads none, no two entries have one
-    key identifier."""
+    identifier and one session. The period reads each session's signed start, so a key may be listed in several
+    sessions, and an identifier names one key."""
     entries = tuple(_entry(e, lp) for e in _of(j, list, "keys"))
     if not entries:
         raise D.Reject(f"{NO_KEY}: list the certifier's entries, at least one")
@@ -809,24 +772,23 @@ def _listed(j, lp: lms.Params, restarts: bool) -> tuple[Entry, ...]:
     if len({(e.key.key_id, e.session) for e in entries}) != len(entries):
         raise D.Reject(f"{TWICE}: two entries hold one key identifier and one session")
     ids = {e.key.key_id for e in entries}
-    if restarts and len({e.key.public for e in entries}) != len(ids):
+    if len({e.key.public for e in entries}) != len(ids):
         raise D.Reject(f"{TWO_KEYS} (a key's first 16 bytes)")
-    if not restarts and len(ids) != len(entries):
-        raise D.Reject(f"{ONE_ID} (a key's first 16 bytes): the clock form reads no session's signed start")
     return entries
 
 
 def params(j) -> Params:
     if not isinstance(j, dict):
         raise D.Reject("the object: not an object")
+    if "sync_set" in j:
+        raise D.Reject(CLOCK_FORM)
     if "key" in j:
         raise D.Reject(f"{KEY_NOT_KEYS}, the list of the certifier's entries, each a key, its session and its start")
     if "session" in j:
         raise D.Reject(f'{SESSION_IN_ENTRY} of "keys"')
     if "sessions" in j:
         raise D.Reject(f'{SESSIONS_IN_ENTRY} of "keys"')
-    if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS):
-        raise D.Reject(f"the object: the keys must be {PARAMS_KEYS} or {ROWS_PARAMS_KEYS}, not {sorted(j)}")
+    _exactly(j, ROWS_PARAMS_KEYS, "the object")
     audits = [_audit(a, "an audit") for a in _of(j["audits"], list, "audits")]
     cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
     first = _nat(j["first"], "first")
@@ -842,32 +804,29 @@ def params(j) -> Params:
         lp = lms.Params(*(_nat(lj[k], "lms") for k in ("N", "W", "H")), toy=_of(lj["toy"], bool, "lms"))
     except ValueError as x:
         raise D.Reject(str(x)) from None
-    entries = _listed(j["keys"], lp, "sync_set" not in j)
+    entries = _listed(j["keys"], lp)
     if first < entries[0].start:
         raise D.Reject(f"first: execution phase {first} {BEFORE}, which starts at {entries[0].start}")
     program = _of(j["program"], str, "program")
     if not DIGEST.fullmatch(program):
         raise D.Reject("program: not a SHA-512 digest")
-    if "sync_set" in j:
-        sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
-    else:
-        schedule = _schedule(j["schedule"])
-        if connection_rows(schedule):
-            raise D.Reject(CONNECTION_ROWS)
-        sync_set, scan = None, _scan(j["scan"], program, schedule)
+    schedule = _schedule(j["schedule"])
+    if connection_rows(schedule):
+        raise D.Reject(CONNECTION_ROWS)
+    scan = _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
-    if schedule is not None and not rows_wf(schedule, windows):
+    if not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
-    if schedule is not None and list(cells) != schedule.rows_cells(windows):
+    if list(cells) != schedule.rows_cells(windows):
         raise D.Reject(f"cells: the rows form's cells are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
                        f"schedule can carry (Schedule.rowsCells), not these {len(cells)}")
-    circuit = None
-    if "circuit" in j and not DIGEST.fullmatch(circuit := _of(j["circuit"], str, "circuit")):
+    circuit = _of(j["circuit"], str, "circuit")
+    if not DIGEST.fullmatch(circuit):
         raise D.Reject("circuit: not a SHA-512 digest")
-    return Params(tuple(audits), cells, first, jitter, link, entries, program, sync_set, windows, schedule, scan,
+    return Params(tuple(audits), cells, first, jitter, link, entries, program, windows, schedule, scan,
                   circuit)
 
 
@@ -922,15 +881,10 @@ def _rows(j, ctx: str) -> dict:
 
 
 def _window(j, ctx: str) -> Window:
-    clock = isinstance(j, dict) and sorted(j) == CLOCK_WINDOW_KEYS
-    if not clock:
-        _exactly(j, ROWS_WINDOW_KEYS, ctx)
+    _exactly(j, ROWS_WINDOW_KEYS, ctx)
     answer = _answer(j["answer"], f"{ctx}.answer")
     certificates = [_certificate(c, f"{ctx}.certificates") for c in _of(j["certificates"], list, ctx)]
-    if clock:
-        return Window(answer, certificates, _certificate(j["clock"], f"{ctx}.clock"))
-    return Window(answer, certificates, None,
-                  [_rows(x, f"{ctx}.registrations") for x in _of(j["registrations"], list, ctx)])
+    return Window(answer, certificates, [_rows(x, f"{ctx}.registrations") for x in _of(j["registrations"], list, ctx)])
 
 
 def _start(j, ctx: str) -> CertifiedStart:
@@ -942,7 +896,7 @@ def _start(j, ctx: str) -> CertifiedStart:
 
 def evidence(b: bytes) -> tuple[list[dict], list[Window], list[CertifiedStart]]:
     """`evidenceOf`: the audits' answers, the execution phases', and the listed entries' sessions' signed starts where
-    the evidence shows any (`"starts"`, the rows form's); evidence that shows none has no `"starts"`."""
+    the evidence shows any (`"starts"`); evidence that shows none has no `"starts"`."""
     j = P.canonical_json(b)
     shown = isinstance(j, dict) and sorted(j) == ["audits", "starts", "windows"]
     if not shown:
@@ -990,10 +944,6 @@ def _certifies_on(p: Params, link: str, d: Direction, w: int, c: Certificate) ->
             and c.verify(e.key, e.session))
 
 
-def _certifies(p: Params, d: Direction, w: int, c: Certificate) -> bool:
-    return _certifies_on(p, p.link, d, w, c)
-
-
 def _held_to(L: int, a: Entry, xa: CertifiedStart, e: Entry, x: CertifiedStart) -> bool:
     """`heldTo`: the listed entry `e`, whose session's signed start is `x`, starts where its key's entry `a`, whose
     session's is `xa`, puts it: as many execution phases of `L` milliseconds after `a`'s start as its session's base
@@ -1008,7 +958,7 @@ def _follows(xb: CertifiedStart, x: CertifiedStart) -> bool:
 
 
 def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: CertifiedStart) -> Finding | None:
-    """`startCheck`: listed entry `i`'s start's finding in the rows form. The start shown for it is its session's
+    """`startCheck`: listed entry `i`'s start's finding. The start shown for it is its session's
     certified start, read as the network certifier's own verifier reads it (`CertifiedStart.refusal`: under the
     entry's key, in its session, for the link, under the period's schedule's parameters digest); the entry starts
     where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself; and its
@@ -1030,27 +980,11 @@ def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: C
 
 
 def _start_checks(p: Params, starts: list[CertifiedStart]) -> list[Finding]:
-    """`startChecks`: the listed entries' starts' findings. In the rows form each entry's (`_start_check`), or the one
-    finding that the evidence does not show a start for each; in the clock form, whose certifier signs no start, the
-    one finding that the evidence shows one."""
-    if p.schedule is None:
-        return [Finding(REJECT, f"{STARTS_CLOCK}: its certifier signs none")] if starts else []
+    """`startChecks`: the listed entries' starts' findings: each entry's (`_start_check`), or the one finding that the
+    evidence does not show a start for each."""
     if len(starts) != len(p.entries):
         return [Finding(REJECT, f"starts: {len(starts)} shown for {len(p.entries)} {STARTS_COUNT}")]
     return [f for i, (e, x) in enumerate(zip(p.entries, starts)) if (f := _start_check(p, starts, i, e, x))]
-
-
-def _clock_digest(s: ClockSync) -> bytes | None:
-    try:
-        return clock_digest(s)
-    except ValueError:
-        return None
-
-
-def clear_clocks(ss: SyncSet) -> set[bytes]:
-    """Each sync of Σ_sync's `clock_digest` itself: the unsalted form, whose digest shows the sync to anyone holding
-    Σ_sync."""
-    return {d for d in (_clock_digest(ClockSync(x, rho)) for x in ss.deltas for rho in ss.rhos) if d is not None}
 
 
 def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
@@ -1064,32 +998,6 @@ def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
         except CC.Refused as e:
             raise Finding(REJECT, f"{what}: {e}") from None
     raise Finding(a["verdict"], f"{what}: service: {a['reason']}")
-
-
-def served(w: int) -> dict:
-    return {"kind": "served", "window": w}
-
-
-def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, reg: dict, x: Window) -> None:
-    what = f"window {w}"
-    if x.clock is None:
-        raise Finding(REJECT, f"{what}: registrations, not a clock certificate")
-    if not (reg.get("program") == p.program
-            and D.canonical(reg.get("window")) == D.canonical(served(w))):
-        raise Finding(REJECT, f"{what}: registration")
-    if not (len(x.certificates) == 2
-            and all(_certifies(p, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
-        raise Finding(REJECT, f"{what}: certificates{_unlisted(p, w, [c.key_id for c in x.certificates])}")
-    if not _certifies(p, EGRESS, w, x.clock):
-        raise Finding(REJECT, f"{what}: clock{_unlisted(p, w, [x.clock.key_id])}")
-    if x.clock.digest in clear:
-        raise Finding(REJECT, f"{what}: clock: unsalted")
-    if x.clock.digest in earlier:
-        raise Finding(REJECT, f"{what}: clock: reused")
-    prof, _ = _answered(what, reg, x.answer)
-    if ([(lv["name"], lv["size"], lv["draw"]) for lv in prof["levels"]] != [(UNIT, 1, {"subset": 1})]
-            or prof["drawn"] != [(UNIT, 1)]):
-        raise Finding(REJECT, f"{what}: profile")
 
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
@@ -1375,8 +1283,6 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
     """`rowsExecutionPhaseCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
     each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
-    if x.registrations is None:
-        raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
     if reg.get("program") != p.program:
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 3
@@ -1508,26 +1414,20 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
         {} if entries is None else {"faulty_entries": entries})
 
 
-def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | None = None,
-           charged: list[Facts] = (), start: int = 0) -> dict:
-    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
-    execution phases' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock
-    form), where a compute audit's own terms are in none, a tied audit's free inputs are in its execution phase's `free`
-    and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit sampled in part (`charged`) is in
-    `eps`, and the period's first start, where it is not the run's first, is charged ``start``, the state's full width,
-    once."""
+def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], charged: list[Facts] = (),
+           start: int = 0) -> dict:
+    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the link-windows' scans (`scans`, each its facts,
+    its tied audits' free inputs and its `β_w`), where a compute audit's own terms are in none, a tied audit's free
+    inputs are in its link-window's `free` and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit
+    sampled in part (`charged`) is in `eps`, and the period's first start, where it is not the run's first, is charged
+    ``start``, the state's full width, once."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
-    if scans is None:
-        units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
-        schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
-        out = {"audits": units}
-    else:
-        s = p.scan
-        units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
-        schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "scans": units, "start": start}
-        if p.schedule.max_tokens_cap is not None:
-            out["max_tokens_cap"] = p.schedule.max_tokens_cap
+    s = p.scan
+    units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
+    schedules = cells
+    out = {"audits": [_facts_json(f) for f in facts], "scans": units, "start": start}
+    if p.schedule.max_tokens_cap is not None:
+        out["max_tokens_cap"] = p.schedule.max_tokens_cap
     K = schedules + cells + start + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
                                 + t.get("faulty_entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
@@ -1545,25 +1445,20 @@ def check(p: Params, c: Commitment, e) -> tuple:
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts, scans = _start_checks(p, starts), [], []
-    clear = clear_clocks(p.sync_set) if p.schedule is None else set()
     for i, (reg, x) in enumerate(zip(c.windows, windows)):
         try:
-            if p.schedule is None:
-                _window_check(p, clear, [y.clock.digest for y in windows[:i] if y.clock is not None], p.first + i,
-                              reg, x)
-            else:
-                scans.append(_rows_window_check(p, c.audits, p.first + i, reg, x))
+            scans.append(_rows_window_check(p, c.audits, p.first + i, reg, x))
         except Finding as f:
             findings.append(f)
     if any(f.delta != scans[0][0].delta for f, _ in scans):
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
-    if p.schedule is not None and not rows_wf(p.schedule, p.windows):
+    if not rows_wf(p.schedule, p.windows):
         findings.append(Finding(REJECT, rows_wf_refusal(p.schedule, p.windows)))
     if p.schedule is not None and connection_rows(p.schedule):
         findings.append(Finding(REJECT, CONNECTION_ROWS))
     charged = {}
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
-        tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)
+        tied = _tied_in(c.audits, c.windows, i)
         try:
             facts.append(f := _audit_check(i, audit, reg, a))
         except Finding as x:
@@ -1571,34 +1466,31 @@ def check(p: Params, c: Commitment, e) -> tuple:
         else:
             if tied and f.drawn < f.units:
                 charged[i] = f
-    if p.schedule is not None:
-        findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
-                     if not _wired(p, c.audits, reg)]
-        findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
-                     if (why := _state_refusal(p, c.audits, reg))]
-        findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}: its public outputs' {TIED_KEY} "
-                                     f"{tied_unheld(p.schedule, x.answer)}")
-                     for i, x in enumerate(windows) if not tied_input_wired(p.schedule, x.answer)]
-        findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
-                     if (why := _start_refusal(p.first + i, i, reg))]
-        # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
-        # schedule with none refuses every registration
-        try:
-            consts = scan_ok.constants(p.schedule.window)
-        except scan_ok.FewTicks as few:
-            findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNCOMPUTED}: {few}")
-                         for i in range(len(c.windows))]
-        else:
-            findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
-                         if not scan_ok.held(consts, reg)]
-        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNHELD}") for i, reg in enumerate(c.windows)
-                     if not _held(p, c.audits, reg)]
+    findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
+                 if not _wired(p, c.audits, reg)]
+    findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
+                 if (why := _state_refusal(p, c.audits, reg))]
+    findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}: its public outputs' {TIED_KEY} "
+                                 f"{tied_unheld(p.schedule, x.answer)}")
+                 for i, x in enumerate(windows) if not tied_input_wired(p.schedule, x.answer)]
+    findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
+                 if (why := _start_refusal(p.first + i, i, reg))]
+    # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
+    # schedule with none refuses every registration
+    try:
+        consts = scan_ok.constants(p.schedule.window)
+    except scan_ok.FewTicks as few:
+        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNCOMPUTED}: {few}")
+                     for i in range(len(c.windows))]
+    else:
+        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
+                     if not scan_ok.held(consts, reg)]
+    findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNHELD}") for i, reg in enumerate(c.windows)
+                 if not _held(p, c.audits, reg)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
         return UNDECIDED, findings[0].reason
-    if p.schedule is None:
-        return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
     return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values()),
@@ -1628,20 +1520,6 @@ def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
 
 
 EXPECT = {
-    "honest": ACCEPT, "second-key": ACCEPT, "two-stretches": ACCEPT, "two-signers": REJECT,
-    "program": REJECT, "provenance": REJECT,
-    "cert-swap": REJECT, "cert-count": REJECT, "cert-forged": REJECT, "cert-window": REJECT, "cert-link": REJECT,
-    "cert-session": REJECT, "cert-key": REJECT, "cert-unlisted": REJECT, "cert-other-session": REJECT,
-    "cert-outside-stretch": REJECT, "cert-period-number": REJECT,
-    "clock-ingress": REJECT, "clock-forged": REJECT, "clock-window": REJECT, "clock-session": REJECT,
-    "clock-reused": REJECT, "clock-unsalted": REJECT,
-    "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
-    "answer-profile": REJECT,
-    "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
-    "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT, "audit-oversampled": REJECT,
-    "undecided-and-reject": REJECT, "form": REJECT, "start-shown": REJECT,
-    "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
-    "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": ACCEPT, "rows-second-key": ACCEPT, "rows-two-stretches": ACCEPT, "rows-two-signers": REJECT,
     "rows-restart": ACCEPT, "rows-start-not-signed": REJECT, "rows-start-uncertified": REJECT,
     "rows-start-count": REJECT, "rows-start-skipped": REJECT,
@@ -1671,16 +1549,16 @@ EXPECT = {
     "rows-tied-strata-sizes": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
-    "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT,
+    "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT, "case": REJECT,
 }
 MUTATIONS = list(EXPECT)
-#: The changes to which entries the parameters list and which of them sign (`rows-…` in the rows form). Accepted: the
+#: The changes to which entries the parameters list and which of them sign (`rows-…`). Accepted: the
 #: signer's entry the second of two, and two entries whose stretches each hold some of the period's execution phases,
 #: each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn, each
 #: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
 #: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
-#: outside its stretch, and at the period's number where the session's belongs. In the rows form, which reads each
-#: session's signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
+#: outside its stretch, and at the period's number where the session's belongs. The check reads each session's
+#: signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
 #: second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second session's
 #: base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`). `case` aims at none
 #: (`AIMS`), so its period lists the one entry that signs it.
@@ -1712,11 +1590,6 @@ class Stretch:
         return {"key": lms.public_key(self.key).hex(), "session": self.session.hex(), "start": self.start}
 
 
-def form_of(m: str) -> str:
-    """The form a change's period is in: the rows form's changes are named `rows-…`."""
-    return "rows" if m.startswith("rows-") else "clock"
-
-
 def _flip(b: bytes, i: int) -> bytes:
     i %= len(b)
     return b[:i] + bytes([b[i] ^ 1]) + b[i + 1:]
@@ -1725,12 +1598,6 @@ def _flip(b: bytes, i: int) -> bytes:
 def _cert_json(c: Certificate) -> dict:
     return {"digest": c.digest.hex(), "direction": c.direction.value, "key_id": c.key_id.hex(), "link": c.link,
             "signature": c.signature.hex(), "window": c.window}
-
-
-def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
-    """The digest a salted clock certificate signs (`certificate.CertifiedClock`): the sync's clock digest under the
-    certifier's salt, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ clock digest)."""
-    return certificate_digest(salt, clock_digest(sync))
 
 
 def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int,
@@ -2354,13 +2221,12 @@ def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, in the form `m` names (`form_of`), every choice sampled from `seed`; `small`:
-    the toy key, as few execution phases and audits as `m` needs."""
+    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few link-windows
+    and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
     rt = random.Random(f"network-period tied {m} {seed}")
     ro = random.Random(f"network-period ok {m} {seed}")
-    rows = form_of(m) == "rows"
     m = m.removeprefix("rows-")
     ki = 0 if small else r.randrange(len(KEYS))
     key = _key(ki)
@@ -2371,21 +2237,21 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     session = r.randbytes(lms.SESSION_BYTES)
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
     link = r.choice(["eth0", "a", "d-e"])
-    program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
     carry = rp.choice(CARRIES) if m == "start-carried" else None
-    least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta", "two-stretches", *RESTARTS) or carry \
-        else 1
+    least_windows = 2 if m in ("undecided-and-reject", "delta", "two-stretches", *RESTARTS) or carry else 1
     least_audits = 2 if m == "state-untied" else \
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     # a rows period is one execution phase (`scanStartCheck`): more only where the change asks, refused, and a later one
     # than the run's first only where the change asks, charged its start
-    n_windows = r.randint(least_windows, least_windows if small or (rows and not carry) else 3)
+    n_windows = r.randint(least_windows, least_windows if small or not carry else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a rows execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
-    n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
+    # a link-window's own audit, and at times one no link-window ties, which may leave units unsampled
+    n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1)))
     first = r.choice([0, 0, r.randrange(1, 6)])
-    if m in SECOND and first == 0:
+    if (m in SECOND or carry == "later" or m == "start-charged") and first == 0:
         first = rk.randrange(1, 6)
+    elif m == "start-unpinned" or carry == "more":
+        first = 0
     # the entries the parameters list, by their stretches' starts, the signer's (`key`, `session`) among them, its
     # numbers the period's less its start; seed 1's key is never listed. Two entries whose stretches each hold some of
     # the period's execution phases, the signer's from one of them on (`two-stretches`); two, the period in the second's
@@ -2413,28 +2279,21 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     def number(w: int) -> int:
         """The number of the period's execution phase `w` in its entry's session: `w` less the entry's start."""
         return w - stretch(w).start
-    if rows:
-        first = rp.randrange(1, 6) if carry == "later" or m == "start-charged" else 0
-    if rows:
-        sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"),
-                                        T={"ok-equal": EQUAL_T, "one-tick": ONE_TICK}.get(m))
-        # an egress bucket's state is its ingress bucket's view read as u16 words, so the view is 16 bits a word
-        widths = (r.randint(1, 3), r.randint(1, 4), OUT_BITS * (words := r.randint(1, 2)), words)
-        scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes,
-                                          every=sched.every))
-        program = program_sha512(scan)
-        delta = r.choice(DELTAS)
-    else:
-        deltas = r.sample(range(4), r.randint(1, 3))
-        rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
-    t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
+    sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"),
+                                    T={"ok-equal": EQUAL_T, "one-tick": ONE_TICK}.get(m))
+    # an egress bucket's state is its ingress bucket's view read as u16 words, so the view is 16 bits a word
+    widths = (r.randint(1, 3), r.randint(1, 4), OUT_BITS * (words := r.randint(1, 2)), words)
+    scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes, every=sched.every))
+    program = program_sha512(scan)
+    delta = r.choice(DELTAS)
+    t = r.randrange(n_windows)
     a = r.randrange(max(n_audits, 1))
     # one slot entries' template per audit: one-stage names a template's ports by its descriptor id; an audit that
     # selects has select entries and scan slots, as a window circuit's last position reads its slots' occupancy
-    owners = rp.sample(range(n_audits), n_windows) if rows else []
-    select = rows and (rp.random() < 0.5 or m == "tied-slots-sampled")
+    owners = rp.sample(range(n_audits), n_windows)
+    select = rp.random() < 0.5 or m == "tied-slots-sampled"
     selects = set(owners) if select else set()
-    lanes = sched.lanes if rows else 0
+    lanes = sched.lanes
     ties = {w: {"audit": i, "key": (k := SELECT_KEY if i in selects else SLOT_KEY), "chunks": [
                 {"port": entries_port(k, j), "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
                 for j in range(lanes)]}
@@ -2445,7 +2304,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unpin = rp.choice(UNPINS) if m == "start-unpinned" else rp.choice(CHARGES) if m == "start-charged" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
     # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it
-    trees = {i: _state_tree(rp, sched.window) for i in range(n_audits)} if rows else {}
+    trees = {i: _state_tree(rp, sched.window) for i in range(n_audits)}
     states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
               for i, x in trees.items()}
     unok = ro.choice(UNOKS) if m == "ok-unheld" else None
@@ -2502,8 +2361,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                  num=doc["window"], **kw)
         return doc | {"certificate": {"digest": c.digest.hex(), "key": c.key_id.hex(), "signature": c.signature.hex()}}
 
-    window_regs, windows, clocks = [], [], []
-    for w in range(first, first + n_windows) if rows else ():
+    window_regs, windows = [], []
+    for w in range(first, first + n_windows):
         aimed = w == first + t
         i, j = r.randrange(2), r.randrange(3)
         regs = registrations(w)
@@ -2672,100 +2531,23 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         window_regs.append(rec)
         shown = {"clock": _cert_json(recs[1])} if aimed and m == "form" else {"registrations": regs}
         windows.append({"answer": answer, "certificates": [_cert_json(c) for c in recs]} | shown)
-    for w in range(first, first + n_windows) if not rows else ():
-        rec = {"format": r.choice(FORMATS), "law": {"k": 1, "law": "subset"}, "partition": f"{link}/{w}",
-               "population": 1, "program": program, "protocol": ONE_STAGE, "window": served(w)}
-        sync = ClockSync(r.choice(deltas), r.choice(rhos))
-        aimed = w == first + t
-        if aimed and m == "program":
-            rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
-        elif aimed and m == "provenance":
-            rec["window"] = r.choice([served(w + 1), {"kind": "batch", "window": w}, served(w) | {"run": 0}, None])
-        digest = bytes.fromhex(R.digest(rec))
-        egress = sign(link, EGRESS, w, r.randbytes(64))
-        ingress = sign(link, INGRESS, w, r.randbytes(64))
-        clock = sign(link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
-        answer = _accepted(digest, program, rec["partition"], 1, 1, r.choice(["1/100", "1/1000000"]), 0)
-        if aimed:
-            if m == "cert-forged":
-                i = r.randrange(2)
-                c = (egress, ingress)[i]
-                sig = r.choice([_flip(c.signature, seed), c.signature[:-1], b""])
-                forged = dataclasses.replace(c, signature=sig)
-                egress, ingress = (forged, ingress) if i == 0 else (egress, forged)
-            elif m == "cert-window":
-                egress = sign(link, EGRESS, w, egress.digest, num=number(w) + 1)
-            elif m == "cert-link":
-                ingress = sign(link + "x", INGRESS, w, ingress.digest)
-            elif m == "cert-session":
-                egress = sign(link, EGRESS, w, egress.digest, s=_flip(session, seed))
-            elif m == "cert-key":
-                ingress = sign(link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
-            elif m == "cert-unlisted":
-                i = r.randrange(3)
-                egress, ingress, clock = (sign(c.link, c.direction, w, c.digest, k=_key(ki, 1)) if n == i else c
-                                          for n, c in enumerate((egress, ingress, clock)))
-            elif m in ("cert-other-session", "cert-outside-stretch", "cert-period-number"):
-                # one of the three under the picked key in the other entry's session, under the other listed entry,
-                # outside its stretch, or at the period's number for the execution phase, not its session's
-                i = r.randrange(3)
-                how = {"cert-other-session": {"s": listed[0].session}, "cert-outside-stretch": {"e": listed[0]},
-                       "cert-period-number": {"num": w}}[m]
-                egress, ingress, clock = (sign(c.link, c.direction, w, c.digest, **how)
-                                          if n == i else c for n, c in enumerate((egress, ingress, clock)))
-            elif m == "clock-ingress":
-                clock = sign(link, INGRESS, w, clock.digest)
-            elif m == "clock-forged":
-                sig, dig = clock.signature, clock.digest
-                clock = r.choice([dataclasses.replace(clock, signature=s) for s in (_flip(sig, seed), sig[:-1], b"")]
-                                 + [dataclasses.replace(clock, digest=d) for d in (_flip(dig, seed), dig[:-1])])
-            elif m == "clock-window":
-                clock = sign(link, EGRESS, w, clock.digest, num=number(w) + 1)
-            elif m == "clock-session":
-                clock = sign(link, EGRESS, w, clock.digest, s=_flip(session, seed))
-            elif m == "clock-reused":
-                clock = sign(link, EGRESS, w, r.choice(clocks).digest)
-            elif m == "clock-unsalted":
-                clock = sign(link, EGRESS, w, clock_digest(sync))
-            elif m == "answer-protocol":
-                answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
-            elif m == "answer-other":
-                answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 2})])
-            elif m == "answer-reject":
-                answer = _refused(answer, REJECT)
-            elif m in ("answer-undecided", "undecided-and-reject"):
-                answer = _refused(answer, UNDECIDED)
-            elif m == "answer-profile":
-                answer = _accepted(digest, program, rec["partition"], *r.choice([(2, 1), (2, 2), (1, 0)]), "1/100", 0)
-                if r.random() < 0.3:
-                    answer["profile"]["delta"] = "2/200"
-        certificates = [egress, ingress]
-        if aimed and m == "cert-swap":
-            certificates = [ingress, egress]
-        elif aimed and m == "cert-count":
-            certificates = r.choice([[egress], [egress, ingress, ingress], []])
-        window_regs.append(rec)
-        clocks.append(clock)
-        shown = {"registrations": []} if aimed and m == "form" else {"clock": _cert_json(clock)}
-        windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates]} | shown)
 
     audit_params, audit_regs, audits, untied = [], [], [], []
-    slots = sched.window // sched.every * sched.lanes if rows else 0
+    slots = sched.window // sched.every * sched.lanes
     # the class circuit, the one window circuit every tied audit runs: its units, its slot entries' template (whose
     # members `prog-unwired`'s `members` puts one off a slot each, and whose body its `body` renames) and scan slots
     off = (rp.choice([1, -1]) if slots > 1 else 1) if unwire == "members" else 0
     twos = m in ("tied-sampled", "tied-stratum-oversampled", "tied-strata-sizes") or by_template
-    n_class = r.randint(2 if twos else 1, 40) if rows else 0
+    n_class = r.randint(2 if twos else 1, 40)
     class_split = r.randint(1, n_class - 1) if n_class > 1 and r.random() < 0.3 else None
-    class_outs = r.sample(UNIT_BYTES, 1 if class_split is None else 2) if rows else []
+    class_outs = r.sample(UNIT_BYTES, 1 if class_split is None else 2)
     class_slots = (rp.randint(1, 2),) if select else ()
 
     def shape_of(n: int, split: int | None, outs: list[int]) -> tuple[tuple[int, int], ...]:
         return ((n, outs[0]),) if split is None or split >= n else ((split, outs[0]), (n - split, outs[1]))
 
     circuit = program_sha512(json.loads(audit_descriptor(
-        shape_of(n_class, class_split, class_outs), (slots + off,), unwire == "body", select, class_slots))) \
-        if rows else None
+        shape_of(n_class, class_split, class_outs), (slots + off,), unwire == "body", select, class_slots)))
     for i in range(n_audits):
         sampled = i == a and m == "tied-sampled"
         partial = i == a and by_template
@@ -2773,7 +2555,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         halves = i == a and m in ("tied-stratum-oversampled", "tied-strata-sizes")
         in_class = i in tied
         entries = (slots + off,) if in_class else ()
-        renamed = rows and unwire == "body" and in_class
+        renamed = unwire == "body" and in_class
         scan_slots = class_slots if in_class else ()
         swapped = unhold == "audit" and i == ties[first + t]["audit"]
         units = (n_class + 1 if swapped else n_class) if in_class else \
@@ -2812,21 +2594,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             k = _strata_resize(r, strata, seed)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
-        if rows:
-            rec["roots"] = _output_entries(rp, i, ties, sched.window // sched.every, first + t, untie, unwire, hit)
-            stated = i == ties[first + t]["audit"]
-            if not (stated and unstate == "audit"):
-                st = states[i] | ({"root": rp.randbytes(64).hex()} if stated and unstate == "audit-root" else {})
-                there = rp.choice(["roots", "registered"])
-                got = [st | ({"port": STATE} if there == "roots" else {"value": SCAN_STATE}) | {"leaves": sched.window}]
-                if stated and unstate == "audit-extra":
-                    got.append(got[0] | {"root": rp.randbytes(64).hex()})
-                if stated and unstate == "audit-activations":
-                    held = st | {"value": SCAN_STATE, "leaves": sched.window, "words": 1}
-                    rec["window"]["activations"] = {"program": WINDOW_PROGRAM, "values": {SCAN_STATE: held}}
-                else:
-                    rec[there] = rec.get(there, []) + got
-                    rp.shuffle(rec[there])
+        rec["roots"] = _output_entries(rp, i, ties, sched.window // sched.every, first + t, untie, unwire, hit)
+        stated = i == ties[first + t]["audit"]
+        if not (stated and unstate == "audit"):
+            st = states[i] | ({"root": rp.randbytes(64).hex()} if stated and unstate == "audit-root" else {})
+            there = rp.choice(["roots", "registered"])
+            got = [st | ({"port": STATE} if there == "roots" else {"value": SCAN_STATE}) | {"leaves": sched.window}]
+            if stated and unstate == "audit-extra":
+                got.append(got[0] | {"root": rp.randbytes(64).hex()})
+            if stated and unstate == "audit-activations":
+                held = st | {"value": SCAN_STATE, "leaves": sched.window, "words": 1}
+                rec["window"]["activations"] = {"program": WINDOW_PROGRAM, "values": {SCAN_STATE: held}}
+            else:
+                rec[there] = rec.get(there, []) + got
+                rp.shuffle(rec[there])
         if i == a and m == "audit-program":
             if r.random() < 0.5:
                 rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
@@ -2858,20 +2639,16 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
                    "jitter": r.randint(1, 5), "keys": [e.json() for e in listed], "link": link,
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "windows": n_windows}
-    if rows:
-        case_params |= {"cells": bound.rows_cells(n_windows), "circuit": circuit, "scan": scan,
-                        "schedule": schedule_json(bound)}
-        if unhold == "params":
-            case_params["circuit"] = r.choice([hashlib.sha512(b"another class circuit").hexdigest(), program, *untied])
-    else:
-        case_params["sync_set"] = {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]}
+    case_params |= {"cells": bound.rows_cells(n_windows), "circuit": circuit, "scan": scan, "schedule": schedule_json(bound)}
+    if unhold == "params":
+        case_params["circuit"] = r.choice([hashlib.sha512(b"another class circuit").hexdigest(), program, *untied])
     c_json = {"audits": audit_regs, "windows": window_regs}
-    # each listed entry's session's signed start, which the rows form's evidence shows: its base on its key's life, a
-    # key's first listed entry's sampled and each later one's as many of the period's schedule's execution phases on
-    # as its start is (`_held_to`), and its ordinal among its key's sessions, a key's first listed entry's sampled and
-    # each later one's the next, signed under the entry's key in its session; the clock form's evidence shows none
+    # each listed entry's session's signed start, which the evidence shows: its base on its key's life, a key's first
+    # listed entry's sampled and each later one's as many of the period's schedule's execution phases on as its start
+    # is (`_held_to`), and its ordinal among its key's sessions, a key's first listed entry's sampled and each later
+    # one's the next, signed under the entry's key in its session
     rs = random.Random(f"network-period starts {m} {seed}")
-    L = bound.window * bound.bucket_ms if rows else 1
+    L = bound.window * bound.bucket_ms
     anchors: dict[bytes, tuple[int, int]] = {}
     bases, ordinals, last = [], [], {}
     for entry in listed:
@@ -2892,10 +2669,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
 
     def signed_start(i: int, how: str | None = None) -> dict:
         """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base, its ordinal and
-        the period's schedule's digest (a stand-in's in the clock form, which has none), signed for the link's start
-        name, egress, window 0; or one that is not its session's certified start, as `how` says (`UNCERTIFIED_BY`)."""
+        the period's schedule's digest, signed for the link's start name, egress, window 0; or one that is not its
+        session's certified start, as `how` says (`UNCERTIFIED_BY`)."""
         e = listed[i]
-        named = bound.digest if rows else hashlib.sha512(b"no schedule").digest()
+        named = bound.digest
         named = _flip(named, seed) if how == "schedule" else named
         k = _key(ki, 1) if how == "key" else e.key
         c = Certificate(k.I, link if how == "link" else start_link(link), INGRESS if how == "direction" else EGRESS,
@@ -2909,25 +2686,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         return {"base_ms": bases[i] + (how == "base"), "certificate": _cert_json(dataclasses.replace(c, signature=sig)),
                 "ordinal": ordinals[i] + (how == "ordinal"), "schedule": named.hex()}
 
-    shown_starts = []
-    if rows:
-        hows: list[str | None] = [None] * len(listed)
-        if m == "start-uncertified":
-            hows[rs.randrange(len(listed))] = rs.choice([h for hs in UNCERTIFIED_BY.values() for h in hs])
-        shown_starts = [signed_start(i, how) for i, how in enumerate(hows)]
-        if m == "start-count":
-            # one too few (none, of one: evidence with no "starts"), one too many, or none
-            shown_starts = rs.choice([shown_starts[1:], [*shown_starts, shown_starts[-1]], []])
-    elif m == "start-shown":
-        shown_starts = [signed_start(rs.randrange(len(listed)))]
+    hows: list[str | None] = [None] * len(listed)
+    if m == "start-uncertified":
+        hows[rs.randrange(len(listed))] = rs.choice([h for hs in UNCERTIFIED_BY.values() for h in hs])
+    shown_starts = [signed_start(i, how) for i, how in enumerate(hows)]
+    if m == "start-count":
+        # one too few (none, of one: evidence with no "starts"), one too many, or none
+        shown_starts = rs.choice([shown_starts[1:], [*shown_starts, shown_starts[-1]], []])
     showing = {"starts": shown_starts} if shown_starts else {}
     e_json = {"audits": audits, "windows": windows} | showing
     if m == "first":
         case_params["first"] = first + r.choice([1, -1] if first else [1])
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
-        if rows:
-            case_params["cells"] = bound.rows_cells(case_params["windows"])
+        case_params["cells"] = bound.rows_cells(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
             "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
@@ -2959,11 +2731,6 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
            p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"},
            *bad_audits(p)]
-    if "sync_set" in p:
-        ss = p["sync_set"]
-        return out + [p | {"sync_set": ss | {"deltas": []}}, p | {"sync_set": ss | {"rhos": [[0, 1]]}},
-                      p | {"sync_set": ss | {"rhos": [[1, 0]]}}, p | {"sync_set": ss | {"deltas": [1, 1]}},
-                      p | {"sync_set": ss | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": ss | {"x": 0}}]
     s = p["schedule"]
     return out + [*bad_cells(p), p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
                   p | {"schedule": s | {"x": 1}}, p | {"schedule": s | {"egress": "bytes"}}, p | {"schedule": [s]},
@@ -2989,10 +2756,7 @@ def bad_entries(p: dict) -> dict[str, dict]:
     """Parameters whose `"keys"` `params` refuses, each one change to `p`, by what it is. No entry (`empty`: `NO_KEY`);
     an entry that starts before the one listed before it (`out-of-order`: `OUT_OF_ORDER`); two entries with one start
     (`overlap`: `OVERLAP`); the first entry again, its key identifier and its session, further on (`twice`: `TWICE`);
-    another key under the first's identifier (`one-id`: `ONE_ID` in the clock form, `TWO_KEYS` in the rows form); in
-    the clock form, which reads no session's signed start, the first's key in another session (`other-session`:
-    `ONE_ID`; the rows form reads those parameters, a key's restart, and holds the entry to its signed start); a first
-    entry that starts after the period does (`before`: `BEFORE`); an entry that is the key alone (`no-entry`:
+    another key under the first's identifier (`one-id`: `TWO_KEYS`); a first entry that starts after the period does (`before`: `BEFORE`); an entry that is the key alone (`no-entry`:
     `NO_ENTRY`); the earlier forms, `"key"` in place of `"keys"` or beside it, `"session"` and `"sessions"` (`key`,
     `key-too`: `KEY_NOT_KEYS`; `session`: `SESSION_IN_ENTRY`; `sessions`: `SESSIONS_IN_ENTRY`); and a list or an entry
     that doesn't read: entries that are no list, an entry without its start or with a field more, a key or a session
@@ -3005,9 +2769,7 @@ def bad_entries(p: dict) -> dict[str, dict]:
     # another key and another session, in no listed entry; and another key under the first's identifier
     fresh = {"key": flip(k, 0), "session": flip(ses, 0)}
     head = lambda x: p | {"keys": [e | x, *es[1:]]}  # noqa: E731
-    restart = {} if "schedule" in p else {
-        "other-session": p | {"keys": [*es, e | {"session": flip(ses, 0), "start": last + 1}]}}
-    return restart | {
+    return {
         "empty": p | {"keys": []},
         "out-of-order": p | {"keys": [fresh | {"start": e["start"] + 1}, *es]},
         "overlap": p | {"keys": [fresh | {"start": e["start"]}, *es]},
@@ -3327,26 +3089,19 @@ def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
                    x | {"certificates": [cert | {"window": -1}]}, x | {"certificates": [cert | {"x": 0}]},
                    x | {"certificates": "x"}, x | {"answer": {k: v for k, v in x["answer"].items() if k != "reason"}},
                    x | {"answer": x["answer"] | {"verdict": "maybe"}}, x | {"answer": x["answer"] | {"reason": "r"}}]
-    if "clock" in x:
-        clock = x["clock"]
-        bad_windows += [{k: v for k, v in x.items() if k != "clock"},
-                        x | {"clock": {"certificate": clock, "sync": [0, 1, 1]}}, x | {"clock": clock | {"x": 0}},
-                        x | {"clock": {k: v for k, v in clock.items() if k != "signature"}},
-                        x | {"clock": clock | {"direction": "up"}}, x | {"clock": [clock]}]
-    else:
-        doc = x["registrations"][0]
-        lay, c = doc["layout"], doc["certificate"]
-        bad_rows = [{k: v for k, v in doc.items() if k != "root"}, doc | {"x": 0}, doc | {"layout": lay | {"x": 0}},
-                    doc | {"layout": {k: v for k, v in lay.items() if k != "slots"}}, doc | {"layout": [lay]},
-                    doc | {"layout": lay | {"buckets": -1}},
-                    doc | {"certificate": {k: v for k, v in c.items() if k != "key"}},
-                    doc | {"certificate": c | {"signature": c["signature"] + "0"}}, doc | {"certificate": "x"},
-                    doc | {"root": doc["root"][:-1]}, doc | {"root": "g" + doc["root"][1:]}, doc | {"wiring": 0},
-                    doc | {"window": "0"}, doc | {"window": -1}, doc | {"cell_bytes": True}, doc | {"format": 1},
-                    doc | {"domain": 0}, "x"]
-        bad_windows += [{k: v for k, v in x.items() if k != "registrations"}, x | {"clock": cert},
-                        x | {"registrations": "x"}, x | {"registrations": [1]}] + \
-            [x | {"registrations": [d, *x["registrations"][1:]]} for d in bad_rows]
+    doc = x["registrations"][0]
+    lay, c = doc["layout"], doc["certificate"]
+    bad_rows = [{k: v for k, v in doc.items() if k != "root"}, doc | {"x": 0}, doc | {"layout": lay | {"x": 0}},
+                doc | {"layout": {k: v for k, v in lay.items() if k != "slots"}}, doc | {"layout": [lay]},
+                doc | {"layout": lay | {"buckets": -1}},
+                doc | {"certificate": {k: v for k, v in c.items() if k != "key"}},
+                doc | {"certificate": c | {"signature": c["signature"] + "0"}}, doc | {"certificate": "x"},
+                doc | {"root": doc["root"][:-1]}, doc | {"root": "g" + doc["root"][1:]}, doc | {"wiring": 0},
+                doc | {"window": "0"}, doc | {"window": -1}, doc | {"cell_bytes": True}, doc | {"format": 1},
+                doc | {"domain": 0}, "x"]
+    bad_windows += [{k: v for k, v in x.items() if k != "registrations"}, x | {"clock": cert},
+                    x | {"registrations": "x"}, x | {"registrations": [1]}] + \
+        [x | {"registrations": [d, *x["registrations"][1:]]} for d in bad_rows]
     bad_starts = []
     if "starts" in e:
         s, later = e["starts"][0], e["starts"][1:]
@@ -3366,18 +3121,16 @@ answer = reference
 
 #: What a case can be aimed at: each verdict, and a case that fails to decode (its params, commitment or evidence).
 KINDS = (ACCEPT, REJECT, UNDECIDED, "broken-params", "broken-commitment", "broken-evidence")
-#: Each form's changes (`build`'s `m`) by the kind they aim at, those to the listed keys aside (`LISTS`): a rejection
-#: by the check itself, not by decoding, for `reject`; `case` breaks the line `serve` reads rather than the period, so
-#: no kind uses it.
-AIMS: dict[str, dict[str, tuple[str, ...]]] = {
-    form: {
-        ACCEPT: tuple(m for m in ms if EXPECT[m] == ACCEPT),
-        REJECT: tuple(m for m in ms if EXPECT[m] == REJECT
-                      and m.removeprefix("rows-") not in ("params", "commitment", "evidence", "case")),
-        UNDECIDED: tuple(m for m in ms if EXPECT[m] == UNDECIDED),
-        **{f"broken-{x}": tuple(m for m in ms if m.removeprefix("rows-") == x)
-           for x in ("params", "commitment", "evidence")},
-    } for form in FORMS for ms in [[m for m in EXPECT if form_of(m) == form and m.removeprefix("rows-") not in LISTS]]
+#: The changes (`build`'s `m`) by the kind they aim at, those to the listed keys aside (`LISTS`): a rejection by the
+#: check itself, not by decoding, for `reject`; `case` breaks the line `serve` reads rather than the period, so no kind
+#: uses it.
+AIMED = [m for m in EXPECT if m.removeprefix("rows-") not in LISTS]
+AIMS: dict[str, tuple[str, ...]] = {
+    ACCEPT: tuple(m for m in AIMED if EXPECT[m] == ACCEPT),
+    REJECT: tuple(m for m in AIMED if EXPECT[m] == REJECT
+                  and m.removeprefix("rows-") not in ("params", "commitment", "evidence", "case")),
+    UNDECIDED: tuple(m for m in AIMED if EXPECT[m] == UNDECIDED),
+    **{f"broken-{x}": tuple(m for m in AIMED if m.removeprefix("rows-") == x) for x in ("params", "commitment", "evidence")},
 }
 
 
@@ -3386,19 +3139,13 @@ def verdict_of(kind: str) -> str:
     return kind if kind in (ACCEPT, REJECT, UNDECIDED) else REJECT
 
 
-def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
-    """A small period of the form (`build(..., small=True)`: the toy key, as few execution phases and audits as its
-    change needs) aimed at `kind`, its change and every choice sampled from `seed`."""
-    ms = AIMS[form][kind]
+def case(kind: str, seed: int = 0) -> dict:
+    """A small period (`build(..., small=True)`: the toy key, as few link-windows and audits as its change needs) aimed
+    at `kind`, its change and every choice sampled from `seed`."""
+    ms = AIMS[kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 
 
-def kinds(form: str = "clock") -> tuple[str, ...]:
-    """The kinds a case of the form can be aimed at (`AIMS`)."""
-    return tuple(k for k in KINDS if AIMS[form][k])
-
-
-def cases(seed: int = 0, form: str = "clock") -> dict[str, tuple[dict, dict]]:
-    """One small period of the form of each kind it can be aimed at (`kinds`) with its answer,
-    `{kind: (case, answer)}`."""
-    return {k: (c, answer(c)) for k in kinds(form) for c in [case(k, seed, form)]}
+def cases(seed: int = 0) -> dict[str, tuple[dict, dict]]:
+    """One small period of each kind (`KINDS`) with its answer, `{kind: (case, answer)}`."""
+    return {k: (c, answer(c)) for k in KINDS for c in [case(k, seed)]}

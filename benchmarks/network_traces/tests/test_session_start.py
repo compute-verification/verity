@@ -22,7 +22,7 @@ from verity.protocols.accounting.certifier.verifier.run_clock import VirtualCloc
 
 from test_warden_serve import PARAMS, SESSION
 
-import warden_serve as ws  # by its own name: `serve` spawns the publisher's process, which imports it
+from benchmarks.network_traces import warden_serve as ws  # by name, so that the spawned process finds its functions
 
 OTHER = bytes(range(1, 33))
 THIRD = bytes(range(2, 34))
