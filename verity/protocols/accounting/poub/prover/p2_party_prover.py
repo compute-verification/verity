@@ -17,7 +17,7 @@ from typing import Any, BinaryIO, Protocol
 
 from verity.channel import Message
 from verity.party import Finish, Identity, Received, Send
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import p2
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
@@ -86,7 +86,7 @@ class Prover:
         return out
 
 
-def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path) -> Any:
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
     """The prover's start on its node, from the configuration and its deploy bindings (`bound`, its
     `[prover.bandwidth]`: the verifier's `address` it dials): its params the request `P2.request_of(node, **P2.SESSION)`
     for the node its store was registered under, and its `store` (a `Peer`) the served C* on the card. Neither has a
@@ -96,8 +96,7 @@ def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Pat
 
 
 STARTS = {P2.PROVER: start}
-"""Each party's start (`ProtocolDef.starts`), which `PROTOCOL` takes once `ProtocolDef` has it."""
-PROTOCOL = ProtocolDef(P2.MANIFEST, {P2.PROVER: Prover})
+PROTOCOL = ProtocolDef(P2.MANIFEST, {P2.PROVER: Prover}, STARTS)
 
 
 def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Peer, request: Mapping[str, Any],
