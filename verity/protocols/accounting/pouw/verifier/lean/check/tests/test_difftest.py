@@ -535,6 +535,33 @@ def test_leaf_words(pass_server):
     assert got[True] and got[False]
 
 
+def passes_distinct(case: dict) -> dict | None:
+    if not isinstance(case["passes"], list):
+        raise D.Reject("passes is not a list")
+    why = Cr.passes_distinct_twin(case["passes"])
+    return None if why is None else {"refused": list(why)}
+
+
+_CALL = st.one_of(st.builds(lambda i: {"index": i}, st.one_of(st.integers(0, 5), st.sampled_from([-1, (1 << 32) - 1, 1 << 32]),
+                                                               st.none())),
+                  st.just({}))
+_PASS = st.one_of(st.fixed_dictionaries({"salt": st.sampled_from(["ab" * 32, "cd" * 32]),
+                                         "matmuls": st.lists(_CALL, max_size=4)}),
+                  st.sampled_from([{"salt": 1, "matmuls": []}, {"salt": "ab" * 32, "matmuls": {}},
+                                   {"salt": "ab" * 32, "matmuls": [1]}, []]))
+PASSES_DISTINCT = D.Port("pouw-check-difftest", "passes-distinct", passes_distinct, package=LEAN,
+                         of_record=V.RECORD_VERDICT,
+                         inputs=st.one_of(st.builds(lambda ps: {"passes": ps}, st.lists(_PASS, max_size=4)),
+                                          st.just({"passes": {}})))
+
+
+def test_passes_distinct(pass_server):
+    """`credit.passes_distinct_twin` against Pearl+'s `PearlPlus.passesDistinct`, the verdict of record
+    `credit.passes_distinct` reads: passes under two salts with small, repeated, out-of-range and missing call indices,
+    and manifests of the wrong form."""
+    print(f"pouw-check-difftest passes-distinct: {D.run(PASSES_DISTINCT, examples=500, server=pass_server)}")
+
+
 def chunks(k) -> dict:
     if type(k) is not int or k < 0:
         raise D.Reject("the input is not a natural number K")
