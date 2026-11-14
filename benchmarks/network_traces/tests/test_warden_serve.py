@@ -872,6 +872,54 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
 
 
+def test_a_phase_with_no_certificate_or_no_registration_is_a_problem_and_one_fewer_in_its_count(tmp_path):
+    """The gate's end holds three of the check's counts only when it is accepted, on the ground that each is then
+    the schedule's (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`): how many records were certified, by
+    how many certificates, and how many of the cells' registrations the check accepted. That stands on the check
+    refusing a run with one missing. A run whose every execution phase is certified and registered is accepted,
+    each count the schedule's. The same run less one record's certificate, for each record and execution phase, or
+    less one cells' registration, is refused on that execution phase by name, with its own count one fewer and the
+    others as they were."""
+    out, windows = tmp_path / "run", 2
+    out.mkdir()
+    _run(out, tmp_path / "key", [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200)],
+         [_response([" a", " b"]), _response([" word"] * 40)], windows=windows)
+
+    def counts(result: dict) -> tuple[int, int, int]:
+        s = result["summary"]
+        return s["certified_windows"], s["certificates"], s["cell_rows"]["registered"]
+
+    whole = ws.check(out)
+    assert whole["accepted"], whole["problems"]
+    assert whole["summary"]["windows"] == windows and whole["summary"]["cell_rows"]["of"] == 2 * windows
+    assert counts(whole) == (3 * windows, 3 * windows, 2 * windows)
+    names = {(link, direction.value): name for name, (link, direction) in ws.CERTIFIED.items()}
+
+    certified = (out / "certified.jsonl").read_text().splitlines()
+    assert len(certified) == 3 * windows
+    for i, line in enumerate(certified):
+        record = ws.cs.certified_from_json(json.loads(line))
+        (out / "certified.jsonl").write_text("".join(x + "\n" for x in certified[:i] + certified[i + 1:]))
+        got = ws.check(out)
+        assert not got["accepted"]
+        assert f"{names[(record.link, record.direction.value)]} window {record.window} isn't certified" in got["problems"]
+        assert counts(got) == (3 * windows - 1, 3 * windows - 1, 2 * windows)
+    (out / "certified.jsonl").write_text("".join(x + "\n" for x in certified))
+
+    cells, salts = (out / "cells.jsonl").read_text().splitlines(), ws.ar.read_blobs(out / "cells.salts")
+    assert len(cells) == len(salts) == 2 * windows
+    for i, line in enumerate(cells):
+        r = json.loads(line)["registration"]
+        (out / "cells.jsonl").write_text("".join(x + "\n" for x in cells[:i] + cells[i + 1:]))
+        (out / "cells.salts").unlink()
+        for blob in salts[:i] + salts[i + 1:]:
+            ws.ar.write_blobs(out / "cells.salts", blob)
+        got = ws.check(out)
+        assert not got["accepted"]
+        assert f"{names[(r['link'], r['direction'])]} window {r['window']}'s cells aren't registered" in got["problems"]
+        assert counts(got) == (3 * windows, 3 * windows, 2 * windows - 1)
+
+
 def test_of_a_deployment_the_gate_gives_out_every_key_but_the_three_of_the_auditors_device(tmp_path):
     """`auditor.DEPLOYMENT_PUBLIC` is the deployment's record less where the relay listened, where it reached the
     endpoint and the origin on the device's raw clock: a key the record gains is given out only once the gate
