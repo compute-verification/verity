@@ -93,13 +93,14 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _part
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
