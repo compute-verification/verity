@@ -16534,9 +16534,6 @@
    },
    "type_hash": "4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f"
   },
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
-   "owner": "@proofs"
-  },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest": {
    "owner": "@proofs",
    "signature": [
@@ -16563,6 +16560,25 @@
     "reads": []
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
+  },
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :",
+    "  Not",
+    "    (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKMal.Masked.dataE Claims.ZKServer.Loop.finS.honestVals",
+    "      (((Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.Tp).withLink Claims.ZKServer.Loop.leakSrc).withFiles",
+    "        Claims.ZKServer.Loop.leakSrc)",
+    "      (Claims.ZKServer.Loop.realOf Claims.ZKServer.Loop.leakSrc) Claims.ZKServer.Loop.leakWk (fun x x_1 => True) 2)"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+    "reads": ["FlockSoundness.Assumptions.HashDerivedKey"]
+   },
+   "type_hash": "e8d629c873126ca93cebe89b070e311e2dd76d6303c1a410979a9635685bdd9c"
   },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
@@ -53948,6 +53964,14 @@
     "Claims.ZKServer.Loop.tapeWk": "e10ebd23253fc1e3b3e6a9c40b58f4eed799a5aa8c801a51e23f6edf9042532a"
    }
   },
+  "Proofs.Flock.SessionLoop.ZkAnyNontrivial": {
+   "digest": "7441e9b35420c1e4990158843f18f33548615f45a2e9cbf36a4455a8542fc1cf",
+   "definitions": {
+    "Claims.ZKServer.Loop.constRel": "99d08792904a28e4834c36dd1a91cfa076776209d0ad41c2f020b39a2a0714a4",
+    "Claims.ZKServer.Loop.leakSrc": "b4f871e1abc3819c127541ea977197c890dc924df7fa88f6c4ec2e3e4fa38719",
+    "Claims.ZKServer.Loop.leakWk": "8c7ffc763e2fc0ad836e59d8c3be87117f2de24cf5e817eb5de109571545918d"
+   }
+  },
   "Proofs.Flock.SoundAtBridge.Served": {
    "digest": "762283783f92afeb221edce17615ea5ee56a1e8f8026475135cbf11b35166bc4",
    "definitions": {
@@ -54030,8 +54054,9 @@
    }
   },
   "Proofs.Flock.Soundness.Assumptions": {
-   "digest": "02d429016eff90b55a5091a78bfb9e5af537509d480983fd77bd9a6d2815ce4b",
+   "digest": "2548841c87763e8e664dff26af5013516ad7385f262942ab3f42186b015f90c0",
    "definitions": {
+    "FlockSoundness.Assumptions.HashDerivedKey": "07ae188fdda3bc525d04385d4483e326ac8c100376bd6dc8078f0bd42fc59dd2",
     "FlockSoundness.Assumptions.HmRowComputes": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae"
    }
   },
@@ -54061,8 +54086,9 @@
    }
   },
   "Proofs.Flock.Soundness.Assumptions.Zk": {
-   "digest": "3e1eb090e7da917bf4a995401e56ae51421e2e3dd1df2280b68ccdf616d66239",
+   "digest": "1b4c6684e285c45826c33378d7990a4d83390c001c7175403f80411e9472123a",
    "definitions": {
+    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "b09998481c1a5702334e2a9dab0008074ab5104aaedd4f18df87bcf1d646ecfe",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZK": "2e0bf4d9d5faf00058b89619d736c802946990d5c49f4b3c3d8f6603544c9eb1",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS": "50b4fd854ccb4067fdf7057ab1a4629ec2a00ca5fe2d12ce7a15083d1894cddc"
    }
