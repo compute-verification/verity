@@ -12,6 +12,10 @@ they sit in `prover/`: a file under `verifier/` loads none under `prover/`.
 - `prove_bundle.py`, `prove_bundle.sh`: a sampled-proof-block replay bundle proved and decided by Lean.
 - `prove_path.py`, `prove_path.sh`: the prove path, below.
 - `class_size.py`: a class circuit's padded size (`../cost/README.md`).
+- `records_audit.py`: a window's audit from its records alone (below), and the template audit's verifier window.
+- `check_memo.py`: the verifier's checks asked once per input, which `window_audit.py` runs under.
+- `compose_circuit.py`: a template's circuit composed by Flock's prover (`verity_flock`), the verifier's own copy;
+  run in the circuit prover's tree.
 
 They still load scripts under `benchmarks/` off `sys.path` (the proof leg, the network certifier's pieces, the
 zero-knowledge mutants) and read the measured data there (`benchmarks/prove_path/sources.json`).
@@ -284,7 +288,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `prove_path.sh` with `PP_RECORDS=1` on a served window) reads only
-  what an integration hands Verity (`verity.commitments.windows.interface`): the window's `circuit.json`, which its docket binds
+  what an integration hands Verity (`verity.commitments.periods.interface`): the window's `circuit.json`, which its docket binds
   by SHA-512; the registered compiler and the advice's root and length; the docket and the committed values; and the
   advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition one a
   catalog registers or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's

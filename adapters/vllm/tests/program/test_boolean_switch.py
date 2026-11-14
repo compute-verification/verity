@@ -189,8 +189,8 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity_vllm.program.frontend.boolean import derived
-    from verity_vllm.program.frontend.derive import DeriveReport
+    from verity_torch.frontend.boolean import derived
+    from verity_torch.frontend.derive import DeriveReport
 
     P = Program(_derived(), annotations={"note": "carried"})
     desc = encode_program(P)
@@ -240,8 +240,8 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     pytest.importorskip("torch")
     import torch
 
-    from verity_vllm.program.frontend.boolean import derived
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.boolean import derived
+    from verity_torch.frontend.derive import derive_report
 
     class M(torch.nn.Module):
         def forward(self, x, y):

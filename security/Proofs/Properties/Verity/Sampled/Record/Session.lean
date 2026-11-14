@@ -198,7 +198,7 @@ theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw
     {spec : SessionSpec} {tabs : Array Setup} {p o : Json}
     (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
     ∃ sts, Spot.OneStageZk.sessionAt I rd draw = .ok (spec, sts) ∧ tabs = FlockDeploy.tabsOf sts ∧
-      (if draw.isSome then Flock.ProvedScope.sampleLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit) =
+      (if draw.isSome then Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit) =
         .ok () := by
   unfold Spot.OneStageZk.setupAt at h
   obtain ⟨⟨spec', sts⟩, hs, h⟩ := bind_ok h
@@ -255,7 +255,7 @@ theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneSta
   rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
   rcases draw with _ | d
   · simp only [hfull, hchecks, hsh, hcoins, hpub, ↓reduceIte, Option.isSome_none, Bool.false_eq_true]
-  · have hl : Flock.ProvedScope.sampleLaw true (Flock.Witness.zkTags I) false (some d) = .ok () := by
+  · have hl : Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false (some d) = .ok () := by
       simpa only [Option.isSome_some, eq_self_iff_true, ↓reduceIte] using hlaw
     simp only [hfull, hchecks, hsh, hcoins, hpub, ↓reduceIte, Option.isSome_some, hl]
 

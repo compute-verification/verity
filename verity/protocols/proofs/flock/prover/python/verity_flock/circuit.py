@@ -66,7 +66,7 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.commitments.windows.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
+from verity.commitments.periods.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -636,7 +636,7 @@ def block_log(rows: list[Port], unit_log: int, unit_packed: bool, stage_logs: li
 
 
 def _unit_ports(definition, cuts: dict | None = None) -> tuple[list[Port], list[Port]]:
-    """``definition``'s rows as `UnitStager` takes them (`verity.commitments.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
+    """``definition``'s rows as `UnitStager` takes them (`verity.commitments.periods.interface.unit_rows`), ``(ins, outs)``: a bit row
     per parameter, or ``k`` of a parameter ``cuts`` cuts ``k`` ways, and one per return field, each whole u16 words."""
     from verity.circuits.evaluation.reference import resolve
 

@@ -470,7 +470,7 @@ end point
 section src
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -581,7 +581,7 @@ open FlockC3.PubRows (ChecksAccepted)
 open FlockC3.RegLevels (Reached readsOwn_of_hown SharedValue site_of_checkShared site_of_portDiff)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -620,16 +620,16 @@ theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg 
     (hcr : ChecksC3Reached F cs coins rows) : ReachedChecked F dg N k Rw := by
   intro R ω t R₂ τ o hA j
   obtain ⟨ω₁, x₁, hx₁⟩ := (F.zs R ω t R₂ j).outcome_writes dg N (τ j) (hA.2.2 j)
-  have hwr : (o j).2.2 = (F.zs R ω t R₂ j).wr ((F.Vs j).law.live.draw ω₁) (τ j).1 x₁ := by rw [hx₁]
+  have hwr : (o j).2.2 = (F.zs R ω t R₂ j).wr ((F.Vs j).samplingDesign.live.draw ω₁) (τ j).1 x₁ := by rw [hx₁]
   have hacc₁ : AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own
-      ((F.zs R ω t R₂ j).wr ((F.Vs j).law.live.draw ω₁) (τ j).1 x₁) := by
+      ((F.zs R ω t R₂ j).wr ((F.Vs j).samplingDesign.live.draw ω₁) (τ j).1 x₁) := by
     rw [← hwr]
     exact (hA.1 j).1
   obtain ⟨R₁, tr₁, hw₁, hacc₂, hc3⟩ := hcr R ω t R₂ j ⟨(τ j).1, _, ⟨ω₁, x₁, rfl⟩, hacc₁⟩
   obtain ⟨ω₂, x₂, rfl⟩ := hw₁
-  have huniv : (F.Vs j).law.live.draw ω₁ = (F.Vs j).law.live.draw ω₂ :=
-    (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).law.src ω₁ u).trans
-      (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).law.src ω₂ u).symm
+  have huniv : (F.Vs j).samplingDesign.live.draw ω₁ = (F.Vs j).samplingDesign.live.draw ω₂ :=
+    (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).samplingDesign.src ω₁ u).trans
+      (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).samplingDesign.src ω₂ u).symm
   have hd₁ := ((F.zs R ω t R₂ j).hRec _ _ x₁ (acceptsZK_of_R hacc₁)).1
   have hd₂ := ((F.zs R ω t R₂ j).hRec _ _ x₂ (acceptsZK_of_R hacc₂)).1
   refine ⟨⟨ω₁, (τ j).1, x₁, hx₁⟩, F.ish, cs t, coins t, F.bind j, rows,

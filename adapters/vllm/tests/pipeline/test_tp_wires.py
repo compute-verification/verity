@@ -22,8 +22,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Builder, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import wiring as WI
 from verity.circuits.ops import gemm as GE
 from verity.definitions.registry import moe
 from verity.definitions.registry import tp_allreduce as TA
@@ -33,7 +33,7 @@ from tests.program.predict.test_steps import _mixed, _registered
 from tests.program.test_tp_binding import ROWS, N, batch_body, rank_body
 from verity_vllm.pipeline.tp import grain as TG
 from verity_vllm.pipeline.tp import wires as TW
-from verity_vllm.program import prune as P
+from verity_torch import prune as P
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp

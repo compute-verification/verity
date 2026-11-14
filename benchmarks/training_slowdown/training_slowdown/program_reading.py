@@ -33,7 +33,7 @@ from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import Coll, concat, tuple_of  # noqa: E402
 from verity.circuits.types import Array, Tuple  # noqa: E402
-from verity_vllm.program.frontend.train_step import AdamW, step_program  # noqa: E402
+from verity_torch.frontend.train_step import AdamW, step_program  # noqa: E402
 
 #: a Program's nesting is not bounded by Python's default recursion limit, so the reading runs in a thread of this
 #: stack, at this limit

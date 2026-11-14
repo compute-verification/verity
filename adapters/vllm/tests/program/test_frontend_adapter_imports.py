@@ -58,7 +58,7 @@ def test_the_scan_reads_every_way_a_module_imports():
     source = (
         "from verity_vllm import settings\n"
         "from verity_vllm.engine import env as engine_env, hooks\n"
-        "from verity_vllm.program.frontend.derive import derive\n"
+        "from verity_torch.frontend.derive import derive\n"
         "from . import emit\n"
         "from .rules import base\n"
         "from .. import inputs\n"

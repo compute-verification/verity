@@ -190,7 +190,7 @@ structure Verifier where
   program : Program
   query : Json
   /-- the agreed sampling design: a rule, which `Draw.derive` expands -/
-  law : Json
+  samplingDesign : Json
   workTable : Option Json
   scheme : String
   /-- each port its layout derives, with its `{"leaves", "domain"}`, and, for a port whose rows are the leaves of another
@@ -540,7 +540,7 @@ it ends, or some member's fewest and most sampled proof blocks under it, over th
 or its fewest is none, a sample that ends missing it (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
-    match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
+    match LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
     | .ok rs => !rs.isEmpty
     | .error _ => true
 
@@ -590,9 +590,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.law v.workTable with
+  match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2
@@ -658,9 +658,9 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.law v.workTable with
+  match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2

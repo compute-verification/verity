@@ -35,7 +35,7 @@ from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
 from verity.definitions.replay import replayer
 
-from verity_vllm.program.inputs import check_params
+from verity_torch.inputs import check_params
 
 from .build import (
     BUILDER_ID,

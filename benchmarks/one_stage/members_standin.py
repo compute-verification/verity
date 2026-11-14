@@ -32,7 +32,7 @@ import case_files as CF  # noqa: E402
 
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
-from verity.commitments.windows import interface as IF  # noqa: E402
+from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R  # noqa: E402
 
@@ -59,7 +59,7 @@ def window(d: Path, members: int) -> Path:
 def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> list[str]:
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
                                                   "adapters/vllm"))
-    return [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "records_audit.py"), "audit", "--window", str(win),
+    return [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py"), "audit", "--window", str(win),
             "--law", DESIGN, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, "--bin", str(flock),
             "--lean", str(lean / "verity-verify-proof"), "--firewall", str(lean / "flock-firewall"), "--ports", str(len(KS)),

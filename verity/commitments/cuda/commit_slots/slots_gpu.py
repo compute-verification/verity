@@ -2,7 +2,7 @@
 SHA-512 engine (``../sha512_rows/engine.py``): the engine hashes each group's rows into hm96 leaves and builds frame-v3
 levels; this module lays them out as one subtree per slot.
 
-``Plan(context, layout)`` holds what a run fixes (the engine, the unit and slot domains, each group's leaf table) on a device.
+``Plan(context, layout, device, build=DIR)`` holds what a run fixes (the engine, the unit and slot domains, each group's leaf table) on a device.
 A step is committed as its groups' outputs arrive::
 
     sc = StepCommitter(plan, step, slots, salt_key)     # salt_key: slots.fresh_salt_key(), the prover's
@@ -13,7 +13,7 @@ A step is committed as its groups' outputs arrive::
     pending.result()                                     # slots.StepCommit(root, slot_roots), the reference's
 
 or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``slots.commit`` signature with the plan in place
-of the context and layout. ``Plan(..., device="host")`` runs the same calls on the engine's host twin (g++), with numpy arrays
+of the context and layout. ``Plan(..., "host", build=DIR)`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference.
 
 The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
@@ -86,11 +86,11 @@ def _arch(major: int, minor: int) -> str:
     return f"{major}{minor}" + ("a" if major in (9, 10, 12) else "")
 
 
-def build(capability: str) -> list[str]:
-    """The engine's device and host builds for compute capability ``capability`` (e.g. ``"9.0"``), with no GPU needed: what
-    a job builds before it takes a GPU lease."""
+def build(capability: str, build: Path, default: str = E.DEFAULT_VARIANT) -> list[str]:
+    """The engine's device and host builds for compute capability ``capability`` (e.g. ``"9.0"``) under ``build``, with no
+    GPU needed: what a job builds before it takes a GPU lease."""
     major, minor = (int(x) for x in capability.split("."))
-    return [str(E.device_lib(_arch(major, minor)).path), str(E.host_lib().path)]
+    return [str(E.device_lib(build, _arch(major, minor), default).path), str(E.host_lib(build).path)]
 
 
 class _Engine(E.Engine):
@@ -290,8 +290,8 @@ class _Held:
 
 
 class Plan:
-    """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
-    Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
+    """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin),
+    the engine built under ``build`` with its kernels but the row kernel on ``default``. Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
     temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` CTAs an SM (the engine's ``minb``, 0 for the
     build's default; every setting commits the same bytes).
@@ -300,10 +300,11 @@ class Plan:
     gave), and the leaf kernel's persistent grid fills those alone: the commit then shares the device with work on the
     other SMs instead of taking turns with it for all of them. The bytes are the same at every ``sms``."""
 
-    def __init__(self, context: bytes, layout: S.CommitShape, device: Any = "cuda", arch: str | None = None,
-                 temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0, sms: int = 0) -> None:
+    def __init__(self, context: bytes, layout: S.CommitShape, device: Any, arch: str | None = None,
+                 temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0, sms: int = 0, *, build: Path,
+                 default: str = E.DEFAULT_VARIANT) -> None:
         self.context, self.layout, self.temp_bytes, self.leaf_minb = context, layout, temp_bytes, leaf_minb
-        self.engine = _Engine(device, arch)
+        self.engine = _Engine(device, arch, default=default, build=build)
         self.host, self.torch, self.device = self.engine.host, self.engine.torch, self.engine.device
         self.unit_dids = E.words(S.unit_domain_ids(context, layout))
         self.slot_did = S.slot_domain(context, layout).domain_id
