@@ -542,7 +542,7 @@ theorem zk_ligerito_reqsL (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) 
     (t.rounds[t.k]!).coins (t.rounds[t.k + 1]!).coins hz₀ (by show sch.m - 7 ≠ 1; omega) hβ₀
     (fOf p.oodValues[0]!) (gOf p.messages[0]!.1, gOf p.messages[0]!.2)
     (fun s q => foldRoundsZK_any P p sch.k0 0 1 s q _ hFl hFs)
-    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (drawKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
+    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (sampleKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
     (fun i => gOf zl.msgs.ybar[i.val]!) (gOf p.messages[sch.k0]!.1, gOf p.messages[sch.k0]!.2)
     (capDig p.recursiveCaps[0]!)
     ⟨0, Model.positions execArith (levelOf (sch.levels.getD 0 default)).queries

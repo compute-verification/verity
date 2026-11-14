@@ -714,7 +714,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     if len(set(drawn)) != len(drawn):
         raise ValueError("a unit is drawn once")
     tgt = target(binding)
-    doc_draw = _draw(draw, drawn)
+    doc_sample = _draw(draw, drawn)
     com, steps, layout = commitment, _Steps(commitment), commitment.layout
 
     roots = {r["port"]: r for r in w.rec["roots"]}
@@ -795,7 +795,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
                       "partition": w.win["partition_digest"], "program": part["program"], "scheme": w.win["scheme"],
                       "population": w.win["population"], "leaf_layer": w.win["leaf_layer"], "roots": used_roots},
            "target": tgt,
-           "draw": doc_draw,
+           "draw": doc_sample,
            "weights": {"program": next(iter(progs)) if progs else None,
                        "values": [{**weights[v].entry(), "row_schema": weights[v].schema} for v in sorted(used_values)]},
            "commitment": commitment_doc(com, steps),
@@ -1121,7 +1121,7 @@ def step_digest(reg: Mapping[str, Any]) -> str:
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
+def step_docket(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
     """The docket of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),

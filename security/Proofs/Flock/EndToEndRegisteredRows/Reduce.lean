@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
@@ -34,12 +34,12 @@ with the registered reads' term removed, at outcomes whose registration is on th
   its committed wires the value layer is the circuit's evaluation on its inputs (`Partition.correct_eval`, with
   `Layout.keyProg_readsOwn`);
 * **the registered reads' term**: at an accepted outcome whose reads the verifier owns, the registered check holds at
-  the outcome's registration (`EndToEndRegisteredDrawnFlat`'s second conjunct), so accepting while a read's leaf is off is
+  the outcome's registration (`EndToEndRegisteredSampledFlat`'s second conjunct), so accepting while a read's leaf is off is
   at most `q_R²/2^513` (`Registered.ReadsX.prob_off_le_at`).
 
-`RowsLinkLe` is `EndToEndRegisteredDrawnFlat`'s first conjunct with the input rows added to "wrong" and `δ_rows` to the
-bound, and `rowsLinkLe` proves it: `zk_session_soundHJR_custody_drawn_reg`'s proof, at an analysis whose wrong set
-and binding error carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_drawnC_rows`).
+`RowsLinkLe` is `EndToEndRegisteredSampledFlat`'s first conjunct with the input rows added to "wrong" and `δ_rows` to the
+bound, and `rowsLinkLe` proves it: `zk_session_soundHJR_custody_sampled_reg`'s proof, at an analysis whose wrong set
+and binding error carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_sampledC_rows`).
 -/
 
 @[expose] public section
@@ -64,7 +64,7 @@ def RowsLinkLe : Prop :=
     (hscope : Discharge.Layout.scopeOkH c = true)
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -86,7 +86,7 @@ def RowsLinkLe : Prop :=
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => Discharge.ZkReg.drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+          fun _ => Discharge.ZkReg.sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     let Xv := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -107,10 +107,10 @@ def RowsLinkLe : Prop :=
 
 /-- **The rows' extraction bound.** The registered reads' leaves are the public file's at every registration
 (`layShHJ`'s `regLeaf` reads only `pub`), so `rd.Off` is one proposition at every registration. Where it holds, the
-rows' disjunct is empty and the bound is `EndToEndRegisteredDrawnFlat`'s first conjunct. Where it fails, the registrant's
-openings `wo` open the registered commitments at every read, and the bound is `ZkLink.zk_flock_drawnC_rows` at "wrong"
-`wrongRegZ ∪ rowsWrongZ`, through `execRefinesZK_tables_drawn` and `ksAvgZC_le_strict`, as
-`zk_session_soundHJR_custody_drawn_reg` is `zk_flock_drawnC_reg`'s. -/
+rows' disjunct is empty and the bound is `EndToEndRegisteredSampledFlat`'s first conjunct. Where it fails, the registrant's
+openings `wo` open the registered commitments at every read, and the bound is `ZkLink.zk_flock_sampledC_rows` at "wrong"
+`wrongRegZ ∪ rowsWrongZ`, through `execRefinesZK_tables_sampled` and `ksAvgZC_le_strict`, as
+`zk_session_soundHJR_custody_sampled_reg` is `zk_flock_sampledC_reg`'s. -/
 theorem rowsLinkLe : RowsLinkLe := by
   intro n Reg own I ht c hc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw
     hM ρ hρ hr t' ht' τ qF qS L G P vb wo σ Xv hCR hA2 hRows
@@ -121,7 +121,7 @@ theorem rowsLinkLe : RowsLinkLe := by
     obtain ⟨p, hp, hne⟩ := h
     exact ⟨p, hp, fun h' => hne ((hcs R R' p).trans h')⟩
   by_cases hoff : rd.Off (reg σ)
-  · have hD := (Flock.SecurityProofs.EndToEndRegisteredDrawnFlat n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀
+  · have hD := (Flock.SecurityProofs.EndToEndRegisteredSampledFlat n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀
       d₀ y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2).1
     refine (prob_mono (q := fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
         u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv) ?_ G τ).trans
@@ -149,15 +149,15 @@ theorem rowsLinkLe : RowsLinkLe := by
     · exact ⟨acceptsZK_of_R hA, u, hu, Finset.mem_union_left _ hW⟩
     · exact ⟨acceptsZK_of_R hA, u, hu, Finset.mem_union_right _
         ((mem_rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo).2 ⟨g, hg, hrd, hne⟩)⟩
-  refine (execRefinesZK_tables_drawn execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
+  refine (execRefinesZK_tables_sampled execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
     (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
       (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-        fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+        fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     (fun S => ∃ u ∈ S, u ∈ W)).trans ?_
   refine (prob_mono (q := fun o : Bool × Finset (Fin n) => o.1 = true ∧ ¬ Disjoint W o.2)
     (fun o h => ⟨h.1, Finset.not_disjoint_iff.2 (let ⟨u, hu, hw⟩ := h.2; ⟨u, hw, hu⟩)⟩) _ _).trans ?_
-  refine (zk_flock_drawnC_rows execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo
+  refine (zk_flock_sampledC_rows execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo
     (ZkSession.loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
     (Discharge.Layout.keyProg_readsOwn c hU n _)
     hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) ht' σ).trans ?_
@@ -172,7 +172,7 @@ theorem rowsLinkLe : RowsLinkLe := by
 theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.EndToEndRegisteredRows := by
   intro n Reg own I ht D hDesc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' τ qF qS qR L G P vb wo σ hCR hA2 hRows hReg
-  have hD := Flock.SecurityProofs.EndToEndRegisteredDrawnFlat n Reg I ht own D.unroll (Flock.Desc.parse_flat hDesc) hU pub
+  have hD := Flock.SecurityProofs.EndToEndRegisteredSampledFlat n Reg I ht own D.unroll (Flock.Desc.parse_flat hDesc) hU pub
     hpub hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2
   have hLk := hL n Reg own I ht D.unroll (Flock.Desc.parse_flat hDesc) hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg
     N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2 hRows

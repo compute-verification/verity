@@ -35,10 +35,10 @@ open Flock
 /-! ## Coins -/
 
 /-- Where the verifier's coins come from (`rec_algebra.CoinSource`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
-when the verifier samples `n` of them, `drawnAll k` that every recorded round is sampled once `k` are. -/
+when the verifier samples `n` of them, `sampledAll k` that every recorded round is sampled once `k` are. -/
 structure CoinSource where
   round : Nat → Nat → Except String (Array F128)
-  drawnAll : Nat → Bool
+  sampledAll : Nat → Bool
 
 /-- A session record's coins by round (`CoinSource(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
 sample (`Flock.Transcript`), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements
@@ -48,7 +48,7 @@ def CoinSource.ofRounds (recorded : Array (Array F128)) : CoinSource :=
   { round := fun k n => match rounds[k]? with
       | some r => if r.size = n then .ok r else .error s!"round {k}: {n} coins drawn, the record has {r.size}"
       | none => .error s!"round {k}: {n} coins drawn, the record has no round"
-    drawnAll := fun k => k == rounds.size }
+    sampledAll := fun k => k == rounds.size }
 
 /-- Coins in whatever rounds the verifier samples, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
 random: the structure depends on the rounds, not on the coins). -/
@@ -521,7 +521,7 @@ own), the final check's two residuals (K's `c0`, `c1`), and its points. -/
 def ligerito (sch : Schedule) (M : Messages α) (tIn : α) (sws : Array Switched) : CM (Array α × LgPts) := do
   let ((initCh, levels, ext), st) ←
     (ligeritoRun sch M).run { s := kofF tIn, q := ((zero, zero), (zero, zero), (zero, zero)) }
-  if !(← read).drawnAll (← get) then throw "recorded rounds were never drawn"
+  if !(← read).sampledAll (← get) then throw "recorded rounds were never drawn"
   if st.msg ≠ M.msgs.size ∨ st.ood ≠ M.ood.size then throw "ligerito: leftover messages"
   let res ← liftE (finalWeights sch ext initCh levels st.oods st.conss sws)
   if M.yr.size ≠ 2 <<< ext then throw "ligerito: |yr|"

@@ -174,7 +174,7 @@ def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(
     coins = RL.CoinServer(_counter_rand())
     proxy = _proxy(coins=coins)
     resp = _session(proxy)
-    assert resp[0] == (RL.RESP_DRAW, "null") and resp[1] == (RL.RESP_OK,)
+    assert resp[0] == (RL.RESP_SAMPLE, "null") and resp[1] == (RL.RESP_OK,)
     assert resp[2][0] == RL.RESP_COINS and len(resp[2][1]) == 8
     assert [(r[0], len(r[1])) for r in resp[5:8]] == [(RL.RESP_COINS, 6), (RL.RESP_COINS, 1), (RL.RESP_COINS, 2)]
     assert resp[-1][0] == RL.RESP_VERDICT
@@ -459,7 +459,7 @@ def test_the_prover_hello_names_the_challengers_tree_and_live_coins_refuse_one()
         _tree_coins().commit_coins(SCHEDULE)
 
 
-def test_the_coin_server_draws_no_coin_tree_of_its_own():
+def test_the_coin_server_samples_no_coin_tree_of_its_own():
     with pytest.raises(ValueError, match="takes it from a source"):
         RL.CoinServer(_counter_rand(), TREE)
 

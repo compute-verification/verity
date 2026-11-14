@@ -12,7 +12,7 @@ With each level, that level's committed tops are staged too, every node held at 
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
 
 ``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
-session over it (`RecSetup.innerDrawn`), so the challenger answers ``Register`` with the verifier's full sample
+session over it (`RecSetup.innerSampled`), so the challenger answers ``Register`` with the verifier's full sample
 (``rec_live --draw``).
 
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the

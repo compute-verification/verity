@@ -10,7 +10,7 @@ import all Lean.Data.Json.FromToJson.Basic
 # The sample that proves no unit
 
 `emptySample N` is the subset sample of no unit over a population of `N`, as the verifier's executable prints a sample
-(`Draw.UnitDraw.toJson`). `Draw.UnitDraw.ofJson` decodes it to that sample (`ofJson_emptySample`) and `canonUtf8` prints
+(`Draw.UnitSample.toJson`). `Draw.UnitSample.ofJson` decodes it to that sample (`ofJson_emptySample`) and `canonUtf8` prints
 it (`canonUtf8_emptySample`), so a setup can be made at it over any population.
 -/
 
@@ -22,11 +22,11 @@ open Flock Refine
 open Lean (Json)
 
 /-- The sample that proves no unit of a population of `N`, as the verifier's executable prints a sample. -/
-def emptySample (N : Nat) : Json := Draw.UnitDraw.toJson ⟨.subset 0, N, #[], #[]⟩
+def emptySample (N : Nat) : Json := Draw.UnitSample.toJson ⟨.subset 0, N, #[], #[]⟩
 
 theorem emptySample_eq (N : Nat) : emptySample N =
     Json.mkObj [("law", "subset"), ("population", Lean.toJson N), ("k", Lean.toJson 0), ("units", Json.arr #[])] := by
-  unfold emptySample Draw.UnitDraw.toJson
+  unfold emptySample Draw.UnitSample.toJson
   simp only [Array.map_empty]
 
 /-- `canonUtf8` prints the sample of no unit. -/
@@ -55,7 +55,7 @@ theorem getObjVal?_mkObj_not {l : List (String × Json)} {k : String} (hk : (l.m
   exact ⟨_, rfl⟩
 
 /-- **The sample of no unit decodes**: to the subset sample of no unit over the population of `N`. -/
-theorem ofJson_emptySample (N : Nat) : Draw.UnitDraw.ofJson (emptySample N) = .ok ⟨.subset 0, N, #[], #[]⟩ := by
+theorem ofJson_emptySample (N : Nat) : Draw.UnitSample.ofJson (emptySample N) = .ok ⟨.subset 0, N, #[], #[]⟩ := by
   have hd : [("law", (Json.str "subset")), ("population", Lean.toJson N), ("k", Lean.toJson 0),
       ("units", Json.arr #[])].Pairwise (fun a b => ¬ compare a.1 b.1 = .eq) := by simp
   have hl := getObjVal?_mkObj hd (k := "law") (v := Json.str "subset") (by simp)
@@ -74,7 +74,7 @@ theorem ofJson_emptySample (N : Nat) : Draw.UnitDraw.ofJson (emptySample N) = .o
   have hN : ∀ c, J.asNat (Lean.toJson N) c = .ok N := fun _ => rfl
   have h0 : ∀ c, J.asNat (Lean.toJson 0) c = .ok 0 := fun _ => rfl
   rw [emptySample_eq]
-  unfold Draw.UnitDraw.ofJson
+  unfold Draw.UnitSample.ofJson
   simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, hl, hp, hk, hu, he, ho, hN, h0, hsz, ok_bind,
     Json.getArr?, Json.getStr?, Array.mapM_empty, pure, Except.pure]
   simp only [throw_bind']

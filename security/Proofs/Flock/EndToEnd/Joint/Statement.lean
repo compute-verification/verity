@@ -81,7 +81,7 @@ structure StratifiedBlock where
   pop : ℕ
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
-  y₀ : DrawSetupZKH I (mPtsOf D.unroll.g (∑ s, ks s)) S₀ (dj S₀)
+  y₀ : SampleSetupZKH I (mPtsOf D.unroll.g (∑ s, ks s)) S₀ (dj S₀)
   wr : Finset (Fin n) → Reg → LiveOut (mPtsOf D.unroll.g (∑ s, ks s)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
   N : ℕ
@@ -139,7 +139,7 @@ noncomputable def sim (τ : Strategy w.game) :=
     (decodesOnZK_of_runsOnZC execArith hs512 _ w.I w.wr _ _ _ _
       (runsZC_liveH w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj w.y₀
         w.wr _ tablesAtZKH_live w.hTags w.hCust.1
-        (fun ω => drawOkZKH_of_exec w.I (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src
+        (fun ω => sampleOkZKH_of_exec w.I (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src
           w.dj w.hCust.2 ω))) τ
 
 /-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
@@ -204,7 +204,7 @@ structure BlockRec (W : ℕ → StratifiedBlock) where
   idx : ℕ
   accepted : Prop
   wrong : Finset (Fin (W idx).n)
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace BlockRec
 

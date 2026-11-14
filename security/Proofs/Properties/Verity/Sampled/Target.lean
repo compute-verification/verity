@@ -164,7 +164,7 @@ theorem ks {r : Verity.WindowFiles} (hr : r = Verity.WindowFiles.one A.fileRead)
     Verity.Game.prob_mono (fun o ho => ⟨ho, fun hR =>
       lt_irrefl ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part Fs) hR⟩) _ τ
   refine (hmono.trans hv).trans (add_le_add (add_le_add (add_le_add ?_ ?_) le_rfl) le_rfl)
-  · unfold Live.drawMiss
+  · unfold Live.sampleMiss
     rw [Flock.Bridge.pa_partOf A.P hns _ Fs hFs]
     apply ENNReal.ofReal_le_ofReal
     have : Finite {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card} :=

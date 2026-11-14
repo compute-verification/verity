@@ -135,7 +135,7 @@ def UnitsOk (units : Array Nat) (k n : Nat) : Prop :=
 instance instDecidableUnitsOk (units : Array Nat) (k n : Nat) : Decidable (UnitsOk units k n) := by
   unfold UnitsOk; infer_instance
 
-def drawnJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
+def sampledJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
 
 /-- The service's answer to an execution phase commitment record that keeps PoUW's rule. -/
 def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
@@ -159,7 +159,7 @@ def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence)
     else if prof.delta ≠ p.delta then
       .reject s!"profile: delta {prof.delta.toString}, not the window's {p.delta.toString}"
     else if prof.drawn ≠ #[(unitLevel, k)] then
-      .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
+      .reject s!"profile: drawn {cs (sampledJson prof.drawn)}, not {k} units"
     else if draw.law ≠ .subset k ∨ draw.population ≠ n then
       .reject s!"draw: {lawName draw.law} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then

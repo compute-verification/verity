@@ -67,7 +67,7 @@ def setupHV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (
   -- a stratified sample's strata are the verifier's own, from its program and query, when it holds both
   if let some d := draw then
     if let (Except.ok (Draw.Law.stratified k strata), some v, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), pv, program) then
+        ((Draw.UnitSample.ofJson d).map (·.law), pv, program) then
       let (law, _) ← v.strat prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmRow.checkPublic c pub
@@ -122,7 +122,7 @@ def setupHiddenV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
     | none => pure pop
   if let some d := draw then
     if let (Except.ok (Draw.Law.stratified k strata), some v, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), pv, program) then
+        ((Draw.UnitSample.ofJson d).map (·.law), pv, program) then
       let (law, _) ← v.strat prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
@@ -176,7 +176,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
     (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) : V (SessionSpec × Array Stmt) := do
   -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
-    if let .ok u := Draw.UnitDraw.ofJson d then
+    if let .ok u := Draw.UnitSample.ofJson d then
       if let .work .. := u.law then
         match closure with
         | some cm =>
@@ -186,7 +186,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
   -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitSample.ofJson d).map (·.law) then
       let (some v, some prog, some K) := (pv, program, stratified)
         | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
@@ -195,7 +195,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitSample.ofJson d).map (·.law) then
       let (some v, some prog, some (K, table)) := (pv, program, work)
         | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
@@ -222,7 +222,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
   -- the sample's sampling design and count are refused before the circuit is read
-  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  let u? ← draw.mapM Draw.UnitSample.ofJson
   if let some u := u? then
     match u.law with
     | .subset _ | .stratified .. => splits u.units.size
@@ -248,7 +248,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
+            unitSample := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option smartUnfolding false in
 theorem setupH_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)

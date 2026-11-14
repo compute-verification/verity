@@ -2811,6 +2811,57 @@
     },
     {
       "paths": {
+        "adapters/vllm/verity_vllm/properties/kernel_allowlist.py": "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py",
+        "adapters/vllm/verity_vllm/properties/quarantine_lint.py": "adapters/vllm/tests/properties/quarantine_lint.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/harness/native/": "benchmarks/pouw/harness/native/",
+        "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/": "benchmarks/pouw/nvfp4_sm120/"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Bridge/DrawnLaw.lean": "security/Proofs/Flock/Bridge/SampledLaw.lean",
+        "security/Proofs/Flock/Claims/Complete/Json/UnitDraw.lean": "security/Proofs/Flock/Claims/Complete/Json/UnitSample.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDraw.lean": "security/Proofs/Flock/Claims/KS/PlainSample.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawAcc.lean": "security/Proofs/Flock/Claims/KS/PlainSampleAcc.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawAccJK.lean": "security/Proofs/Flock/Claims/KS/PlainSampleAccJK.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawAccK.lean": "security/Proofs/Flock/Claims/KS/PlainSampleAccK.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawDec.lean": "security/Proofs/Flock/Claims/KS/PlainSampleDec.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawDecJK.lean": "security/Proofs/Flock/Claims/KS/PlainSampleDecJK.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawDecK.lean": "security/Proofs/Flock/Claims/KS/PlainSampleDecK.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawJ.lean": "security/Proofs/Flock/Claims/KS/PlainSampleJ.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawJCols.lean": "security/Proofs/Flock/Claims/KS/PlainSampleJCols.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawJMove.lean": "security/Proofs/Flock/Claims/KS/PlainSampleJMove.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawJRun.lean": "security/Proofs/Flock/Claims/KS/PlainSampleJRun.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawK.lean": "security/Proofs/Flock/Claims/KS/PlainSampleK.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawKDefs.lean": "security/Proofs/Flock/Claims/KS/PlainSampleKDefs.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawRCols.lean": "security/Proofs/Flock/Claims/KS/PlainSampleRCols.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawRColsE.lean": "security/Proofs/Flock/Claims/KS/PlainSampleRColsE.lean",
+        "security/Proofs/Flock/Claims/KS/PlainDrawSim.lean": "security/Proofs/Flock/Claims/KS/PlainSampleSim.lean",
+        "security/Proofs/Flock/Claims/KS/ZkDrawJ.lean": "security/Proofs/Flock/Claims/KS/ZkSampleJ.lean",
+        "security/Proofs/Flock/Claims/Sampling/EndToEndDraw.lean": "security/Proofs/Flock/Claims/Sampling/EndToEndSample.lean",
+        "security/Proofs/Flock/Claims/Sampling/Select/DrawLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SampleLaw.lean",
+        "security/Proofs/Flock/EndToEndDrawn.lean": "security/Proofs/Flock/EndToEndSampled.lean",
+        "security/Proofs/Flock/EndToEndDrawn/": "security/Proofs/Flock/EndToEndSampled/",
+        "security/Proofs/Flock/Soundness/Discharge/Composed/DrawnJ.lean": "security/Proofs/Flock/Soundness/Discharge/Composed/SampledJ.lean",
+        "security/Proofs/Flock/Soundness/Discharge/Exec/LawDraw.lean": "security/Proofs/Flock/Soundness/Discharge/Exec/LawSample.lean",
+        "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundDrawOk.lean": "security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundSampleOk.lean",
+        "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOk.lean": "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOk.lean",
+        "security/Proofs/Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean": "security/Proofs/Flock/Soundness/Discharge/ZkLink/SampleOkJson.lean",
+        "security/Proofs/Flock/Soundness/ExecDraw.lean": "security/Proofs/Flock/Soundness/ExecSample.lean",
+        "security/Proofs/Flock/Soundness/ExecDrawOS.lean": "security/Proofs/Flock/Soundness/ExecSampleOS.lean",
+        "security/Proofs/Flock/Soundness/KeyedDraw.lean": "security/Proofs/Flock/Soundness/KeyedSample.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerDraw.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerSample.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/HiddenDraw.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/HiddenSample.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/WiresDrawn.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/WiresSampled.lean",
+        "verity/protocols/proofs/spot/verifier/one_stage/hidden_draw.py": "verity/protocols/proofs/spot/verifier/one_stage/hidden_sample.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/tests/program/test_broadcast_bias_add.py": "adapters/torch/tests/frontend/test_broadcast_bias_add.py",
         "adapters/vllm/tests/program/test_composition.py": "adapters/torch/tests/frontend/test_composition.py",
         "adapters/vllm/tests/program/test_derive_gate_path.py": "adapters/torch/tests/frontend/test_derive_gate_path.py",

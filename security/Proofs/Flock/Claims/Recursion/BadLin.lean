@@ -151,49 +151,49 @@ theorem Ex_Fdev_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
     (hk : 0 < I.V.k (xI D x)) :
     Ex (fun s : (Fdev H D I DO decO P x M hk).S => ((Fdev H D I DO decO P x M hk).cost s : ℝ)) ≤
       2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (drawCost H D I DO decO P x t.1 t.2 : ℝ)) := by
+        (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) := by
   have hoff : ∀ j : ℕ, PrefixDet (k := D.V.k x) (Coin := Coin) fun _ => j := fun _ _ _ _ => rfl
   have hω : ∀ (j : Fin (I.V.k (xI D x))) (ω : Ω),
       (Ex fun r : Fin (D.V.k x) → Coin =>
         Ex fun b : ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
             (Fin M → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) =>
           (linkCost (linkG H D I DO decO P x j ω r)
-            (fun v => drawCost H D I DO decO P x ω (fork j r v.1, v.2)) M b : ℝ)) ≤
-        2 * Ex fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x ω d : ℝ) := by
+            (fun v => sampleCost H D I DO decO P x ω (fork j r v.1, v.2)) M b : ℝ)) ≤
+        2 * Ex fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω d : ℝ) := by
     intro j ω
     let F : (Fin (D.V.k x) → Coin) → ℝ := fun r =>
-      Ex fun c : (EO D I DO decO).C x => (drawCost H D I DO decO P x ω (r, c) : ℝ)
+      Ex fun c : (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω (r, c) : ℝ)
     have hu : ∀ r, (Ex fun v : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (drawCost H D I DO decO P x ω (fork j r v.1, v.2) : ℝ)) = Ex fun r' => F (fork j r r') := fun r => Ex_prod _
+        (sampleCost H D I DO decO P x ω (fork j r v.1, v.2) : ℝ)) = Ex fun r' => F (fork j r r') := fun r => Ex_prod _
     calc _ ≤ Ex fun r : Fin (D.V.k x) → Coin => 2 * Ex fun v : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-            (drawCost H D I DO decO P x ω (fork j r v.1, v.2) : ℝ) :=
+            (sampleCost H D I DO decO P x ω (fork j r v.1, v.2) : ℝ) :=
           Ex_mono fun r => Ex_linkCost_le _ _ M
       _ = 2 * Ex fun p : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) => F (fork j p.1 p.2) := by
           rw [Ex_mul_left, Ex_prod (fun p : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) => F (fork j p.1 p.2))]
           exact congrArg (2 * ·) (congrArg Ex (funext hu))
       _ = 2 * Ex F := by rw [Ex_fork (hoff j) F]
       _ = _ := congrArg (2 * ·)
-          (Ex_prod (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (drawCost H D I DO decO P x ω d : ℝ))).symm
+          (Ex_prod (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => (sampleCost H D I DO decO P x ω d : ℝ))).symm
   have hj : ∀ j : Fin (I.V.k (xI D x)),
       Ex (fun rest : Ω × (Fin (D.V.k x) → Coin) × ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
           (Fin M → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) =>
         (linkCost (linkG H D I DO decO P x j rest.1 rest.2.1)
-          (fun v => drawCost H D I DO decO P x rest.1 (fork j rest.2.1 v.1, v.2)) M rest.2.2 : ℝ)) ≤
+          (fun v => sampleCost H D I DO decO P x rest.1 (fork j rest.2.1 v.1, v.2)) M rest.2.2 : ℝ)) ≤
         2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-          (drawCost H D I DO decO P x t.1 t.2 : ℝ)) := by
+          (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) := by
     intro j
     rw [Ex_prod (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (drawCost H D I DO decO P x t.1 t.2 : ℝ)), ← Ex_mul_left]
+      (sampleCost H D I DO decO P x t.1 t.2 : ℝ)), ← Ex_mul_left]
     exact (Ex_prod _).trans_le (Ex_mono fun ω => (Ex_prod _).trans_le (hω j ω))
   calc Ex (fun s : (Fdev H D I DO decO P x M hk).S => ((Fdev H D I DO decO P x M hk).cost s : ℝ))
       = Ex fun j : Fin (I.V.k (xI D x)) =>
           Ex fun rest : Ω × (Fin (D.V.k x) → Coin) × ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) ×
               (Fin M → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) =>
             (linkCost (linkG H D I DO decO P x j rest.1 rest.2.1)
-              (fun v => drawCost H D I DO decO P x rest.1 (fork j rest.2.1 v.1, v.2)) M rest.2.2 : ℝ) :=
+              (fun v => sampleCost H D I DO decO P x rest.1 (fork j rest.2.1 v.1, v.2)) M rest.2.2 : ℝ) :=
         Ex_prod (fun s : LinCoins D I DO decO Ω x M => ((Fdev H D I DO decO P x M hk).cost s : ℝ))
     _ ≤ Ex fun _ : Fin (I.V.k (xI D x)) => 2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-          (drawCost H D I DO decO P x t.1 t.2 : ℝ)) := Ex_mono hj
+          (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) := Ex_mono hj
     _ = _ := by
         have : Nonempty (Fin (I.V.k (xI D x))) := ⟨⟨0, hk⟩⟩
         exact Ex_const _
@@ -205,10 +205,10 @@ theorem Pr_bad_le_ecr {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
     (P : Prover Ω) (M : ℕ) (hk : 0 < I.V.k (xI D x)) (hcr : ExpectedCR H (Fdev H D I DO decO P x M hk)) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       I.V.k (xI D x) * (2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (drawCost H D I DO decO P x t.1 t.2 : ℝ)) / 2 ^ (256 : ℝ)) + I.V.k (xI D x) / ((M : ℝ) + 1) := by
+        (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) / 2 ^ (256 : ℝ)) + I.V.k (xI D x) / ((M : ℝ) + 1) := by
   have hF : (Fdev H D I DO decO P x M hk).Pr H ≤
       2 * Ex (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (drawCost H D I DO decO P x t.1 t.2 : ℝ)) / 2 ^ (256 : ℝ) :=
+        (sampleCost H D I DO decO P x t.1 t.2 : ℝ)) / 2 ^ (256 : ℝ) :=
     hcr.trans (div_le_div_of_nonneg_right (Ex_Fdev_cost_le H D I DO decO x P M hk) (by positivity))
   have := mul_le_mul_of_nonneg_left hF (Nat.cast_nonneg (I.V.k (xI D x)) : (0 : ℝ) ≤ I.V.k (xI D x))
   linarith [Pr_bad_le_lin hFk decO x P M hk]

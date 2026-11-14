@@ -18,8 +18,8 @@ file states the layout that fixes those places before the sample and proves what
   proof block `v` is the population's `base k + v`. Both sides are fixed by the registration, before any coin;
 * under it the members partition the population (`Laid.exists_member`, `Laid.member_unique`, `Laid.mem_iff`), a sample
   is its members' parts and nothing else (`Laid.parts`, an equivalence; `Laid.card_parts`), and member `k`'s part of the
-  window's sample is read off it by the layout alone (`Laid.mem_design_draw`, `Laid.mem_draw_iff`;
-  `Laid.design_draw_ok` on the sampled list the verifier's bytes give);
+  window's sample is read off it by the layout alone (`Laid.mem_design_sample`, `Laid.mem_sample_iff`;
+  `Laid.design_sample_ok` on the sampled list the verifier's bytes give);
 * **the members' sampling designs are the window's marginals**: an event of member `k`'s sample has, under `design k`
   and under `memberLaw τ k` (the design its session is played alone at), the probability the window's one sample gives
   the event at its part (`prCoin_design`, `prCoin_memberLaw`); the members' samples together are the window's
@@ -254,18 +254,18 @@ theorem disjoint_part_iff (k : Fin w.ms.length) (S : Finset (Fin w.nJ)) (B : Fin
 
 variable (w)
 
-/-- **The window's sample on the verifier's bytes**: where `drawUnits` samples the list `r.1`, the units of that
+/-- **The window's sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1`, the units of that
 list. -/
 theorem draw_ok (ω : w.L.Ω) {r : Array ℕ × ℕ}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
+    (hr : _root_.Spot.Draw.sampleUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ u.val ∈ r.1 := by
   dsimp only [JointAuditV5.L, Bridge.execSel]
   rw [hr]
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
 
 /-- **The window's sample where the verifier's bytes run out**: every unit. -/
-theorem draw_error (ω : w.L.Ω) {e : String}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
+theorem sample_error (ω : w.L.Ω) {e : String}
+    (hr : _root_.Spot.Draw.sampleUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e)
     (u : Fin w.nJ) :
     u ∈ w.L.draw ω := by
   dsimp only [JointAuditV5.L, Bridge.execSel]
@@ -278,42 +278,42 @@ namespace Laid
 
 /-- **Member `k`'s sample is the window's at its place**: its proof block `v` is sampled exactly when the population's
 `base k + v` is. -/
-theorem mem_design_draw (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fin (w.ms.get k).n) (u : Fin w.nJ)
+theorem mem_design_sample (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fin (w.ms.get k).n) (u : Fin w.nJ)
     (hu : u.val = w.base k + v.val) : v ∈ (w.design k).draw ω ↔ u ∈ w.L.draw ω := by
   have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
   rw [← e]
   exact w.mem_part k _ v
 
 /-- **A sampled proof block `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
-theorem mem_draw_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
+theorem mem_sample_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ (w.design k).draw ω := by
   constructor
   · intro hu
     obtain ⟨k, v, rfl⟩ := h.exists_emb u
     exact ⟨k, v, h.emb k v, (w.mem_part k _ v).2 hu⟩
   · rintro ⟨k, v, hu, hv⟩
-    exact (h.mem_design_draw k ω v u hu).1 hv
+    exact (h.mem_design_sample k ω v u hu).1 hv
 
-/-- **Member `k`'s sample on the verifier's bytes**: where `drawUnits` samples the list `r.1` over the window's
+/-- **Member `k`'s sample on the verifier's bytes**: where `sampleUnits` samples the list `r.1` over the window's
 population, member `k`'s sample is its part of that list (`MemberLayout.memberUnits`): the members' samples are read
 off the one sampled list in order, by the registered bases and counts. -/
-theorem design_draw_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : Array ℕ × ℕ}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
+theorem design_sample_ok (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {r : Array ℕ × ℕ}
+    (hr : _root_.Spot.Draw.sampleUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok r)
     (v : Fin (w.ms.get k).n) :
     v ∈ (w.design k).draw ω ↔ v.val ∈ MemberLayout.memberUnits w.counts k.1 (w.ms.get k).n r.1.toList := by
   have hlt : w.base k + v.val < w.nJ := by
     have := ((h.mem_iff k _).1 ⟨v, rfl⟩).2
     rw [← h.emb k v]
     exact ((w.ms.get k).emb v).2
-  rw [h.mem_design_draw k ω v ⟨w.base k + v.val, hlt⟩ rfl, w.draw_ok ω hr, MemberLayout.mem_memberUnits,
+  rw [h.mem_design_sample k ω v ⟨w.base k + v.val, hlt⟩ rfl, w.draw_ok ω hr, MemberLayout.mem_memberUnits,
     Array.mem_toList_iff]
   exact ⟨fun hu => ⟨v.2, hu⟩, fun hu => hu.2⟩
 
 /-- **Member `k`'s sample where the verifier's bytes run out**: every one of its proof blocks. -/
-theorem design_draw_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
-    (hr : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
+theorem design_sample_error (k : Fin w.ms.length) (ω : w.L.Ω) {e : String}
+    (hr : _root_.Spot.Draw.sampleUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .error e) :
     (w.design k).draw ω = Finset.univ :=
-  Finset.eq_univ_iff_forall.2 fun v => (w.mem_part k _ v).2 (w.draw_error ω hr _)
+  Finset.eq_univ_iff_forall.2 fun v => (w.mem_part k _ v).2 (w.sample_error ω hr _)
 
 end Laid
 

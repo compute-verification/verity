@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Binding.RowsX
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
 
-`flock_e2e_countL` and `flock_e2e_drawnL` (`E2E.lean`), and their forms at the executable's sampling design
+`flock_e2e_countL` and `flock_e2e_sampledL` (`E2E.lean`), and their forms at the executable's sampling design
 (`ExecStratified.lean`), with `vb : ValueBinding` built from the serving rows (`HmRows.binding`). The binding's hash is
 SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, and what `vb` carried becomes:
 * `HmRowComputes` (`hHm`), the circuit's row hashing, the one gap of the binding;
@@ -116,11 +116,11 @@ theorem flock_e2e_count_hm96LX
       (add_le_add (add_le_add le_rfl (ksAvgBE_le_strictL H E Lf plan k (reg σ) (cont σ) hKS)) le_rfl))
     (tr.le hT))
 
-/-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_drawnL` at
+/-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_sampledL` at
 `vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96L` (`cr/sha-512` through `hKS`
 and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `δ_link`, both at `L`, so it holds as
 stated at the live sample (`L := Law.execOS …`), with no A3. -/
-theorem flock_e2e_drawn_hm96L
+theorem flock_e2e_sampled_hm96L
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -140,7 +140,7 @@ theorem flock_e2e_drawn_hm96L
       StrictCR.ksAvgStrict plan L k qF qS (reg σ) + P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
   (prob_split_accept _ σ execAccept _).trans (add_le_add
-    ((flock_e2e_drawnL P H E Lf plan tab (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1) dp ones
+    ((flock_e2e_sampledL P H E Lf plan tab (execAccept := fun o => o.1 = true ∧ execAccept o) (fun _ h => h.1) dp ones
       hConst zeros hZero (rs.binding hHm) hk hRw hM hρ hr ht σ hCR).trans
       (add_le_add (ksAvgBE_le_strictL H E Lf plan k (reg σ) (cont σ) hKS) le_rfl))
     (tr.le hT))

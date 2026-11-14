@@ -267,7 +267,7 @@ noncomputable def toTrials (L : Law n) : Trials L PS B where
   T R _ c h := haveI : Nonempty (J.ReadsAt L c) := h
     (Game.draw (J.ReadsAt L c)).bind fun w => (J.G (L.draw w.1) R).map fun o => (w.1, o)
   sT R τ c h := haveI : Nonempty (J.ReadsAt L c) := h
-    Strategy.bind _ _ (drawStrat _) fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1))
+    Strategy.bind _ _ (sampleStrat _) fun w => Strategy.map _ _ (J.strat (L.draw w.1) R (τ w.1))
   rd R _ c e := J.readsOut L R c e
   op R _ c e v := Classical.epsilon fun o => ∃ u ∈ L.draw e.1, c ∈ J.reads u ∧
     ∃ w, e.2.2 u = some w ∧ J.Rel (L.draw e.1) R u w ∧ o = J.opens (L.draw e.1) R u w c ∧ B.val o = v

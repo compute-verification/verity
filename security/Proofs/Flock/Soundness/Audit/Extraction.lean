@@ -193,7 +193,7 @@ theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
       (prCoin_false.le.trans (zero_le))
 
 /-- **Sampled proof blocks, with a randomized extractor**, are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_drawn (A : ExtractionAnalysis L Reg session)
+theorem extraction_audit_sampled (A : ExtractionAnalysis L Reg session)
     {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.wrong (A.committedOf σ)) o.2) (audit L Reg session) σ ≤

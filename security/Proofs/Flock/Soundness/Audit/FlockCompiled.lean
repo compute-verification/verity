@@ -281,7 +281,7 @@ theorem flock_compiled_count
     (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink K σ
 
 /-- **Sampled proof blocks of the compiled Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_compiled_drawn
+theorem flock_compiled_sampled
     (decode : Decoder (C := C) (Reg := Reg) plan)
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
@@ -291,7 +291,7 @@ theorem flock_compiled_drawn
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (sessionC H E plan)) σ ≤
       ksAvg H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
-  extraction_audit_drawn (P.analysisC H E plan decode Xc Kr hlow)
+  extraction_audit_sampled (P.analysisC H E plan decode Xc Kr hlow)
     (P.flock_compiled_knowledgeSound H E plan decode Xc hK hlow) hlink σ
 
 end Partition

@@ -155,7 +155,7 @@ theorem repJ_round (T : ZKMal.CoinLayer.TableData)
     intro k link c' t dom xs hi hk hph
     obtain ⟨lay, mask, hs, hc, -, -⟩ := Loop.placeholder_ok hph
     subst hc
-    rw [Loop.ofDraws_rowH_size]
+    rw [Loop.ofSamples_rowH_size]
     exact (Loop.sizesOk_at hSz hk).2.2.2 lay mask hs
   rcases Nat.eq_zero_or_pos (nextAt spec sts (M.hist σ.c)).2 with h0 | hpos
   · have hfr := freshAt_cur hsl hF hJ hr.rep_eq hlt hD.names h0

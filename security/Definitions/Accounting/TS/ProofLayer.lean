@@ -44,7 +44,7 @@ TS model's accounting:
   failure). Its fork form (`ProofLayer.Forked`, as ruled): two runs off one commitment, both accepted, open it
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
-  (`ProofLayer.SoundAt`); Flock's `Flock.Guarantees.EndToEndHiddenDrawn` is this bound for a session, against the
+  (`ProofLayer.SoundAt`); Flock's `Flock.Guarantees.EndToEndHiddenSampled` is this bound for a session, against the
   committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
   rows its registered roots open to, and its output rows (the sinks committed after the coin) the Program's on those
   rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` states that bound for one session. The bridge

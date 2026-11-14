@@ -157,7 +157,7 @@ class ShowsSalt(RL.Proxy):
     def _handle(self, r):
         if r[0] == RL.REQ_PROOF:
             super()._handle(r)
-            return RL.resp_str(RL.RESP_DRAW, json.dumps(self.private[-1]["salts"][-1]))
+            return RL.resp_str(RL.RESP_SAMPLE, json.dumps(self.private[-1]["salts"][-1]))
         return super()._handle(r)
 
 

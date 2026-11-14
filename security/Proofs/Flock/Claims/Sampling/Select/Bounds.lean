@@ -46,9 +46,9 @@ import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The sample `drawUnits` makes misses a set of units no more often than its sampling design's `P_a`
+# The sample `sampleUnits` makes misses a set of units no more often than its sampling design's `P_a`
 
-`drawUnits` runs its sampling design's stages on the coins in order (`drawUnits_seq`), and each stage is bounded by its sampler's
+`sampleUnits` runs its sampling design's stages on the coins in order (`sampleUnits_seq`), and each stage is bounded by its sampler's
 escape on a stream of any length (`Law.subset_exec_escape_le`, `Law.bernoulli_exec_escape_le`), so the stopping-time
 bound (`seqMiss_le`) multiplies them.
 
@@ -79,10 +79,10 @@ theorem uniform_zero (src : ByteArray) : ∀ fuel pos, Flock.Draw.uniform 0 src 
       exact uniform_zero src fuel _
 
 theorem loopSw_none (n : ℕ) (src : ByteArray) :
-    ∀ (l : List ℕ) (sw : Std.HashMap ℕ ℕ) (pos : ℕ), n ∈ l → DrawExec.loopSw n src l sw pos = none
+    ∀ (l : List ℕ) (sw : Std.HashMap ℕ ℕ) (pos : ℕ), n ∈ l → SampleExec.loopSw n src l sw pos = none
   | [], _, _, h => absurd h List.not_mem_nil
   | i :: is, sw, pos, h => by
-    unfold DrawExec.loopSw
+    unfold SampleExec.loopSw
     split
     · rfl
     · rename_i r p hu
@@ -94,7 +94,7 @@ theorem loopSw_none (n : ℕ) (src : ByteArray) :
 
 /-- **`subset k n` samples nothing when `k > n`**: its `n`-th step samples from `[0, 0)`. -/
 theorem subset_none_of_lt (k n : ℕ) (hk : n < k) (src : ByteArray) : Flock.Draw.subset k n src = none := by
-  rw [DrawExec.subset_eq, loopSw_none n src _ _ _ (List.mem_range'.2 ⟨n, hk, by omega⟩), Option.map_none]
+  rw [SampleExec.subset_eq, loopSw_none n src _ _ _ (List.mem_range'.2 ⟨n, hk, by omega⟩), Option.map_none]
 
 /-- Stages with the same reads and samplers, each condition implying the other's. -/
 theorem seqMiss_imp : ∀ (l l' : List Stage),
@@ -122,7 +122,7 @@ theorem bernoulli_stage_bounded (n num den : ℕ) [NeZero den] (h : num ≤ den)
   simpa [finOf] using hu
 
 theorem escape_ne_top {n : ℕ} (L : Law n) (B : Finset (Fin n)) : L.escape B ≠ ⊤ :=
-  ne_top_of_le_ne_top ENNReal.one_ne_top (DrawExec.prCoin_le_one _)
+  ne_top_of_le_ne_top ENNReal.one_ne_top (SampleExec.prCoin_le_one _)
 
 /-- The claims' probability of an event below a finite bound on its `prCoin`. -/
 theorem Pr_le_of_prCoin {L : ℕ} (E : (Fin L → Fin 256) → Prop) (q : ℝ≥0∞) (hq : q ≠ ⊤) (h : prCoin E ≤ q) :
@@ -134,10 +134,10 @@ theorem Pr_le_of_prCoin {L : ℕ} (E : (Fin L → Fin 256) → Prop) (q : ℝ≥
 `((den − num)/den)^|U|`. -/
 theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     (∀ k, k ≤ n → Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        Draw.drawUnits (.subset k) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
+        Draw.sampleUnits (.subset k) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
       ((n - U.card).choose k : ℝ) / (n.choose k : ℝ)) ∧
     (∀ num den, 0 < den → num ≤ den → Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        Draw.drawUnits (.bernoulli num den) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
+        Draw.sampleUnits (.bernoulli num den) n (bytesOf src) = .ok (units, read) ∧ ∀ u ∈ U, u ∉ units) ≤
       (((den - num : ℕ) : ℝ) / den) ^ U.card) := by
   refine ⟨fun k hk => ?_, fun num den hden h => ?_⟩
   · have hle := seqMiss_le [(⟨2 * k * Flock.Draw.width n + 64, Flock.Draw.subset k n, fun D => ∀ u ∈ U, u ∉ D⟩,
@@ -147,7 +147,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     dsimp only at hle
     refine le_trans (Pr_le_of_prCoin _ _ (escape_ne_top _ _) (le_trans (prCoin_mono fun f hf => ?_) hle)) ?_
     · obtain ⟨units, read, hd, hm⟩ := hf
-      refine seqMiss_imp _ _ ?_ _ _ (drawUnits_seq _ n _ units read hd)
+      refine seqMiss_imp _ _ ?_ _ _ (sampleUnits_seq _ n _ units read hd)
       exact .cons ⟨rfl, rfl, fun D hD u hu huD => hm u hu (hD u huD)⟩ .nil
     · rw [Law.subset_escape, card_finOf hU, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
   · have : NeZero den := ⟨by omega⟩
@@ -158,7 +158,7 @@ theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     dsimp only at hle
     refine le_trans (Pr_le_of_prCoin _ _ (escape_ne_top _ _) (le_trans (prCoin_mono fun f hf => ?_) hle)) ?_
     · obtain ⟨units, read, hd, hm⟩ := hf
-      refine seqMiss_imp _ _ ?_ _ _ (drawUnits_seq _ n _ units read hd)
+      refine seqMiss_imp _ _ ?_ _ _ (sampleUnits_seq _ n _ units read hd)
       exact .cons ⟨rfl, rfl, fun D hD u hu huD => hm u hu (hD u huD)⟩ .nil
     · rw [Law.bernoulli_escape h, card_finOf hU, ENNReal.toReal_pow, bernFactor_zero num den]
 
@@ -221,7 +221,7 @@ theorem stratumQ_toReal (W : Finset ℕ) (s : Flock.Draw.Stratum) (o : ℕ) :
 theorem stratumQ_le_one (W : Finset ℕ) (s : Flock.Draw.Stratum) (o : ℕ) : stratumQ W s o ≤ 1 := by
   unfold stratumQ
   split
-  · exact DrawExec.prCoin_le_one _
+  · exact SampleExec.prCoin_le_one _
   · exact zero_le_one
 
 theorem strataStages_bounded (W : Finset ℕ) :
@@ -241,7 +241,7 @@ theorem strataStages_prod (W : Finset ℕ) : ∀ (l : List Flock.Draw.Stratum) (
     simp only [strataStages, List.map_cons, List.prod_cons, strataPa]
     exact ⟨mul_le_one' (stratumQ_le_one W s o) h1, by rw [ENNReal.toReal_mul, h2, stratumQ_toReal]⟩
 
-/-- **The strata's stages as `drawUnits` runs them miss their windows**: stage `i` of the strata `St` samples its
+/-- **The strata's stages as `sampleUnits` runs them miss their windows**: stage `i` of the strata `St` samples its
 `i`-th stratum's units among `units`, and no unit at a slot of `W` is among them. -/
 theorem strataStages_of (St : Array Flock.Draw.Stratum) (units : Array ℕ) (W : Finset ℕ)
     (hW : ∀ v ∈ W, (St.toList.flatMap fun s => expand s.units.toList).getD v 0 ∉ units) :
@@ -273,7 +273,7 @@ sizes and samples, its strata's units in order as slots. -/
 theorem strata_bound (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
     (hSt : (∃ k, law = .stratified k St) ∨ ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) (n : ℕ)
     (W : Finset ℕ) (L : ℕ) :
-    Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read, Draw.drawUnits law n (bytesOf src) = .ok (units, read) ∧
+    Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read, Draw.sampleUnits law n (bytesOf src) = .ok (units, read) ∧
       ∀ v ∈ W, (St.toList.flatMap fun s => expand s.units.toList).getD v 0 ∉ units) ≤
     strataPa (St.toList.map fun s => (s.size, s.k)) 0 W := by
   have hstages : ∀ units : Array ℕ, lawStages law n (fun i Dl => ∀ x ∈ Dl, unitOf law i x ∈ units) =
@@ -285,7 +285,7 @@ theorem strata_bound (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
   rw [← heq]
   refine Pr_le_of_prCoin _ _ (ne_top_of_le_ne_top ENNReal.one_ne_top hle1) (le_trans (prCoin_mono fun f hf => ?_) hle)
   obtain ⟨units, read, hd, hm⟩ := hf
-  have hs := drawUnits_seq law n _ units read hd
+  have hs := sampleUnits_seq law n _ units read hd
   rw [hstages] at hs
   have := strataStages_of St units W hm [] St.toList rfl
   simp only [List.length_nil, List.flatMap_nil, Array.length_toList] at this

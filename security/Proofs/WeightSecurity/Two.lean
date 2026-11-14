@@ -36,7 +36,7 @@ namespace WeightSecurity.SecurityProofs
 
 open Claims Claims.Sampling Claims.SamplingGeneric WeightSecurity.Assumptions
 open FlockSoundness.Game hiding Msg
-open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
+open Claims.Sampling.EndToEndSample (SubsetInputsDesign)
 open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
