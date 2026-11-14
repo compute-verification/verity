@@ -11,7 +11,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 job=${1:-}
 case "$job" in
-  build) shift; exec bash "$HERE/native/build.sh" "$@" ;;
+  build) shift; exec bash "$HERE/../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh" "$@" ;;
   pin_target) shift; exec bash "$HERE/jobs/pin_target.sh" "$@" ;;
   bench|characterize|verify|ledger|price_twins|ieee_pin) shift; exec "${PY:-python3}" "$HERE/$job.py" "$@" ;;
 esac
