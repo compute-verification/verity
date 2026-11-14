@@ -7,7 +7,7 @@ statement (`Flock.Registered.checkComplete`); each unit's one public output, its
 renders a row), read off a value the verifier registers itself at known content, every word 1. Standalone: no Spec
 holds these units yet (`verity.protocols.accounting.certifier.prover.egress`).
 
-    python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
+    python verity/protocols/accounting/certifier/prover/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
 * **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
   (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
@@ -49,7 +49,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
 
 import warden_zk as WZ  # noqa: E402

@@ -6,10 +6,10 @@ registration, every row of every unit, input or output, a registered read, prove
 Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
-    python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
+    python verity/protocols/accounting/certifier/prover/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
         [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
         local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
+    python verity/protocols/accounting/certifier/prover/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
@@ -186,9 +186,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
 import warden_zk as WZ  # noqa: E402
@@ -659,7 +659,7 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in,
     and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
-    from benchmarks.network_traces import warden_serve as WS
+    from verity.protocols.accounting.certifier.device import warden_serve as WS
     from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
 
     dep = json.loads(_found(run, "deployment.json").read_text())

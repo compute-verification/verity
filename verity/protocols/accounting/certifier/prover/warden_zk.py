@@ -3,7 +3,7 @@ port registered against the network certifier's signed egress root (`warden_rows
 the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
-    python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python verity/protocols/accounting/certifier/prover/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
@@ -61,10 +61,10 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402

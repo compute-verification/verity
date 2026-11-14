@@ -6,7 +6,7 @@ decided by `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the p
 the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
 comparison to each verdict, which decides nothing.
 
-    python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python verity/protocols/accounting/certifier/prover/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K]
 
 * **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
@@ -63,10 +63,10 @@ from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402

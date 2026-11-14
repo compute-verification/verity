@@ -57,7 +57,7 @@ Two results compare only at one identity, and `result.py compare` refuses any ot
 
 The group is a setting, written in the result beside the identity: the numbers are for a second of execution phase
 at any G, which is what lets a grouped run be compared with the baseline. The period check's rows form reads one
-execution phase a registration (`benchmarks/network_traces/scan_period.py`'s `rows_case` refuses a group of more), so
+execution phase a registration (`verity/protocols/accounting/certifier/prover/scan_period.py`'s `rows_case` refuses a group of more), so
 a result at a group above 1 is the cost of a form the period check does not read today. The machine is not in the
 identity; the result's host stamp and `out/host.txt` say what it was.
 

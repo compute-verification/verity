@@ -23,6 +23,6 @@ The circuit stays untimed (the MLP Boolean, the served Program's values words). 
 crossing edge is a value read by a gate placed in another unit, and the frames that carry it are fixed by φ.
 
 The content check N3 (frames are committed crossings) was prototyped here and is retired: the network certifier's
-step-indexed scan (`ingress_scan`, `egress`), proved in zero knowledge by `benchmarks/network_traces/scan_zk.py`,
+step-indexed scan (`ingress_scan`, `egress`), proved in zero knowledge by `verity/protocols/accounting/certifier/prover/scan_zk.py`,
 supersedes it.
 """

@@ -149,7 +149,7 @@ def test_a_refused_store_write_ends_in_its_word_and_a_record_out_of_form_is_not_
 def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     store, out = Path("/var/lib/vy-challenger/store"), Path("/var/lib/vy-challenger/certifier/c1/out")
     assert A.weights_command({"shape": "h200"}, out, store, tree=Path("/opt/vy-challenger") / PIN) == [
-        sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/load_relay.py", "write", "--store",
+        sys.executable, f"/opt/vy-challenger/{PIN}/verity/protocols/accounting/certifier/device/load_relay.py", "write", "--store",
         str(store), "--shape", "h200", "--workers", str(A.os.cpu_count() or 1), "--out", str(out / "store.json")]
     assert A.Host().store == store
 
