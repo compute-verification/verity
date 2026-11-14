@@ -1,12 +1,12 @@
 """rows.sh's check, with no card, of the sign key and rows a built `session.cu` derives on the device: its chained
 pass's messages (`rs_chain_template`, rs_chain_set's on the host) at a seed of 64 zero bytes, hashed here as
-`chain_prepare_kernel` hashes them, against VECTOR at 64 rows (the wide key: K, row 0's first 16 bytes and row 63's
-last 16) and against `verity.commitments.randomness`'s v2 key and rows at 16. Stdlib only, so the build's machine runs
-it as it is; loading the library calls no CUDA function.
+`chain_prepare_kernel` hashes them, against the verifier's key and every row of its signs at each row count
+(`receipts.sign_key`, `receipts.sign_bits`: at 64 rows the wide key, at 16 the 32-byte one). Stdlib and the verifier's
+receipts only, so the build's machine runs it as it is; loading the library calls no CUDA function.
 
   python3 sign_key.py SESSION_SO
 
-Prints one line a row count; exits 1 naming each of K, row 0 and row 63 (at 16 rows: the key or a row) that differs.
+Prints one line a row count; exits 1 naming the key and each row that differs.
 """
 from __future__ import annotations
 
@@ -17,13 +17,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.commitments import randomness
+from verity.protocols.accounting.poub.verifier import receipts
 
-CONTEXT = {"k": 64, "n": 4096, "tag": "sketch-sha512"}
-#: the 64-row sign key and two of its rows at a source of 64 zero bytes, `sketch-signs/v1` under the wide derive
-VECTOR = {"K": "b844824fb8704537ad7e865cc186b22f116ef99a0e48d8034d76cc07cf9ab10b"
-               "d3e8ca87fb456891833fe7d994a5141c4b52bf3446f163a1a954024dfa5e8583",
-          "row 0": "3f2ad9ff6856261e62ea25da12b64840", "row 63": "3333608eddf01f1e530f7d92d002db91"}
+SEED = bytes(64)
 ROW_BYTES = 512
 
 
@@ -39,7 +35,7 @@ def template(lib: ctypes.CDLL, rows: int) -> tuple[bytes, list[int], bytes, list
     return derive.raw[:dn[0]], list(dn), row.raw[:rn[3]], list(rn)
 
 
-def derived(derive: bytes, dn: list[int], head: bytes, rn: list[int], rows: int, seed: bytes = bytes(64)
+def derived(derive: bytes, dn: list[int], head: bytes, rn: list[int], rows: int, seed: bytes = SEED
             ) -> tuple[bytes, list[bytes]]:
     """The key and the rows `chain_prepare_kernel` makes from these messages at pass seed `seed`."""
     m = bytearray(derive)
@@ -58,13 +54,10 @@ def derived(derive: bytes, dn: list[int], head: bytes, rn: list[int], rows: int,
 
 
 def differs(key: bytes, rows: list[bytes], k: int) -> list[str]:
-    """What of the device's key and rows at `k` rows is not the reference's."""
-    if k == 64:
-        got = {"K": key.hex(), "row 0": rows[0][:16].hex(), "row 63": rows[63][-16:].hex()}
-        return [name for name in VECTOR if got[name] != VECTOR[name]]
-    want = randomness.derive(bytes(64), "verity/remote-bandwidth/sketch-signs/v0", {**CONTEXT, "k": k})
-    return (["the key"] if key != want.value else []) + [
-        f"row {c}" for c in range(k) if rows[c] != want.stream(("row", c), ROW_BYTES)]
+    """What of the device's key and rows at `k` rows is not the verifier's."""
+    want = receipts.sign_bits(SEED, k)
+    return (["the key"] if key != receipts.sign_key(SEED, k).value else []) + [
+        f"row {c}" for c in range(k) if c >= len(rows) or rows[c] != want[c]]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,8 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     bad = False
     for k in (64, 16):
         wrong = differs(*derived(*template(lib, k), k), k)
-        print(f"sign key at {k} rows: " + (f"differs in {', '.join(wrong)}" if wrong else
-                                           "the vector's" if k == 64 else "randomness v2's"))
+        print(f"sign key at {k} rows: " + (f"differs in {', '.join(wrong)}" if wrong else "the verifier's"))
         bad = bad or bool(wrong)
     lib.rs_rows(16)
     return 1 if bad else 0
