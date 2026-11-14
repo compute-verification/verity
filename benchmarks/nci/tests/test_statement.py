@@ -36,7 +36,7 @@ def slowdown(over: dict, tier: str) -> float:
 
 
 def test_the_slowdown_compares_with_the_unconstrained_run():
-    """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
+    """Unregistered compute trains like the unconstrained developer, and so does free compute on registered capacity
     (reference efficiency: ``evaluate`` at ``free_mfu`` = MFU_0); the rest are counted multiplications, so
     the slowdown is 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
     terms."""
