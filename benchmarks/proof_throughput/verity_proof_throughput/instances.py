@@ -147,7 +147,7 @@ def build(w: Workload, now: dt.datetime | None = None) -> dict[str, Any]:
                    "shape": got["shape"], "definition": got["definition"], "program_digest": got["program_digest"],
                    "domain": "total: uniform 16-bit words, non-finite encodings included"},
         "lane_digest": "sha256(b'proof-throughput/lane/v1\\0' || every input word then every output word, each u32 LE)",
-        "generated": {"utc": (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"), "git_head": _git_head(),
+        "generated": {"utc": (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%dT%H:%M:%SZ"), "git_head": _git_head(),
                       "research_run_id": os.environ.get("RESEARCH_RUN_ID"), "source_sha256": _source_sha256()},
         "output_words": {"distinct": len(set(outs)), "count": len(outs)},
         "population_digest": population_digest(lanes),

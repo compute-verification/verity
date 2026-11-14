@@ -15,7 +15,7 @@ VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 @pytest.fixture
 def ci(monkeypatch, tmp_path):
     monkeypatch.syspath_prepend(str(VERIFIER))
-    import ci as mod  # noqa: PLC0415
+    import ci as mod
 
     for k in ("RESEARCH_STORE_CONFIG", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "CHECK_STORE_CUSTODY"):
         monkeypatch.delenv(k, raising=False)

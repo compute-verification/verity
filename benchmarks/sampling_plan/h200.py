@@ -38,15 +38,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import transformer as X  # noqa: E402
-from inputs import CARDS, I, cap  # noqa: E402
+import transformer as X
+from inputs import CARDS, I, cap
 
-from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.proofs.spot.prover.candidates import shape_of  # noqa: E402
-from verity.protocols.proofs.spot.prover.optimize import row_ands  # noqa: E402
-from verity.circuits.codec import descriptor_id  # noqa: E402
-from verity.circuits.defs import bind  # noqa: E402
-from verity.circuits.ops import fp32 as F, gemm as G  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.proofs.spot.prover.candidates import shape_of
+from verity.protocols.proofs.spot.prover.optimize import row_ands
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.ops import fp32 as F, gemm as G
 
 DELTAS = X.DELTAS
 #: each subcircuit's sampling block certifies at most this share of its units incorrect at delta = 1% (`transformer.TARGET_SHARE`)

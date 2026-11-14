@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -35,8 +35,8 @@ sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
 P = lms.Params(64, 4, 4)
-T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 20, 9, 40, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=UTC)
+T1 = datetime(2026, 10, 20, 9, 40, 0, tzinfo=UTC)
 COMMIT = "ab" * 64
 PIN = "c" * 40
 SALT, ROUND = "pouw/salt", "pouw/round"

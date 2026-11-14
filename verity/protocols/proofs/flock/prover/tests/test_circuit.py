@@ -12,9 +12,9 @@ from verity_flock import circuit as FC
 from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit, const_bits
 
-from verity_flock import subcircuit_templates as TM  # noqa: E402
-from synthetic_sets import synthetic_set  # noqa: E402
-from verity_flock.input_sets import InputSet  # noqa: E402
+from verity_flock import subcircuit_templates as TM
+from synthetic_sets import synthetic_set
+from verity_flock.input_sets import InputSet
 
 
 def _set(sid: str, n: int, tmp_path):
