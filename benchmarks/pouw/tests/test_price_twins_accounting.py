@@ -25,9 +25,9 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 sys.path.insert(0, str(Path(__file__).parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
-import clear_work as CW  # noqa: E402
+import clear_work as CW
 
-import price_twins as P  # noqa: E402
+import price_twins as P
 
 GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
 ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element

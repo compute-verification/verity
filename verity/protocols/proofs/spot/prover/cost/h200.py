@@ -38,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
 
-import transformer as X
+from verity.protocols.proofs.spot.prover.cost import transformer as X
 from inputs import CARDS, I, cap
 
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum

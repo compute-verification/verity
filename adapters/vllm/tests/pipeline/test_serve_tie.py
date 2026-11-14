@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 from verity.circuits.codec import canonical_json
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from tests.pipeline.test_serve_day import OTHER, _day, _opts
 from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server

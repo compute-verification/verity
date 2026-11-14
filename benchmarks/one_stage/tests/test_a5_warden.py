@@ -197,7 +197,7 @@ def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_mo
     """This audit's process holds `network_traces`' `replay` under that name (its imports reach `active_replay`, which
     imports it), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
     path, so the case is written and no error stands in its place."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     theirs = AW.ws.ar.replay
     monkeypatch.setitem(sys.modules, "replay", theirs)

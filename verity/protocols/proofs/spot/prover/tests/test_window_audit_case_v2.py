@@ -18,7 +18,7 @@ import pytest
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import a5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 

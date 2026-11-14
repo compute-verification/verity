@@ -1,6 +1,6 @@
 """`recursion.py`: a recursion_e2e result's measured session scaled to every machine-window of each deployment."""
 import pytest
-import recursion as R
+from verity.protocols.proofs.spot.prover.cost import recursion as R
 
 RESULT = {"headline": {"ok": True, "pipeline": {"inner M0 e2e_s": 10.0, "V* staging_s (vstage + vcap steps)": 20.0,
                                                 "outer prove (firewall) e2e_s": 570.0, "Lean step_s": 60.0}},

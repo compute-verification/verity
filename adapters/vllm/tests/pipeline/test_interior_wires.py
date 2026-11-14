@@ -24,7 +24,7 @@ from verity.definitions.registry import dead_free as DF
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_rows as IR
