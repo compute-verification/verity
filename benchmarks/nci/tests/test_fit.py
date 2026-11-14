@@ -116,8 +116,8 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
     assert F.fit_rate(p, R, 1e10, F.BOUNDARY["central"]) == (math.inf, 0)
     assert F.fit_rate(p, 0.99 * R, 1e10, F.BOUNDARY["central"])[0] < math.inf
     assert F.window_mults(1e10 * p["b_w"], 1e10, F.BOUNDARY["central"], p["b_w"]) == math.inf
-    q = F.params(6.0, residual=0.1)
-    assert 1 < F.slowdown(q, math.inf, 0.0) == pytest.approx(1 / F.residual_with_lag(q))
+    q = F.params(6.0, free=0.1)
+    assert 1 < F.slowdown(q, math.inf, 0.0) == pytest.approx(1 / F.free_with_lag(q))
 
 
 def test_the_table_against_the_red_teams_closed_form():
@@ -126,7 +126,7 @@ def test_the_table_against_the_red_teams_closed_form():
     memory rungs have it; at central boundary bits the fit
     bound is stronger there, and void from 50 GB, where a server holds N* weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}
-    assert T.audited_residual(F.params(1.0)) == pytest.approx(0.323, abs=5e-4)
+    assert T.audited_free(F.params(1.0)) == pytest.approx(0.323, abs=5e-4)
     assert rows[1.0]["slowdown_closed"] == rows[6.0]["slowdown_closed"] == rows[13.0]["slowdown_closed"] == pytest.approx(3.022, abs=1e-3)
     assert rows[6.0]["slowdown_fit"] > rows[6.0]["slowdown_closed"] and rows[13.0]["slowdown_fit"] > rows[13.0]["slowdown_closed"]
     assert rows[50.0]["periods"] == 0 and rows[166.0]["periods"] == 0

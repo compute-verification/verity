@@ -1,35 +1,35 @@
 module
 
-public import Proofs.InferenceOnly.Cut
-public import Proofs.InferenceOnly.CutWitness
-public import Proofs.InferenceOnly.Untied
-public import Proofs.InferenceOnly.CutCharged
+public import Proofs.Slowdown.Cut
+public import Proofs.Slowdown.CutWitness
+public import Proofs.Slowdown.Untied
+public import Proofs.Slowdown.CutCharged
 public import Proofs.Core
 public import Proofs.InferenceOnly.Pull
 public import Proofs.InferenceOnly.Rate
-public import Proofs.InferenceOnly.Threads
-public import Proofs.InferenceOnly.Layered
-public import Proofs.InferenceOnly.Fit
-public import Proofs.InferenceOnly.FitKeep
-public import Proofs.InferenceOnly.FitSlotsWitness
-public import Proofs.InferenceOnly.WeightsSlotsWitness
-public import Proofs.InferenceOnly.FitRate
-public import Proofs.InferenceOnly.FitWitness
-public import Proofs.InferenceOnly.Slowdown
-public import Proofs.InferenceOnly.Remote
-public import Proofs.InferenceOnly.RemotePeriod
-public import Proofs.InferenceOnly.Capability
+public import Proofs.Slowdown.Threads
+public import Proofs.Slowdown.Layered
+public import Proofs.Slowdown.Fit
+public import Proofs.Slowdown.FitKeep
+public import Proofs.Slowdown.FitSlotsWitness
+public import Proofs.Slowdown.WeightsSlotsWitness
+public import Proofs.Slowdown.FitRate
+public import Proofs.Slowdown.FitWitness
+public import Proofs.Slowdown.Slowdown
+public import Proofs.Slowdown.Remote
+public import Proofs.Slowdown.RemotePeriod
+public import Proofs.Slowdown.Capability
 public import Proofs.InferenceOnly.Verdict
 public import Proofs.InferenceOnly.DescVerdict
-public import Proofs.InferenceOnly.Covering
-public import Proofs.InferenceOnly.CoveringWitness
-public import Proofs.InferenceOnly.CoveringTwoCosts
-public import Proofs.InferenceOnly.CoveringTwoCostsWitness
+public import Proofs.Slowdown.Covering
+public import Proofs.Slowdown.CoveringWitness
+public import Proofs.Slowdown.CoveringTwoCosts
+public import Proofs.Slowdown.CoveringTwoCostsWitness
 public import Proofs.InferenceOnly.Cover
 public import Proofs.InferenceOnly.PartitionCovers
 public import Proofs.InferenceOnly.CompliesCK
-public import Proofs.InferenceOnly.Witnesses
-public import Proofs.InferenceOnly.Formalism
+public import Proofs.Slowdown.Witnesses
+public import Proofs.Slowdown.Formalism
 public import Proofs.InferenceOnly.Lemmas
 
 /-!
