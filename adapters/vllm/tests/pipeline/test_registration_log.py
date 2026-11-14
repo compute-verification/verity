@@ -34,7 +34,7 @@ WINDOW = {"kind": "stand-in", "deployment": "test"}
 
 
 def _case(registered=("w8", "sc"), program_digest=None):
-    """The Program (θ = w8 and sc), the instance on it (the one call one IU, α = 16 bits a gate) and the log `write` makes."""
+    """The Program (θ = w8 and sc), the instance on it (the one call one inference block, α = 16 bits a gate) and the log `write` makes."""
     program = Program(FN, registered=registered, theta=("w8", "sc"))
     desc = codec.encode_program(program)
     text = codec.canonical_json(desc).decode()
