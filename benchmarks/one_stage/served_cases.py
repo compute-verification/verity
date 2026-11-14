@@ -12,7 +12,7 @@ bare case too:
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
 (``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`), Pearl+'s case's
 parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`), the serve's first registration record
-(``D/deployment-registration.json``, `DEPLOYMENT`) and each window's registration records as the harness keeps them
+(``D/deployment-registration.json``, `DEPLOYMENT`) and each window's docket records as the harness keeps them
 (`RECORDS`) where it holds them.
 Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
 H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
@@ -45,7 +45,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     null, as the policy's check reads them. It has three sources, tried in this order, and the first that is there is
     the whole log, none filled in from another: (1) ``--log``, a file the caller hands; (2) with ``--serve-dir``, the
     serve's H1 log through R's ``previous``, `h1_log`, each window's docket W and record R up to the window's W;
-    (3) the serve's own registration records, walked back from R's ``previous`` by digest to a record whose
+    (3) the serve's own docket records, walked back from R's ``previous`` by digest to a record whose
     ``previous`` is null, `pearl_log`: on a serve whose window record is Pearl+'s, that W and before it the serve's
     first registration record, W from Pearl+'s case's parts on the served node and, on a copy of the compose hand-off,
     which holds no part of Pearl+'s case, from the files the hand-off lists (`RECORDS`, `DEPLOYMENT`). Whoever handed
@@ -195,7 +195,7 @@ PEARL_PLUS_PIECE = Path("private/pearlplus/case")
 #: Under ``--serve-dir``: the serve's first registration record, where the serve wrote one before its first request
 #: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
 DEPLOYMENT = Path("deployment-registration.json")
-#: The registration records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
+#: The docket records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
 #: record W (`served_verdicts.sh`'s `pearl_tie`) and each window's record R as its audit wrote it. The compose hand-off
 #: lists every one there is (`served_verdicts.sh`'s `handoff_inputs`), so a copy of it holds each record a window's log
 #: can name

@@ -4928,7 +4928,7 @@ def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve
 
 
 def test_a_hand_off_carries_every_windows_pearl_plus_record_and_audit_record_the_serve_dir_holds(tmp_path):
-    """The inference-only case's log is walked among the serve's registration records, so the hand-off lists and hashes
+    """The inference-only case's log is walked among the serve's docket records, so the hand-off lists and hashes
     each one the serve dir holds: every window's Pearl+ record W (pearlplus/w<k>/registration.json, the audited window's
     and each earlier one's) and every window's record R as its audit wrote it, of whatever class, beside the serve's
     first. Each hides roots and names alone: `served_verdicts.py witness` refuses nothing of the list, and of Pearl+'s

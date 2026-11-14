@@ -1149,7 +1149,7 @@ def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and
 def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deployments_first_record_must(tmp_path):
     """An empty or a truncated file under `SC.RECORDS` beside a whole log is skipped, as a record nobody names is, so the
     walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
-    registration record (`SC.DEPLOYMENT`) truncated is still refused."""
+    docket (`SC.DEPLOYMENT`) truncated is still refused."""
     w0 = h1_registration(R.digest(FIRST))
     r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
     files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
@@ -1172,7 +1172,7 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
 
 
 def test_the_hand_off_lists_the_records_by_the_patterns_the_walk_reads():
-    """`SC.RECORDS` and the hand-off's list of the serve's registration records (`served_verdicts.sh`'s
+    """`SC.RECORDS` and the hand-off's list of the serve's docket records (`served_verdicts.sh`'s
     `handoff_inputs`) are two copies of the same patterns, in the same order."""
     text = (HERE.parent / "served_verdicts.sh").read_text()
     said = re.findall(r"""printf '%s\\n' ((?:\S+/registration\.json ?)+)\)""", text)
@@ -1210,7 +1210,7 @@ def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_re
     """The policy's log is read off the serve's H1 log only as it names its records: a line whose file isn't the record
     of its digest, a line naming none, or a log that never reaches R's previous or isn't JSON refuses the policy's case
     alone (one-stage's and the period's are still written). So does a serve dir with no H1 log for an R naming a
-    previous record: its log is then walked among the serve's own registration records, which hold none of that
+    previous record: its log is then walked among the serve's own docket records, which hold none of that
     digest."""
     serve, v1, w = tied_serve(tmp_path / "serve")
     h1 = serve / "h1"
