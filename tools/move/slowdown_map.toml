@@ -6,7 +6,8 @@
 #   `DampenerRemotePeriod`, `DampenerThreaded`, `DampenerThreadedSlots`, `DampenerWindows`, with their `_honest` and
 #   `_nontrivial`) and `remoteDampener`, with every mention of them outside Lean. `DampenerRemotePeriod` becomes
 #   `SlowdownRemoteMonitoringPeriod`, since a Lean `*Period*` name for the stretch a bound is about says monitoring
-#   period (GLOSSARY.md, Older names); it stands before `Dampener`, which would match first.
+#   period (GLOSSARY.md, Older names). Its three names are whole words in [[words_in]], which `rename.py` and
+#   `move_check.py` both apply before [words], where `Dampener` would match them first.
 # - The proofs' three lemmas that spell it in lower case, each by its whole name.
 # What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
 # declaration to a name its base never spells, and `slowdown` in lower case is spelled already): Python's
@@ -16,11 +17,18 @@
 # `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
 
 [words]
-"DampenerRemotePeriod" = "SlowdownRemoteMonitoringPeriod"
 "Dampener" = "Slowdown"
 "dampener_core" = "slowdown_core"
 "dampener_attained" = "slowdown_attained"
 "dampener_T0_fails" = "slowdown_T0_fails"
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"DampenerRemotePeriod" = "SlowdownRemoteMonitoringPeriod"
+"DampenerRemotePeriod_honest" = "SlowdownRemoteMonitoringPeriod_honest"
+"DampenerRemotePeriod_nontrivial" = "SlowdownRemoteMonitoringPeriod_nontrivial"
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
