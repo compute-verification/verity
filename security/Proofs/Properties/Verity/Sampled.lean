@@ -731,10 +731,15 @@ structure PinnedTables where
   file : String → Option ByteArray
   hash : ∀ sha b, file sha = some b → Flock.hexOf (Flock.Sha512.hash b) = sha
 
+/-- **The pinned files held by a deployment**: lookup by the SHA-512 hex digest the circuit names. The bytes are
+deployment data; the proof that a successful lookup has the requested digest follows from `find?`, without evaluating
+SHA-512 in a theorem. -/
+def PinnedTables.ofFiles (files : Array ByteArray) : PinnedTables where
+  file sha := tableFile sha files
+  hash _ _ h := tableFile_hash h
+
 /-- **No pinned table registered**: the registered files of a deployment that registers none. -/
-def PinnedTables.empty : PinnedTables where
-  file _ := none
-  hash _ _ h := by cases h
+def PinnedTables.empty : PinnedTables := .ofFiles #[]
 
 /-- **The lookup tables a circuit file registers**: each pinned table its META looks up
 (`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`PinnedTables.file`). -/
@@ -1062,13 +1067,14 @@ def SampleLinkFirst (label : String) (after : ByteArray) (log : List Verity.Rele
 
 /-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
 session and the parameters name the one-stage form (`ParamsAt`), each strategy of the period's game that meets the
-further finders' premises (`Vocab.finderCR`, the condition of `error` SPOT's target reads it under) makes the sampled
-verdict accept with probability at most the published `δ` at its calls: `0` where the verdict never accepts, `⊤` where
-the deployment claims nothing. Parameters naming the recursive form (`VStar.Recursive`) are not this target's. -/
+further finders' premises and the finder's (`Vocab.finderCR`, `Vocab.FinderCR`, both in the condition of `error` SPOT's
+target reads it under) makes the sampled verdict accept with probability at most the published `δ` at its calls: at
+most the finder's collision bound where the verdict accepts only off v2's registered tables, `⊤` where the deployment
+claims nothing. Parameters naming the recursive form (`VStar.Recursive`) are not this target's. -/
 def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
     Prop :=
   ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    V.finderCR .sampled θ F c σ →
+    V.finderCR .sampled θ F c σ → V.FinderCR .sampled θ F c σ →
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session

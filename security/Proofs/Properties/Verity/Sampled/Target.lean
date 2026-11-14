@@ -212,7 +212,7 @@ theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array Byte
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ :=
     Verity.Game.prob_mono (fun o ho => ho.1) _ σ
   cases hS : S θ F with
-  | none => exact hver.trans ((hCov θ F hS hP c σ hfs).trans (le_add_right (le_add_right le_rfl)))
+  | none => exact hver.trans ((hCov θ F hS hP c σ hfs hFC).trans (le_add_right (le_add_right le_rfl)))
   | some A =>
     have hsu := hD.setsUp θ F A hS
     have hFin := hD.finderCR θ F A hS c σ hfs hpr

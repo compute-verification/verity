@@ -39,9 +39,9 @@ open Lean (Json)
 open Claims.Sampling
 open Verity.Sampled.Trees (bind_ok)
 open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm partition_evaluate_tiles
-  laysOut_units length_popUnits lawObj kindOf flockLaw_cases deriveLaw_cases slotDesign_law bind_eq_ok throw_ne
-  throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok not_mem_repr split1_colon split1_slash digits_repr
-  toNat!_repr parseDesign_count parseDesign_bernoulli)
+  laysOut_units length_popUnits lawObj kindOf flockLaw_cases deriveLaw_cases deriveLaw_none slotDesign_law bind_eq_ok
+  throw_ne throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok not_mem_repr split1_colon split1_slash
+  digits_repr toNat!_repr parseDesign_count parseDesign_bernoulli)
 open private split1 digits from Spot.Select
 
 theorem strataSizes_slotPartition (l : _root_.Spot.Slots.SlotOrder) :
@@ -136,20 +136,6 @@ theorem deriveLaw_congr (p : _root_.Spot.Program) (q : Json) (tbl : Option Json)
     _root_.Spot.Draw.deriveLaw p q a tbl = _root_.Spot.Draw.deriveLaw p q b tbl := by
   unfold _root_.Spot.Draw.deriveLaw
   rw [hl, hn]
-
-/-- **`deriveLaw` expands neither a subset nor a Bernoulli sampling design.** -/
-theorem deriveLaw_none (p : _root_.Spot.Program) (q : Json) (tbl : Option Json) {law : Json}
-    (h1 : kindOf law ≠ "stratified") (h2 : kindOf law ≠ "work") :
-    _root_.Spot.Draw.deriveLaw p q law tbl = .ok none := by
-  unfold _root_.Spot.Draw.deriveLaw
-  split
-  next s hs =>
-    have hk : kindOf law = s := by simp [kindOf, hs]
-    rw [hk] at h1 h2
-    simp only [Bool.not_or, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, beq_eq_false_iff_ne, ne_eq, h1, h2,
-      not_false_eq_true, and_self, ↓reduceIte]
-    rfl
-  next => rfl
 
 /-- `Flock.Draw.deriveWork` refuses `k = 0`. -/
 theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab : Array (String × ℕ × ℕ)}
@@ -295,10 +281,10 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
   | none =>
     rcases flockLaw_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
     · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_count "subset" (Or.inl rfl) k (hk k rfl))
-        (deriveLaw_none _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
+        (deriveLaw_none _ _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
         (flockLaw_subset_text k n (hk k rfl) hkn)
     · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_bernoulli a b hb hab)
-        (deriveLaw_none _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
+        (deriveLaw_none _ _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
         (flockLaw_bernoulli_text a b n hb hab)
     · rcases deriveLaw_cases _ _ _ _ _ hd with ⟨-, h, -⟩ | ⟨_, _, _, -, h, -⟩
       · exact absurd hs h

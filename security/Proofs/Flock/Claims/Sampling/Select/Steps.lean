@@ -194,6 +194,20 @@ theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
     obtain rfl := (Except.ok.inj h).symm
     exact Or.inl ⟨rfl, by rw [hk]; decide, by rw [hk]; decide⟩
 
+/-- **`deriveLaw` expands no sampling design of neither kind `stratified` nor `work`**: it returns `none` there, whatever
+the program, query and work table. -/
+theorem deriveLaw_none (d : Program) (query law : Json) (table : Option Json) (h1 : kindOf law ≠ "stratified")
+    (h2 : kindOf law ≠ "work") : Draw.deriveLaw d query law table = .ok none := by
+  unfold Draw.deriveLaw
+  split
+  next s hs =>
+    have hk : kindOf law = s := by simp [kindOf, hs]
+    rw [hk] at h1 h2
+    dsimp only
+    rw [ite_eq_left (by simp [h1, h2])]
+    rfl
+  next => rfl
+
 /-- The units of ascending ranges `[lo, hi)`. -/
 def rsSize (rs : Array (ℕ × ℕ)) : ℕ := (expand rs.toList).length
 

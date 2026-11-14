@@ -17,6 +17,7 @@ The sessions are a fetched fixture (`artifacts.json`), which `suites.py` fetches
 missing fixture fails these tests rather than skipping them."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -25,11 +26,23 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import partition_object as PO
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
 VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "prover" / "agreement"
 ROOT = Path(__file__).resolve().parents[6]
+#: Flock's public-input sessions' stage (its `test_lean_public_inputs.py`), a fetched fixture under this suite's inputs
+PUBLIC_INPUTS = Path(__file__).resolve().parents[3] / "flock" / "prover" / "tests" / "fixtures" / "public-inputs"
+#: a descriptor of one primitive Definition, which reads no registered value
+DESCRIPTOR = {"schema": "verity-ir/descriptor/v1", "callees": [], "definitions": {"Main_v1": {"form": "primitive"}},
+              "root": "Main_v1"}
+#: the hm96 leaf scheme's salt source `Flock.Tags` pins, which the public-input fixture's circuit predates
+SALT_SOURCE = "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored"
+#: META's bindings, which a circuit's class leaves out (`HmRow.BINDING_KEYS`)
+BINDING_KEYS = ("partition", "program_sha512", "program_digests")
+CHECK_OWN = ("public inputs: the circuit names public input ports; pass the verifier's own recomputation "
+             "(--public-inputs F)")
 N = 4
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               "verity/flock-circuit/tmpl")
@@ -106,6 +119,50 @@ def test_the_v2_audits_own_run_accepts_the_honest_session_and_refuses_the_tail_f
     honest, tail = _v2(fx, "honest"), _v2(fx, "tail")
     assert honest.accepted and honest.units == tuple(range(N)), honest
     assert (tail.accepted, tail.why) == (False, _cases(fx)["tail"]["lean"]["why"]), tail
+
+
+def _circuit_text(head: str, meta: dict, rest: str) -> str:
+    return head + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n" + rest
+
+
+def _public_inputs_files(to: Path) -> tuple[Path, Path, dict]:
+    """Flock's public-input fixture (`PUBLIC_INPUTS`: a RoPE head whose `cs` is a public input port) under v2's
+    statement: its leaf scheme's salt source the one the statement pins (`Flock.Tags`), its partition a
+    `verity/partition/v1` object over its program, and its public file pinned to that circuit and its class
+    (`HmRow.classOf`: the file without META's bindings); the circuit, the public file and the partition object."""
+    assert (PUBLIC_INPUTS / "stage" / "circuit.txt").is_file(), (
+        f"{PUBLIC_INPUTS} is not fetched: `uv run research data fetch-fixtures {PUBLIC_INPUTS.relative_to(ROOT)}`")
+    head, meta_line, rest = (PUBLIC_INPUTS / "stage" / "circuit.txt").read_text().split("\n", 2)
+    meta = json.loads(meta_line[5:])
+    assert meta["public_inputs"], meta
+    meta["leaf_scheme"]["salt_source"] = SALT_SOURCE
+    partition = {"format": PO.FORMAT, "program": meta["program_sha512"], "query": PO.call_query()}
+    meta["partition"] = {"digest": PO.digest(partition), "rule": PO.FORMAT}
+    circuit = to / "circuit.txt"
+    circuit.write_text(_circuit_text(head, meta, rest))
+    unbound = _circuit_text(head, {k: v for k, v in meta.items() if k not in BINDING_KEYS}, rest)
+    h, body = (PUBLIC_INPUTS / "stage" / "pub-4.bin").read_bytes().split(b"\n", 1)
+    header = {**json.loads(h), "circuit_sha512": PF.file_sha512(circuit)}
+    header["units"]["classes"] = [hashlib.sha512(unbound.encode()).hexdigest()] * len(header["units"]["classes"])
+    public = to / "pub-4.bin"
+    public.write_bytes(json.dumps(header, sort_keys=True).encode() + b"\n" + body)
+    return circuit, public, partition
+
+
+def test_the_v2_audit_refuses_a_circuit_with_a_public_input_port(tmp_path):
+    """v2 sets its session up without the verifier's own recomputation of public input words (`OneStageZk.buildSessionOf`
+    passes no `--public-inputs`), so a circuit naming a public input port is refused at setup (`HmIn.checkOwn`), before
+    any proof is read, on the audit's own run and not only at `flock-verify`'s command; the session is a record and no
+    proof file. `Verity.Sampled.pub_of_setup` reads off that refusal that every session v2 accepts has no public input
+    port."""
+    circuit, public, partition = _public_inputs_files(tmp_path)
+    (tmp_path / "session").mkdir()
+    (tmp_path / "session" / "session.json").write_text("{}")
+    got, refused = PF.verdicts_v2(PF.Proof(circuit, public, (tmp_path / "session",)),
+                                  circuit_sha512=PF.file_sha512(circuit), program=DESCRIPTOR, partition=partition)
+    assert refused is None, refused
+    (f,) = got
+    assert (f.accepted, f.why, f.units) == (False, f"setup: {CHECK_OWN}", ()), f
 
 
 @pytest.mark.parametrize("statement", WRONG_TAGS)

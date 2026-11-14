@@ -1050,6 +1050,23 @@ theorem logged_tables_le (V : Vocab d α) (T : PinnedTables) (k : Verity.Registr
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
 
+/-- **The sampled verdict where no accepted play sends the pinned tables**: each accepted play's blobs then hold a pinned
+table at other bytes than its registered file, a SHA-512 collision the read finder outputs (`finder_of_tables`), so the
+verdict's probability is at most the read finder's. -/
+theorem verdict_le_of_tables (V : Vocab d α) (T : PinnedTables) (k : Verity.Registration.Composite)
+    (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c))
+    (h : ∀ t : Verity.Game.Tape (V.game θ F c) σ, V.Verdict k .sampled (Verity.Game.Tape.out _ σ t) →
+      ¬ TablesSent T (Verity.Game.Tape.out _ σ t).sent) :
+    Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
+      ENNReal.ofReal ((readFinder V T dev θ F c σ).Pr Verity.sha512Msg) := by
+  rw [Verity.Game.prob_eq_prCoin]
+  calc Verity.Game.prCoin (fun t => V.Verdict k .sampled (Verity.Game.Tape.out _ σ t))
+      ≤ Verity.Game.prCoin (fun t =>
+          ∃ u v, (readFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) :=
+        Verity.Game.prCoin_mono fun t hv => finder_of_tables V T dev θ F c σ t (h t hv)
+    _ = _ := Verity.Game.prCoin_eq_ofReal_pr _
+
 /-- **(a) at the leg's constructions with this read finder and forger** (`withBinding`). -/
 theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (T : PinnedTables)
     (k : Verity.Registration.Composite) (reads : Sent → Option (List Read)) (dev : Exchange → History)
