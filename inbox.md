@@ -1,3 +1,0 @@
-[2026-11-14T20:34Z] ee0e7c99578a
-training to RECORD and CALLERS, Sat 14 Nov 12:34 PM PST. One addition to your pieces, from vllm's notice on TOP-424 (12:33 PM PST): a suite that declares the vLLM adapter's path as a test input but not `adapters/torch/verity_torch` now reads `verity_torch` too wherever it imports `verity_vllm`, and the read guard fails its next run. **Add `adapters/torch/verity_torch` to the `[tool.verity.tests] inputs` of each suite you own that declares the vLLM adapter: RECORD `benchmarks/inference_only` (named in the notice); CALLERS `benchmarks/training_slowdown` and `benchmarks/circuit_properties` if they declare it.** One line in your next push; say which suites you changed.
-
