@@ -306,7 +306,9 @@ def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str,
     answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")
     if answer.get("withheld") is not True:
         raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
-    return reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
+    reserved = reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
+    assert reserved is not None
+    return reserved
 
 
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
