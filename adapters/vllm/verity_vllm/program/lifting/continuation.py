@@ -334,7 +334,7 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
     L = int(prompt_len)
     pos = lambda t: L - 1 + (t - 1)  # noqa: E731  -- slot t's query position, the ledger's convention
     return {"rule": "expected draw positions = {L - 1 + (t - 1) : r_t = 1}, L = prompt_len, pos = the query position of record (Continuation_v1 "
-                    "recurrence over the served list; A = LAG; the draw ledger's convention)",
+                    "recurrence over the served list; A = LAG; the sample ledger's convention)",
             "prompt_len": int(prompt_len), "A": A, "cap": cap, "n_served": len(served),
             # the recurrence runs on served[:cap]; a served list OVER the cap is named here (and its samples past the cap
             # are EXTRA positions in the compare), never truncated silently
@@ -346,7 +346,7 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
 
 
 def compare_draw_positions(expected: Sequence[int], drawn: Sequence[int]) -> dict[str, Any]:
-    """`drawn` = the positions the record's ledger shows a sample at (stoch_recompute's `draw_accounting`), in ledger order.  Every extra / missing / repeated /
+    """`drawn` = the positions the record's ledger shows a sample at (stoch_recompute's `sample_accounting`), in ledger order.  Every extra / missing / repeated /
     out-of-order position is a problem BY NAME; `ok` is their absence -- 'RNG advances iff r_t' measured literally."""
     exp = [int(p) for p in expected]
     got = [int(p) for p in drawn]
