@@ -8,3 +8,6 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 
 [paths]
 "benchmarks/one_stage/tests/test_two_stage_verdicts.py" = "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py"
+
+[modules]
+"benchmarks.one_stage.tests.test_two_stage_verdicts" = "verity.protocols.proofs.spot.device.tests.test_two_stage_verdicts"
