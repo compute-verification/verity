@@ -300,25 +300,35 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
 def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
     over 40 units a sample that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
-    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a sample
-    that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
-    `a5.draw_ran_out`). A sampling design that doesn't apply refuses every member, recorded with why. The registration's
-    check is handed those members (`a5.link_members`), and refuses the recorded one, where the audit's case is of the
+    so it is recorded refused, and not at four. One of 8, or of 4 at two a proof block, is recorded refused too: a
+    sample that ends can miss it, its fewest none. Under `subset:2` a sample that ends holds at most 2 of a member, one
+    count of link points, and can miss each of the three, so each is recorded refused (one that runs out of coins fails
+    the window: `a5.draw_ran_out`). Under `subset:39` a sample that ends misses none and gives each one count, so none
+    is. A sampling design that doesn't apply refuses every member, recorded with why. The registration's check is
+    handed those members (`a5.link_members`), and refuses the recorded ones, where the audit's case is of the
     per-member form (`a5.per_member`): several members under `--zk` sessions, where `a5.members_proof` writes one."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
     ms = [member(0, "t", 0, 28, 1), member(1, "u", 28, 8, 1), member(2, "v", 36, 4, 2)]
+
+    def row(k: int, fewest: int, most: int) -> dict:
+        m = ms[k]["m"]
+        return {"member": f"m{k}", "template": m.template, "n": m.n, "vus_per_block": ms[k]["st"]["meta"]["vus_per_block"],
+                "fewest": fewest, "most": most}
+
     assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
-        {"member": "m0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 8, "most": 20}]}
+        row(0, 8, 20), row(1, 0, 8), row(2, 0, 4)]}
     assert a5.link_points({"k": 20, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
-    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
+    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
+        row(0, 0, 2), row(1, 0, 2), row(2, 0, 2)]}
+    assert a5.link_points({"k": 39, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
     assert a5.link_members(ms) == [([[0, 28]], 1), ([[28, 36]], 1), ([[36, 40]], 2)]
-    assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
+    assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0, 1, 2]
     assert [a5.per_member(ms[:n], zk) for n in (1, 2, 3) for zk in (True, False)] == [False, False, True, False, True, False]
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 

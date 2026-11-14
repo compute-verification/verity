@@ -1445,7 +1445,8 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
     sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
-    `draw_ran_out`), or why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
+    `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
+    why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here for every window; the registration's check refuses them where the audit's case is of the per-member
     form (`per_member`)."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
