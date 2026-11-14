@@ -92,6 +92,7 @@ ON_DISK = {
     "TP_RANK_REPLAY_SCHEMA": "verity-vllm/tp-rank-replay/v1",
     "TP_REPLAY_DEFERRED_SCHEMA": "verity-vllm/tp-replay-deferred/v1",
     "TP_SAMPLED_REPLAY_SCHEMA": "verity-sweep/tp-sampled-replay/v1",
+    "TP_SERVING_ROWS_SCHEMA": "verity-vllm/tp-serving-rows/v1",
     "TP_VALUE_CHECK_SCHEMA": "verity/commit-integ/value-check-tp/v1",
     "TP_WEIGHTS_PIN_SCHEMA": "verity-sweep/tp-weights-pin/v1",
     "WEIGHTS_OF_RECORD_PRIOR_SCHEMA": "verity/commit/weights-of-record/v1",
