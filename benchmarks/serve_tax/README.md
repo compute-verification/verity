@@ -26,6 +26,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
 | `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
+| `tick-certifier` | `tick` with the network certifier itself in front, under vLLM's client (two commands, below) | `tick` |
 | `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
 | `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
@@ -239,7 +240,8 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
   part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
   cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
-  here is of it: vLLM's own client can't drive a tick arm. A target given with `--target` has no parts.
+  here is of it: vLLM's own client can't drive a tick arm whose certifier the corpus's client stands in for.
+  `tick-certifier` is not comparable either (below). A target given with `--target` has no parts.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
   `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
   prefill read. `two-stage` turns it off: a history table holds its request's latent rows from position 0, and a
@@ -263,8 +265,13 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   tables on a tree whose boundary commitment builds none commits without them, and the line says the cost is without
   them.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
-  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's, fed by the
+  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
   stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
+- **The arm behind the network certifier,** `tick-certifier`, is the tick arm with the certifier itself in front
+  (`serve_tax.CERTIFIER`), which vLLM's client drives through a shim (`cell_shim`). Two commands serve it, since the
+  certifier never runs on the node it certifies: `--side server` there, `--side client` on the certifier's host.
+  The certifier's schedule (`serve_tax.CELLS`) paces every answer, so its verdict is `not comparable`;
+  `serve_tax.py`'s docstring has the rest.
 
 It writes `serving_cost.txt`, whose first line is the number with its label, interval, target and verdict and whose
 next lines are the row on a repeated prefix, and `serving_cost.json`, one object whose first keys are `value`, `unit`,
@@ -402,7 +409,8 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
-and refuse a tree without them. A saturated load keeps a connection open for every request queued in the server, so the
+and refuse a tree without them. `tick-certifier` is two jobs: the node's (`SIDE=server`, in `run.sh`'s header),
+then the certifier's host's (`serve_tax.py run --side client`), which needs no GPU. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned

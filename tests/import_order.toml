@@ -79,7 +79,7 @@ directory = "verity/protocols/accounting/poub/device/live_verifier"
 owner = "memory-accounting"
 
 [[distribution]]
-directory = "verity/protocols/accounting/pouw/clear"
+directory = "verity/protocols/accounting/pouw/prover/clear"
 owner = "compute-accounting"
 
 [[distribution]]
@@ -335,6 +335,7 @@ loaded_by = [
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
     "verity/hardware/tests/test_policy.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
 ]
 
 [[place]]
@@ -575,8 +576,6 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/pouw/clear/clear_audit.py",
-    "verity/protocols/accounting/pouw/clear/clear_work.py",
     "verity/protocols/accounting/pouw/prover/circuit/__init__.py",
     "verity/protocols/accounting/pouw/prover/circuit/anchors.py",
     "verity/protocols/accounting/pouw/prover/circuit/cap.circuit-check.py",
@@ -593,6 +592,8 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/accounting/pouw/prover/circuit/rowk.py",
     "verity/protocols/accounting/pouw/prover/circuit/window_statement.py",
+    "verity/protocols/accounting/pouw/prover/clear/clear_audit.py",
+    "verity/protocols/accounting/pouw/prover/clear/clear_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/__init__.py",
     "verity/protocols/accounting/pouw/prover/schemes/ncp.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py",
