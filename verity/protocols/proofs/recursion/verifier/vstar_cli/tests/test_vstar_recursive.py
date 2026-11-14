@@ -10,8 +10,10 @@ flags name, by SHA-512, and every file is handed to `verdicts` as a blob. The fo
 `ownOfJson` and `proofsOf` parse. With ``VERITY_VSTAR_RECURSIVE_DATA=DIR``, a `recursion_e2e` run's kept data (its
 ``data/TAG``, `KEEP_DATA=1`, after STEP=lean), or with ``=fetch`` the kept run `recursive_data.json` names, three
 recursive sessions are put to both: the honest one, every part accepted by each; the inner session with rep 0's challenge
-coin flipped (85's ``inner-neg-challenge``); and the honest one with one bit of part 0's first rep file flipped. Each part's verdict is the same in both, and a refusal of the whole
-check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at every part.
+coin flipped (85's ``inner-neg-challenge``), refused by the algebra's parts at rep 0's row of `v` and accepted by every
+other part; and the honest one with one bit of part 0's first rep file flipped. Each part's verdict is the same in
+both, and a refusal of the whole check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at
+every part.
 
 The refusals the compiled check adds to `flock-verify`'s per-part path are each held to a refusal by both: the inner
 statement under Flock's plain verifier (`innerOk`, here an inner sample that does not parse), and plain SHA-512 leaves under
@@ -26,6 +28,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -225,23 +228,27 @@ def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_p
 # --- a whole recursive session: a recursion_e2e run's kept data ---------------------------------------------------------------
 
 DATA = settings.recursive_data()
-DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean): set "
-                              "VERITY_VSTAR_RECURSIVE_DATA=DIR, or =fetch for the kept run recursive_data.json names")
+#: the whole-session tests, about half an hour on a node: a cold check runs them by name with VERITY_VSTAR_RECURSIVE_DATA=1
+#: (check.py's `OPT_IN`), and they run wherever else the variable names the data
+DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean), about half "
+                              "an hour on a node: set VERITY_VSTAR_RECURSIVE_DATA=DIR, or =fetch (or =1) for the kept run "
+                              "recursive_data.json names")
 KEPT = json.loads((Path(__file__).with_name("recursive_data.json")).read_text())["art"]
 
 
 def _data_dir(tmp_path_factory) -> Path:
     """``DATA``'s directory: ``DATA`` itself, or for ``fetch`` `KEPT` fetched from the evidence store into a fresh directory.
-    `KEPT` is on the store's private remote only, so where the store can't reach it (a node without the remote's keys)
-    the tests skip, naming the store's refusal."""
+    `KEPT` is on the store's private remote only, which a recorded check and a `research run` reach with the run's custody
+    key (`settings.store_env`). Where the store can't reach it the tests skip, naming the store's refusal; a recorded
+    check, which requires the store, fails that skip."""
     if DATA != "fetch":
         return Path(DATA)
     to = tmp_path_factory.mktemp("kept")
     r = subprocess.run([sys.executable, "-m", "research", "data", "fetch", KEPT, "--to", str(to)], capture_output=True,
-                       text=True, check=False)
+                       text=True, check=False, env=settings.store_env())
     if r.returncode:
         why = (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
-        pytest.skip(f"VERITY_VSTAR_RECURSIVE_DATA=fetch: the evidence store did not fetch {KEPT} ({why}); run where "
+        pytest.skip(f"VERITY_VSTAR_RECURSIVE_DATA=fetch: the evidence store is not reachable for {KEPT} ({why}); run where "
                     "`research data fetch` reaches the private remote, or fetch it there and set VERITY_VSTAR_RECURSIVE_DATA=DIR")
     return to
 
@@ -293,11 +300,15 @@ class Session:
         assert not missing, f"{dd}: no proved session of V*'s {missing}: the run's LEVELS left them out"
         self.parts = [by_unit[n] for n in names]
 
-    def check(self, inner: Inner, parts: list[Part], tmp: Path) -> list[tuple[str, bool]]:
+    def verdicts(self, inner: Inner, parts: list[Part], tmp: Path) -> tuple[dict, list[dict]]:
+        """V*'s compiled check's line over the whole session (`lean_verdicts`), and each part's verdict (`flock_verdict`)."""
         lean = lean_verdicts(self.exe, inner, parts, tmp)
         with ThreadPoolExecutor(settings.lean_jobs()) as ex:
             flock = list(ex.map(lambda jp: flock_verdict(self.flock, inner, self.rec_inner, *jp), enumerate(parts)))
-        return agree(lean, flock, parts)
+        return lean, flock
+
+    def check(self, inner: Inner, parts: list[Part], tmp: Path) -> list[tuple[str, bool]]:
+        return agree(*self.verdicts(inner, parts, tmp), parts)
 
 
 @pytest.fixture(scope="module")
@@ -329,16 +340,38 @@ def test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size(ses
     print(json.dumps({"size": n, "round_trips": got["round_trips"]}))
 
 
+#: The parts that read rep 0's challenge coin, by their statement's name: the algebra's (`RecCoins.checkResiduals`, part
+#: ``j`` of ``rec-residuals/…-p<j>``), whose `v` rows are V*'s residuals at the inner session's own coins. No other part
+#: reads that coin (85's `lean_verdicts.COVERS`).
+ALGEBRA = re.compile(r"rec-residuals/.*-p(\d+)")
+
+
+def v_row_refusal(name: str, j: str) -> re.Pattern:
+    """`RecCoins.checkValue`'s refusal of algebra part ``j`` (statement ``name``) whose rep 0 row of `v` is not the
+    verifier's, as both verifiers word it."""
+    return re.compile(rf"setup: rec-coins: {re.escape(name)}: rep 0: part {j}'s \d+ elements of v: "
+                      r"the statement's v row is not the verifier's rec-v row 0")
+
+
 @pytest.mark.slow
 @DEPLOYED
 def test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it(session, tmp_path):
-    """85's inner session with rep 0's challenge coin flipped (``inner-neg-challenge``, `rec_inner.py forge`): each part's
-    verdict is `flock-verify`'s, and some part refuses it."""
+    """85's inner session with rep 0's challenge coin flipped (``inner-neg-challenge``, `rec_inner.py forge`): the
+    algebra's parts refuse it, by V*'s compiled check and by `flock-verify` alike and each at rep 0's row of `v`, and
+    every other part is accepted as in the honest session. A session refused anywhere else (its record, another part,
+    the whole check) fails here: the flipped coin is then not what was refused."""
     neg = session.dd / "inner-neg-challenge"
     if not (neg / "session" / "session.json").is_file():
         pytest.skip(f"{neg}: the run's lean step made no flipped inner session (NEG_INNER without challenge)")
-    got = session.check(Inner(session.dd / "stage", neg), session.parts, tmp_path)
-    assert not all(a for _, a in got), got
+    lean, flock = session.verdicts(Inner(session.dd / "stage", neg), session.parts, tmp_path)
+    got = agree(lean, flock, session.parts)
+    reads = [ALGEBRA.fullmatch(name) for name, _ in got]
+    assert any(reads), f"no algebra part among {[name for name, _ in got]}: nothing here reads the flipped coin"
+    assert [a for _, a in got] == [m is None for m in reads], got
+    for (name, _), m, x, f in zip(got, reads, lean["parts"], flock):
+        if m is not None:
+            want = v_row_refusal(name, m[1])
+            assert want.fullmatch(x["why"]) and want.fullmatch(f["why"]), (name, x["why"], f["why"])
 
 
 @pytest.mark.slow
@@ -360,7 +393,7 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
 
 @pytest.mark.slow
 @DEPLOYED
-def test_an_inner_draw_that_does_not_parse_is_refused_by_both(session, tmp_path):
+def test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both(session, tmp_path):
     """The inner statement's sample cut short: the compiled check refuses the whole check at Flock's plain verifier on the
     inner statement (`innerOk`), and `flock-verify` accepts no part."""
     inner = copy.copy(session.inner)
