@@ -3,6 +3,7 @@ module
 public import Properties.Composition
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import all Init.Data.String.Defs
 
 /-!
 # `Core.canonicalJson` round trip: a printable value is its own canonical JSON
@@ -48,13 +49,17 @@ theorem toUTF8_all_lt {s : String} (h : Ascii s) : s.toUTF8.data.all (· < 0x7f)
   rw [hd] at hb
   obtain ⟨c, hc, hbc⟩ := List.mem_flatMap.1 hb
   have hc7 : c.toNat < 0x7f := h c hc
+  have hcv : c.val.toNat < 127 := hc7
   have hsz : c.utf8Size = 1 := by
     rw [Char.utf8Size_eq_one_iff, UInt32.le_iff_toNat_le]
-    exact Nat.le_of_lt_succ (by simpa using hc7)
+    simp only [UInt32.reduceToNat]
+    omega
   rw [String.utf8EncodeChar_eq_singleton hsz, List.mem_singleton] at hbc
   subst hbc
-  rw [UInt8.lt_iff_toNat_lt, UInt32.toNat_toUInt8]
-  simpa using Nat.lt_of_lt_of_le (Nat.mod_le _ _ ▸ hc7) (le_refl _)
+  simp only [decide_eq_true_eq]
+  refine UInt8.lt_iff_toNat_lt.2 ?_
+  simp only [UInt32.toNat_toUInt8, UInt8.reduceToNat]
+  omega
 
 /-- **A string is read back from its own UTF-8 bytes.** -/
 theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
@@ -80,7 +85,7 @@ theorem good_canonRoundTrip {j : Json} (h : Good j) :
   refine ⟨s, j', hcanon, hparse, hsame, hascii, hall, hfrom, ?_⟩
   unfold Core.canonicalJson
   simp only [hall, hfrom, hparse, hcj, bind, Except.bind, pure, Except.pure, bne_self_eq_false,
-    Bool.false_eq_true, if_false, ite_false, Option.getD]
+    Bool.false_eq_true, reduceIte]
 
 /-! ## `Plain`: the class the honest witness is built from -/
 
