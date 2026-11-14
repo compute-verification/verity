@@ -147,7 +147,7 @@ def Fp8ActQuant(B, S, x):
 _SCALED_MM_CONF = ("exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, "
                    "N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, "
                    f"{EVIDENCE['vllm_fp8_kernels_probe']['captured_utc']}) and 0 mismatches at every coordinate-sampled quantised gemm "
-                   "leaf of the production capture (corr-A/B); the k32 step pinned by the tc-fp8 campaign")
+                   "leaf of the serving capture (corr-A/B); the k32 step pinned by the tc-fp8 campaign")
 
 
 @composite("DotE4m3", 1, ["K"], lambda S: ((("xq", Array(S.K, E4M3)), ("wq", Array(S.K, E4M3))), F32),
@@ -247,7 +247,7 @@ def ScaledMmFp8NoSwap(B, S, xq, sx, w, sw, *bias):
            lambda S: (((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, E4M3))), ("sw", F32))
                        + ((("b", Array(S.N, BF16)),) if S.BIAS else ())),
                       Tuple(Array(S.K, E4M3), F32, Array(S.N, BF16))),
-           conformance="exact-model-tested; the two halves are the production nodes (Fp8ActQuant, ScaledMmFp8); as one function on real rows: tests/program/test_fp8.py::test_quant_linear_fp8_on_production_row (layer 0 qkv_proj, t=0/63/130: x_q, s_x and eight output words exact)")
+           conformance="exact-model-tested; the two halves are the serving nodes (Fp8ActQuant, ScaledMmFp8); as one function on real rows: tests/program/test_fp8.py::test_quant_linear_fp8_on_a_served_row (layer 0 qkv_proj, t=0/63/130: x_q, s_x and eight output words exact)")
 def QuantLinearFp8(B, S, x, w, sw, *bias):
     """The FP8 linear on one token row: `Fp8ActQuant` (computed x_q and s_x from the bf16 row) then `ScaledMmFp8`.
     Returns (x_q, s_x, y) — the three values serving materialises.  The layer functions call the two halves as

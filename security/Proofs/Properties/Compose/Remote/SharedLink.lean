@@ -5,7 +5,7 @@ import Proofs.Properties.Compose.Remote.Sample
 import Proofs.Properties.Compose.Remote.Window
 
 /-!
-# The session link windows a sample (`RunSamplesRecords`, `AcceptedSamplesOpenable`)
+# The session links windows to their sample (`RunSamplesRecords`, `AcceptedSamplesOpenable`)
 
 A run keeps, at any `g ≥ 1`, three facts of every sample taken and accepted window:
 

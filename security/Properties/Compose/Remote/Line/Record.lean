@@ -253,7 +253,7 @@ noncomputable def Node.rebuildBurst (n : Node) : ℝ := (n.rates.rebuildBurstByt
 /-- `B_d`, one maximal disk read in blocks. -/
 noncomputable def Node.diskBurst (n : Node) : ℝ := (n.rates.diskBurstBytes : ℝ) / n.blockBytes
 
-/-- `B_l`, one link window in blocks. -/
+/-- `B_l`, one link burst in blocks. -/
 noncomputable def Node.linkBurst (n : Node) : ℝ := (n.rates.linkBurstBytes : ℝ) / n.blockBytes
 
 /-- `S`, the registered blocks the node's chips can hold any byte of: `chipBytes / blockBytes` rounded up, so a block

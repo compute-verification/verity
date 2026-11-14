@@ -36,7 +36,7 @@ def digestsJson (d : Digests) (rows : Nat) : Json :=
   Json.mkObj [("sha256", Flock.hexOf d.sha256.finish), ("bytes", (d.bytes : Json)), ("rows", (rows : Json))]
 
 /-- A part laid out with input ports `ins` and its outputs as one port, as `IL.layout(C, ins, ["y"])` and
-`IL.netlist(lay, "part")` lay out and write it. -/
+`IL.circuit_description(lay, "part")` lay out and write it. -/
 def partNet (st : St) (ins : Array Nat) (outs : List Lin) : Except String Json := do
   if let some v := deadRow st outs.toArray then throw s!"AND {v} reaches no output"
   let l := layout st ins #[outs.length] outs.toArray
