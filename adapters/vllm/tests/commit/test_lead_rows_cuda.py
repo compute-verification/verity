@@ -5,12 +5,16 @@ across every position width, both schemas and short last values, whole subtrees 
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.pod
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the lead kernels need a GPU", allow_module_level=True)
 
