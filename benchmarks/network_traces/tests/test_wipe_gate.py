@@ -72,7 +72,8 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
     out.mkdir(parents=True, exist_ok=True)
     env = {"PATH": f"{bin_}{os.pathsep}{os.path.dirname(sys.executable)}{os.pathsep}{os.defpath}",
            "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_RUN_ID": "r1",
-           "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable, **env}
+           "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable,
+           "VY_CHALLENGER_1_HOST": "192.0.2.21", **env}
     if popen:
         return subprocess.Popen(["bash", str(ROOT / "benchmarks/network_traces/wipe_gate.sh")], cwd=ROOT,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
@@ -84,6 +85,17 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
 def _published(tmp_path: Path) -> list[str]:
     return sorted(p.relative_to(tmp_path / "run" / "out").as_posix()
                   for p in (tmp_path / "run" / "out").rglob("*") if p.is_file())
+
+
+def test_without_the_challenger_hosts_address_nothing_is_sent(tmp_path):
+    """site.json names the variable that holds the challenger host's address, which `_gate` sets: with it unset and no
+    CHALLENGER the script ends naming it, before the gate is asked anything; a CHALLENGER given whole reads none."""
+    keep = tmp_path / "keep"
+    got = _gate(tmp_path, KEEP=str(keep), VY_CHALLENGER_1_HOST="")
+    assert got.returncode != 0 and "VY_CHALLENGER_1_HOST is unset: site.json names it for its gate" in got.stderr
+    assert not keep.exists() and _published(tmp_path) == []
+    got = _gate(tmp_path, KEEP=str(keep), VY_CHALLENGER_1_HOST="", CHALLENGER="research@192.0.2.9")
+    assert got.returncode == 0 and (keep / RUN / "fetch.tar.gz").is_file(), got.stdout + got.stderr
 
 
 def test_record_keeps_no_witness(tmp_path):

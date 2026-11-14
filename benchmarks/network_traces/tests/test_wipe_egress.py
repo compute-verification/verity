@@ -34,6 +34,8 @@ ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))
 LINK, FAILS = ws.LINK, f"{ws.LINK}-fails"
+#: the device the gate's `end.json` names for a network certifier run
+DEVICE = "warden"
 MS = 1_000_000
 
 
@@ -75,7 +77,7 @@ def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset 
         (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines))
     files = {Path(n).name: hashlib.sha512((run / n).read_bytes()).hexdigest()
              for n in (E.DEPLOYMENT, E.CERTIFICATES) if (run / n).is_file()}
-    (run / E.END).write_text(json.dumps({"device": "warden", "rc": 0, "run": "c-test", "pinned": "0" * 40,
+    (run / E.END).write_text(json.dumps({"device": DEVICE, "rc": 0, "run": "c-test", "pinned": "0" * 40,
                                          "verdict": {"accepted": accepted}, "files": files}))
     return run
 
@@ -138,7 +140,7 @@ def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tm
 
 def test_the_gates_verdict_and_its_hashes_of_out_bind_the_count(tmp_path: Path) -> None:
     refused = egress(gate_run(tmp_path / "refused", accepted=False), at(4_000), at(9_000))
-    assert refused["why"] == ["the gate's check didn't accept the run (device warden, rc 0, accepted False)"]
+    assert refused["why"] == [f"the gate's check didn't accept the run (device {DEVICE}, rc 0, accepted False)"]
     assert (refused["covered"], refused["certificates"], refused["K"]) == (False, 0, None)
     bare = gate_run(tmp_path / "bare")
     (bare / E.CERTIFICATES).unlink()

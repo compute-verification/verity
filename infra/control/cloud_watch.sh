@@ -1,8 +1,10 @@
 #!/bin/sh
 # The cloud watch: our cloud infra's health and spend, from the control pod; anomalies and a 15:00Z digest in
 # #agent-alerts. Code: /data/infra/cloud_watch.py and /data/infra/cloud_watch.toml (copies of infra/control/'s; standard library
-# and psql). The credentials go only into the environment: r2.env and relay.env (SLACK_BOT_TOKEN, GH_TOKEN) are sourced, and
-# store-index.env's URL (it has `&`) is read with sed. State: /data/cloud-watch/state.json. Log: /data/cloud-watch/watch.log
+# and psql). The credentials go only into the environment: r2.env and relay.env (SLACK_BOT_TOKEN) are sourced, and
+# store-index.env's URL (it has `&`) is read with sed. GitHub is read with the pod's read-only App token, which the watch
+# takes from cloud_watch.toml's github.token_command (gh_read_token.sh --cached) each pass, never from a file.
+# State: /data/cloud-watch/state.json. Log: /data/cloud-watch/watch.log
 # With arguments it runs them once in the foreground, without the lock: `cloud_watch.sh once --dry-run --digest`.
 DIR=/data/cloud-watch
 LOG=$DIR/watch.log

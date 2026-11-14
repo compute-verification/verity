@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-#: the mask whole a unit (`dsa_topk_mask_cut.DsaTopKMaskWhole_v1`) at the long row's served statics, TOPK 2,048 up to
-#: `WHOLE_MAX`: the first class, the first whose rows alone need 2^27 bits, and the last
+#: the mask whole a unit (`dsa_topk_mask_cut.DsaTopKMaskWhole_v1`, and `_v2`, which the long row's cut binds) at the long
+#: row's served statics, TOPK 2,048 up to `WHOLE_MAX`: the first class, the first whose rows alone need 2^27 bits, and the last
 RANGES = {
     "DsaTopKMaskWhole_v1{N=4096..40960 step 2048,TOPK=2048}": ("N=4096", "N=40960", "N=24576"),
+    "DsaTopKMaskWhole_v2{N=4096..40960 step 2048,TOPK=2048}": ("N=4096", "N=40960", "N=24576"),
 }
 
 

@@ -114,7 +114,7 @@ def _run_fill(dispatch, name: str, env: dict | None = None) -> int:
                           text=True, check=False).returncode
 
 
-def test_an_n2_block_needs_cmd_owner_and_a_max_min_within_the_runners_cap(dispatch, tmp_path):
+def test_an_n2_block_needs_cmd_owner_and_a_max_min_within_the_runners_limit(dispatch, tmp_path):
     b = dispatch.n2_block(_item(tmp_path))
     assert (b["gpus"], b["prio"], b["max_min"], b["cpus"]) == (1, 0, 25, 16)
     for bad, why in (({"cmd": ""}, "no n2 block"), ({"max_min": 45}, "max_min 45"), ({"gpus": 2}, "gpus 2"),

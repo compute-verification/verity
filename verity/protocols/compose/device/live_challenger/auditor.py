@@ -312,13 +312,16 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     buckets before the end ("End", and the runner's "A session").
   - *The unit* opens one ssh to the peer with the auditor's tunnel key, which carries both forwards: a rehearsal's
     `-L`, from a free port here to the endpoint's PORT, and a `-R`, from the peer's 127.0.0.1:CLIENT_PORT to the
-    relay's listener, a free port of the loopback here (`forward_argv`). It then runs
-    `benchmarks/network_traces/warden_serve.py session`: the key, the relay for exactly `--windows` execution phases,
-    and the check.
+    relay's listener, a free port of the loopback here (`forward_argv`). The unit binds that listener itself before
+    it starts the ssh and holds it until the ssh has exited (`held_listener`), so the forward never ends at a port
+    another process could take: a connection made while no relay accepts waits at the session's own socket, where the
+    relay takes it as it starts, or the unit closes it unread, in no record, with the ssh. It then runs
+    `benchmarks/network_traces/warden_serve.py session` on that socket (`--listen-fd`): the key, the relay for exactly
+    `--windows` execution phases, and the check.
   - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
-    relay's cells both ways (`verity.protocols.accounting.certifier.verifier.warden`: `cells` sending, `Shim`
-    reading) at the schedule the deployment names. The port answers only while the unit's ssh is up: a connection
-    refused there is the forward down, and the run's `tunnel.log` says why.
+    relay's cells both ways (the relay's module, named above: `cells` sending, `Shim` reading) at the schedule the
+    deployment names. The port answers only while the unit's ssh is up: a connection refused there is the forward
+    down, and the run's `tunnel.log` says why.
   - *Ready.* `status RUN` carries `relay`: null until the relay listens, then `{"client": "127.0.0.1:CLIENT_PORT",
     "deployment": {...}}`, the relay's `deployment.json` as the run publishes it (its key, the session, the schedule,
     `origin_unix`, `windows`, the run id). Bucket 0 starts at the origin, a few seconds after the relay listens; a
@@ -2032,8 +2035,8 @@ def certifier_prompts(req: dict, data: bytes) -> bytes:
 
 
 #: each verb the rehearsal unit runs, its request parser: the two rehearsals, the load (a warden rehearsal with its
-#: load first), the store's write and the relay session (the relay of a warden rehearsal, kept up for clients that
-#: aren't its own)
+#: load first), the store's write and the relay session (the relay of a network certifier rehearsal, kept up for
+#: clients that aren't its own)
 REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden,
               "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights,
               "relay-session": lambda argv, host: parse_warden(argv, host, session=True)}
@@ -2774,7 +2777,7 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 
 
 def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
-                   store: Path | None = None, listen: int | None = None) -> list[str]:
+                   store: Path | None = None, listen: int | None = None, listen_fd: int | None = None) -> list[str]:
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
@@ -2785,15 +2788,17 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its program, the endpoint given
     `LOAD_READY_S` to come up after it. A relay session's request (it has ``client_port``) runs `warden_serve.py
     session` instead: the relay alone, with no client and no traffic, listening on this host's 127.0.0.1:`listen`
-    (where the peer's clients' forward ends) for the request's execution phases, its upstream, key, schedule and
-    watermark as a scan rehearsal's."""
+    (where the peer's clients' forward ends; on the socket it inherits as `listen_fd` when given, `held_listener`'s,
+    and then it binds none) for the request's execution phases, its upstream, key, schedule and watermark as a scan
+    rehearsal's."""
     scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     watermark = ["--watermark"] if req.get("watermark") else []
     if "client_port" in req:
         return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "session",
-                "--upstream", url.removeprefix("http://"), "--listen", f"127.0.0.1:{listen}", "--out", str(out),
+                "--upstream", url.removeprefix("http://"), "--listen", f"127.0.0.1:{listen}",
+                *([] if listen_fd is None else ["--listen-fd", str(listen_fd)]), "--out", str(out),
                 *height_argv(req), "--windows", str(req["windows"]), *scan[1:], *watermark]
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     load = req.get("load")
@@ -3111,9 +3116,23 @@ def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] 
     return [*TUNNEL_SSH, "-L", f"127.0.0.1:{local}:127.0.0.1:{remote}", *reverse, *ssh]
 
 
-def _listening(command: Callable[..., list[str]], listen: int) -> Callable[..., list[str]]:
-    """`command` (`warden_command`) for a relay session whose relay listens on this host's 127.0.0.1:`listen`."""
-    return lambda *a: command(*a, listen=listen)
+def held_listener():
+    """A relay session's listener: a socket bound to a free port of this host's loopback and listening. The session's
+    unit opens it before its ssh, whose `-R` ends at that port, hands it to the relay's runner (`warden_serve.py
+    --listen-fd`) and closes it only once that ssh has exited. So a connection the peer makes through the forward
+    while no relay accepts, before the runner serves or after it stops, waits at a socket the session holds and never
+    reaches another process that took the port."""
+    import socket
+    held = socket.socket()
+    held.bind(("127.0.0.1", 0))
+    held.listen()
+    return held
+
+
+def _listening(command: Callable[..., list[str]], listen: int, fd: int) -> Callable[..., list[str]]:
+    """`command` (`warden_command`) for a relay session whose relay listens on this host's 127.0.0.1:`listen`, on the
+    socket it inherits as `fd`."""
+    return lambda *a: command(*a, listen=listen, listen_fd=fd)
 
 
 def _stop_with(tunnel: subprocess.Popen, proc: subprocess.Popen) -> None:
@@ -3141,9 +3160,9 @@ def certifier_run(host: Host, run: str, *, pinned: str,
                   command: Callable[..., list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
     """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
-    load") or relay session ("A relay session": a warden rehearsal's relay alone, where the same ssh also brings the
-    peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that ssh exits),
-    as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
+    load") or relay session ("A relay session": a network certifier rehearsal's relay alone, where the same ssh also
+    brings the peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that
+    ssh exits), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. Every run's own output (`rehearse.log`) and its tunnels' (`tunnel.log`) are free text and go to
     `witness/`. A network certifier run writes to `witness/` too, and its public outcome (`warden_outcome`) to `out/`
@@ -3171,20 +3190,24 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     sys.path.insert(0, str(HERE))
     import serve
     kept = "client_port" in req
-    local, *sinks = _local_ports(1 + (load["streams"] if load else 0) + kept)
-    ssh = serve.peer_ssh(host.peers, req["peer"])
-    back = ()
-    if kept:  # a relay session: the same ssh brings the peer's clients to the relay's listener, a free port here
-        listen = sinks.pop()
-        back, command = ((req["client_port"], listen),), _listening(command, listen)
-    argv = (tunnel_argv or (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
+    # a relay session: the same ssh brings the peer's clients to the relay's listener, which this unit holds from
+    # before that ssh starts until it has exited (`held_listener`)
+    held = held_listener() if kept else None
     rc, word, why, tunnels = 2, None, None, []
-    with open(logs / "tunnel.log", "wb") as log:
-        tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
-        for s in sinks:
-            tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
-                                            stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
     try:
+        local, *sinks = _local_ports(1 + (load["streams"] if load else 0))
+        ssh = serve.peer_ssh(host.peers, req["peer"])
+        back = ()
+        if kept:
+            listen = held.getsockname()[1]
+            back, command = ((req["client_port"], listen),), _listening(command, listen, held.fileno())
+        argv = (tunnel_argv or
+                (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
+        with open(logs / "tunnel.log", "wb") as log:
+            tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
+            for s in sinks:
+                tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
+                                                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         if not up(tunnels[0], local):
             word, why = "tunnel", f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
         elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
@@ -3195,7 +3218,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
             with open(logs / "rehearse.log", "wb") as log:
                 proc = subprocess.Popen(command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL,
                                         stdout=log, stderr=subprocess.STDOUT, env=certifier_env(),
-                                        start_new_session=True)
+                                        start_new_session=True, pass_fds=(held.fileno(),) if kept else ())
             if kept:
                 threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
             rc = (wait or _wait)(proc, req["minutes"] * 60)
@@ -3209,6 +3232,8 @@ def certifier_run(host: Host, run: str, *, pinned: str,
         for tunnel in tunnels:
             tunnel.terminate()
             tunnel.wait()
+        if kept:
+            held.close()
     if warden:
         outcome = {"device": "warden", **warden_outcome(out, work, None if kept else req["requests"])}
         for refusal in ("unruled", "miscounted"):

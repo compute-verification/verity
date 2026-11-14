@@ -14,9 +14,7 @@ from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, Registry, Sett
 MEMBER = Path(__file__).resolve().parents[1]
 REGISTRY_FILE = "verity_bench/settings.py"
 #: The files of this member that still use the environment directly, and how often (`direct_uses`).  It only shrinks.
-#: runner.py reads the integration's own VERITY_INDUCTOR_DIR_PER_PROCESS, which outside code can read only once
-#: ``verity_vllm.settings`` is a public interface (``tests/test_vllm_public_api.py``).
-BASELINE = {"verity_bench/vllm/runner.py": 1}
+BASELINE: dict[str, int] = {}
 
 
 def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
@@ -118,7 +116,7 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-0000")
     monkeypatch.delenv("OUT", raising=False)
     monkeypatch.chdir(root)
-    monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": []})
+    monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": [], "points": []})
     monkeypatch.setattr(cli, "write", lambda doc, path: path.write_text(json.dumps(doc)))
     monkeypatch.setattr(cli, "render", lambda doc: "")
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity]) == 0

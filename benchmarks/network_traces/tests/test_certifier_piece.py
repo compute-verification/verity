@@ -51,7 +51,7 @@ import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
-from test_served_session import RUN, STUB  # noqa: E402
+from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
@@ -86,7 +86,7 @@ def warden(tmp_path_factory):
     """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), the
     execution phase holding the most whole certified requests, its two row registrations (ingress, egress) and the
     run's deployment."""
-    d = tmp_path_factory.mktemp("warden")
+    d = tmp_path_factory.mktemp("network_certifier")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
     by: dict[int, list[dict]] = {}
@@ -737,6 +737,34 @@ def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp
     assert json.loads((piece / "answer.json").read_text()) == a and not (tmp_path / "seen").exists()
 
 
+def test_a_chain_accepted_on_the_period_check_goes_on_to_that_check_whose_answer_is_the_pieces(tmp_path, warden, period):
+    """The chain's report says `chain_record.RESTS` where its scan's acceptance rests on the period check. The piece
+    then goes on to that check and answers what it answers, a reject as an accept, so no answer is an accept the
+    period check didn't give; split in two, the chain step marks DIR/chain.json with no answer, and the period step
+    reads that report again and checks V3c's period.json."""
+    seen = []
+    rejected = CP.answer("reject", "window 0: the scan's prog is no compute audit's slot entries")
+    accepted = {"protocol": CP.PROTOCOL, "verdict": "accept"}
+    assert _decide(tmp_path / "reject", warden, CR.RESTS, check=lambda c, p: seen.append(p.name) or rejected) == rejected
+    assert _decide(tmp_path / "accept", warden, CR.RESTS, check=lambda c, p: seen.append(p.name) or accepted) == accepted
+    assert seen == ["period", "period"]
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
+    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, CR.RESTS, warden["w"])) == 0
+    assert (piece / CP.CHAINED).is_file() and not (piece / "answer.json").exists()
+    answer = period.reference(period.case("accept", 1, "clock"))
+    assert _hook("period", d, piece, v3c, *_lean(tmp_path, answer)) == 0, (piece / "period.log").read_text()
+    assert json.loads((piece / "answer.json").read_text())["verdict"] == "accept" and (tmp_path / "seen").is_dir()
+
+
+@pytest.mark.parametrize("word", ["refused", "scan accepted", f"scan {CR.RESTS}", f"{CR.RESTS}, N2 refused", None])
+def test_any_other_word_of_the_chains_report_is_a_reject_and_the_period_check_isnt_run(tmp_path, warden, word):
+    """Only the whole chain's two accepting words go on: a refusal, the scan-only path's words and anything else are the
+    chain's reject, with the word and its why, before the period check (`_decide`'s fails the test when called)."""
+    a = _decide(tmp_path, warden, word)
+    assert a["verdict"] == "reject" and a["reason"].startswith(f"the chain {word}: ")
+
+
 @pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json"])
 def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, warden):
     """The chain step refuses without V3c's committed window, which its scan reads, and when its limit
@@ -779,6 +807,11 @@ def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
+@pytest.fixture(autouse=True)
+def challenger_host(monkeypatch):
+    monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
+
+
 def _stub_gate(tmp_path: Path, monkeypatch) -> None:
     """`test_served_session.STUB` as ssh: the gate it reaches writes its request to tmp_path/request."""
     (tmp_path / "bin").mkdir()
@@ -803,7 +836,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (kept.parent / "start.json").stat().st_mode & 0o777 == 0o600
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
-    assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
+    assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
@@ -811,6 +844,18 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
                     str(tmp_path / "key"), "--scan-class", "w63"]) == 0
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
+
+
+def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variables_name_before_the_gate(tmp_path,
+                                                                                                    monkeypatch):
+    """The front's default gate is `SS.GATE`, whose host the environment holds: unset, the front is refused by the
+    variable's name and sends nothing; the dry run's ``--gate local`` reads no address (the test below runs it)."""
+    _stub_gate(tmp_path, monkeypatch)
+    monkeypatch.delenv("VY_CHALLENGER_1_HOST")
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"].startswith("VY_CHALLENGER_1_HOST is unset: the gate is ")
+    assert not (tmp_path / "request").exists()
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,

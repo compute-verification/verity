@@ -34,7 +34,8 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
   128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
   which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
-  - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
+  - ``--gate USER@HOST`` (the challenger's gate, `GATE` with the challenger host's address from the environment
+    variable it names, under the lane's gate key ``--key``): the request with the
     prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
     until the run ends (``status.json``), then ``fetch``. The reply is the request's public fields and the run's
     systemd unit, ``vy-certifier@RUN.service``, which the warden's witness also records (stalls.json's cgroup paths)
@@ -104,9 +105,11 @@ the run dir), never through a run's custody, and the served node already holds i
 developer's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
 ``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
 
-The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there):
+The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there; a run that asks
+the gate takes the challenger host's address from where it is launched, ``--env`` below):
 
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd source --timeout 90m \\
+      --env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at UTC'
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd source --timeout 30m \\
       -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
@@ -115,7 +118,8 @@ The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's ga
       --send certified-io.json -- bash -lc 'python3 benchmarks/network_traces/served_session.py endpoint \\
       --from SERVE_DIR --io "$RESEARCH_RUN_DIR/inputs/certified-io.json" --out "$OUT"'
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
-      --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
+      --store-read --send challenger-key.json --env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST \\
+      -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
       tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
@@ -135,9 +139,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
+import re
 import secrets
 import shlex
 import shutil
@@ -155,6 +161,11 @@ TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
 
+#: this directory's settings registry, by its path: a bare ``settings`` is whichever one sys.path has first
+_spec = importlib.util.spec_from_file_location("network_traces_settings", HERE / "settings.py")
+settings = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(settings)
+
 #: the scan's class (`scan_zk.W63`, the gate's class of record): at most KI prompt ids in, at most KO ids out a request
 (_, KI), (_, KO) = A.scan_bounds()
 #: the session's prompt ids a request, which reach the warden in time (KI's don't)
@@ -162,8 +173,9 @@ PROMPT_IDS = 256
 #: the session's requests: what `PEER`'s free disk seals, within 72 GB even if every request runs all KO ids
 #: (the endpoint's sizing: 636.5 MB a full-length request)
 REQUESTS = 113
-#: where the sessions run, kept as data (``site.json``): the served peer, the gate (USER@HOST) and the lane whose key it
-#: takes, the auditor's node, the gate key's file under ~/.ssh and the lane's gate directory there
+#: where the sessions run, kept as data (``site.json``): the served peer, the gate (USER@HOST, its host the
+#: ``${NAME}`` of the environment variable that holds the challenger host's address: `gate_at`) and the lane whose key
+#: it takes, the auditor's node, the gate key's file under ~/.ssh and the lane's gate directory there
 SITE: dict[str, str] = json.loads((HERE / "site.json").read_text())
 PEER, PORT, GATE, LANE = SITE["peer"], 18782, SITE["gate"], SITE["lane"]
 #: the auditor's side, where the chain runs and the gate's coins for its sample arrive
@@ -216,6 +228,17 @@ class Refused(Exception):
 class Late(Refused):
     """Launched more than `LATE_S` past ``--at``: nothing is sent."""
     code = 3
+
+
+def gate_at(gate: str) -> str:
+    """`gate` (USER@HOST, or ``local``) with each ``${NAME}`` filled from the environment: `GATE` names the challenger
+    host's address that way, which no file here holds. A NAME the environment doesn't hold is refused by name."""
+    def held(m: re.Match) -> str:
+        if not (value := settings.host(m[1])):
+            raise Refused(f"{m[1]} is unset: the gate is {gate}, so set it to the challenger host's address, or give "
+                          "--gate USER@HOST")
+        return value
+    return re.sub(r"\$\{(\w+)\}", held, gate)
 
 
 def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
@@ -271,6 +294,8 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     # by ``chain``'s own default, so its command names any other
     on = getattr(a, "auditor", AUDITOR)
     coin_peer = "" if on == AUDITOR else f" --coin-peer {on}"
+    # the launcher's shell fills it: the session and the chain's coin link ask `GATE`, whose host no file holds
+    host = "--env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST"
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
                f"--minutes {a.minutes} --prompt-ids {a.prompt_ids} --tokens {a.tokens} --vocab {a.vocab}"
@@ -283,7 +308,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
             "hand_start": HAND_START,
             "runs": {
                 "session": f"research run --on {on} --source . --project verity --as network-accounting "
-                           f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
+                           f"--cwd source --timeout {a.minutes + 60}m {host} -- bash -lc '{session}'",
                 "io": f"research run --on {on} --source . --project verity --as network-accounting "
                       "--cwd source --timeout 30m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run "
                       "--no-sync python benchmarks/network_traces/served_session.py io --run RUN'",
@@ -292,7 +317,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                             "benchmarks/network_traces/served_session.py endpoint --from SERVE_DIR --io "
                             f"\"$RESEARCH_RUN_DIR/inputs/{CERTIFIED}\" --out \"$OUT\" --port {a.port}'",
                 "chain": f"research run --on {on} --source . --project verity --as network-accounting "
-                         "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
+                         f"--cwd clone --timeout 270m --store-read --send challenger-key.json {host} -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
                          "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
@@ -820,6 +845,8 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     a = parser().parse_args(argv)
     try:
+        if a.cmd == "session" or (a.cmd == "chain" and a.coins == "gate"):
+            a.gate = gate_at(a.gate)
         if a.cmd == "chain":
             return chain(a)
         if a.cmd == "io":

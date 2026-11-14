@@ -349,6 +349,23 @@ def publish(tmp_path: Path, lines: list[bytes], log: Path) -> subprocess.Complet
                           text=True)
 
 
+def test_publish_reads_the_hosts_address_from_the_environment_and_ends_at_once_without_it(tmp_path):
+    """With no DEST the gate is research@ the address the environment holds; with neither, a pass and a loop end at
+    once naming the variable, before anything is asked of the host or kept."""
+    script, bin_dir, asked = str(HERE.parent / "publish.sh"), tmp_path / "bin", tmp_path / "asked"
+    bin_dir.mkdir()
+    (bin_dir / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {asked}\nexit 9\n')
+    (bin_dir / "ssh").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
+    env |= {"PATH": f"{bin_dir}:{env['PATH']}", "VY_CHALLENGER_STATE": str(tmp_path / "state")}
+    for words in ([], ["--every", "300"]):
+        r = subprocess.run(["bash", script, *words], env=env, capture_output=True, text=True)
+        assert r.returncode != 0 and "VY_CHALLENGER_1_HOST: the auditor host's address, or DEST as an argument" in r.stderr
+    assert not asked.exists() and not (tmp_path / "state").exists()
+    r = subprocess.run(["bash", script], env=env | {"VY_CHALLENGER_1_HOST": "192.0.2.21"}, capture_output=True, text=True)
+    assert r.returncode == 9 and [line.split()[-2] for line in asked.read_text().splitlines()] == ["research@192.0.2.21"] * 3
+
+
 def test_publish_puts_every_session_that_ended_since_its_last_pass(tmp_path):
     def entry(kind, session):
         return json.dumps({"schema": A.SCHEMA, "kind": kind, "session": session, "body": {"key_sha512": "k"}}).encode()

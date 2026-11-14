@@ -39,7 +39,6 @@ members = [
     "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
-    "verity-core-periods",
     "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-exact-kit",
@@ -2499,23 +2498,6 @@ requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "verity-difftest", editable = "tools/difftest" },
     { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
-]
-
-[[package]]
-name = "verity-core-periods"
-version = "0.0.0"
-source = { virtual = "verity/periods" }
-dependencies = [
-    { name = "hypothesis" },
-    { name = "verity" },
-    { name = "verity-difftest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "tools/difftest" },
 ]
 
 [[package]]
