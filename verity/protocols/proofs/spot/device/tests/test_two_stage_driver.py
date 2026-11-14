@@ -38,9 +38,9 @@ from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boun
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-TS = importlib.import_module("two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
 FC = importlib.import_module("fake_challenger")
-AC = importlib.import_module("a5_coins")
+AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)

@@ -44,9 +44,9 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
-from verity_vllm.records.schema_ids import POUW_H1_HANDOFF_SCHEMA
 
-SCHEMA = POUW_H1_HANDOFF_SCHEMA
+#: a suspended window's hand-off state's schema, which `suspend` writes and `resume` refuses any other than
+SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
 FILE = "h1-window.pkl"
 #: what the stream's descriptor travels with, and the holder's answer once it has it
 STREAM, TAKEN = b"verity/pouw/h1/stream/v1", b"taken"
