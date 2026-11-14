@@ -34,22 +34,26 @@ def _outcome(unit: P.SessionUnit) -> V.UnitOutcome:
                          tuple((p, r) for p, (r, kind) in enumerate(zip(unit.rows, unit.kinds)) if kind == "known"))
 
 
-def _setup():
+def _staged(k: int = K):
     session = _rand(32)
-    tree = mc.CoinTree.draw(b"source", session, BLOCKS, K, key=mc.coin_key(_rand(mc.HM96.key_bytes)),
-                            salts=[_rand(mc.HM96.salt_bytes) for _ in range(K)])
-    c = mc.SessionCommitment(session, tree.root, tree.key, BLOCKS, K, 854_000, BLOCK, _rand(64))
+    tree = mc.CoinTree.draw(b"source", session, BLOCKS, k, key=mc.coin_key(_rand(mc.HM96.key_bytes)),
+                            salts=[_rand(mc.HM96.salt_bytes) for _ in range(k)])
+    c = mc.SessionCommitment(session, tree.root, tree.key, BLOCKS, k, 854_000, BLOCK, _rand(64))
     blocks = {i: _rand(BLOCK) for i in range(BLOCKS)}
-    rounds = [mc.Round(j, tree.indices[j], 10 * j, 10 * j + 5, mc.block_digest(blocks[tree.indices[j]])) for j in range(K)]
+    rounds = [mc.Round(j, tree.indices[j], 10 * j, 10 * j + 5, mc.block_digest(blocks[tree.indices[j]])) for j in range(k)]
     key = _rand(16 + 64)
-    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
+    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": k}, sort_keys=True, separators=(",", ":")).encode()
     m = R.memory_challenger_message(key[:16], session, mc.message(c, mc.COMPLETE, rounds))
-    st = P.session_statements(head, mc._domain(mc.RECORD_BINDING, session, K).domain_id, session,
+    st = P.session_statements(head, mc._domain(mc.RECORD_BINDING, session, k).domain_id, session,
                               [r.value() for r in rounds], m, key, _rand(R.DEPLOYED.signature_bytes()), tree.indices,
                               [blocks[i] for i in tree.indices], limit_ns=c.limit_ns)
+    return c, [tree.opening(j) for j in range(k)], key, st, lambda i: _commit(blocks[i])
+
+
+def _setup():
+    c, openings, key, st, registered = _staged()
     proofs = V.SessionProofs(_outcome(st.signature), _outcome(st.digest), tuple(_outcome(u) for u in st.rounds))
-    openings = [tree.opening(j) for j in range(K)]
-    return c, openings, key, proofs, lambda i: _commit(blocks[i])
+    return c, openings, key, proofs, registered
 
 
 def _check(c, openings, key, proofs, registered, scheme=mc.LMS, trusted=None) -> mc.Verdict:
@@ -103,3 +107,17 @@ def test_proving_is_not_written_yet() -> None:
     c, openings, key, proofs, registered = _setup()
     with pytest.raises(NotImplementedError, match="memory-accounting/pous-session-inside-proof"):
         P.prove_session(proofs)
+
+
+@pytest.mark.parametrize("k", [1, K])
+def test_the_session_is_a_window_circuit(k) -> None:
+    """The staged statements as a window's circuit (`window.SessionIntegration`): its templates and wires pass the
+    window's checks, one unit each for the signature and the digest and one a round, at a K with no odd round too."""
+    from verity.circuits.codec import descriptor_id
+    from verity.protocols.accounting.pous.prover.window import SessionIntegration
+
+    st = _staged(k)[3]
+    circuit = SessionIntegration(st).circuit()
+    assert circuit.units == {descriptor_id(st.signature.definition): 1, descriptor_id(st.digest.definition): 1,
+                             **{descriptor_id(st.rounds[s].definition): len(st.rounds[s::2]) for s in range(min(k, 2))}}
+    assert len(circuit.wires) == 1 + k

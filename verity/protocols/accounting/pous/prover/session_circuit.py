@@ -56,7 +56,7 @@ from .verdict_circuit import PousVerdict, verdict_value
 
 __all__ = ["CTX_BYTES", "RECORD_BYTES", "RECORDS_PER_ROW", "RECORD_SCHEMA", "SESSION_BYTES", "SESSION_TAG", "MAX_ROUNDS", "PousRecordLeaf",
            "PousRecordPad", "PousRound", "PousSessionDigest", "PousSessionMessage", "PousSessionSig", "records_rows",
-           "head_bytes", "round_ok", "session_digest", "session_sig_ok", "signed_context"]
+           "head_bytes", "octets", "round_ok", "session_digest", "session_sig_ok", "signed_context"]
 
 #: a round record's bytes (`memory_challenger.Round.value`), and the records a registered row holds
 RECORD_BYTES, RECORDS_PER_ROW = 92, 2
@@ -72,6 +72,11 @@ SESSION_BYTES = 32
 CTX_BYTES = 8 + len(_ROLE) + 16 + 16 + SESSION_BYTES
 
 
+def octets(n: int):
+    """A row of n bytes: ``Array<n, Array<8, Value<1>>>``, its bits in byte order (a window's port is whole words)."""
+    return Array(n, Array(8, BL.BIT))
+
+
 def _sig_bytes(S) -> int:
     p = _lms_params(S)
     return 4 + S.N * (1 + p.P + S.H)
@@ -79,7 +84,7 @@ def _sig_bytes(S) -> int:
 
 def _session_sig(S):
     _lms_params(S)
-    return (("key", bits(8 * (16 + S.N))), ("m", bits(512)), ("sig", bits(8 * _sig_bytes(S)))), bits(1)
+    return (("key", octets(16 + S.N)), ("m", octets(64)), ("sig", octets(_sig_bytes(S)))), bits(1)
 
 
 def _session_body(B, S, key, m, sig):
@@ -110,8 +115,8 @@ def _round_sig(S):
     _check("PousRound", N=S.N)
     if S.SLOT not in range(RECORDS_PER_ROW):
         raise ValueError(f"PousRound's SLOT is a record's place in its row, below {RECORDS_PER_ROW}, not {S.SLOT!r}")
-    return (("row", bits(8 * S.N)), ("records", bits(8 * RECORD_BYTES * RECORDS_PER_ROW)), ("j", bits(32)),
-            ("i", bits(64))), bits(1)
+    return (("row", octets(S.N)), ("records", octets(RECORD_BYTES * RECORDS_PER_ROW)), ("j", octets(4)),
+            ("i", octets(8))), bits(1)
 
 
 def _round_body(B, S, row, records, j, i):
@@ -121,7 +126,7 @@ def _round_body(B, S, row, records, j, i):
     def integer(lo, hi):
         return [rec[hi - 1 - t // 8][t % 8] for t in range(8 * (hi - lo))]
 
-    digest = B.call(bind(PousRowDigest, N=S.N), row)
+    digest = B.call(bind(PousRowDigest, N=S.N), X.coll(bits(8 * S.N), X.refs(row)))
     held = [x for b in rec[_DIGEST[0]:_DIGEST[1]] for x in b] + integer(*_J) + integer(*_INDEX)
     return B.call(bind(PousEqual, N=608), X.coll(bits(608), X.refs(digest) + X.refs(j) + X.refs(i)),
                   X.coll(bits(608), held))
@@ -204,10 +209,10 @@ def _digest_statics(S) -> None:
 def _digest_sig(S):
     _digest_statics(S)
     _message_sig(S)
-    row = bits(8 * RECORD_BYTES * RECORDS_PER_ROW)
+    row = octets(RECORD_BYTES * RECORDS_PER_ROW)
     rows = tuple((f"r{t}", row) for t in range(records_rows(S.K)))
-    return ((("head", bits(8 * head_bytes(S.HEAD))), ("domain", bits(512)), ("ctx", bits(8 * CTX_BYTES)), *rows),
-            Tuple(bits(1), bits(512), *(row for _ in rows)))
+    return ((("head", octets(head_bytes(S.HEAD))), ("domain", octets(64)), ("ctx", octets(CTX_BYTES)), *rows),
+            Tuple(bits(1), octets(64), *(row for _ in rows)))
 
 
 def _digest_body(B, S, head, domain, ctx, *rows):
@@ -234,11 +239,12 @@ def _digest_body(B, S, head, domain, ctx, *rows):
         d = X.coll(BL.BIT, [const(0)])
         level = [B.call(node, dom, byte(depth), byte(j), d, level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
         depth += 1
-    m = B.call(bind(PousSessionMessage, HEAD=S.HEAD), X.coll(bits(8 * S.HEAD), X.refs(head)[:8 * S.HEAD]), level[0], ctx)
+    m = B.call(bind(PousSessionMessage, HEAD=S.HEAD), X.coll(bits(8 * S.HEAD), X.refs(head)[:8 * S.HEAD]), level[0],
+               X.coll(bits(8 * CTX_BYTES), X.refs(ctx)))
     timed = B.call(bind(PousVerdict, K=S.K, M=0, LIMIT=S.LIMIT),
                    X.coll(Array(S.K, bits(8 * RECORD_BYTES)), [x for r in recs for x in r]),
                    X.coll(Array(S.K, bits(512)), [x for r in recs for x in r[8 * _DIGEST[0]:8 * _DIGEST[1]]]))
-    return tuple_of(X.coll(bits(1), X.refs(timed)), m, *rows)
+    return tuple_of(X.coll(bits(1), X.refs(timed)), X.coll(octets(64), X.refs(m)), *rows)
 
 
 PousSessionDigest = CompositeDefinition(

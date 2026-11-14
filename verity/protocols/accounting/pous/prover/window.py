@@ -13,11 +13,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from verity.commitments.windows.interface import Circuit, Integration, Window
+import numpy as np
 
-from . import answer_circuit, decode_circuit, verdict_circuit
+from verity.circuits.codec import descriptor_id
+from verity.commitments.windows.interface import Circuit, Integration, Window, Wire
 
-DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit)
+from . import answer_circuit, decode_circuit, session_circuit, verdict_circuit
+from .session import SessionStatements, SessionUnit
+
+DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 
 
 class SetupIntegration:
@@ -33,17 +37,45 @@ class SetupIntegration:
                                   "(SetupIntegration.run)")
 
 
+def _bits(data: bytes, n: int) -> list[int]:
+    return [(data[t // 8] >> (t % 8)) & 1 for t in range(n)]
+
+
 class SessionIntegration:
-    """PoUS's session as an integration: the signature check, the message's hash and one opened block a round, each
-    its own proof block."""
+    """PoUS's session as an integration (`session.session_statements`): the signature check (`PousSessionSig_v1`, one
+    unit), the message's hash (`PousSessionDigest_v1`, one unit) and one opened block a round (`PousRound_v1` at slot 0
+    for the even rounds and at slot 1 for the odd), each its own proof block. Its wires are the session's links: the
+    signature's ``m`` reads the digest's output m (``o1``), and round j's ``records`` the digest's records output ⌊j/2⌋
+    (``o{2 + ⌊j/2⌋}``). The rows the verifier knows (the key, the header, the domain id, the signed context, j and i) and
+    each round's registered row are free rows here, which the session's tables are to fill."""
+
+    def __init__(self, statements: SessionStatements) -> None:
+        self.statements = statements
+        rounds = statements.rounds
+        self._parity = tuple(tuple(u for j, u in enumerate(rounds) if j % 2 == s) for s in (0, 1))
+
+    def _templates(self) -> list[tuple[SessionUnit, ...]]:
+        st = self.statements
+        return [g for g in ((st.signature,), (st.digest,), *self._parity) if g]
 
     def circuit(self) -> Circuit:
-        raise NotImplementedError("proofs/zero-knowledge: PoUS's session as a window's circuit "
-                                  "(SessionIntegration.circuit)")
+        groups = self._templates()
+        sig, dig = (descriptor_id(g[0].definition) for g in groups[:2])
+        wires = [Wire(sig, "m", dig, "o1", 0, (1,), 0, (0,))]
+        for group in self._parity:
+            wires += [Wire(descriptor_id(group[0].definition), "records", dig, f"o{2 + u}", u, (1,), 0, (0,))
+                      for u in range(len(group))]
+        return Circuit("pous-session", tuple((g[0].definition, len(g)) for g in groups), wires=tuple(wires))
 
     def run(self, window: Window) -> None:
-        raise NotImplementedError("proofs/zero-knowledge: PoUS's session's values recorded into a window "
-                                  "(SessionIntegration.run)")
+        for group in self._templates():
+            params, ret = group[0].definition.signature()
+            fields = getattr(ret, "fields", None) or (ret,)
+            inputs = [np.array([_bits(u.rows[p], ty.leaves) for u in group], dtype=np.uint8)
+                      for p, (_, ty) in enumerate(params)]
+            outputs = [np.array([_bits(u.outputs[o], ty.leaves) for u in group], dtype=np.uint8)
+                       for o, ty in enumerate(fields)]
+            window.record(group[0].definition, inputs, outputs)
 
 
 def write_window(integration: Integration, out_dir: Path, registrar: Any) -> Path:
