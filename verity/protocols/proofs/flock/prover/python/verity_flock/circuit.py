@@ -1120,7 +1120,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
         raise ValueError("META: shared_reads without public_inputs (a shared read's position is a public input)")
     rs = meta["shared_reads"]
     if not isinstance(rs, list):
-        raise ValueError("META shared_reads: not a list")
+        raise ValueError("META shared_reads: not a list")  # one refusal type, the verifier's text
     if not rs:
         raise ValueError("META: shared_reads names no port")
     if counts is None or refs is None:
