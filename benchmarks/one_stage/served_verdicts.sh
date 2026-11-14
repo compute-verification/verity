@@ -140,7 +140,8 @@
 # ALPHA, GAMMA, the served node, the serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on)
 # and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
-# PoUW's period case, sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
+# the serve's first registration record and each window's Pearl+ record W and audit's record R, PoUW's period case,
+# sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
 # holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor host the prover doesn't control and where no witness goes
@@ -1301,7 +1302,9 @@ sampled_of_record() {
 # no other file of a session). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
 # window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
 # file, each session's record and proofs, the lookup tables), H1's log and each record it names, the serve's first
-# registration record where it wrote one, and PoUW's period case.
+# registration record where it wrote one, each window's Pearl+ record W and audit's record R that the serve dir holds
+# (`served_cases.py`'s RECORDS: every record a window's log can name, so the inference-only case's log is walked from
+# the copy alone, with no part of Pearl+'s case), and PoUW's period case.
 # And compose.env, its settings: the window, its engine steps (the record's, picked here from the requests file, which
 # stays), the product, the composite, α and Γ, the served node, the follow-on node COMPOSE_NODE, the tree's commit, the
 # host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none) and the record's audit (SAMPLED_AUDIT).
@@ -1339,6 +1342,7 @@ for x in open(sys.argv[1]):
     if x.strip():
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
     [ -z "$blobs" ] || printf '%s\n' "$blobs"
+    (cd "$D" && printf '%s\n' pearlplus/w*/registration.json v3c-w*/audit/window/registration.json)
     for f in pieces compose.env inference-only.json; do
       [ ! -e "$D/private/compose/$f" ] || (cd "$D" && find "private/compose/$f" -type f)
     done
