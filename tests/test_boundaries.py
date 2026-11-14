@@ -670,15 +670,19 @@ def _sys_path(node: ast.AST) -> bool:
 def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], loaders: Set[str]) -> list[tuple[int, str]]:
     """``(line, code)`` for each of ``nodes`` that puts a path ``reaches`` accepts on ``sys.path`` or loads a module from
     it, directly or through one of ``loaders``, the functions that hand a parameter to such a load.  A loader is matched by
-    name, so a standard-library module's function of the same name (``subprocess.run``) is not one; ``PATH_LOADERS`` and
-    ``sys.path`` are standard-library and always count."""
+    name, so a function of that name on a standard-library module the nodes import as itself (``import subprocess``,
+    ``subprocess.run``) is not one; on a local module named like one (``from x import platform``) it still is.
+    ``PATH_LOADERS`` and ``sys.path`` are standard-library and always count."""
+    nodes = list(nodes)
+    std = {a.name.split(".")[0] for n in nodes if isinstance(n, ast.Import) for a in n.names if not a.asname}
+    std = (std & sys.stdlib_module_names) - {a.asname or a.name for n in nodes if isinstance(n, ast.ImportFrom) for a in n.names}
     out = []
     for n in nodes:
         if isinstance(n, ast.Call):
             f = n.func
             name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
             on_path = name in {"insert", "append", "extend"} and isinstance(f, ast.Attribute) and _sys_path(f.value)
-            stdlib = isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in sys.stdlib_module_names
+            stdlib = isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in std
             hit = on_path or name in PATH_LOADERS or (name in loaders and not stdlib)
             args = [*n.args, *(k.value for k in n.keywords)]
         elif isinstance(n, (ast.Assign, ast.AugAssign)):
@@ -819,7 +823,8 @@ def test_a_benchmarks_import_is_found() -> None:
     from another file's constant, a call to another file's loader (whose load follows a nested function), that constant
     read in a file importing its module (also as ``import a.b as X``) and ``runpy.run_path`` are each found; a path into
     another directory, a mere mention of ``benchmarks/``, ``benchmarks/``'s own files, that constant read in a file that
-    doesn't import its module, and a standard-library function named like a loader (``subprocess.run``) are not."""
+    doesn't import its module, and a standard-library function named like a loader (``subprocess.run``) are not.  A loader
+    called on a local module named like a standard-library one (``from x import tool as platform``) is found."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
@@ -839,6 +844,7 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/runs.py": "import runpy\nrunpy.run_path('benchmarks/ppl/main.py')\n",
         "x/aliased.py": "import sys\nimport x.config as C\nsys.path.insert(0, str(C.SESSION))\n",
         "x/other.py": "import sys\nfrom y import settings\nsys.path.insert(0, str(settings.SESSION))\n",
+        "x/local.py": "from x import config, tool as platform\nplatform.run(config.SESSION)\n",
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
@@ -849,6 +855,7 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/shell.py": ["4: tool.run(config.SESSION)"],
         "x/runs.py": ["2: runpy.run_path('benchmarks/ppl/main.py')"],
         "x/aliased.py": ["3: sys.path.insert(0, str(C.SESSION))"],
+        "x/local.py": ["2: platform.run(config.SESSION)"],
     }, found
 
 
