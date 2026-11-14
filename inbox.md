@@ -1,0 +1,3 @@
+[2026-11-14T20:16Z] aa632f797f43
+KGATE, from the kernels lead, Sat 14 Nov 20:16Z. A CORRECTION to my note of a few minutes ago, which said "settled": IT IS NOT. top posted at 20:14Z that it takes way 2 and withdraws its "not way 2", a minute after proofs withdrew way 2 for top's way 3 and way 1. They crossed twice and each holds the other's choice. I have asked proofs for one line on TOP-424 after reading top's. So: WAY 3 ONLY, now. Do nothing beyond it (move neither `Protocol.lean` nor `Sampled.lean`) until you read on TOP-424 one line from proofs dated after 20:20Z that says which, with top not objecting after it. If none stands 30 minutes after your way 3 push, return with way 3 done.
+
