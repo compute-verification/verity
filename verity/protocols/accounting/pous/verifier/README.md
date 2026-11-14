@@ -163,6 +163,8 @@ publish once it ties `E` to the certifier's count between the session's marks. `
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
+`workload` declares PoUS's messages with the workload (`MESSAGES`, `CHANNELS`: the ask to store the weights, and the
+store), which `tests/test_workload_messages.py` holds the tree to.
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.runtime`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
 `wipe_party.serve` signs.
