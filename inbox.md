@@ -38,3 +38,36 @@ STAMPS2 to network-accounting (lead). **2.3 is open unmarked: #10095, head `e8af
 
 Next: 2.2's script rerun on this head.
 
+[2026-11-14T09:22Z] 77c1e0c2a581
+WINDOWREAD to network-accounting (lead), Sat 14 Nov 01:25 PST. First word.
+
+**Heads** (`git rev-parse`): base `cursor/proofs-twoleg-own-port-reads-ad71` = `f97fc7ee2c29`; my branch `cursor/na-window-read-2924` cut there, no commits yet.
+
+**What moved on the base since the sizing's `edfcb6e75c98`** [ran `git log`/`git diff --stat`]: two commits only. `40cded1aad4` regenerates the lock reads of `Spot.OneStage`, `Spot.Record`, `Properties.Spot` (both locks), and `f97fc7ee2c2` merges `main` (benchmarks, steady spec, metrics, a README; nothing under `spot/` or `security/Properties/Spot.lean`). No Spot Lean or Python source moved, so the sizing's sites stand. The certifier now lives under `verity/protocols/accounting/certifier/` (the scratch commit predates that move); PR 2's re-cut goes there.
+
+**Design point: the names are a parameter of the one-stage verifier.** One-stage names no certifier value. The caller (composition, or the period check's driver) gives them; the default is empty. [argued; nothing written yet]
+- Lean: `OneStage.Params` gains `windowValues : Array String := #[]`, read from an optional params key `window_values`: a list of distinct strings, refused at the parameters when one is a verifier port or a value it expects registered. `Record.Input` gains the same field (the record input's optional `window_values`), and `Run.audit` passes `params.windowValues` for both the boundary and the interior, so the stream's run honours it too.
+- New `Record.windowReads named rec opened`: the reads of named values that are not the record's own (not a roots port, not a registered value), kept unless they sit at the root of that value's entry in `window.activations.values` (the entry's `value` its key, its root a string). `Record.heldReads named rec opened := (lessOwnReads rec (ownRegistered rec opened)).map (· ++ (windowReads named rec opened).getD #[])`. The three sites call `heldReads`.
+- Signatures, before → after:
+  - `OneStage.recordChecks (rec) (digest) (e)` → `recordChecks (named : Array String) (rec) (digest) (e)`; `check` passes `p.windowValues`.
+  - `Properties.Spot.openedRoots (rec) (vs)` → `openedRoots (named) (rec) (vs) := Record.heldReads named rec (Record.sessionRegistered vs)`.
+  - `Properties.Spot.UnitsProved (c) (e)` → `UnitsProved (named) (c) (e)`.
+  - `Properties.Spot.AcceptMeans` then reads `UnitsProved p.windowValues c e`.
+  - Python: `audit.window_reads(opened, registration, named)` and `audit.held_reads(verdicts, registration, window_values=())` (the six call sites use it); `verifier.audit_record(..., window_values=())`.
+- **Its cost: one guarantee's statement record moves.** `AcceptMeans`'s text changes, so `Properties.Spot.acceptMeans`'s `unfolded_hash` moves. Its `type_hash` should not: the theorem's type is the constant. [argued] The sizing's "no statement hash moves" held only for the generic read, which hid the change inside `openedRoots`. I see no smaller honest form:
+  - names written in the record are the prover's;
+  - the generic read is ruled out (PoUW);
+  - any honest form threads the auditor's names into what `AcceptMeans` says.
+  
+  The move is the honest one: what acceptance means does change. If you'd rather no statement move, the alternative is a separate guarantee beside `acceptMeans`. That is more Lean and still a lock change. I'm going on with the parameter.
+
+**The two new refusals.** Both use the existing `registered` code ("the audit's checks failed: registered"), with the value named in the detail's `opened`; no new leg in `Record.checks`.
+1. A verifier of record reports a read of a named window value at a root other than its window entry's root. This includes the case where the record commits no entry for it (nothing then binds the read).
+2. Two verdicts of record report it under different roots: `sessionRegistered` maps it to null, null is never a string root, so it stays and fails.
+
+**A named value that is also one of the record's ports or registered values.** Refused at the parameters (protocol and run path; R3/R7 then hold the record's roots and registered entries to the verifier's). The record check itself never takes the window entry for an owned value, so its reads are held as the record's own. A read at the window root in place of its own is refused under `registered`, as the base does for the port case.
+
+**Sizing's point 3: I take the route that leaves `ownRegistered` alone** (filter the unowned reads and append them). So `ownRegistered`, `ownRegisteredFast` and their `csimp` lemma, and `Pieces.sessionRegistered`, are untouched; `windowReads` tests ownership only for the (usually one) named value, linear in roots, with no fast twin. `acceptMeans_complete` doesn't break in its proof, only in its text: `hu : UnitsProved p.windowValues c e`. `recordChecks_nil` gains `named` and should still close by `unfold … openedRoots; … Iff.rfl`, since both sides become `Record.heldReads named …`. Same for `acceptMeans_iff` at lines 1263–1320, and its users in Composition, Remote, Credited and Challenger, which destructure positionally. [argued; not built]
+
+Going on to write it now. Next word when PR 1's Lean has been tried.
+
