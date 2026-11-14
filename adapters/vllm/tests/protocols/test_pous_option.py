@@ -20,6 +20,7 @@ from concurrent import futures
 import pytest
 import torch
 
+from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -281,11 +282,17 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CS, "session", session)
     _judges(monkeypatch)
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
+        return Side.of(doc, node, key, local, what)
+
     with PO.install(toy, _ctx(ENTRY)) as comp:
         opt = comp.get("pous")
         for n in (0, 1):
             out = tmp_path / f"out{n}"
-            got = opt.leg(_period_dir(tmp_path, n, JUDGES), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+            got = opt.leg(_period_dir(tmp_path, n, JUDGES), NODE, out, side_of=side_of, schemes=ts.SCHEMES,
+                          protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-device"] == (   # the test signer's key is no auditor's pinned key
@@ -308,8 +315,8 @@ def test_a_period_whose_tools_name_no_lean_is_undecided_where_the_python_accepts
     monkeypatch.setattr(CS, "session", session)
     runs = _judges(monkeypatch)
     with PO.install(toy, _ctx(ENTRY)) as comp:
-        got = comp.get("pous").leg(_period_dir(tmp_path, 0), NODE, tmp_path / "out", schemes=ts.SCHEMES,
-                                   protocol=TEST_PROTOCOL)
+        got = comp.get("pous").leg(_period_dir(tmp_path, 0), NODE, tmp_path / "out", side_of=Side.of,
+                                   schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert runs[0].answer["verdict"] == "accept", runs[0].answer["reason"]
     assert got["verdict"] == "undecided" and got["reason"] == period.NO_JUDGE
     assert got["public"] is None and got["profile"] is None

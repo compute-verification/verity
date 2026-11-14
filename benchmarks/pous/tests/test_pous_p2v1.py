@@ -1,8 +1,8 @@
-"""P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
-(`verity/protocols/accounting/pous/verifier/p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
-library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
-(`p2_v1/memory_challenger.py` for the spec's framing, `verity/protocols/accounting/pous/device/timed_audit.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
-logical clock, so no outcome depends on a clock."""
+"""P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v3-gpu | p2-v3-mc-gpu`) on CPU: the
+reference (`verity/protocols/accounting/pous/verifier/p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for
+the GPU library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory
+challenger process (`verity/protocols/accounting/pous/device/timed_audit.py`'s `protocol.TimedAudit`, or `memory_challenger/live.py`)
+on its logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
 import hashlib
@@ -211,7 +211,8 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     R, _, _ = _p2()
     nvme = tmp_path / "nvme"
     nvme.mkdir()
-    body = _bench().P2V1Gpu().run(_args(tmp_path, nvme_dir=str(nvme)), WS, tmp_path, backend=_backend(), params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path, nvme_dir=str(nvme), k=105), WS, tmp_path, backend=_backend(), params=_small(),
+                                  research=True)
     gates = body["gates"]
     assert body["segments"] == 3 and body["blocks"] == 192 and body["weight_bytes"] == 2560
     for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "timed_audit", "value_control", "late_control",
@@ -219,20 +220,20 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
         assert gates[g]["passed"], (g, gates[g])
     assert gates["vector"]["vector"] == "p2-v4/w128/0" and gates["round_trip"]["blocks"] == 192
     point = gates["operating_point"]
-    assert point["k"] and point["deadline"] and point["rtt_allowance"] and not point["blocks"]    # 192 < 2^8 at the test point
+    assert point["k"] and point["deadline"] and point["rtt_allowance"] and not point["blocks"], point    # 192 < 2^8 at the test point
     m = body["metrics"]
     honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
     assert honest["audits_accepted"] == 2 and honest["k"] == R.K_AUDIT == 105 and honest["responder"]["answered"] == 2 * 105
     limit = m["calibration"]["limit_ns"]
     assert honest["limit_fixed_before_load"] and honest["limit_ns"] == late["limit_ns"] == rec["limit_ns"] == limit
-    assert honest["allowance_kind"] == "loopback" and len(honest["source"]) == 64 and len(honest["records"]) == 2
+    assert honest["allowance_kind"] == "loopback" and len(honest["records"]) == 2
     assert value["audits_accepted"] == 0 and value["wrong"] > 0
     assert late["audits_accepted"] == 0 and late["late"] > 0 and late["wrong"] == 0
     assert rec["wrong"] == 0 and rec["late"] > 0 and rec["margin_s"]["min"] < 0 and rec["dropped_blocks"] == 20
     assert m["seqroot"]["root_s"] == 1e-3 / 2 and "upper bound" in m["seqroot"]["label"]
     assert m["loop"]["tokens"] == [1, 8] and set(m["loop"]["overhead"]) == {1, 8} and m["nvme"]["block_read_s"]["n"] == 8
-    assert body["setup"]["manifest"] == {"scheme": "p2", "w": 128, "c0": 173, "profile": "test-14B", "blocks_per_segment": 64,
-                                         "segments": 3}
+    from verity.protocols.accounting.pous.verifier import schemes
+    assert body["setup"]["manifest"] == schemes.P2Params(128, 173, 64, 3).manifest()
     assert not body["profile"]["certified"] and "P2–M1-SGI" in body["profile"]["experimental"]
     names = {r["name"] for r in body["measurements"]}
     assert {"encode_GBps", "decode_overhead_T1", "audit_margin_min_s", "recompute_margin_min_s", "seqroot_root_s"} <= names
@@ -242,8 +243,8 @@ def test_the_recompute_control_covers_c_past_its_encoded_head(tmp_path):
     """With only the first 64 of 192 blocks encoded (the rest random canonical, as on the device), every dropped block, in the
     head or past it, is re-encoded from its decoded row and answers correctly; the margin is the limit minus each recomputed
     answer's device time."""
-    body = _bench().P2V1Gpu().run(_args(tmp_path, p2_encode_blocks=64, audits=6), WS, tmp_path, backend=_backend(),
-                                  params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path, p2_encode_blocks=64, audits=6), WS, tmp_path, backend=_backend(),
+                                  params=_small(), research=True)
     m, gates = body["metrics"], body["gates"]
     assert m["encoded_blocks"] == 64 and gates["round_trip"]["blocks"] == 64
     rec = m["recompute_control"]
@@ -277,7 +278,7 @@ def test_the_p2_recompute_adversary_reencodes_every_dropped_block_of_c():
 
 
 def test_a_wrong_p2_kernel_stops_the_run_before_anything_is_timed(tmp_path):
-    body = _bench().P2V1Gpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small())
     assert body["gates"]["vector"]["passed"] and not body["gates"]["round_trip"]["passed"]
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]
 
@@ -288,10 +289,10 @@ def test_the_vector_gate_holds_the_keys_to_the_pinned_v4_keys(tmp_path):
     import json
 
     _, harness, _ = _p2()
-    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
     assert all(g["passed"] for g in body["gates"].values()), body["gates"]
     assert body["gates"]["vector"]["keys_version"] == 4 and body["gates"]["vector"]["keys_v4"]
-    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(says=1), params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(says=1), params=_small())
     assert not body["gates"]["vector"]["passed"] and not body["gates"]["vector"]["keys_v4"]
     keys = json.loads(harness.KEYS.read_text())
     small = _small()
@@ -303,8 +304,8 @@ def test_the_vector_gate_holds_the_keys_to_the_pinned_v4_keys(tmp_path):
 
 
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
-    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
-    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags"}
+    body = _bench().P2V3Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
+    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags", "codec"}
     assert all(g["passed"] for g in body["gates"].values())
     assert body["metrics"] is None and body["measurements"] == [] and "--gates-only" in body["stopped"]
 
@@ -313,9 +314,9 @@ def test_audits_0_runs_the_p2_arm_untimed_with_no_limit_audit_or_control_and_say
     _, harness, _ = _p2()
     monkeypatch.setattr(harness.H, "audit_round", lambda *a, **k: pytest.fail("an untimed run started an audit"))
     monkeypatch.setattr(harness.H, "calibrate_limit", lambda *a, **k: pytest.fail("an untimed run calibrated a limit"))
-    body = _bench().P2V1Gpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=_backend(), params=_small())
+    body = _bench().P2V3Gpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=_backend(), params=_small())
     assert body["timed"] is False and body["audits"] == "skipped (untimed placement)" and body["profile"] is None
-    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags"}
+    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags", "codec"}
     assert all(g["passed"] for g in body["gates"].values())
     m = body["metrics"]
     assert m["timed"] is False and set(m["loop"]["overhead"]) == {1, 8} and m["seqroot"]["twice_limit_s"] is None
@@ -339,20 +340,20 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
     (tmp_path / "p").mkdir()
     band = _bench().BandGpu().run(band_t._args(tmp_path / "b"), band_t.WS, tmp_path / "b", backend=band_t._backend(bp), base=bp,
                                   vectors=band_t._vectors(bp))
-    p2 = _bench().P2V1Gpu().run(_args(tmp_path / "p"), WS, tmp_path / "p", backend=_backend(), params=_small())
+    p2 = _bench().P2V3Gpu().run(_args(tmp_path / "p"), WS, tmp_path / "p", backend=_backend(), params=_small(), research=True)
     doc = lambda body, scheme, ok: json.loads(json.dumps({"scheme": scheme, "passed": ok, "weight_set": WS["id"], "hardware": "cpu",  # noqa: E731
                                                           "gates": body["gates"], "metrics": body["metrics"]}, default=str))
-    both = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v4", True))
+    both = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2-128/v4", True))
     rows = {r["metric"]: r for r in both["rows"]}
     for name in ("encode_GBps", "decode_pass_s", "decode_overhead_T1", "decode_overhead_T8", "audit_answer_p99.9_s",
                  "audit_margin_min_s", "audit_limit_s", "recompute_margin_min_s"):
         assert rows[name]["band"] is not None and rows[name]["p2"] is not None, name
     assert rows["decode_pass_s"]["p2_over_band"] == rows["decode_pass_s"]["p2"] / rows["decode_pass_s"]["band"]
-    assert "| metric | band (band-chain/d12/v1) | P2 (p2/v4) |" in sbs.markdown(both)
-    one = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v4", False))
+    assert "| metric | band (band-chain/d12/v1) | P2 (p2-128/v4) |" in sbs.markdown(both)
+    one = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2-128/v4", False))
     assert all(r["p2"] is None for r in one["rows"]) and not one["p2"]["passed"]
     (tmp_path / "band.json").write_text(json.dumps(doc(band, "band-chain/d12/v1", True)))
-    (tmp_path / "p2.json").write_text(json.dumps(doc(p2, "p2/v4", False)))
+    (tmp_path / "p2.json").write_text(json.dumps(doc(p2, "p2-128/v4", False)))
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     assert sbs.main([str(tmp_path / "band.json"), str(tmp_path / "p2.json"), "--out", str(tmp_path / "side.json")]) == 1
     assert json.loads((tmp_path / "side.json").read_text())["schema"] == sbs.SCHEMA
@@ -360,7 +361,7 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
 
 def test_the_v3_arm_gates_on_the_specs_vectors():
     bench = _bench()
-    assert bench.IMPLS["p2-v3-gpu"] is bench.P2V3Gpu and bench.IMPLS["p2-v1-gpu"] is bench.P2V1Gpu
+    assert bench.IMPLS["p2-v3-gpu"] is bench.P2V3Gpu and "p2-v1-gpu" not in bench.IMPLS
     got = bench.P2V3Gpu().conformance_gate()
     assert got["passed"] and "p2-v4/w16448/0" in got["checks"], got
 
