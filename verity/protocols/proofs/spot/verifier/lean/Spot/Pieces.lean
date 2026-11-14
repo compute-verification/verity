@@ -26,7 +26,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   instances of template `t`), from given bytes of the challenger's coins, with the number of bytes it read
   (`Select.selectSecond`);
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
-  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
+  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.checkAny`);
 * `second_interior_reads`: of that check's input, the statements' reads that rest on the interior's own values
   (`SecondStage.interiorReads`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
@@ -881,10 +881,10 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
       verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads }
   return (allow, own, stmts)
 
-/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.check`). -/
+/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
 def secondStatements (j : Json) : V Json := do
   let (allow, own, stmts) ← secondOwn j
-  return (SecondStage.check allow own stmts).toJson
+  return (SecondStage.checkAny allow own stmts).toJson
 
 /-- `second_stage.check`'s input (`secondOwn`) to the reads that rest on the interior's own values
 (`SecondStage.interiorReads`), each `{"template", "port", "value"}`. -/

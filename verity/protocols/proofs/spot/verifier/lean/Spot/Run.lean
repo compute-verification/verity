@@ -44,7 +44,7 @@ check the stream ran on it, in the stream's order.
   names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
-  (`SecondStage.check`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
+  (`SecondStage.checkAny`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
   symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
@@ -273,7 +273,7 @@ private def secondStage (i : Input) (sample : Array Nat) :
   | _, none => return .ok none
 
 /-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
-(`SecondStage.check`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`: whether
+(`SecondStage.checkAny`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`: whether
 it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
 private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
@@ -294,7 +294,7 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
         reads := it.reads }
-    let rec_ := SecondStage.attach rec_ (SecondStage.check form own it.statements)
+    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny form own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
