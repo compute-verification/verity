@@ -44,3 +44,45 @@ B. `tools/move/law_words_map.toml` is on the collect branch, and it leaves our p
 - No locked Lean declaration and no kept byte changes. `test_chain_record` passes (17), and `py_compile` passes on both files.
 - The rename commit, `Rename by tools/move/law_words_certifier_map.toml` (67bc03e96af), is local and unpushed. I push both commits on your yes. With no timer I can't wait out the 30-minute silence rule, so I end the turn here, and your yes resumes me.
 
+[2026-11-14T22:15Z] 3d82d8f5bac9
+STAMPS2, the charge's width cut (TOP-424's hunk), trusted file: applied and pushed.
+Commit 9a2faee1a5ccf4fa536512bb2d31a3165ece9a41. Collect head after the push: 71d156cc0842deb240d7c3619c2e60a7af8130eb.
+
+1. Equality, before applying [ran]. `replay_chain.widths(S).LW` is `_bitlen(S.L)`, which is `max(int(v).bit_length(), 1)`; the hunk computes `max(int(st["L"]).bit_length(), 1)` [read]. The run called the real `RC.widths(SimpleNamespace(**st)).LW` against the hunk's expression for every L from 0 through 2**32 inclusive: 4,294,967,297 values, 0 differing. L is the engine's max_model_len, and nothing below the charge caps it: the check itself refuses from 2**32 (33 bits), and the width only grows past that, so 0..2**32 decides every verdict. It also compared the old and new verdicts (taken or refused, with the width) at 0, 1 and 2**k - 1, 2**k, 2**k + 1 for k = 0..80: 240 values, none differing. At the cap, 2**32 - 1 is taken at 32 bits; 2**32 and 2**32 + 1 are refused at 33.
+One difference outside L, which I state because the file is trusted: the old call also read NB, A, Q, D and P (`widths` evaluates every field), so a statics dict missing one of them raised AttributeError, and one with a non-integer value raised there. The hunk reads L alone. Both callers, compile_slice_v7 (`vars(S)`) and serve_commit (`CS.statics(...)`), hand full statics [read].
+
+2. The hunk as applied, verbatim:
+```
+@@ -49,7 +49,6 @@ from verity.circuits.types import Array
+ from verity.commitments import hm96
+ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+ from verity.protocols.accounting.certifier.verifier import arith_encode as AE
+-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
+ from verity.protocols.accounting.certifier.verifier.arith_encode import Carry, ChargeBook
+ from verity.protocols.accounting.certifier.verifier.head_check import BIT, _part
+ from verity.protocols.proofs.spot.verifier.one_stage import produced
+@@ -273,8 +272,8 @@ LENGTH_BITS = 32
+ 
+ def check_length_slots(st: dict) -> dict:
+     """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v7`): refused
+-    where an output length, LW = bitlen(L) bits (`replay_chain.widths`), is wider than a length slot's `LENGTH_BITS`."""
+-    if (lw := RC.widths(SimpleNamespace(**st)).LW) > LENGTH_BITS:
++    where an output length, LW = bitlen(L) bits, is wider than a length slot's `LENGTH_BITS`."""
++    if (lw := max(int(st["L"]).bit_length(), 1)) > LENGTH_BITS:
+         raise ValueError(f"statics {dict(st)}: an output length of {lw} bits, wider than a length slot's {LENGTH_BITS}")
+     return st
+```
+No import added; `SimpleNamespace` stays imported for its two other uses. The module docstring still names `replay_chain` twice, in prose.
+What the charge is already held to: the window difftest, `tests/test_network_certifier_window_lean_difftest.py`. Its vectors carry max_tokens at and past `MT_CAP`, the audit pins them against the device program's `WindowCharge.charges`, and `window_charge.MT_CAP = (1 << charge_chain.LENGTH_BITS) - 1`. No test held `check_length_slots`'s cut to that cap, so I added `test_a_slices_lengths_fit_a_length_slot_up_to_the_leans_mt_cap` to that file. It reads `def MT_CAP : Nat := 2 ^ 32 - 1` from `device/program/lean/NetworkCertifier/WindowCharge.lean` and asserts it equals `WC.MT_CAP` and `(1 << LENGTH_BITS) - 1`. Then, at 0, 1 and 2**k - 1, 2**k, 2**k + 1 for k up to 40, it asserts `check_length_slots({"L": L})` is taken exactly when L <= MT_CAP. It does not import replay_chain.
+Tests, by file [ran]: test_network_certifier_window_lean_difftest.py (3 passed, the new test included), test_network_certifier_charge_chain.py (9 passed, after `research data fetch-fixtures` brought arith_encode_vectors.json, which this restarted VM lacked; without it the same 6 fail before and after my change), test_network_certifier_charge_lean_difftest.py (2 passed); 14 in all on the merged tree. Ruff is clean. Not run: the adapter's compile_slice_v7 tests, whose conftest cannot import verity_torch on this VM.
+
+3. test_network_certifier_lengths_row.py: only `test_the_request_row_is_the_arrival_slots_layout` reads replay_chain. It builds `RC.Shape(...)` and asserts `RC.widths(chain).LW == sh.LW` and `RC.arrival_fields(chain) == LR.request_fields(sh)`, holding the certifier's lengths row to the replay chain's arrival slots. That is not the same helper: it tests where the lengths row meets vLLM's replay chain, so it belongs with vllm's move, as that one test function. I did not cut it.
+
+4. After the change, these under verity/ still import the two (git grep): replay_chain's and replay_step's own sidecars (`replay_chain.circuit-check.py`, `replay_step.circuit-check.py`) and their own tests (`test_network_certifier_replay_chain.py`, which `importorskip`s replay_step, and `test_network_certifier_replay_step.py`), all of which move with them; plus the lengths-row test function in 3. Nothing else, and no non-test module.
+
+5. No Lean touched: the commit changes the two .py files alone (WindowCharge.lean and AdviceV1.lean, both trees, are unchanged). The files that hold the charge to them, run by file: test_network_certifier_window_lean_difftest.py and test_network_certifier_charge_lean_difftest.py, both passing. Their Lean halves run in the Lean audit, which I did not launch.
+
+6. `verity/commitments/pool_row.py` line 1-2 is prose: its module docstring says the pool row is "the row `CompileSlice_v6` carries from window to window (`verity_vllm.compiler.compile_slice_v6`)". It is not an import (the module imports only `verity.commitments.rowleaf` and `.gates.rowleaf`) and not an id a record holds.
+
+Crossing: `restack.py na-charge --main origin/cursor/na-architecture-b51f` failed on 9f71545ac43, an `audit_code_map` rerun over #9896's lines whose base's rename.py can't read the map (KeyError 'words'). So I crossed by hand. Four maps were new to my branch: memory_gpu_weights (layout), pouw_sample, sampled_proofs_words and warden_tokens. The other seven had only reruns in the window. Across all eleven maps, none of the old names or paths is in my 18 added lines, and no commit in the window touches my two files [ran]. Then I made a plain merge, with no conflict. 4974327abaf, f7b30e1f7ce and b2112f543e46 were already in my branch.
+
