@@ -34,7 +34,7 @@ server against `V*`, and the link off the deployed worker (`LoopModel.link_deplo
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed)
+open _root_.Flock.ZkServer.Session (State Placed)
 open _root_.Flock (V SessionSpec Stmt)
 
 /-- **`LoopP` at `LoopJ` at the session's first request**: with no session state, no placement and no stream seen,
@@ -51,7 +51,7 @@ theorem loopP_start {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessi
     simp only [keyIs, Bool.and_eq_true, beq_iff_eq] at hk
     exact hnew p (Array.mem_of_find?_eq_some hp) hk.1.1
   have hstop : σ.R.stopped sid = false := by
-    unfold _root_.Flock.Firewall.Frames.Sessions.stopped
+    unfold _root_.Flock.ZkServer.Frames.Sessions.stopped
     exact Array.any_eq_false'.mpr fun p hp => by simp [hnew p hp]
   have hF : LoopFacts sid spec [] {} {} σ :=
     { setup := fun h => by cases h
@@ -103,7 +103,7 @@ theorem LoopModel.own_of_runStar {W Rr Θ : Type} {M : LoopModel W Rr} {H : Msg 
 
 /-- **At the deployed loop the run's first message is the `Hello` at the tape's nonce**: where each of the run's
 messages is the deferred release's and it has one, the first is the server's own `Hello` (`frameD_own`; the run has a
-message past the `Hello`, so the release defers no stop there), the loop's `flock-firewall hello` message
+message past the `Hello`, so the release defers no stop there), the loop's `flock-zk-server hello` message
 (`loop_helloIs`) at the statement's setup. -/
 theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
@@ -112,10 +112,10 @@ theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     (hOwn : M.Own) (hne : 0 < M.τ.length) :
-    M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩ := by
+    M.msgs.headD [] = _root_.Flock.ZkServer.Hello.msg spec ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩ := by
   have hlast := hD.last_eq
   have hnext := hD.next
   have hm : M.msgs.headD [] = (M.τ[0]'hne).1 := by
@@ -178,7 +178,7 @@ theorem envPre_run
   have hOwn := LoopModel.own_of_runStar hτ
   have hk : 0 < k M.x := lt_of_lt_of_le (audK_pos spec sts M.x) hK
   have hne : 0 < M.τ.length := (runStar_auditorV hτ).2 0 hk fun _ hi => absurd hi (Nat.not_lt_zero _)
-  have h0 : M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec nonce := by
+  have h0 : M.msgs.headD [] = _root_.Flock.ZkServer.Hello.msg spec nonce := by
     rw [hn]
     exact hD.head_hello hOwn hne
   have hwk := LoopModel.link_deployed hdw (M.hist 1) (by rw [LoopModel.hist, length_histOf_take]; omega)

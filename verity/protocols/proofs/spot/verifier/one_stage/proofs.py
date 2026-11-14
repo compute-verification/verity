@@ -100,6 +100,16 @@ MUFU_SHA512 = {t.name: t.sha512 for t in TABLES if t.name in ("rsq", "sqrt", "rc
 #: `OneStageZk.NO_TABLES`, the head of the v2 audit's refusal of blobs whose pinned MUFU tables are not the registered
 #: circuit's lookups (`tables_why`)
 NO_TABLES = "tables: the blobs' pinned MUFU tables are not the ones the registered circuit looks up (its META's lookups)"
+#: `OneStageZk.TABLES_KEY`: the parameter naming how many tables one session sets up
+SESSION_TABLES_KEY = "session_tables"
+
+
+def session_tables_of(params: Mapping[str, Any]) -> int:
+    """`OneStageZk.tablesOfJson`: one table a session where the parameters name no `session_tables`. A session of J
+    tables is not written, so parameters naming it raise."""
+    if SESSION_TABLES_KEY not in params:
+        return 1
+    raise NotImplementedError("proofs/zero-knowledge: one-stage v2 at J tables in one session (session_tables)")
 
 
 class LeanError(RuntimeError):

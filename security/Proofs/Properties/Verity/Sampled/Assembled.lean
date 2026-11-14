@@ -27,7 +27,7 @@ and v2 reads each pinned table at its registered file (`TablesSent`), and at the
   `roundEmpty`): the coin map's premise holds within the openings' gaps and empty classes over the stops wherever the
   session's sampling coins are uniform (`sampleMap_couples`), and the decoders' premise holds pointwise
   (`decodes_of_digests`) wherever v2's parameters name the vocabulary's digests, the writer keeps an accepted
-  transcript's view and the outcomes on the joint law's support off the empty classes are the writer's at the moves
+  transcript's view and the outcomes on the joint distribution's support off the empty classes are the writer's at the moves
   v2's files decode to.
 * **The sample's coins** (`srcCoinsAt`, `avg_srcCoinsAt`): the session's bytes as `m` fresh frames' coins, uniform by A3
   wherever the session's bytes are `m` frames.
@@ -40,7 +40,7 @@ and v2 reads each pinned table at its registered file (`TablesSent`), and at the
 What the pieces leave is this module's hypotheses, each named in `couplingTarget_assembled`: the device's printed log
 (`hP`), the session's bytes as whole frames (`hL`), the openings' gaps and empty classes within the hiding term
 (`hε`), the session v2 sets up (`hA`), the vocabulary's digests (`hDg`), the writer's view (`hW`), and the moves on the
-joint law's support off the empty classes (`hM`), with the readings `rd`, the decoders `D`, the sample's family `label`
+joint distribution's support off the empty classes (`hM`), with the readings `rd`, the decoders `D`, the sample's family `label`
 and the field's encoding `e` as parameters, and the sample's digest the strategy's `afterAt`.
 -/
 
@@ -273,7 +273,7 @@ history at each play signed what the play's signatures are on (`hS`, `Binding.Si
 the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at
 most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`),
 `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps
-an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
+an accepted transcript's view (`hW`), and on the joint distribution's support off the empty classes the outcomes beside accepted
 plays whose log v2 read is the device's, whose blobs sent hold each pinned table at its registered file and whose sample
 answers the strategy's `afterAt` are the writer's at the moves v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (T : PinnedTables)

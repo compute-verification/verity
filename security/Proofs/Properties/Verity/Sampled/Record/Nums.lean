@@ -126,7 +126,7 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
   cases hX
   rw [Verity.QSort.size_qsort, size_mapM_option hus, size_mapM_except hm]
 
-/-- **The coins sample `A.kd` units** where the sample ends: `A`'s law is on its strata and samples `A.kd` (`Live.hlaw`). -/
+/-- **The coins sample `A.kd` units** where the sample ends: `A`'s sampling design is on its strata and samples `A.kd` (`Live.hlaw`). -/
 theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
     (h : _root_.Spot.Draw.drawUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
   unfold drawn

@@ -50,7 +50,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
 
 * A session of several tables (`setupTables_spec`) keeps the statement's sample, which is a subset or a stratified sample
-  (the setup refuses any other law at several tables) whose units are the session's instances; its `Σ` is a SHA-512
+  (the setup refuses any other sampling design at several tables) whose units are the session's instances; its `Σ` is a SHA-512
   digest; and its `Hello` is `helloOf`'s at the tables' names.
 * A subset sample that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
   count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a

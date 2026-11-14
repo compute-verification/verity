@@ -20,7 +20,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
   `nTab I` dividing `kd`, `DrawOkZKHJP` holds at `mPtsOf c.g (kd / nTab I)` link points, by `drawOkZKHJ_of_size`'s
   argument.
 * `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJPLaw` (`live-verifier`
-  at `own` and the registration's law), at a sampling design whose sample files decode only to `kd` units.
+  at `own` and the registration's sampling design), at a sampling design whose sample files decode only to `kd` units.
 * `drawOkZKHJP_of_count`, `decodesZCJH_custodyAt`: the same at one table under a sampling design read per sample, at the sample's own
   count's link points `mPtsOf c.g |S|`, at a sampling design each of whose samples has the session's `mPts` link points
   (a member of a window's sample, whose part `S` is sampled by `subset |S|`).
@@ -165,7 +165,7 @@ theorem drawOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.t
 
 /-- **The decoder at the live hidden-output tables at `own`, under `live-verifier`** (`decodesZCJH_liveIP` at
 `RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`), and its sample file, which decodes
-only to `kd` units under the registration's law, the challenger's live-coin part's samples (`drawOkZKHJP_of_size`), at
+only to `kd` units under the registration's sampling design, the challenger's live-coin part's samples (`drawOkZKHJP_of_size`), at
 `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd : ℕ)

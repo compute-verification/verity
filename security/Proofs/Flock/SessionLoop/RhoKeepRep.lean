@@ -22,7 +22,7 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace Claims.ZKServer.RhoKeep
 
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker MaskSlot Draws)
+open _root_.Flock.ZkServer.Frame (Cfg Masker MaskSlot Draws)
 open Loop
 
 /-- Coins the frame takes at level 0, outside the inner proof, keep its phase and position and leave it owing none. -/
@@ -53,12 +53,12 @@ body to `ρ₀`'s takes the round's coins, the frame is in level 0's masked phas
 at the next body's first value. The state is the frame's after body `i - 1` (`sched_l0Run`), whose coins keep it
 (`answer_l0`). -/
 theorem repState_l0 {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
-    {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hm14 : 14 ≤ t.st.m) (hdg : t.st.digest.size < 2 ^ 64)
-    (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
+    (hcap : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
     {mk : Option MaskSlot} (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
@@ -75,7 +75,7 @@ theorem repState_l0 {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! 
   rw [show alg.size + (xs.size + 2) + 1 + i = alg.size + (xs.size + 2) + 1 + (i - 1) + 1 by omega,
     repState_at c t rep dom xs hi cr0 cr ns _ hal hs (by omega)] at ha
   dsimp only at ha
-  cases h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs
+  cases h2 : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs
       (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr
         (alg.size + (xs.size + 2) + 1 + (i - 1)))).2
   · rw [h2] at ha

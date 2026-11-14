@@ -1003,7 +1003,7 @@ def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payl
 def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, Any] | None = None,
           replay_units: bool = True) -> dict[str, str]:
     """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``registration``: the
-    window's ``registration.json``, whose roots and law the bundle's must be, and whose ``window.commitment``
+    window's ``registration.json``, whose roots and sampling design the bundle's must be, and whose ``window.commitment``
     (`steps_provenance`) names every step root the bundle opens against: a step it doesn't name fails closed."""
     bad: dict[str, str] = {}
     if doc.get("format") != FORMAT:
