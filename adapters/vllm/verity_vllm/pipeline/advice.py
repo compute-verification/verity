@@ -658,7 +658,7 @@ def main(a: Options) -> int:
         roots = None
         if a.weights_of_record:
             serve = Path(a.run) / "serve.json"
-            roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
+            roots = registered_weights(json.loads(M.read(Path(a.weights_of_record), "RegisteredWeights")),
                                        json.loads(M.read(serve, "ServingConfiguration")) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
                     compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)

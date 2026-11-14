@@ -132,3 +132,10 @@ def test_h1_registration_bytes_unchanged(tmp_path):
         M.append(tmp_path / "after.jsonl", "H1Registration", json.dumps(line).encode())
     assert (tmp_path / "after.jsonl").read_bytes() == (tmp_path / "before.jsonl").read_bytes()
     assert [json.loads(x) for x in M.lines(tmp_path / "after.jsonl", "H1Registration")] == lines
+
+
+def test_registered_weights_reading_unchanged(tmp_path):
+    reg = {"schema": "verity-vllm/weights-registration/v1", "roots": {"model.embed": "05" * 64}, "note": "é"}
+    (tmp_path / "weights_registration.json").write_text(json.dumps(reg, indent=1))
+    path = tmp_path / "weights_registration.json"
+    assert json.loads(M.read(path, "RegisteredWeights")) == json.loads(path.read_text()) == reg
