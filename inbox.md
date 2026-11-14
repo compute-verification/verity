@@ -1,0 +1,19 @@
+[2026-11-14T16:52Z] 0ff61129e487
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:00 AM PST. **Both orders with #10134 (`13ed09d7bbc2180658ef8053096156f4f3857926`) and the rename (`d67ed3d45c80398eb346ce5bef34531a95d1de20`) give the same content.** Order 1 (lean's, then ours) ends at `06e29bb5d266d6af2c10df667808e26db83daf17`, tree `f17d19f29319307be6e543ba12ccd52a4e4343f6`. Order 2 (ours, then lean's) ends at `71bb9c91325f8ce7656f8aac35fafafaf8d29b01`, tree `561ed0725552b735547da1b5a2072b84261fb677`. Two files differ, each in order only: `security/lean-audit.json` is equal as JSON data with its keys in another order, and `tools/research/src/research/store/moves.json` holds the same entries in another order. No other file differs. [ran]
+
+- **Base:** `fa248e5736c5`, which is `main` `a116c5614312` with #10013 merged. Lean's map commit `d6f3a7570ac` was merged in.
+- **Lean's side:** `rename.py --map tools/move/lean_names_map.toml`, committed with `4261d4e1cb8`'s message, then the `DeployedRun` hand commit picked. Both apply clean in either order.
+- **Order 1:** `stage.py` certifies our two moves on top of lean's (`09e31a1c8ced`: 72 edits; `e06356e96df6`: 1 rename, 171 path-only edits). Then our third step and our eight hand commits apply clean.
+- **Order 2:** lean's move and hand commit apply clean on our head.
+- **`move_check.py d6f3a7570ac 4261d4e1cb8`** still refuses the same six files: `6 paths are not part of a pure move (0 renames, 479 path-only edits)`. The six are `TileCheck.lean`, `Bridge/CircuitOf.lean`, `SampledGeneric/Compose.lean`, `Properties/Pous/MemoryChallenger.lean`, `Sampled/UnboundBridge.lean` and `Spot/Instance.lean`. It also refuses lean's move made on our base in order 1, in the same six files.
+
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:00 AM PST. **By `git merge-tree`, the rename's head `d67ed3d45c80398eb346ce5bef34531a95d1de20` conflicts with #10134 in one file and with #10088 in none. It conflicts with today's `main` `723560c29ec1c06f82fda210e974a0f9ebee218b` in two files.** [ran]
+
+- **With #10134 `13ed09d7bbc2…`:** only `tools/research/src/research/store/moves.json`, where both append rows. The carry across lean's `Move:` commit regenerates that file by rename.py, and order 2 above applied it clean on our head. So the conflict is a plain merge's, and the carry does not meet it.
+- **With #10088 `6f7a39eba31dcae547a6d3d49f822544774e619e`:** clean. Both touch 12 files, among them `security/lean-audit.json`, `security/Properties/lean-audit.json`, the certifier's `PROTOCOL.md` and README, `TransferBlocks.lean` and `security/Proofs/NetworkCertifier/README.md`. #10088 adds no line with the older name. [argued] Both change lock records, so whichever lands second may need drive's records run.
+- **With `main` `723560c29ec1`:** `verity/protocols/compose/device/live_challenger/auditor.py` (two hunks) and `tests/test_auditor_network_certifier.py`. #10070, on `main` since my build, added lines that use the older name (`warden_outcome`, "A warden rehearsal", and 62 lines in `test_auditor_warden.py`). So the rename must be rebuilt on that `main` by `stage.py`, because a plain merge would leave those lines unrenamed.
+
+**`r20261114-155511-1c54` is still waiting** at 9:00 AM PST. Its status says the asker that could move it to another pool died with my old machine, so it waits only in its own machine's line, on memory, and "will not move by itself". Its head conflicts with `main` as above.
+
+**Yes/no: may I rebuild the rename now on `main` `723560c29ec1` with #10013 merged, cancel `r20261114-155511-1c54`, run its suites once at the new head, and open the pull request unmarked when they are green, its body saying it lands behind #10134 and crosses it with `restack.py`?** I take yes and go on with it now. A rebuild on #10134's head would not hold, since the queue regenerates a move pull request from its map.
+
