@@ -15,7 +15,7 @@ table saying what fills it; a report is refused while any number is unfilled, na
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 
-**Demo A** composes sampled proofs, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
+**Demo A** composes SPOT, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
 ``Accounting.Guarantees.JointPooledLive`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
@@ -25,7 +25,7 @@ the per-subcircuit bound, with the joint figure labelled unlocked.
 **The sample** is a handful: k = `HANDFUL` units sampled uniformly over the whole partition by
 the live coins, never sized to a proving budget; a block that drew another k says so in the caveats.
 
-**Part 3's H and B** are proofs' planner's (``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
+**Part 3's H and B** are proofs' planner's (``verity/protocols/proofs/spot/prover/cost/demo_a.py``), read from a recorded run
 of it: `spot.optimize.for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, its plan of
 record's ``free_compute`` and ``leak`` at δ = 1%. ``H_POOLED``, ``B_POOLED`` and ``PLANNER`` (the planner, its commit and
 its run) are filled together, each source naming the run.
@@ -44,7 +44,7 @@ every sampled proof block was proved.
 
 **Gathers** are wire references, not proof blocks: a measured subcircuit named for one is refused.
 
-**Words.** Each of the six subprotocols by its name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network
+**Words.** Each of the six subprotocols by its name (SPOT, PoUW, PoUS, the bandwidth audit, the network
 certifier, the wipe), "proof block", "sampling block", "server-time block" and "subcircuit": `render` refuses a report
 that says "leg", "window", "template", "integrity", "work", "space" or "communication" (`BANNED`) outside a code span,
 measurement text included.
@@ -209,7 +209,7 @@ MEASURED: dict[str, str] = {
                 "planner's k",
     "POUW_COVERAGE": "the per-call noise run: the share of the block's static INT8 MACs its tiles cover (`range`)",
     "POUW_CERTIFIED_SHARE": "the per-call noise run: PoUW's certified share at POUW_RHO's ρ",
-    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditPeriod`",
+    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditMonitoringPeriod`",
     "PROVING_GPU_S": "the prove run: GPU-seconds of proving over every drawn unit's session",
     "BLOCK_GPU_S": "the block run: H200-seconds the block served",
     "PROVE_S_PER_AND": "the prove run, fitted by `spot.costfit`: GPU-seconds of proving per AND",
@@ -252,7 +252,7 @@ MEASURED: dict[str, str] = {
     "ROW_SLOT_NS_B1024": "the same run: nanoseconds a step per row-slot",
     "STEP_S_KERNELS": "kernels' faster step at batch 512: seconds a step",
     "WORLD_GATES_YEAR": f"the world's compute, AND gates a year, labelled {WORLD_LABEL} (census entry pending)",
-    "PLANNER": "proofs' planner (`benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
+    "PLANNER": "proofs' planner (`verity/protocols/proofs/spot/prover/cost/demo_a.py`) at its commit, and the recorded run of it "
                "at 1% of a one-week sampling block (`--spans week`)",
     "H_POOLED": "PLANNER's run: `for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, the plan of "
                 "record's incorrect ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
@@ -339,19 +339,19 @@ def _tiles(public: Mapping[str, Any] | None) -> str | None:
 def demo_a_verdict(record: Mapping[str, Any], failures: int = 0) -> str:
     """Demo A's composed verdict over `DEMO_A` on the record's block, counting its `failures` visible failures (module
     docstring)."""
-    legs, server = record["legs"], record["server"]
-    rejected = [p for p in DEMO_A if legs.get(p) and legs[p]["server"] == server
-                and legs[p]["answer"]["verdict"] in ("reject", "error")]
+    subprotocols, server = record["legs"], record["server"]
+    rejected = [p for p in DEMO_A if subprotocols.get(p) and subprotocols[p]["server"] == server
+                and subprotocols[p]["answer"]["verdict"] in ("reject", "error")]
     if rejected:
         return "reject (" + ", ".join(PROTOCOL_NAMES[p] for p in rejected) + ")"
     if failures:
         return f"fail ({failures:,} drawn unit{'s' * (failures != 1)} not proved: visible failures, no redraw)"
-    absent = [p for p in DEMO_A if not legs.get(p) or legs[p]["server"] != server]
+    absent = [p for p in DEMO_A if not subprotocols.get(p) or subprotocols[p]["server"] != server]
     if absent:
         return "pending: no " + ", no ".join(PROTOCOL_NAMES[p] for p in absent) + " on the block's server"
-    waiting = [p for p in DEMO_A if legs[p]["answer"]["verdict"] != "accept"]
+    waiting = [p for p in DEMO_A if subprotocols[p]["answer"]["verdict"] != "accept"]
     if waiting:
-        return "pending (" + ", ".join(f"{PROTOCOL_NAMES[p]}: {legs[p]['answer']['verdict']}" for p in waiting) + ")"
+        return "pending (" + ", ".join(f"{PROTOCOL_NAMES[p]}: {subprotocols[p]['answer']['verdict']}" for p in waiting) + ")"
     return "accept"
 
 
@@ -364,13 +364,13 @@ def from_record(record: Mapping[str, Any], label: str | None = None) -> dict[str
     def put(name: str, value: Any) -> None:
         out[name] = V(value, f"block record {record['run']} › {RECORD[name]}", label)
 
-    legs, server = record["legs"], record["server"]
+    subprotocols, server = record["legs"], record["server"]
     lo, hi = record["server_time"][0]["steps"]
     put("RECORD_RUN", record["run"])
     put("BLOCK_SERVER", server)
     put("BLOCK_STEPS", f"[{lo}, {hi})")
     put("DEMO_A_VERDICT", demo_a_verdict(record))
-    here = {p: legs[p] for p in DEMO_A if legs.get(p) and legs[p]["server"] == server}
+    here = {p: subprotocols[p] for p in DEMO_A if subprotocols.get(p) and subprotocols[p]["server"] == server}
     if i := here.get("integrity"):
         put("DRAWN_UNITS", i["quantity"]["drawn"])
         put("UNITS_TOTAL", i["quantity"]["of"])
@@ -430,7 +430,7 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
         runs = {n: set(RUN_ID.findall(values[n].source)) for n in planned}
         if len(planned) != len(PLANNED) or not all(runs.values()) or len(set.intersection(*runs.values())) == 0:
             raise ValueError(f"measurements: {', '.join(f'⟨{n}⟩' for n in PLANNED)} are filled together from one "
-                             f"recorded run of proofs' planner, each source naming that run (`benchmarks/sampling_plan/demo_a.py "
+                             f"recorded run of proofs' planner, each source naming that run (`verity/protocols/proofs/spot/prover/cost/demo_a.py "
                              f"--spans week`); got {sorted(planned)}")
     if "WORLD_GATES_YEAR" in values and values["WORLD_GATES_YEAR"].label != WORLD_LABEL:
         raise ValueError(f"measurements: ⟨WORLD_GATES_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")

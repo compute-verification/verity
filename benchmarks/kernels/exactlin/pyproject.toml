@@ -1,0 +1,9 @@
+# The int8-exact linear's benches. Not a package: its benches run on GPU hosts, per their headers, on the integration's
+# kernels (verity_vllm.engine.int8_fused). The suite here holds what of int8_fused dither's dither_a.py inlines to what
+# int8_fused binds.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test_dither_a_helpers reads int8_fused's source and dither_a.py's, holding the names the second reads to the first.
+inputs = ["adapters/vllm/verity_vllm/engine/int8_fused.py", "benchmarks/hash/dither/dither_a.py"]

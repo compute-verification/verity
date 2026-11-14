@@ -33,7 +33,7 @@
 #endif
 #define DCAP_FLIN
 #define main dcap_main
-#include "dcap.cu"
+#include "../../../verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu"
 #undef main
 #include "rounds.cuh"
 

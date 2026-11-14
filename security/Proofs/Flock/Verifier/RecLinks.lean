@@ -11,7 +11,7 @@ refused, so neither a missing row nor a failed one opens without a collision: no
 resistance, which a reader of this lemma takes as the premise its pair refutes.
 
 What is proved is about the unit's reference (`RecLinkRef.linkRef`), whose output is `linkOut`'s (`linkRef_ok`).
-That the netlist (`VStar.linkUnit`) computes `linkOut` wherever its rows hold, on the bytes of its ports' words, is
+That the circuit description (`VStar.linkUnit`) computes `linkOut` wherever its rows hold, on the bytes of its ports' words, is
 `Proofs.Flock.VBridge.RecLink` (`laid_linkUnit`, `linkB_words`); this file doesn't compose the two.
 -/
 module

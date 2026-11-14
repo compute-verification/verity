@@ -56,6 +56,9 @@ from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.pipeline import config_record as CR
 
+#: The names the library's other modules read here: ``Options`` and ``main``, the ``glue`` command.
+__all__ = ["Options", "main"]
+
 MARKER = "__models__"
 SCAN = (Path(__file__).parent, ROOT / "tests")
 SIDECAR = ".circuit-check.py"

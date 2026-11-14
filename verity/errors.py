@@ -2,10 +2,13 @@
 
 ``InvalidArtifact`` is raised for an encoding outside a modelled domain or a malformed protocol object;
 ``ProtocolError`` for a misuse of a protocol API (not a verdict); ``ResourceLimit`` when a verification limit
-is exceeded. Verdict codes (``verity_vllm.check.codes``) build on ``ProtocolError``.
+is exceeded. Verdict codes (``verity_vllm.check.codes``) build on ``ProtocolError``. ``Refused`` is a prover's refusal:
+what was asked is outside what the code serves or proves, said by reason; the vLLM adapter raises this one class too.
 """
 
 from __future__ import annotations
+
+from collections.abc import Sequence
 
 
 class InvalidArtifact(ValueError):
@@ -24,3 +27,14 @@ class ResourceLimit(InvalidArtifact):
         self.resource = resource
         self.limit = limit
         self.observed = observed
+
+
+class Refused(ValueError):
+    """``reasons`` lists every reason (one string is one reason).  ``what`` names what refused: the message is
+    ``"<what> refused: <reason>; <reason>"``, or the reasons alone without it."""
+
+    def __init__(self, reasons: str | Sequence[str], what: str = "") -> None:
+        self.reasons = (reasons,) if isinstance(reasons, str) else tuple(reasons)
+        self.what = what
+        said = "; ".join(self.reasons)
+        super().__init__(f"{what} refused: {said}" if what else said)

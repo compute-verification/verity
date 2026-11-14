@@ -8,7 +8,7 @@ import json
 import pytest
 
 from tests.query.test_module_body import W, _call, program
-from verity_vllm.correspondence import runtime as RC
+from verity_torch.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_query import (
     CallName,
     Correspondence,

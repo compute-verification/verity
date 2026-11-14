@@ -1,34 +1,21 @@
 """egress_zk's host side: the execution phase it reads (each bucket's state renders the network certifier's row, its
 registration read under the test key) and each member's host read (`egress_zk.refused`, as Lean's registered reads make it, of the
 rows the units compute) as the member's: honest accepted with every o0 1 and every row the warden's, lying's changed
-unit's row not the warden's, moved's at the other unit's position. Lean's statement setup (`flock-verify statement`,
+unit's row not the warden's, moved's at the other unit's position. Lean's statement setup (`verity-verify-proof statement`,
 `Registered.checkComplete` among its checks) holds each staged member to the verifier's registered reads of every
 port. Nothing here proves (`egress_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(HERE / "tests"))
-from test_warden_zk import needs_lean, reads_of, statement  # noqa: E402
+from benchmarks.network_traces.tests.test_warden_zk import needs_lean, reads_of, statement
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_egress_zk", HERE / "egress_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-ez = _load()
+from verity.protocols.accounting.certifier.prover import egress_zk as ez
 
 
 def test_each_members_host_read_is_the_members(tmp_path):

@@ -7,10 +7,10 @@
 # OUT is the run's public $OUT, and OUT/pieces its subprotocols' public pieces. First, under PRODUCT=onsite, onsite's own
 # cases (PoUS's and the wipe's, each under SERVE_DIR/private beside its Lean's answer, as its piece wrote it), named by
 # `onsite_cases` in the file ONSITE_PIECES names (`served_verdicts.sh`'s, which exports it). Then, where the tree has
-# `served_cases.py`, the cases on the window's registration record R (its docstring), each under SERVE_DIR/private:
-# sampled proofs' one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
-# sampled proofs case (a5's v2 case, which only a `--zk` audit of one sampled member on a window of one member writes,
-# so a window of several members has none and each composite names sampled proofs missing, in the form `one-stage`)
+# `served_cases.py`, the cases on the window's docket R (its docstring), each under SERVE_DIR/private:
+# SPOT's one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
+# SPOT case (a5's v2 case, which only a `--zk` audit of one sampled member on a window of one member writes,
+# so a window of several members has none and each composite names SPOT missing, in the form `one-stage`)
 # and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,

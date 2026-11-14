@@ -55,7 +55,7 @@ fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a f
 
 `IoTieBucket` is the proof block, one a bucket row. Its `row` is the network certifier's registered row t and its `port`
 S rows of the Commit's registered port, which the proof system reads (the Lean verifier's registered reads,
-`flock-verify --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th
+`verity-verify-proof --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th
 step by `port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries,
 each its id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and
 `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. An execution phase's tie is its T
@@ -79,7 +79,8 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.accounting.certifier.verifier import head_check as HC
-from verity.protocols.accounting.certifier.verifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.id_form import EVENT_END, EVENT_HEAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -92,7 +93,7 @@ ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
 ID_AT = HEADER.size + len(ID_EVENT_HEAD)
 #: the least cell: the header and one event, which a `DATA` cell holds with no padding
 CELL_USED = HEADER.size + ID_EVENT_BYTES
-#: the network certifier's `END` kind (`warden.END`), beside `active`'s `PAD` and `DATA`
+#: the network certifier's `END` kind (`warden.END`), beside `link_frame`'s `PAD` and `DATA`
 END = 0x20
 #: a response's last bytes, after its events: the network certifier's `END` holds them
 TRAILER = b"data: [DONE]" + EVENT_END
@@ -828,7 +829,7 @@ IoTieBucket = CompositeDefinition(
     doc="1 iff every cell of the bucket row (the warden's registered row, read by the proof system: bit 8k + i is bit i "
         "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
         "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
-        "one egress bucket row, every cell opened; a link-window's tie is its T rows'")
+        "one egress bucket row, every cell opened; an execution phase's tie is its T rows'")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------

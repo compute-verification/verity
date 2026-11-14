@@ -6,12 +6,12 @@ import Mathlib.Algebra.BigOperators.Fin
 # `audit_exfiltration`'s bound, evaluated by Lean
 
 Vectors for `verity_one_stage.consumers.exfiltration_bound` and `location_bits` (`verifier/tests/fixtures/exfiltration_lean.json`),
-from the soundness package's `audit_exfiltration` on the uniform `k`-subset of `n` units (`Law.subset n k`), at
+from the soundness package's `audit_exfiltration` on the uniform `k`-subset of `n` units (`SamplingDesign.subset n k`), at
 `δ = 2^-e` and `b` output bits per unit:
 
-* `K` is the least `K` that meets `audit_exfiltration`'s `hk : miss (K + 1) < δ`. By `Law.subset_miss`,
+* `K` is the least `K` that meets `audit_exfiltration`'s `hk : miss (K + 1) < δ`. By `SamplingDesign.subset_miss`,
   `miss (K + 1) = C(n - (K + 1), k) / C(n, k)`, so `hk` is `C(n - (K + 1), k) · 2^e < C(n, k)`.
-* `H = b · K` is its `hH`'s harm bound: a set `B` with `δ ≤ escape B = miss |B|` (`Law.subset_escape`) has
+* `H = b · K` is its `hH`'s harm bound: a set `B` with `δ ≤ escape B = miss |B|` (`SamplingDesign.subset_escape`) has
   `|B| ≤ K`, so it holds at most `b · K` output bits.
 * `admissible = ∑ j ∈ range (K + 1), n.choose j`, and the bound's first term is `numerator n H K / |M|` with
   `numerator n H K = 2 ^ H * admissible`. `audit_exfiltration_numerator` checks that `numerator` is that term.
@@ -28,7 +28,7 @@ open scoped ENNReal
 def numerator (n H K : ℕ) : ℕ := 2 ^ H * ∑ j ∈ range (K + 1), n.choose j
 
 /-- `audit_exfiltration` itself, its bound read through `numerator`: this fails to build if the bound's term changes. -/
-theorem audit_exfiltration_numerator {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {L : Law n} {Reg : Type}
+theorem audit_exfiltration_numerator {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {L : SamplingDesign n} {Reg : Type}
     {session : Finset (Fin n) → Reg → Game Bool} {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
     {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
@@ -64,18 +64,18 @@ def meets (n k e K : ℕ) : Bool :=
 /-- `meets` is `miss (K + 1) < 2^-e ≤ miss K` for the uniform `k`-subset: `K` meets `audit_exfiltration`'s `hk`, and it is
 the least that does, since `miss` is antitone. -/
 theorem miss_of_meets {n k e K : ℕ} (h : meets n k e K = true) :
-    ∃ hk : k ≤ n, (Law.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
-      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.subset n k hk).miss K := by
+    ∃ hk : k ≤ n, (SamplingDesign.subset n k hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.subset n k hk).miss K := by
   simp only [meets, Bool.and_eq_true, decide_eq_true_eq, chooseD_eq] at h
   obtain ⟨⟨⟨hk, hK⟩, hlt⟩, hle⟩ := h
   have hB : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
   have hc : ((2 ^ e : ℕ) : ℝ≥0∞) ≠ 0 := by exact_mod_cast (pow_pos two_pos e).ne'
   have ht : ∀ x : ℕ, (x : ℝ≥0∞) ≠ ⊤ := fun x => ENNReal.natCast_ne_top x
   refine ⟨hk, ?_, ?_⟩
-  · rw [Law.subset_miss hk hK, ENNReal.div_lt_iff (Or.inl hB) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
+  · rw [SamplingDesign.subset_miss hk hK, ENNReal.div_lt_iff (Or.inl hB) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
       ENNReal.lt_div_iff_mul_lt (Or.inl hc) (Or.inl (ht _))]
     exact_mod_cast hlt
-  · rw [Law.subset_miss hk (by omega), ENNReal.le_div_iff_mul_le (Or.inl hB) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
+  · rw [SamplingDesign.subset_miss hk (by omega), ENNReal.le_div_iff_mul_le (Or.inl hB) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
       ENNReal.div_le_iff_le_mul (Or.inl hc) (Or.inl (ht _))]
     exact_mod_cast hle
 
@@ -90,14 +90,14 @@ theorem grid_meets : grid.all (fun (n, k, e, _) => meets n k e (countBound n k e
 
 /-- **Each vector's `K` meets `hk`, and no smaller count does**: `miss (K + 1) < 2^-e ≤ miss K`. -/
 theorem grid_counts : ∀ c ∈ grid, ∃ hk : c.2.1 ≤ c.1,
-    (Law.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
-      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
+    (SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1 + 1) < ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
+      ((2 ^ c.2.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.subset c.1 c.2.1 hk).miss (countBound c.1 c.2.1 c.2.2.1) :=
   fun c hc => miss_of_meets (List.all_eq_true.1 grid_meets c hc)
 
-/-! ## Stratified laws
+/-! ## Stratified samplingDesigns
 
-A stratified vector's law has strata of `N_s` units drawing `k_s` (`Law.stratified`). A fill `c` that some `τ ∈ (0, 1]`
-separates attains its `miss (∑ c)` (`Law.stratified_miss_eq_greedy`): every factor `(N_s − j − k_s)/(N_s − j)` the fill takes
+A stratified vector's samplingDesign has strata of `N_s` units drawing `k_s` (`SamplingDesign.stratified`). A fill `c` that some `τ ∈ (0, 1]`
+separates attains its `miss (∑ c)` (`SamplingDesign.stratified_miss_eq_greedy`): every factor `(N_s − j − k_s)/(N_s − j)` the fill takes
 is at least `τ`, and every factor it leaves is at most `τ`. `searchS` fills greedily in exact integers, taking the largest
 next factor by cross-multiplication, so the factors it takes never rise and `τ` is the last one. `meetsS` checks both
 fills and their `τ` in ℕ, so exactly: a fill ordered in floating point can fail to be separated at a near-tie, and then its
@@ -133,45 +133,45 @@ theorem prod_natCast_div {ι : Type*} (s : Finset ι) (c d : ι → ℕ) :
   exact fun i _ j _ _ => Or.inr (ENNReal.natCast_ne_top _)
 
 /-- A fill `c` that `τ = p/q` separates, in ℕ, attains `miss (∑ c) = ∏ C(n_s − c_s, k_s) / ∏ C(n_s, k_s)`. -/
-theorem miss_eq_of_sep {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (Law.stratum σ s).card)
+theorem miss_eq_of_sep {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (SamplingDesign.stratum σ s).card)
     (c : Fin m → ℕ) {p q : ℕ} (hp : 0 < p) (hpq : p ≤ q)
-    (hs : ∀ s, c s ≤ (Law.stratum σ s).card ∧
-      (0 < c s → p * ((Law.stratum σ s).card - (c s - 1)) ≤ q * ((Law.stratum σ s).card - (c s - 1) - k s)) ∧
-      (c s < (Law.stratum σ s).card → q * ((Law.stratum σ s).card - c s - k s) ≤ p * ((Law.stratum σ s).card - c s))) :
-    (Law.stratified σ k hk).miss (∑ s, c s) =
-      ((∏ s, ((Law.stratum σ s).card - c s).choose (k s) : ℕ) : ℝ≥0∞) /
-        ((∏ s, (Law.stratum σ s).card.choose (k s) : ℕ) : ℝ≥0∞) := by
+    (hs : ∀ s, c s ≤ (SamplingDesign.stratum σ s).card ∧
+      (0 < c s → p * ((SamplingDesign.stratum σ s).card - (c s - 1)) ≤ q * ((SamplingDesign.stratum σ s).card - (c s - 1) - k s)) ∧
+      (c s < (SamplingDesign.stratum σ s).card → q * ((SamplingDesign.stratum σ s).card - c s - k s) ≤ p * ((SamplingDesign.stratum σ s).card - c s))) :
+    (SamplingDesign.stratified σ k hk).miss (∑ s, c s) =
+      ((∏ s, ((SamplingDesign.stratum σ s).card - c s).choose (k s) : ℕ) : ℝ≥0∞) /
+        ((∏ s, (SamplingDesign.stratum σ s).card.choose (k s) : ℕ) : ℝ≥0∞) := by
   have hq : q ≠ 0 := by omega
-  rw [Law.stratified_miss_eq_greedy σ k hk c (fun s => (hs s).1) (τ := (p : ℝ≥0∞) / q)
+  rw [SamplingDesign.stratified_miss_eq_greedy σ k hk c (fun s => (hs s).1) (τ := (p : ℝ≥0∞) / q)
     (ENNReal.div_pos_iff.2 ⟨by exact_mod_cast hp.ne', ENNReal.natCast_ne_top _⟩)
     (ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast hpq))
     (fun s h => natCast_div_le_div hq (by have := (hs s).1; omega) (by rw [mul_comm _ q]; exact (hs s).2.1 h))
     (fun s h => natCast_div_le_div (by omega) hq (by rw [mul_comm]; exact (hs s).2.2 h))]
   exact prod_natCast_div _ _ _
 
-/-- **`meetsS` is `miss (K + 1) < 2^-e ≤ miss K`** for every stratified law whose strata are the rows' sizes and draws. -/
+/-- **`meetsS` is `miss (K + 1) < 2^-e ≤ miss K`** for every stratified samplingDesign whose strata are the rows' sizes and draws. -/
 theorem miss_of_meetsS {e K : ℕ} {r : List (ℕ × ℕ × ℕ × ℕ)} {τ τ' : ℕ × ℕ} (h : meetsS e K r τ τ' = true)
-    {n : ℕ} (σ : Fin n → Fin r.length) (hσ : ∀ s, (Law.stratum σ s).card = r[s.1].1) :
-    ∃ hk : ∀ s, r[s.1].2.1 ≤ (Law.stratum σ s).card,
-      (Law.stratified σ (fun s => r[s.1].2.1) hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
-        ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.stratified σ (fun s => r[s.1].2.1) hk).miss K := by
+    {n : ℕ} (σ : Fin n → Fin r.length) (hσ : ∀ s, (SamplingDesign.stratum σ s).card = r[s.1].1) :
+    ∃ hk : ∀ s, r[s.1].2.1 ≤ (SamplingDesign.stratum σ s).card,
+      (SamplingDesign.stratified σ (fun s => r[s.1].2.1) hk).miss (K + 1) < ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ∧
+        ((2 ^ e : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.stratified σ (fun s => r[s.1].2.1) hk).miss K := by
   simp only [meetsS, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
   obtain ⟨⟨⟨⟨hs1, hs2, hp, hpq, hp', hpq'⟩, hall⟩, hlt⟩, hle⟩ := h
   have row : ∀ s : Fin r.length, sepOk τ.1 τ.2 (r[s.1].1, r[s.1].2.1, r[s.1].2.2.1) = true ∧
       sepOk τ'.1 τ'.2 (r[s.1].1, r[s.1].2.1, r[s.1].2.2.2) = true := fun s => by
     simpa only [Bool.and_eq_true] using hall _ (List.getElem_mem s.2)
   simp only [sepOk, decide_eq_true_eq] at row
-  have hk : ∀ s, r[s.1].2.1 ≤ (Law.stratum σ s).card := fun s => (hσ s) ▸ (row s).1.1
+  have hk : ∀ s, r[s.1].2.1 ≤ (SamplingDesign.stratum σ s).card := fun s => (hσ s) ▸ (row s).1.1
   have hc : ((2 ^ e : ℕ) : ℝ≥0∞) ≠ 0 := by exact_mod_cast (pow_pos two_pos e).ne'
   have ht : ∀ x : ℕ, (x : ℝ≥0∞) ≠ ⊤ := fun x => ENNReal.natCast_ne_top x
-  have hD : ((∏ s : Fin r.length, (Law.stratum σ s).card.choose r[s.1].2.1 : ℕ) : ℝ≥0∞) ≠ 0 := by
+  have hD : ((∏ s : Fin r.length, (SamplingDesign.stratum σ s).card.choose r[s.1].2.1 : ℕ) : ℝ≥0∞) ≠ 0 := by
     exact_mod_cast Finset.prod_ne_zero_iff.2 fun s _ => (Nat.choose_pos (hk s)).ne'
-  have eD : (∏ s : Fin r.length, (Law.stratum σ s).card.choose r[s.1].2.1) = (r.map fun x => chooseD x.1 x.2.1).prod := by
+  have eD : (∏ s : Fin r.length, (SamplingDesign.stratum σ s).card.choose r[s.1].2.1) = (r.map fun x => chooseD x.1 x.2.1).prod := by
     simp only [hσ, chooseD_eq]; exact Fin.prod_univ_fun_getElem r fun x => x.1.choose x.2.1
   refine ⟨hk, ?_, ?_⟩
   · have e1 := miss_eq_of_sep σ _ hk (fun s => r[s.1].2.2.1) hp hpq fun s => by rw [hσ]; exact (row s).1.2
     rw [Fin.sum_univ_fun_getElem r fun x => x.2.2.1, hs1] at e1
-    have eN : (∏ s : Fin r.length, ((Law.stratum σ s).card - r[s.1].2.2.1).choose r[s.1].2.1) =
+    have eN : (∏ s : Fin r.length, ((SamplingDesign.stratum σ s).card - r[s.1].2.2.1).choose r[s.1].2.1) =
         (r.map fun x => chooseD (x.1 - x.2.2.1) x.2.1).prod := by
       simp only [hσ, chooseD_eq]; exact Fin.prod_univ_fun_getElem r fun x => (x.1 - x.2.2.1).choose x.2.1
     rw [e1, ENNReal.div_lt_iff (Or.inl hD) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
@@ -179,7 +179,7 @@ theorem miss_of_meetsS {e K : ℕ} {r : List (ℕ × ℕ × ℕ × ℕ)} {τ τ'
     exact_mod_cast hlt
   · have e1 := miss_eq_of_sep σ _ hk (fun s => r[s.1].2.2.2) hp' hpq' fun s => by rw [hσ]; exact (row s).2.2
     rw [Fin.sum_univ_fun_getElem r fun x => x.2.2.2, hs2] at e1
-    have eN : (∏ s : Fin r.length, ((Law.stratum σ s).card - r[s.1].2.2.2).choose r[s.1].2.1) =
+    have eN : (∏ s : Fin r.length, ((SamplingDesign.stratum σ s).card - r[s.1].2.2.2).choose r[s.1].2.1) =
         (r.map fun x => chooseD (x.1 - x.2.2.2) x.2.1).prod := by
       simp only [hσ, chooseD_eq]; exact Fin.prod_univ_fun_getElem r fun x => (x.1 - x.2.2.2).choose x.2.1
     rw [e1, ENNReal.le_div_iff_mul_le (Or.inl hD) (Or.inl (ht _)), ← ENNReal.div_eq_inv_mul,
@@ -235,13 +235,13 @@ theorem gridS_meets : gridS.all (fun (sh, e, _) => match certS sh e with
     | some (K, r, τ, τ') => decide (r.map (fun x => (x.1, x.2.1)) = sh) && meetsS e K r τ τ'
     | none => false) = true := by decide +kernel
 
-/-- **Each stratified vector's `K` meets `hk`, and no smaller count does**, for every stratified law with the vector's
+/-- **Each stratified vector's `K` meets `hk`, and no smaller count does**, for every stratified samplingDesign with the vector's
 strata: `miss (K + 1) < 2^-e ≤ miss K`. -/
 theorem gridS_counts : ∀ v ∈ gridS, ∃ K r τ τ', certS v.1 v.2.1 = some (K, r, τ, τ') ∧
-    r.map (fun x => (x.1, x.2.1)) = v.1 ∧ ∀ {n : ℕ} (σ : Fin n → Fin r.length), (∀ s, (Law.stratum σ s).card = r[s.1].1) →
-      ∃ hk : ∀ s, r[s.1].2.1 ≤ (Law.stratum σ s).card,
-        (Law.stratified σ (fun s => r[s.1].2.1) hk).miss (K + 1) < ((2 ^ v.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
-          ((2 ^ v.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (Law.stratified σ (fun s => r[s.1].2.1) hk).miss K := by
+    r.map (fun x => (x.1, x.2.1)) = v.1 ∧ ∀ {n : ℕ} (σ : Fin n → Fin r.length), (∀ s, (SamplingDesign.stratum σ s).card = r[s.1].1) →
+      ∃ hk : ∀ s, r[s.1].2.1 ≤ (SamplingDesign.stratum σ s).card,
+        (SamplingDesign.stratified σ (fun s => r[s.1].2.1) hk).miss (K + 1) < ((2 ^ v.2.1 : ℕ) : ℝ≥0∞)⁻¹ ∧
+          ((2 ^ v.2.1 : ℕ) : ℝ≥0∞)⁻¹ ≤ (SamplingDesign.stratified σ (fun s => r[s.1].2.1) hk).miss K := by
   intro v hv
   have h := List.all_eq_true.1 gridS_meets v hv
   obtain ⟨sh, e, b⟩ := v

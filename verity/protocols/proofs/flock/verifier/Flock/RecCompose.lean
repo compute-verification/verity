@@ -1,6 +1,6 @@
 /-
-`flock-verify rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
-`flock-verify verify --zk` process at one V* statement (`--rec-part J`), with one session. The compiled verifier the
+`verity-verify-proof rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
+`verity-verify-proof verify --zk` process at one V* statement (`--rec-part J`), with one session. The compiled verifier the
 recursion's guarantee reads (`RecDeploy.V`, `Proofs.Flock.Claims.Recursion.Deploy`) runs part `s` at the statement
 `RecDeploy.partRaw … s p`: of what `verify` reads, only the part's Flock statement (its circuit, partition, program and
 registered reads, with its staged public file), its index and the verifier's own bindings of it vary by part, and every
@@ -68,7 +68,7 @@ structure Shared where
   registration : Option String
   innerStatement : Option String
   innerTables : Option (List (String × String))
-  innerDraw : Option String
+  innerSample : Option String
   links : Option (String × Nat)
   innerProgram : Option String
   deriving DecidableEq, Repr, Inhabited
@@ -79,11 +79,11 @@ def linksOf (links : Option (ByteArray × Nat)) : Option (String × Nat) := link
 /-- **The shared inputs' digests**, from the bytes `verify` read. -/
 def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript registration :
     Option ByteArray) (innerStatement : Option String)
-    (innerTables : Option (List (String × ByteArray))) (innerDraw : Option ByteArray)
+    (innerTables : Option (List (String × ByteArray))) (innerSample : Option ByteArray)
     (links : Option (ByteArray × Nat)) (innerProgram : Option ByteArray) : Shared :=
   ⟨recInner.map digest, innerCircuit.map digest, innerPublic.map digest, innerPartition.map digest,
     innerCoins.map digest, innerSession.map digest, transcript.map digest, registration.map digest, innerStatement,
-    innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links,
+    innerTables.map (·.map fun t => (t.1, digest t.2)), innerSample.map digest, linksOf links,
     innerProgram.map digest⟩
 
 /-- A string or `null`. -/
@@ -110,7 +110,7 @@ def Shared.toJson (s : Shared) : Json :=
     ("inner_tables", match s.innerTables with
       | none => .null
       | some ts => .arr (ts.map fun t => Json.arr #[.str t.1, .str t.2]).toArray),
-    ("inner_draw", optJson s.innerDraw), ("rec_links", linksJson s.links),
+    ("inner_draw", optJson s.innerSample), ("rec_links", linksJson s.links),
     ("inner_program", optJson s.innerProgram)]
 
 /-- Field `k` of `j`: a string, or `null` as `none`; nothing when absent or another value. -/
@@ -158,7 +158,7 @@ def Shared.diff (s t : Shared) : String :=
     one "inner_statement" "how the inner statement is proved, --rec-inner-statement" s.innerStatement t.innerStatement <|>
     one "inner_tables" "the inner statement's lookup tables, --rec-inner-tables"
       (s.innerTables.map toString) (t.innerTables.map toString) <|>
-    one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerDraw t.innerDraw <|>
+    one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerSample t.innerSample <|>
     one "rec_links" "the inner population's link table, --rec-links" (s.links.map (linksShow ∘ some))
       (t.links.map (linksShow ∘ some)) <|>
     one "inner_program" "the verifier's program of the inner statement, --rec-inner-program" s.innerProgram

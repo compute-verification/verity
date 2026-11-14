@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Recursion.KSLin2
 
 The inner protocol's terms bound `P_O`'s aborting runs in the inner protocol's own model of runs (`runModel` at
 `Comp.innerPO` and `Comp.keepAO`); the composite's bound reads the same finders on its reruns (`Comp.innerModel`). A run
-of the first is a rerun of the second through `extendDraw`, and the two models agree on it but where the rerun is bad:
+of the first is a rerun of the second through `extendSample`, and the two models agree on it but where the rerun is bad:
 
 * a run's coins are its rerun's inner coins (`Comp.coins_extend`), and a fork at an inner round is its rerun's fork
   there (`Comp.named_extend`, `extend_fork_min`);
@@ -32,10 +32,10 @@ open Claims Claims.Recursion
 
 /-- An inner run's coins forked at `j` onto another's, extended, are the extended samples forked at `j` capped at the
 inner rounds. -/
-theorem extendDraw_fork {Coin C : Type} [Inhabited Coin] {n N : ℕ} (j : ℕ)
+theorem extendSample_fork {Coin C : Type} [Inhabited Coin] {n N : ℕ} (j : ℕ)
     (a b : (Fin n → Coin) × (Fin N → Coin) × C) :
-    extendDraw ((fork j a.1 b.1, b.2) : (Fin n → Coin) × (Fin N → Coin) × C) =
-      (fork (min j n) (extendDraw a).1 (extendDraw b).1, (extendDraw b).2) :=
+    extendSample ((fork j a.1 b.1, b.2) : (Fin n → Coin) × (Fin N → Coin) × C) =
+      (fork (min j n) (extendSample a).1 (extendSample b).1, (extendSample b).2) :=
   Prod.ext (extend_fork_min j a.1 b.1 a.2.1 b.2.1) rfl
 
 namespace Comp
@@ -102,10 +102,10 @@ rerun is kept. -/
 theorem accAt_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
     (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)
     (t : (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x)
-    (h : ¬ ((K.BadO I S H P x ω (extendDraw t) ∨ K.OutRO H P x ω (extendDraw t)) ∧
-      (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendDraw t))) :
+    (h : ¬ ((K.BadO I S H P x ω (extendSample t) ∨ K.OutRO H P x ω (extendSample t)) ∧
+      (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendSample t))) :
     (runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)).acc ω t ↔
-      (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendDraw t) := by
+      (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendSample t) := by
   show (abortRun H (K.innerPO I S H P x decC) I.V (K.xI x) (K.keepAO I S H P x) ω t).out = .acc ↔ _
   rw [abortRun_eqO decC hn, innerFO_acc_iff hCF decC hdec]
   refine ⟨fun hk => ?_, fun ha => (keepDO_iff_acc (fun hb => h ⟨Or.inl hb, ha⟩) (fun ho => h ⟨Or.inr ho, ha⟩)).2 ha⟩
@@ -118,7 +118,7 @@ omit [Nonempty Coin] in
 /-- **A run's coins are its rerun's inner coins.** -/
 theorem coins_extend (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x)
     (t : (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x) :
-    (K.innerModel (S.IVStar I.V I.ans) H P x).coins (extendDraw t) =
+    (K.innerModel (S.IVStar I.V I.ans) H P x).coins (extendSample t) =
       (runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)).coins t := by
   show coinSeq (firstCoins (I.V.k (K.xI x)) (extend t.1 t.2.1)) = coinSeq t.1
   rw [firstCoins_extend hn]
@@ -129,13 +129,13 @@ reruns. -/
 theorem named_extend (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x)
     (us : ℕ → (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x) :
     ∀ e : RunExp,
-      extendDraw ((runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)).named us e) =
-        (K.innerModel (S.IVStar I.V I.ans) H P x).named (fun i => extendDraw (us i)) e
+      extendSample ((runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)).named us e) =
+        (K.innerModel (S.IVStar I.V I.ans) H P x).named (fun i => extendSample (us i)) e
   | .fresh _ => rfl
   | .fork j u v => by
     simp only [RunModel.named]
     rw [← named_extend decC hn us u, ← named_extend decC hn us v]
-    exact extendDraw_fork j _ _
+    exact extendSample_fork j _ _
 
 /-! ## Calls -/
 

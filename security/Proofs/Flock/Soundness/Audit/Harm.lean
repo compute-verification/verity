@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Flock.Audit.Harm
-public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # Harm bounds

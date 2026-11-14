@@ -64,11 +64,13 @@ open Flock Transcript FlockSoundness FlockSoundness.Refine FlockComplete Replay 
 
 local notation "𝕂" => FlockLevel3.GF256
 
+variable {wideLeaf : Bool}
+
 /-! ## The `--zk` schedule -/
 
 /-- **The `--zk` schedule's facts**: fast100's dimensions, levels and caps, and level 0's `t_pad` padding coefficients
 within its `2^cols` columns. -/
-theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.n ≠ 0 ∧ 1 ≤ v.1.k0 ∧ 2 ≤ v.1.levels.size ∧ v.1.k0 + 3 * (v.1.levels.size - 1) ≤ v.1.n ∧
       (∀ j < v.1.levels.size, (v.1.levels.getD j default).q ≠ 0) ∧
       (∀ i < v.1.levels.size, LevelSeam (v.1.levels.getD i default)) ∧
@@ -79,7 +81,7 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
       (∀ i < v.1.levels.size, (v.1.levels.getD i default).cap ≤ (v.1.levels.getD i default).d) ∧
       v.1.ext = v.1.n - v.1.k0 - 3 * (v.1.levels.size - 1) := by
   obtain ⟨-, -, -, hk0, -, ⟨-, hL, hl0, hc0, hl4, hc, hext⟩, hseam, -, hlv⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams m v.1 v.2 h
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ m v.1 v.2 h
   have hlig := zkSchedule_lig h1 h2 h
   have hcols : ∀ i < v.1.levels.size, (v.1.levels.getD i default).cols = v.1.n - v.1.k0 - 3 * i := by
     intro i hi
@@ -89,11 +91,11 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
       have := hc i (by omega)
       rw [ih (by omega)] at this
       omega
-  have ht : ∀ k : Fin 11, (match Zk.schedule (k.val + 25) with
+  have ht : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide (v.2 ≤ 2 ^ (v.1.levels.getD 0 default).cols)
       | .error _ => false) = true := by
     decide +kernel
-  have ht' := ht ⟨m - 25, by omega⟩
+  have ht' := ht wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at ht'
   refine ⟨zkSchedule_n h, hk0, hL, by have := hlig.dims; omega, fun j hj => ?_, hseam, hl0, hl4, hcols, ht',
     hlig.cap, by have := hlig.dims; omega⟩

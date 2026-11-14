@@ -54,7 +54,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
-open _root_.Flock.Firewall.Frame (Masker)
+open _root_.Flock.ZkServer.Frame (Masker)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`

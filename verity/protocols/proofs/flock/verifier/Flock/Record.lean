@@ -1,11 +1,12 @@
-/-
-The session record (`flock-live-session/v1`) and the session checks S1–S14, S17.
--/
 module
 
 public import Flock.Transcript
 public import Flock.Draw
 public import Flock.CoinTree
+
+/-!
+The session record (`flock-live-session/v1`) and the session checks S1–S14, S17.
+-/
 
 @[expose] public section
 
@@ -36,7 +37,7 @@ structure SessionSpec where
   retainRounds : Bool := false
   /-- the session's unit sample (one table's: the public header's `unit_draw`, `Flock.Draw`; several tables': the sample they split, never
   a table's part) and its instance count -/
-  unitDraw : Option Json := none
+  unitSample : Option Json := none
   instances : Nat := 0
   /-- the record's digests are SHA-512 under `_sha512` keys (the circuit prover's `SessionConfig::sha512_digests`), else SHA-256 -/
   sha512Digests : Bool := false
@@ -123,11 +124,11 @@ def decode (spec : SessionSpec) (text : String) : V RunRecord := do
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
   -- U1–U3 (`Flock.Draw`): a null sample is no sample
-  let recDraw := match j.getObjVal? "unit_draw" with
+  let recSample := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d
     | .error _ => none
-  Draw.check recDraw spec.unitDraw spec.instances
+  Draw.check recSample spec.unitSample spec.instances
   let dk := spec.dk
   -- S5 (keys of other tables are ignored)
   let rootB ← spec.tables.mapM fun t => do

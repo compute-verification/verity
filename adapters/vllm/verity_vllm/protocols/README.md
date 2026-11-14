@@ -14,7 +14,9 @@ module. From the package itself: `Context`, `Refused`, `WeightsView`, `adapter`,
 `Context`, `Option` and `Target`. From `linear.api`: `Arm`, `Control`, `LinearSite`, `PassSpec` and `Stack`; from
 `linear.vllm_site`: `attach` and `discover`. From the store's modules: `NodeMemory` of `registry`, `PageLayout` of its
 own `interface`, `Lines` of `memory_map`, `Binder`, `Every`, `WeightRegion` and `model_weights` of `binder`, and
-`StoreBackend` and `prove` of `remote`; one test of `verity` also reads `registry`'s private `_page_blocks`. No name of
-`pous.py` or `spot.py` is imported from outside: each is reached as its option, through the package. The package,
-`interface`, both modules of `linear/` and the store's `registry`, `interface`, `memory_map` and `binder` declare these
-names in `__all__`.
+`StoreBackend`, `prove` and `CommitSession` of `remote`, the last of which `pipeline.remote_session` reaches through
+`driver`; one test of `verity` also reads `registry`'s private `_page_blocks`. From
+`spot`: `NAME` and `DEFAULT_SCHEME`, by which serve-openai's Pearl+ Commit windows name its entry
+(`pipeline.serve_pearl`). No other name of `spot.py` and none of `pous.py` is imported from outside: each is reached as
+its option, through the package. The package, `interface`, `spot`, both modules of `linear/` and the store's
+`registry`, `interface`, `memory_map`, `binder` and `remote` declare these names in `__all__`.

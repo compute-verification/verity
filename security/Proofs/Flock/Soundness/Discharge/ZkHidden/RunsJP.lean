@@ -10,9 +10,9 @@ set_option Elab.async false
 /-!
 # The message half at the live hidden-output tables at the verifier's public inputs
 
-`runsZCJH_liveI` at `own`: `RunsOnZCJA` at flock-verify `--zk --public-inputs`'s acceptance (`AcceptsZKP I own`), at the
+`runsZCJH_liveI` at `own`: `RunsOnZCJA` at verity-verify-proof `--zk --public-inputs`'s acceptance (`AcceptsZKP I own`), at the
 tables `planZHJP`, from the record's custody at that acceptance (`RecordsLiveZKJA` at `setupOfP (zkInputs I) own`) and
-the challenger's live-coin part's samples (`DrawOkZKHJP`). `decodesOnZKJA_of_runsOnZCJA` turns it into the decoder `simZJA` reads.
+the challenger's live-coin part's samples (`SampleOkZKHJP`). `decodesOnZKJA_of_runsOnZCJA` turns it into the decoder `simZJA` reads.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -29,13 +29,13 @@ variable {n mPts : ℕ} {Reg : Type}
 /-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables at `own`** (`runsZCJH_liveI`). -/
 theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
+    (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts →
       Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I)
+    (L : SamplingDesign n) (hT : TagsOkZHJ I)
     (hRec : RecordsLiveZKJA (AcceptsZKP I own) (setupOfP (zkInputs I) own) dj
       (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJP I own dj mPts (L.draw ω)) :
+    (hDraw : ∀ ω, SampleOkZKHJP I own dj mPts (L.draw ω)) :
     RunsOnZCJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj)
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by
   intro ω R o hacc j
@@ -52,16 +52,16 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
-  obtain ⟨pi', pop, -, -, hdr⟩ := Hidden.setupHidden_drawnP hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec
+  obtain ⟨pi', pop, -, -, hdr⟩ := Hidden.setupHidden_sampledP hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec
     (c := { sts[j.val].c with outPorts := if pi'.ports.isEmpty then #[] else #[("public inputs", pi'.words)] }) hdr
-  obtain ⟨x, hx⟩ := drawSetupHP_of_setupHiddenI (I := inputsJ I j.val) (own := own)
+  obtain ⟨x, hx⟩ := sampleSetupHP_of_setupHiddenI (I := inputsJ I j.val) (own := own)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
-  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJP_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
+  obtain ⟨y, hyx, hysch, hytp⟩ := sampleSetupZHJP_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
   have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
   have hTy : (planZHJP (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
@@ -70,7 +70,7 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
     rw [hget]
     unfold tableZHJP
     rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
-    exact DrawSetupZHJP.table_eq _ _
+    exact SampleSetupZHJP.table_eq _ _
   rw [← hysch, ← hytp, ← hyst] at hv0 hv1
   rw [← hyst] at hst
   obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
@@ -159,13 +159,13 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
 /-- **The decoder at the live hidden-output tables at `own`** (`decodesOnZKJA_of_runsOnZCJA` at `runsZCJH_liveIP`). -/
 theorem decodesZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
+    (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts →
       Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I)
+    (L : SamplingDesign n) (hT : TagsOkZHJ I)
     (hRec : RecordsLiveZKJA (AcceptsZKP I own) (setupOfP (zkInputs I) own) dj
       (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKHJP I own dj mPts (L.draw ω)) :
+    (hDraw : ∀ ω, SampleOkZKHJP I own dj mPts (L.draw ω)) :
     DecodesOnZKJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=

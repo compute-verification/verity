@@ -463,7 +463,7 @@ def test_a_measurement_over_a_period_and_a_scope_holds_each_as_its_own_field_and
                     "over": "world", "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None,
                     "inputs": ["modeled"], "host": stamp}
     week = w.measurement("gb", 273.1, "GB a datacenter week", mark="modeled", period="week", over="datacenter")
-    phase = w.measurement("gb", None, "GB a phase", mark="modeled", period="phase", why="no row of record")
+    phase = w.measurement("gb", None, "GB a phase", mark="modeled", period="phase", why="no phase's rows")
     world = w.measurement("gb", 3.0, "GB", mark="modeled", over="world")
     bare = w.measurement("gb", 2.0, "GB", mark="modeled")
     assert [(m.get("period"), m.get("over")) for m in (week, phase, world, bare)] == [
@@ -475,8 +475,9 @@ def test_a_measurement_over_a_period_and_a_scope_holds_each_as_its_own_field_and
     assert research_result.check_doc(tmp_path, doc, RUN).valid
     before = (tmp_path / kit.RESULT).read_bytes()
     for held in (year, week, phase, world, bare):
-        with pytest.raises(ValueError, match=f"already holds a measurement named gb at period={held.get('period')!r} and "
-                                             f"over={held.get('over')!r}: a result holds one a name, period and over"):
+        with pytest.raises(ValueError, match=f"already holds a measurement named gb at period={held.get('period')!r}, "
+                                             f"over={held.get('over')!r} and member=None: a result holds one a name, "
+                                             "period, over and member"):
             kit.writer(tmp_path).measurement("gb", 1.0, "GB", mark="modeled", period=held.get("period"),
                                              over=held.get("over"))
     for period in ("day", "Year", "years", "", "world", 7, True):
@@ -489,6 +490,35 @@ def test_a_measurement_over_a_period_and_a_scope_holds_each_as_its_own_field_and
                                              r"or None where it is over no such scope, not .*: pass over=\.\.\. with one "
                                              "of them"):
             w.measurement("gate", 1.0, "GB", mark="modeled", over=over)
+    assert (tmp_path / kit.RESULT).read_bytes() == before
+
+
+def test_a_measurement_of_one_member_of_a_set_holds_it_as_its_own_field_and_one_a_name_and_member(tmp_path, no_gpu):
+    """`member` is a field of the measurement, after its spans, where given and only there, a non-empty string. The same
+    name for another member is another measurement, and a second of one name and member is refused."""
+
+    from research import result as research_result
+
+    w = kit.writer(tmp_path)
+    a = w.measurement("gap", 2, "premises", target=0, mark="measured", member="Pouw.Guarantees.Sound")
+    b = w.measurement("gap", 0, "premises", target=0, mark="measured", member="Pous.Guarantees.Sound")
+    yearly = w.measurement("gap", 1, "premises", mark="measured", period="year", member="Pouw.Guarantees.Sound")
+    bare = w.measurement("gap", 3, "premises", mark="measured")
+    assert list(a)[:5] == ["name", "value", "unit", "mark", "member"] and a["member"] == "Pouw.Guarantees.Sound"
+    assert list(yearly)[4:6] == ["period", "member"] and "member" not in bare
+    doc = _result(tmp_path)
+    assert doc["measurements"] == [a, b, yearly, bare]
+    assert research_result.check_doc(tmp_path, doc, RUN).valid
+    before = (tmp_path / kit.RESULT).read_bytes()
+    with pytest.raises(ValueError, match="already holds a measurement named gap at period=None, over=None and "
+                                         "member='Pous.Guarantees.Sound': a result holds one a name, period, over and member"):
+        kit.writer(tmp_path).measurement("gap", 1, "premises", mark="measured", member="Pous.Guarantees.Sound")
+    for member in ("", "  ", 7, True, ["lean"]):
+        with pytest.raises(ValueError, match=r"gate's member names which member of a set its value is for, a non-empty "
+                                             r"string, or None where it is for no one member, not .*"):
+            w.measurement("gate", 1, "premises", mark="measured", member=member)
+    with pytest.raises(ValueError, match="'member' is a key the measurement already has a meaning for"):
+        w.measurement("gate", 1, "premises", mark="measured", extra={"member": "lean"})
     assert (tmp_path / kit.RESULT).read_bytes() == before
 
 
@@ -655,3 +685,24 @@ def test_a_result_that_names_no_fingerprint_and_no_file_is_written_byte_for_byte
         "status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}},
         indent=1) + "\n"
     assert not {"workload_fingerprint", *kit.FILES} & json.loads(text).keys()
+
+
+def test_a_writer_of_a_kind_writes_it_and_refuses_a_result_of_another(tmp_path, no_gpu):
+    """`research` stores a result as the artifact kind its `kind` names (`bench-result/v1` where it has none), so a
+    benchmark whose results are stored as their own kind writes it through the writer, and one run writes one kind."""
+
+    from research import result as research_result
+
+    kind = "verity-steady-point/v1"
+    kit.writer(tmp_path, kind).measurement("rate", 2.5, "1/s", mark="measured")
+    kit.writer(tmp_path).validation("passed", "a benchmark", "4 of 4 gates hold")
+    held = _result(tmp_path)
+    assert held["kind"] == kind and [m["name"] for m in held["measurements"]] == ["rate"]
+    assert research_result.check(tmp_path, RUN).valid
+    assert kit.writer(tmp_path, kind).fingerprint(point="p")["point"] == "p"
+    with pytest.raises(ValueError, match="writes one kind"):
+        kit.writer(tmp_path, "verity-vllm-benchmark/v1").measurement("wall", 1.5, "s", mark="measured")
+    with pytest.raises(ValueError, match="NAME/vN"):
+        kit.writer(tmp_path / "other", "a steady point").measurement("wall", 1.5, "s", mark="measured")
+    kit.writer(tmp_path / "plain").measurement("wall", 1.5, "s", mark="measured")
+    assert "kind" not in _result(tmp_path / "plain")

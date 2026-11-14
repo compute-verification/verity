@@ -7,8 +7,8 @@ import hashlib
 
 import pytest
 
-from verity.channel import (HEADER, REFUSALS, Body, FrameReader, Hex, Int, List, Message, MessageTypes, Phase, Refused, Schema,
-                              Str, canonical, frame, frames, parse, split)
+from verity.channel import REFUSALS, Body, Hex, Int, List, Message, MessageTypes, Phase, Refused, Schema, Str, canonical
+from verity.runtime.framing import HEADER, FrameReader, decode, encode, frame, frames, parse, split
 from verity.runtime import handshake as H
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
@@ -27,35 +27,35 @@ def refused(f, *a) -> str:
 
 
 def test_a_message_round_trips_and_its_head_is_the_commitments_canonical_json():
-    data = R.encode(OK)
+    data = encode(R, OK)
     head, body = split(data)
     assert head == canonical_json_bytes(OK.head()) == canonical(OK.head())
     assert body == b"\x00\x01" and data == frame(head, body)
-    assert R.decode(data) == OK
+    assert decode(R, data) == OK
     assert R.kind("Ping", 2) == "output"
 
 
 def test_each_rule_broken_is_refused_by_its_name():
-    good = R.encode(OK)
+    good = encode(R, OK)
     head, body = split(good)
-    assert refused(R.decode, good[:5]) == "malformed"
-    assert refused(R.decode, good + b"x") == "malformed"
-    assert refused(R.decode, frame(b'{"type": "Ping","v":1}')) == "malformed"
-    assert refused(R.decode, frame(b'{"n":1,"n":1,"type":"Ping","v":1}')) == "malformed"
-    assert refused(R.decode, frame(b'{"n":1.0,"type":"Ping","v":2}')) == "malformed"
-    assert refused(R.decode, frame(b'[1]')) == "malformed"
-    assert refused(R.decode, HEADER.pack(1 << 20, 0) + b"{}") == "oversized"
-    assert refused(R.decode, frame(head, bytes(18))) == "oversized"
-    assert refused(R.decode, frame(canonical({"type": "Pong", "v": 1}))) == "unknown-type"
-    assert refused(R.decode, frame(canonical({"type": "Ping", "v": 3}))) == "unknown-version"
-    assert refused(R.decode, frame(canonical({"type": "Ping", "v": "1"}))) == "unknown-version"
-    assert refused(R.decode, frame(canonical({"type": "Ping", "v": 2}))) == "schema"
-    assert refused(R.decode, frame(canonical({"n": 10, "who": "", "ids": [], "type": "Ping", "v": 1}))) == "schema"
-    assert refused(R.decode, frame(canonical({"n": 1, "who": "", "ids": ["0F0F0F0F"], "type": "Ping", "v": 1}))) == "schema"
-    assert refused(R.decode, frame(canonical({"n": 1, "who": "", "ids": [], "x": 0, "type": "Ping", "v": 1}))) == "schema"
-    assert refused(R.decode, frame(head, b"\x00")) == "schema"
-    assert refused(R.encode, Message("Ping", {"n": True, "who": "", "ids": []})) == "schema"
-    assert refused(R.encode, Message("Ping", {"n": 1}, version=7)) == "unknown-version"
+    assert refused(decode, R, good[:5]) == "malformed"
+    assert refused(decode, R, good + b"x") == "malformed"
+    assert refused(decode, R, frame(b'{"type": "Ping","v":1}')) == "malformed"
+    assert refused(decode, R, frame(b'{"n":1,"n":1,"type":"Ping","v":1}')) == "malformed"
+    assert refused(decode, R, frame(b'{"n":1.0,"type":"Ping","v":2}')) == "malformed"
+    assert refused(decode, R, frame(b'[1]')) == "malformed"
+    assert refused(decode, R, HEADER.pack(1 << 20, 0) + b"{}") == "oversized"
+    assert refused(decode, R, frame(head, bytes(18))) == "oversized"
+    assert refused(decode, R, frame(canonical({"type": "Pong", "v": 1}))) == "unknown-type"
+    assert refused(decode, R, frame(canonical({"type": "Ping", "v": 3}))) == "unknown-version"
+    assert refused(decode, R, frame(canonical({"type": "Ping", "v": "1"}))) == "unknown-version"
+    assert refused(decode, R, frame(canonical({"type": "Ping", "v": 2}))) == "schema"
+    assert refused(decode, R, frame(canonical({"n": 10, "who": "", "ids": [], "type": "Ping", "v": 1}))) == "schema"
+    assert refused(decode, R, frame(canonical({"n": 1, "who": "", "ids": ["0F0F0F0F"], "type": "Ping", "v": 1}))) == "schema"
+    assert refused(decode, R, frame(canonical({"n": 1, "who": "", "ids": [], "x": 0, "type": "Ping", "v": 1}))) == "schema"
+    assert refused(decode, R, frame(head, b"\x00")) == "schema"
+    assert refused(encode, R, Message("Ping", {"n": True, "who": "", "ids": []})) == "schema"
+    assert refused(encode, R, Message("Ping", {"n": 1}, version=7)) == "unknown-version"
 
 
 def test_canonical_json_holds_no_float():
@@ -65,7 +65,7 @@ def test_canonical_json_holds_no_float():
 
 
 def test_a_stream_is_cut_into_frames_and_an_oversized_header_refused_before_its_body():
-    a, b = R.encode(OK), R.encode(Message("Ping", {"n": 1}, version=2))
+    a, b = encode(R, OK), encode(R, Message("Ping", {"n": 1}, version=2))
     reader = FrameReader()
     for i in range(len(a + b)):
         reader.feed((a + b)[i:i + 1])
@@ -86,9 +86,9 @@ def test_a_phase_refuses_what_it_doesnt_expect():
 def test_a_registry_restricted_to_some_types():
     only = (R | MessageTypes([Schema("Pong", 1, "private")])).only(["Pong"])
     assert only.types == {"Pong"}
-    assert refused(only.decode, R.encode(Message("Ping", {"n": 1}, version=2))) == "unknown-type"
+    assert refused(decode, only, encode(R, Message("Ping", {"n": 1}, version=2))) == "unknown-type"
     # The header's bounds come first: a body where the registry allows none is refused before its type is read.
-    assert refused(only.decode, R.encode(OK)) == "oversized"
+    assert refused(decode, only, encode(R, OK)) == "oversized"
 
 
 # --- the handshake ------------------------------------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def test_a_signature_that_doesnt_verify_is_refused():
     a.start()
     sig = a.on(hb[0])[0]
     b.on(a.frames[0])
-    forged = H.REGISTRY.encode(Message("Signature", body=bytes(len(split(sig)[1]))))
+    forged = encode(H.REGISTRY, Message("Signature", body=bytes(len(split(sig)[1]))))
     with pytest.raises(Refused) as e:
         b.on(forged)
     assert e.value.name == "handshake-signature"
@@ -179,7 +179,7 @@ def test_a_signature_that_doesnt_parse_is_refused_with_what_was_caught():
     a.on(hb[0])
     b.on(a.frames[0])
     with pytest.raises(Refused) as e:
-        b.on(H.REGISTRY.encode(Message("Signature", body=b"\x00")))
+        b.on(encode(H.REGISTRY, Message("Signature", body=b"\x00")))
     assert e.value.name == "handshake-signature"
     assert "doesn't parse" in e.value.detail and type(e.value.__cause__).__name__ in e.value.detail
 

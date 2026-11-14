@@ -73,7 +73,7 @@ from pathlib import Path
 
 from scipy.optimize import linprog
 
-from verity_machine_model.model import DATA, census, model, vector
+from verity_machine_model.model import DATA, card, census, model, vector
 
 __all__ = ["Adapt", "CREDITS", "Design", "Eps", "Filler", "Form", "Honest", "LANES", "MMA", "Machine", "Mix", "NOISE",
            "OPERANDS", "PINNED", "PRODUCTS", "Part", "QS", "ROUTES", "SUMS", "Setup", "Table", "UNI", "adapt", "adapts",
@@ -424,9 +424,23 @@ class Table:
 
 
 def table(data: Path = DATA, q: float | None = None, l2: float | None = None, nbytes: float | None = None) -> Table:
-    t = tomllib.loads((data / "table.toml").read_text())
+    """The table route at its file's `sms` and `mhz`, the clock its lines were measured at, or, where the file gives
+    neither, at the card file's `sm.count` and `clock.sm`."""
+    p = data / "table.toml"
+    t = tomllib.loads(p.read_text())
+    if ("sms" in t) != ("mhz" in t):
+        raise SystemExit(f"{p}: give sms and mhz, the SMs and clock its lines were measured at, or neither, to read the "
+                         f"card file's sm.count and clock.sm")
+    if "sms" in t:
+        sms, mhz = t["sms"], t["mhz"]
+    else:
+        from verity.device import number   # here: only a reader of the card needs verity
+
+        c = card(data)
+        sms, mhz = (int(x) if x.denominator == 1 else float(x)
+                    for x in (number(c["sm"]["count"]), number(c["clock"]["sm"])))
     return Table(q=t["q"] if q is None else q, bytes=t["bytes"] if nbytes is None else nbytes,
-                 l2=t.get("l2") if l2 is None else l2, sms=t["sms"], mhz=t["mhz"], source=t["source"])
+                 l2=t.get("l2") if l2 is None else l2, sms=sms, mhz=mhz, source=t["source"])
 
 
 @dataclass(frozen=True)

@@ -17,12 +17,12 @@ import numpy as np
 import pytest
 from verity.circuits import Program
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry.b1 import weights_type
 
 # `test_lifted_tiny`'s fixture harness: _lserve, EOS_FOR, Y_RAW, ...
 from tests.program import test_lifted_tiny as T

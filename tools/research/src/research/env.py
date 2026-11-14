@@ -38,7 +38,7 @@ KEYS = (
 # exec.machine: the machines.toml name a `research run --on <machine>` ran on (job.json run.remote.machine), indexed so that
 # `research pods unpreserved|drain <machine>` can find every Attempt recorded on a machine; hw.hostname is the container's hostname.
 LOCKFILES = ("uv.lock", "Cargo.lock")
-UNTRACKED_CAP_BYTES = 64 << 20
+UNTRACKED_LIMIT_BYTES = 64 << 20
 #: The runner's capture of a dirty source in the run dir (`source_conditions(dirty_capture=...)`), which custody always uploads
 #: (store.custody.RUN_FILES): the tree on the machine is never a run's only copy of its source.  Inside: the diff against HEAD, and
 #: each untracked, unignored file under DIRTY_UNTRACKED/.
@@ -140,7 +140,7 @@ def _dirty_digest(root: Path, commit: str = "HEAD", capture: Path | None = None)
                 tar = _drop(tar, capture)
                 continue
             total += p.stat().st_size
-            if total > UNTRACKED_CAP_BYTES:
+            if total > UNTRACKED_LIMIT_BYTES:
                 _drop(tar, capture)
                 return "too-large"
             h.update(rel.encode("utf-8") + b"\0")

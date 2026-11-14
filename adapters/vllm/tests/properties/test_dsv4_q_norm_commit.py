@@ -13,11 +13,11 @@ from pathlib import Path
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import rows
-from verity.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
-from verity.definitions.registry import dsa_norm
-from verity.definitions.registry.prims import bits_of
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import rows
+from verity_vllm.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
+from verity_vllm.definitions.registry import dsa_norm
+from verity_vllm.definitions.registry.prims import bits_of
 
 from verity_vllm.query.manifest import format as RM
 
@@ -60,5 +60,5 @@ def test_two_roundings_miss_the_rows_the_fixture_names():
     fused = block_rmsnorm_rows(X, W, EPS, BLOCK, WARPS)
     assert [int(v) for v in (two["out"].astype(np.uint16) != Y).sum(axis=1)] == [r["definition_off_words"] for r in FIXTURE["rows"]]
     e: np.ndarray = np.full(len(Y), bits_of(np.float32(EPS)), dtype=np.uint32)
-    gap = fused["mean"].astype(np.int64) - DR.add_rn(e, two["mean"]).astype(np.int64)
-    assert gap.tolist() == [r["eps_sum_ulps"] for r in FIXTURE["rows"]]
+    eps_sum_ulps = fused["mean"].astype(np.int64) - DR.add_rn(e, two["mean"]).astype(np.int64)
+    assert eps_sum_ulps.tolist() == [r["eps_sum_ulps"] for r in FIXTURE["rows"]]

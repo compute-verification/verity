@@ -1,7 +1,6 @@
 """The device kernels of a Kineto Chrome trace (`torch.profiler.profile(...).export_chrome_trace`): its kernels, memcpys and
-memsets in launch order (`kernels_of_trace_events`), and their summary by name (`summarize_kernels`).  The kernel census reads
-one trace per engine step (`properties.census`), and each TP rank one over its whole run
-(`pipeline.tp.rank_worker.TP2CaptureWorkerExtension.tp2_profiler_stop`).  Torch-free."""
+memsets in launch order (`kernels_of_trace_events`), and their summary by name (`summarize_kernels`).  Each TP rank reads one
+over its whole run (`pipeline.tp.rank_worker.TP2CaptureWorkerExtension.tp2_profiler_stop`).  Torch-free."""
 
 from __future__ import annotations
 

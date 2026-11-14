@@ -3,7 +3,7 @@
 # verity/protocols/proofs/flock/prover/live in as crates/flock-live, run the flock-link negatives (in-process verifier) and timed sessions
 # against a verifier PROCESS (loopback, or VERIFIER=host:port for a verifier on another pod).
 # F2 (the pinned census-unit + BLAKE3 union verifier and the GPU unit-table verifier): verity_unit.rs goes into
-# flock-prover, the unit netlists are exported with export_unit.py, and `flock-live selftest-f2` runs when F2=1.
+# flock-prover, the units' circuit descriptions are exported with export_unit.py, and `flock-live selftest-f2` runs when F2=1.
 # LEGACY=1 also runs flock-live's own selftest (stub link, F3 cases) and its BLAKE3-union bench at LEGACY_N compressions
 # (the same-host baseline: no circuit, no link claims).
 # env: SELF_VUS="8 64"  BENCH_VUS="4096"  RUNS=2  VERIFIER=  SERVE_ONLY=  SKIP_BENCH=  F2=  LEGACY=  LEGACY_N=393216
@@ -31,7 +31,7 @@ if [ -n "${LEGACY:-}" ]; then
   $F/target/release/flock-live bench --n ${LEGACY_N:-393216} --runs 3 2>&1 | tee $O/bench-legacy.txt | grep BENCH | cut -c1-600
 fi
 if [ -n "${F2:-}" ]; then
-  $F/target/release/flock-live selftest-f2 --netlist $N/net-hopper_bf16.txt --netlist-other $N/net-hopper_e4m3.txt \
+  $F/target/release/flock-live selftest-f2 --circuit-description $N/net-hopper_bf16.txt --circuit-description-other $N/net-hopper_e4m3.txt \
     --n ${F2_N:-4096} --units ${F2_UNITS:-4096} --nbl ${F2_NBL:-14} 2>&1 | tee $O/selftest-f2.txt | grep -E '^(NEG|SELFTEST)' | cut -c1-300
 fi
 lscpu | grep -E 'Model name' | tee $O/host.txt; echo "threads $TH" | tee -a $O/host.txt; free -g | tee -a $O/host.txt

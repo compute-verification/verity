@@ -2,7 +2,7 @@
 installs innermost first, uninstalls to exactly what the model held, and records what each option committed to.
 
 CPU only.  The PoUW and POUS adapters are stand-ins (`_fake_adapter`) over a toy linear layer whose ``quant_method.apply`` is
-the hook site both real adapters wrap; the sampled-proofs adapter is the real one.
+the hook site both real adapters wrap; the SPOT adapter is the real one.
 """
 from __future__ import annotations
 
@@ -156,14 +156,13 @@ def test_the_composition_installs_innermost_first_and_unwinds_to_the_model_as_it
     _fake_adapter(monkeypatch, "pous", _pous(log), schemes=("band-chain/d12/v1",))
     model = Model()
     before = hooks.live()
-    comp = PO.install(model, _serve("pous:band-chain/d12/v1", "pouw:ncp-v1"))
-    assert comp.entries == ALL[:2] and log == ["pouw", "responder up", "pous"]
-    layer = model.layers[0]
-    assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x")          # PoUW's GEMM reads the weight POUS decoded
-    assert [e.tag for e in hooks.live()[len(before):]] == ["pouw:ncp-v1"] * 2 + ["pous:band-chain/d12/v1"] * 3
-    assert len(hooks.live("pous:band-chain/d12/v1")) == 3 and PO.undeclared(comp.entries) == ()
-    assert PO.undeclared(("pous:band-chain/d12/v1",)) == ("pouw:ncp-v1",)
-    comp.close()
+    with PO.install(model, _serve("pous:band-chain/d12/v1", "pouw:ncp-v1")) as comp:
+        assert comp.entries == ALL[:2] and log == ["pouw", "responder up", "pous"]
+        layer = model.layers[0]
+        assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x")      # PoUW's GEMM reads the weight POUS decoded
+        assert [e.tag for e in hooks.live()[len(before):]] == ["pouw:ncp-v1"] * 2 + ["pous:band-chain/d12/v1"] * 3
+        assert len(hooks.live("pous:band-chain/d12/v1")) == 3 and PO.undeclared(comp.entries) == ()
+        assert PO.undeclared(("pous:band-chain/d12/v1",)) == ("pouw:ncp-v1",)
     comp.close()
     assert log[3:] == ["responder down handle", "pous released"]
     assert all("apply" not in vars(m.quant_method) for m in model.layers) and hooks.live() == before
@@ -410,7 +409,7 @@ def test_spot_alone_at_the_commit_adds_no_hooks():
 
 def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses(capsys):
     """vllm-v1 (SHA-256, 32-byte roots) is registered so a recorded run's target parses and digests as it did; a Commit
-    refuses it by name, and refuses a committer whose scheme isn't the one sampled proofs is declared with."""
+    refuses it by name, and refuses a committer whose scheme isn't the one SPOT is declared with."""
     assert config.DEFAULT_ROW_PROTOCOLS == ("sampled-proofs:rows-sha512",)
     with pytest.raises(PO.Refused, match=r"sampled-proofs:vllm-v1: vllm-v1 \(SHA-256, 32-byte roots\) is kept only to read "
                                          r"recorded runs: .* declare sampled-proofs:rows-sha512"):
@@ -462,16 +461,14 @@ def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypat
     p, model = TargetProfile(protocols=ALL[1:]), Model()
     versions: dict[str, Any] = {}
     assert PO.commit_guard(p) is p
-    comp = PO.at_commit(p, model, versions)
-    assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
-    verdict = {"commit_pass": True, "run_roots": ["ab" * 32]}
-    PO.into_verdict(comp, verdict, tmp_path, p, program_digest="cd" * 32, manifest={"manifest_digest": "ef" * 32})
-    assert comp.closed and "apply" not in vars(model.layers[0].quant_method) and log[-1] == "pous released"
+    with PO.at_commit(p, model, versions) as comp:
+        assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
+        verdict = {"commit_pass": True, "run_roots": ["ab" * 32]}
+        PO.into_verdict(comp, verdict, tmp_path, p, program_digest="cd" * 32, manifest={"manifest_digest": "ef" * 32})
+        assert comp.closed and "apply" not in vars(model.layers[0].quant_method) and log[-1] == "pous released"
     rec = json.loads((tmp_path / "protocols.json").read_text())
     assert verdict == {"commit_pass": True, "run_roots": ["ab" * 32], "protocols": {"protocols": list(ALL[1:]), "record": rec["digest"]}}
     assert rec["profile_digest"] == p.digest()
-    assert rec["protocols"][1] == {"entry": "sampled-proofs:rows-sha512",
-                                   "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
     assert rec["protocols"][1] == {"entry": "sampled-proofs:rows-sha512",
                                    "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
 
@@ -656,8 +653,7 @@ def _commit(*enabled):
 
 def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     """`verity.protocols.accounting.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
-    that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
-    proofs nothing changes."""
+    that scheme is admitted beside SPOT, and every other one keeps its refusal, word for word.  Without SPOT nothing changes."""
     from verity.protocols.accounting.pouw.prover import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
@@ -682,16 +678,16 @@ PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
 
 
 def _cut_window(cut=None, **more):
-    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside sampled proofs, ``cut`` the
-    sampled-proofs setting naming the executor whose sites the window's circuit is cut at."""
+    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside SPOT, ``cut`` the
+    SPOT setting naming the executor whose sites the window's circuit is cut at."""
     own = {**({} if cut is None else {PO.CUT: cut}), **more}
     return PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
                       settings={"pouw": PEARL_SETTINGS, "sampled-proofs": own})
 
 
-def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
-    """Pearl-C has no circuit (its y is noise-dependent), so sampled proofs takes it only where the window's circuit is cut at
-    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the sampled-proofs setting
+def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
+    """Pearl-C has no circuit (its y is noise-dependent), so SPOT takes it only where the window's circuit is cut at
+    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the SPOT setting
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
     composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
     from verity_vllm.protocols import pouw
@@ -704,13 +700,13 @@ def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_s
     assert PO.refusals(_cut_window()) == (uncut,)
     other = PO.refusals(_cut_window("pouw:ncp-v2"))
     assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and "an adapter's cuts" in other[2]
-    assert PO.refusals(_cut_window(PEARL, x=1)) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
-                                                    "of its (cut)",)
+    assert PO.refusals(_cut_window(PEARL, x=1)) == (("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
+                                                     "of its (cut)"),)
     ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
                      settings={"sampled-proofs": {PO.CUT: "pouw:ncp-v2"}})
-    assert PO.refusals(ncp) == ("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
-                                "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
-                                "the cut reads (an adapter's cuts)",)
+    assert PO.refusals(ncp) == (("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
+                                 "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
+                                 "the cut reads (an adapter's cuts)"),)
     assert PO.refusals(PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"))) == ()
     assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
     row = f"{PEARL},sampled-proofs:rows-sha512"

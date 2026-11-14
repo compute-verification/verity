@@ -1,4 +1,4 @@
-"""What a run records about its engine and host: the profile manifest and profile id (built as the production recorder
+"""What a run records about its engine and host: the profile manifest and profile id (built as the serving recorder
 builds them; fields that necessarily differ from the accepted record's manifest are listed in the notes), the model config subset,
 and the versions and host documents.
 """
@@ -39,7 +39,7 @@ ACCEPTED_RECORD = ACCEPTED["B0"]["record"]
 
 def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str | None, vllm_commit: str | None,
                      sampling: dict) -> tuple[dict, str, dict]:
-    """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the production recorder; falls back
+    """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the serving recorder; falls back
     to a sha256 of the engine kwargs + versions when build_manifest cannot run (and says so in the notes)."""
     case = engine.case
     acc = ACCEPTED.get(case, {})
@@ -63,7 +63,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             # engine was built with (the default 1 made a TP=2 rank's header claim TP=1; only the `backends.all_reduce` probe differed)
             tensor_parallel_size=int(engine.kwargs.get("tensor_parallel_size") or 1),
         )
-        # the production recorder adds these after the run; eager production has no generated kernels
+        # the serving recorder adds these after the run; an eager served run has no generated kernels
         manifest["compilation"]["generated_kernels"] = {"wrappers": 0, "distinct_kernel_sources": 0, "kernel_set_sha256": None,
                                                         "call_set_sha256": None, "ptx_code_set_sha256": None, "ptx_variants": 0}
         manifest["engine_kwargs"]["enable_prefix_caching"] = bool(engine.kwargs.get("enable_prefix_caching", False))
@@ -131,7 +131,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             # programs).  The dir is vLLM's per-config inductor_cache (it exports TORCHINDUCTOR_CACHE_DIR at initialize_cache) or the explicit
             # per-process override; a null pin here on a compiled engine is an error of record (the global match's G1 fails closed on it).
             gk = generated_kernels_of_this_process()
-            # the manifest (-> profile id) carries production.py's summary shape only; the per-piece inventory and the dir it was read from
+            # the manifest (-> profile id) carries the serving recorder's summary shape only; the per-piece inventory and the dir it was read from
             # go to the header notes (paths differ per process; the digests do not)
             manifest["compilation"]["generated_kernels"] = {k: gk.get(k) for k in ("wrappers", "distinct_kernel_sources", "kernel_set_sha256",
                                                                                    "call_set_sha256", "wrapper_norm_set_sha256")}
@@ -140,7 +140,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                 manifest["compilation"]["generated_kernels"]["error"] = gk["error"]
             notes["generated_kernels"] = {k: gk.get(k) for k in ("inductor_cache_dir", "per_process_cache_dir", "pieces", "kernels", "error")}
         pid = prof.profile_id_of(manifest)
-        notes["profile_id_method"] = ("profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted "
+        notes["profile_id_method"] = ("profile.profile_id_of(profile.build_manifest(...)) as the serving recorder builds it; differs from the accepted "
                                       "record's id by construction: gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), "
                                       "engine_kwargs.enable_prefix_caching/max_num_seqs, generated_kernels placeholders")
     except Exception as e:  # noqa: BLE001

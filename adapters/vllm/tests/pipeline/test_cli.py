@@ -5,6 +5,7 @@
 * a command run as the process sees ``sys.argv`` as ``python -m <module>`` gave it (its run records store it); a call
   with an explicit argv leaves ``sys.argv`` alone;
 * a ``UsageError`` from ``main`` exits 2;
+* ``write`` puts a command's output for its reader on stdout, ``end`` after it, and nothing on stderr;
 * the process-wide settings need no core: ``row stage build`` with ``VERITY_DENSE_THREADS`` set runs where ``verity`` can't be
   imported, as in a Build's top-level process.
 """
@@ -92,6 +93,12 @@ def test_an_explicit_argv_leaves_sys_argv_alone(probe, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["/tree/pytest"])
     assert cli.main(["probe", "--n", "4"]) == 0
     assert probe[-1] == (4, ["/tree/pytest"])
+
+
+def test_write_puts_the_text_and_its_end_on_stdout_alone(capsys):
+    cli.write('{"ok": true}')
+    cli.write("a plan", end="")
+    assert capsys.readouterr() == ('{"ok": true}\na plan', "")
 
 
 def test_a_usage_error_from_main_exits_2(probe):

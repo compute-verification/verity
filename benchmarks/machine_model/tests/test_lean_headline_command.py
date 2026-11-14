@@ -25,6 +25,7 @@ def out(tmp_path, monkeypatch):
     return out
 
 
+@pytest.mark.slow
 def test_check_passes_on_what_the_command_writes_and_names_a_file_that_is_not(out, capsys):
     not_written = "is not what `machine-model lean-headline` writes"
     assert main(["lean-headline", "--check"]) == 1 and not out.exists()
@@ -32,7 +33,7 @@ def test_check_passes_on_what_the_command_writes_and_names_a_file_that_is_not(ou
     assert main(["lean-headline"]) == 0
     written = {str(p.relative_to(out)): p.read_bytes() for p in out.glob("*/*")}
     assert sorted(written) == SEVEN
-    assert capsys.readouterr().out.count("wrote security/Definitions/Accounting/Headline") == 7
+    assert capsys.readouterr().out.count("wrote security/Definitions/Pouw/Headline") == 7
     assert main(["lean-headline", "--check"]) == 0
     assert "wrote" not in capsys.readouterr().out
     assert {str(p.relative_to(out)): p.read_bytes() for p in out.glob("*/*")} == written
