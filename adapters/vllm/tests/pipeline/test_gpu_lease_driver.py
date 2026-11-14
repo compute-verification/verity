@@ -1,14 +1,17 @@
 """`verity_vllm.pipeline.gpu_lease` in this process, on stand-ins of what only a card has: the CUDA driver as `_Driver` and
 `cuda_initialised` call it, nvidia-smi as `on_gpus` asks it, torch and vLLM's engine as `_shut_down` ends them, and the lease
 holder as `_end_with` and `let_go` wait for it. Also `run_main`'s exit once the lease is released, the environment `acquire`
-reads (`use_environ`) and what `_InProcess` says it did. `build-match`'s `test_gpu_lease.py` runs the lease in child processes
-over a fake lease tool; no test here starts a process or needs a GPU."""
+reads (`use_environ`), what `_InProcess` says it did, and `acquire` itself over a stand-in lease tool that passes it lock
+descriptors over the socket it is given. `build-match`'s `test_gpu_lease.py` runs the lease in child processes over a fake
+lease tool; no test here starts a process or needs a GPU."""
 from __future__ import annotations
 
 import ctypes
+import io
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -301,3 +304,145 @@ def test_the_in_process_holders_say_what_they_did_and_reset_with_the_process_s_d
     held = GL._InProcess(None, [], None, {}, True)
     held.err = err
     assert held.done() == done and held.error() == err and held.driver() == "the driver" and held.record() == {}
+
+
+class LeaseTool:
+    """The lease tool's process as `acquire` starts it: given the socket's end it is passed, it sends one lock descriptor for
+    each of ``locks`` (files under the test's directory, as a pool's lock files are) and prints ``line``, the leased devices
+    as JSON. With no line it has no GPU to give, and passes none."""
+
+    def __init__(self, line: bytes, locks: list[Path], rc: int = 75) -> None:
+        self.line, self.locks, self.rc = line, locks, rc
+        self.calls: list[str] = []
+        self.asked: dict[str, Any] = {}
+
+    def __call__(self, argv: list[str], *, stdin: int, stdout: int, pass_fds: tuple[int, ...], env: dict[str, str]) -> LeaseTool:
+        assert stdin == stdout == subprocess.PIPE
+        (end,) = pass_fds
+        self.asked = {"argv": argv, "end": end, "env": env}
+        if self.line:
+            sock = socket.socket(fileno=os.dup(end))
+            fds = [os.open(p, os.O_RDONLY) for p in self.locks]
+            socket.send_fds(sock, [b"L"], fds)
+            for fd in fds:
+                os.close(fd)
+            sock.close()
+        self.stdout = io.BytesIO(self.line)
+        return self
+
+    def wait(self) -> int:
+        self.calls.append("wait")
+        return self.rc
+
+    def kill(self) -> None:
+        self.calls.append("kill")
+
+
+@pytest.fixture
+def leasing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNamespace]:
+    """What `acquire` runs besides the lease tool, stood in and recorded: CUDA not yet initialised, the time, nvidia-smi's
+    answers (``on``, one a look; the last repeats), the exit hook and the holder's watch. Every descriptor of a lock file
+    left open in this process is closed after the test."""
+    seen = SimpleNamespace(on=[[]], looks=[], waits=[], atexit=[], threads=[], timeline=[], held=[])
+
+    def on_gpus(leased: list[str]) -> list[str]:
+        seen.looks.append(leased)
+        return seen.on.pop(0) if len(seen.on) > 1 else seen.on[0]
+
+    class Thread:
+        def __init__(self, *, target: Any, args: tuple[Any, ...], daemon: bool) -> None:
+            assert daemon
+            seen.threads.append((target, args))
+
+        def start(self) -> None:
+            pass
+
+    monkeypatch.setattr(GL, "cuda_initialised", lambda: False)
+    monkeypatch.setattr(GL, "_utc", lambda t: "T")
+    monkeypatch.setattr(GL, "on_gpus", on_gpus)
+    monkeypatch.setattr(GL, "atexit", SimpleNamespace(register=seen.atexit.append))
+    monkeypatch.setattr(GL, "threading", SimpleNamespace(Thread=Thread))
+    monkeypatch.setattr(GL, "_HELD", seen.held)
+    seen.tl = SimpleNamespace(start=lambda name: seen.timeline.append(("start", name, {})),
+                              end=lambda name, **k: seen.timeline.append(("end", name, k)))
+    seen.env = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: str(tmp_path / "gpu_lease.started"), GL.TOOL_START: "0", "KEPT": "k"}
+    seen.locks = [tmp_path / f"{n}.lock" for n in (5, 6)]
+    for p in seen.locks:
+        p.write_text("")
+    yield seen
+    for _, ours, _, _, _ in seen.held:
+        ours.close()
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            if os.readlink(f"/proc/self/fd/{fd}").startswith(str(tmp_path)):
+                os.close(int(fd))
+        except OSError:
+            pass
+
+
+GRANTED = b'{"CUDA_VISIBLE_DEVICES": "5", "GPU_LEASE_UUID": "GPU-5"}\n'
+
+
+def _tool(monkeypatch: pytest.MonkeyPatch, tool: LeaseTool) -> LeaseTool:
+    monkeypatch.setattr(GL, "subprocess", SimpleNamespace(Popen=tool, PIPE=subprocess.PIPE))
+    return tool
+
+
+@pytest.mark.parametrize("timed", [True, False])
+def test_acquire_takes_the_lease_tool_s_locks_and_devices_and_holds_them_to_the_exit(monkeypatch, capsys, tmp_path, leasing, timed):
+    tool = _tool(monkeypatch, LeaseTool(GRANTED, leasing.locks[:1]))
+    env = leasing.env
+    before = dict(env)
+    GL.acquire(leasing.tl if timed else None, env, wait=leasing.waits.append)
+    assert (tmp_path / "gpu_lease.requested").read_text() == "T\n"
+    assert tool.asked["argv"] == GL.holder_argv(before, tool.asked["end"]) and tool.asked["env"] == GL.tool_env(before)
+    assert GL.TOOL_START not in tool.asked["env"] and tool.asked["env"]["KEPT"] == "k"
+    assert (env["CUDA_VISIBLE_DEVICES"], env["GPU_LEASE_UUID"]) == ("5", "GPU-5")
+    ((holder, ours, fds, started, held_env),) = leasing.held
+    assert holder is tool and started == env[GL.STARTED] and held_env is env
+    assert len(fds) == 1 and os.path.samefile(f"/proc/self/fd/{fds[0]}", leasing.locks[0])
+    assert ours.fileno() >= 0 and tool.calls == []
+    assert leasing.looks == [["GPU-5"]] and leasing.waits == []
+    assert leasing.atexit == [GL._EXITING.set] and leasing.threads == [(GL._end_with, (tool,))]
+    assert leasing.timeline == ([("start", "gpu_lease.wait", {}), ("end", "gpu_lease.wait", {"devices": "5", "locks": 1})] if timed else [])
+    assert capsys.readouterr().err == ""
+
+
+def test_acquire_waits_for_another_process_to_leave_the_leased_gpus_and_says_so(monkeypatch, capsys, leasing):
+    _tool(monkeypatch, LeaseTool(GRANTED, leasing.locks[:1]))
+    leasing.on = [["GPU-5"], ["GPU-5"], []]
+    GL.acquire(None, leasing.env, wait=leasing.waits.append)
+    assert leasing.waits == [GL.CLEAR_EVERY_S] * 2 and len(leasing.held) == 1
+    assert capsys.readouterr().err == "T GPU lease: another process left the leased GPU(s) after 2 look(s)\n"
+
+
+def test_a_lease_whose_gpus_stay_occupied_is_given_back_and_refused_by_name(monkeypatch, leasing):
+    tool = _tool(monkeypatch, LeaseTool(GRANTED, leasing.locks[:1]))
+    leasing.on = [["GPU-5"]]
+    with pytest.raises(SystemExit) as refusal:
+        GL.acquire(leasing.tl, leasing.env, wait=leasing.waits.append)
+    assert str(refusal.value) == (f"GPU lease: nvidia-smi still lists another process on the leased GPU(s) ['GPU-5'] after {GL.CLEAR_LOOKS} "
+                                  f"look(s) {GL.CLEAR_EVERY_S:g} s apart (a cancelled Commit's engine workers outlive its lease): no engine "
+                                  "can start there")
+    assert tool.calls == ["kill"] and leasing.waits == [GL.CLEAR_EVERY_S] * GL.CLEAR_LOOKS
+    assert leasing.held == [] and leasing.atexit == [] and leasing.threads == []
+
+
+def test_a_lease_tool_that_ends_without_a_gpu_is_refused_with_its_code(monkeypatch, leasing):
+    tool = _tool(monkeypatch, LeaseTool(b"", [], rc=75))
+    with pytest.raises(SystemExit, match=r"^GPU lease: /l/gpu-lease ended \(rc 75\) without a GPU$"):
+        GL.acquire(leasing.tl, leasing.env, wait=leasing.waits.append)
+    assert tool.calls == ["wait"] and leasing.held == [] and leasing.looks == []
+    assert leasing.timeline == [("start", "gpu_lease.wait", {})]
+
+
+@pytest.mark.parametrize(("n", "passed"), [("2", 1), ("3", 2)])
+def test_a_holder_that_passes_fewer_locks_than_the_task_s_gpus_is_killed_and_the_lease_refused(monkeypatch, leasing, n, passed):
+    tool = _tool(monkeypatch, LeaseTool(GRANTED, leasing.locks[:passed]))
+    leasing.env["GPU_LEASE_N"] = n
+    with pytest.raises(SystemExit) as refusal:
+        GL.acquire(None, leasing.env, wait=leasing.waits.append)
+    assert str(refusal.value) == (f"GPU lease: the holder passed {passed} lock descriptor(s) for {n} GPU(s); the Commit would not hold "
+                                  "its lease")
+    assert tool.calls == ["kill"] and leasing.held == [] and leasing.looks == []
+    assert "CUDA_VISIBLE_DEVICES" not in leasing.env
