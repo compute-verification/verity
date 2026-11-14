@@ -21,6 +21,8 @@ hypotheses: `SessionCoins.LogRising`, `SessionCoins.RecordsCover` and `SessionCo
 the form is set up at the circuit statement, whose one table is `Flock.Tags.circuit.table`. This module states the
 piece at that table, where the three are theorems, and with them the statements' count and the statements' round.
 
+* `PartsHeldAt` is `partsHeldAt_of_accepts` (`AcceptsTop.lean`), from `HeldOfAt`: an accepted play's interior passed
+  the run's check of its strata against its replay block's parts (`partsSizedAt_of_formAccepts`).
 * `StmtsCount` is `stmtsCount_of` (`FormCount.lean`), from `HeldOfAt` and `PartsHeldAt`.
 * `SessionCoins.LogRising` is `SessionCoins.logRising_of`, from the log the check read (`SessionCoins.located_rising`,
   `SessionCoins.interiorReads`) and `SessionCoins.InteriorLogged`.
@@ -65,7 +67,7 @@ piece at that table, where the three are theorems, and with them the statements'
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
-**Not established here**: `StmtsRead`, `PartsHeldAt` and `PinHeldAt`, each a hypothesis.
+**Not established here**: `StmtsRead` and `PinHeldAt`, each a hypothesis.
 `SessionCoins.StmtsFit` is `SessionCoins.stmtsFit_of` (`FormSetup.lean`): the form refuses evidence of `2^64`
 statements or more, and a play one of whose sessions' statements is `2^64` bytes or more.
 -/
@@ -106,10 +108,11 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
-    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hparts : PartsHeldAt A C)
+    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     (hsent : CaseIsSent C) (hC : CaseCommits C) (hx : stmtOf c = some x) :
     MessagesFixedAgreed V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) (formReading A C S dev)
       (FormAccepts C) Good (formMiss V A x θ F c σ C S dev Good L q) := by
+  have hparts : PartsHeldAt A C := partsHeldAt_of_accepts hof (partsSizedAt_of_formAccepts hof)
   have hcount : StmtsCount A C Good := stmtsCount_of Good hof hparts
   have hfit : SessionCoins.StmtsFit C Good := SessionCoins.stmtsFit_of C Good
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
