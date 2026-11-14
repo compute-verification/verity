@@ -149,7 +149,7 @@ POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = "no --period-answer: no certifier/v0 answer on the period"
 #: why a report writes no block entry for any answer the period check gives
-ROWS_FORM = ("the rows form's link-windows are the scan's registrations, which this chain does not hold, so no K is "
+ROWS_FORM = ("the rows form's execution phases are the scan's registrations, which this chain does not hold, so no K is "
              "written")
 #: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkCheck.Period`'s)
 PERIOD_TAG = "verity-network-certifier/period/v0"
@@ -640,7 +640,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`LinkWindows.charge`),
+    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`TransferBlocks.charge`),
     and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
@@ -663,7 +663,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and draw the K counts", "network": network}
     elif not steps:
-        k = {"open": "the certificates step records no link-window's egress buckets (window_buckets), the steps over "
+        k = {"open": "the certificates step records no execution phase's egress buckets (window_buckets), the steps over "
                      "which K's jitter term charges each audit", "network": network}
     else:
         audits = [a | {"steps": steps, "jitter": LB.jitter_bits(steps)} for a in audits]
@@ -974,7 +974,7 @@ def markdown(r: dict) -> str:
         notes.append(f"- endpoint: advice {ep['advice']}; " + (f"I/O tie on honest {ep['tie']}" if "tie" in ep else
                                                                 f"certified I/O {ep.get('io')}"))
     if s.get("tie", {}).get("tie"):
-        notes.append(f"- tie: link-windows tied by member {s['tie']['tie']}")
+        notes.append(f"- tie: execution phases tied by member {s['tie']['tie']}")
     lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",

@@ -15,7 +15,7 @@ public import Mathlib.Data.Finset.Dedup
 # The certifier program agrees with the reference definitions
 
 The program (`certifier_program`, `NetworkCertifier`) is Lean core only: it sums over `List.finRange`, as Python does,
-and still hands each frame at a tick it computes from a declared clock sync per executionPhase. The reference
+and still hands each frame at a tick it computes from a declared clock sync per execution phase. The reference
 (`Definitions.Certifier`, `NetTiming`) sums over `Finset`s and hands each frame at its send tick, one FIFO per
 execution block; it is what the guarantees read. The difftest runs the program against the Python audit; the guarantees
 here say that what it evaluates is the reference's, so the chain is Python ≈ the program (the difftest) and the program
@@ -31,7 +31,7 @@ here say that what it evaluates is the reference's, so the chain is Python ≈ t
 * `CodeChargesV1`: the program's advice v1 charges (`NetworkCertifier.AdviceV1.charges`, which the charge difftest runs
   against `arith_encode.reference_charge`) are the reference's (`AdviceV1.charges`), for books with the same fields;
   the program's `bitlen` is Lean core's `Nat.log2` plus one, the reference's `Nat.size`;
-* `CodeChargesWhole`: the program's whole-executionPhase charges (`NetworkCertifier.WindowCharge.charges`, which the executionPhase
+* `CodeChargesWhole`: the program's whole-execution phase charges (`NetworkCertifier.WindowCharge.charges`, which the execution phase
   difftest runs against `window_charge.reference_window`) are the reference's (`WindowCharge.charges`), for books with
   the same tables and priors and windows with the same fields, length terms included.
 
@@ -302,10 +302,10 @@ theorem code_executionPhase (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV
 theorem code_attachment (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
     (htot : bk.total = bk'.total) (hz : bk.zeros = bk'.zeros) (N : ℕ) :
     ∀ (cy : NetworkCertifier.AdviceV1.Carry) (ws : List (List Bool)),
-      NetworkCertifier.AdviceV1.session bk N cy ws = AdviceV1.session bk' N (carryRef cy) ws
+      NetworkCertifier.AdviceV1.chargesFrom bk N cy ws = AdviceV1.chargesFrom bk' N (carryRef cy) ws
   | _, [] => rfl
   | cy, ds :: ws => by
-    simp only [NetworkCertifier.AdviceV1.session, AdviceV1.session, ← code_executionPhase bk bk' harr htot hz N cy ds]
+    simp only [NetworkCertifier.AdviceV1.chargesFrom, AdviceV1.chargesFrom, ← code_executionPhase bk bk' harr htot hz N cy ds]
     cases NetworkCertifier.AdviceV1.executionPhase bk N cy ds with
     | none => rfl
     | some p =>
@@ -324,15 +324,15 @@ theorem CodeChargesV1 (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book
 /-- The reference form of the program's table. -/
 def tableRef (t : NetworkCertifier.WindowCharge.Table) : WindowCharge.Table := ⟨t.freqs, t.total⟩
 
-/-- The reference form of the program's whole-executionPhase book. -/
+/-- The reference form of the program's whole-execution phase book. -/
 def bookRef (bk : NetworkCertifier.WindowCharge.Book) : WindowCharge.Book :=
   ⟨tableRef bk.arrived, tableRef bk.nHits, tableRef bk.hit, tableRef bk.resumes, tableRef bk.nOrder, tableRef bk.gap,
     tableRef bk.index, tableRef bk.lag, bk.priors⟩
 
-/-- The reference form of the program's whole-executionPhase carry. -/
+/-- The reference form of the program's whole-execution phase carry. -/
 def wcarryRef (c : NetworkCertifier.WindowCharge.Carry) : WindowCharge.Carry := ⟨carryRef c.dec, c.pos, c.rank⟩
 
-/-- The reference form of the program's executionPhase. -/
+/-- The reference form of the program's execution phase. -/
 def executionPhaseRef (x : NetworkCertifier.WindowCharge.Advice) : WindowCharge.Advice := ⟨x.ds, x.hits, x.order, x.lens⟩
 
 theorem code_codeAll : ∀ (st : NetworkCertifier.AdviceV1.Tally) (ss : List (ℕ × ℕ × ℕ)),
@@ -464,11 +464,11 @@ theorem code_wexecutionPhase (bk : NetworkCertifier.WindowCharge.Book) (N H O L 
 
 theorem code_wrun (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ) :
     ∀ (cy : NetworkCertifier.WindowCharge.Carry) (ws : List NetworkCertifier.WindowCharge.Advice),
-      NetworkCertifier.WindowCharge.session bk N H O L cy ws =
-        WindowCharge.session (bookRef bk) N H O L (wcarryRef cy) (ws.map executionPhaseRef)
+      NetworkCertifier.WindowCharge.chargesFrom bk N H O L cy ws =
+        WindowCharge.chargesFrom (bookRef bk) N H O L (wcarryRef cy) (ws.map executionPhaseRef)
   | _, [] => rfl
   | cy, x :: ws => by
-    simp only [NetworkCertifier.WindowCharge.session, WindowCharge.session, List.map_cons,
+    simp only [NetworkCertifier.WindowCharge.chargesFrom, WindowCharge.chargesFrom, List.map_cons,
       ← code_wexecutionPhase bk N H O L cy x]
     cases NetworkCertifier.WindowCharge.executionPhase bk N H O L cy x with
     | none => rfl
@@ -476,7 +476,7 @@ theorem code_wrun (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ) :
       simp only [Option.bind_some, Option.map_some]
       rw [code_wrun bk N H O L p.2 ws]
 
-/-- **Advice v1's whole executionPhase charged in the program is the reference's** (`CodeChargesWhole`): for books with the
+/-- **Advice v1's whole execution phase charged in the program is the reference's** (`CodeChargesWhole`): for books with the
 same tables (each one's frequencies and total) and the same priors, and windows with the same decisions, hits, order
 entries and length terms, the program's `charges` of the windows, listed in order, is the reference's. -/
 theorem CodeChargesWhole (bk : NetworkCertifier.WindowCharge.Book) (bk' : WindowCharge.Book)

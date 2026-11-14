@@ -19,8 +19,7 @@ on a circuit of any widths: inference blocks of at most `c` gates, each reading 
 `(c, k)`-partition complies at rate `k / c`, and an inference block of at most `c` gates at rate `α` reads at most
 `k = α c` fresh input bits. `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most
 `n` proof blocks of a `(c, k)`-partition. A policy is a condition on declarations that the verifier checks from `D` and
-`θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by which every declaration
-that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh input that the
+`θ` alone (`Policy`), a protocol with no rounds of its own. `Reads c C` is the least total fresh input that the
 inference blocks of a division of `C` into blocks of at most `c` gates read.
 -/
 
@@ -58,10 +57,5 @@ def CompliesAtMost (c k n : ℕ) : Policy := fun d =>
 gates read. -/
 noncomputable def Reads (c : ℕ) (C : RegisteredCircuit) : ℕ :=
   sInf {r | ∃ (n : ℕ) (P : Partition C.D n), (∀ u, C.D.size (P.gates u) ≤ c) ∧ r = ∑ u, freshInput C (P.gates u)}
-
-/-- **The slowdown factor** `ρ_policy(t)`: the least ratio of `size(d)` to `size(t)` over the declarations `d` that
-implement `t` and comply with `policy`, and `⊤` when none does. -/
-noncomputable def slowdown (policy : Policy) (t : RegisteredCircuit) : ℝ≥0∞ :=
-  ⨅ (d : RegisteredCircuit) (_ : t.Implements d ∧ policy d), (d.D.size d.D.computed : ℝ≥0∞) / t.D.size t.D.computed
 
 end InferenceOnly

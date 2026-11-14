@@ -28,7 +28,7 @@
     {"file": "benchmarks/numerical/bench-instances/v1/tu-k16.index.json", "count": 12, "lane": "compute-accounting"},
     {"file": "benchmarks/numerical/bench-instances/v1/vu-k1536.index.json", "count": 7, "lane": "compute-accounting"},
     {"file": "benchmarks/one_stage/inference_only.py", "count": 1, "lane": "proofs"},
-    {"file": "benchmarks/one_stage/prove_leg.py", "count": 1, "lane": "proofs"},
+    {"file": "benchmarks/one_stage/prove_subprotocol.py", "count": 1, "lane": "proofs"},
     {"file": "benchmarks/one_stage/served_shares.py", "count": 2, "lane": "proofs"},
     {"file": "benchmarks/one_stage/served_util.py", "count": 2, "lane": "proofs"},
     {"file": "benchmarks/pouw/filler/arms.py", "count": 1, "lane": "compute-accounting"},
@@ -57,7 +57,6 @@
     {"file": "security/Proofs/Pouw/HeadlineDc/Sm90.lean", "count": 1, "lane": "lean"},
     {"file": "security/Proofs/Pouw/HeadlineDc/Sm90Measured.lean", "count": 1, "lane": "lean"},
     {"file": "security/Proofs/Pouw/HeadlineDc/Sm90MeasuredI3.lean", "count": 1, "lane": "lean"},
-    {"file": "security/Proofs/Poub/RemoteHeld/Meets.lean", "count": 3, "lane": "lean"},
     {"file": "security/Proofs/Core/Accel/Witness.lean", "count": 3, "lane": "proofs"},
     {"file": "security/Proofs/Core/Site.lean", "count": 1, "lane": "proofs"},
     {"file": "security/Proofs/Flock/Claims/Complete/Coins.lean", "count": 1, "lane": "proofs"},
@@ -84,6 +83,7 @@
     {"file": "verity/protocols/accounting/poub/verifier/timing.py", "count": 4, "lane": "memory-accounting"},
     {"file": "verity/protocols/accounting/pous/device/lean/MemoryChallenger/WipeProtocol.lean", "count": 1, "lane": "memory-accounting"},
     {"file": "verity/protocols/accounting/pouw/prover/circuit/h1device.py", "count": 6, "lane": "compute-accounting"},
-    {"file": "verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_cover.json", "count": 3, "lane": "compute-accounting"}
+    {"file": "verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_cover.json", "count": 3, "lane": "compute-accounting"},
+    {"file": "security/Proofs/Poub/RemoteHeld/Meets.lean", "count": 3, "lane": "lean"}
   ]
 }

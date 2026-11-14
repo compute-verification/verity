@@ -240,7 +240,7 @@ def test_an_honest_window_is_complete_so_the_issuer_refuses_nothing_honest(tmp_p
     assert issuer.refused == []
 
 
-def test_a_certificate_cannot_move_to_another_link_window_or_key(tmp_path):
+def test_a_certificate_cannot_move_to_another_phase_or_key(tmp_path):
     """Moving a certificate to another window, link or direction, editing its head, signing with another key or
     forging the signature is a `signature` violation, and only in that window."""
     signer = signers.signer(tmp_path)

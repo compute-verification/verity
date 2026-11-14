@@ -35,11 +35,16 @@ path = "../../verity/commitments/randomness"
 name = "core_vstar"
 path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
 
-# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
-# `RecursiveKSAt`'s event
+# SPOT[Flock]'s sampled check and its two-stage form (`VStar.Recursive.Sampled`, `VStar.Recursive.SampledTwo`)
 [[require]]
 name = "core_vstar_recursive"
 path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
+
+# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# `RecursiveKSAt`'s event
+[[require]]
+name = "spot_flock_recursion"
+path = "../../verity/protocols/proofs/spot_flock_recursion/verifier/lean"
 
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]
@@ -170,7 +175,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.Members.Widen", "Proofs.Properties.Verity.Sampled.Window",
   "Proofs.Properties.Verity.Sampled.Window.Accepts", "Proofs.Properties.Verity.Sampled.Window.Walk",
   "Proofs.Properties.Verity.Sampled.Window.Draw", "Proofs.Properties.Verity.Sampled.Window.Members",
-  "Proofs.Properties.Verity.Sampled.Window.Reach", "Proofs.Properties.Verity.Sampled.Window.Leg",
+  "Proofs.Properties.Verity.Sampled.Window.Reach", "Proofs.Properties.Verity.Sampled.Window.Subprotocol",
   "Proofs.Properties.Verity.Sampled.Window.Logged", "Proofs.Properties.Verity.Sampled.Window.Assembled",
   "Proofs.Properties.Verity.Sampled.Window.Charge", "Proofs.Properties.Verity.Sampled.Window.Order",
   "Proofs.Properties.Verity.Sampled.Window.Writes", "Proofs.Properties.Verity.Sampled.Window.Answered",

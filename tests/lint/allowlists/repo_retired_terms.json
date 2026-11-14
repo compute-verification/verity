@@ -1934,8 +1934,6 @@
     {"file": "benchmarks/one_stage/onsite_periods.py", "count": 2},
     {"file": "benchmarks/one_stage/pod.sh", "count": 13},
     {"file": "benchmarks/one_stage/pouw_piece.py", "count": 22},
-    {"file": "benchmarks/one_stage/prove_leg.py", "count": 155},
-    {"file": "benchmarks/one_stage/prove_leg.sh", "count": 82},
     {"file": "benchmarks/one_stage/pyproject.toml", "count": 16},
     {"file": "benchmarks/one_stage/replay.py", "count": 330},
     {"file": "benchmarks/one_stage/served_bandwidth.py", "count": 3},
@@ -1951,7 +1949,6 @@
     {"file": "benchmarks/one_stage/tests/test_block_census.py", "count": 2},
     {"file": "benchmarks/one_stage/tests/test_onsite_periods.py", "count": 1},
     {"file": "benchmarks/one_stage/tests/test_pouw_piece.py", "count": 5},
-    {"file": "benchmarks/one_stage/tests/test_prove_leg_served.py", "count": 4},
     {"file": "benchmarks/one_stage/tests/test_serve_load.py", "count": 6},
     {"file": "benchmarks/one_stage/tests/test_served_bandwidth.py", "count": 4},
     {"file": "benchmarks/one_stage/tests/test_served_integrity.py", "count": 33},
@@ -2902,7 +2899,6 @@
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie.py", "count": 31},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_adversarial.py", "count": 6},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_phase4.py", "count": 2},
-    {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_link_window_lean.py", "count": 58},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_out_commit.py", "count": 2},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_pacer.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_period.py", "count": 172},
@@ -3645,7 +3641,6 @@
     {"file": "verity/protocols/experimental/dither/prover/kernels/h1u.cu", "count": 41},
     {"file": "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean", "count": 6},
     {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 126},
-    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean", "count": 81},
     {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Sampled.lean", "count": 2},
     {"file": "verity/protocols/proofs/spot_flock/verifier/lean/lakefile.toml", "count": 5},
     {"file": "security/Proofs/Flock/Recursive/ZkServer.lean", "count": 30},
@@ -5086,6 +5081,11 @@
     {"file": "security/Properties/Poub/Remote/Schedule.lean", "count": 15},
     {"file": "security/Properties/Poub/Remote/Shared.lean", "count": 97},
     {"file": "security/Properties/Poub/Remote/Subprotocol.lean", "count": 2},
-    {"file": "security/Definitions/Poub/Remote/Node.lean", "count": 3}
+    {"file": "security/Definitions/Poub/Remote/Node.lean", "count": 3},
+    {"file": "benchmarks/one_stage/prove_subprotocol.py", "count": 155},
+    {"file": "benchmarks/one_stage/prove_subprotocol.sh", "count": 82},
+    {"file": "benchmarks/one_stage/tests/test_prove_subprotocol_served.py", "count": 4},
+    {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "count": 58},
+    {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean", "count": 81}
   ]
 }
