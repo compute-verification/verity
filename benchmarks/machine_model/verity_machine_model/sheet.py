@@ -1,6 +1,6 @@
 """A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
-reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
-form or its pipe.
+reads, its value (or a `card` line, where the device's card file holds it), the document that states it and its grade,
+and each class of its DS vector's epoch with its tensor form or its pipe.
 
 `lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
 form's MACs a warp instruction over a quarter of its type's peak (A3), 128 over its pipe's width (A4; the uniform pipe's
@@ -23,7 +23,7 @@ from pathlib import Path
 
 from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
-from verity_machine_model.model import model, vector
+from verity_machine_model.model import card, model, vector
 
 __all__ = ["Const", "Figure", "Form", "Kind", "Peak", "ROOT", "Reading", "Sheet", "at_fmax", "cited", "differences",
            "figures", "lean", "lines", "literal", "moves", "omega", "reading", "row", "sheet", "uni"]
@@ -96,8 +96,39 @@ class Sheet:
     omega: tuple[str, str]  # A6's ω, a tensor class's accumulator words: its grade and source
 
 
-def _const(t: dict, key: str) -> Const:
-    return Const(Fraction(t[key]), t["grade"], t["source"])
+def _reader(p: Path, data: Path):
+    """`value(t, key)`: a table's `key`, or its `card` line's number: the device's card file's entries (model.toml's
+    `card`) and numbers joined by ` * ` and ` / `, as theta.toml's `card` lines are. The grade and source stay the
+    table's own, which the Lean states."""
+    cards: list[dict] = []
+
+    def value(t: dict, key: str) -> Fraction:
+        if "card" not in t:
+            return Fraction(t[key])
+        if key in t:
+            raise SystemExit(f"{p}: a table gives {key} = {t[key]} and reads the card file ({t['card']}); delete one")
+        from verity.device import number   # here: only a reader of the card needs verity
+
+        if not cards:
+            cards.append(card(data))
+        x, op = Fraction(1), "*"
+        for tok in t["card"].split():
+            if tok in ("*", "/"):
+                op = tok
+                continue
+            if tok[0].isdigit():
+                y = Fraction(tok)
+            else:
+                e = cards[0]
+                for k in tok.split("."):
+                    e = e.get(k) if isinstance(e, dict) else None
+                if not (isinstance(e, dict) and "value" in e):
+                    raise SystemExit(f"{p}: hardware/cards/{cards[0]['sku']}.toml has no entry {tok}")
+                y = number(e)
+            x = x * y if op == "*" else x / y
+        return x
+
+    return value
 
 
 def sheet(data: Path) -> Sheet:
@@ -105,6 +136,11 @@ def sheet(data: Path) -> Sheet:
     if not p.is_file():
         raise SystemExit(f"{data}: no {SHEET}; a device with a data sheet has one (README \"Devices\")")
     t = tomllib.loads(p.read_text())
+    value = _reader(p, data)
+
+    def _const(v: dict, key: str) -> Const:
+        return Const(value(v, key), v["grade"], v["source"])
+
     kinds = {}
     for k, v in t["kinds"].items():
         form = Form(v["type"], v["m"], v["n"], v["k"], v["warps"], v.get("sparse", False)) if "type" in v else None
@@ -116,7 +152,7 @@ def sheet(data: Path) -> Sheet:
               uniform_issue=_const(t["uniform_issue"], "slots"),
               clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
               labels={c: v.get("label", f"`{c}` clock") for c, v in t["clocks"].items()},
-              peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
+              peaks={ty: Peak(value(v, "macs"), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
                               v["grade"], v["source"], v.get("element_words", 1)) for ty, v in t["peaks"].items()},
               pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds,
               omega=(t["omega"]["grade"], t["omega"]["source"]))
