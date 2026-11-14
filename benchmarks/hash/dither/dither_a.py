@@ -89,7 +89,7 @@ import h1c as H1CM
 from dither_fused import CM, CR, H1R, Call, unwords
 from h1c import Dom, Tab
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "exactlin"))
 import exactlin as ELH
 from verity_config.settings import of
 

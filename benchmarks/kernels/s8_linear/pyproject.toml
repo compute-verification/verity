@@ -1,0 +1,22 @@
+# The exact W8A8 linear at the large model's shapes on the H200 (s8_wgmma.cu), sm_120 (int8_fused) and any card (int_mm.py).
+# Not a package: the scripts run on a GPU node (run.sh) and the kernel builds on a CPU node (build.sh); the CPU twin of
+# ScaledMmS8Coordinate_v1 they check against (fixture.py), int_mm.py's eager linear and PTX audit, wgmma.py's host side and
+# the SASS gate run here as a suite (`uv run tools/verity/check/suites.py benchmarks/kernels/s8_linear`), the twin held
+# to the Definition's evaluator.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test_ship_nvcc.py starts bash on ../ship_nvcc.sh (the nvcc build.sh compiles with), ../ship_probe.sh (what the frame
+# asks of it at every build) and ../job_nvcc.sh (the nvcc a job's own libraries compile with), and test_ship_place.py on
+# the first two, ../ship.sh and ../ship_clock.c (the frame build.sh compiles in) and on copies of them, which the read
+# guard can't trace
+untraced = ["tests/test_ship_nvcc.py", "tests/test_ship_place.py"]
+# tests/ evaluate the Definition (verity.circuits, which imports no other unit) and the twin's bf16 cast (verity.circuits.kernels.tc);
+# wgmma.py reads its variables through settings.py, on verity_config.settings; the SASS gate is the harness's build gate.
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
+          "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "tools/config/verity_config",
+          "verity/protocols/accounting/pouw/prover/sass_gate.py", "benchmarks/kernels/ship_nvcc.sh",
+          "benchmarks/kernels/ship_probe.sh", "benchmarks/kernels/job_nvcc.sh", "benchmarks/kernels/ship.sh",
+          "benchmarks/kernels/ship_clock.c",
+          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon"]
