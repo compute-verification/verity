@@ -1,6 +1,7 @@
 # The retired word "law" outside the proof system's paths, in the Glossary's words: what `tools/move/rename.py --map
 # tools/move/law_words_map.toml` renames. GLOSSARY.md: "law", "draw law", `law` identifiers, the Lean's `Law` -> the
-# sampling design. A name takes `design` (as `parse_design` and `design_object` already do), prose "sampling design".
+# sampling design. A name takes proofs' spelling (`law_lean_map.toml`): its law part becomes `SamplingDesign`,
+# `sampling_design` or `SAMPLING_DESIGN` (`WorkLaw` to `WorkSamplingDesign`); prose takes "sampling design".
 # It renames the names whose definitions are on this side (the PoUW plan's `WorkLaw`, `CountLaw`, `TileLaw` and
 # `window_laws`, the configuration's `default_law`, the adapter's `window_law` module and its `law_of`, the served
 # commit's `law_of`, test constants `LAW`) and prose that names the sampling design by a possessive or a qualifier.
@@ -16,19 +17,17 @@
 # - records of what was: GLOSSARY.md's table, the retired-terms lint, its allowlists and tests, the move tool's tests.
 
 [words]
-"test_handoff_work_law_draws_the_plans_k_and_its_windows_are_integrity_period_logs" = "test_handoff_work_design_draws_the_plans_k_and_its_windows_are_integrity_period_logs"
-"test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_design"
-"test_a_bernoulli_law_is_the_single_unit_case" = "test_a_bernoulli_design_is_the_single_unit_case"
-"test_exhaustive_facts_travel_with_the_law" = "test_exhaustive_facts_travel_with_the_design"
+"test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_sampling_design"
+"test_a_bernoulli_law_is_the_single_unit_case" = "test_a_bernoulli_sampling_design_is_the_single_unit_case"
+"test_exhaustive_facts_travel_with_the_law" = "test_exhaustive_facts_travel_with_the_sampling_design"
 "the registration's law" = "the registration's sampling design"
 "the partition file's law" = "the partition file's sampling design"
 "The partition file's law" = "The partition file's sampling design"
 "proof system's law" = "proof system's sampling design"
 "the partition's law" = "the partition's sampling design"
 "the sample's law" = "the sample's sampling design"
-"the plan's law" = "the plan's sampling design"
 "one-stage audits' law" = "one-stage audits' sampling design"
-"one-stage's law object" = "one-stage's design object"
+"one-stage's law object" = "one-stage's sampling design object"
 "`reusing`'s R's law" = "`reusing`'s R's sampling design"
 "A4 P6's law" = "A4 P6's sampling design"
 "serving rows' window law" = "serving rows' window sampling design"
@@ -37,34 +36,29 @@
 "any other law" = "any other sampling design"
 "any of its laws" = "any of its sampling designs"
 "`draw.py` laws" = "`draw.py` sampling designs"
-"`work:1` law" = "`work:1` sampling design"
 "``work`` law" = "``work`` sampling design"
 "every bernoulli law" = "every bernoulli sampling design"
 "first default law" = "first default sampling design"
-"the laws of `Achievability`" = "the sampling designs of `Achievability`"
-"the cost the laws pay" = "the cost the sampling designs pay"
 "draw-law seam" = "sampling-design seam"
 "work-law budget" = "work sampling design's budget"
-"law-level bound" = "design-level bound"
-"window_laws" = "window_designs"
-"default_law" = "default_design"
-"law_name" = "design_name"
-"sqrt_law" = "sqrt_design"
-"WorkLaw" = "WorkDesign"
-"CountLaw" = "CountDesign"
-"TileLaw" = "TileDesign"
-"a4_law" = "a4_design"
+"window_laws" = "window_sampling_designs"
+"default_law" = "default_sampling_design"
+"law_name" = "sampling_design_name"
+"WorkLaw" = "WorkSamplingDesign"
+"CountLaw" = "CountSamplingDesign"
+"TileLaw" = "TileSamplingDesign"
+"a4_law" = "a4_sampling_design"
 
 [[words_in]]
-files = ["adapters/**", "benchmarks/pouw/**"]
+files = ["adapters/**", "benchmarks/pouw/**", "**/served_zk/served_commit.py"]
 [words_in.words]
-"window_law" = "window_design"
-"law_of" = "design_of"
+"window_law" = "window_sampling_design"
+"law_of" = "sampling_design_of"
 
 [[words_in]]
 files = ["**/served_table.py"]
 [words_in.words]
-"_law" = "_design"
+"_law" = "_sampling_design"
 
 [[words_in]]
 files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/tests/test_interface.py",
@@ -73,8 +67,8 @@ files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/te
          "adapters/**/test_serving_rows_bundle.py", "adapters/**/test_serving_rows_boolean.py",
          "adapters/**/test_window_circuit_pearl.py", "adapters/**/test_window_rows.py", "adapters/**/protocols/spot.py"]
 [words_in.words]
-"REUSING_LAW" = "REUSING_DESIGN"
-"LAW" = "DESIGN"
+"REUSING_LAW" = "REUSING_SAMPLING_DESIGN"
+"LAW" = "SAMPLING_DESIGN"
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
