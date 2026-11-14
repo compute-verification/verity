@@ -1,6 +1,6 @@
 """The desc fuzzer's run (`InferenceOnlyCheck.DescFuzzMain`): the Python half.
 
-`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `InferenceOnlyCheck/DescFuzzMain.lean`
+`verity/protocols/policy/inference_only/verifier/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `InferenceOnlyCheck/DescFuzzMain.lean`
 decides the statements behind `DescAgrees` on (`runs` in that package's `lean-audit.json`), which the Lean audit runs and
 caches on the Lean package's files alone, against the data's SHA-256 in the record. So the first test is what says the
 data is still what the generator writes. The second, that it holds this shape: one gate reading, through one
@@ -18,7 +18,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

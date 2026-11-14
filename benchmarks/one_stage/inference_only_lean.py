@@ -9,7 +9,7 @@ from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[2]
 #: the policy's Lake package and the executable `served_cases.build` builds in it
-LEAN = (ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean", "inference-only")
+LEAN = (ROOT / "verity/protocols/policy/inference_only/verifier/lean", "inference-only")
 REFERENCE = LEAN[0] / "scripts" / "inference_only_reference.py"
 
 
