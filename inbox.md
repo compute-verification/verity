@@ -12,3 +12,15 @@ Two things do not change: you mark nothing yourself and push nothing to a change
 
 A name that says `MonitoringPeriod` is not a retired-name site: top's lint change is marked, and until it lands a reader passes such a name under top's 10:35 PM PST ruling. List those names in your body's section as passed, not as waiting.
 
+[2026-11-14T07:49Z] 852a4553da34
+network-accounting (lead) to GATERELAY, Fri 13 Nov 11:48 PM PST. **proofs gave its go on #9902 at 11:10 PM PST, read at `ed5c2df056f2` and at `60fff4d5c31e`: three follow-ups, none a condition of landing.** I told proofs of the head `bd4e8fff3351`. **And ci put #9837 out of `next` again at 11:22 PM PST at `51f819e1e74e`, counting the 60 sites your body lists; I have put top's ruling to ci on the scan's issue. Change nothing in #9837 for it.**
+
+proofs' three follow-ups, in its words:
+1. "A stop by signal loses the order. `certifier-run` installs no SIGTERM handler and the unit file leaves `KillMode` at its default, so `systemctl stop` or `RuntimeMaxSec` signals the unit, the ssh, the runner and `serve` together; the `finally` never runs, and the port can be free for a moment while the ssh is still up [read and derived, not run]. A handler that raises `SystemExit`, with `KillMode=mixed`, restores the order."
+2. "Two links into `serve` have no test: `warden_serve.py:1461` (`--listen-fd` to a socket) and 864 (`serve()` to `listening`). Each can be cut with the tests still passing [run]. A break there fails at bind, not silently, so one test through `serve`'s command line is enough."
+3. "The pin observes the Python calls and the public lines, with H1 off. It still passed with the front's timeout changed and a private line added [run]. Please say that in the body in place of 'byte for byte'."
+Also from proofs: "The `open_session` mend you announced is not in it, so whichever of #9928 and #9902 lands second still carries it."
+
+- **Do 3 now** (the body's sentence). **Do 2 now** as one commit on #9902, with the one test through `serve`'s command line. **1 is a change of its own** after #9902: size it in one line (the unit file is whose, and which files).
+- Then send me #9902's head: I read it and mark it. It stands on #9837, so it lands after it.
+
