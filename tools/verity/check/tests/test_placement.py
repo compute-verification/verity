@@ -174,6 +174,7 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
     asked = []
     monkeypatch.setattr(CHECK, "read_slots", lambda names: asked.append(names) or {n: docs[n] for n in names})
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "whole_ask_gib", lambda need, cache=True: None)
     calls = []
     monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     assert CHECK.record(["--on", "auto", "--priority"]) == 0
