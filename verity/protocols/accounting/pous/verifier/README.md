@@ -75,7 +75,7 @@ C = protocol.encode(scheme, w, salt)                                           #
 vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      # PRIVATE: the verifier encodes
 # vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
 v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
-v.run(protocol.responder(scheme, blocks.__getitem__))
+v.run(responder(scheme, blocks.__getitem__))                                    # the prover's: pous/prover/responder.py
 print(v.profile().statement())                                                 # Pous.SecurityProofs.BandMultiMeetsFamily
 ~~~
 

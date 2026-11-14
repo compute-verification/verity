@@ -19,6 +19,7 @@ from pous_fakes import Clock
 
 from verity.claims import get as core_claim
 from verity.commitments.randomness import frame
+from verity.protocols.accounting.pous.prover.responder import responder
 from verity.protocols.accounting.pous.verifier import band, dense, primitives, protocol, schemes
 from verity.protocols.accounting.pous.verifier.codec import Geometry
 from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
@@ -135,7 +136,7 @@ def test_audit_through_the_interface(name):
     with pytest.raises(ValueError, match="no certificate"):
         protocol.TimedAudit(sch, vk, key, k=20, experimental=True)
     v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert v.run(responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
     wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
@@ -466,7 +467,7 @@ def test_a_two_round_audit_gives_its_profile():
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
                           clock=Clock(step=1_000))
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert v.run(responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.k == 97 and p.effective_rounds == 2 and p.state_bound_bits == 254_307_274
     assert "passes 97 challenges within 724,499 ns" in p.statement()
@@ -492,7 +493,7 @@ def test_certified_profile_of_one_band12_segment():
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=Clock(step=1_000))
-    assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert v.run(responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
     assert p.state_bound_bits == 254_307_274 == (512 * 524_288 * 18) // 19
@@ -501,7 +502,7 @@ def test_certified_profile_of_one_band12_segment():
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
     late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=Clock(step=600_000))
-    assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
+    assert not late.run(responder(sch, blocks.__getitem__)).accepted
 
 
 def test_many_segments_are_a_gap_not_a_refusal():

@@ -15,9 +15,9 @@ import pytest
 import settings
 from test_pous_dense import SmallCapacity
 
+from verity.protocols.accounting.pous.prover.responder import HonestResponder
 from verity.protocols.accounting.pous.verifier import band, dense, setup
 from verity.protocols.accounting.pous.verifier.audit import (
-    HonestResponder,
     UnsignedRounds,
     challenge_key,
     run_timed,

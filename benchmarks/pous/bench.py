@@ -233,11 +233,13 @@ class Reference:
 
     @staticmethod
     def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int) -> dict[str, Any]:
+        from verity.protocols.accounting.pous.prover.responder import responder
+
         results = []
         for j in range(audits):
             v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
                                   experimental=True)   # an experimental scheme's profile says so
-            results.append(v.run(protocol.responder(scheme, block)))
+            results.append(v.run(responder(scheme, block)))
         elapsed = [x.elapsed_ns for r in results for x in r.answers]
         return {"audits": audits, "accepted": sum(r.accepted for r in results), "k": v.k, "limit_ns": v.limit_ns,
                 "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}

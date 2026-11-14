@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from verity.protocols.accounting.pous.prover.responder import HonestResponder
 from verity.protocols.accounting.pous.verifier import dense, setup
 from verity.protocols.accounting.pous.verifier.audit import (
-    HonestResponder,
     UnsignedRounds,
     challenge_key,
     run_timed,

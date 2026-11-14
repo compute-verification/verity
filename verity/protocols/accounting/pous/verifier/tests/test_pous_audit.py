@@ -10,10 +10,10 @@ import pytest
 from pous_fakes import Clock
 
 from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.protocols.accounting.pous.prover.responder import HonestResponder
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.audit import (
     DEADLINE_NS,
-    HonestResponder,
     UnsignedRounds,
     challenge_key,
     deadline_rounds,
