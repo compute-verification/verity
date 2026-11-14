@@ -179,13 +179,13 @@ def executionPhase (bk : Book) (N : ℕ) (cy : Carry) (ds : List Bool) : Option 
   else none
 
 /-- **A run's charges**: each executionPhase's, the carry passed along. -/
-def session (bk : Book) (N : ℕ) : Carry → List (List Bool) → Option (List ℕ)
+def chargesFrom (bk : Book) (N : ℕ) : Carry → List (List Bool) → Option (List ℕ)
   | _, [] => some []
-  | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (session bk N p.2 ws).map fun ls => p.1 :: ls
+  | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (chargesFrom bk N p.2 ws).map fun ls => p.1 :: ls
 
 /-- **The run's charges per executionPhase**, from the book's priors and run 0, for the decision streams of `W` windows. -/
 def charges (bk : Book) (N : ℕ) {W : ℕ} (a : Fin W → List Bool) : Option (List ℕ) :=
-  session bk N ⟨bk.priors, 0⟩ (List.ofFn a)
+  chargesFrom bk N ⟨bk.priors, 0⟩ (List.ofFn a)
 
 /-- **Advice v1's decision streams**: those of `W` windows whose charge no executionPhase refuses. A refused executionPhase fails its
 compile slice's proof block, so no accepted run has other advice. -/

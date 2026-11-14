@@ -196,16 +196,16 @@ def executionPhase (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Advice) : Optio
   else none
 
 /-- **A run's charges**: each executionPhase's, the carry passed along. -/
-def session (bk : Book) (N H O L : ℕ) : Carry → List Advice → Option (List ℕ)
+def chargesFrom (bk : Book) (N H O L : ℕ) : Carry → List Advice → Option (List ℕ)
   | _, [] => some []
-  | cy, x :: ws => (executionPhase bk N H O L cy x).bind fun p => (session bk N H O L p.2 ws).map fun ls => p.1 :: ls
+  | cy, x :: ws => (executionPhase bk N H O L cy x).bind fun p => (chargesFrom bk N H O L p.2 ws).map fun ls => p.1 :: ls
 
 /-- The session's first carry (`first_carry`): the book's priors, run 0, and no order entry yet. -/
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- **The run's charges per executionPhase**, from the session's first carry, for the advice of `W` windows. -/
 def charges (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Fin W → Advice) : Option (List ℕ) :=
-  session bk N H O L bk.first (List.ofFn a)
+  chargesFrom bk N H O L bk.first (List.ofFn a)
 
 /-- **Advice v1's whole windows**: the advice of `W` windows whose charge no executionPhase refuses. A refused executionPhase fails its
 unit, so no accepted run has other advice. -/

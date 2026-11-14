@@ -302,10 +302,10 @@ theorem code_executionPhase (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV
 theorem code_attachment (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
     (htot : bk.total = bk'.total) (hz : bk.zeros = bk'.zeros) (N : ℕ) :
     ∀ (cy : NetworkCertifier.AdviceV1.Carry) (ws : List (List Bool)),
-      NetworkCertifier.AdviceV1.session bk N cy ws = AdviceV1.session bk' N (carryRef cy) ws
+      NetworkCertifier.AdviceV1.chargesFrom bk N cy ws = AdviceV1.chargesFrom bk' N (carryRef cy) ws
   | _, [] => rfl
   | cy, ds :: ws => by
-    simp only [NetworkCertifier.AdviceV1.session, AdviceV1.session, ← code_executionPhase bk bk' harr htot hz N cy ds]
+    simp only [NetworkCertifier.AdviceV1.chargesFrom, AdviceV1.chargesFrom, ← code_executionPhase bk bk' harr htot hz N cy ds]
     cases NetworkCertifier.AdviceV1.executionPhase bk N cy ds with
     | none => rfl
     | some p =>
@@ -464,11 +464,11 @@ theorem code_wexecutionPhase (bk : NetworkCertifier.WindowCharge.Book) (N H O L 
 
 theorem code_wrun (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ) :
     ∀ (cy : NetworkCertifier.WindowCharge.Carry) (ws : List NetworkCertifier.WindowCharge.Advice),
-      NetworkCertifier.WindowCharge.session bk N H O L cy ws =
-        WindowCharge.session (bookRef bk) N H O L (wcarryRef cy) (ws.map executionPhaseRef)
+      NetworkCertifier.WindowCharge.chargesFrom bk N H O L cy ws =
+        WindowCharge.chargesFrom (bookRef bk) N H O L (wcarryRef cy) (ws.map executionPhaseRef)
   | _, [] => rfl
   | cy, x :: ws => by
-    simp only [NetworkCertifier.WindowCharge.session, WindowCharge.session, List.map_cons,
+    simp only [NetworkCertifier.WindowCharge.chargesFrom, WindowCharge.chargesFrom, List.map_cons,
       ← code_wexecutionPhase bk N H O L cy x]
     cases NetworkCertifier.WindowCharge.executionPhase bk N H O L cy x with
     | none => rfl

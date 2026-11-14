@@ -136,12 +136,12 @@ def executionPhase (bk : Book) (N : Nat) (cy : Carry) (ds : List Bool) : Option 
   else none
 
 /-- A run's charges: each executionPhase's, the carry passed along. -/
-def session (bk : Book) (N : Nat) : Carry → List (List Bool) → Option (List Nat)
+def chargesFrom (bk : Book) (N : Nat) : Carry → List (List Bool) → Option (List Nat)
   | _, [] => some []
-  | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (session bk N p.2 ws).map fun ls => p.1 :: ls
+  | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (chargesFrom bk N p.2 ws).map fun ls => p.1 :: ls
 
 /-- The run's charges per executionPhase, from the book's priors and run 0. -/
 def charges (bk : Book) (N : Nat) (ws : List (List Bool)) : Option (List Nat) :=
-  session bk N ⟨bk.priors, 0⟩ ws
+  chargesFrom bk N ⟨bk.priors, 0⟩ ws
 
 end NetworkCertifier.AdviceV1
