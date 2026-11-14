@@ -413,12 +413,12 @@ class Draws:
         return self._evidence
 
 
-def held(draws: Any) -> dict[str, Any]:
-    """`service.Stream`'s ``key`` and ``main`` for a stream on the coins of ``draws``' session (a `Draws`): the
+def held(turns: Any) -> dict[str, Any]:
+    """`service.Stream`'s ``key`` and ``main`` for a stream on the coins of ``turns``' session (a `Draws`): the
     challenger's key and the verifier's copy of main's first-parent history, as `start` had them before the session
     opened. A stream is made with them: no evidence names a key, and the history an evidence carries is held to
     this one."""
-    got = draws.held()
+    got = turns.held()
     return {"key": Ch.ChallengerKey.from_json(got["key"]), "main": got["main"]}
 
 
