@@ -15,7 +15,8 @@ Every path git sees changed must be one of:
   comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
   `benchmarks/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
   (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
-  moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
+  moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or from the
+  name of an import root (`[roots] old` of a map the range ran by) to where `tools/move/layout.py` writes it, or a dotted
   name (`verity.protocols.proofs.flock.prover.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
@@ -389,21 +390,47 @@ def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
                              for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old)]) is not None
 
 
-def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
+def short_forms(pmap: dict[str, str], base: Tree, maps: list[dict] = ()) -> dict[str, str]:
     """Each moved path as written below a directory its old and new paths share (`verity_vllm/program/predict` for
-    `adapters/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
-    names a path of BASE's tree from the root."""
+    `adapters/vllm/verity_vllm/program/predict`), keeping at least one shared part; and, for each import root of a path map
+    the range ran by (`[roots] old`, `verity_vllm = "adapters/vllm/verity_vllm"`), a moved path below it as written from the
+    root's name, to what `tools/move/layout.py` writes for where it went (its `_short_form`: from the name of the `[roots]
+    new` root it is now below, else from the repository's root). Dropped where two moves disagree or where it names a path
+    of BASE's tree from the root."""
     out: dict[str, str] = {}
     bad: set[str] = set()
+
+    def add(so: str, sn: str) -> None:
+        if so in pmap or so in base.set or base.has_dir(so) or out.setdefault(so, sn) != sn:
+            bad.add(so)
+
     for old, new in pmap.items():
         o, n = old.split("/"), new.split("/")
         c = 0
         while c < min(len(o), len(n)) - 1 and o[c] == n[c]:
             c += 1
         for k in range(1, c):
-            so, sn = "/".join(o[k:]), "/".join(n[k:])
-            if so in pmap or so in base.set or base.has_dir(so) or out.setdefault(so, sn) != sn:
-                bad.add(so)
+            add("/".join(o[k:]), "/".join(n[k:]))
+    for data in maps:
+        roots = data.get("roots")
+        olds, news = (roots.get("old"), roots.get("new")) if isinstance(roots, dict) else (None, None)
+        if not isinstance(olds, dict) or not isinstance(news, dict):
+            continue
+        under = sorted(((k, str(d).strip("/")) for k, d in news.items()), key=lambda kd: -len(kd[1]))
+
+        def written(new: str) -> str:
+            for name, d in under:
+                if new == d or new.startswith(d + "/"):
+                    return name + new[len(d):] if d != name else new
+            return new
+
+        for name, d in olds.items():
+            d = str(d).strip("/")
+            if d == name:
+                continue                                # written from the root, which the path map reads
+            for old, new in pmap.items():
+                if old.startswith(d + "/"):
+                    add(name + old[len(d):], written(new))
     return {k: v for k, v in out.items() if k not in bad}
 
 
@@ -1651,8 +1678,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             entries.remove(a)
             d.update(status="R", score=100 if d["shas"][0] == a["shas"][1] else 0, new=new,
                      modes=(d["modes"][0], a["modes"][1]), shas=(d["shas"][0], a["shas"][1]))
-    short = short_forms(pmap, B)
-    rows = Rows(layout_maps(B, head, cwd), pmap, B, H)
+    path_maps = layout_maps(B, head, cwd)
+    short = short_forms(pmap, B, path_maps)
+    rows = Rows(path_maps, pmap, B, H)
     renamed = [(e["old"], e["new"]) for e in entries if e["status"] == "R"]
     modules = Modules(renamed, dotted)
     lmods, dests = {}, {}

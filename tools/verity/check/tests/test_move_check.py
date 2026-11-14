@@ -1857,6 +1857,38 @@ FLOCK_MOVED = {
 }
 
 
+#: `pkg` is an import root below `adapters/app/`, whose lint lists its files from `adapters/app/`; `gate.py` leaves it for
+#: `verity`'s root
+ROOTS = {
+    LAYOUT_MAP: ('[roots]\nold = { pkg = "adapters/app/pkg", verity = "verity" }\nnew = { pkg = "adapters/app/pkg", verity = "verity" }\n\n'
+                 '[paths]\n"adapters/app/pkg/gate.py" = "verity/serving/gate.py"\n'),
+    "adapters/app/pkg/__init__.py": "", "adapters/app/pkg/gate.py": "X = 1\n", "adapters/app/pkg/stay.py": "Y = 1\n",
+    "verity/__init__.py": "", "verity/serving/__init__.py": "",
+    "adapters/app/allow.json": '[\n {"file": "pkg/gate.py", "kind": "T201"},\n {"file": "pkg/stay.py", "kind": "T201"}\n]\n',
+}
+
+
+@pytest.mark.parametrize(("written", "message", "certified"), [
+    ("verity/serving/gate.py", LAYOUT_MSG, True),
+    ("verity/serving/gate.py", "Move by hand\n", False),
+    ("serving/gate.py", LAYOUT_MSG, False),
+])
+def test_a_path_written_from_its_import_root_follows_its_file_out_of_the_root(tmp_path, written, message, certified):
+    """`pkg/gate.py`, written from the name of the import root it is below (`[roots] old` of the map the move ran by), is
+    written as `tools/move/layout.py` writes it once the file leaves that root: from the root it lands below, here from the
+    repository's root (`verity` is its own directory). Without the move line no map names the roots, and any other
+    spelling is beyond the move."""
+    repo, base = _repo(tmp_path, ROOTS)
+    _move(repo, "adapters/app/pkg/gate.py", "verity/serving/gate.py")
+    _write(repo, {"adapters/app/allow.json": ROOTS["adapters/app/allow.json"].replace('"pkg/gate.py"', f'"{written}"')})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"] == certified, r["refusals"]
+    if not certified:
+        assert _refused(r) == {"adapters/app/allow.json": "edit beyond moved paths and module names"}
+
+
 def _flock(tmp_path: Path, message: str = LAYOUT_MSG, **over: str) -> dict:
     repo, base = _repo(tmp_path, FLOCK)
     _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
