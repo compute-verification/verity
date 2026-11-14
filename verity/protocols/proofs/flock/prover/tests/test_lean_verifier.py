@@ -485,7 +485,7 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     got = check([d, *bad], *flags, "--work", "2")
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
     assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
-    # another table's law, or the stratified sampling design, is not this verifier's
+    # another table's sampling design, or the stratified one, is not this verifier's
     other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]

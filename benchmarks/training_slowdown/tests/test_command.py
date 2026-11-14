@@ -1,15 +1,17 @@
 import importlib.util
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import synthetic
 from synthetic import tiny_registry, write_config
 
-from training_slowdown import STOPPED, TOLD, config, starts, stop_record
+from training_slowdown import STOPPED, TOLD, config, grade, starts, stop_record
 
 COMMAND = Path(__file__).resolve().parents[1] / "run.py"
 _spec = importlib.util.spec_from_file_location("training_slowdown_command", COMMAND)
@@ -48,6 +50,8 @@ class Research:
         #: the text of the run.json, and of the state.json, each record holds
         self.said: dict[str, str] = {}
         self.kept: dict[str, str] = {}
+        #: the records a file was fetched from, in order
+        self.fetched: list[str] = []
 
     def __call__(self, argv):
         assert argv[0] == "research", argv
@@ -57,6 +61,7 @@ class Research:
         verb = argv[2]
         if verb == "fetch" and "--to" in argv:
             assert argv[4] == "--path" and argv[6] == "--to" and len(argv) == 8, argv
+            self.fetched.append(argv[3])
             texts = {"out/run.json": self.said, cmd.STATE_JSON: self.kept}[argv[5]]
             if argv[3] not in texts:
                 return SimpleNamespace(returncode=1, stdout="", stderr="no file matches")
@@ -515,24 +520,214 @@ def test_local_runs_a_stopped_job_again_on_its_own_state(tmp_path, reg_path, mon
         assert err.count("holds no run.json that reads (JSONDecodeError: ") == (2 if then[1] == unread else 0)
 
 
+#: what the command prints before a grade's block
+ALL_DONE = "every job has its record ({})\n"
+#: the line of a config that names no honest config
+NO_HONEST = ("names no honest config, so it has no slowdown: the grade divides the config's count by honest "
+             'training\'s, and `honest = "NAME"` in the config names one')
+
+
+def pair(where: Path, reg: Path, seeds=None) -> tuple[Path, config.Config, config.Config]:
+    """An attack config of the tiny start, `a`, that names an honest config, `ref`, which trains every weight: the
+    attack's path, and both as loaded on `reg`."""
+    seeds = seeds or {"search": [0], "final": [1]}
+    write_config(where / "ref.toml", seeds=seeds, dials={"trainable": "*", "lr": 1e-2})
+    path = write_config(where / "a.toml", seeds=seeds, honest="ref")
+    cfg = config.load(path, starts.registry(reg))
+    return path, cfg, config.honest(cfg, starts.registry(reg))
+
+
+@pytest.fixture(scope="module")
+def graded(tmp_path_factory):
+    """The command as a user starts it, `--local --device cpu`, through the jobs' own processes, on `pair`'s two
+    configs of the tiny start on the graded registry (`synthetic.graded_registry`), twice: the two runs' processes,
+    and the `slowdown.json` each left."""
+    tmp = tmp_path_factory.mktemp("graded")
+    reg = synthetic.graded_registry(tmp / "reg")
+    path, cfg, honest = pair(tmp / "attacks", reg)
+    root = tmp / "jobs"
+    argv = [sys.executable, str(COMMAND), str(path), "--local", "--root", str(root), "--starts", str(reg),
+            "--device", "cpu"]
+    runs, wrote = [], []
+    for _ in range(2):
+        runs.append(subprocess.run(argv, capture_output=True, text=True))
+        wrote.append((root / cfg.digest / "slowdown.json").read_bytes())
+    return SimpleNamespace(reg=reg, path=path, cfg=cfg, honest=honest, root=root, runs=runs, wrote=wrote)
+
+
+def block(out: str, jobs: int) -> str:
+    """The grade's block the command printed: all it prints after it says every job has its record."""
+    assert out.count(ALL_DONE.format(jobs)) == 1, out[-3000:]
+    return out.split(ALL_DONE.format(jobs))[1]
+
+
 @pytest.mark.slow
-def test_local_runs_a_config_end_to_end_and_a_second_run_runs_nothing(tmp_path, reg_path):
+def test_local_runs_a_config_end_to_end_grades_it_and_a_second_run_runs_nothing(graded):
     """The command as a user starts it, through the jobs' own processes: what an in-process test can't show is that
     a job's process finds the route, the start and the data from its argv alone and leaves its record where the
-    command looks."""
-    path = write_config(tmp_path / "a.toml", seeds={"search": [0], "final": [1]})
-    cfg = config.load(path, starts.registry(reg_path))
-    root = tmp_path / "jobs"
-    argv = [sys.executable, str(COMMAND), str(path), "--local", "--root", str(root), "--starts", str(reg_path),
-            "--device", "cpu"]
-    p = subprocess.run(argv, capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-4000:]
-    recs = {}
-    for job in cfg.jobs():
-        raw = (root / job.label / "run.json").read_bytes()
-        rec = recs[job.label] = json.loads(raw)
+    command looks, and that the grade reads those records as the jobs wrote them. Every job of the config and of
+    its honest config done, the command grades them: its block states a slowdown as a number, since the attack and
+    the honest config each reach the gain and the search record's step is measured, and `slowdown.json` is in the
+    config's directory of jobs. A second run runs no job and prints and writes the same."""
+    first, again = graded.runs
+    assert first.returncode == 0, first.stdout[-3000:] + first.stderr[-4000:]
+    for job in graded.cfg.jobs() + graded.honest.jobs():
+        rec = json.loads((graded.root / job.label / "run.json").read_bytes())
         assert rec["invalid"] == [] and rec["split"] == job.split and rec["label"].endswith(job.label)
         assert all(cp["e_bytes"] and cp["score"]["split"] == job.split for cp in rec["checkpoints"])
-    again = subprocess.run(argv, capture_output=True, text=True)
-    assert again.returncode == 0 and "every job has its record (2)" in again.stdout
-    assert all(json.loads((root / label / "run.json").read_bytes()) == rec for label, rec in recs.items())
+    s = json.loads(graded.wrote[0])
+    assert s["schema"] == grade.SCHEMA and s["config"] == "a" and s["honest"]["config"] == "ref"
+    assert s["S"]["why"] is None and s["rho"]["rho"] is not None and s["basis"]["split"] == "final"
+    assert all(s["H"][k]["C"] and isinstance(s["S"][k], float) and s["S"][k] > 0 for k in ("any", "honest"))
+    shown = block(first.stdout, 4)
+    assert shown.startswith("SLOWDOWN a   start tiny, gain 1.1x, policy console ")
+    assert f"against the honest route: S {s['S']['honest']:,.6g} = p " in shown
+    assert not (graded.root / graded.honest.digest / "slowdown.json").exists()
+    assert {x["source"] for x in s["records"]} == {
+        str(graded.root / j.label / "run.json") for j in graded.cfg.jobs() + graded.honest.jobs()}
+
+    assert again.returncode == 0 and again.stdout.startswith(f"a: digest {graded.cfg.digest[:16]}")
+    assert block(again.stdout, 4) == shown and graded.wrote[1] == graded.wrote[0]
+
+
+@pytest.mark.slow
+def test_the_commands_grade_is_the_grades_own_commands_on_the_same_records(graded, tmp_path):
+    """The block the command prints and the slowdown.json it writes are, byte for byte, what the grade's own
+    command prints and writes handed the two directories of jobs."""
+    out = tmp_path / "out"
+    p = subprocess.run([sys.executable, "-m", "training_slowdown.grade", "--config", str(graded.path), "--starts",
+                        str(graded.reg), "--records", str(graded.root / graded.cfg.digest), "--honest",
+                        str(graded.root / graded.honest.digest), "--out", str(out)],
+                       cwd=COMMAND.parent, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-4000:]
+    assert block(graded.runs[0].stdout, 4) == p.stdout and p.stdout.startswith("SLOWDOWN a ")
+    assert (out / "slowdown.json").read_bytes() == graded.wrote[0]
+
+
+@pytest.mark.slow
+def test_local_grades_the_configs_own_jobs_and_names_a_record_at_a_seed_it_doesnt_list(graded, tmp_path, capsys):
+    """A config's digest leaves out its seeds, so its directory of jobs may hold a record at a seed it no longer
+    lists, which would move the grade's mean over seeds: the command doesn't read it, names it, and grades as it does
+    without it. The grade's own command, handed the whole directory, would read it."""
+    root = tmp_path / "jobs"
+    shutil.copytree(graded.root, root)
+    extra = root / graded.cfg.digest / "7" / "final"
+    shutil.copytree(root / graded.cfg.digest / "1" / "final", extra)
+    assert cmd.main([str(graded.path), "--local", "--root", str(root), "--starts", str(graded.reg)]) == 0
+    assert block(capsys.readouterr().out, 4) == (
+        f"training-slowdown: not graded, at a seed or split its config doesn't list: {extra / 'run.json'}\n"
+        + block(graded.runs[0].stdout, 4))
+    assert (root / graded.cfg.digest / "slowdown.json").read_bytes() == graded.wrote[0].replace(
+        str(graded.root).encode(), str(root).encode())
+    assert [r["seed"] for r in grade.read(root / graded.cfg.digest) if r["split"] == "final"] == [1, 7]
+
+
+def done(r: Research, *cfgs: config.Config) -> dict[str, str]:
+    """Every job of `cfgs` done on the fake store, each with a record of its own: the records by label."""
+    records = {}
+    for n, j in enumerate(j for c in cfgs for j in c.jobs()):
+        run, records[j.label] = f"r20980101-000000-{n:04x}", "art:" + f"{n:x}" * 64
+        r.labels.append((run, config.LABEL_KEY, j.label))
+        r.attempts[run] = {"status": {"rc": 0}, "outputs": {"run_record": records[j.label]}}
+    return records
+
+
+@pytest.mark.slow
+def test_from_the_store_the_grade_reads_each_jobs_record_and_says_as_local_does(graded, tmp_path, monkeypatch,
+                                                                                 capsys):
+    """Without `--local` the grade reads each done job's run.json in its run's record, with the record's id as its
+    source: on the records `--local` graded, the block is the same and so is `slowdown.json` but for those sources,
+    written under `$OUT` at the place `--local` writes it in its root."""
+    r = Research()
+    records = done(r, graded.cfg, graded.honest)
+    for j in graded.cfg.jobs() + graded.honest.jobs():
+        r.said[records[j.label]] = (graded.root / j.label / "run.json").read_text()
+    monkeypatch.setenv("OUT", str(tmp_path / "out"))
+    assert command(r, str(graded.path), "--starts", str(graded.reg)) == 0
+    assert block(capsys.readouterr().out, 4) == block(graded.runs[0].stdout, 4)
+    assert sorted(r.fetched) == sorted(records.values())
+    got, local = (json.loads(b) for b in ((tmp_path / "out" / graded.cfg.digest / "slowdown.json").read_bytes(),
+                                          graded.wrote[0]))
+    by_record = {v: str(graded.root / label / "run.json") for label, v in records.items()}
+    assert sorted(by_record[x["source"]] for x in got["records"]) == sorted(x["source"] for x in local["records"])
+    unsourced = [{**x, "source": None} for x in got["records"]], [{**x, "source": None} for x in local["records"]]
+    assert unsourced[0] == unsourced[1] and {**got, "records": None} == {**local, "records": None}
+
+    monkeypatch.delenv("OUT")
+    r.fetched.clear()
+    assert command(r, str(graded.path), "--starts", str(graded.reg)) == 0
+    assert block(capsys.readouterr().out, 4) == block(graded.runs[0].stdout, 4) and len(r.fetched) == 4
+
+
+@pytest.mark.parametrize("state, rc", [("pending", 3), ("stopped", 3), ("stalled", 4), ("failed", 1)])
+def test_a_job_without_its_record_leaves_no_grade_and_fetches_no_record_for_one(state, rc, tree, reg_path, capsys):
+    """While a job of the config or of its honest config is pending, stopped, stalled or failed, the command grades
+    nothing: it prints no block, and fetches the record of no done job. A stopped job is started again, and is then
+    pending."""
+    path, cfg, honest = pair(tree, reg_path)
+    r = Research()
+    records = done(r, cfg, honest)
+    job = honest.jobs()[-1]
+    r.labels = [x for x in r.labels if x[2] != job.label]
+    command(r, str(path), "--starts", str(reg_path))
+    if state == "failed":
+        r.attempts[last_run(r, job)] = {"status": {"rc": 1}, "outputs": {}}
+    elif state in ("stopped", "stalled"):
+        for _ in range(cmd.STALLS - 1 if state == "stalled" else 0):
+            stop(r, job, "art:" + "f" * 64)
+            command(r, str(path), "--starts", str(reg_path))
+        stop(r, job, "art:" + "f" * 64)
+    capsys.readouterr()
+    assert command(r, str(path), "--starts", str(reg_path)) == rc
+    out = capsys.readouterr().out
+    shown = {"stopped": f"pending  {last_run(r, job)} (continues "}.get(state, f"{state:8} {last_run(r, job)}")
+    assert f"  {job.split:6} {job.seed:<5} {shown}" in out
+    assert "SLOWDOWN" not in out and "every job has its record" not in out
+    assert not set(r.fetched) & set(records.values())
+
+
+def done_locally(root: Path, *cfgs: config.Config) -> None:
+    """Every job of `cfgs` done under `root` as `--local` leaves one, its record an empty one."""
+    for j in (j for c in cfgs for j in c.jobs()):
+        (root / j.label).mkdir(parents=True)
+        (root / j.label / "job.json").write_text('{"rc": 0}\n')
+        (root / j.label / "run.json").write_text("{}\n")
+
+
+def test_a_grade_that_refuses_says_why_and_exits_with_its_own_status_and_a_dry_run_grades_nothing(tmp_path, reg_path,
+                                                                                               capsys):
+    """Every job done, a grade that refuses the records is the command's own status, `REFUSED`, which no job's
+    state gives, with the grade's reason: here the tiny registry's one start on its data, which gives the grade's fit
+    no frontier; from the store, a done job whose record holds no run.json that reads. A dry run of the same grades
+    nothing and reads no record: it exits as one with every record does."""
+    path, cfg, honest = pair(tmp_path / "attacks", reg_path)
+    root = tmp_path / "jobs"
+    done_locally(root, cfg, honest)
+    local = [str(path), "--local", "--root", str(root), "--starts", str(reg_path)]
+    assert cmd.REFUSED == 5 and cmd.REFUSED not in (0, 1, 3, 4)
+    assert cmd.main(local) == cmd.REFUSED
+    out = capsys.readouterr().out
+    assert out.endswith("training-slowdown: no slowdown, the grade refuses the records: grade: the 1 starts on data "
+                        "'tiny' give no fit: it takes 3 frontier points spanning a factor 10 in C0\n")
+    assert ALL_DONE.format(4) in out and not (root / cfg.digest / "slowdown.json").exists()
+
+    assert cmd.main(local + ["--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert out.endswith(ALL_DONE.format(4)) and "would run" not in out
+    r = Research()
+    done(r, cfg, honest)
+    assert command(r, str(path), "--starts", str(reg_path), "--dry-run") == 0
+    assert capsys.readouterr().out.endswith(ALL_DONE.format(4)) and r.fetched == []
+    assert command(r, str(path), "--starts", str(reg_path)) == cmd.REFUSED and len(r.fetched) == 1
+    assert "holds no run.json that reads" in capsys.readouterr().out
+
+
+def test_a_config_that_names_no_honest_config_has_no_grade(tmp_path, reg_path, capsys):
+    """The grade divides a config's count by honest training's: a config that names no honest config is never graded
+    against itself, and the command says how one is named and exits as one whose every job has its record."""
+    path = write_config(tmp_path / "a.toml", seeds={"search": [0], "final": [1]})
+    root = tmp_path / "jobs"
+    done_locally(root, config.load(path, starts.registry(reg_path)))
+    assert cmd.main([str(path), "--local", "--root", str(root), "--starts", str(reg_path)]) == 0
+    assert capsys.readouterr().out.endswith(ALL_DONE.format(2) + f"a {NO_HONEST}\n")
+    assert list(root.glob("*/slowdown.json")) == []
