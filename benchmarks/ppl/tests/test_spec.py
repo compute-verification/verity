@@ -3,6 +3,7 @@ import tomllib
 import pytest
 import torch
 
+import run
 import spec
 import steps
 
@@ -275,7 +276,6 @@ def test_rejections_name_the_problem(text, message):
 
 
 def test_bf16_is_not_a_spec():
-    import run
     with pytest.raises(ValueError, match="bf16 is the reference"):
         run.arms_for([str(spec.SPECS / "int8-linears.toml"), "bf16"])
 
