@@ -326,8 +326,9 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
-    and salts), under a network certifier key of its own, beside its `deployment.json`; the connections of ``late``
-    failed late (a void run, their reasons in ``fails.records``)."""
+    and salts), under a network certifier key of its own, beside its `deployment.json`, which carries the session's
+    start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
+    ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -335,13 +336,15 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
     out.mkdir(parents=True)
     signer = sz.LmsSigner.create(sz.lms.keygen(sz.lms.Params(64, 1, 6), hashlib.sha512(seed).digest()),
                                  out.parent / f"{out.name}-signer.json")
-    pub = WS.Publisher(out, sz.Issuer(signer, sz.SESSION), setup.params)
+    issuer = sz.Issuer(signer, sz.SESSION)
+    start = WS.start_json(WS.certify_start(issuer, 0, setup.params))  # signed before any record, as the publisher's
+    pub = WS.Publisher(out, issuer, setup.params)
     for w in range(windows):
         for rec, grid in ((served.ingress[w], setup.params.grid), (served.egress[w], setup.params.grid),
                           (served.failed[w], setup.params.fails_grid)):
             pub.keep(rec, grid)
     dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=windows,
-                               slack=0.025, run_id=bytes(32))
+                               slack=0.025, run_id=bytes(32), start=start)
     (out / "deployment.json").write_text(json.dumps(dep))
     return out
 
@@ -529,13 +532,14 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule (its integer fields, the id egress
-    form's), the registered Program and its
+    case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase 0, and
+    its schedule (its integer fields, the id egress form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
     its answer), the registration, and its answer, three records' certificates (requests, responses, fails: its own)
-    and two row registrations, each named by the registration's roots. The period's mirror reads the block's
+    and two row registrations, each named by the registration's roots, and the deployment's signed start, the listed
+    entry's session's, certified under its key in its session. The period's mirror reads the block's
     `SlotEntry_v1` template's entries off its descriptor, a stand-in whose closure digest is no pinned Definition's
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
@@ -546,8 +550,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
     swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
     entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, and a run in the bytes
-    egress form, are refused by name. Slow
+    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, a run in the bytes
+    egress form, and a run whose deployment holds no signed start are refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
     import scan_period as SP
@@ -612,7 +616,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
-    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
+    assert (p["keys"], p["schedule"], p["link"]) == (
+        [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
@@ -625,6 +630,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     ev = json.loads(bytes.fromhex(case["evidence"]))
     (x,) = ev["windows"]
     assert ev["audits"] == [audit["answer"]]
+    # the one listed entry's session's signed start, the deployment's, which the period check holds the entry to
+    (start,) = PC.evidence(bytes.fromhex(case["evidence"]))[2]
+    (entry,) = PC.params(p).entries
+    assert ev["starts"] == [dep["start"]] and start.base_ms == 0
+    assert start.refusal(entry.key, entry.session, WS.LINK, PC.params(p).schedule.digest) is None
     assert x["answer"] == answer and x["registrations"] == [regs["ingress", 0], regs["egress", 0]]
     assert [(c["link"], c["direction"], c["window"]) for c in x["certificates"]] == [
         ("warden", "ingress", 0), ("warden", "egress", 0), ("warden-fails", "egress", 0)]
@@ -673,6 +683,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         SP.rows_case(run, scan)
     (run / "deployment.json").write_text(json.dumps({**dep, "params": {**dep["params"], "egress": "bytes"}}))
     with pytest.raises(SystemExit, match="the period check's schedule is the id egress form's, not 'bytes''s"):
+        SP.rows_case(run, scan)
+    (run / "deployment.json").write_text(json.dumps({k: v for k, v in dep.items() if k != "start"}))
+    with pytest.raises(SystemExit, match="deployment.json holds no signed start"):
         SP.rows_case(run, scan)
 
 
