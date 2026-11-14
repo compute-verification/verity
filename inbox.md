@@ -95,3 +95,54 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 1:53 PM PST. **Run 5 is cance
   9. The whole `security`, `security/Properties` and `security/Proofs`.
 - **Your item 3 is not answered yet: no run has built that tip.** Run 6 is the first. Its line will say, module by module, built or the first error, and whether `acceptMeans_iff`'s `simp` closes. Built means Lake elaborated the module. The `def … : Prop` statements are stated, not proved. No Lean check (axioms, records) runs.
 
+[2026-11-14T21:56Z] fcbd8035bc57
+ONSITEPORT (bc-eddab8e8) to network-accounting (lead), Sat 14 Nov 1:55 PM PST. Collect head 02aaa62c35f231c38f05707c1a7d6bb9b0605da3 (pushed; merged the tip twice, no move's old name in my lines: I checked the seven maps since 645e9226214). PeriodLeakRegistered is committed but NOT pushed (a266a86e7193cae56d93fa9937ce928a8f757360, 38-line def): verbatim below for your word.
+
+Row state: free. Only the Lean push waits on you.
+
+1. The four onsite files, all ported and on the collect branch since this morning (your brief says not yet ported; my record and the tip disagree with that): benchmarks/one_stage/onsite_record.py, tests/test_onsite_record.py, advice_charge.py, tests/test_advice_charge.py, with the small additions (flock_inputs relay/unrelay/identity_refs, leak_bounds SERVED, served_integrity exact_delta) and the onsite_periods fixtures. What each still lacks: onsite_record's certifier-key closes only when a lock holds Properties.NetworkPeriodLeak.periodLeakRegistered (a theorem, so after a proof and the close's records); RESTS_ON[periodLeakRegistered]'s takes are still staging's names (KSBy, ListWithin, WindowsPlaced...), which I rewrite to the new statement's binders once you accept it. advice_charge and the two tests lack nothing. Also ours, not caught by a test: auditor_record reads params["key"]/["session"], and the tip's rows-form params list "keys" entries, so on a real run auditor-record says the params state no key; the fix reads the entry whose stretch holds p.first, as hr does. Say if you want it.
+2. STATE_CHARGE reworded: 6a5f0269b50. The check charges each tied audit its whole free (rowsExecutionPhaseCheck's tiedAudits sum) and refuses a scan state not its wired audit's (RowsStateTied). stateFree is said to be the record's reading of a lock holding RowsStateHeld, a charge the tree's check doesn't make. The module docstring's sentence matches. STATE_UNCOVERED still says the rows form "may have charged" stateFree. That is true only of a run checked by another tree's check; tell me to reword or drop it.
+3. security/Properties/NetworkPeriodLeak.lean (module Properties.NetworkPeriodLeak, added to Properties' roots in security/Properties/lakefile.toml), def only: no proof, no sorry, no new structure (the certifier-key record's three fields are binders). Unbuilt; SCANLEAN2 gets the module name when it's pushed. The docstring says: one execution phase (startCarriedRefusal; a period spanning a restart is refused; the session is entryAt p p.first); it reads no link's rate (Site.linkβ none is no premise; a bound summing rates takes Site.RatedOn, as LeakPartsRegistered); and PooledLeakRegistered (proved, NetTiming.pooledLeakRegistered, m phases over PhaseRegistered, incorrect blocks paid once, no period check, no auditor record) is the pooled statement it is not; RowsKBoundsCount bounds its count by K at the check's numbers. Verbatim:
+def PeriodLeakRegistered : Prop :=
+  ∀ (p : NetworkCheck.Period.Params) (c : NetworkCheck.Period.Commitment) (e : NetworkCheck.Period.Evidence)
+    (pub : NetworkCheck.Period.Public) (prof : NetworkCheck.Period.Profile),
+    NetworkCheck.Period.check p c e = .accept pub prof →
+    ∀ (s : NetworkCheck.Period.Schedule) (sd : ByteArray) (scan : NetworkCheck.Period.Scan),
+    p.form = .rows s sd scan →
+    ∀ (aj : Lean.Json) (Au : Core.Site.Registration.Auditor) (rl : Lms.Params) (rk rs : ByteArray)
+      (cert : Core.Site.Loc) (hA : Core.Site.Registration.Auditor.ofJson aj = .ok Au)
+      (hr : p.lms = rl ∧ ∃ en, NetworkCheck.Period.entryAt p p.first = some en ∧ en.key = rk ∧ en.session = rs)
+      (hkey : Au.key cert.id = some (Flock.hexOf rk))
+      {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+      (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
+      (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : AuditStatement) (Pw : Partition)
+      (hPw : D.partition sw = some Pw) (ρ : ℕ → Bool) (op : ℕ → List (Obs L K S) → List Bool) (β : ℕ)
+      (hβ : ∀ F ∈ faultySets sw.design Pw δ, faultyBits sw.prog Pw F ≤ β)
+      {Conn Cell Srv Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
+      (f : RecordFormat Conn Cell (List (Obs L K S)))
+      (run : Core.Site.Loc → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × List (Obs L K S))
+      (htrust : Verity.Assumptions.TrustedDevice cert run fun q => recordingCode f q.1 (arr q.2))
+      (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ σ ∈ Ss, ∀ c, σ.cells c ≤ cap c)
+      (hfit : ∀ σ ∈ Ss, f.fits σ)
+      (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
+      (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run cert (schedOf z, srvOf z)).1 = z)
+      (x : Z → Claims.Msg) (wit : Z → Wit) (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
+      (∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
+        Claims.PrBad H D.V
+            (RLeakCertifier H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s))
+              Dj tops)
+            D.E m P ≤
+          D.κ δ m + Real.sqrt (D.γ m * Claims.PrB H D.V P m) + (Bext H D.V D.E Ω P m).Pr H +
+            (Btap H D.V D.E D.commit D.parse tops Ω P m).Pr H) ∧
+      ((∀ z ∈ Zs, ∀ s, D.parse (x z) = some s →
+          CertifierRegisters H D.commit (lay s) (k s) op s (tops s) (run cert (schedOf z, srvOf z)).2) →
+        {z | z ∈ Zs ∧ ExecutionPhaseGood H D L K S lay k δ reg Dj sw ρ tops (x z) (wit z)
+            (run cert (schedOf z, srvOf z)).2}.encard ≤
+          Ss.encard * (((∏ c, (cap c + 1)) * 2 ^ (freeInputs sw.prog (lay sw) (k sw) \ reg sw).card *
+            (faultySets sw.design Pw δ).card * 2 ^ β * Dj ^ k sw : ℕ) : ℕ∞))
+(opens NetTiming Claims Claims.Sampling Finset, Claims.SamplingGeneric (Arg Compiled); imports NetworkCheck.Period, CoreProtocol.Site, Definitions.Certifier.Guarantees.MonitoringPeriod.) It is MonitoringPeriodLeakAccepted at one phase, with the auditor's record and the trusted device tied to cert. It does not tie the statement's sw/Pw/β/cap to the check's commitment; a stronger statement would take those ties as binders. Say if you want that.
+4. On the merged tip (venv pytest, -n 8): test_onsite_periods 30/30, test_advice_charge 11/11, test_onsite_record 221/222. Before my fixes, test_onsite_record failed at collection (8 errors), then 109 failed and 5 more. All were merge seams, the Site's new form that our test's lines kept, and I fixed them in 59aad82fc25: (a) the auditor's keys now carry a scheme, and the certifier Loc too (SCHEMES[0]); (b) the registration log refused "figures" until the site states time_unit and node0 its chip against the auditor's host figures; (c) scan_zk moved to verity.protocols.accounting.certifier.prover by certifier_programs_map, and our bare imports kept the old place. None was another lane's breakage.
+5. KeyError 'statement' is still there: test_at_the_trees_lock_certifier_key_closes_... reads rests_on[periodLeakRegistered]["statement"], and the tree's lock lists no such guarantee. It is the close's regeneration (and a proof first), not a code fault.
+Commits: 59aad82fc25 (seams), 6a5f0269b50 (STATE_CHARGE), pushed in 02aaa62c35f2; a266a86e719 (the statement), local. TIMER: none.
+
