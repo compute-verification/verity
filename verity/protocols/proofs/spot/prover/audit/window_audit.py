@@ -868,7 +868,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
-            p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
+            compose = Path(__file__).resolve().parents[2] / "verifier" / "one_stage" / "compose_circuit.py"
+            p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
                        timeout=a.session_timeout)
             if p.returncode != 0:
