@@ -454,8 +454,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert "store bound: yes, to synthetic-bf16" in al.table(doc).splitlines()
         assert honest["error"] == al.session_error(sessions[0]) and "error" not in dropper
         lg = sessions[0]["ledger"]
-        assert honest["error"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
-        assert [honest["error"][f"delta_{n}"] for n in al.ledger.DELTA_PARTS] == [
+        assert honest["error"]["exact"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
+        assert [honest["error"]["exact"][f"delta_{n}"] for n in al.ledger.DELTA_PARTS] == [
             lg["delta"][n] for n in al.ledger.DELTA_PARTS]
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
@@ -900,7 +900,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
     fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
     def session(profile: float, passes: int, sketch: float, *, charged: bool = True) -> dict:
-        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": al.ledger.hiding_over(passes),
+        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": float(al.ledger.hiding_over(passes)),
              "sketch": sketch}
         if charged:
             d["rejection"] = 48 * passes * 2.0 ** -64
@@ -935,6 +935,16 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     bad["ledger"]["delta"]["sketch"] = 2.0 ** -31
     with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
         al.session_error(bad)
+    texts = json.loads(json.dumps(a))
+    texts["ledger"]["delta"] = {n: str(Fraction(x)) for n, x in a["ledger"]["delta"].items()}
+    exact = sum(map(Fraction, texts["ledger"]["delta"].values()), Fraction(0))
+    for m in texts["ledger"]["declared"]["memory"].values():
+        m.update({"delta": str(exact)} if "delta" in m else {})
+    assert al.session_error(texts)["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(exact)}, (
+        "a ledger that writes its δ and parts as ratio text is read exactly: the hiding part is in the total")
+    texts["ledger"]["delta"]["sketch"] = str(Fraction(1, 2 ** 31))
+    with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
+        al.session_error(texts)
     two = json.loads(json.dumps(a))
     two["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"] *= 2
     with pytest.raises(al.Disagree, match="the ledger computes one"):

@@ -146,7 +146,7 @@ def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.
     return sr
 
 
-def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
+def proof_block_class(set_dir: str, m0_path: str, out: Path) -> str:
     """The class of every instance, from the verifier's own composition of the circuit (M0's `--class-only`)."""
     p = run([sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--class-only"], out / "class.log", {"PYTHONPATH": m0_path})
     return json.loads(p.stdout.strip().splitlines()[-1])["class_sha512"]
@@ -792,7 +792,7 @@ def main() -> int:
     receipt = R.receipt(rec, "one-stage-e2e verifier (a0.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     if a.bind:
-        checks["bindings"] = bindings(st["meta"], header, rec, unit_class(a.set, a.m0_pythonpath, out))
+        checks["bindings"] = bindings(st["meta"], header, rec, proof_block_class(a.set, a.m0_pythonpath, out))
     summary["registration_digest"] = R.digest(rec)
     summary["partition_digest"] = rec["partition"]
     summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}

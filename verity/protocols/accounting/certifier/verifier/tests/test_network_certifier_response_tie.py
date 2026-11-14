@@ -15,7 +15,7 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.circuits.partition_v2 import UNIT_CLASSES
+from verity.circuits.partition_v2 import SIZE_CLASSES
 from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import stop_rule
 from verity.protocols.accounting.certifier.prover import response_tie as RT
@@ -95,7 +95,7 @@ def test_the_shape_and_the_static_are_checked():
     assert SIZES[-1] == CT.most_ids() == 4096
     sh = RT.Shape(4096, True)
     assert (sh.k, sh.egress_bits, sh.row_bits, sh.input_bits, sh.output_bits) == (12, 131_072, 131_104, 131_120, 131_120)
-    assert sh.output_bits <= UNIT_CLASSES[-1] < 16 + 32 * (2 * sh.O + 1)
+    assert sh.output_bits <= SIZE_CLASSES[-1] < 16 + 32 * (2 * sh.O + 1)
     assert (RT.Shape(16, False).input_bits, RT.Shape(16, False).output_bits) == (544, 560)
     assert sh.statics() == RT.Shape(4096, False).statics() == {"O": 4096}
     refused = ((0, "power of two of at least 2"), (1, "power of two of at least 2"), (24, "power of two of at least 2"),
@@ -114,7 +114,7 @@ def test_the_shape_and_the_static_are_checked():
 def test_a_row_whose_count_its_field_doesnt_hold_is_refused(monkeypatch):
     """Were the widest size class wider, a stop class's row would still be at most 4,096 ids, the most its stop
     word's 13 bits count, and a no-stop class's at most 32,768, the end row's 16."""
-    monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 1 << 22)
+    monkeypatch.setattr(CT, "SIZE_CLASS_MAX", 1 << 22)
     assert CT.most_ids() == 65_536
     assert RT.Shape(4096, True).k == 12 and RT.Shape(32_768, False).k == 15
     with pytest.raises(ValueError, match="count field, of 13 bits, doesn't hold: at most 4096 ids"):
