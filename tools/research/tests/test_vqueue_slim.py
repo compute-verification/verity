@@ -24,10 +24,11 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
-                                  _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
-                                  judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
-                                  joined, shard_count, start, step_kind, step_test, suite_kind, traced_reads, unnamed)
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+                                  WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
+                                  audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
+                                  lends_onward, lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start,
+                                  step_kind, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -878,6 +879,116 @@ def test_an_auto_plan_waits_then_is_made_and_each_of_its_shards_names_the_runs_i
     assert judge(h.d, rec) == Verdict(PENDING) and len(plans.asked) == 1 and h.posted == []
     plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
     assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and named == ["r-a", "r-a"]
+
+
+@pytest.mark.parametrize("shards", [1, 3, "auto:2"])
+def test_a_check_leaving_suites_to_its_base_s_names_it_to_each_launch_and_its_record_says_whose(world, monkeypatch, tmp_path,
+                                                                                                shards):
+    """``suites_from``, the candidate the check is built on: each launch names it by the setting `check.lender` reads
+    (`LEND_ENV`, which settings.py declares under this name), an auto plan's shards as they launch, and the next launch
+    names none; the record says whose check answers for the suites it leaves out (``suites_from``).  Only the check that
+    gates takes one: a candidate's only its own base, and the check of `main`'s own tip, which is its own base, another
+    commit, an earlier tip, never itself."""
+    assert LEND_ENV == "TRAIN_SUITES_FROM"
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, named, plans = "m1,m2,m3", [], Plans(h.d, tmp_path)
+    h.d._started = lambda got: named.append(_handed().get(LEND_ENV)) or Landing._started(got)
+    rec = start(h.d, sha, base, shards=shards, suites_from=base)
+    assert (rec["suites_from"], rec["gate"]) == (base, CHECK) and LEND_ENV not in _handed()
+    assert any(f"as candidate {sha[:12]}'s check, the suites keyed as in {base[:12]} its check's: " in x for x in world.logs)
+    if shards == "auto:2":
+        assert named == []
+        plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+        assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING)
+    assert named == [base] * (2 if shards == "auto:2" else shards) and LEND_ENV not in _handed()
+    named.clear()
+    assert "suites_from" not in start(h.d, sha, base, shards=1) and named == [None]
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, suites_from=base)
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, shards=1, suites_from=sha)
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, sha, shards=1, suites_from=sha)
+    other = world.change({"x.txt": "x\n"})
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, shards=1, suites_from=other)
+    named.clear()
+    own = start(h.d, sha, sha, shards=1, suites_from=base)
+    assert (own["suites_from"], own["tip"], own["base"], named) == (base, sha, sha, [base]) and LEND_ENV not in _handed()
+
+
+def test_a_check_leaves_no_suite_to_its_base_s_under_a_deselect_list(world, monkeypatch, tmp_path):
+    """Under the loop's deselect list two checks may run different tests of one suite, so a check launched with one names no
+    lender, and its record says it left tests out (``deselect``), which keeps it from lending (`lends_suites`)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    named, listed = [], tmp_path / "deselect"
+    h.d._started = lambda got: named.append(_handed().get(LEND_ENV)) or Landing._started(got)
+    listed.write_text("tools/x/tests/test_x.py::test_slow\n")
+    rec = start(h.d, sha, base, shards=1, deselect=listed, suites_from=base)
+    assert named == [None] and "suites_from" not in rec and rec["deselect"] is True
+    listed.unlink()
+    rec = start(h.d, sha, base, shards=1, deselect=listed, suites_from=base)
+    assert named == [None, base] and rec["suites_from"] == base and "deselect" not in rec
+
+
+def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite_steps(world, monkeypatch, tmp_path):
+    """`lends_suites`: the check that gates, judged on pytest and lean-suites, lends them while the check of `main` keeps a
+    verdict that passed both; `lends_onward`, to the check of a later tip of `main`, the same check whatever its verdict
+    yet, where that tip's policy is the one it was judged under.  Not the run beside a graph2 check, not a check launched
+    under a deselect list, not where a suite step gates nothing or the candidate's policy isn't its base's (an allowance
+    its check is judged without), and, for `lends_suites`, not while `main`'s check keeps no verdict or one that failed a
+    suite step: a candidate above lands on that failure as inherited, and a check that left the suite out would record
+    the step passed."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    green = start(h.d, base, base, shards=1)
+    _slim(h, tmp_path)
+    assert judge(h.d, green) == Verdict(PASS) and {"pytest", "lean-suites"} <= set(green["verdict"]["passed"])
+    rec = start(h.d, sha, base, shards=1)
+    assert lends_suites(h.d, rec, green)
+    assert not lends_suites(h.d, None, green) and not lends_suites(h.d, start(h.d, sha, base), green)
+    assert not lends_suites(h.d, {**rec, "deselect": True}, green)
+    assert not lends_suites(h.d, rec, None) and not lends_suites(h.d, rec, start(h.d, base, base, shards=1)), "no verdict kept"
+    red = json.loads(json.dumps(green))
+    red["verdict"]["passed"] = [s for s in red["verdict"]["passed"] if s != "pytest"]
+    assert not lends_suites(h.d, rec, red)
+    other = world.change({"tools/verity/check/policy.toml": _policy(("suite x", "ci", LIVE), off_gate=OFF)})
+    _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{other}")
+    assert not lends_suites(h.d, start(h.d, other, base, shards=1), green), "its policy isn't its base's"
+    assert lends_onward(h.d, green, sha) and lends_onward(h.d, rec, sha)
+    assert lends_onward(h.d, start(h.d, base, base, shards=1), sha), "one still running lends too"
+    assert not lends_onward(h.d, None, sha) and not lends_onward(h.d, start(h.d, base, base), sha)
+    assert not lends_onward(h.d, {**green, "deselect": True}, sha)
+    assert not lends_onward(h.d, green, other), "the tip's policy isn't the one that check was judged under"
+    assert not lends_onward(h.d, start(h.d, other, base, shards=1), other), "nor is its own its base's"
+    h.d.warn_steps = ("lean-suites",)
+    assert not lends_suites(h.d, rec, green) and not lends_onward(h.d, green, sha)
+
+
+def test_a_check_that_left_suites_to_another_passes_only_once_that_one_passed_both_suite_steps(world, monkeypatch, tmp_path):
+    """`borrowed`: the check that left suites to its base's (``suites_from``) never passes on its own steps alone.  While
+    that check keeps no verdict a pass is pending and a fail not ended; once it passed both suite steps the verdict is the
+    check's own.  A record that never will answer (`answers_suites`: it failed a suite step or ended in infra, ran under
+    a deselect list, or is no check that gates, as a quick tier's isn't whatever it says it passed) holds it the same way,
+    for the loop to start it again.  A check that left none out is never held."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    lender = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=1, suites_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    red = Verdict(FAIL, (_failed(h, base, sha, "circuit-check"),), ended=True)
+    assert own == Verdict(PASS) and answers_suites(lender) is None and answers_suites(None) is None
+    for source in (None, lender):
+        assert borrowed(own, rec, source) == Verdict(PENDING) and borrowed(red, rec, source) == replace(red, ended=False)
+    passed = {**lender, "verdict": {"state": PASS, "passed": ["pytest", "lean-suites", "lean-audit"]}}
+    assert answers_suites(passed) is True and borrowed(own, rec, passed) == own and borrowed(red, rec, passed) == red
+    never = [{**passed, "verdict": {"state": FAIL, "passed": ["lean-suites"], "failed": []}},
+             {**passed, "verdict": {"state": INFRA}}, {**passed, "deselect": True}, {**passed, "gate": "quick"},
+             {k: v for k, v in passed.items() if k != "gate"}]
+    for source in never:
+        assert answers_suites(source) is False and borrowed(own, rec, source) == Verdict(PENDING)
+        assert not lends_suites(h.d, start(h.d, sha, base, shards=1), source)
+    plain = start(h.d, sha, base, shards=1)
+    assert borrowed(own, plain, None) == own and borrowed(own, plain, never[0]) == own and borrowed(own, None, None) == own
 
 
 def test_a_check_that_waited_and_then_registered_no_run_is_infra_kept(world, monkeypatch):

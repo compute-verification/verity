@@ -256,6 +256,11 @@ only those its slot happens to hold.  The agreement's pinned upstream build and 
 the launcher signs a URL of each and fetches neither, and lean-agreement fetches them as it starts (`lean_agreement_urls`), so a
 run whose agreement pass is reused fetches nothing.
 
+A pass travels in a pack only once its run has ended, so the check of a candidate of the verified queue built on a candidate
+whose check is still running finds none of that check's passes.  The queue names that candidate (`TRAIN_SUITES_FROM`), and a
+`--record --on --deferred` launch whose base it is sends it (`lender`, `LEND_FILE`): each suite step then leaves out the
+suites whose key in its tree is their key here (`suites.py --lend-from`, a row marked `lent`), which that check answers for.
+
 The evidence store.  A recorded check runs the store-backed tests (adapters/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
 dir (`research run --custody-r2`, the default with --on: a delete-free key with GetObject), which `store_io` hands to its store
@@ -437,6 +442,9 @@ SHARD_PARTS = "check-shard-parts.json"
 BASE_FILE = "check-base.txt"
 #: the commit a `--record --on` check's --ratchet-base REF names, among its inputs: ratchet-gate's base in place of `BASE_FILE`'s
 RATCHET_BASE_FILE = "check-ratchet-base.txt"
+#: the commit whose check answers for the suites a `--record --on --deferred` run leaves out (`suites.py --lend-from`), among
+#: its inputs: the run's base, where the verified queue names it (`lender`)
+LEND_FILE = "check-lend-from.txt"
 #: an auto shard's plan (`shards.py`), among its inputs (unrecorded: `--shard-plan-file`)
 AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
@@ -1289,6 +1297,32 @@ def nested_record(argv: list[str]) -> str:
                        *(a for a in argv if a != "--record")])
 
 
+def lender(base: str, deferred: str | None, rest: list[str]) -> str | None:
+    """The commit a recorded run's suites lend from (`LEND_FILE`): the one `TRAIN_SUITES_FROM` names, which the verified queue
+    sets for a check whose suites another check runs (`research.vqueue_slim.start`'s ``suites_from``): for the check of a
+    candidate built on a candidate in flight, that candidate, the run's own base ``base``; for the check of `main`'s own tip,
+    whose base is its first parent, an earlier tip of `main`, that commit or one below it (`_at_or_below`).  Never this
+    commit itself, and only for a `--deferred` run that reuses passes; None without the setting, and, the reason printed,
+    for any other run: its suites all run."""
+    if not (named := SETTINGS.TRAIN_SUITES_FROM):
+        return None
+    sha, on = _rev(f"{named}^{{commit}}"), _rev(f"{base}^{{commit}}")
+    if deferred is None or "--no-cache" in rest:
+        why = "only a --deferred run that reuses passes leaves a suite to another check"
+    elif sha is None or on is None or sha == _rev("HEAD") or not _at_or_below(sha, on):
+        why = f"it is neither the run's base {base} nor a commit below it"
+    else:
+        return sha
+    print(f"check: TRAIN_SUITES_FROM {named} lends no suite: {why}", flush=True)
+    return None
+
+
+def _at_or_below(sha: str, commit: str) -> bool:
+    """Whether ``sha`` is ``commit`` or a commit below it in its history."""
+    return sha == commit or subprocess.run(["git", "merge-base", "--is-ancestor", sha, commit], cwd=ROOT,
+                                           capture_output=True).returncode == 0
+
+
 def record(argv: list[str]) -> int:
     """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--ratchet-base RREF] [--agreement]`: `research run --tool check` on this
     clean commit, with presigned URLs of the pinned upstream build and inputs (`agreement_url_file`: the launch fetches neither)
@@ -1296,7 +1330,8 @@ def record(argv: list[str]) -> int:
     whenever --agreement is given, refused when they can't be signed, with
     `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the presigned URLs of
     the newest recorded checks' verdict packs (`verdict_url_file`), with --no-cache after both packs of each recorded check of the
-    commit (`commit_packs`, the passes its fresh suites are compared with). A commit that can't land on REF as it is
+    commit (`commit_packs`, the passes its fresh suites are compared with), and with `--on` the commit its suites lend from
+    (`lender`, `LEND_FILE`). A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
@@ -1458,6 +1493,9 @@ def record(argv: list[str]) -> int:
         if ratchet_base is not None:
             (d / RATCHET_BASE_FILE).write_text(f"{_rev(ratchet_base) or ratchet_base}\n")
             cmd += ["--send", str(d / RATCHET_BASE_FILE)]
+        if lend := lender(base, deferred, rest):
+            (d / LEND_FILE).write_text(f"{lend}\n")
+            cmd += ["--send", str(d / LEND_FILE)]
     try:
         if both:
             procs = []
@@ -2081,8 +2119,11 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     # circuit-check alone the other half is circuit-check's (`cc_mem_gb`), and alone in the slot pytest has all of it
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // (
         2 if with_lean or with_cc else 1)
+    # the commit the run was sent as its suites' lender (`LEND_FILE`): each suite step leaves out what its check answers for
+    lend = out / "inputs" / LEND_FILE
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
-            *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else [])]
+            *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []),
+            *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else [])]
     lean = lean_steps(out, cache, urls, regenerate, bookkeeping, agreement_urls)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
@@ -3329,7 +3370,8 @@ def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
 
 def reuse(out: Path, done: list[dict]) -> dict:
     """Per step that can reuse a kept pass, how many of its parts this check reused and how many it ran again: suites
-    (`suites.json`, `suites-lean.json`; each suite run again with the inputs that forced it, `suites.forced_by`), circuit-check
+    (`suites.json`, `suites-lean.json`; each suite run again with the inputs that forced it, `suites.forced_by`; ``lent``, those
+    of the reused that another commit's check answers for, `suites.py --lend-from`), circuit-check
     targets (its step's cache), Lean packages (`lean-audit/audit.json`'s `cached`), and the steps cached whole (`STEP_KEYS`)."""
     got: dict[str, dict] = {}
     for f, step in (("suites.json", "pytest"), ("suites-lean.json", "lean-suites")):
@@ -3339,6 +3381,7 @@ def reuse(out: Path, done: list[dict]) -> dict:
             continue
         ran = sorted((r for r in rows if r.get("status") != "cached"), key=lambda r: -(r.get("seconds") or 0))
         got[step] = {"of": "suites", "reused": len(rows) - len(ran), "rerun": len(ran),
+                     **({"lent": n} if (n := sum(bool(r.get("lent")) for r in rows)) else {}),
                      "reran": [{"suite": r["suite"], "seconds": r.get("seconds"),
                                 "forced_by": ((r.get("forced_by") or {}).get("why") or ["not recorded"])[:3]} for r in ran]}
     for s in done:
