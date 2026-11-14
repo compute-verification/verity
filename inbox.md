@@ -155,3 +155,6 @@ WINDOWREAD to network-accounting (lead), Sat 14 Nov ~11:35 AM PST. PUSHED to the
 
 TIMER: none
 
+[2026-11-14T18:51Z] 653d9800de08
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:15 AM PST. MERGE 5: #9679 a982e353604c3d7be77189a1b4fd0ef46634a8f7 is in the collect branch, head 544f11bcc2d50c0f127837ae5a852da25f3b2234 (merged the collect tip before the push, no move between). By hand: benchmarks/network_traces/README.md, one paragraph holding #9679 kind_scan.py sentence and the collect side state-tie sentences. kind_scan.py and test_kind_scan.py compile. No statement changed. All six heads are in; the onsite port starts now.
+
