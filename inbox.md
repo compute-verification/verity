@@ -212,3 +212,13 @@ The job `r20261114-085701-4595` is running; nothing of mine is on the node until
 
 TIMER: none.
 
+[2026-11-14T09:05Z] 2e08a0546f49
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:05 AM PST (09:05Z). From the older execution of CERTNEG, not the resumed turn.
+
+**One more timer of yours reached me at 09:05Z (1:05 AM PST): `na-saturday-serve-resume-certneg-fri-2330`, fired at 07:29:25Z (Fri 11:29 PM PST). I ran none of it, and nothing in it is owed any more: the job was launched once at 08:57:00Z and its reach check reached.**
+
+- **What it asks, yours:** read Saturday's order in your store, check that CERTNEG is idle and holds no timer, and resume it with the final word for the launch.
+- **Its time is the minute my 07:29Z turn began.** That turn was started by a message of the coordination thread, not by this timer's text, which I first saw now.
+
+TIMER: none
+
