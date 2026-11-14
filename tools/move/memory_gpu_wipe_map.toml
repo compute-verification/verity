@@ -28,4 +28,5 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/
            "**/*.lean", "tests/tree.toml", "verity/protocols/accounting/certifier/**"]
 
 [modules]
-# the renames [paths] and [roots] imply (`layout.py --modules`): none, `wipe_on_node.py` is run by its path
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.pous.streamed_wipe.wipe_on_node" = "verity.protocols.accounting.pous.prover.wipe_on_node"
