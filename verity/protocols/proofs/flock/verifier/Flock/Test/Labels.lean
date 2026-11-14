@@ -1,11 +1,12 @@
-/-
-`RecVStar.checkLabels` on a population of four units: a sampled table's statement must label its instances with the units its
-sample proves, at one table and at two (each table's part of the sample, `tableDraw`, as `Stmt.setupTables` builds it).
--/
 module
 
 public import Flock.RecVStar
 meta import Flock.RecVStar
+
+/-!
+`RecVStar.checkLabels` on a population of four units: a sampled table's statement must label its instances with the units its
+sample proves, at one table and at two (each table's part of the sample, `tableDraw`, as `Stmt.setupTables` builds it).
+-/
 
 @[expose] public section
 

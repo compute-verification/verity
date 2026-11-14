@@ -52,9 +52,9 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the sampled proof blocks' session records' SHA-512, once)
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one sampling design and K′ is a function of the
   level, so the challenger holds one Stream per level.
-- **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered`, which
+- **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered_twin`, which
   `public_problem` mirrors for the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome
-  (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
+  (`core_check.case_twin` the Python) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the execution phase's witness (``outcome.json``'s ``of_record``, the opening
   verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
   rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
@@ -71,7 +71,7 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before the execution phase's coins (a beacon's salt) is read
   only when the request says it is a recorded replay.  `select` opens the execution phase's sampling coin after the registration (its
-  digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
+  digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``verity-verify-proof draw --population N
   --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  An execution phase is received within
   the registration deadline of the salt coin's release and before the execution phase's sampling coin is released, or it is refused
   (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
@@ -111,33 +111,34 @@ import math
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
+from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.circuits.codec import canonical_json
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.randomness import Key, derive
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.protocols.accounting.certifier.verifier.active import RUN_ID_BYTES
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.circuit import pc8
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import verifier as PV
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import pc8
 from verity.protocols.accounting.pouw.verifier.coins import Challenger as Coins
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
@@ -146,7 +147,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR  # noqa: E402
+import of_record as OR
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
@@ -243,9 +244,9 @@ def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, An
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
     ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
-                         "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
-                         "(`public_problem`)"),
+    ("window", "output", ("PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, "
+                          "root_W), each the verifier's own recomputation at the registered level, the length its "
+                          "fixed max_tokens (`public_problem`)")),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
@@ -315,7 +316,8 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
     unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
     SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
     if record is None:
-        from research.store.local import LocalStore  # noqa: PLC0415  only the verifier's own reading fetches
+        # only the verifier's own reading fetches
+        from research.store.local import LocalStore
         record = LocalStore().fetch(CHALLENGER_KEY_PIN)
     try:
         doc = json.loads(Path(record).read_bytes())
@@ -339,7 +341,7 @@ class Deployment:
     """What a certified execution phase's verifier pins of its deployment: the network certifier's public key and its run's id,
     the only ones whose answers the challenger takes (its client, `certifier.active.CertifierClient`, must be for them,
     and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
-    coin record and the sample's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
+    coin record and the sample's check of record verifies it (`core_check.draw_twin`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
     # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
@@ -652,7 +654,7 @@ def core_params(params: dict) -> dict:
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
           record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`core_check.opening`, the unit sampled unless not `drawn`), of record (`record`, Lean's by
+    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`, Lean's by
     default), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
     one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
@@ -695,10 +697,10 @@ def lean_verdict(path_: Path) -> dict:
     except (OSError, ValueError):
         lines = []
     if not lines:
-        return {"of_record": True, "accepted": None, "verifier": "lean flock-verify verify --zk", "sessions": []}
+        return {"of_record": True, "accepted": None, "verifier": "lean verity-verify-proof verify --zk", "sessions": []}
     v = lines[0] if len(lines) == 1 else lines
     return {"of_record": True, "accepted": all(bool(x.get("accepted")) for x in lines),
-            "why": next((x.get("why", "") for x in lines if not x.get("accepted")), ""), "verifier": "lean flock-verify verify --zk",
+            "why": next((x.get("why", "") for x in lines if not x.get("accepted")), ""), "verifier": "lean verity-verify-proof verify --zk",
             "digest": hashlib.sha512(canonical_json(v)).hexdigest(), "sessions": [_session_digest(x.get("session")) for x in lines]}
 
 
@@ -760,7 +762,7 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
                    "sessions": [d for v in vs for d in (v or {}).get("sessions", ())]}}
 
 
-#: a sample over the key's stream: (law, N, the stream's bytes) to the units
+#: a sample over the key's stream: (the sampling design, N, the stream's bytes) to the units
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
@@ -803,7 +805,7 @@ class Recorded:
 def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) -> tuple[Ch.LiveCommitment, dict]:
     """A certified execution phase's trusted coin commitment, which the challenger reads itself from the record its challenger
     signed and wrote at `path` under the verifier's `key` (`challenger.trusted_commitment`), and the record with the key
-    as the sample's check of record reads them (`core_check.draw` verifies the record again).  Raises `ValueError` when
+    as the sample's check of record reads them (`core_check.draw_twin` verifies the record again).  Raises `ValueError` when
     there is no such record, or it isn't a live execution phase's sampling session's."""
     if path is None or not isinstance(key, Ch.ChallengerKey):
         raise ValueError("a certified window's challenger reads its coin commitment from its challenger's signed record "
@@ -824,12 +826,12 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
 
 def _pd():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    from verity_vllm.protocols.pouw import pearl_c as PD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD
     return PD
 
 
 class Challenger:
-    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered`), the pass's
+    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered_twin`), the pass's
     execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's, by default).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
     `Recorded` in a replay); the execution phase's sampling coin keys `sampler` (Lean's sample, or its twin `python_sampler`).  A Spec
     fixes one sampling design and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
@@ -919,7 +921,7 @@ class Challenger:
 
     def _coins_json(self) -> dict:
         """The coins the checks of record read: a certified execution phase's challenger record and the key it is signed under
-        (`core_check.draw` verifies it), or the seeded execution phase's commitment."""
+        (`core_check.draw_twin` verifies it), or the seeded execution phase's commitment."""
         return self.coins.commitment.to_json() if self.signed is None else self.signed
 
     def open(self, label: str, after: bytes) -> CoinOpening | Ch.LiveOpening:
@@ -958,7 +960,7 @@ class Challenger:
             self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def registered(self, name: str, rec: Mapping[str, Any]) -> None:
-        """PoUW's rule over the registration (`core_check.registered`), of record.  Raises `Refused`."""
+        """PoUW's rule over the registration (`core_check.registered_twin`), of record.  Raises `Refused`."""
         try:
             x = {"params": self.core, "commitment": OR.hexed(rec)}
         except TypeError as e:
@@ -972,7 +974,7 @@ class Challenger:
     def pass_epoch(self, raw: bytes | None, recorded: bool = False, name: str = "", **bound: bytes) -> str:
         """How the pass's salt was had (``coin``, ``recorded beacon`` for a recorded replay's, or ``certifier``), its
         manifest `raw` re-started under the challenger's own coin commitment, or a certified execution phase's `bound`
-        (`core_check.pass_epoch`'s ``reveal``, ``committed``, ``stream`` and ``prover``), and named by the execution phase's
+        (`core_check.pass_epoch_twin`'s ``reveal``, ``committed``, ``stream`` and ``prover``), and named by the execution phase's
         parameters, of record.  Raises `Refused`."""
         out = self._of_record(name, self.record.pass_epoch, {
             "coins": self._commitment().to_json(), "raw": None if raw is None else raw.hex(),
@@ -1036,7 +1038,8 @@ class Challenger:
             return self._certified(name, rec, stream, replay, manifest, recorded)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
-        sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
+        replayed = None if replay is None else self._drawn(replay)
+        sampler = self._keyed if replay is None else (lambda law, n: replayed.units)
         st = self.stream(stream, ell, sampler)
         if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
@@ -1405,13 +1408,13 @@ def cmd_edit(a) -> int:
 
 
 def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
-    """The execution phase's sample by Lean ``flock-verify draw --stream``: the units of a subset sampling design over N, on the key's stream."""
+    """The execution phase's sample by Lean ``verity-verify-proof draw --stream``: the units of a subset sampling design over N, on the key's stream."""
     def sample(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
         p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
         lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:
-            raise _refused("sampler", f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
+            raise _refused("sampler", f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
         if log is not None:
             with open(log, "a") as f:
                 f.write(lines[0] + "\n")
@@ -1654,18 +1657,19 @@ def main(argv=None) -> int:
     p = sub.add_parser("challenger")
     p.add_argument("params")
     p.add_argument("log")
-    p.add_argument("--lean", help="Lean flock-verify, whose draw over the sampling coin's key is the challenger's "
-                                  "(default: its Python twin, stream_subset)")
+    p.add_argument("--lean", help="Lean verity-verify-proof, whose sample over the sampling challenge's key is the "
+                                  "challenger's (default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
-    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins flipped "
-                                   "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
-                                   "before serving); default: fresh from the Lean verifier of record when this process "
-                                   "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
+    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's challenges "
+                                   "came from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's "
+                                   "challenges before serving); default: fresh from the Lean verifier when this "
+                                   "process starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes "
+                                   "LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
-    p.add_argument("--lean", help="Lean flock-verify, the sample's sampler (default: its Python twin)")
+    p.add_argument("--lean", help="Lean verity-verify-proof, the sample's sampler (default: its Python twin)")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("coin-variant")
     for x in ("manifest", "coins", "opening", "out"):

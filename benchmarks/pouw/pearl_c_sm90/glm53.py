@@ -117,7 +117,7 @@ def gamma(s: PearlC, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
 def table(name: str = SCHEME, ep: bool = False) -> list[dict]:
     """Every linear (`linears`) with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the
     record's) and, in the domain, the gap at each FADD reading."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     rows = []
     for i, lin in enumerate(linears(ep=ep)):

@@ -1,13 +1,14 @@
-/-
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Salt
+public import Proofs.Flock.Soundness.Discharge.Hm.Top
+
+/-!
 The hm96 slot from the empty state: in a satisfying assignment of its rows, when its `cv` inputs hold the chaining value
 of a message before its last block, its `pad` inputs the last block and its salt inputs a 192-byte salt's bits, its
 outputs are the bits of `SHA-512(m) ⊕ M·y` and of `SHA-512(salt_prefix ‖ y)`. The chaining value before each block is
 `chainV` (`chainV_succ`: one compression per block, the form the sha512x3 slots compute).
 -/
-module
-
-public import Proofs.Flock.Soundness.Discharge.Hm.Salt
-public import Proofs.Flock.Soundness.Discharge.Hm.Top
 
 @[expose] public section
 

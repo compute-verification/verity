@@ -138,7 +138,7 @@ theorem zk_width (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ true x j) :
   | none => simp [wordLenJ, hh] at h
   | some a =>
     obtain ⟨_, st⟩ := a
-    exact ⟨2 ^ (Claims.Flock.zkLevel0 st.m).lanes, by positivity, fun u hu => by simp [wideJ, hh, hu]⟩
+    exact ⟨2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).lanes, by positivity, fun u hu => by simp [wideJ, hh, hu]⟩
 
 /-- **`ExtendJ` at the untrimmed masked instance**, at every relation: `Claims.Flock.extendJ_of_fill` at the masked
 code's first lane (`zk_avoid`) and table `j`'s witness lanes (`zk_width`). -/
@@ -157,7 +157,7 @@ theorem zk_width (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ true x j) :
   | none => simp [wordLenJ, hh] at h
   | some a =>
     obtain ⟨_, st⟩ := a
-    exact ⟨2 ^ (Claims.Flock.zkLevel0 st.m).lanes, by positivity, fun u hu => by simp [wideJ, hh, hu]⟩
+    exact ⟨2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).lanes, by positivity, fun u hu => by simp [wideJ, hh, hu]⟩
 
 /-- **`ExtendJ` at the untrimmed masked instance**, at every relation: `Claims.Flock.extendJ_of_fill` at the masked
 code's first lane (`zk_avoid`) and table `j`'s witness lanes (`zk_width`). -/

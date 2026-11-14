@@ -63,6 +63,8 @@ from verity.commitments import rowleaf as RL
 from verity.commitments.indexed import RangeIndexedDomain
 
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 M_REAL, LAYERS = 32, 32
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}   # (n, k)
 POISON, SLOT, SEG_TPB = 0xA5, 256, 256
@@ -198,7 +200,7 @@ def main() -> int:
     ap.add_argument("--rows-cubin", required=True, help="hm96_rows.cu built for sm_120a")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
-    R = load("gpu1_run", HERE.parent / "pearl_c_sm120" / "run.py")
+    R = load("gpu1_run", SM120 / "run.py")
     vp, u64, P = C.c_void_p, C.c_uint64, C.POINTER
     image, rimage = Path(args.cubin).read_bytes(), Path(args.rows_cubin).read_bytes()
     dev = R.Dev(image)

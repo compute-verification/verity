@@ -314,7 +314,7 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 def HStruct (GS : Flock.RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) : Prop :=
   structureOf F.sh = .ok GS ∧ groups GS (portSizes F.sh) = .ok gs
 
-/-- **`HStruct` from the verifier's check of one part**: a circuit `RecResiduals.check` passes (`flock-verify` runs it on
+/-- **`HStruct` from the verifier's check of one part**: a circuit `RecResiduals.check` passes (`verity-verify-proof` runs it on
 every circuit it reads), its unit named part `p` at a shape `RecResiduals.shape?` gives as `sh`, has the structure and
 the groups return at `sh` (`RecResiduals.part` computes both), its parts plain (`holoOf`). -/
 theorem hStruct_of_check {c : Flock.Circuit} (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ}

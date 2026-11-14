@@ -13,7 +13,7 @@ Three objects, all pure Python (no torch; testable on any host):
   for and only when every applicability condition it was built under holds for the requester; the refusal names every differing
   field with both values.
 
-Canonical bytes = `verity.circuits.codec.canonical_json` (compact, keys sorted, ASCII); a tuple is written as a list, a set as its sorted list.
+Canonical bytes = `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`; tuples are serialised as lists.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import json
 from dataclasses import asdict, dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from verity.circuits.codec import canonical_json
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
 from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
@@ -35,14 +34,15 @@ SCHEMA = "verity/aot-artifact/v1"
 
 
 def canonical_bytes(obj: Any) -> bytes:
-    return canonical_json(_plain(obj))
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=_json_default).encode()
 
 
-def _plain(o):  # a set as its sorted list, which is how these bytes have always held one
-    if isinstance(o, dict):
-        return {k: _plain(v) for k, v in o.items()}
-    seq = sorted(o) if isinstance(o, (set, frozenset)) else o
-    return [_plain(v) for v in seq] if isinstance(o, (list, tuple, set, frozenset)) else o
+def _json_default(o):
+    if isinstance(o, (set, frozenset)):
+        return sorted(o)
+    if isinstance(o, tuple):
+        return list(o)
+    raise TypeError(f"not canonicalisable: {type(o).__name__}")
 
 
 def sha256_hex(b: bytes) -> str:
@@ -75,8 +75,8 @@ class TargetProfile:
                            declaration).  `emulate_precision_casts` (Inductor's own switch) makes every fused Triton kernel perform the bf16
                            roundings the Program specifies at each op boundary; default Inductor carries fp32 through a fused region, so the
                            Program's intermediate values do not exist in that execution and any observation of them changes it
-                           (instrumented != production).  With the emulation the collection boundary is invisible by
-                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
+                           (instrumented != served).  With the emulation the collection boundary is invisible by
+                           construction (measured: served vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
@@ -145,8 +145,8 @@ class TargetProfile:
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
-                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
+                           SPOT alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, SPOT included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
@@ -194,7 +194,7 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
-    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    #: the protocol set the run executes (None = SPOT alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
     #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
@@ -455,15 +455,15 @@ class TargetProfile:
                     "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
                     "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
-                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
+                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact ("
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
-                                       "compilation facts + kernel_set digest (DECISIONS-2 §7 S1)" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
+                                       "compilation facts + kernel_set digest" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
                                        else "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"),
                 "claim": ("P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay "
-                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes "
-                          "(S2: 4016/4016 launches on the B1 row); the eager Program is NOT a model of this execution (P_compiled != P_eager: "
+                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; "
+                          "the eager Program is NOT a model of this execution (P_compiled != P_eager: "
                           "roundings elided, residual recomputed unrounded, other reduction orders; tokens diverge from eager). Attention = eager "
-                          "FA2 splitting op; lm_head eager (DECISIONS-2 §7, ruling M-0380)")}
+                          "FA2 splitting op; lm_head eager")}
 
     # -- serialisation ---------------------------------------------------------------------------------------------------
     def to_json(self) -> dict:
@@ -490,7 +490,7 @@ class TargetProfile:
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         if d.get("protocols") is None:
-            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+            d.pop("protocols", None)               # absent = SPOT alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:
@@ -527,7 +527,9 @@ class TargetProfile:
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
+        from verity_vllm.program.frontend.gemm_targets import (
+            vllm_tuned_gemm_arch_family,  # lazy: keeps this module light
+        )
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -552,7 +554,6 @@ class TargetProfile:
         import torch  # lazy: the module is torch-free on CPU hosts
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
-
 
     @classmethod
     def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
@@ -595,11 +596,11 @@ class TargetProfile:
         tp = cls.from_gpu_document(profile_doc.get("gpu"))
         if tp is None:
             return None
-        fav = ((profile_doc.get("backends") or {}).get("attention_flash_attn_version"))
+        backends = profile_doc.get("backends")
+        fav = backends.get("attention_flash_attn_version") if backends else None
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
-
 
     @property
     def capability_str(self) -> str:
@@ -676,7 +677,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         if got != profile.moe_experts_class():
             bad.append(f"moe_backend declared {profile.moe_backend!r} ({profile.moe_experts_class()}), applied {got!r}")
     return bad
-
 
 
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------

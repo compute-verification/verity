@@ -215,9 +215,10 @@ def namesEq (got : Option (List String)) (want : List String) : Bool :=
 
 /-- **A record names its registration's names** (`n`): its roots' ports are the registration's ports and its registered
 values the registration's registered values, each a string named once (`namesEq`). `Run.run`'s registration check
-(`Registration.check`) holds a record to this at its registration's verifier, whose ports and registered values are
-each listed once: `R3-ports` of the ports, and of the registered values `R7-values` where the registration registers
-some and the record's keys, which then have no `registered`, where it registers none. -/
+(`Registration.check`) holds a record to this at its registration's verifier, whose ports and registered values, the
+values it holds a certified entry for among them, are each listed once: `R3-ports` of the ports, and of the registered
+values `R7-values` where the registration registers some and the record's keys, which then have no `registered`,
+where it registers none. -/
 def recordOk (rec : Json) (n : Names) : Bool :=
   namesEq (namesAt rec "roots" "port") n.ports && namesEq (namesAt rec "registered" "value") n.values
 
@@ -348,10 +349,11 @@ def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (k 
         | none => true
       | none => true
 
-/-- The tables' sizes `m` a session's statement sets up under `--zk`, in order; none where it doesn't set up. -/
-def shapeOf (xS : Msg) : List ℕ :=
+/-- The tables a session's statement sets up under `--zk`, in order, each its statement version (wide leaf or not)
+and its size `m`; none where it doesn't set up. -/
+def shapeOf (xS : Msg) : List (Bool × ℕ) :=
   match FlockDeploy.setupOf true xS with
-  | some (_, _, sts) => sts.toList.map (·.m)
+  | some (_, _, sts) => sts.toList.map fun st => (st.wideLeaf, st.m)
   | none => []
 
 /-! ## What the verifier evaluates -/
@@ -375,7 +377,8 @@ def hiddenOf (xS : Msg) : Bool :=
   | none => false
 
 /-- **Template `t`'s session statement is in scope**: in Flock's masked scope, with template `t`'s reference statement's
-table shapes, in the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any
+table shapes (each table's statement version and size, so a session at the other statement version is refused), in the
+scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `verity-verify-proof` refuses any
 other), and with hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
 def sessionOk (t : ℕ) (xS : Msg) : Bool :=
   zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS
@@ -1101,7 +1104,8 @@ def session (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
   else some (h.xS₀ (templateOf h.ms u), refusedSeen)
 
 /-- Template `t`'s reference statement's masked level-0 lengths, summed. -/
-noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def n₀ (t : ℕ) : ℝ :=
+  ((shapeOf (h.xS₀ t)).map fun p => (2 : ℝ) ^ (Claims.Flock.zkLevel0 p.1 p.2).d).sum
 
 /-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them (`irootsOf`); none
 before it. -/

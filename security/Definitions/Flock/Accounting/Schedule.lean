@@ -117,4 +117,24 @@ example : (fast100 33).get! |>.WellShaped [21, 19, 17, 15, 13, 11] := by decide
 example : (fast100 34).get! |>.WellShaped [22, 20, 18, 16, 14, 12, 10] := by decide
 example : (fast100 35).get! |>.WellShaped [23, 21, 19, 17, 15, 13, 11] := by decide
 
+/-- The wide-leaf schedule for `m` (`Flock.fast100Wide`), or `none` outside `22 ≤ m ≤ 35`: `fast100 m`, except that
+for `32 ≤ m ≤ 35` level 0 folds `k0 = m − 25` lanes over `m = 31`'s levels, so its codeword stays at `2^19` symbols.
+`fast100` stays beside it: the two are the schedules of two statement versions. -/
+def fast100Wide : ℕ → Option Schedule
+  | 32 => some (mk 32 7 [18, 15, 12, 9, 6, 3] 3)
+  | 33 => some (mk 33 8 [18, 15, 12, 9, 6, 3] 3)
+  | 34 => some (mk 34 9 [18, 15, 12, 9, 6, 3] 3)
+  | 35 => some (mk 35 10 [18, 15, 12, 9, 6, 3] 3)
+  | m => fast100 m
+
+/-- The `d` column where the wide-leaf schedule differs, checked against it: level 0's codeword has `2^19` symbols. -/
+example : (fast100Wide 32).get! |>.WellShaped [19, 17, 15, 13, 11, 9] := by decide
+example : (fast100Wide 33).get! |>.WellShaped [19, 17, 15, 13, 11, 9] := by decide
+example : (fast100Wide 34).get! |>.WellShaped [19, 17, 15, 13, 11, 9] := by decide
+example : (fast100Wide 35).get! |>.WellShaped [19, 17, 15, 13, 11, 9] := by decide
+
+/-- The schedule of a statement version's tables (`Flock.fast100At`): the wide-leaf schedule at a wide-leaf statement,
+`fast100` otherwise. -/
+def fast100At (wide : Bool) (m : ℕ) : Option Schedule := if wide then fast100Wide m else fast100 m
+
 end FlockSoundness.Accounting

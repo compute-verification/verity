@@ -1,5 +1,5 @@
 """Differential-test adapter (gate G4, `verity_vllm.properties.admission`) for `GumbelTopPTokenSelect_v1{V,S}(logits, top_p, seed,
-pos, temp)` — temperature + top-p (split pipeline) + seeded Gumbel select — against the pinned production chain of vLLM d9105ea80's
+pos, temp)` — temperature + top-p (split pipeline) + seeded Gumbel select — against the pinned served chain of vLLM d9105ea80's
 `Sampler.sample` for a request with top_p < 1 and no top-k / penalties / logit bias / min_p:
 
     logits32 = logits_bf16.to(float32); apply_temperature(logits32, idx, temperature)      # `_temperature_kernel` (skipped at T in {0, 1})
@@ -9,8 +9,8 @@ pos, temp)` — temperature + top-p (split pipeline) + seeded Gumbel select — 
     # pod, torch venv:  VERITY_REAL_LOGITS=<rows.npy> verity-vllm properties-admission produce --adapter verity_vllm.program.sampling_topp_adapter --n 40 --seed 13 --out DIR
     # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.sampling_topp_adapter --dir DIR --out RUN/sampling_topp.json
 
-The production side ALSO emits the masked fp32 row (output 1) so the intermediate `TopPMask_v1{V,S}` value is checked lane by lane,
-not only the sampled token (`spec`: `registry.sampling_topp_difftest`'s Definition).  S is a static of the specialization = the split count the production launch used (recorded per case).
+The served side ALSO emits the masked fp32 row (output 1) so the intermediate `TopPMask_v1{V,S}` value is checked lane by lane,
+not only the sampled token (`spec`: `registry.sampling_topp_difftest`'s Definition).  S is a static of the specialization = the split count the served launch used (recorded per case).
 Cases: real rows when `VERITY_REAL_LOGITS` names a `[N, V]` bf16-word .npy (Llama-3.2-1B lm_head outputs, the B1 stochastic-sampling manifest
 prompt), interleaved with edge rows (zeros / max / subnormal / alternating / few-finite / many-duplicates); temperatures = the panel's
 0.8 and a spread (never 0: top-p at temperature 0 is greedy — a different family); top_p = the panel's 0.95, 1.0 (the p >= 1 early

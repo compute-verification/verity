@@ -5,6 +5,7 @@ public import Proofs.Pouw.PearlPlus.Keys
 public import Proofs.Pouw.PearlPlus.Semantics
 public import Proofs.Pouw.PearlC.Freeze
 public import Proofs.Pouw.PearlC.AccumProofs
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, part (c), the inert-work replay: `word_debit` counts the game's flags and later +0 promotions

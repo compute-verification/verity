@@ -13,7 +13,7 @@ set_option Elab.async false
 `keyedRowsOuts` takes three conditions on the session's circuit: its unit reads only its leaf group (`h1`), the unit
 returns the outputs (`ho`), and every input a unit row reads is a port bit (`PortReads`). `PortReads` is stated on
 `Rows.ofNet`, which is not computable. `scopeOk` checks all three on the parsed circuit, with code that runs, and
-`scopeOk_spec` gives them. `flock-verify verify` refuses every circuit failing it (`Flock.ProvedScope.check`, which
+`scopeOk_spec` gives them. `verity-verify-proof verify` refuses every circuit failing it (`Flock.ProvedScope.check`, which
 `FailClosed.scopeOk_eq` proves this one), so the headlines over what it accepts (`Discharge/FailClosed`) take none of them.
 
 `scopeOk` also checks the unit's `unitLog ≤ 32`, under which the net's sparse rows are `Rows.ofNet`'s

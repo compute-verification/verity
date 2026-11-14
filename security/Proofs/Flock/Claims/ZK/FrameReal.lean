@@ -55,20 +55,22 @@ namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128)
 
+variable {wideLeaf : Bool}
+
 /-- A `--zk` schedule's pad and tree sizes within a `u64`'s count: what `tabOfLevel0_alike` and `schedSoFar_alike`
 read. -/
-def schedBnd (m : ℕ) : Bool :=
-  match _root_.Flock.Zk.schedule m with
+def schedBnd (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, tp) => decide (2 * tp < 2 ^ 64) && sch.levels.all (fun lv => decide (64 * 2 ^ lv.d < 2 ^ 64)) &&
       decide (64 * 2 ^ (default : _root_.Flock.Level).d < 2 ^ 64)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem schedBnd_lt : ∀ m, m < 36 → schedBnd m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem schedBnd_lt : ∀ (w : Bool) (m : Fin 36), schedBnd w m.val = true := by decide +kernel
 
-theorem sched_bounds {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) :
+theorem sched_bounds {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     2 * tp < 2 ^ 64 ∧ ∀ i, 64 * 2 ^ (sch.levels.getD i default).d < 2 ^ 64 := by
-  have hok := schedBnd_lt m (sched_facts h).1
+  have hok := schedBnd_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold schedBnd at hok
   rw [h] at hok
   simp only [Bool.and_eq_true, decide_eq_true_eq, Array.all_eq_true] at hok
@@ -81,11 +83,11 @@ theorem sched_bounds {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Floc
     exact hl i hi'
 
 theorem ofDraws_gsize {m : ℕ} {g : Array F128} {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
-    (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l) :
-    ∃ s tp, _root_.Flock.Zk.schedule m = .ok (s, tp) ∧
+    (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l) :
+    ∃ s tp, _root_.Flock.Zk.schedule wideLeaf m = .ok (s, tp) ∧
       g.size = 2 ^ ((s.levels.getD 0 default).lanes + (s.levels.getD 0 default).cols) := by
   unfold _root_.Flock.Firewall.Level0.ofDraws at h
-  cases hz : _root_.Flock.Zk.schedule m with
+  cases hz : _root_.Flock.Zk.schedule wideLeaf m with
   | error e => rw [hz] at h; cases h
   | ok p =>
     obtain ⟨s, tPad⟩ := p
@@ -99,7 +101,7 @@ theorem ofDraws_gsize {m : ℕ} {g : Array F128} {d : ByteArray} {l : _root_.Flo
 `Level0.ofDraws` drew at its `m`, as `Finish`'s `level0` request reads it (`level0Of`). -/
 def RealTabs (sts : Array _root_.Flock.Stmt) (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) :
     Prop :=
-  ∀ k tr hr, real k = .ok (tr, hr) → ∃ g d l, _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d = .ok l ∧
+  ∀ k tr hr, real k = .ok (tr, hr) → ∃ g d l, _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d = .ok l ∧
     _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l = .ok tr
 
 /-- **The rep's own table is of the placeholder's shape**, where `real` answers the loop's own tables. -/
@@ -137,14 +139,16 @@ theorem real_tabAlike {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Floc
 
 theorem tabOfLevel0_sched {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Level0.Level0}
     {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
-    t.st = st ∧ _root_.Flock.Zk.schedule st.m = .ok (t.sch, t.tPad) := by
+    t.st = st ∧ _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (t.sch, t.tPad) := by
   unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
   split at h
   · cases h
-  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  split at h
+  · cases h
+  rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
   · rw [hs] at h; cases h
   · rw [hs] at h
     simp only at h

@@ -7,7 +7,8 @@ manifest's rows beyond v1 are its "promoted" facts whatever the engine is called
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
 rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.  A check module loads
-neither numpy, torch nor the core `verity` as it is imported.
+neither numpy, torch nor the core `verity` as it is imported.  A row's batch is its workload's, whether or not the workload was
+fetched before.  The listing of decisions and retirements wraps a reason and a need to a line of 132.
 """
 from __future__ import annotations
 
@@ -25,6 +26,8 @@ from tests.regression import decisions as D
 from tests.regression import test_regression as TR
 from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
+from tests.regression.checks import program_digest as PD
+from verity_vllm import config
 
 
 class _Fake(resolver.Row):
@@ -38,8 +41,8 @@ class _Fake(resolver.Row):
         return self.docs[rel]
 
 
-def _ident(op: str, member: str = "out", step: int = 0) -> dict:
-    return {"program_digest": "p", "request_id": "r0", "step": step, "invocation": 0, "op_path": op, "output_member": member,
+def _ident(op: str) -> dict:
+    return {"program_digest": "p", "request_id": "r0", "step": 0, "invocation": 0, "op_path": op, "output_member": "out",
             "element_range": [0, 4], "rank": 0, "family": "instance_outputs"}
 
 
@@ -109,6 +112,21 @@ def test_a_malformed_retirement_is_named(monkeypatch):
     assert problems["step_segmentation"].startswith("missing") and "no check named" in problems["no_such_check"]
 
 
+def test_the_listing_wraps_a_reason_and_a_need_to_a_line_of_132():
+    """Each render wraps a reason, and the retirements' a need too, to `D.WRAP` columns after the 13 of its label.  A word of 300
+    letters is cut at that column, so it shows the width to the column: two lines of 132 and one of the 62 letters left."""
+    word = "x" * 300
+    decision = {"row": 9, "row_id": "k", "check": "c", "finding": "f", "status": "accepted", "since": "s", "since_commit": "", "reason": word,
+                "expected": {}, "pins": {}, "problem": ""}
+    retired = {"row": 9, "check": "c", "since": "s", "reason": word, "needs": word, "problem": ""}
+
+    def widths(text: str) -> list[int]:
+        return [len(line) for line in text.splitlines() if line.startswith(("    reason   ", "    needs    ", " " * 13))]
+
+    assert widths(D.render([decision])) == [132, 132, 75]
+    assert widths(D.render_retired([retired])) == [132, 132, 75] * 2
+
+
 def test_a_registered_fixture_is_found_by_its_path():
     reg = json.loads(resolver.REGISTRY.read_text())
     art, rel = next(iter(reg.items()))
@@ -150,6 +168,17 @@ def test_a_post_flip_reference_row_is_summarised_from_its_own_evidence(tmp_path,
     exp, act = CS.expected(row), CS.actual(row)
     assert act["source"] == "recomputed" and resolver.diff(exp, act) == []
     assert act["rc"] == 0 and act["pass"] is True and act["engine_settings"]["max_num_seqs"] == 8 and act["n_treatment"] == 1
+
+
+@pytest.mark.parametrize(("depth", "inner", "kept"), [(0, "0.5", 0.5), (0, "auto", "auto"), (200_000, "", None)],
+                         ids=["json", "no-json", "nested-past-what-json-reads"])
+def test_an_engine_arg_json_cannot_read_stays_the_text_of_the_command_line(tmp_path, monkeypatch, depth, inner, kept):
+    """`summarize` reads each `--engine-arg` as JSON, and keeps the text of one that `json.loads` does not read, whatever it raises."""
+    row = _post_flip_row(tmp_path, monkeypatch, rc=None)
+    value = "[" * depth + inner + "]" * depth
+    (tmp_path / "rows" / "k" / "commit.log").write_text(f"$ commit --engine-arg x={value} --max-num-seqs 8\n")
+    settings = CS.actual(row)["engine_settings"]
+    assert settings["max_num_seqs"] == 8 and settings["x"] == (value if kept is None else kept)
 
 
 def test_a_post_flip_rows_rc_is_its_verdicts(tmp_path, monkeypatch):
@@ -213,6 +242,44 @@ def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch
     other = resolver.scratch(row)
     assert one != other and one.is_dir() and other.is_dir()
     assert one.parent == other.parent == tmp_path / "r19-regress" / "k"
+
+
+def test_a_rows_batch_is_its_workloads_whether_or_not_the_workload_was_fetched_before(tmp_path, monkeypatch):
+    """The digest of record is the workload's from two requests up, so the lift counts the row's requests.  It reads the workload
+    as every other check does (`row.workload()`, which fetches one the store keeps), so it lifts the same in a tree nothing has
+    fetched into.  Only a row whose workload the tree does not hold has no batch: a stored one that cannot be fetched is the
+    fetch's refusal."""
+    root = tmp_path / "vllm"
+    (root / "workloads").mkdir(parents=True)
+    doc = json.dumps({"requests": [{"request_id": "r0"}, {"request_id": "r1"}]})
+    (root / "workloads" / config.DIGESTS).write_text(f"{hashlib.sha256(doc.encode()).hexdigest()}  k.json\n")
+    monkeypatch.setattr(resolver, "VLLM_ROOT", root)
+    fetched: list[str] = []
+
+    def fetch(paths):
+        for p in paths:
+            p.write_text(doc)
+            fetched.append(p.name)
+    monkeypatch.setattr(config, "_fetch", fetch)
+    for key in ("k", "unheld"):
+        (tmp_path / "rows" / key).mkdir(parents=True)
+        (tmp_path / "rows" / key / "build_summary.json").write_text(json.dumps(
+            {"request": {"program_digest": "request-d"}, "workload": {"workload_digest": "workload-d"}}))
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
+    row = resolver.Row("k", {"row": 9}, fixtures={})
+    exp = PD.expected(row)
+    assert (exp["batch"], exp["program_digest_of_record"], fetched) == (2, "workload-d", ["k.json"])
+    assert PD.expected(row) == exp and fetched == ["k.json"], "on disk now: the same lift, and nothing fetched again"
+    unheld = PD.expected(resolver.Row("unheld", {"row": 10}, fixtures={}))
+    assert (unheld["batch"], unheld["program_digest_of_record"], fetched) == (None, "request-d", ["k.json"])
+
+    def refuse(paths):
+        raise RuntimeError(f"{[p.name for p in paths]}: stored workloads, not here, and not fetched")
+    monkeypatch.setattr(config, "_fetch", refuse)
+    (root / "workloads" / "k.json").unlink()
+    with pytest.raises(RuntimeError, match=r"\['k.json'\]: stored workloads, not here"):
+        PD.expected(row)
 
 
 def test_a_rows_manifest_flags_replace_the_policies_off():

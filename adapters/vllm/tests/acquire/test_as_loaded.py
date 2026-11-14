@@ -18,11 +18,11 @@ from torch import nn
 from tests import fake_vllm
 from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
     EX,
+    INTER,
     RANK,
     WORLD,
     E,
     H,
-    I,
     dsv4,
 )
 from tests.check.test_weights_of_record_routed_experts import _program
@@ -38,7 +38,7 @@ class _Mxfp4Method:
     mxfp4_backend, moe_kernel = "marlin", "built"
 
     def __init__(self) -> None:
-        self.num_experts, self.intermediate_size, self.hidden_size = E, I // WORLD, H
+        self.num_experts, self.intermediate_size, self.hidden_size = E, INTER // WORLD, H
         self.moe = types.SimpleNamespace(w13_num_shards=2)
 
 
@@ -50,9 +50,11 @@ def repack(layer, w13, w2, s13, s2):
 
 @pytest.fixture
 def vllm_mxfp4(monkeypatch):
-    fake = fake_vllm.install(monkeypatch, extra=[f"{mml._MXFP4}:Mxfp4MoEMethod", f"{mml._ORACLE}:Mxfp4MoeBackend"])   # reached by name
+    fake = fake_vllm.install(monkeypatch, extra=[f"{mml._MXFP4}:Mxfp4MoEMethod", f"{mml._ORACLE}:Mxfp4MoeBackend",   # reached by name
+                                                 f"{AL._MARLIN_FP4}:prepare_moe_mxfp4_layer_for_marlin"])
     fake[mml._MXFP4].Mxfp4MoEMethod = _Mxfp4Method
     fake[mml._ORACLE].Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
+    return fake
 
 
 @pytest.fixture
@@ -102,6 +104,31 @@ def test_a_served_tensor_that_is_not_the_repack_of_the_checkpoint_refuses_by_nam
         layer.w2_weight_scale.view(-1)[3] ^= 1
     with pytest.raises(ValueError, match=rf"{EX}: Marlin's repack of the checkpoint's bytes is not the served w2_weight_scale:"):
         AL.attach_rank(model, world=WORLD, rank=RANK, composer=lambda **kw: WR.rank_composer(**composer, **kw), repack=repack)
+
+
+def test_a_rank_given_no_repack_is_held_to_vllms_own_of_the_four_fields_without_bias(served, vllm_mxfp4):
+    """`marlin_repack`, the repack of a rank that names none, is vLLM's `prepare_moe_mxfp4_layer_for_marlin` of the layer and its four
+    fields with no bias, and of the six tensors vLLM returns it gives the four fields'."""
+    model, layer, loaded, composer = served
+    asked = []
+
+    def vllms(*args):
+        asked.append(args)
+        return (*repack(*args[:5]), "w13's bias", "w2's bias")
+
+    vllm_mxfp4[AL._MARLIN_FP4].prepare_moe_mxfp4_layer_for_marlin = vllms
+    four = [loaded[f] for f in AL.FIELDS]
+    got = AL.marlin_repack(layer, *four)
+    assert len(got) == 4 and all(torch.equal(a, b) for a, b in zip(got, repack(layer, *four)))
+    assert len(asked) == 1 and len(asked[0]) == 7 and asked[0][0] is layer and asked[0][5:] == (None, None)
+    assert all(a is b for a, b in zip(asked[0][1:5], four))
+    view, info = AL.attach_rank(model, world=WORLD, rank=RANK, composer=lambda **kw: WR.rank_composer(**composer, **kw))
+    assert len(asked) == 2 and info["fields"] == 4
+    assert all(torch.equal(dict(view.named_parameters())[f"{EX}.{f}"], loaded[f]) for f in AL.FIELDS)
+    with torch.no_grad():
+        layer.w13_weight.view(-1)[5] ^= 1
+    with pytest.raises(ValueError, match=rf"{EX}: Marlin's repack of the checkpoint's bytes is not the served w13_weight:"):
+        AL.attach_rank(model, world=WORLD, rank=RANK, composer=lambda **kw: WR.rank_composer(**composer, **kw))
 
 
 def test_a_model_without_a_marlin_layer_is_its_own_weights(vllm_mxfp4):

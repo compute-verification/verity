@@ -30,11 +30,11 @@ import Proofs.Flock.Soundness.ZK.Session
 
 `zk_session_composed`: for any live prover `τ` of a public-output one-table `--zk` session,
 
-* **soundness**: `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of
+* **soundness**: `Pr[verity-verify-proof --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of
   the key program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits
   (lp-zkbind's `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with
   `δ_tree = 0` (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to
-  flock-verify's acceptance by `zk_headline_exec_on`;
+  verity-verify-proof's acceptance by `zk_headline_exec_on`;
 * **zero knowledge**: at every sample `verify --zk` sets up, the verifier's view of the session's table at the executable's
   leaves (`coinedOf P (tablesAtZK dj y₀ S R)`) is within `2·|Hid|·2^-193` of `S_shvzk`'s, which reads only the public
   values, both ways (Lemma B, `session_shvzk_hm96`, with `PadOnto` from `PadNonvanishing` by `padOnto_M1`, which

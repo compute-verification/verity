@@ -320,10 +320,10 @@ theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Decidab
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
       ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
         ¬ (T j).Committed A (Claims.Flock.oracleOf C))
@@ -337,7 +337,7 @@ theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Decidab
 `PT_LOCAL` and `Zk.schedule`'s schedule (past the last table, table 0's). -/
 noncomputable def zkTabs {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts) (j : ℕ) :
     TabZK 𝔽 mPts :=
@@ -346,7 +346,7 @@ noncomputable def zkTabs {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
 
 theorem zkTabs_of_lt {sts : Array Stmt} {mPts : ℕ} (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts) {j : ℕ}
     (h : j < sts.size) : zkTabs h0 L hz hk hlay j = zkTab (L j h) (hz j h) (hk j h) (hlay j h) :=
@@ -362,7 +362,7 @@ verifier sets up the tables `sts`, at their every layout and link layout at `PT_
 def ZkLiveJ (x : Claims.Msg) : Prop :=
   ∀ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (_ : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAtJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
@@ -385,15 +385,15 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
       Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length →
       (∀ j < (tables true x).length, (tables true x)[j]? = some (spec, stJ h0 j)) →
       (∀ j < (tables true x).length, 25 ≤ (stJ h0 j).m ∧ (stJ h0 j).m ≤ 35 ∧
-        (T j).sch = Accounting.m1Schedule (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).m ∧ (T j).e = 2 ∧
+        (T j).sch = Accounting.m1Schedule (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).e = 2 ∧
         (T j).S.shape spec.mPts = acct spec (stJ h0 j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
         (T j).N ≤ Claims.Flock.Numbers.padDomain
-          (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).m).1.k0)) →
+          (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).wideLeaf (stJ h0 j).m).1.k0)) →
       (∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, wideJ true x j (C p)) →
         ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C →
           ¬ (T j).Committed execArith (Claims.Flock.oracleOf C)) → B T) :
     ∃ (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-      (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+      (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
       (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
       (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
       B (zkTabs h0 L hz hk hlay) := by
@@ -401,7 +401,7 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
       ∃ L : Layout sts[j], (L.model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts :=
     fun j h => zk_scopeJ hs hin hset h
   choose h25 h35 hk L hlay using hsc
-  have hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m) :=
+  have hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m) :=
     fun j h => zk_schedule_ok (h25 j h) (h35 j h)
   have hlen : (tables true x).length = sts.size := by
     unfold tables
@@ -440,15 +440,15 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
       Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length →
       (∀ j < (tables true x).length, (tables true x)[j]? = some (spec, stJ h0 j)) →
       (∀ j < (tables true x).length, 25 ≤ (stJ h0 j).m ∧ (stJ h0 j).m ≤ 35 ∧
-        (T j).sch = Accounting.m1Schedule (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).m ∧ (T j).e = 2 ∧
+        (T j).sch = Accounting.m1Schedule (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).e = 2 ∧
         (T j).S.shape spec.mPts = acct spec (stJ h0 j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
         (T j).N ≤ Claims.Flock.Numbers.padDomain
-          (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).m).1.k0)) →
+          (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).wideLeaf (stJ h0 j).m).1.k0)) →
       (∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, wideJ true x j (C p)) →
         ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C →
           ¬ (T j).Committed execArith (Claims.Flock.oracleOf C)) → B T) :
     ∃ (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-      (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+      (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
       (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
       (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts),
       B (zkTabs h0 L hz hk hlay) :=

@@ -61,7 +61,8 @@ def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int
     for its layout alone."""
     if layout.n_rho > KEEP:
         return layout
-    replay, counts = kept.pop(layout.n_rho, None) or (layout.replay, {})
+    held = kept.pop(layout.n_rho, None)
+    replay, counts = held or (layout.replay, {})
     kept[layout.n_rho] = replay, counts
     while sum(kept) > KEEP:
         del kept[next(iter(kept))]
@@ -127,7 +128,8 @@ class BoundaryWindows:
         self.tables, self.layers, self.capacity = tables, tuple(int(x) for x in layers), int(capacity)
         self.sink, self.clock, self.release = sink, clock, release
         self.serve = serve or secrets.token_hex(32)
-        self._check, self._check_fn = (check, None) if isinstance(check, SpecializedDefinition) else (None, check)
+        #: the check template, or until `check` first reads it the callable that gives it
+        self._template: SpecializedDefinition | Callable[[], SpecializedDefinition] = check
         self.open: dict[str, dict[str, Any]] = {}
         self.window, self.opened, self.stopped = 0, clock(), False
         self.jobs: queue.Queue = queue.Queue()
@@ -165,9 +167,9 @@ class BoundaryWindows:
 
     @property
     def check(self) -> SpecializedDefinition:
-        if self._check is None:
-            self._check = self._check_fn()
-        return self._check
+        if not isinstance(self._template, SpecializedDefinition):
+            self._template = self._template()
+        return self._template
 
     def admit(self, request: Any) -> None:
         self.open[request.request_id] = {"prompt": tuple(request.prompt_token_ids or ()),

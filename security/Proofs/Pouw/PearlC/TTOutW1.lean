@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # TT_OUT at W1 is TT_OUT at the cost model `W1.w1Priced`

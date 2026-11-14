@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from tests import fake_vllm
-from tests.acquire.test_vocab_range_source import Recorder
+from tests.acquire.test_vocab_range_source import Recorder, exactness_in_tree
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as NORM_TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION as NORM_TAP_VERSION
 from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
@@ -152,6 +152,8 @@ def test_the_scale_products_source_installed_commits_from_its_site_and_uninstall
     model.down_proj(xs, ws)
     assert [name for name, _ in com.acquired] == [f"down_proj/{SP.MEMBER}"] and len(c_ops.launches) == 3
     assert torch.equal(com.acquired[0][1].view(torch.int32), S.products(torch, xs, ws).view(torch.int32))
+    module = ".".join(S.fp8_twins.__name__.split(".")[-2:])       # the function's module as the Definitions' package names it
+    assert f"({module}.scale_products;" in src.declaration_classes()[0]["evidence"]
     src.uninstall()
     assert not src.active and c_ops.cutlass_scaled_mm is installed and hooks.live() == live
     assert _hooked(model.down_proj) == 0 and _hooked(model.other) == 0
@@ -309,6 +311,7 @@ def test_attach_gives_the_committer_the_router_softmax_source_and_its_required_c
     assert R.attach(com, router.so, manifest, ("a",), explicit_classes=True, model=model)[0] == ("a",)
     (declared,) = src.declaration_classes()
     assert declared["class"] == RS.FAMILY and declared["count"] == 0 and hashlib.sha256(BUILD).hexdigest() in declared["evidence"]
+    assert exactness_in_tree(src)
 
 
 # --- the fused norm: its tap is a CUDA build, and its install reads vLLM's batch invariance ----------------------------------------------
@@ -375,6 +378,7 @@ def test_the_fused_norm_source_installed_taps_its_module_and_uninstalled_leaves_
     model.norm(hidden=x)                                        # the module called by keyword: no leading shape, the scale stays flat
     assert com.acquired[1][1].tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
     assert (src.stats["tensors"], src.stats["by_kind"], src.stats["bytes"], src.stats["errors"]) == (2, {"cuda": 2}, 48, 0)
+    assert exactness_in_tree(src)
     src.uninstall()
     assert not src.active and norm.c.fused_add_rms_norm is norm.installed and hooks.live() == live
     assert _hooked(model.norm) == 0 and _hooked(model.other) == 0
@@ -398,6 +402,20 @@ def test_a_source_of_no_fused_norm_loads_no_build(norm):
     src = N.NormScaleSource(Recorder(), _two_modules(_fused_norm, "norm"), {"norm": "RsqrtF32_v1"}, norm.so)
     assert src.kinds == ["aten"] and norm.loaded == [] and src.ns is None
     assert src.stats["so"] == norm.so and src.stats["so_sha256"] is None
+
+
+def test_the_fused_norm_source_reads_its_words_per_token_before_the_bytes_of_its_build(norm, tmp_path):
+    """The loaded build is hashed last, so a `words_per_token` that is no integer is refused whether or not the build's bytes can be
+    read."""
+    model, gone = _two_modules(_fused_norm, "norm"), str(tmp_path / "no_such_build.so")
+    no_integer: Any = "x"
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, gone, words_per_token=no_integer)
+    with pytest.raises(FileNotFoundError):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, gone, words_per_token=3)
+    assert norm.loaded == [gone, gone]
+    src = N.NormScaleSource(Recorder(), model, {"norm": FUSED}, norm.so, words_per_token=3)
+    assert src.words_per_token == 3 and src.stats["so_sha256"] == hashlib.sha256(BUILD).hexdigest()
 
 
 # --- the call boundaries: forward pre-hooks alone ------------------------------------------------------------------------------------------

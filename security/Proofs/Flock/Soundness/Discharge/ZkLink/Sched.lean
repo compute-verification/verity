@@ -6,14 +6,16 @@ public import Definitions.Flock.Accounting.Padded
 public import Flock.Zk
 public import Proofs.Flock.Soundness.LigeritoPhase
 public import Proofs.Flock.Soundness.Refine.Schedule
+public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # `Zk.schedule` at every m it accepts
 
-`Zk.schedule` accepts `m` from 25 to 35 (`schedule_spec`). At each, its schedule has the shape `TabZK` needs, its `m`, and
-level 0 padded by `t_pad` meets `PadOK` (`schedule_zk`), from `zkSchedFacts_all`, checked by `decide +kernel` at each `m`.
+`Zk.schedule` accepts `m` from 25 to 35 (`schedule_spec`), at either statement version (`wideLeaf`: the wide-leaf
+schedule, or `fast100`; `schedule_at`). At each, its schedule has the shape `TabZK` needs, its `m`, and level 0 padded
+by `t_pad` meets `PadOK` (`schedule_zk`), from `zkSchedFacts_all`, checked by `decide +kernel` at each version and `m`.
 -/
 
 @[expose] public section
@@ -22,9 +24,11 @@ namespace FlockSoundness.Discharge.ZkLink
 
 open Flock Accounting Refine
 
+variable {wideLeaf : Bool}
+
 /-- What `DrawSetupZK` needs of `Zk.schedule m`'s schedule and `t_pad`, as a `Bool` (`true` where it refuses `m`). -/
-def zkSchedFacts (m : ℕ) : Bool :=
-  match Zk.schedule m with
+def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match Zk.schedule wideLeaf m with
   | .ok (s, t) =>
     let a := schedOf s
     let l := a.levels.headD default
@@ -35,32 +39,41 @@ def zkSchedFacts (m : ℕ) : Bool :=
   | .error _ => true
 
 /-- **The m check**: every `m` `Zk.schedule` accepts (25 to 35) meets `zkSchedFacts`, by the kernel's `decide`. -/
-theorem zkSchedFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkSchedFacts m = true := by
-  intro m h1 h2; interval_cases m <;> decide +kernel
+theorem zkSchedFacts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkSchedFacts wideLeaf m = true := by
+  intro m h1 h2; cases wideLeaf <;> interval_cases m <;> decide +kernel
 
-/-- `Zk.schedule` accepts only `25 ≤ m ≤ 35`, and only where `fast100` has a schedule. -/
-theorem schedule_spec {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule m = .ok r) :
-    25 ≤ m ∧ m ≤ 35 ∧ ∃ s, Flock.fast100 m = some s := by
+/-- `Zk.schedule` accepts only `25 ≤ m ≤ 35`, and only where the statement version has a schedule (`fast100At`). -/
+theorem schedule_at {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok r) :
+    (25 ≤ m ∧ m ≤ 35) ∧ ∃ s, Flock.fast100At wideLeaf m = some s := by
   unfold Zk.schedule at h
   obtain ⟨q0, hq, h⟩ := ebind_ok h
   have hm : 25 ≤ m ∧ m ≤ 35 := by
     unfold Zk.queries0 at hq
     split_ifs at hq <;> first | (simp only [beq_iff_eq] at *; omega)
-  refine ⟨hm.1, hm.2, ?_⟩
+  refine ⟨hm, ?_⟩
   revert h
-  cases Flock.fast100 m with
+  cases Flock.fast100At wideLeaf m with
   | none => intro h; cases h
   | some s => intro _; exact ⟨s, rfl⟩
 
+/-- `Zk.schedule` accepts only `25 ≤ m ≤ 35`, where `fast100` has a schedule too (the two versions' tables cover the
+same `m`, `fast100At_isSome`). -/
+theorem schedule_spec {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok r) :
+    25 ≤ m ∧ m ≤ 35 ∧ ∃ s, Flock.fast100 m = some s := by
+  obtain ⟨hm, s, hs⟩ := schedule_at h
+  have hsome := fast100At_isSome (wide := wideLeaf) m
+  rw [hs] at hsome
+  exact ⟨hm.1, hm.2, Option.isSome_iff_exists.1 hsome.symm⟩
+
 
 /-- **`Zk.schedule`'s schedule has `DrawSetupZK`'s shape, `m` and padding** (`PadOK`, its radius from `ρ' ≤ 0.98`). -/
-theorem schedule_zk {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule m = .ok (sch, tPad)) :
+theorem schedule_zk {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     (2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
       (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
       levelsChained (schedOf sch).levels (schedOf sch).ext = true) ∧
     (schedOf sch).m = m ∧ Accounting.PadOK (schedOf sch).level₀ tPad := by
   obtain ⟨h1, h2, -⟩ := schedule_spec h
-  have hf := zkSchedFacts_all m h1 h2
+  have hf := zkSchedFacts_all (wideLeaf := wideLeaf) m h1 h2
   unfold zkSchedFacts at hf
   rw [h] at hf
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hf

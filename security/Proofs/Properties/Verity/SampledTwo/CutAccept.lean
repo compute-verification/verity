@@ -25,6 +25,9 @@ sessions in order (`OrderShown`). The two-stage form refuses a play without them
   (`Ledger.verifyLedger_inv`; `win_lines`). The reserve is the one the form finds among the same entries
   (`reserve_line`). The parameters name the two windows (`windowsOf_some`) and a challenger key (`keyOf_some`).
 
+The two windows the parameters name differ (`windowsOf_ne`): the form refuses an interior audit on the boundary
+registration's window.
+
 `cutBound_accept` is then the cut with one premise left about the device: its history at each play printed the play's
 log in its ledger's order (`PrintsInOrder`), with `Wired` and `SignsPlay` as in `cutBound_order`. No theorem of this
 module proves `PrintsInOrder` of a device.
@@ -65,7 +68,8 @@ theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
 /-- The form's evidence parses only with the first stage's coin evidence not `null`: `evidenceOf` refuses it. -/
 private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence}
     (h : VStar.Recursive.SampledTwo.evidenceOf b = .ok e) : e.coins ≠ Json.null := by
-  unfold VStar.Recursive.SampledTwo.evidenceOf at h
+  replace h := (VStar.Recursive.SampledTwo.evidenceOf_ok h).1
+  unfold VStar.Recursive.SampledTwo.evidenceParsed at h
   obtain ⟨j₀, -, h⟩ := bind_ok h
   obtain ⟨j, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
@@ -175,6 +179,22 @@ theorem windowsOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} 
       simp only [Prod.mk.injEq] at hpair
       obtain ⟨rfl, rfl⟩ := hpair
       exact ⟨rfl, rfl⟩
+
+/-- **The two windows `windowsOf` names differ**: the parameters are the form's parse (`paramsAt_form`), and the
+form's parameters parse only where the interior audit's window is not the boundary registration's
+(`VStar.Recursive.SampledTwo.paramsOfJson_ok`, its refusal `ONE_WINDOW`). -/
+theorem windowsOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : windowsOf θ = some (w₁, w₂)) : w₁ ≠ w₂ := by
+  cases hp : paramsAt θ with
+  | error err =>
+    unfold windowsOf at h
+    rw [hp] at h
+    simp [Except.toOption] at h
+  | ok p =>
+    obtain ⟨h₁, h₂⟩ := windowsOf_some hp h
+    obtain ⟨j, hj⟩ := paramsAt_form hp
+    have hne := (VStar.Recursive.SampledTwo.paramsOfJson_ok hj).2
+    rw [h₁, h₂] at hne
+    exact fun hw => hne (congrArg some hw)
 
 /-- **A window `verifyLedger` returns is an open among the entries it read, named by its root**, and its end, where
 it has one, is an end among them of the open's session (`Ledger.verifyLedger_inv`). -/

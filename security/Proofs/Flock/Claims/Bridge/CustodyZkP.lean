@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 /-!
 # The record `verify --zk --public-inputs` decodes is the live session's: `RecordsLiveZKJA`, by construction
 
-`RecordCustodyZKJP` (`live-verifier` at `flock-verify verify --zk --public-inputs`, the acceptance `AcceptsZKP I own`
+`RecordCustodyZKJP` (`live-verifier` at `verity-verify-proof verify --zk --public-inputs`, the acceptance `AcceptsZKP I own`
 the V5 leg reads) asks of the writer `wr` that the record `AcceptsZKP I own` accepts of `wr S R o` carries `S`'s sample
 and `o`'s proof files and decodes to `o`'s link points, roots and rounds (`RecordsLiveZKJA`), and of the sample files that
 they are the verifier's (`DrawFileZK`). This file proves the first half at one writer, by the record's decode round
@@ -42,7 +42,7 @@ At the verifier's acceptance at its public inputs `own` (`ZkHidden.AcceptsZKP I 
 
 * `not_acceptsZKP_nil`: `Zk.verify` refuses a session without proof files.
 * `wrZP`, `viewZP`, `recordsLiveZKJA_wrZP`, `recordCustodyZKJP_wrZP`: the writer and the view, and `RecordCustodyZKJP`
-  at the writer from its sample file half alone. `recordCustodyZKJP_wrZP_printed`: at the sample file `flock-verify draw`
+  at the writer from its sample file half alone. `recordCustodyZKJP_wrZP_printed`: at the sample file `verity-verify-proof draw`
   prints (`djPrinted`), with no premise.
 * `acceptsZKP_streams`: an accepted record's decoded session has both rep streams of each of its tables, since
   `Zk.verifyRep` refuses a table without them (S11; `zk_verify_ok`, `zk_verifyRep_ok`).
@@ -213,7 +213,7 @@ theorem recordCustodyZKJP_wrZP (I : Exec.Inputs) (own : Option ByteArray) (dj : 
     Assumptions.Zk.RecordCustodyZKJP (mPts := mPts) I own dj Jf (wrZP I own dj Jf) kd :=
   ⟨recordsLiveZKJA_wrZP I own dj Jf, hdf⟩
 
-/-- The sample file `flock-verify draw` prints for the verifier's own `subset kd` sample of `S` over the `n` proof
+/-- The sample file `verity-verify-proof draw` prints for the verifier's own `subset kd` sample of `S` over the `n` proof
 blocks. -/
 def djPrinted (kd : ℕ) (S : Finset (Fin n)) : Json := (ZkLink.drawOf (.subset kd) n S).toJson
 

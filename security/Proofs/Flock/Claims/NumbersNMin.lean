@@ -70,6 +70,8 @@ namespace Claims.Flock.Numbers
 
 open FlockSoundness.Accounting
 
+variable {wideLeaf : Bool}
+
 /-- Level 0's decoding threshold: `1 − δ = √ρ + η` at rate `1/2` and `η = 1/200`. -/
 noncomputable def agree₀ : ℝ := Real.sqrt (1 / 2) + 1 / 200
 
@@ -188,18 +190,24 @@ theorem miss_ge {c q : ℕ} (hc : c ∈ [9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 
 dimension `2^c + t` (`t = 2q₀`, `m1Pad`) and length `2^{c+1}`, has its Johnson count at `agree₀` above its length
 (`9172 > 2^13`, `17112 > 2^14`, `33215 > 2^15`), so no columns at distinct positions reach it. -/
 theorem zk_nMin_gt_len {m : ℕ} (hm : m ∈ [25, 26, 27]) :
-    2 ^ (((m1Schedule m).levels.headD default).logCols + 1) <
-      johnsonCount (2 ^ ((m1Schedule m).levels.headD default).logCols + m1Pad m) agree₀ := by
+    2 ^ (((m1Schedule wideLeaf m).levels.headD default).logCols + 1) <
+      johnsonCount (2 ^ ((m1Schedule wideLeaf m).levels.headD default).logCols + m1Pad wideLeaf m) agree₀ := by
   obtain ⟨hlo, hhi⟩ := agree₀_sq_bounds
+  have key : ∀ w : Bool,
+      (((m1Schedule w 25).levels.headD default).logCols = 12 ∧ m1Pad w 25 = 554) ∧
+      (((m1Schedule w 26).levels.headD default).logCols = 13 ∧ m1Pad w 26 = 484) ∧
+      (((m1Schedule w 27).levels.headD default).logCols = 14 ∧ m1Pad w 27 = 458) := by
+    intro w; cases w <;> decide
+  obtain ⟨⟨c25, p25⟩, ⟨c26, p26⟩, c27, p27⟩ := key wideLeaf
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
   rcases hm with rfl | rfl | rfl
-  · rw [show ((m1Schedule 25).levels.headD default).logCols = 12 by decide, show m1Pad 25 = 554 by decide,
+  · rw [c25, p25,
       johnsonCount_eq_of (J := 9172) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
     norm_num
-  · rw [show ((m1Schedule 26).levels.headD default).logCols = 13 by decide, show m1Pad 26 = 484 by decide,
+  · rw [c26, p26,
       johnsonCount_eq_of (J := 17112) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
     norm_num
-  · rw [show ((m1Schedule 27).levels.headD default).logCols = 14 by decide, show m1Pad 27 = 458 by decide,
+  · rw [c27, p27,
       johnsonCount_eq_of (J := 33215) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
     norm_num
 

@@ -1,4 +1,8 @@
-/-
+module
+
+public import Spot.Stream
+
+/-!
 # The proof system's fleet: each stream's operator, and the operator's halt (`service.Fleet`'s rules)
 
 A fleet is the challenger's streams across protocols and levels, each attached to its operator (the identity it
@@ -27,9 +31,6 @@ A decision is `{"refused": codes}` or `{"ok": value}`: `unattached` (no stream o
 halted: an op naming it or one of its streams is refused and changes nothing). An error is an op or a state this port
 doesn't read.
 -/
-module
-
-public import Spot.Stream
 
 @[expose] public section
 set_option backward.privateInPublic true

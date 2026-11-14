@@ -1,6 +1,6 @@
 """serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit period's H1 window
 taps the server's own rows-sha512 Commit (its step-input port and the bench row's int8 source) and ties at ROOTS1, on the
-epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor host's
+epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor device's
 challenger, which the auditor's ledger opens and ends for it; `CommitWindows` opens the arm once the committer is
 installed and closes it before the committer comes off, its outcome the window's line; and the flags are refused before
 the model loads where the server can't serve them."""
@@ -49,9 +49,9 @@ from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 #: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
@@ -178,7 +178,7 @@ def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_liv
     None."""
     import stat
 
-    from verity_vllm.protocols.pouw.h1 import prover as PV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
@@ -216,7 +216,7 @@ def test_a_window_whose_prover_state_isnt_written_fails_visibly_and_refuses_its_
     """A served call's file the writer couldn't write is its window's failure: the release waits for the window's files,
     its outcome carries the error and its draw-gated release is refused by name; the next window is written whole."""
     from verity_vllm.pipeline import serve_release as SL
-    from verity_vllm.protocols.pouw.h1 import prover as PV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 
     savez = PV._savez
 
@@ -308,7 +308,7 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     from verity.circuits.codec import program_digest
     from verity.protocols.accounting.pouw.verifier import credit as CR
 
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
@@ -552,8 +552,8 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     its sampling session, reserved withheld beside it) is the one reserved at startup."""
     from verity.protocols.accounting.pouw.verifier import verifier
 
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
-    from verity_vllm.protocols.pouw.h1 import tables_device as TD
+    from verity_vllm.protocols.pouw import h1_hooks as PHK
+    from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
 
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     calls, roots, warmed, built = [], [], [], []
@@ -621,7 +621,7 @@ def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
 def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_path, monkeypatch):
     """Window 0's release raises off the loop after its session closed: its outcome carries the error, recorded before
     window 1's, which opened, served and released as its own."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     srv, closer = _Server(monkeypatch), Later()
     finish = PHW.finish
@@ -686,7 +686,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     from tests.protocols.test_pouw_h1_commit import Committer
     from verity_vllm.commit import step_rows as R
     from verity_vllm.pipeline import serve_release as SL
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     acquired: dict[int, list[tuple[str, bytes]]] = {}
 

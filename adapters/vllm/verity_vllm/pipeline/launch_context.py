@@ -132,11 +132,16 @@ def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, ...], list | str
 
 def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
     """The workload's requests at their realized arrivals (`arrivals.realized_arrive_steps`: an arrival the idle engine brings
-    forward is prefilled alone, not with the requests declared at its step)."""
+    forward is prefilled alone, not with the requests declared at its step); a ValueError naming the fix for a workload that
+    declares neither its requests nor a sweep, whose launches nothing here knows."""
     reqs = workload.get("requests")
     if isinstance(reqs, list) and reqs and all(isinstance(r, dict) and "prompt_len" in r for r in reqs):
         out = [{"arrive_step": int(r.get("arrive_step", 0) or 0), "prompt_len": int(r["prompt_len"]), "max_tokens": int(r["max_tokens"]),
                 "cached": c} for r, c in zip(reqs, cached_of(workload))]
+    elif "sweep" not in workload:
+        raise ValueError(f"the workload declares no requests with their prompt_len and no sweep (its requests: {reqs!r:.80}), so no "
+                         f"launch of its requests is known here. The fix: a Program of no declared request (a class's) is built at its "
+                         f"launch, `build_program`'s batch (`steps.RequestUnit.launch`, which its key holds), never one read from here")
     else:
         s = workload["sweep"]
         ils, caps = s["input_lengths"], s["output_caps"]

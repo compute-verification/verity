@@ -184,7 +184,7 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
     desc = SV.descriptor(program)
@@ -208,7 +208,7 @@ def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
     from verity_flock import class_statement as CS
 
-    from verity_vllm.protocols.pouw.h1 import drawn_rows as D
+    from verity.protocols.accounting.pouw.prover.serving.h1 import drawn_rows as D
     if os.environ.get("HZ_STAGE", "fast") == "fast":
         sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
         import fast_stage
@@ -231,7 +231,7 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
     from tests.protocols.pouw_h1_rehearsal import PROGRAM
-    from verity_vllm.protocols.pouw.h1 import drawn_rows as D
+    from verity.protocols.accounting.pouw.prover.serving.h1 import drawn_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
     files: dict[str, Any] = {CR.LEAF_PROGRAMS: {}}

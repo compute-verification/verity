@@ -66,7 +66,7 @@ No unit's ref is pinned to `⌊u / G⌋` here: these hold at every ref the verif
 namespace Flock.Bridge
 
 open Claims Claims.Sampling
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- **A registration's leaf map**: per port `q` its leaf count `cnt q`, unit `u`'s leaf `ref q u` there, leaf `r`'s
 `b ‖ c` digest `dig q r`, the path levels `d` an opening's data reserves before the row's bits, and port `q`'s frame-v3

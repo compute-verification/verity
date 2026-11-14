@@ -1,33 +1,33 @@
-"""One-stage v2's per-member form outside Lean: the refusal's run on a case, and the Python of the sessions' run.
+"""One-stage v2's per-member form outside Lean: the check's run on a case, and the Python of the sessions' run.
 
 A window of several members is audited in v2's per-member form of ``proofs`` (the parameters' ``members``, the
-evidence's ``statements``; `proofs.members_v2` writes it). `Spot.OneStageZk` parses the form and accepts nothing of it
-(`checkMembersAt_refuses`). The executable's ``refusal PARAMS COMMITMENT EVIDENCE [BLOB ...]``
-(`Spot/MembersRefusal.lean`) runs the audit's check on such a case and prints why it is refused: the reason of the
-first check that fails, and `MULTI_REFUSED` under ``proofs:`` exactly where every check before the refusal passed
-(`ALL_PASSED`). The line is a refusal's reason and no verdict (`REFUSAL`): the command never exits 0, and nothing here
-reads its answer as an audit's.
+evidence's ``statements``; `proofs.members_v2` writes it). `Spot.OneStageZk` reads a case in either form and decides
+a per-member one by `checkMembersAt`: it accepts where the form's run returns with every session accepted and v1's
+check at the coins accepts on the sessions' verdicts. `check` runs the executable's ``check`` on such a case and
+returns its verdict and reason.
 
 `members_run` is the Python of `OneStageZk.membersRun`, the part of that check that reads the per-member form: the
 statements' structure, the sessions' coins held to the trees the window's challenger session logged, each closed after
 its session's evidence before the next is opened, the members laid over the registration's population, each registered
 value one tree, the registration's roots each one member's, then each statement's session verified on its member's own
-files. It refuses with Lean's reason where Lean refuses, and accepts nothing either: its `Run` is the sessions'
-findings, which the audit above it (v1's check at the coins, then the refusal) reads. Each session's verdict is the
+files. It refuses with Lean's reason where Lean refuses, and is no verdict itself: its `Run` is the sessions'
+findings, which the audit above it (v1's check at the coins) reads. Each session's verdict is the
 Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `proofs.verify` runs it).
 
 Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
-the reads Lean's `Member.statement` makes of them, then what a session's verdict checks of the files alone
-(`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the sample missed is refused there as
-one it holds is. The form the sampled audit's knowledge soundness covers is the Flock verifier's own there too
-(`flock_form`: its executable's ``ks-form``).
+the reads Lean's `Member.statement` makes of them, on the member's own lookup tables (the blobs' pinned tables its
+circuit looks up, `proofs.own_tables`, so the members of a window may look up different tables), then what a session's
+verdict checks of the files alone (`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the
+sample missed is refused there as one it holds is. The form the sampled audit's knowledge soundness covers is the Flock
+verifier's own there too (`flock_form`: its executable's ``ks-form``).
 
 Where it is not Lean's step for step, each on a case neither side accepts:
 
 * **A link's ``root_B`` length** (`challenger.LINK_ROOT_LEN`). Lean holds each session's link to the length its
-  statement fixes for its table's ``root_B`` (`OneStageZk.rootBTables`, the session set up on the member's files) before
-  it verifies any session. This sets up no session, so it passes no length (`TABLES`): a session Lean refuses there for
-  that length alone is here a session its own verdict rejects, since the verifier holds ``root_B`` to that length.
+  statement fixes for its table's ``root_B`` (`OneStageZk.ownRootBTables`, the session set up on the member's files)
+  before it verifies any session. This sets up no session, so it passes no length (`TABLES`): a session Lean refuses
+  there for that length alone is here a session its own verdict rejects, since the verifier holds ``root_B`` to that
+  length.
 * **A circuit's ``vus_per_block``** (`OneStageZk.Member.blockHeld`). Lean refuses a circuit file that parses with
   another ``vus_per_block`` than the parameters', and one that does not parse for that, where it holds the member's
   files. This reads the file's META alone, so it refuses both for the ``vus_per_block``.
@@ -43,6 +43,9 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
+* **The members' wiring** (the parameters' ``proofs.wiring``, `OneStageZk.wiringOf`, held by `wiresHeld` after the
+  sessions): parameters naming one raise `Outside`. This reads no circuit's ports or public file's rows, which that
+  check compares.
 * **A registered file's own form** (`Flock.Registered.ofJson`, which `classHeld` and each statement read it through).
   This reads a member's registered file by the fields `classHeld` compares, `Outside` where one is not a registered
   port's; the file's other refusals are the Flock verifier's, at the member's session, and are not answered here for a
@@ -66,44 +69,38 @@ from verity.protocols.proofs.spot.device.coins import DRAW_FORM
 from . import closing as CL, partition as P, proofs as PF, registered as REG
 from .proofs import V2_EXE, LeanError, v2_executable
 
-#: what the v2 executable's ``refusal`` says of what it prints (`OneStageZk.REFUSAL`)
-REFUSAL = "the per-member form's refusal, no verdict"
-#: `OneStageZk.MULTI_REFUSED`: the refusal of the per-member form's acceptance
-MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
-                 "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})")
-#: `refusal`'s reason exactly where the sessions' verdicts and v1's whole check at the coins passed
-ALL_PASSED = f"proofs: {MULTI_REFUSED}"
+#: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
+EXITS = {"accept": 0, "reject": 1, "undecided": 2}
 
 
-def refusal(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: Sequence[Path] = ()) -> tuple[str, bool]:
-    """Why v2 refuses the case of parameters `params`, registration record `commitment` and evidence `evidence` (each
-    the bytes the audit reads) on the files `blobs` (`V2_EXE`'s ``refusal``, `OneStageZk.membersOutcome`): the reason,
-    and whether the check decided (False where it is undecided). The reason is `ALL_PASSED` exactly where every check
-    before the per-member form's refusal passed. A case in the one statement's form is refused unchecked. Raises
-    `LeanError` on an answer that is not a refusal's line."""
-    with tempfile.TemporaryDirectory(prefix="verity-members-refusal-") as d:
+def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: Sequence[Path] = ()) -> tuple[str, str | None]:
+    """v2's check of the case of parameters `params`, registration record `commitment` and evidence `evidence` (each
+    the bytes the audit reads) on the files `blobs` (`V2_EXE`'s ``check``, `OneStageZk.protocol`): the verdict
+    (``accept``, ``reject`` or ``undecided``) and the reason, None on an accept. A case in either form is checked in
+    its own. Raises `LeanError` on an answer that is not an outcome's line, or whose exit is not its verdict's."""
+    with tempfile.TemporaryDirectory(prefix="verity-members-check-") as d:
         paths = [Path(d, n) for n in ("params.json", "commitment.bin", "evidence.bin")]
         canonical = json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
         for path, b in zip(paths, (canonical, commitment, evidence)):
             path.write_bytes(b)
-        p = subprocess.run([str(v2_executable()), "refusal", *map(str, paths), *map(str, blobs)], capture_output=True,
+        p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
-        raise LeanError(f"{V2_EXE} refusal answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
-    if (not isinstance(got, dict) or sorted(got) != ["decided", "refusal", "run"] or got["run"] != REFUSAL
-            or type(got["refusal"]) is not str or type(got["decided"]) is not bool
-            or p.returncode != (1 if got["decided"] else 2)):
-        raise LeanError(f"{V2_EXE} refusal answered a line that is not a refusal's (exit {p.returncode}): {got!r}"[:600])
-    return got["refusal"], got["decided"]
+        raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+    if (not isinstance(got, dict) or got.get("verdict") not in EXITS or p.returncode != EXITS[got["verdict"]]
+            or not (got.get("reason") is None or type(got["reason"]) is str)
+            or (got["verdict"] == "accept") != (got.get("reason") is None)):
+        raise LeanError(f"{V2_EXE} check answered a line that is not an outcome's (exit {p.returncode}): {got!r}"[:600])
+    return got["verdict"], got["reason"]
 
 
-def case_refusal(case: Mapping[str, Any]) -> tuple[str, bool]:
-    """`refusal` on a case as a driver writes one: ``{"blobs": [path, ...], "commitment": hex, "evidence": hex,
+def case_check(case: Mapping[str, Any]) -> tuple[str, str | None]:
+    """`check` on a case as a driver writes one: ``{"blobs": [path, ...], "commitment": hex, "evidence": hex,
     "params": {...}}``."""
-    return refusal(case["params"], bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]),
-                   [Path(b) for b in case["blobs"]])
+    return check(case["params"], bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]),
+                 [Path(b) for b in case["blobs"]])
 
 
 #: `OneStageZk.sessionTables`, the tables of a member's session, each with no ``root_B`` length (module docstring)
@@ -153,8 +150,8 @@ class _Refused(Exception):
 @dataclass(frozen=True)
 class Statement:
     """What one member's session is verified on, each file a blob's: the member's circuit and public files, the
-    verifier's program (its descriptor's bytes), partition object and registered file for the member, the pinned lookup
-    tables the blobs hold, by name, and the session's record and proof files, by name."""
+    verifier's program (its descriptor's bytes), partition object and registered file for the member, the member's own
+    lookup tables, the pinned ones its circuit looks up, by name, and the session's record and proof files, by name."""
 
     circuit: Path
     public: Path
@@ -218,6 +215,8 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
     they are not in that form."""
     form = Outside("the parameters and the evidence are not in the per-member form as its parsers read it "
                    "(`OneStageZk.membersParamsOfJson`, `membersEvidenceOf`)")
+    if isinstance(params.get("proofs"), dict) and "wiring" in params["proofs"]:
+        raise Outside("the parameters name the members' wiring, whose check (`OneStageZk.wiresHeld`) this does not run")
     try:
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)
@@ -527,10 +526,12 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
     return population_why(units, strata, header, slice_)
 
 
-def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes,
-           tables: Sequence[tuple[str, Path]], strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path]:
-    """`OneStageZk.Member.files`: the member `name`'s circuit and public files, read as `Member.statement` reads them
-    and held with no session (`files_why`); a refusal names the member."""
+def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, strata: Any,
+           slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+    """`OneStageZk.Member.files`: the member `name`'s circuit and public files and its own lookup tables, the blobs'
+    pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as `Member.statement` reads
+    them and held with no session (`files_why`); a refusal names the member. A table its circuit looks up that the
+    blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
     try:
         circuit = _blob(blobs, m["circuit"], "circuit")
         meta = _meta(circuit)
@@ -538,8 +539,10 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             lookups = PF.lookups_of(meta)
         except ValueError as e:
             raise _Refused(str(e)) from None
-        if (why := PF.tables_why(lookups, blobs)) is not None:
+        own = PF.own_tables(lookups, blobs)
+        if (why := PF.tables_match_why(own, lookups)) is not None:
             raise _Refused(why)
+        tables = tuple((n, blobs[PF.MUFU_SHA512[n]]) for n in own)
         if m["registered"] is None and PF.reads_registered(descriptor):
             raise _Refused("registered: the program reads registered values (a RegisteredInput among its "
                            "definitions) and the verifier holds no registered reads: verify with its own "
@@ -553,7 +556,7 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             raise _Refused(why)
     except _Refused as e:
         raise _Refused(f"member {name}: {e}") from None
-    return circuit, public
+    return circuit, public, tables
 
 
 def flock_verdict(st: Statement) -> dict[str, Any]:
@@ -615,9 +618,9 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     """`OneStageZk.membersRun` (module docstring): the per-member form's sessions' run on the parameters `params`, the
     registration record `record`, the evidence `evidence` (each as its parser read it) and the files `blobs`, by SHA-512
     (`blobs_of`), under the verifier's own `program`, the one `params` names, and its challenger's signature check
-    `verify`. The run and None, or None and Lean's refusal, the reason `membersOutcome` prints after ``proofs:``. It
-    accepts nothing: a run whose sessions all accepted is what the audit above it reads, v1's check at the coins and then
-    the form's refusal (`ALL_PASSED`). `verdict` is one session's verdict of the Flock verifier (`flock_verdict`), and
+    `verify`. The run and None, or None and Lean's refusal, the reason `check` answers after ``proofs:``. It is no
+    verdict: a run whose sessions all accepted is what the audit above it reads, v1's check at the coins, which
+    accepts or refuses the case. `verdict` is one session's verdict of the Flock verifier (`flock_verdict`), and
     `form` its check of a member's files' form with no session (`flock_form`). `Outside` on what it does not decide."""
     ms, sts = _parsed(params, evidence)
     if P.program_sha512(program) != params["partition"].get("program"):
@@ -643,8 +646,8 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         except (P.QueryRefused, ValueError) as e:
             strata = e
         descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
-        tables = tuple((n, blobs[d]) for n, d in PF.MUFU_SHA512.items() if d in blobs)
-        files = {name: _files(name, m, blobs, descriptor, tables, strata, _slice(m, roots[name], record), form)
+        files = {name: _files(name, m, blobs, descriptor, strata,
+                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):
@@ -654,8 +657,9 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
                 _, parsed = _record(path, s["name"])
             except _Refused as e:
                 raise _Refused(f"member {name}: {e}") from None
-            statement = Statement(*files[name], descriptor, params["partition"], ms[name]["registered"], tables, path,
-                                  tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
+            circuit, public, tables = files[name]
+            statement = Statement(circuit, public, descriptor, params["partition"], ms[name]["registered"], tables,
+                                  path, tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
             findings.append(_session(s["name"], name, statement, parsed, verdict))
         proved = tuple(u for f in findings for u in f.units)
         every = all(f.accepted for f in findings)
@@ -667,15 +671,14 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
 
 
 def run_reason(run: Run | None, refused: str | None) -> str | None:
-    """What `refusal` answers on a case whose per-member run is `members_run`'s `(run, refused)`, where v1's check at
-    the coins passes on everything else: the run's refusal under ``proofs:``; `ALL_PASSED` where every session
-    accepted; and None where a session did not, which v1's check answers by its verdict's name."""
-    if run is None:
-        return f"proofs: {refused}"
-    return ALL_PASSED if run.all else None
+    """The reason `check` rejects with on a case whose per-member run is `members_run`'s `(run, refused)`, where v1's
+    check at the coins passes on everything else: the run's refusal under ``proofs:``, and None where the run
+    returned. There `check` accepts where every session accepted (`Run.all`), and where one did not, v1's check
+    answers by its verdict's name."""
+    return None if run is not None else f"proofs: {refused}"
 
 
-__all__ = ["ALL_PASSED", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "MULTI_REFUSED", "NO_CHALLENGER",
-           "Outside", "POPULATION_ORDER", "PROVED_UNITS", "REFUSAL", "ROW_TABLES", "Run", "Statement", "TABLES",
-           "TABLE_PORT", "UNREAD", "blobs_of", "case_refusal", "files_why", "flock_form", "flock_verdict", "members_run",
-           "population_why", "refusal", "run_reason"]
+__all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
+           "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
+           "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
+           "members_run", "population_why", "run_reason"]

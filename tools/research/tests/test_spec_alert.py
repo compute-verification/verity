@@ -301,16 +301,16 @@ def test_a_trust_gap_grown_by_hand_comes_first_and_one_that_shrank_is_shown_afte
 def test_a_guarantee_deployed_or_no_longer_and_a_premise_trusted_or_no_longer_are_shown():
     old = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.G"], {}, {"C.CR": "collision resistance",
                                                                                    "C.Old": "an old bound"},
-                 {"A.G": {"C.Src": "the firewall's randomness"}})
+                 {"A.G": {"C.Src": "the ZK server's randomness"}})
     new = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.H"], {}, {"C.CR": "collision resistance, strict",
                                                                                    "C.New": "a new bound"},
-                 {"A.H": {"C.Src": "the firewall's randomness"}})
+                 {"A.H": {"C.Src": "the ZK server's randomness"}})
     assert spec.changes(old, new) == [
         "• deployed guarantee `A.H` listed: it states the deployed system",
         "• `A.G` no longer listed as deployed",
         "• trust base `C.CR`: collision resistance, strict (was: collision resistance)",
         "• trust base `C.New`: a new bound, listed",
-        "• deployed guarantee `A.H` also trusts `C.Src`: the firewall's randomness",
+        "• deployed guarantee `A.H` also trusts `C.Src`: the ZK server's randomness",
         "• trust base `C.Old` no longer listed (it stated: an old bound)",
         "• deployed guarantee `A.G` no longer trusts `C.Src`"]
     assert spec._tally([k for k, _ in spec._entries(old, new)]) == \
@@ -331,14 +331,14 @@ def test_a_rename_carries_the_trust_with_it_and_changes_nothing_of_it():
 
 
 def test_a_gap_premise_renamed_with_its_text_is_no_growth_and_one_the_records_already_held_is():
-    """A rename that changes a premise's text changes its hash too (`DrawIsCoin` to `SampleIsCoin`): a name no old record
+    """A rename that changes a premise's text changes its hash too (`CoinIsFresh` to `SampleIsCoin`): a name no old record
     held, in place of one no new record holds, is that rename. A premise the records already held, newly in the gap, was
     put there by hand."""
     def doc(renamed: str, h: str, gap: list[str]) -> dict:
         d = _trust(_doc({"A.G": _g("G", "h1")}, {renamed: h, "A.Other": "h2"}), ["A.G"], {"A.G": gap})
         return d | {"open": {renamed: {"issue": "X-1"}, "A.Other": {"issue": "X-2"}}}
 
-    old = doc("A.DrawIsCoin", "h3", ["A.DrawIsCoin"])
+    old = doc("A.CoinIsFresh", "h3", ["A.CoinIsFresh"])
     new = doc("A.SampleIsCoin", "h4", ["A.SampleIsCoin", "A.Other"])
     assert [t for k, t in spec._entries(old, new) if k in TRUST_KINDS] == [
         "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `A.Other`"]
@@ -353,12 +353,12 @@ def test_a_gap_premise_swapped_for_a_fresh_one_with_another_text_is_no_growth_an
         return _trust(_doc({"A.G": rec}), ["A.G"], {"A.G": [premise]}) | {
             "open": {premise: {"issue": issue, "due": "2026-11-30", "digest": digest}}}
 
-    old, new = doc("A.DrawIsCoin", H1, "X-1"), doc("A.SampleIsCoin", H2, "X-2")
-    rests = "• guarantee `A.G` rests now also on `A.SampleIsCoin`; no longer on `A.DrawIsCoin`"
+    old, new = doc("A.CoinIsFresh", H1, "X-1"), doc("A.SampleIsCoin", H2, "X-2")
+    rests = "• guarantee `A.G` rests now also on `A.SampleIsCoin`; no longer on `A.CoinIsFresh`"
     assert spec._entries(old, new) == [
         ("premises", rests),
         ("open", "• open premise `A.SampleIsCoin` listed (X-2, due 2026-11-30)"),
-        ("discharged", "• open premise `A.DrawIsCoin` discharged: no longer listed (X-1, due 2026-11-30)")]
+        ("discharged", "• open premise `A.CoinIsFresh` discharged: no longer listed (X-1, due 2026-11-30)")]
     repo = _repo(tmp_path)
     a = _commit(repo, "security/lean-audit.json", old, "a")
     b = _commit(repo, "security/lean-audit.json", new, "b")

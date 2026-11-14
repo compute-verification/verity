@@ -55,7 +55,7 @@ fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a f
 
 `IoTieBucket` is the proof block, one a bucket row. Its `row` is the network certifier's registered row t and its `port`
 S rows of the Commit's registered port, which the proof system reads (the Lean verifier's registered reads,
-`flock-verify --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th
+`verity-verify-proof --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th
 step by `port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries,
 each its id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and
 `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. An execution phase's tie is its T

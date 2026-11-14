@@ -1,7 +1,7 @@
 import Flock
 
 /-!
-`flock-served CIRCUIT PUBLIC STATEMENT PARTITION PROGRAM`: `flock-verify verify --zk --partition --program`'s work on the
+`flock-served CIRCUIT PUBLIC STATEMENT PARTITION PROGRAM`: `verity-verify-proof verify --zk --partition --program`'s work on the
 statement before any session, a step at a time, as `verifyCmd` runs it at one table, one `PHASE {json}` line per step on
 stdout: the circuit file's read, its SHA-512 (what `--archive`'s `archiveGetSha` holds it to), `Zk.maskLogOf`, the parse
 (`ProvedScope.circuitOf` at that SHA-512, as `circuitOfKnowing` reads it: `HmOut.parseCommitWith`, a templated

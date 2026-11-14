@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import gzip
+import hashlib
 import json
 import os
 import select
@@ -36,7 +37,7 @@ import pytest
 
 from tests.acquire.call_boundary_programs import LP, PF, T, build_dir, dense_program
 from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
-from verity_vllm.config import UsageError
+from verity_vllm.config import RowConfig, UsageError, row_file, row_path
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline import row_stages as S
@@ -108,6 +109,77 @@ def test_chain_refuses_its_own_flags_among_the_stage_flags(tmp_path):
         row.main(ch)
 
 
+def test_main_hands_each_subcommand_to_what_runs_it_and_returns_its_answer(tmp_path, monkeypatch, capsys):
+    """`row stage` and `row shed` are the run store's, each asked for by its entry point, and `row stage` is handed the function that
+    runs a row; `row run` runs the row at the stages its caller named; `row fa-version` prints the number alone, which a row's setup
+    reads from the command's output."""
+    from verity_vllm.pipeline import row
+    env = {"PY": sys.executable}
+    calls: list[tuple] = []
+
+    class Store:
+        def __init__(self, module: str, entry: str):
+            self.asked = (module, entry)
+
+        def stage(self, o, run):
+            calls.append((*self.asked, o, run))
+            return 7
+
+        def shed(self, o):
+            calls.append((*self.asked, o))
+            return 8
+
+    def run_row(o, stages):
+        calls.append((o, stages))
+        return 9
+
+    monkeypatch.setattr(row, "run_store", Store)
+    monkeypatch.setattr(row, "run_row", run_row)
+    monkeypatch.setattr(row, "fa_version", lambda workload, target: {("w.json", None): 2, ("w.json", "{}"): 3}[workload, target])
+    st = cli.parse("row", ["stage", "commit", ROW, "R", "o/r", "rev"], env)
+    sh = cli.parse("row", ["shed", "--force"], env)
+    o = _opts(tmp_path, "--stages", "build,match")
+    assert (row.main(st), row.main(sh), row.main(o)) == (7, 8, 9)
+    assert calls == [(row.RESEARCH, "row stage", st, run_row), (row.RESEARCH, "row shed", sh), (o, "build,match")]
+    assert [row.main(cli.parse("row", ["fa-version", "w.json", *t], env)) for t in ([], ["--target", "{}"])] == [0, 0]
+    assert capsys.readouterr().out == "2\n3\n"
+
+
+def test_a_rows_effective_config_is_its_file_its_stage_configs_and_what_the_caller_moved(tmp_path, monkeypatch):
+    """What a run of a row used (`row.effective_config`, written as the row's ``effective_config.json``): the row's file without its
+    requests and that file's digest, the run's own words and which of them differ from the file's, each stage's config in full, the
+    options a flag or a variable moved from its default, the installed vLLM, and the engine environment the stages inherit, which
+    never holds a credential.  A row id with no file has no config, no file and nothing to differ from."""
+    from importlib import metadata
+
+    from verity_vllm.pipeline import row
+    words = ["run", ROW, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp_path), "--py", sys.executable]
+    environ = {"MATCH_IMPL": "record", "VLLM_BATCH_INVARIANT": "1", "NCCL_ALGO": "Ring", "CUDA_VISIBLE_DEVICES": "3", "HOME": "/home/nobody",
+               "VLLM_API_KEY": "dummy", "NCCL_DUMMY_TOKEN": "dummy"}
+    o = cli.parse("row", [*words, "--build-jobs", "3", "--world", "2"], environ)
+    monkeypatch.setattr(metadata, "version", lambda name: {"vllm": "0.0.test"}[name])
+    eff = row.effective_config(o, "build,match", ("pous:s1",))
+    wl = row_file(ROW)
+    assert list(eff) == ["schema", "row", "config", "file", "run", "run_differs_from_config", "stages", "overrides", "vllm_installed", "engine_env"]
+    assert (eff["schema"], eff["row"], eff["vllm_installed"]) == ("verity-vllm/effective-config/v1", ROW, "0.0.test")
+    assert eff["config"] == {k: v for k, v in RowConfig.load(wl).to_json().items() if k != "requests"} and eff["config"]["model"] == o.repo
+    assert eff["file"] == {"path": row_path(ROW), "sha256": hashlib.sha256(wl.read_bytes()).hexdigest()}
+    assert eff["run"] == {"role": "LLAMA32_1B", "repo": "unsloth/Llama-3.2-1B", "rev": "9535bd9b", "world": 2, "gpu_util": None, "query": o.query,
+                          "protocols": ["pous:s1"], "stages": "build,match"}
+    assert eff["run_differs_from_config"] == ["rev"]                    # the file states the whole revision, the run its first eight digits
+    assert eff["stages"] == {"build": dataclasses.asdict(o.build), "match": dataclasses.asdict(o.match), "commit": dataclasses.asdict(o.commit)}
+    assert eff["overrides"] == {"build.build_jobs": "3", "match.match_impl": "record", "world": 2, "protocols": ["pous:s1"]}
+    assert list(eff["engine_env"].items()) == [("CUDA_VISIBLE_DEVICES", "3"), ("NCCL_ALGO", "Ring"), ("VLLM_BATCH_INVARIANT", "1")]
+
+    def not_installed(name):
+        raise metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(metadata, "version", not_installed)
+    none = row.effective_config(cli.parse("row", [w.replace("__i256__", "__i999__") for w in words], {}), "build", None)
+    assert (none["config"], none["file"], none["run_differs_from_config"], none["overrides"]) == (None, None, [], {})
+    assert (none["run"]["protocols"], none["run"]["stages"], none["vllm_installed"], none["engine_env"]) == (None, "build", None, {})
+
+
 def test_the_commit_flags_the_row_arms_exist():
     from verity_vllm.check import weights_of_record
     from verity_vllm.pipeline import commit
@@ -128,7 +200,7 @@ def test_a_tree_without_the_run_stores_tool_beside_it_is_refused_by_name(tmp_pat
     """A row's stages run with the run store's tool on their path, so a tree without `tools/research/src` beside it, as the public
     tree is, refuses the row at setup before any stage."""
     r = _row(tmp_path)
-    r.tree = str(tmp_path / "tree" / "integrations" / "vllm")
+    r.tree = str(tmp_path / "tree" / "adapters" / "vllm")
     os.makedirs(r.tree)
     with pytest.raises(Stop) as e:
         r.setup({})
@@ -234,7 +306,7 @@ def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc)
     assert f"CANCELLED by {name}" in (d / "stage.log").read_text()
     row_log = (d / "row.log").read_text()
     assert f"{name} received: forwarding to the running stage" in row_log and f"row cancelled by {name}" in row_log
-    tl = [json.loads(ln) for ln in open(d / "timeline.jsonl")]
+    tl = [json.loads(ln) for ln in (d / "timeline.jsonl").read_text().splitlines()]
     assert {"stage": "row", "ev": "cancelled", "signal": name[3:]}.items() <= tl[0].items()
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "cancel"}.items() <= tl[1].items()
 
@@ -340,8 +412,13 @@ def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int, environ: dict[str,
     (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
     r.B, r.LP, r.T, r.MML, r.ck, r.tgt_args = s["B"], s["LP"], s["T"], s["I"] + s["O"], str(ck), []
     ran: list[str] = []
+
+    def run_tl(st: str, to: int, lf: str, cmd: list[str], *extra: tuple) -> int:
+        ran.append(st)
+        return 0
+
     monkeypatch.setattr(r, "launch_args", lambda lp, t: [])
-    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, *extra: ran.append(st) or 0)
+    monkeypatch.setattr(r, "run_tl", run_tl)
     monkeypatch.setattr(R, "_memory_headroom", lambda: 1 << 40)
     monkeypatch.setattr(R, "_cpus", lambda: cpus)
     return r, ran
@@ -431,6 +508,8 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
 def test_a_batch_composes_and_builds_its_manifest_without_waiting_for_the_envelope(tmp_path, monkeypatch):
     r, seen = _batch_build(tmp_path, monkeypatch)
     assert (r.LP, r.T) not in R.request_shapes(r.path(r.wl))
+    for marker in ("derives_done", "derives_failed"):                 # an earlier attempt's markers end nothing of this Build's
+        Path(f"{r.d}/build_workload.{marker}").touch()
     r.build()
     assert seen["before_derives_end"] == ((0, 0), True) and seen["manifests"] == ["w" * 64]
     assert seen["derived"] == [f"{r.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(r.path(r.wl), r.LP, r.T)]
@@ -675,7 +754,13 @@ def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
     (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
     (Path(r.d) / "build_summary.json").write_text(json.dumps({"request": {"program_digest": PD}}))
     built: list[str] = []
-    monkeypatch.setattr(r, "required_manifest", lambda stage: built.append(stage) or _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD) or 0)
+
+    def required_manifest(stage: str) -> int:
+        built.append(stage)
+        _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+        return 0
+
+    monkeypatch.setattr(r, "required_manifest", required_manifest)
     return r, built
 
 
@@ -752,8 +837,13 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     assert t.hidden_so == t.env.hidden_so_fa2_guarded
     assert _tp_row(tmp_path, TP_MOE, environ={"GUARDED_MAX_TAP": "0"}).hidden_so == t.env.hidden_so_fa2
     seen: list[list[str]] = []
+
+    def run_tl(stage: str, to: int, log: str, cmd: list[str]) -> int:
+        seen.append(cmd)
+        return 0
+
     monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    monkeypatch.setattr(t, "run_tl", run_tl)
     os.makedirs(t.d)
     t.manifest_global("commit.required_manifest")
     assert {"--norm-scales", "--router-softmax", "--vocab-range"} <= set(seen[0]) and "--guarded-max" not in seen[0]
@@ -764,6 +854,31 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
+
+
+def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp_path, monkeypatch):
+    """`tp-commit` with no ``--checkpoints-manifest`` takes the package's own; the row names the tree's file to it, the one it
+    names to `tp-commit-replay`, so the Commit's record says which pins its shards were held to.  A config run's Commit, one
+    instrumented arm with no Match to compare against, names it as a full run's does."""
+    tp = _tp_row(tmp_path, TP_DENSE)
+    pins = os.path.join(tp.tree, "manifests/checkpoints.json")
+    for row, config_run in ((tp, False), (_tp_row(tmp_path, TP_DENSE, "--config-run", "1"), True)):
+        cmd = row.commit_cmd([])
+        assert cmd[cmd.index("--checkpoints-manifest") + 1] == pins and cmd.count("--checkpoints-manifest") == 1, config_run
+        assert ("--only-arm" in cmd, "--match-dir" in cmd) == (config_run, not config_run)
+    seen: list[list[str]] = []
+
+    def run_tl(stage: str, to: int, log: str, argv: list[str]) -> int:
+        seen.append(argv)
+        return 0
+
+    monkeypatch.setattr(tp, "run_tl", run_tl)
+    isdir = os.path.isdir
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or isdir(p))
+    os.makedirs(f"{tp.d}/commit")
+    Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
+    tp.replay()
+    assert [c[c.index("--checkpoints-manifest") + 1] for c in seen] == [pins]
 
 
 def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
@@ -838,24 +953,33 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
     with pytest.raises(Stop) as e:
         cpu.match()
-    assert e.value.rc == 11 and "gpu_legs.json" in open(f"{cpu.d}/stages.txt").read()
+    assert e.value.rc == 11 and "gpu_legs.json" in Path(cpu.d, "stages.txt").read_text()
     ran: list[str] = []
+
+    def run_gpu(stage: str, to: int, log: str, cmd: list[str], **kw: Any) -> int:
+        ran.append(stage)
+        return 0
+
+    def run_tl(stage: str, *a: Any) -> int:
+        ran.append(stage)
+        return 0
+
     monkeypatch.setattr(R, "derived_ok", lambda p: False)
-    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: ran.append(stage) or 0)
-    monkeypatch.setattr(gpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    monkeypatch.setattr(gpu, "run_gpu", run_gpu)
+    monkeypatch.setattr(gpu, "run_tl", run_tl)
     with pytest.raises(Stop) as e:
         gpu.match()
     assert e.value.rc == 0 and ran == ["match.capture", "match.control"]
     assert json.loads(Path(gpu.M, "gpu_legs.json").read_text()) == {"capture_rc": 0, "control_rc": 0}
-    assert open(f"{gpu.d}/stages.txt").read().splitlines()[-1].startswith("match-gpu PASS")
+    assert Path(gpu.d, "stages.txt").read_text().splitlines()[-1].startswith("match-gpu PASS")
     ran.clear()
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
     monkeypatch.setattr(R, "tp_passed", lambda p: True)
 
     monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU stage in the cpu phase"))
-    monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    monkeypatch.setattr(cpu, "run_tl", run_tl)
     cpu.match()
-    last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
+    last = Path(cpu.d, "stages.txt").read_text().splitlines()[-1].split()
     assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
 
 
@@ -943,7 +1067,7 @@ def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_
     plan = R.fold_plan(t.shapes, 78, 8, int(mem_gb) * 10**9)
     assert 339 * 2**30 < plan["gm_bytes"] < 400 * 10**9 and 36 * 10**9 < plan["fold_bytes"] < 44 * 10**9
     assert leg == plan["leg_s"] > 3 * 7200 and to == leg * (-(-8 // folds) + 2 * -(-8 // ranks) + 1) > 17 * 3600
-    (mark,) = [e for e in map(json.loads, open(t.timeline)) if e["stage"] == "match.fold_plan"]
+    (mark,) = [e for e in _timeline(t) if e["stage"] == "match.fold_plan"]
     assert (mark["rank_workers"], mark["fold_workers"], mark["leg_s"], mark["mem_gb"]) == (ranks, folds, leg, int(mem_gb))
 
 
@@ -955,12 +1079,12 @@ def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_
     t.match()
     cmd = seen["match.fold_match"][1]
     assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1]) == ("1", "1")
-    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in open(f"{t.d}/row.log").read()
+    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in Path(t.d, "row.log").read_text()
     t, seen = _b8_cpu_half(tmp_path / "explicit", monkeypatch, "--fold-rank-workers", "2", "--fold-timeout", "100", mem_gb="300")
     t.match()
     to, cmd = seen["match.fold_match"]
     assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1], cmd[cmd.index("--timeout") + 1]) == ("2", "0", "100")
-    assert to == 100 * (4 + 2 * 4 + 1) and "WARNING" not in open(f"{t.d}/row.log").read()
+    assert to == 100 * (4 + 2 * 4 + 1) and "WARNING" not in Path(t.d, "row.log").read_text()
 
 
 def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):

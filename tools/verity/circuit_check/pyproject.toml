@@ -56,7 +56,7 @@ parallel = true
 # binding reaches, building no body: about 2.6 GiB. Where a binding's record doesn't count, the
 # first worker has the bindings without one built and their records stored (`circuit-check --all --records-only`, a process
 # forked per binding) while the others wait: its processes take what the workers' shares
-# leave as they wait (conftest.py's `_budget`), each counted at what `heavy.json` says it grows.
+# leave as they wait (conftest.py's `_budget`), each counted at what its owner's unkeyed file says it grows (`cli.heavy`).
 # Built whole in each worker instead, the catalog takes a worker past 50 GB. A circuit-check a test starts
 # keeps to this share too (conftest.py's `worker_slot_gb`).
 worker_gb = 8
@@ -85,16 +85,20 @@ inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
           "verity/commitments/randomness", "verity/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/windows",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/accounting/pouw/verifier/salt.py",
           "verity/protocols/accounting/pouw/verifier/protocol.py",
           # circuit/h1window.py imports both, so building the H1 units reads them.
           "verity/protocols/accounting/pouw/verifier/core_check.py", "verity/protocols/accounting/pouw/verifier/leaf_lanes.py",
+          # core_check.py imports it for the salt check's verdict of record
+          "verity/protocols/accounting/pouw/verifier/verifier.py",
           "verity/protocols/accounting/pouw/verifier/serving.py", "verity/protocols/accounting/pouw/verifier/registration.py", "verity/protocols/accounting/pouw/verifier/coins.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier/grind.py", "verity/protocols/accounting/pouw/prover/circuit", "verity/protocols/accounting/pouw/prover/schemes",
+          "verity/protocols/experimental/dither/prover", "verity/protocols/experimental/__init__.py",
+          "verity/protocols/experimental/dither/__init__.py",
           "verity/protocols/accounting/pouw/verifier/live_reads.py", "verity/protocols/accounting/pouw/prover/__init__.py",
           "verity/protocols/accounting/pous/prover/__init__.py", "verity/protocols/accounting/certifier/prover/__init__.py",
           "verity/protocols/accounting/pous/verifier/__init__.py", "verity/protocols/accounting/pous/prover/circuit.py",
@@ -126,9 +130,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/prover/io_ids.py", "verity/protocols/accounting/certifier/prover/io_ids.circuit-check.py",
           "verity/protocols/accounting/certifier/prover/io_ids.circuit-check.json",
           "verity/protocols/accounting/certifier/prover/ingress_scan.py", "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.py",
-          "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.json",
+          "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.json", "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/verifier/head_check.py", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.py",
-          "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json",
+          "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/verifier/replay_step.py", "verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.py",
           "verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.json",
           "verity/protocols/accounting/certifier/verifier/served.py", "verity/protocols/accounting/certifier/verifier/served.circuit-check.py",
@@ -151,6 +155,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/proofs/spot/verifier/one_stage",
           "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/service.py",
           "verity/protocols/proofs/spot/verifier/second_stage.py", "verity/protocols/proofs/spot/verifier/schedule.py",
+          "verity/protocols/proofs/spot/verifier/window_place.py",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/weights.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py", "adapters/vllm/verity_vllm/program",
           "adapters/vllm/verity_vllm/__init__.circuit-check.py",
@@ -192,7 +197,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v5.circuit-check.json",
           "verity/protocols/accounting/certifier/prover/compile_slice_v6.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.py",
-          "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.json",
+          "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.json", "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/prover/compile_slice_v7.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.json",
@@ -206,7 +211,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/verifier/release.py",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
           "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/commitments",
-          "adapters/vllm/tests/__init__.py", "verity/protocols/accounting/pous/__init__.py", "adapters/vllm/tests/check/__init__.py"]
+          "adapters/vllm/tests/__init__.py", "verity/protocols/accounting/pous/__init__.py", "adapters/vllm/tests/check/__init__.py",
+          # test_superseded_versions.py: the list it holds the superseded versions to
+          "tests/lint/allowlists/superseded_versions.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -228,6 +235,7 @@ tests = [
     "tests/test_named_targets.py",
     "tests/test_pinned_targets.py",
     "tests/test_ranges.py",
+    "tests/test_superseded_versions.py",
     "tests/test_targets.py",
     "tests/test_wide_outputs.py",
 ]
@@ -256,7 +264,8 @@ paths = [
 tests = ["tests/test_attention_split.py", "tests/test_attention_split_digests_*.py", "tests/test_bodies.py",
          "tests/test_declared_tables.py", "tests/test_metadata_files.py", "tests/test_named_targets.py",
          "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_split_prims_serve.py",
-         "tests/test_structural.py", "tests/test_structural_slots.py", "tests/test_targets.py"]
+         "tests/test_structural.py", "tests/test_structural_slots.py", "tests/test_superseded_versions.py",
+         "tests/test_targets.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine/served_seed.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",

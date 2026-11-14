@@ -49,7 +49,7 @@ statement reads it (`decL`, `decC` at the registrants' commit-time openings `ope
   at slot `t` lane `l mod 4`'s at the same slot, and its cells its own;
 * `LaneAgrees`, `LaneAgrees.laneOk`: a lane's view agrees with a leaf on what `LaneOk` reads (its A and B rows, its own
   32 cells, its partials row, its public inputs, its index and `ok`), so `LaneOk` of the view is `LaneOk` of the leaf's;
-* `LaneKnownHolds.pub_eq`, `lane_eq`, `ok_eq`: where flock-verify's checks give a lane's known fields, its decode's
+* `LaneKnownHolds.pub_eq`, `lane_eq`, `ok_eq`: where verity-verify-proof's checks give a lane's known fields, its decode's
   public inputs, index and `ok` are those; `CombineView.eta_ok`.
 
 Four lanes read each A row, and four each B row; that they decode it alike is `Accounting.TS.Lanes.read_bits` (one

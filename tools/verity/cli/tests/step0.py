@@ -1,6 +1,6 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
-entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
+entry or `LIVE` (`PARTIES`), and the live run of SPOT's core parties (`live`,
 `verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
@@ -23,7 +23,9 @@ from typing import Any
 from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
 from verity.channel import Refused
@@ -42,25 +44,25 @@ KEY = lms.Params(64, 1, 3)
 
 # --- what each subprotocol and the workload declare --------------------------------------------------------------------
 
-def _law(law: str, params: Mapping[str, Any]) -> None:
+def _design(design: str, params: Mapping[str, Any]) -> None:
     try:
-        parse_design(law)
+        parse_design(design)
     except ValueError as e:
         raise Refused("law", str(e)) from None
 
 
-def _work_law(law: str, params: Mapping[str, Any]) -> None:
-    _law(law, params)
-    if law.partition(":")[0] != "work":
-        raise Refused("law", f"the certifier's output tie is proved whole only beside a streamed work draw (a5's "
-                             f"output-class-needs-a-streamed-work-draw): work:K, not {law}")
+def _work_design(design: str, params: Mapping[str, Any]) -> None:
+    _design(design, params)
+    if design.partition(":")[0] != "work":
+        raise Refused("law", f"the certifier's output tie is proved whole only beside a streamed work sample (a5's "
+                             f"output-class-needs-a-streamed-work-draw): work:K, not {design}")
 
 
-def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
+def _certifier_params(params: Mapping[str, Any]) -> dict[str, Any]:
     """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
-    by default (``max_tokens_cap``, ``lengths``, ``content``) stays out of the table while unset (`WARDEN_DEFAULTS`),
-    as it stays out of `WardenParams.digest`, so a configuration that sets none has the form and hash it had before
-    any was a parameter."""
+    by default (``max_tokens_cap``, ``lengths``, ``content``, ``request_words``) stays out of the table while unset
+    (`CERTIFIER_DEFAULTS`), as it stays out of `WardenParams.digest`, so a configuration that sets none has the form
+    and hash it had before any was a parameter."""
     names = [f.name for f in fields(WardenParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
         raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
@@ -75,9 +77,9 @@ def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
     return {**given, "tie": True}
 
 
-#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response cap, the lengths
-#: rows' form, the content rows' classes), and ``tie``.
-WARDEN_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
+#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response's token bound, the lengths
+#: rows' form, the content rows' classes, the request words), and ``tie``.
+CERTIFIER_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -94,6 +96,9 @@ def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 _VERIFIER = (Role("verifier", "auditor"),)
+#: the certifier's parties less the workers: the step-0 toy is the workload's party and runs no component's developer
+#: side, the certifier's included
+_CERTIFIER = tuple(r for r in NC.MANIFEST.parties if r.name != NC.WORKERS)
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"],
               parties=(Role("challenger", "auditor"), Role("firewall", "developer"), *_VERIFIER),
@@ -103,18 +108,16 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("verifier", "workers", ("draw",), after=("coins",)),
                         Channel("workers", "firewall", ("witness",), after=("draw",)),
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
-              needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
+              needs=frozenset({"windows"}), law=_design, default_law="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
-    Component("inference-only", SP.IDS["inference-only"], parties=_VERIFIER, requires=("sampled-proofs",)),
+    Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties=(Role("network-certifier", "auditor"), *_VERIFIER),
-              channels=(Channel("network-certifier", "workers", ("out-opening",)),
-                        Channel("network-certifier", "verifier", ("out-record",))),
+    Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=(("challenger", "network-certifier"),), params=_warden,
-              default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
+              colocated=(("challenger", "network-certifier"),), params=_certifier_params,
+              default_params=CERTIFIER_DEFAULTS, law=_work_design, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),
@@ -145,16 +148,16 @@ def unserved(what: str) -> Check:
     return check
 
 
-#: each listed subprotocol's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
+#: each listed subprotocol's period check on SPOT's verifier (its ``component``), SPOT's own aside
 CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
                             "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
-                            "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
+                            "pous": unserved("PoUS run check"), "bandwidth": unserved("PoUB session"),
                             "wipe": unserved("memory challenger's wipe check")}
 
 
 class Machine:
-    """This machine's capabilities for sampled proofs' parties over ``state`` (module docstring)."""
+    """This machine's capabilities for SPOT's parties over ``state`` (module docstring)."""
 
     def __init__(self, config: Mapping[str, Any], state: Path, checks: Mapping[str, Check] = CHECKS) -> None:
         self.config, self.state, self.checks = config, state, checks
@@ -163,12 +166,12 @@ class Machine:
         raise SP.Unavailable(f"no workload serves period {i} at step 0 here")
 
     def pin(self) -> dict[str, Any]:
-        raise SP.Unavailable("no firewall is pinned at step 0 here")
+        raise SP.Unavailable("no ZK server is pinned at step 0 here")
 
     def host(self) -> Any:
         raise SP.Unavailable("no challenger's host runs at step 0 here")
 
-    def audit(self, i: int, registration: bytes, challenger: Mapping[str, Any], firewall: Mapping[str, Any]
+    def audit(self, i: int, registration: bytes, challenger: Mapping[str, Any], zk_server: Mapping[str, Any]
               ) -> tuple[dict[str, Any], dict[str, Any] | None]:
         raise SP.Unavailable(f"no records audit of period {i} runs at step 0 here")
 
@@ -241,7 +244,7 @@ def deployment(config: Mapping[str, Any], local: bool, at: Mapping[str, str]) ->
 
 
 def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
-    """Where each of sampled proofs' listening parties listens for the verifier: its ``address`` (default loopback) and
+    """Where each of SPOT's listening parties listens for the verifier: its ``address`` (default loopback) and
     its ``listen`` port, for those the configuration gives one."""
     return {p["name"]: f"{p.get('address', '127.0.0.1')}:{p['listen']}" for p in cfg["party"]
             if p["name"] in SPOKES and "listen" in p}
@@ -249,7 +252,7 @@ def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
          machine: Callable[[Mapping[str, Any], Path], Machine] = Machine) -> runtime.RunResult:
-    """The live run of sampled proofs' parties ``here`` (`verity.runtime.runner.run`) on ``machine``: every one
+    """The live run of SPOT's parties ``here`` (`verity.runtime.runner.run`) on ``machine``: every one
     of them in this process when all four are here, else each listening one at its configured address (`listening`)
     and the verifier dialing those that run elsewhere; refused by name (``listen``) when one the verifier needs has
     none. Its transcripts and record are under ``STATE/runs/<local|here joined by +>/``."""

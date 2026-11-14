@@ -53,9 +53,9 @@ def compare_dirs(real: str, relabel: str) -> dict | None:
     """None when `relabel` (a rank's directory written from the template) equals `real` (the rank derived), else the first
     difference, ``{file, path, real, relabel}`` (a JSON path), ``{file, offset, real, relabel}`` (a byte offset and the bytes
     around it), ``{file, only_in}`` or ``{file, unreadable}`` (a truncated `.gz`, a summary that is not JSON), with ``files``:
-    every file that differs.  Every file is compared byte for byte (``.gz`` decompressed) except `TELEMETRY`'s, compared as JSON
-    without those keys, and `SKIPPED`; the files `SUMMARIES` derives from the others come last, so the first difference is in the
-    file that holds it."""
+    the files that differ, with one name for a subdirectory (its first file that differs).  Every file is compared byte for byte
+    (``.gz`` decompressed) except `TELEMETRY`'s, compared as JSON without those keys, and `SKIPPED`; the files `SUMMARIES` derives
+    from the others come last, so the first difference is in the file that holds it."""
     names = sorted((set(os.listdir(real)) | set(os.listdir(relabel))) - set(SKIPPED), key=lambda n: (n in SUMMARIES, n))
     diffs = []
     for name in names:
@@ -169,7 +169,7 @@ def _at(doc: Any, path: str) -> Any:
     for k in [k for k in path.split("/") if k]:
         if isinstance(doc, dict):
             doc = doc.get(k, "<absent>")
-        elif isinstance(doc, list) and k.isdigit():
+        elif isinstance(doc, list) and k.isdecimal():
             doc = doc[int(k)] if int(k) < len(doc) else "<absent>"
         else:
             return doc

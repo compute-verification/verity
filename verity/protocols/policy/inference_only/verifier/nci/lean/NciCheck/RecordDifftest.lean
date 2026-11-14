@@ -1,14 +1,16 @@
 module
 
 public import NciCheck.RecordCount
+public import NciCheck.RecordRows
+public import NciCheck.RecordChosen
 public import NciCheck.CountDifftest
 
 /-!
 # The record check's difftest, against the Python reference
 
 `scripts/record_difftest_vectors.py` writes cases of `Record` (an instance, the trusted input, the rows whose
-kinds are asked, and the count's limits) and, on each, `scripts/nci_record_reference.py`'s results, which visit every
-row of every unit where `Record` reads the record's description. `NciCheck/RecordDifftestMain.lean` fails
+kinds are asked, the count's limits and the rows rule's) and, on each, `scripts/nci_record_reference.py`'s results, which visit every
+row of every unit where `Record` reads the record's description. `RecordDifftestMain.lean`, beside this file, fails
 unless, on every case:
 
 * `Record.checkDetail` gives Python's `check_detail`: the summary's counts, the verdict and the failure, or
@@ -19,6 +21,10 @@ unless, on every case:
   the refusal's code;
 * `RecordCount.checkDetail` gives Python's `count`: a block's Boolean gates, the verdict and the failure, or
   the first refusal's code;
+* `RecordRows.checkDetail` gives Python's `block_rows`: a block's rows, which Python adds up unit by unit, its
+  fresh bits, the verdict and the failure, or the first refusal's code;
+* `RecordChosen.checkDetail` gives Python's `chosen`: the execution phase's input bits, those of each kind and the
+  ones the prover chose, which Python adds up row by row over every unit, or the first refusal's code;
 * the templates `Record.front` reads have the closed rows of Python's `closed`, template by template, or the
   two refuse with one code: what each Definition passes on (`Record.passedOn`), held on every template
   whether or not a wire fills its rows;
@@ -46,6 +52,14 @@ def publicFields : List String := ["error", "message", "complies"]
 
 /-- The fields of the count compared: a refusal's code, or a block's Boolean gates and the verdict. -/
 def countFields : List String := ["error", "bool_gates", "complies", "failure"]
+
+/-- The fields of the rows rule compared: a refusal's code, or a block's rows and fresh bits and the verdict. -/
+def rowsFields : List String := ["error", "rows", "fresh", "complies", "failure"]
+
+/-- The fields compared of the bits the prover chose: a refusal's code, or the execution phase's input bits, those of
+each kind and the ones the prover chose. -/
+def chosenFields : List String := ["error", "inputs", "inside", "theta", "cross_wires", "free", "ingress",
+  "unregistered", "openings", "chosen"]
 
 /-- How Lean's list of `what` (the rows' kinds, what the form exports of them, or the templates' closed rows) differs
 from Python's on case line `i`: both the same list, or both a refusal of one code. -/
@@ -109,6 +123,9 @@ def differences (i : Nat) (case py : String) : List String :=
       rowsDiffer "kinds" i (Record.kinds inst tr (c.getObjValD "rows")) (p.getObjValD "kinds") ++
       rowsDiffer "exported" i (Record.exported inst tr (c.getObjValD "rows")) (p.getObjValD "exported") ++
       compare i "count" countFields (RecordCount.checkDetail inst tr (c.getObjValD "count")) (p.getObjValD "count") ++
+      compare i "block rows" rowsFields (RecordRows.checkDetail inst tr (c.getObjValD "block_rows"))
+        (p.getObjValD "block_rows") ++
+      compare i "chosen" chosenFields (RecordChosen.checkDetail inst tr) (p.getObjValD "chosen") ++
       rowsDiffer "closed" i (closedOf inst tr) (p.getObjValD "closed") ++
       circuitDiffers i inst tr (c.getObjValD "spot") (detail.getObjValD "error")
 

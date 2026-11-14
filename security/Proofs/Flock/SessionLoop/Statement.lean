@@ -87,7 +87,7 @@ def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F
   match FlockDeploy.setupOf true x with
   | some (_, _, sts) => do
     let (g, d, hi) ← src x w ρ k
-    let l ← _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d
+    let l ← _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
     let t ← _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
     pure (t, hi)
   | none => .error "no session"
@@ -97,7 +97,7 @@ witness and sampled bytes `src` gives rep stream `2j` (one level 0 a table, as `
 def Loop.level0Of {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (j : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
   let (g, d, _) ← src x w ρ (2 * j)
-  _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d
+  _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d
 
 /-- **The loop's own link** at the source `src`: each table's sampled level-0 root, with no public words, as the loop's
 `Commit` carries them (`Session.relay`'s `commitFrame` of the roots `Level0.ofSession` bound); the empty root where the
@@ -279,7 +279,7 @@ packed witness and sampled bytes `src` gives rep stream `k` (`Loop.realOf`'s). -
 def Loop.level0At {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (k : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
   let (g, d, _) ← src x w ρ k
-  _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d
+  _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
 
 /-- **The link's level 0 is the tape's** at `x`: at every nonce and tape, table `j`'s sampled level 0 (`Loop.level0Of`) has
 `Masked.linkIn`'s inputs. `Loop.Src`'s level-0 half gives it (`Loop.Src.linkLevel0`). -/
@@ -341,7 +341,7 @@ two halves: level 0's inputs at its sizes (`Loop.Level0Src`: the host's packed w
 reads) and the rep samples (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
 reasonable: the loop runs on the developer's own host, whose operating system's random bytes are the uniform samples the
 tape models, and which hands the loop the witness `w` the statement is served at. The host is the developer's, not an
-auditor-trusted one (`trusted-host`), and that is the host to trust here: zero knowledge protects the developer. -/
+auditor-trusted one (`trusted-device`), and that is the host to trust here: zero knowledge protects the developer. -/
 def Loop.Src
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -464,7 +464,7 @@ is the one the loop's `Commit` carries (`Loop.linkOf src`) and whose files and s
 with no premise on the tables but `SwCausalOn` at `Loop.SwOk`: `Tables`, `Complete`, `DummyReg`, `Causal` and `TapeOK`
 hold at `Masked.dataE` (`Loop.tables_dataE`, `complete_dataE`, `dummyReg_dataE`, `causal_dataE`, `tapeOK_dataE`).
 In place of `LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
-`flock-verify verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
+`verity-verify-proof verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
 tape's (`Loop.Src`). It takes no `FinishIs`: at these premises, with `LiveRoundEq` and `SwCausalOn`, the loop's `Finish`
 is the switched session's (`Loop.finishIsOn`). The scope
 is a premise because the loop does not run that check, and cannot run all of it: the check reads the verifier's own

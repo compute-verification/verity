@@ -1,6 +1,6 @@
 """H1's served activation quantizer (co32c-u16) is bit-exact against steps.act_quant.
 
-The GPU gate (benchmarks/pouw/edited_gemm/crun.sh) ties the served kernels crow_s + cquant_h1 to cgemm_ref.py's numpy
+The GPU gate (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/crun.sh) ties the served kernels crow_s + cquant_h1 to cgemm_ref.py's numpy
 recomputation; this ties that same numpy formula to steps.act_quant, so the served X equals steps' H1 arm. act_quant's
 H1 call is the int8 linear's dither at act_top 127, one bit (dither_shift(1) = 0, t = 126): s = amax / 126, then
 X = floor((x / s).clamp(-126, 126)) + b. The served path upcasts bf16 activations to fp32 (the kernel reads uint16 and

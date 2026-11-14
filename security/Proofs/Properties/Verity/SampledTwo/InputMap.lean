@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.SampledTwo.Steps
 # The last step's law is over the run of record's own second stage's cells and counts
 
 The two-stage form's last step holds the interior audit's sample to a sampling design it computes from its parameters
-(`secondLawOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
+(`secondDesignOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
 stage samples over the cells and counts it computes from its input's interior. The check builds that input from the same
 parameters (`inputOf`), so the two are one:
 
@@ -14,7 +14,7 @@ parameters (`inputOf`), so the two are one:
   parameters, the commitment's record, none, and the first stage's bytes.
 * `inputOf_interior`: the input holds an interior whose parameters, replay block and bytes are the form's interior
   parameters, its replay block, and the second stage's bytes.
-* `secondLawOf_ok`: `secondLawOf` returns `Select.secondLaw` of the proved units of the run's `draw`, over the cells
+* `secondLawOf_ok`: `secondDesignOf` returns `Select.secondLaw` of the proved units of the run's `draw`, over the cells
   the replay block's program has under the interior's query, at the rule's counts.
 * `accepted_law_run`: where the two-stage check accepts, the sampling design of its last step is `Select.secondLaw` of the proved
   units of the run of record's `draw`, over the cells of that run's interior's replay block under its query, at the
@@ -74,14 +74,14 @@ theorem inputOf_interior (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : Byte
        cases rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨_, rfl, rfl, rfl, rfl⟩)
 
-/-- **What `secondLawOf` computed** where it returned: under a two-stage rule, `Select.secondLaw` of the proved units
+/-- **What `secondDesignOf` computed** where it returned: under a two-stage rule, `Select.secondLaw` of the proved units
 of the run's `draw`, over the replay block's cells under the interior's query, at the rule's counts over them. -/
-theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondLawOf p run = .ok law) :
+theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondDesignOf p run = .ok law) :
     ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
       Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
       Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
       law = Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks := by
-  unfold secondLawOf at h
+  unfold secondDesignOf at h
   split at h
   · try dsimp only at h
     obtain ⟨ns, hns, h⟩ := bind_ok h
@@ -113,8 +113,10 @@ theorem accepted_law_run {form : Bool} {p : Params} {c : OneStage.Commitment} {�
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, -, -⟩ := inputAt_ok hi
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondLawOf_ok hl
   obtain ⟨it, hit, hp, hrep, hsrc⟩ :=
-    inputOf_interior p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
-  obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
+    inputOf_interior p { c with record := j₁ } ξ ξ₂
+      { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
+  obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂
+    { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
   refine ⟨c₂, ξ₂, r, i, run, law, it, grain, replay, k, ns, ids, ks, hi, hr, hj, htwo, ?_, hsrc, ?_, ?_, ?_, ?_, ?_,
     hks, hlaw⟩
   · rw [hio]

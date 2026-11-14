@@ -387,7 +387,7 @@ theorem crMap_getD (f : ℕ → Array F128) (n : ℕ) {i : ℕ} (hi : i < n) :
 /-- A rep's start lays out the statement's pads at its schedule's `k0`, and its mask slot. -/
 theorem start_eq {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : MaskSlot}
     (h : _root_.Flock.Firewall.Drive.start st = .ok (lay, mask)) :
-    ∃ sch tp, _root_.Flock.Zk.schedule st.m = .ok (sch, tp) ∧
+    ∃ sch tp, _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp) ∧
       lay = _root_.Flock.Zk.PadLayout.new st.m st.c.kLog sch.k0 ∧ _root_.Flock.Firewall.Drive.maskSlot st = .ok mask := by
   unfold _root_.Flock.Firewall.Drive.start at h
   obtain ⟨⟨sch, tp⟩, hs, h⟩ := bindV_ok h
@@ -468,7 +468,7 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
     exact getElem!_pos _ j hj
   have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
   have hm14 : 14 ≤ (Masked.stsOf x)[j].m := by have := (hall j hj).1; omega
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
@@ -528,7 +528,7 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
@@ -564,7 +564,7 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
     exact eA
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
-    _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad)))
+    _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
   have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
@@ -716,7 +716,7 @@ theorem rank_unrefused (T : ZKMal.CoinLayer.TableData)
   have hs1 : 1 ≤ s := by
     obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
     obtain ⟨y⟩ := hx.2 j hj
-    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
       rw [show (2 * j + r) / 2 = j by omega, getElem!_pos _ j hj]
       exact y.hz
     rw [hs]

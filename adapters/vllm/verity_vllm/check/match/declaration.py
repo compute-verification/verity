@@ -11,6 +11,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from verity.circuits.codec import canonical_json, program_digest
+
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.config import workload_file
@@ -19,6 +21,8 @@ from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.schema_ids import GLOBAL_PROGRAM_SCHEMA
 from verity_vllm.records.workload import Workload
+
+__all__ = ["MODELLED_ENGINE", "compilation_facts"]
 
 GP_SCHEMA = GLOBAL_PROGRAM_SCHEMA
 
@@ -260,7 +264,6 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     digest_verification = {"verified": False, "why": "descriptor.json.gz not beside the artifact"}
     dpath = os.path.join(os.path.dirname(os.path.abspath(artifact_path)), "descriptor.json.gz")
     if os.path.exists(dpath):
-        from verity.circuits.codec import canonical_json, program_digest
         with gzip.open(dpath, "rb") as f:
             desc = json.loads(f.read())
         recomputed = program_digest(desc)

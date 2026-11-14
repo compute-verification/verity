@@ -101,13 +101,13 @@ def epoch(s: str | None) -> float | None:
         return None
 
 
-def gpu_count(field: str, v, cap: int) -> int:
-    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `cap`, as an int or a string of digits; ValueError for
+def gpu_count(field: str, v, most: int) -> int:
+    """A policy's `max` or `borrow`: a whole number of GPUs from 0 to `most`, as an int or a string of digits; ValueError for
     anything else (-1, 1.5, Infinity, "8x")."""
     if isinstance(v, str) and v.isascii() and v.isdigit():
         v = int(v)
-    if type(v) is not int or not 0 <= v <= cap:
-        raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {cap}")
+    if type(v) is not int or not 0 <= v <= most:
+        raise ValueError(f"{field} {v!r} isn't a whole number of GPUs from 0 to {most}")
     return v
 
 
@@ -514,10 +514,10 @@ class Controller:
         if target is None:
             target = len(pool) - len(free) + wanted
         self.stopping = {p: s for p, s in self.stopping.items() if Path(f"/proc/{p}").exists()}
-        cap = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
+        room = unborrowed(obs, {j["metadata"]["name"] for j in obs["jobs"]})
         borrow = lim["borrow"] if want and all(w.get("preempt") == "1" for w in want) and \
             t < (epoch(lim["borrow-until"]) or float("inf")) else 0
-        limit = min(lim["max"], cap + borrow) if cap is not None else len(pool) + len(pending)
+        limit = min(lim["max"], room + borrow) if room is not None else len(pool) + len(pending)
         target = max(0, min(limit, int(target)))
         if blocked:
             target = len(pool) + len(pending)

@@ -94,7 +94,7 @@ about those bytes has the probability it has for independent uniform bytes.
 What A3 assumes of the operating system is that the challenger's calls to `IO.getRandomBytes` for the coins a unit
 sample reads, and for the epoch salt, are such a source, every call's bytes independent of every earlier call's, for
 every `L`. That the challenger releases those coins only after the registration they sample is recorded rests on
-`trusted-host`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
+`trusted-device`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
 A3: the theorems read `drawWith` on a model byte source, the unit sample runs it on the challenger's coins read in order
 (`Spot.Draw.drawUnits`), and `drawOS` runs it on `IO.getRandomBytes` (`drawOS_def`).
 

@@ -43,7 +43,7 @@ per unit, when proof `i` of round `w` on the window's path `x` is a Flock sessio
 with outcome `out x w i`. It closes the three gaps between the two as follows:
 
 1. **the probability bridge** is three named premises: the window's sampling design at each `(w, i)` is its sessions'
-   (`WindowLaw`), the layer accepts a proof only where flock-verify accepts its session (`AcceptedLive`), and the
+   (`WindowLaw`), the layer accepts a proof only where verity-verify-proof accepts its session (`AcceptedLive`), and the
    relation holds at the value layer's rows wherever every sampled proof block of the session is right (`RelOfRows`);
 2. **the opening against the plurality** is one named premise, `OpenedPlurAt`: an accepted proof's opening is the
    layer value `rows` of the plurality value layer `XplurZC`, outside `δo`; it holds at `δo = 0` when the layer's
@@ -79,7 +79,7 @@ def WindowLaw (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : �
     (fun x => out x w i)
 
 /-- **Gap 1, acceptance** (open): the layer accepts proof `i` of round `w` only
-where flock-verify accepts its session's outcome (`LiveAcceptsZKR`). -/
+where verity-verify-proof accepts its session's outcome (`LiveAcceptsZKR`). -/
 def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)

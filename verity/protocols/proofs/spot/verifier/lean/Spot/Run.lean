@@ -39,16 +39,16 @@ check the stream ran on it, in the stream's order.
   registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
-  audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
+  audit record (`Record.record`, with the names of the values the verifier holds certified entries for) over the
+  sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
   interior registration, the second stage's cells and the design's links and wires, the rows their units read and the
   names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
-  symbol accepts when every audit
-  record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
-  their own roots (`own_reads`), whose rows round 2 holds.
+  symbol accepts when every audit record does. Each audit record takes the sessions' reads of its registration's own
+  ports at their own roots (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows.
 
 A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
 audit record as the text of Python's `canonical_json`, and under a two-stage rule `interior`, the interior registration's
@@ -243,15 +243,15 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
       if why == Challenger.FAMILY_ROOT then "family" else "coins"
   | _, _, _, _ => some "coins"
 
-/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
-the registration's own ports at their own roots under a two-stage rule. -/
-def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
-    (served sessionRoots : Json) : V Json :=
+/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, holding each value
+its verifier `v` holds a certified entry for to have a reported read (`Record.certifiedCheck`). -/
+def audit (i : Input) (v : Registration.Verifier) (record receipt draw law : Json) (proved : Array Int)
+    (instances : Int) (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
     ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots),
-    ("own_reads", Json.bool (i.rule matches .twoStage ..))]))
+    ("certified", Json.arr (v.certified.map fun x => Json.str x.1.value))]))
 
 /-- Under a two-stage rule, the check's query is the rule's `grain`. -/
 private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
@@ -319,7 +319,8 @@ def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
   | none => return (true, [])
   | some (it, receipt, draw, law, read) => do
     let proved := it.provedUnits.getD (Draw.proved draw)
-    let rec_ ← audit i it.record receipt draw law proved (it.instances.getD proved.size) it.served it.sessionRoots
+    let rec_ ← audit i it.params.verifier it.record receipt draw law proved (it.instances.getD proved.size) it.served
+      it.sessionRoots
     let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
     let own : SecondStage.Own :=
       { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
@@ -329,6 +330,7 @@ def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        widths := SecondStage.replayWidths i.params.verifier.program.prog it.replay.prog.programFn,
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
@@ -377,7 +379,7 @@ def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
     let shown := if i.outputs.isEmpty then Json.mkObj [] else getD ((ofRecord[0]?.map (·.2)).getD Json.null) "public"
     let proved := i.provedUnits.getD drawn
     let instances := i.instances.getD proved.size
-    let rec_ ← audit i i.record receipt draw derived proved instances i.served i.sessionRoots
+    let rec_ ← audit i v i.record receipt draw derived proved instances i.served i.sessionRoots
     let (accepted₂, staged) ← interiorAudit form i (drawn.map Int.toNat) inner
     let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
     return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),

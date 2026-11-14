@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.RecOpening
+meta import Flock.RecOpening
+
+/-!
 `RecResiduals.partlyRead` on small nets: the row ports' bits sit at `rowCol`'s columns (port `n` elements wide spans
 `16 · portWordsOf n` columns), an element read in no bit or in all 128 passes, and the first element read in some but not
 all is named with how many, wherever it sits among held elements read in no bit. `readIns` marks the input columns the
@@ -15,10 +20,6 @@ list of w slots it adds: refused with no residual, with only `acc0`'s port held,
 name than its element needs is named, at copy 0 even with no copy, and at each copy below `upv`; a forced zero (leaf -1)
 keys none. `roundNames` names each round holding a key, `RecOpening.rsName` claim `i`'s ring switch's elements `m<i>`.
 -/
-module
-
-public import Flock.RecOpening
-meta import Flock.RecOpening
 
 @[expose] public section
 

@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The message half of the decoder premise, and the decoder at the headline: statements
 
-`flock_headline_exec`'s open guarantee is `hdec : DecodesOn …`: at every outcome of the live session flock-verify
+`flock_headline_exec`'s open guarantee is `hdec : DecodesOn …`: at every outcome of the live session verity-verify-proof
 accepts, each rep's tape (its rounds' messages, decoded from their bytes, and coins) plays the rep's game, and the table's
 verdict accepts. The statements here:
 
@@ -107,7 +107,7 @@ def TagsOk (I : Inputs) : Prop :=
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`wr` is the challenger's record of the live session**: whenever flock-verify accepts what `wr` writes for the
+/-- **`wr` is the challenger's record of the live session**: whenever verity-verify-proof accepts what `wr` writes for the
 outcome `o` at sample `S`, the record carries the sample `dj S`, the proof files are `o`'s, and the record decodes to a
 session whose table's `root_B`, link points and rep streams' rounds are `o`'s. -/
 def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)

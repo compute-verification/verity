@@ -66,7 +66,7 @@ a session `sess₀ x w i k` at its registrants' openings `op x w i k` with its r
 (`RowsSession.canon`), with outcomes `out x w i k`, and the group layer
 `groupLayer T n sess out known okSalt full want opened rel right` (accepted where the leaf verifier's check of the tile
 and its chunks passes, `PouwWindow.Lanes.checkChunks T n`, and at every one of the `T.lanes · n + 1` sessions
-flock-verify `--zk --registered` accepts with its known-content, complete and known-read checks, at the known content
+verity-verify-proof `--zk --registered` accepts with its known-content, complete and known-read checks, at the known content
 `known x w i k` followed by its `o0` row 1 under `okSalt x w i k` and the ports `full x w i k` it reads in full, and
 `pouw-leaf-own`'s checks of its file at the ports `want x w i k`, of its sample, every unit of a non-empty population,
 and of its reads, one at each port, pass; opening `opened x w i`, its relation `rel x w i`, or a clash of two of the

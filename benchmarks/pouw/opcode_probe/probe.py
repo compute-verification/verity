@@ -51,7 +51,7 @@ def _load(name: str, path: Path):
     return mod
 
 
-G = _load("gpu_kit_sass_gate", HERE.parent / "gpu_kit" / "sass_gate.py")
+G = _load("gpu_kit_sass_gate", HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "gpu_kit" / "sass_gate.py")
 rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 

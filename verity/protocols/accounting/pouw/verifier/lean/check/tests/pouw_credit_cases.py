@@ -48,7 +48,7 @@ naming another layout over the same nodes (``alt-layout``), a template's A or B 
 input words (``reinterpret``, the decoder's ``E_REINTERPRET``), or an H1 execution phase's whole descriptor with a linear, so a
 tile, at a K the tile's proof doesn't cover (``tile-k``: 2^17 or past, or no multiple of 32). Its mutations of the
 composed check present a round log the challenger never received (``never-received``, its coins carried as if opened
-after its roots and its sample root over it, so only `core_check.rounds` refuses it), a round coin opened after another
+after its roots and its sample root over it, so only `core_check.rounds_twin` refuses it), a round coin opened after another
 root, an A tree the round roots didn't commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`) register the A values under another
 execution phase's open root or another circuit, their trees under those domains so `_a_link` accepts them
 (``other-registration``), give one proof's session another registration's root for a value it opened
@@ -417,7 +417,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     round's root is the one the
     challenger received and its coin the one opened after it; under ``never-received`` the challenger received other
     roots, and the log carries their coins as if opened after its own, its sample root over it (the composed check's
-    counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
+    counterexample: `_credited` and `_a_link` accept it, `core_check.rounds_twin` doesn't)."""
     if rounds is None:
         rounds = rng.choice([s for s in (1, 2, 3) if calls is None or len(calls) % s == 0])
     ch = Wd.live_challenger(rng.randrange(4), rounds, rng.randbytes)
@@ -1195,7 +1195,7 @@ def _partial(rng: random.Random) -> tuple[dict, list[int]]:
     while True:
         d = {**_draw_args(rng), "layout": layout(rng)}
         d["k"] = _k(rng, d["layout"])
-        units, _ = Cr.drawn(*(d[k] for k in DRAWN_KEYS))
+        units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
         if len(units) < sum(hi - lo for s in Cr.strata(d["layout"])[0] for lo, hi in s["units"]):
             return d, units
 
@@ -1205,11 +1205,11 @@ def outcome_instance(rng: random.Random, name: str = "honest") -> dict:
     if name == "chosen":
         d, units = _partial(rng)
         other = {**d, "coin": _hex(rng)}
-        chosen, _ = Cr.drawn(*(other[k] for k in DRAWN_KEYS))
+        chosen, _ = Cr.drawn_twin(*(other[k] for k in DRAWN_KEYS))
         return {**d, "proofs": _proofs(rng, chosen if chosen != units else units[1:] + [max(units) + 1])}
     d = {**_draw_args(rng), "layout": layout(rng)}
     d["k"] = _k(rng, d["layout"])
-    units, _ = Cr.drawn(*(d[k] for k in DRAWN_KEYS))
+    units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
     proofs = _proofs(rng, units)
     return {**d, "proofs": proofs if name == "honest" else _mutate_proofs(proofs, rng, name, units)}
 
@@ -1222,7 +1222,7 @@ def _served_units(d: dict, stream: str | None = None, k: int | None = None) -> l
     """The units `d`'s sampling coin selects at its K (or `k`) under the served execution phase's arguments (`credit.window`'s), or
     under `stream`."""
     coin = d["draw"]["coin"]["coin"]
-    got, why = Cr.drawn(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
+    got, why = Cr.drawn_twin(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
                         {"receipts": d["draw"]["receipts"]}, d["layout"], d["k"] if k is None else k)
     assert why is None, why
     return got

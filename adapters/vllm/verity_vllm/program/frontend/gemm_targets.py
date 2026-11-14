@@ -134,7 +134,7 @@ class GemmTarget:
     #: the block-FP8 fused-MoE experts (`TritonExperts`: `fused_moe_kernel` with `use_fp8_w8a8` over [M, K/G] x [E, cdiv(N, G), K/G]
     #: scales), as measured: the e4m3 k32 step of its `tl.dot` (`targets.FP8_DOTS`; `targets.moe_expert_fp8_gemm_spec` binds each
     #: (token, slot) pair over it); blackwell_consumer's is measured by property blackwell_fp8_capture (`evidence`); hopper's is the
-    #: wgmma k32 step its blockwise FP8 linear runs (`fp8_block_dot`), the step the `MoeExpertFp8BlockGemm(W)_v1` forms hard-code, whose
+    #: wgmma k32 step its blockwise FP8 linear runs (`fp8_block_dot`), the step the `MoeExpertFp8BlockCoordinate(W)_v1` forms hard-code, whose
     #: composition in `fused_moe_kernel` property glm53_block_fp8_capture checks on the H200.  None = that kernel has no registered
     #: Definition on this target, and the block-FP8 experts are refused by name.
     fp8_moe_dot: str | None = None

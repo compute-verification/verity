@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.Test.RegProgram
+meta import Flock.Test.RegProgram
+
+/-!
 `HmLinks.check` reads each unit and each gate's unit from the root body's nodes (`unitAt`, `ownerAt`); on
 `Flock.Test.RegProgram`'s program (a call, batches, a scan and primitives) those lookups are the unrolled units' (`unitRef`,
 `ownerRef`) at every unit and gate, the check over the population is the reference walk's (`checkRef`), and a sample that
 proves a unit reads only its wires.
 -/
-module
-
-public import Flock.Test.RegProgram
-meta import Flock.Test.RegProgram
 
 @[expose] public section
 

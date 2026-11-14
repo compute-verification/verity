@@ -1,4 +1,10 @@
-/-
+module
+
+public import Base.Bytes
+public import Base.Hash
+public import Lean.Data.Json.FromToJson.Basic
+
+/-!
 A record entry: one message of a run's transcript (a registration, a commitment, the challenger's coins or sample, a
 proof, a verdict), numbered, chained to the entry before it and signed by the party that sent it.
 
@@ -15,11 +21,6 @@ text of the entry.
 schemas, kinds and bodies, which key signs, its sessions) is its own check; the auditor's ledger
 (`Spot.Challenger.ledgerEntry?`) reads its entries through this. `verity/core/protocols/record.py` mirrors it.
 -/
-module
-
-public import Base.Bytes
-public import Base.Hash
-public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 

@@ -3,7 +3,8 @@ registered before it served, by `NciCheck.Count`'s rule. `BitAtx32_v1`'s price i
 primitive, input by input; the verdict's rule is the count rule's reference (`nci_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
-session's gates and fresh bits with every weight held, and n, under an H200 int8 serve's φ or the one ``--serve`` states,
+session's gates and fresh bits with every weight held, those by kind (a split the verdict recomputes and holds the
+policy to, and a policy written before the split is read as before), and n, under an H200 int8 serve's φ or the one ``--serve`` states,
 cut at Pearl+'s linears where it says, and a BF16 checkpoint under the int8 serve's φ is refused by name; and on toy
 serve dirs over small circuit records the verdict
 accepts within (c, k, n), refuses past each, and refuses as undecided what the rule can't decide (no policy, one written
@@ -60,6 +61,27 @@ def small() -> dict:
     circuit = IF.Circuit("test/blocks", ((_fn(GEMM), 4), (_fn(ROPE), 6)),
                          blocks=IF.Blocks(slots=2, steps=3, inference=entries))
     return IF.descriptor_record(circuit, 1)
+
+
+@pytest.fixture(scope="module")
+def kinded() -> dict:
+    """Two slots of two `GEMM` units whose ``x`` rows are the scan state row's and ``w`` rows a cut linear's y, each a
+    registered read of a parameter no pin holds: a block's 18,432 fresh bits, 2,048 of the scan state and 16,384 of
+    the linears' outputs."""
+    from verity_vllm.program.predict.scan_state import SCAN_STATE
+    from verity_vllm.protocols.pouw.pearl_c.window import y_value
+
+    fn = _fn(GEMM)
+    gid, rows = IF.descriptor_id(fn), dict(IF.layout(fn).rows)
+    reads = (IF.Read(gid, "x", SCAN_STATE, 0, (4,), 0, (rows["x"],)), IF.Read(gid, "w", y_value(0, 0), 0, (4,), 0, (rows["w"],)))
+    reg = IF.Registered({SCAN_STATE: 4 * rows["x"], y_value(0, 0): 4 * rows["w"]}, reads=reads)
+    entries = (IF.InferenceEntry(GEMM, 0, (2, 2), ("slot", "-"), 0),)
+    return IF.descriptor_record(IF.Circuit("test/kinded", ((fn, 4),), registered=reg,
+                                           blocks=IF.Blocks(slots=2, steps=1, inference=entries)), 1)
+
+
+#: `kinded`'s fresh bits a block by kind
+KINDED = {"linears": 16_384, "scan_state": 2_048}
 
 
 @pytest.fixture(scope="module")
@@ -142,17 +164,22 @@ def test_n_is_the_cards_sessions_over_the_lease_on_the_grid():
             IO.capacity(*bad)
 
 
-def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_and_n(small, monkeypatch):
+def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_and_n(kinded, small, monkeypatch):
     """The policy's c and k are its session's gates and fresh bits with every weight parameter held (and nothing else:
-    a scan state's row stays fresh), its n `capacity` of the class's session work, each input to n with its source, and
-    the time it was written as given."""
+    a scan state's row stays fresh), k by kind as the same count splits it, its n `capacity` of the class's session
+    work, each input to n with its source, and the time it was written as given. A class with fresh bits of no kind
+    writes no policy."""
     assert IO.weight_pins(["weights/a@4", "weights/a@4/table", "scan_state/s@1", "weightsx/b@2"]) == \
         {"weights/a@4": "00", "weights/a@4/table": "00"}
-    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (small, ["scan_state/s@1"]))
+    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (kinded, ["scan_state/s@1"]))
     pol = IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
-    row = IO.session_row(small, {}, {})
+    row = IO.session_row(kinded, {}, {})
     work = IO.session_work(IO.window_class("2,2,2"), MODEL)
     assert (pol["c"], pol["k"], pol["n"]) == (row["gates"], row["fresh"], IO.capacity(work["theta_macs"], 60, Fraction(1, 4))["n"])
+    assert pol["k_by_kind"] == row["k_by_kind"] == KINDED and sum(KINDED.values()) == pol["k"]
+    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (small, []))
+    with pytest.raises(ValueError, match="a fresh bit of no kind of linears, scan_state"):
+        IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
     assert pol["written_utc"] == BEFORE and pol["session"]["definition"] == row["definition"] and pol["tree"] == "abc"
     assert pol["class"] == {"slots": 2, "prompt": 2, "outputs": 2, "positions": 3} and pol["serve"]["model"] == MODEL
     i = pol["n_inputs"]
@@ -170,7 +197,7 @@ def _stated(**over) -> dict:
                                   "default_seed": DEFAULT_SEED, **over}))
 
 
-def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(small, monkeypatch, tmp_path):
+def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(kinded, monkeypatch, tmp_path):
     """With φ stated (``--serve``: serve-phi's statement of the serve.json a serve will write, or a serve.json, its
     execution under its engine), the policy's session is the class's circuit under that φ, cut at a PoUW scheme's
     linears where ``--pearl-tables`` names one, and the policy records both; a statement of another model or revision
@@ -179,7 +206,7 @@ def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(small, 
 
     def doc(serve, cls, scheme=None):
         seen.append((serve, scheme))
-        return small, []
+        return kinded, []
 
     monkeypatch.setattr(IO, "class_doc", doc)
     args = ("2,2,2", *BF16, 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
@@ -260,6 +287,43 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
         3, [[row["definition"], row["gates"], row["fresh"], 6]], 6, {})
     assert IO.line(pub).startswith("accept: session ") and IO.line(pub).endswith(
         "n 6 (no count published: n is judged on the blocks' exact count, held on the node)")
+
+
+@pytest.mark.parametrize(("split", "why"), [
+    (None, None),
+    (KINDED, None),
+    ({"linears": 16_383, "scan_state": 2_049}, "is not the run's circuit's"),
+    ({"linears": 16_384, "scan_state": 2_047}, "doesn't sum to its k = 18432"),
+])
+def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_path, split, why):
+    """The verdict recomputes the run's circuit's k by kind and accepts a policy whose ``k_by_kind`` is that and sums to
+    its k, or that has none, as a policy written before the key; a split that is another, or doesn't sum to k, is
+    refused."""
+    row = IO.session_row(kinded, None, None)
+    assert row["k_by_kind"] == KINDED and row["fresh"] == 18_432
+    pol = _policy(row) if split is None else _policy(row, k_by_kind=split)
+    pub, _ = IO.verdict(pol, kinded, _serve(tmp_path / "s", FULL), None, None)
+    if why is None:
+        assert (pub["verdict"], pub["complies"]) == ("accept", True)
+    else:
+        assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ") and why in pub["reason"]
+
+
+@pytest.mark.parametrize("split", [
+    {"linears": "16384", "scan_state": 2_048},
+    {"linears": 16_384.0, "scan_state": 2_048},
+    {"linears": 16_384, "scan_state": True},
+    {"linears": [16_384], "scan_state": 2_048},
+    {**KINDED, "salt": 0},
+    [16_384, 2_048],
+])
+def test_a_policys_k_by_kind_holds_only_its_kinds_each_an_int(kinded, tmp_path, split):
+    """A split whose keys are not of `KINDS`, or a value that is not an integer (a string of digits, a float, a bool, a
+    list), or that is no object, is refused as undecided, saying so, before any sum."""
+    row = IO.session_row(kinded, None, None)
+    pub, _ = IO.verdict(_policy(row, k_by_kind=split), kinded, _serve(tmp_path / "s", FULL), None, None)
+    assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ")
+    assert "is not an object of linears, scan_state, each an integer of bits" in pub["reason"]
 
 
 @pytest.mark.parametrize(("over", "why"), [

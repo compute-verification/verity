@@ -1,9 +1,9 @@
-"""`flock-verify rec-compose` in Python (`Flock/RecCompose.lean`, `RecCompose.check`), reason for reason, which
+"""`verity-verify-proof rec-compose` in Python (`Flock/RecCompose.lean`, `RecCompose.check`), reason for reason, which
 `tests/test_lean_rec_compose.py` holds to the Lean binary on honest and tampered part sets. The Lean is the verifier;
 this is for writing part sets and their verdicts (``verdict``) in tests and stand-ins, and a run's record (`run_record`)
 staging the shared set its parts' files give (`shared_of_args`, held to ``verify``'s by `tests/test_lean_rec_coins.py`).
 
-A recursive statement's V* parts each ran ``flock-verify verify --zk --rec-part J`` once. Their logs compose when there
+A recursive statement's V* parts each ran ``verity-verify-proof verify --zk --rec-part J`` once. Their logs compose when there
 is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each once; every ``VERDICT`` accepts, ran
 ``--zk``, names no identifier and the composition's own rows file's SHA-512; the first part's ``rec_shared`` holds every
 input the compiled verifier's parts read at the composition's own inner shape and link table (``--rec-links``), and

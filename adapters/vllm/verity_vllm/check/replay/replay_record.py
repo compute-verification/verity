@@ -6,8 +6,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.check.replay.replay_codes import (
+from verity_vllm.records import replay_codes as RC
+from verity_vllm.records.replay_codes import (
     NOT_YET,
     WHY_CLASSES_BY_NAME,
     why_class,

@@ -59,3 +59,6 @@ def install(scheme: str, target: Target) -> Option:
     return Option(name=entry, hooks=target.hooks(entry),
                   details={"commitment_scheme": scheme, "law": LAW,
                            "challenge": "verity.commitments.randomness.derive from an auditor key"})
+
+
+__all__ = ["DEFAULT_SCHEME", "NAME"]

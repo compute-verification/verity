@@ -14,10 +14,11 @@ from __future__ import annotations
 from typing import Any
 
 from verity_vllm.query.manifest.format import manifest_digest
+from verity_vllm.records.schema_ids import MANIFEST_VERIFY_SCHEMA
 
 __all__ = ["verify"]
 
-SCHEMA = "verity-sweep/manifest-verify/v1"
+SCHEMA = MANIFEST_VERIFY_SCHEMA
 ENGINE = "v2-query"
 
 

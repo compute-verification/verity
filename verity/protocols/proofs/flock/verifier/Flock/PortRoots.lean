@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.ProvedScope
+public import Flock.Registered
+
+/-!
 The circuit and public files `verify --zk` holds to the form the sampled audit's knowledge soundness covers
 (`Flock.Guarantees.SampledKSLiveV3`): every port a `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the
 scope check reads them (`rowsOk`), each of its own name, no two ports whose registered frame-v3 roots over the public
@@ -22,10 +27,6 @@ one root under different domains (`collidesPub`).
   statement is the template's parse (`HmOut.parseTmpl`) and for a flat one the circuit `HmOut.parse` reads, as `check`
   does. It refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
 -/
-module
-
-public import Flock.ProvedScope
-public import Flock.Registered
 
 @[expose] public section
 

@@ -51,7 +51,7 @@ public file's leaf map. So the refusal is `RootFixesDomainL` at that leaf map, t
 
 namespace Flock.Bridge
 
-open Properties.NetworkCertifier.Bytes (bs bs_inj)
+open Properties.Certifier.Bytes (bs bs_inj)
 
 /-- **The verifier's published roots are `rootsOfL`'s at the public file's leaf map**: port `q`'s published root
 (`Flock.PortRoots.pubRoot`) is `rootsOfL`'s at `LeafMap.ofPublic` over the file's population. -/

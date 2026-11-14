@@ -71,11 +71,16 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.vllm-allowlist.driver": "f=adapters/vllm/tests/lint/merge_allowlist.py; "
                                                 "[ -f \"$f\" ] || f=integrations/vllm/tests/lint/merge_allowlist.py; "
                                                 "python3 \"$f\" %O %A %B %P",
+                 # `--caps `: origin/main's merge.py, which the command runs, knows `--limits` only once it holds it (merge.LIMITS_FLAG)
+                 "merge.lean-limits.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
+                                           "(tools/verity/lean/merge.py)",
+                 "merge.lean-limits.driver": _lean_driver("--caps "),
+                 "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
+                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject "),
+                 # the driver's name before the rename, with the same command, while a branch's `.gitattributes` names it
                  "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
                                          "(tools/verity/lean/merge.py)",
-                 "merge.lean-caps.driver": _lean_driver("--caps "),
-                 "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
-                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject ")}
+                 "merge.lean-caps.driver": _lean_driver("--caps ")}
 
 
 CWD_CLONE = "clone"

@@ -42,11 +42,19 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   relative one no longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`,
   `module:attr`, docs). A module whose own row keeps its name (a [paths] row with old == new) stays where it is when its
   package moves;
+- Lean modules: a `.lean` file the map moves is the module its path below its Lake package names (`lean_module`), and
+  each `import` line of it names the new module; in a `lean-audit.json`, each whole name of it (a `reads` key, a layer,
+  an import), never a declaration below it, which keeps its namespace (`lean_module_sub`): the edits `move_check.py`
+  certifies;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
-A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. A
-Lake package's path to another package that named one before the move names one after it, or the move stops (exit 1). An
-old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
-and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
+A `lean-audit.json`'s `guarantees` and `reads` never change but for a `reads` key that follows its module, and neither
+do the digests a path-keyed pin file records (the move stops on one that would), but for a Lake manifest's: a pin of
+`tools/verity/check/pins.py` that held the digest of a manifest the move rewrites gets its new digest
+(`repin_manifests`, which `rename.py` runs too), since a move changes a manifest only in where its path packages sit,
+which no pinned output reads. A Lake package's path to another package that named one before the move names one after
+it, or the move stops (exit 1). An old path that names something outside the tree ([rewrite] keep: the frozen evidence
+artifact's layout) is never rewritten, and neither is a dotted name that only looks like a module ([rewrite]
+keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
@@ -79,6 +87,7 @@ import bisect
 import fnmatch
 import functools
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -90,6 +99,7 @@ import sys
 import tokenize
 import tomllib
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -116,6 +126,11 @@ RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", "
 #: the Lake files that name other packages' directories, each from its own: a lakefile by a requirement's `path`, a
 #: manifest by a path package's `dir` (`lake_dirs` reads them, `lake_spans` finds them in the text)
 LAKE_FILES = ("lakefile.toml", "lake-manifest.json")
+MANIFEST = "lake-manifest.json"
+#: a Lean import line, as `move_check.py`'s `LEAN_IMPORT` reads one
+LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$", re.M)
+#: the pins of Lean sources: {path: digest} under a JSON key, or a `sha256sum` listing (`pins`)
+PINS_PY = "tools/verity/check/pins.py"
 _LAKE_PATH = re.compile(r'[ \t]*path[ \t]*=[ \t]*"(?P<p>[^"\\\n]+)"')
 _LAKE_PACKAGE = re.compile(r"\{[^{}]*\}")
 _LAKE_DIR = re.compile(r'"dir"\s*:\s*"(?P<p>[^"\\\n]+)"')
@@ -203,6 +218,43 @@ def lake_spans(name: str, text: str) -> list[tuple[int, int]]:
             if re.search(r'"type"\s*:\s*"path"', package.group(0)) and (m := _LAKE_DIR.search(package.group(0))):
                 spans.append((package.start() + m.start("p"), package.start() + m.end("p")))
     return spans
+
+
+def pins(pins_py: Path) -> list[tuple[str, str | None, str]]:
+    """The pins `tools/verity/check/pins.py` (at `pins_py`) lists, as (pin, the JSON key it records {path: digest} under or
+    None for a `sha256sum` listing, the directory its paths are below); none when there is no such file."""
+    if not pins_py.is_file():
+        return []
+    spec = importlib.util.spec_from_file_location("move_pins", pins_py)
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)       # its dataclass looks its module up
+    exec(compile(pins_py.read_text(), str(pins_py), "exec"), mod.__dict__)  # noqa: S102  (an import, with no bytecode left in the tree)
+    return [(p.path, p.key, p.under) for p in mod.PINS]
+
+
+def repin_manifests(before: str, text: str, key: str | None, under: str, changed: dict[str, tuple[bytes, str]],
+                    written: Callable[[str], str | None]) -> str:
+    """A pin's `text` after a move, with each Lake manifest's digest it held before the move (`before`: under JSON key `key`,
+    or a `sha256sum` line when `key` is None, its path relative to `under`) replaced by the manifest's new digest when the
+    move rewrites it: a move changes a manifest only in where its path packages sit, which no pinned output reads. A
+    digest of any other file stays, for the pin's command. `changed` holds each file the move rewrites by its path before
+    the move, as (its bytes before, its text after); `written` gives a recorded path as the pin writes it after the move,
+    or None to leave its digest."""
+    if key is None:
+        recorded = dict(ln.split("  ", 1)[::-1] for ln in before.splitlines() if ln.strip())
+    else:
+        recorded = json.loads(before).get(key, {})
+    for rel, digest in recorded.items():
+        target = posixpath.normpath(posixpath.join(under, rel))
+        if posixpath.basename(target) != MANIFEST or target not in changed:
+            continue
+        if hashlib.sha256(changed[target][0]).hexdigest() != digest or (w := written(rel)) is None:
+            continue
+        after = hashlib.sha256(changed[target][1].encode()).hexdigest()
+        if key is None:
+            text = re.sub(rf"^{digest}(  {re.escape(w)})$", lambda m, h=after: h + m[1], text, flags=re.M)
+        else:
+            text = re.sub(rf'("{re.escape(w)}"\s*:\s*"){digest}"', lambda m, h=after: f'{m[1]}{h}"', text)
+    return text
 
 
 def sh_ref(ref: str) -> str:
@@ -378,6 +430,26 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
             return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
     parts = p.split("/")
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
+
+
+def lean_module(path: str, files) -> str | None:
+    """The Lean module of the `.lean` file `path` among `files`: its path below its Lake package (the nearest directory
+    with a lakefile), `/` as `.`, without `.lean`, as `move_check.py` names one; None outside any package."""
+    d = posixpath.dirname(path)
+    while d:
+        if f"{d}/lakefile.toml" in files or f"{d}/lakefile.lean" in files:
+            return path[len(d) + 1:-len(".lean")].replace("/", ".")
+        d = posixpath.dirname(d)
+    return None
+
+
+def lean_module_sub(text: str, mods: dict[str, str]) -> str:
+    """Each whole moved Lean module name in `text` (`move_check.py`'s `module_sub`): `A.B`, never a declaration `A.B.c`
+    below it, which keeps its namespace."""
+    if not mods:
+        return text
+    pat = re.compile(r"(?<![\w.])(" + "|".join(map(re.escape, sorted(mods, key=len, reverse=True))) + r")(?![\w.])")
+    return pat.sub(lambda m: mods[m[1]], text)
 
 
 def module_there(old: str, new: str, root: str, tracked) -> bool:
@@ -718,6 +790,8 @@ class Run:
                     mods.add(m)
                     mods.update(".".join(m.split(".")[:i]) for i in range(1, len(m.split("."))))
         self.new_modules = mods
+        self.lean_mods = {a: b for n, o in self.old_of.items() if n != o and o.endswith(".lean")
+                          and (a := lean_module(o, self.tracked_old)) and (b := lean_module(n, self.new_files)) and a != b}
 
     def old_module_of(self, new_path: str) -> str | None:
         old = self.old_of.get(new_path, new_path)
@@ -732,7 +806,7 @@ class Run:
         lean_before = {}
         for p in sorted(self.new_files | set(self.texts)):
             if p.endswith("lean-audit.json"):
-                lean_before[p] = self._lean_records(self._read(p))
+                lean_before[p] = self._lean_records(self._read(p), self.lean_mods)
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
                        for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
@@ -775,6 +849,32 @@ class Run:
         for p, before in pins_before.items():
             if re.findall(r"\b[0-9a-f]{64}\b", self.texts.get(p) or self._read(p) or "") != before:
                 raise SystemExit(f"{p}: the rewrite would change a pinned digest")
+        self.repin()
+
+    def repin(self):
+        """Each pin of `tools/verity/check/pins.py` with the new digest of each Lake manifest it held that the move rewrites
+        (`repin_manifests`), under the manifest's path as the rewrite leaves the pin: where that no longer names the manifest
+        (a pin the map excludes, of a manifest that moved), the digest stays, for the pin's command."""
+        def source(p: str) -> Path:
+            return self.root / (self.old_of.get(p, p) if self.dry else p)
+        changed = {self.old_of.get(p, p): (source(p).read_bytes(), t) for p, t in self.texts.items()
+                   if posixpath.basename(p) == MANIFEST and p in self.new_files}
+        if not changed:
+            return
+        for was, key, under in pins(source(self.new_of.get(PINS_PY, PINS_PY))):
+            if (pin := self.new_of.get(was, was)) not in self.new_files:
+                continue
+            there, kept = (self.L.directory(under)[0] or under) if under else "", self.L.excluded(was, pin)
+
+            def written(rel: str, under=under, there=there, kept=kept) -> str | None:
+                dest = self.new_of.get(t := posixpath.normpath(posixpath.join(under, rel)), t)
+                w = rel if kept else posixpath.relpath(dest, there) if there else dest
+                return w if posixpath.normpath(posixpath.join(there, w)) == dest else None
+            before = source(pin).read_text()
+            text = self.texts.get(pin, before)
+            if (new := repin_manifests(before, text, key, under, changed, written)) != text:
+                self.texts[pin] = new
+                self._count(pin, "pins repinned to a rewritten Lake manifest")
 
     def rekey_lean_deps(self, pin: str = "tools/lean/lean-deps.json"):
         """Each pinned dependency bundle is keyed by its package's manifest and toolchain (`lean_audit.deps_key`), and a moved
@@ -811,9 +911,13 @@ class Run:
             self.texts[pin] = new
 
     @staticmethod
-    def _lean_records(text):
+    def _lean_records(text, mods: dict[str, str] | None = None):
+        """A lock's guarantees and reads, each `reads` key (a module's name) as `mods` moves it."""
         d = json.loads(text) if text else {}
-        return json.dumps([d.get("guarantees"), d.get("reads")], sort_keys=True)
+        reads = d.get("reads")
+        if mods and isinstance(reads, dict):
+            reads = {mods.get(k, k): v for k, v in reads.items()}
+        return json.dumps([d.get("guarantees"), reads], sort_keys=True)
 
     def _read(self, p: str) -> str | None:
         """The text of `p` as it will be written, or None for a file that isn't text (a NUL in its first 8 KiB, or not UTF-8)
@@ -855,9 +959,13 @@ class Run:
             out = self._imports(path, old, out)
         if is_shell(path, out):
             out = self._sh_anchors(path, old, out)
-        if not path.endswith(".lean"):
+        if path.endswith(".lean"):
+            out = LEAN_IMPORT.sub(lambda m: m[1] + self.lean_mods.get(m[2], m[2]) + m[3], out)
+        else:
             out = self._from_strings(path, out)
             out = self._dotted(path, out)
+        if path.endswith("lean-audit.json"):
+            out = lean_module_sub(out, self.lean_mods)
         if posixpath.basename(path) == "pyproject.toml":
             out = self._pyproject(path, out)
         return out

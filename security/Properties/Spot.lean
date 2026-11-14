@@ -12,26 +12,36 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
-  and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
-  ports, roots, leaves and domains, a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`),
-  anchors (`R5`), previous record, window, the
-  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
-  values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
-  rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
-  its proof blocks don't each read alone (`R8`); and in the per-member form each member's one count of link points
-  (`RL`);
+  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains,
+  a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
+  window (`R6`); for a v2 record its registered values, the verifier's own and the ones it holds certified entries for
+  (`R7`, `CertifiedHeld`); and under a template query, no run Input its proof blocks don't each read alone (`R8`); and
+  in the per-member form each member's one count of link points (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
-* **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+* **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
+  one of the record's own values, less a read named by one of its own ports taken at that port's own root, is of a
+  registered value, opened against its registered root (`UnitsProved`; a registered value needs no reported read), and
+  the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
 
-and it then publishes the sampled and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
-`unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
-evidence is completeness, `Properties.Spot.acceptMeans_complete`.
+and it then publishes the sampled and proved units with the exact bounds at δ and whether every verdict ran, those not
+of record too (`publicOf`), and the profile of one level
+`unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). The check asks one thing more, which
+this does not state: a reported read of each value the verifier holds a certified entry for (the record's check
+`certified`). That the check accepts every such commitment and evidence, with those reads, is completeness, `Properties.Spot.acceptMeans_complete`, and `Properties.Spot.acceptMeans_iff` is the two
+together.
+
+**The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s, and SPOT's check doesn't hold them. The caller's check
+(`VStar.Recursive.Caller.check`) holds the record to what SPOT's caller hands the verifier beside the record and SPOT's
+own log: the day's declared program (`DeclaredDay`), the
+window's stream and prover, its seed salt, its registered compiler and advice length, its pool's reset, once a week,
+and its window opening the pool the previous window of record left, or the empty pool where the public rule or its
+reset restarts it, for a verifier with a pool (`PoolChained`). They are stated where SPOT is called, of the case the
+caller's check accepted (`Properties.Remote.StageHeld`), which reads them off that check's emptiness
+(`Properties.Remote.CallerCheckMeans`).
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
 as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
@@ -50,19 +60,22 @@ open OneStage (Params Commitment Evidence Public)
 
 /-! ## The registration: R1–R8 against the verifier's own copies -/
 
-/-- The verifier expects a v2 record: it expects values registered. -/
-def ExpectsV2 (v : Registration.Verifier) : Prop := v.registered.isEmpty = false
+/-- The verifier expects a v2 record: it expects values registered or holds certified entries
+(`Registration.Verifier.v2`). -/
+def ExpectsV2 (v : Registration.Verifier) : Prop := (v.registered.isEmpty && v.certified.isEmpty) = false
 
 /-- The partition object the verifier holds: its own, or the canonical one over its program's SHA-512 and its query. -/
 def partitionOf (v : Registration.Verifier) : Json :=
   v.partition.getD (Partition.build (Flock.hexOf v.program.sha512) v.query)
 
-/-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered; its format
+/-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered or holds
+certified entries; its format
 is the matching one and its protocol one-stage's; its sampling design is `law`, the verifier's agreed law as `Draw.derive` expands it
 over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
-  keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
-  jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) ∧
+  keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
+  jeq (getD rec "format")
+    (.str (if v.registered.isEmpty && v.certified.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) ∧
   jeq (getD rec "protocol") (.str Registration.PROTOCOL) ∧
   Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (getD rec "law") law ∧
   (getD rec "window" matches .obj _) ∧ ∃ k ∈ Registration.KINDS, jeq (getD (getD rec "window") "kind") (.str k)
@@ -77,15 +90,13 @@ def DeclaredDay (rec : Json) (v : Registration.Verifier) : Prop :=
 /-- R2: the verifier's partition names its program's SHA-512, and the record names the same program; the record's query
 is the SHA-512 of the partition's canonical query (whenever that query has a canonical form); the partition has a digest,
 which the record names; and the record's population is the number of units the verifier's query derives from its own
-program; and, for a verifier that reads the registration log's declarations, the record names its day's declared program
-(`DeclaredDay`). -/
+program. -/
 def R2 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (partitionOf v) "program") (.str (Flock.hexOf v.program.sha512)) ∧
   jeq (getD rec "program") (getD (partitionOf v) "program") ∧
   (∀ q, Registration.queryDigest (getD (partitionOf v) "query") = .ok q → jeq (getD rec "query") (.str q)) ∧
   (∃ d, Partition.digest (partitionOf v) = some d ∧ jeq (getD rec "partition") (.str d)) ∧
-  (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (getD rec "population") (Lean.toJson n)) ∧
-  DeclaredDay rec v
+  (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (getD rec "population") (Lean.toJson n))
 
 /-- The record's roots: its `roots` list (none when it isn't a list). -/
 def rootsOf (rec : Json) : Array Json :=
@@ -182,18 +193,20 @@ def RunPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
 def PoolResetOnce (v : Registration.Verifier) : Prop :=
   (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
 
+/-- The record's window names the registration log's compiler by its digest and advice of at most its public length ℓ in
+bits, and neither a compiler nor advice where the log registers none (`Registration.Verifier.compiler`); anything when
+the verifier reads no log's compiler. -/
+def RunCompiler (rec : Json) (v : Registration.Verifier) : Prop :=
+  Registration.compilerOk (getD rec "window") v.compiler = true ∧
+    Registration.adviceOk (getD rec "window") v.compiler = true
+
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
-has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`RunSeedSalt`) and its pool's reset, week and
-spent mark (`RunPoolReset`, `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
+has no digest), and no earlier record has its window. -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
     | none => .null) ∧
-  (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
-  (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
-    jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v
+  (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false)
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
@@ -260,11 +273,14 @@ output value it has an entry for has its earlier port, with the value's leaf cou
 with the value's leaves, words and word bits (`EarlierIs`), and takes that port's or entry's domain and root
 (`Registration.applyOutputs`: `mine'` and `held'`); the
 record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
-them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
-naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
+them or not; its values are exactly the verifier's and its certified entries' (`ValuesAre`, over `mine'` then
+`v.certified`'s entries, so a value among both is in no record it accepts); each of those values has its entry (the last
+naming it, as Python's dict reads it) as derived, or as certified, and held (`EntryIs`), a value it doesn't fill held to
+its output's root,
 else to the root it pinned before the record, else to the root the log first registered it under with the domain it
 takes now (`Registration.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
-recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`). -/
+recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`).
+A certified value's root is `CertifiedHeld`'s. -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
   ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
     getD rec "registered" = .arr es ∧
@@ -274,13 +290,15 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
       v.outputs v.log).2 = (mine', held') ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
       keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
-    ValuesAre es mine' ∧
-    (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-      EntryIs e want (heldFor v.supplied held' want.value)) ∧
-    SuppliedIs es mine' v.supplied
+    ValuesAre es (mine' ++ v.certified.map (·.1)) ∧
+    (∀ want ∈ mine' ++ v.certified.map (·.1), ∀ e,
+      es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want (heldFor v.supplied held' want.value)) ∧
+    SuppliedIs es (mine' ++ v.certified.map (·.1)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
 
-/-- R7's pool chain (`Registration.poolChained`): for a verifier with a pool, the record's entry for the value its window
+/-- The pool chain the caller's check holds (`VStar.Recursive.Caller.poolChained`), a caller's fact (`CallerHeld`): for a verifier with a
+pool, the record's entry for the value its window
 opens the pool from (`pin`; `Registration.entryOf`, the last entry naming it) has the domain and root of the pool the
 window opens (`Registration.poolOpen`): the previous record's entry for the value the pool was left in (`pout`) when the
 window carries the previous window's pool (`Registration.Pool.chains`: the verifier didn't refuse the window the public
@@ -290,6 +308,12 @@ def PoolChained (rec : Json) (v : Registration.Verifier) : Prop :=
   ∀ p, v.pool = some p → ∃ e d r, Registration.entryOf rec p.pin = some e ∧
     Registration.poolOpen rec v p = some (d, r) ∧
     jeq (getD e "domain") (.str d) = true ∧ jeq (getD e "root") (.str r) = true
+
+/-- R7's certified roots (`Registration.certifiedHeld`): the record has an entry for each value the verifier holds a
+certified entry for (`Registration.entryOf`, the last naming it), with the root the verifier holds for it, whether or
+not the verifier fills, pinned or takes the value from an earlier run. -/
+def CertifiedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
+  ∀ x ∈ v.certified, ∃ e, Registration.entryOf rec x.1.value = some e ∧ jeq (getD e "root") (.str x.2) = true
 
 /-- R7's roots at the values the verifier pinned (`Registration.checkRegistered`'s `R7-held`), which R7 implies: of the
 verifier's own entries (`Registration.ownEntries`), each value it pinned before the record (`pinned`, the first root it
@@ -306,18 +330,34 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
 
 /-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
 program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
-and most sampled proof blocks under it, over the samples that end, give different link points (`LinkPoints.refused`, which
-refuses a sampling design no sample of which ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
+fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
+ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]
 
-/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
-chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered; and the per-member form's
-members' link points (`RL`). -/
+/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its
+pinned roots (`PinnedHeld`) and its certified roots (`CertifiedHeld`) when the verifier expects values registered or
+holds certified entries; and the per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s,
+not these. -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
+    (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v
+
+/-- The caller's facts: what the caller's check (`VStar.Recursive.Caller.check`) holds the record to against what SPOT's
+caller hands the verifier beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
+log's declarations); its window names the stream and the prover a verifier is bound to (`binding`), the seed salt the
+verifier read from the challenger's log (`RunSeedSalt`) and its pool's reset, week and spent mark (`RunPoolReset`,
+`RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`), and the registration log's compiler and
+advice within its length (`RunCompiler`); and, when the verifier expects values registered, the window opens the pool
+the previous window of record left (`PoolChained`). -/
+def CallerHeld (rec : Json) (v : Registration.Verifier) : Prop :=
+  DeclaredDay rec v ∧
+  (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
+    jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
+  RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
+  RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v)
 
 /-! ## The sample: the registered law over the registered population -/
 
@@ -381,24 +421,26 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
-record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
-to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
-`Record.ownRegistered` compute from the verdicts). -/
+record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
+(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
+such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
+`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.ownRegistered rec (Record.sessionRegistered vs)
+  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
 
-/-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
-the same key and root in the second. -/
-def SameRoots (a b : Array (String × Json)) : Prop :=
-  a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
+/-- Each opened read is of a registered value at its registered root: every entry of `opened`, a `{value: root}`, has its
+value and root in `registered`. It asks nothing of a registered value that `opened` lacks. -/
+def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
+  ∀ x ∈ opened, ∃ y ∈ registered, x.1 = y.1 ∧ jeq x.2 y.2
 
 /-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
+each port); and each of the record's own values the verifiers report a read of, less those of its own ports at their
+own roots (`openedRoots`), is a value the record registers, the read opened against the record's root for it
+(`Record.registeredRoots`, each value's last entry). A registered value no verifier reports a read of is not required
+to have one. -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
@@ -406,8 +448,7 @@ def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
-    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
@@ -424,7 +465,8 @@ def drawnNats (draw : Json) : Array Nat :=
   | .arr us => us.filterMap nat?
   | _ => #[]
 
-/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
+/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: whether every
+verdict ran (`Record.allRan`, which `VerdictsAccept` asks only of the verdicts of record), the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
@@ -432,7 +474,8 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) 
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
-      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
+    complete := Record.allRan e.verdicts }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/

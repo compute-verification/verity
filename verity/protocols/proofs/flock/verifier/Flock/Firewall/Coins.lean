@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.CoinTree
+public import Flock.Hm96
+
+/-!
 # The coin tree's openings, checked in Lean (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md, live PROTOCOL.md §9)
 
 The prover's side of the keyed coin tree. The verifier commits every coin of the session at `Hello` and opens them round
@@ -18,10 +23,6 @@ coin it hands on: the session's `Hello` (the spec, the link points' count and th
 the key), then each opening in the order the prover asks for them. The first refusal ends the session: nothing after it
 is checked, so no coin after a refused opening is handed on.
 -/
-module
-
-public import Flock.CoinTree
-public import Flock.Hm96
 
 @[expose] public section
 

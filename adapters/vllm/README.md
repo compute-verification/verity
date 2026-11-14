@@ -16,8 +16,7 @@ Verity itself knows nothing of vLLM.
   idle and closes when it is idle again or after `--window-steps`. Each window is one Commit, and `--seal` seals it.
   `--protocols pouw:<scheme>` serves PoUW's H1 arm on the endpoint's own Commit, one H1 window per window, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
-  flag and record. The public release leaves out this endpoint and the window circuit, which read the network
-  certifier's encoding, and that encoding stays private, so it ships without a runnable served window.
+  flag and record.
 - **`verity demo vllm`** (`demos/vllm/run.sh`) starts the served-verdicts launcher,
   `benchmarks/one_stage/served_verdicts.sh`, on the node `demos/vllm/placement.toml` names. It runs the Build of
   record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:
@@ -99,7 +98,7 @@ finish inside one served window. The parts, in the order they run:
   registration's digest. Until a size class's request Definition lands, the replay block is a stand-in: instances of
   one check template, in the two-stage serve one token-select check for each served id. So the interior holds the
   token selection and not the model's layers.
-- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
+- **The stages around it** (`verity/protocols/proofs/spot/device/two_stage.py`). `first` registers each size class's boundary
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
   stage. The verifier refuses every two-stage run at its last check (`FORM` in
@@ -126,6 +125,10 @@ One line for each subpackage of `verity_vllm/`, and for what sits beside it:
 verity_vllm/
   llm.py             LLM, the pinned engine as a library
   config.py          workload files, checkpoint pins, protocol names; settings.py: every environment variable it reads
+  errors.py, log.py  the one refusal type (Refused); the logger every library module logs through (init_logger)
+  target_family.py   the target-family preflight: a workload's device class, held against its Build and its pod's GPU
+  glue.py            the glue inventory: a model's model-specific code, and its hours from staged checkpoint to record
+  gc_tuning.py       the cyclic collector's thresholds for the offline analysis processes
   engine/            the pinned engine: its build, profiles, served switches (served.py); hooks.py owns every runtime patch
   pipeline/          stage drivers (Build, Match, Commit; tp/ for TP > 1), the endpoint (serve_*.py), cli.py, circuit_db.py
   program/           Programs: the torch frontend (frontend/) lowers the served model onto registered Definitions
@@ -139,7 +142,7 @@ verity_vllm/
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
-  properties/        property harnesses: non-interference, kernel census, golden and holdout corpora, tap exactness
+  properties/        property harnesses: admission difftests, the quarantine lint, the kernel allowlist
   records/           typed stage records, one for each kind one stage writes and another reads
   ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device

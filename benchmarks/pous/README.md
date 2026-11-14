@@ -13,7 +13,7 @@ What code outside this directory may use. Everything else here is internal.
 | `uv run tools/verity/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
 | `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
 | `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
-| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's host. It writes its core answer to `DIR/answer.json`. |
+| `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's device. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
 | `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
@@ -163,8 +163,9 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 `benchmarks/one_stage/served_verdicts.sh` runs it as
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
-SHA-512 of the wipe party's public key, by default vy-auditor-2's): a session signed under another is rejected, and
-with none pinned, the setting empty, the piece refuses before it asks for a card. Its header lists the challenger's
+SHA-512 of the wipe party's public key, by default vy-auditor-2's, `wipe_party.AUDITOR_KEYS`): a session signed under
+another is rejected, and with none pinned, the setting empty, the piece refuses before it asks for a card. A session
+accepted under any other pin is a rehearsal: its record says no bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
 `served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights as `C*` on

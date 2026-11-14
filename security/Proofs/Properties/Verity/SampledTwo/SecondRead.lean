@@ -53,14 +53,14 @@ theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : O
     {ξ : ByteArray} {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : secondCheck v delta c law ξ e = .accept pub prof) :
     ∃ n units read, nat? (getD c.record "population") = some n ∧
-      OneStage.drawnFrom { v with law := subsetLaw n } law n ξ = .ok (units, read) ∧
+      OneStage.drawnFrom { v with law := subsetDesign n } law n ξ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ.size / Challenger.COIN_BYTES := by
   unfold secondCheck at h
   cases hm : nat? (getD c.record "population") with
   | none => simp [hm] at h
   | some m =>
     simp only [hm] at h
-    cases hr : OneStage.coinsReason { v with law := subsetLaw m } law c.record e.draw ξ with
+    cases hr : OneStage.coinsReason { v with law := subsetDesign m } law c.record e.draw ξ with
     | some why => simp [hr] at h
     | none =>
       obtain ⟨n, units, read, hn, hdf, hsz⟩ := coinsReason_read hr
@@ -71,14 +71,14 @@ theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : O
         | exact ⟨_, units, read, hm, hdf, hsz⟩
 
 /-- **An accepted two-stage check's second-stage bytes are the coins its sample read**: the interior audit's sample, under
-the second stage's law `secondLawOf` computes and its record's population, read `read` bytes of the bytes `ξ₂` its
+the second stage's law `secondDesignOf` computes and its record's population, read `read` bytes of the bytes `ξ₂` its
 sample read, and `ξ₂` holds as many whole challenger coins as those bytes reach. -/
 theorem second_read {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    ∃ c₂ ξ₂ run law n units read, OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ secondLawOf p run = .ok law ∧
+    ∃ c₂ ξ₂ run law n units read, OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ secondDesignOf p run = .ok law ∧
       nat? (getD c₂.record "population") = some n ∧
-      OneStage.drawnFrom { p.audit.base.verifier with law := subsetLaw n } law n ξ₂ = .ok (units, read) ∧
+      OneStage.drawnFrom { p.audit.base.verifier with law := subsetDesign n } law n ξ₂ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ₂.size / Challenger.COIN_BYTES := by
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, -, -, -, -, law, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, hξ, -⟩ := inputAt_ok hi

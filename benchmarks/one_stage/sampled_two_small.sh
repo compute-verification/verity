@@ -28,17 +28,17 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; git rev-parse HEAD; } | tee "$O/machine.txt"
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) \
-    && (cd verity/protocols/proofs/recursion/verifier/recursive && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/protocols/proofs/spot_flock/verifier/lean && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
-FORM_BIN=$REPO/verity/protocols/proofs/recursion/verifier/recursive/.lake/build/bin
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
+FORM_BIN=$REPO/verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin
 sha256sum "$BIN" "$LEAN" "$FORM_BIN/sampled-two" "$FORM_BIN/sampled-two-on" | tee "$O/binaries.sha256"
 
 kept=0; n=0
@@ -69,13 +69,13 @@ CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["clas
 LOGITS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("logits", ""))' "$O/serve.json")
 KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
+"${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --deployed-key --main "$O/main.txt" --out "$W/first" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 \
   || { tail -20 "$O/first.log"; exit 3; }
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --deployed-key \
   --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
@@ -107,12 +107,12 @@ echo "FORM_OFF rc=$off $(head -c 2000 "$O/form/off.json")"
 [ "$kept" -eq 0 ] || exit 8
 
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
+"${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --deployed-key --first-tree --main "$O/main.txt" --out "$W/first-tree" ${SMALL_FIRST:-} \
   > "$O/first-tree.log" 2>&1 || { tail -20 "$O/first-tree.log"; exit 9; }
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first-tree/$(basename "$CLASS")/stage1.json" \
+"${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py second --stage1 "$W/first-tree/$(basename "$CLASS")/stage1.json" \
   --boundary "$CLASS" --capture "$W/serve/capture" --challenger local --challenger-host "$W/first-tree/challenger-host" \
   --deployed-key --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second-tree" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second-tree.log" 2>&1 || rc=$?

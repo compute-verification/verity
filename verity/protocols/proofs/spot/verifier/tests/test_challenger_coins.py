@@ -179,7 +179,7 @@ def test_coins_skipped_after_the_commitment_are_caught_by_the_log():
     assert T.read_reason(ch.commitment, skipped.to_json(), ROOT, read) is None
 
 
-def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):  # noqa: F811
+def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):
     """Over a challenger served on loopback (`remote.serve`): the sample opens its coins in one round trip, and the
     verifier replays it against the commitment and roots it trusts from the challenger's directory and the auditor's
     ledger (`remote.trusted_session`)."""
@@ -227,7 +227,7 @@ COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-wi
 COIN_CODES = {"second-root": "family"}
 
 
-def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
+def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
     the challenger's `coins` and its registration under `window_root`, sampled after the registration's digest, its proof
     delivered, and its outcome run with the case's evidence (`coins_reason`'s, which is `draw_coins`'s: the auditor's
@@ -315,7 +315,7 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
 
 
 def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
-        tmp_path, signer, monkeypatch):  # noqa: F811
+        tmp_path, signer, monkeypatch):
     """On a stream sampling from the challenger (which its digest names), every outcome's run
     by the verifier (`Run.run`) checks the sample's coins: with their evidence for the registration's window
     (`window_root`) it accepts the honest sample, and it rejects, failing `run` with the select step's `coins`, each of
@@ -378,7 +378,7 @@ def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several
     evidence = {"ledger": R.ledger_lines(host.ledger.path), "main": main, "pins": test_remote.HOST_PINS,
                 "segment": segment.to_json(), "session": R.session_files(host.directory)}
     after = bytes.fromhex(reg.digest)
-    # one object for both readers: the stream's check and the component's read the same evidence under the same key
+    # one object for both readers: the stream's check and the subprotocol's read the same evidence under the same key
     assert T.coins_reason(key, main, evidence, window, "positions", after, read, lms_verify) is None
     assert T.draw_coins(key, window, "positions", after, evidence, lms_verify)[:len(read)] == read
     assert "coin opening is malformed" in T.coins_reason(key, main, {**evidence, "segment": raw}, window, "positions",
@@ -508,7 +508,7 @@ def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn
     assert draw.record.roots == []
 
 
-def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):  # noqa: F811
+def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):
     """Over a challenger served on loopback for the window, withheld: the stream samples the window's seed salt at its
     open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
     (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the

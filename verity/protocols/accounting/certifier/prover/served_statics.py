@@ -17,7 +17,7 @@ step's statics are zero.
   opened to the verifier's own copy;
 - ``srb``, the block's served rows, leaf w·(P / G) + j of the served-rows registration (`served_rows.block_bits`: G steps of
   R slots of (valid, request, kind, start, n), `compile_slice.rows_bits`' packing). Its b‖c is held to that leaf by the Lean
-  verifier's registered reads (`served_rows.reads_port`, ``flock-verify verify --registered``), so the proof block
+  verifier's registered reads (`served_rows.reads_port`, ``verity-verify-proof verify --registered``), so the proof block
   hashes the block's rows and no more.
 
 **The statement** (`check`). For every step of the block and every slot k: bit 0 ``count``, the served row's valid and n

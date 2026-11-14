@@ -3,7 +3,7 @@
 # dense rollup's K = 4096 GEMM coordinate, shape 430e5aad). One step per job (research run --queue
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
-#                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
+#                verity-verify-proof (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
 #                --program-module rec_reprice.py:program --partition q-template-instance --stage-only, BATCH=fixed N,
 #                untiled, every instance's own rows: FLOCK_OWN_ROWS=1) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
@@ -45,17 +45,19 @@
 #                (v-sess/rec-run.jsonl): the staging before any session, each V* part's challenger (serve --rec-run) logging
 #                every Hello it answers, the close after the last session
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
-#   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs oprove fixed (the
+#   STEP=lean    (CPU) Lean's verity-verify-proof verify --zk on each statement's last session, with V*'s own inputs oprove fixed (the
 #                inner shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1, the
 #                inner's own plain verify, is refused: Lean's plain verify takes a coin tree of the session's own streams
 #                (--coins tree), not the inner session's, which adds the inner phase's sparse and stacked streams; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither
 #                of V*'s), and
-#                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
+#                verity-verify-proof statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
 #                each forgery refused by Lean at one of its parts (a ZK server's refusal, or a session with no proof, is
 #                "not exercised" and fails),
 #                and the inner statement's units were derived from the program (lean_verdicts.py); with every V* part run,
-#                Lean composes them over the challenger's record (rec-compose)
+#                Lean composes them over the challenger's record (rec-compose). A run without that record (any MODES
+#                but the ZK server's alone), or of some of V*'s parts, exits 0 on its parts and is not composed: the
+#                step's last line says so, and out/lean/rec-compose.json says whether Lean composed and accepted
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
@@ -83,7 +85,7 @@
 #              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
 #              one to; the step refuses a W none of the parts it checks reads: challenge needs an alg part, query L0;
 #              empty: none)
-#      REC_COINS=0 (oprove, lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
+#      REC_COINS=0 (oprove, lean; 1: the inner statement set up once per inner session, verity-verify-proof rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
 #      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree sampled and opened there, rec_live
 #              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples them, rec_live --tree-test-os,
@@ -97,7 +99,7 @@
 #              directory $DD/fw: STEP=inner, one session (WARM=0 RUNS=1), opens it with V*'s statements as its parts in
 #              rec-statements' order and RELEASE_WINDOWS_S's schedule ($DD/release.json, rec_inner.py release-parts);
 #              STEP=oprove, MODES=firewall, proves each part once in that order through `prove --firewall-state`
-#              (core-firewall session, built beside flock-verify) and writes out/oprove/release.json, each part's release
+#              (core-firewall session, built beside verity-verify-proof) and writes out/oprove/release.json, each part's release
 #              time against when the Lean loop decided it (rec_inner.py release-report), failing unless every part left)
 #      RELEASE_WINDOWS_S=lead=1500,L0=2800,L=900,alg=900,cap=120,other=900 (each part's window by its class, seconds; lead is
 #              added to the first's)  RELEASE_BUDGET= (the stream's failure budget, at least 1: RELEASE=1 needs it)
@@ -165,8 +167,8 @@ KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protoco
   $(find verity/protocols/proofs/flock/prover/cuda verity/protocols/proofs/flock/prover/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
-# the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
+# the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside verity-verify-proof
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 # the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
 CSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/recursion/verifier/firewall)
@@ -175,7 +177,7 @@ FWS=$DD/fw RELEASE=${RELEASE:-0}
 FSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 # the ship's name for each binary: its cache key in the name, so a node takes only the one its own sources key
-SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:flock-verify-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA $FC_CORE_FIREWALL:core-firewall-$CSHA"
+SHIPS="$B:flock-circuit-$KEY-g$GPU-sm$SM $LEAN_BIN:verity-verify-proof-$LSHA $FC_FIREWALL_LEAN:flock-firewall-$LSHA $FOLD_BIN:inner-fold-$FSHA $FC_CORE_FIREWALL:core-firewall-$CSHA"
 if [ -n "${PREBUILT:-}" ]; then
   for s in $SHIPS; do
     f=$PREBUILT/${s#*:}; [ -x ${s%%:*} ] || [ ! -f $f ] || { mkdir -p $(dirname ${s%%:*}) && cp $f ${s%%:*}.$$ && chmod +x ${s%%:*}.$$ && mv ${s%%:*}.$$ ${s%%:*}; }
@@ -435,7 +437,7 @@ def replay(p):
 def lean(p):
     at = text(p).find("VERDICT ")
     if at < 0:
-        # `flock-verify statement`'s line, read as lean_verdicts.py reads it
+        # `verity-verify-proof statement`'s line, read as lean_verdicts.py reads it
         st = next((json.loads(l) for l in text(p).splitlines() if l.startswith("{") and '"partition_check"' in l), None)
         if st is None:
             return text(p)[-600:]
@@ -513,15 +515,15 @@ EOF
 
 lean_build() {
   [ -x $LEAN_BIN ] && [ -x $FC_FIREWALL_LEAN ] && return 0
-  no_build "flock-verify-$LSHA or flock-firewall-$LSHA"
+  no_build "verity-verify-proof-$LSHA or flock-firewall-$LSHA"
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
       rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-        && (cd $LEAN_SRC && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
-        && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+        && (cd $LEAN_SRC && lake build verity-verify-proof flock-firewall) && mkdir -p $L/lean-$LSHA \
+        && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
     fi
   )
 }
@@ -592,7 +594,7 @@ stage_inner() {
 
 # inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage (rec_reprice.py partition): the
 # partition object (Q_template_instance over the population program, partition.json) and that program (program.json), which
-# STEP=lean's statement check reads, and the full draw over them (rec_live.full_draw: the stratified law at K = the
+# STEP=lean's statement check reads, and the full sample over them (rec_live.full_draw: the stratified sampling design at K = the
 # population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
   [ -f $DD/stage/own-partition ] && return 0   # STAGE=0's caller wrote them
@@ -605,7 +607,7 @@ inner_partition() {
 # every statement's tops and check 5 are held to (RecVStar.checkTopRows, RecCoins.checkLink) and whose c_k its rec-c<k>
 # rows are (RecVStar.checkPubRows)
 rec_inner_files() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-program $DD/stage/program.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session"; }
-# REC_COINS=1: the inner statement set up once per inner session (flock-verify rec-coins, into its rec-coins.json), each
+# REC_COINS=1: the inner statement set up once per inner session (verity-verify-proof rec-coins, into its rec-coins.json), each
 # verify reading that record (--rec-inner-coins) in place of the inner statement's files, which at a served lane's size
 # every verify would otherwise parse again
 rec_coins() { [ "${REC_COINS:-0}" = 1 ] || return 0
@@ -669,7 +671,7 @@ inner)
   taskset -c $VCPU env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) > $O/inner/statement.txt 2>&1 \
     || { tail -5 $O/inner/statement.txt; exit 1; }
   python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
-  # the verifier's full draw, which verify requires of a session over the inner session (RecSetup.innerDrawn)
+  # the verifier's full sample, which verify requires of a session over the inner session (RecSetup.innerDrawn)
   inner_partition > $O/inner/partition.txt || exit 1
   cp $D/draw.json $O/inner/
   [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }
@@ -790,7 +792,7 @@ EOF
   ;;
 vstage)
   # V*'s statements over the inner's last proxied session: the verifier's fold points (from the coins), its extra claims and
-  # comb (InnerFold.lean as an executable, cached by its sources as STEP=build caches flock-verify; no proof read), then the
+  # comb (InnerFold.lean as an executable, cached by its sources as STEP=build caches verity-verify-proof; no proof read), then the
   # statements, each in its own process: first the verifier's values alone (its native seconds, and the running sums' salts
   # sampled once into $V/acc-salts.bin, the prover's, so that every statement reads one chain), then the algebra, the forgeries
   # and every level, JOBS at once
@@ -874,9 +876,9 @@ oprove)
   [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
     || { tail -20 $O/build-lean.log; exit 1; }
   VS=$DD/v-sess; mkdir -p $VS $O/oprove
-  # Outer proofs through the firewall are independent sessions (AGENTS.md): every
-  # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
-  # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
+  # Outer proofs through the ZK server are independent sessions (AGENTS.md): every
+  # staged statement is fixed before any session flips coins (statements.sha512, checked again once all have ended), gets
+  # exactly one session, with its own loopback verifier, live coins and ZK server pass, never a second one (no lease retry,
   # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv: 0 only
   # when the verifier accepted each of its sessions, `loopback`), an honest one's failure, or one with no exit recorded,
   # failing the step.

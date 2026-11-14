@@ -12,9 +12,9 @@ message (round `stage + 1`) and each session's messages to the sessions' reading
 module gives both, from the files the form's check verified each session on (`Spot.OneStageZk.stepMember`), as the
 messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the record's bytes the device's digests hash.
 
-* **Template `t`'s session** (`memberAt`, `filesAt`, `recordAt`): the first of the interior audit's members whose
-  circuit is the one the params name for template `t` (as `SpotFlock.HeldOf.memberOf`), and the one session of the
-  statement that names it, its record on the blobs.
+* **Template `t`'s session** (`filesAt`, `memberAt`, `recordAt`): the `t`-th of the statements' sessions, in the
+  order the check reads their records, the member its statement names, found by name as
+  `Spot.OneStageZk.heldStep` finds it, and the session's record on the blobs.
 * **Its statement** (`stmtRaw`, `stmtAtCase`): the statement the form verifies the session at
   (`Member.statement`, then `step` at the record's sample): `flock-verify verify --zk` at `verity/flock-circuit`, the
   member's circuit and public file, the blobs' lookup tables, the record's sample (`drawBytes`), the member's partition
@@ -24,11 +24,12 @@ messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the recor
   second-stage statement check reads by position, the `t`-th template `t`'s session statement, in the encoding
   `SpotFlock.stmtsOf` reads back (`stmtsOf_encStmts`, `stmtAt_stmtsMsg`). A statement whose fields fit their length
   words decodes back to its fields (`stmtAtCase_some`, then `FlockDeploy.decode_encode_of_fits`).
-* **A session's messages** (`sessionMsgs`, `msgAtCase`): as `FlockDeploy.act` reads them, the link message (tag `0`, the
-  record's `root_B` and public words, `linkBody`), each recorded round's retained bytes after tag `0`, in
+* **A session's messages** (`sessionMsgs`, `msgAtCase`): as `FlockDeploy.act` reads them, the link message (tag `0`,
+  the record's `root_B` and public words, `linkBody`), each recorded round's retained bytes after tag `0`, in
   `spec.repStreams` order, and the last message (tag `1`: the statement, the record's text and the proof files the
   session's reps name, `Final.encode`), at the session that the statement sets up. None where the record doesn't parse
-  or a round retained no bytes, so no reading defaults.
+  or a round retained no bytes, so no reading defaults. `SessionParts` names the parts `msgsAtCase` reads them from
+  (`msgsAtCase_some`, `msgsAtCase_of_parts`).
 * **The reading** (`sessionReading`): `stmts` and `msg` on the play's case; the coins and their agreement are the
   coins' piece's, parameters here. Each session's prover that sends those messages whatever the answers is
   `replayProver`, a prover that reads its messages off its tape (`Messages.proverOf`).
@@ -50,17 +51,23 @@ def formOf (k : Case) : Option (VStar.Recursive.SampledTwo.Params × VStar.Recur
   | .ok pe => some pe
   | .error _ => none
 
-/-- **Template `t`'s member**: the first of the interior audit's members whose circuit is the one the params name for
-template `t`. -/
-def memberAt (p : VStar.Recursive.SampledTwo.Params) (t : ℕ) : Option Spot.OneStageZk.Member :=
-  (p.circuits[t]?).bind fun c => p.members.find? (·.own.circuit == c.2.1)
+/-- **Template `t`'s session's files**: the `t`-th of the statements' sessions, in the order the check reads their
+records. -/
+def filesAt (e : VStar.Recursive.SampledTwo.Evidence) (t : ℕ) : Option Spot.OneStageZk.RunFiles :=
+  (e.statements.toList.flatMap (·.sessions.toList))[t]?
 
-/-- **Template `t`'s session's files**: the one session of the statement that names template `t`'s member. -/
-def filesAt (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) (t : ℕ) :
-    Option Spot.OneStageZk.RunFiles := do
-  let m ← memberAt p t
-  let st ← e.statements.find? (·.member == some m.name)
-  st.sessions[0]?
+/-- **The statement of the `t`-th of the statements' sessions**: each statement once a session it holds, in the
+sessions' order. -/
+def stmtFilesAt (e : VStar.Recursive.SampledTwo.Evidence) (t : ℕ) : Option Spot.OneStageZk.StatementFiles :=
+  (e.statements.toList.flatMap fun st => st.sessions.toList.map fun _ => st)[t]?
+
+/-- **Template `t`'s member**: the member of the parameters that the statement of the `t`-th of the statements'
+sessions names, found by name as `Spot.OneStageZk.heldStep` finds it. -/
+def memberAt (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) (t : ℕ) :
+    Option Spot.OneStageZk.Member := do
+  let st ← stmtFilesAt e t
+  let name ← st.member
+  p.members.find? (·.name == name)
 
 /-- **A session's record**, its text on the blobs. -/
 def recordAt (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) : Option String :=
@@ -83,8 +90,8 @@ def stmtRaw (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (tables : Lis
 the member's own circuit, public file and registered reads and the blobs' lookup tables. -/
 def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
   let pe ← formOf k
-  let m ← memberAt pe.1 t
-  let s ← filesAt pe.1 pe.2 t
+  let m ← memberAt pe.1 pe.2 t
+  let s ← filesAt pe.2 t
   let record ← recordAt k.blobs s
   let circuit ← (k.blobs.get m.own.circuit "circuit").toOption
   let pub ← (k.blobs.get m.own.pub "public file").toOption
@@ -115,12 +122,20 @@ def sessionMsgs (spec : _root_.Flock.SessionSpec) (x : Msg) (record : String) (p
 files its reps name (`Spot.OneStageZk.filesOf`). -/
 def msgsAtCase (k : Case) (t : ℕ) : Option (List Msg) := do
   let pe ← formOf k
-  let s ← filesAt pe.1 pe.2 t
+  let s ← filesAt pe.2 t
   let record ← recordAt k.blobs s
   let x ← stmtAtCase k t
   let su ← FlockDeploy.setupOf true x
   let proofs ← (Spot.OneStageZk.filesOf k.blobs s (.ok (su.2.1, #[], Json.null, Json.null))).toOption
   sessionMsgs su.2.1 x record proofs
+
+/-- **Template `t`'s session on the case, part by part**, as `msgsAtCase` reads it: its statement `x`, the setup
+`(s, spec, sts)` the statement gives, its record's text `record` and the proof files `proofs` its reps name. -/
+def SessionParts (k : Case) (t : ℕ) (x : Msg) (s : FlockDeploy.Ins) (spec : _root_.Flock.SessionSpec)
+    (sts : Array _root_.Flock.Stmt) (record : String) (proofs : Array ByteArray) : Prop :=
+  ∃ p e fs, formOf k = some (p, e) ∧ filesAt e t = some fs ∧ recordAt k.blobs fs = some record ∧
+    stmtAtCase k t = some x ∧ FlockDeploy.setupOf true x = some (s, spec, sts) ∧
+    (Spot.OneStageZk.filesOf k.blobs fs (.ok (spec, #[], Json.null, Json.null))).toOption = some proofs
 
 /-- **Template `t`'s session's `i`-th message on the case.** -/
 def msgAtCase (k : Case) (t i : ℕ) : Option Msg := (msgsAtCase k t).bind fun ms => ms[i]?
@@ -215,7 +230,7 @@ theorem stmtAt_stmtsMsg (h : SpotFlock.Held) {k : Case} {m : Msg} (hm : stmtsMsg
 
 /-- **Template `t`'s session statement is its member's statement** at its session's record's sample. -/
 theorem stmtAtCase_some {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = some x) :
-    ∃ p e m s record circuit pub, formOf k = some (p, e) ∧ memberAt p t = some m ∧ filesAt p e t = some s ∧
+    ∃ p e m s record circuit pub, formOf k = some (p, e) ∧ memberAt p e t = some m ∧ filesAt e t = some s ∧
       recordAt k.blobs s = some record ∧ (k.blobs.get m.own.circuit "circuit").toOption = some circuit ∧
       (k.blobs.get m.own.pub "public file").toOption = some pub ∧
       x = (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (drawBytes record)
@@ -263,5 +278,68 @@ theorem finalOf_sessionMsgs {spec : _root_.Flock.SessionSpec} {x : Msg} {record 
   obtain ⟨lv, mids, -, -, rfl⟩ := sessionMsgs_some h
   exact ⟨FlockDeploy.Final.encode ⟨x, record, proofs⟩, getLast?_cons_concat _ _ _,
     FlockComplete.finalOf_encode hs hrec hp hb⟩
+
+/-! ## The case's session, part by part -/
+
+/-- **Template `t`'s messages on the case are its session's parts' messages.** -/
+theorem msgsAtCase_some {k : Case} {t : ℕ} {ms : List Msg} (h : msgsAtCase k t = some ms) :
+    ∃ x s spec sts record proofs, SessionParts k t x s spec sts record proofs ∧
+      sessionMsgs spec x record proofs = some ms := by
+  unfold msgsAtCase at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨⟨p, e⟩, hf, fs, hs, record, hr, x, hx, ⟨s, spec, sts⟩, hsu, proofs, hp, hm⟩ := h
+  exact ⟨x, s, spec, sts, record, proofs, ⟨p, e, fs, hf, hs, hr, hx, hsu, hp⟩, hm⟩
+
+/-- **The messages of a session's parts are template `t`'s messages on the case.** -/
+theorem msgsAtCase_of_parts {k : Case} {t : ℕ} {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} {record : String} {proofs : Array ByteArray} {ms : List Msg}
+    (h : SessionParts k t x s spec sts record proofs) (hm : sessionMsgs spec x record proofs = some ms) :
+    msgsAtCase k t = some ms := by
+  obtain ⟨p, e, fs, hf, hs, hr, hx, hsu, hp⟩ := h
+  unfold msgsAtCase
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff]
+  exact ⟨(p, e), hf, fs, hs, record, hr, x, hx, (s, spec, sts), hsu, proofs, hp, hm⟩
+
+/-- **The form's evidence of a case is the one its evidence's bytes decode to.** -/
+theorem formOf_evidence {k : Case} {p : VStar.Recursive.SampledTwo.Params}
+    {e : VStar.Recursive.SampledTwo.Evidence} (h : formOf k = some (p, e)) :
+    VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e := by
+  unfold formOf at h
+  cases hp : (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson) with
+  | error w =>
+    rw [hp] at h
+    cases h
+  | ok p' =>
+    cases he : VStar.Recursive.SampledTwo.evidenceOf k.evidence with
+    | error w =>
+      rw [hp, he] at h
+      cases h
+    | ok e' =>
+      rw [hp, he] at h
+      cases h
+      rfl
+
+/-- **Each template below the statements' count has a session statement**, where the case has a statements'
+message. -/
+theorem stmtAtCase_of_stmtsMsg {k : Case} {m : Msg} (hm : stmtsMsg k = some m)
+    {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
+    (hf : formOf k = some (p, e)) {t : ℕ} (ht : t < e.stmts.size) : ∃ x, stmtAtCase k t = some x := by
+  obtain ⟨p', e', xs, hf', hxs, -⟩ := stmtsOf_stmtsMsg hm
+  rw [hf] at hf'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf')
+  obtain ⟨hlen, hget⟩ := mapM_some _ hxs
+  rw [List.length_range] at hlen
+  have h := hget t (by rw [List.length_range]; exact ht) (by omega)
+  rw [List.getElem_range] at h
+  exact ⟨_, h⟩
+
+/-- **Where template `t` has a session statement, the statements have a `t`-th session.** -/
+theorem filesAt_of_stmt {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = some x)
+    {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
+    (hf : formOf k = some (p, e)) : ∃ fs, filesAt e t = some fs := by
+  obtain ⟨p', e', m, fs, record, circuit, pub, hf', -, hs, -⟩ := stmtAtCase_some h
+  rw [hf] at hf'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf')
+  exact ⟨fs, hs⟩
 
 end Verity.SampledTwo.SessionMsgs

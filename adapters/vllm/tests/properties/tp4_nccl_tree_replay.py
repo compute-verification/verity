@@ -10,7 +10,7 @@ for the call at those facts, three ways: the Boolean Definition (`AllReduceNcclT
 `AllReduceNcclTree_v2` is one of it per element), the word Definition `AllReduceNcclTree_v1` at the call's SIZE (``--no-word`` skips
 it, and the record is then NO-GO), and `tp_allreduce_check.nccl_tree_rows`. Two other orders are counted beside it, the chain reversed and the f32 sum of the four
 rounded once, so the record shows the capture tells them apart. It writes ``<out>/calls.jsonl`` (one line per call) and the property
-record ``<out>/properties/tp4_nccl_tree_capture.json`` (`properties.record`), and prints ``TP4-NCCL-TREE GO`` or ``NO-GO``:
+record ``<out>/properties/tp4_nccl_tree_capture.json`` (`records.property_record`), and prints ``TP4-NCCL-TREE GO`` or ``NO-GO``:
 
     python tests/properties/tp4_nccl_tree_replay.py replay --capture DIR --out DIR [--jobs N] [--no-word]
 
@@ -44,7 +44,7 @@ from verity.definitions.registry import boolean_tp_allreduce as BA
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
 
-from verity_vllm.properties.record import DIR, seal
+from verity_vllm.records.property_record import DIR, seal
 
 SCHEMA = "verity-vllm/tp4-nccl-tree-capture/v1"
 RECORD = "tp4_nccl_tree_capture.json"

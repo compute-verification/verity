@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 
 #: the deployment's registration log under the serve dir's ``h1/``: one line a record, W at its writing and R once bound
 LOG = "log.jsonl"

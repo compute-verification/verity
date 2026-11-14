@@ -59,7 +59,7 @@ import serve as SV  # noqa: E402
 
 import forms as F  # noqa: E402
 from h1c import H1C, Dom, Tab, unwords, words  # noqa: E402
-from h1r import H1R, Call  # noqa: E402
+from benchmarks.hash.dither.h1r import H1R, Call  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -505,7 +505,7 @@ def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int 
         if bool(z[m:].any()) or bool(a[m:].any()) or bool(sa[m:].any()):
             zero_bad.append(w)
         if g["y"] is not None:
-            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            # the reference body, not the op: on CUDA the op serves verity_int8::scaled_mm from int8_fused's kernel
             yr = E.dequantize(zr, sa[:m], REG[w][1].weight_scale)
             if not torch.equal(yr.view(torch.int16), g["y"][w].view(torch.int16)):
                 y_bad.append(w)
@@ -528,7 +528,7 @@ def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int 
     doc["receipts_vs_h1r_bad"] = rc_bad
     doc["live_units"] = int(sum((min(m, t) + 31) // 32 * (n // 32) for n, _ in win.nk))
     # h1tile.reference on a few live units: z and receipt
-    from verity_vllm.protocols.pouw.h1 import receipts as RC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
     refs = []
     rng = np.random.default_rng(s)
     for w in [0, 3, 2][:n_ref_units]:

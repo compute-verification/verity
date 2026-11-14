@@ -23,7 +23,7 @@ from verity.definitions.registry import mla_check as MK
 from tests import fake_vllm
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
 SPLITK = {"kind": "splitk", "SPLIT_K": 2, "TILE_K": 128, "WARPS": 2}
@@ -118,7 +118,7 @@ def test_the_stress_rows_decide_the_dotprod_contraction(tmp_path, fma: int) -> N
     assert X.fma_of({**t, "fma_differ": 3, "fma0_mismatch": 1, "fma1_mismatch": 2}) is None
 
 
-@pytest.mark.parametrize(("K", "splits"), [(6144, 3), (6144, 4), (7168, 2), (7168, 3), (7168, 4), (7168, 5)])
+@pytest.mark.parametrize(("K", "splits"), [(6144, 3), (6144, 4), (7168, 2), (7168, 3), (7168, 4), (7168, 5), (12288, 2)])
 @pytest.mark.parametrize("output", ["f32", "bf16"])
 def test_the_splitk_probe_distinguishes_every_served_hypothesis(K: int, splits: int, output: str) -> None:
     x, w, differ = X.splitk_probe_words(K, splits, output)

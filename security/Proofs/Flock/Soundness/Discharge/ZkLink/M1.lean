@@ -44,22 +44,24 @@ open scoped NNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- What `TabZK.M1` needs of `Zk.schedule m`'s schedule and `t_pad`, as a `Bool` (`true` where it refuses `m`). -/
-def zkM1Facts (m : ℕ) : Bool :=
-  match Zk.schedule m with
-  | .ok (s, t) => decide (schedOf s = m1Schedule m) && decide (t = m1Pad m)
+def zkM1Facts (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match Zk.schedule wideLeaf m with
+  | .ok (s, t) => decide (schedOf s = m1Schedule wideLeaf m) && decide (t = m1Pad wideLeaf m)
   | .error _ => true
 
 /-- **The m check**: at every `m` `Zk.schedule` accepts (25 to 35), its schedule and `t_pad` are Flock ZK's, by the
 kernel's `decide`. -/
-theorem zkM1Facts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkM1Facts m = true := by
-  intro m h1 h2; interval_cases m <;> decide +kernel
+theorem zkM1Facts_all : ∀ m, 25 ≤ m → m ≤ 35 → zkM1Facts wideLeaf m = true := by
+  intro m h1 h2; cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- **`Zk.schedule`'s schedule is `m1Schedule`, its `t_pad` `m1Pad`.** -/
-theorem schedule_m1 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule m = .ok (sch, tPad)) :
-    schedOf sch = m1Schedule m ∧ tPad = m1Pad m := by
+theorem schedule_m1 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
+    schedOf sch = m1Schedule wideLeaf m ∧ tPad = m1Pad wideLeaf m := by
   obtain ⟨h1, h2, -⟩ := schedule_spec h
-  have hf := zkM1Facts_all m h1 h2
+  have hf := zkM1Facts_all (wideLeaf := wideLeaf) m h1 h2
   unfold zkM1Facts at hf
   rw [h] at hf
   simpa only [Bool.and_eq_true, decide_eq_true_eq] using hf
@@ -95,7 +97,7 @@ theorem tabAt_M1 (ht : I.tags.typed = false) (regs : List (Model.Region y.x.st.c
     rw [ZkExec.innerN, Zk.INNER_LOG_INV_RATE, show (2 : ℕ) ^ 3 = 8 by norm_num]
     omega
   have : NeZero ((layOf y.x.st y.sch).len + Zk.K_PAD) := ⟨by simp [Zk.K_PAD]⟩
-  refine ⟨y.x.st.m, h1, h2, hsch, hpad, rfl, ⟨hk, hR, hp⟩, ?_, rfl, relUDR_ge_m1 y.innerDom h8⟩
+  refine ⟨y.x.st.wideLeaf, y.x.st.m, h1, h2, hsch, hpad, rfl, ⟨hk, hR, hp⟩, ?_, rfl, relUDR_ge_m1 y.innerDom h8⟩
   show innerN (layOf y.x.st y.sch) ≤ 2 ^ 13
   rw [hb]
   exact Nat.pow_le_pow_right (by norm_num) hb13

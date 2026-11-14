@@ -14,7 +14,7 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   So the window's passes are its Commit's steps in order, round s is its step s, call c of a round its c-th linear (for
   the 1B, layer by layer qkv, o, gate_up and down), and no warm-up pass is in the epoch.
 * **Coins.** ``coins(k)`` gives the pouw settings window k's salt coin comes from. With ``--challenger-gate``,
-  ``--challenger-peer`` and ``--challenger-lane`` it is a live salt-only session of window k's own on the auditor host's
+  ``--challenger-peer`` and ``--challenger-lane`` it is a live salt-only session of window k's own on the auditor device's
   challenger (`live`): reserved at the window's open under the lane (`pouw_h1_window.reserve_salt`, joining the lane's
   open period), opened by the install on its salt epoch's root and its salt coin flipped from it
   (`pouw_h1_window.salt_session`). Without them it is an in-process challenger of epoch k over the Lean
@@ -111,7 +111,7 @@ def refusal(opts: Any) -> str | None:
                 "(--challenger-gate, --challenger-peer, --challenger-lane) or in-process (serve_pearl)")
     if len({bool(getattr(g, f)) for f in GATE}) > 1:
         return ("--challenger-gate, --challenger-peer and --challenger-lane go together under Pearl+: the gate's command, "
-                "this machine's name in the auditor host's peers, and the lane whose gate key the command holds, whose open "
+                "this machine's name in the auditor device's peers, and the lane whose gate key the command holds, whose open "
                 "period each window's salt-only session joins")
     if opts.precision != PRECISION:
         return (f"--protocols {ENTRY} serves the BF16 checkpoint's linears as Pearl+'s FP8 product: it needs --precision "
@@ -134,7 +134,7 @@ def in_process(window: int) -> dict[str, Any]:
 
 
 def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], dict[str, Any]]:
-    """Each window's coins from a live salt-only session of its own on the auditor host's challenger, through infra's gate
+    """Each window's coins from a live salt-only session of its own on the auditor device's challenger, through infra's gate
     ``gate`` (its command as one string, holding lane ``lane``'s gate key) as peer ``peer``: window k's reserved when it
     opens (``reserve --peer PEER``, Pearl-C's salt coin alone, epoch k: `pouw_h1_window.reserve_salt`, joining the lane's
     open period, refused before reserving while that period is H1's), which the install opens on its salt epoch's root and
@@ -142,7 +142,7 @@ def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], di
     reserve answer), ``gate`` and ``period``. ``run`` replaces the gate's subprocess (tests). A refusal is `CoinError`
     (a ValueError), the window's failure."""
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     g = ChallengerGate(gate, run)
 
@@ -187,7 +187,7 @@ class PearlWindows:
         (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier built
         (`verifier.executable`, their entropy); ``readied``, with each part's time."""
         from verity.protocols.accounting.pouw.verifier import verifier
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         pw, t0 = self.config["pouw"], self.clock()
         PPD.Kernel.load(pw["kernel"], pw.get("cubin"))
@@ -265,7 +265,7 @@ class PearlWindows:
         """Window ``window``'s ``coins.json`` and ``served.json`` from its closed option ``opt``, whose Commit committed
         ``steps`` steps, and its outcome: ``error`` (``error`` given, or the passes with calls not the Commit's steps, a
         pass short of a linear's call or without its manifest) when it isn't one Pearl+ round a step."""
-        from verity_vllm.protocols.pouw.pearl_c import window as PWR
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
         d, c = self.dir_of(window), opt.commitment()
         passes = [p for p in PWR.served_passes(opt.details["passes"]) if p["units"]]

@@ -5,7 +5,7 @@ A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serv
 a template's operands, Dither's z/y leaves or receipt roots, H1's per-call A, y and z tables. Its root is a hiding
 commitment, which binds nothing on its own: `EndToEndRegisteredRows` links a proof's value layer to a committed row only at
 a registered read. So the service registers each served tree as a port of the verifier's own `--registered` file before
-the session's statement and coin (`RowsSession.ServedRegistered`), and verifies with `flock-verify --zk --registered`;
+the session's statement and coin (`RowsSession.ServedRegistered`), and verifies with `verity-verify-proof --zk --registered`;
 `Flock.Guarantees.ServedRowsLinked` then gives the committed tree's row at every served read.
 
 **The port form.** A served tree is the registered value of the program parameter whose rows it commits (`value`): its
@@ -123,7 +123,7 @@ class ServedRegistration:
         return self.file["ports"]
 
     def file_bytes(self) -> bytes:
-        """The `--registered` file as `flock-verify` reads it: canonical JSON."""
+        """The `--registered` file as `verity-verify-proof` reads it: canonical JSON."""
         return canonical_json(self.file)
 
     def write(self, path: str | Path) -> Path:

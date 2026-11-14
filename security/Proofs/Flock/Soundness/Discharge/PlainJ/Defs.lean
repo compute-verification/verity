@@ -20,14 +20,14 @@ import Proofs.Flock.Soundness.Discharge.Hm.Site
 /-!
 # One plain sampled session of `J` tables: the plan, sites, layout and rows
 
-`flock-verify verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
+`verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) accepts a public-output session of up to
 `Tags.MAX_TABLES` tables at a subset sample (`ProvedScope.checkP`, `ProvedScope.drawLaw` at `plainTables`). `Stmt.setupTables` sets table
 `j` up under `tagsAt` at its sample `Composed.drawJ` (the session's sample at one table, its part `j` at several). These are
 `Composed.DefsJ`'s public shadow pieces at the plain inputs themselves, so the layout and rows are `Discharge/Layout`'s directly,
 with no transfer to compiled tables:
 
 * `inputsPJ`, `tablePJ`, `planPJ`, `tabPJ`: table `j`'s inputs (`tagsAt`), its table (the `DrawSetup` table where
-  flock-verify sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
+  verity-verify-proof sets one up at table `j`'s inputs and sample, else a reference setup `x₀`'s refused table), the plan of
   `nTab I` tables, and each sampled proof block's table (`partOf`).
 * `sitesPJ`, `sitesPJ_parse`, `sitesPJ_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they parse,
   and `Discharge/Layout`'s site fact.
@@ -61,8 +61,8 @@ variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.
   {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at sample `S`**: the table flock-verify sets up at table `j`'s inputs and sample when it sets one up, and
-otherwise the reference setup `x₀`'s refused table (a setup at table 0's inputs, which every session flock-verify
+/-- **Table `j` at sample `S`**: the table verity-verify-proof sets up at table `j`'s inputs and sample when it sets one up, and
+otherwise the reference setup `x₀`'s refused table (a setup at table 0's inputs, which every session verity-verify-proof
 accepts at a sample `DrawOkPJ` admits has: `setupPJ_of_verifiesP`). -/
 noncomputable def tablePJ (S : Finset (Fin n)) (j : Fin (nTab I)) : Integrate.Table mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
@@ -85,7 +85,7 @@ theorem tabOfPJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   simp only [Partition.tabOf, planPJ, tabPJ, List.get_ofFn]
   rfl
 
-/-- **Table `j` where flock-verify sets it up**: at a `DrawSetup` of table `j`'s inputs and sample, `tablePJ` is the table of
+/-- **Table `j` where verity-verify-proof sets it up**: at a `DrawSetup` of table `j`'s inputs and sample, `tablePJ` is the table of
 one with the same statement. -/
 theorem tablePJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
     (x : DrawSetup (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
@@ -124,7 +124,7 @@ theorem sitesPJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 variable {pub : Public} (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
 
 include hc hpub hpt in
-/-- **`BcSite` at every satisfiable site** at `J` tables (`sitesAt_bcSite`): at a table flock-verify sets up by
+/-- **`BcSite` at every satisfiable site** at `J` tables (`sitesAt_bcSite`): at a table verity-verify-proof sets up by
 `table_bcSite` at table `j`'s inputs; at a refused one no message satisfies the table. -/
 theorem sitesPJ_bcSite (ho : c.outNet = c.unitNet) :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)

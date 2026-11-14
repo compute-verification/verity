@@ -22,13 +22,13 @@ from hypothesis import strategies as st
 import reference as R
 import sampled_two as T
 import verity_difftest as D
+from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 from verity_difftest import canonical
-from verity_difftest import settings as opt
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 OS = R.ONE_STAGE
-PORT = D.ProtocolPort("sampled-two", T.answer, st.nothing(), package=R.ROOT / "verity/protocols/proofs/recursion/verifier/recursive")
+PORT = D.ProtocolPort("sampled-two", T.answer, st.nothing(), package=R.ROOT / "verity/protocols/proofs/spot_flock/verifier/lean")
 server = D.server_fixture(PORT)
 DROP = object()
 
@@ -48,9 +48,9 @@ def _base_text() -> str:
     c = OS._two_stage_case(0)
     it = c["interior"]
     return canonical({
-        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/first"), "challenger": c["challenger"],
+        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/0"), "challenger": c["challenger"],
         "delta": c["delta"],
-        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second"), "replay": it["replay"],
+        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second/0"), "replay": it["replay"],
                      "values": it["values"]},
         "outputs": [], "public": c["public"], "rule": c["rule"], "values": c["values"]})
 
@@ -91,7 +91,7 @@ CHANGES = {
     "outputs-not-a-list": lambda p: _set(p, ("outputs",), "credited"),
     "outputs": lambda p: _set(p, ("outputs",), ["credited"]),
     "rule-all": lambda p: _set(p, ("rule",), {"rule": "all"}),
-    "rule-law": lambda p: _set(p, ("rule",), {"law": "rate:1/2", "rule": "law"}),
+    "rule-sampling-design": lambda p: _set(p, ("rule",), {"law": "rate:1/2", "rule": "law"}),
     **{f"rule-odd-{n}": (lambda r: lambda p: _set(p, ("rule",), r))(r) for n, r in enumerate(OS.ODD_RULES)},
     "challenger-not-a-string": lambda p: _set(p, ("challenger",), 3),
     "public-not-a-list": lambda p: _set(p, ("public",), "x"),
@@ -177,7 +177,7 @@ def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     on, and the shipped `sampled-two` refuses it by the switch alone. It catches a change after which the form accepts
     no play, which every refusal case above passes. The kept case is a play of before that change: where the change
     is to what an honest play is, the case is made afresh (`AFRESH`)."""
-    d = Path(opt.get("VERITY_SAMPLED_TWO_CASE") or CASE)
+    d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
     assert (d / "params.json").is_file(), (
         f"{d} is not fetched: `uv run research data fetch-fixtures "
         "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
@@ -188,3 +188,29 @@ def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     assert on.returncode == 0, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
     off = subprocess.run([str(exes[1]), "check", *files], capture_output=True, text=True, check=False)
     assert off.returncode == 1 and any(x in off.stdout for x in BY_THE_SWITCH), (off.stdout + off.stderr)[-4000:]
+
+
+#: how the Lean's refusal of an interior audit on the boundary registration's window begins (`SampledTwo.ONE_WINDOW`)
+ONE_WINDOW = "the interior audit's window is the boundary registration's"
+
+
+@pytest.mark.slow
+def test_the_form_refuses_the_honest_play_on_one_window(tmp_path) -> None:
+    """The form reads a two-stage audit on two windows only: the kept honest play (`CASE`) with its interior audit's
+    window root set to the boundary registration's is refused by `sampled-two-on`, the check with its switch on, at
+    its parameters and by name (`ONE_WINDOW`). The parameters still parse to the end, where the refusal is, which no
+    refusal case above reaches: their interior names no members."""
+    d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
+    assert (d / "params.json").is_file(), (
+        f"{d} is not fetched: `uv run research data fetch-fixtures "
+        "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
+    params = json.loads((d / "params.json").read_text())
+    assert params["interior"]["params"]["window_root"] != params["boundary"]["window_root"]
+    params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
+    one = tmp_path / "params.json"
+    one.write_text(canonical(params))
+    files = [str(one)] + [str(d / f) for f in ("commitment.json", "evidence.json")]
+    files += [str(b) for b in sorted((d / "blobs").iterdir())]
+    on = subprocess.run([str(D.build(PORT.package, "sampled-two-on")), "check", *files],
+                        capture_output=True, text=True, check=False)
+    assert on.returncode == 1 and ONE_WINDOW in on.stdout, (on.stdout + on.stderr)[-4000:]

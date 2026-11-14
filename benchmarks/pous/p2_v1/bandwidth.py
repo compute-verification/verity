@@ -26,7 +26,7 @@ in worker processes). The sketch is a pass of its own over the chunk's rows, not
 byte is read from HBM twice.
 
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_party --stdio` on
-the auditor's host; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
+the auditor's device; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
 `--connect HOST:PORT`, or starts it as a party of the auditor's gate (`--party CMD`, the ssh command to the gate's verb,
 whose stdout says the port, reached at `--party-host`, and then the verifier's own record of the answer, which must be
 the one the session ended with), sends the request and answers each pass,

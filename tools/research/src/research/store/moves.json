@@ -2397,6 +2397,277 @@
         "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
         "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/circuit/dither.py": "verity/protocols/experimental/dither/prover/dither.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.py": "verity/protocols/experimental/dither/prover/dither.circuit-check.py",
+        "verity/protocols/accounting/pouw/prover/circuit/dither.circuit-check.json": "verity/protocols/experimental/dither/prover/dither.circuit-check.json",
+        "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
+        "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
+      }
+    },
+    {
+      "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/native/": "verity/protocols/accounting/pouw/prover/kernels/harness/native/",
+        "benchmarks/pouw/nvfp4_sm120/": "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/h1c.cu": "verity/protocols/experimental/dither/prover/kernels/h1c.cu",
+        "benchmarks/hash/dither/h1f.cu": "verity/protocols/experimental/dither/prover/kernels/h1f.cu",
+        "benchmarks/hash/dither/h1o.cu": "verity/protocols/experimental/dither/prover/kernels/h1o.cu",
+        "benchmarks/hash/dither/h1r.cu": "verity/protocols/experimental/dither/prover/kernels/h1r.cu",
+        "benchmarks/hash/dither/h1u.cu": "verity/protocols/experimental/dither/prover/kernels/h1u.cu",
+        "benchmarks/hash/dither/h1sha.cuh": "verity/protocols/experimental/dither/prover/kernels/h1sha.cuh",
+        "benchmarks/hash/dither/tests/test_h1u_domain.py": "verity/protocols/experimental/dither/tests/test_h1u_domain.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/dashboard/": "infra/dashboard/"
+      }
+    },
+    {
+      "paths": {
+        "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
+        "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
+        "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
+        "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/torch_gpu/sha512_rows/engine.py": "verity/commitments/cuda/sha512_rows/engine.py",
+        "benchmarks/torch_gpu/sha512_rows/rows.cu": "verity/commitments/cuda/sha512_rows/rows.cu",
+        "benchmarks/torch_gpu/sha512_rows/rows.cuh": "verity/commitments/cuda/sha512_rows/rows.cuh",
+        "benchmarks/torch_gpu/sha512_rows/rows_host.cpp": "verity/commitments/cuda/sha512_rows/rows_host.cpp",
+        "benchmarks/torch_gpu/sha512_rows/settings.py": "verity/commitments/cuda/sha512_rows/settings.py",
+        "benchmarks/torch_gpu/sha512_rows/check.py": "verity/commitments/cuda/sha512_rows/check.py",
+        "benchmarks/torch_gpu/sha512_rows/README.md": "verity/commitments/cuda/sha512_rows/README.md",
+        "benchmarks/torch_gpu/sha512_rows/pyproject.toml": "verity/commitments/cuda/sha512_rows/pyproject.toml",
+        "benchmarks/torch_gpu/sha512_rows/tests/": "verity/commitments/cuda/sha512_rows/tests/",
+        "benchmarks/torch_gpu/commit_slots/slots.py": "verity/commitments/cuda/commit_slots/slots.py",
+        "benchmarks/torch_gpu/commit_slots/slots_gpu.py": "verity/commitments/cuda/commit_slots/slots_gpu.py",
+        "benchmarks/torch_gpu/commit_slots/README.md": "verity/commitments/cuda/commit_slots/README.md",
+        "benchmarks/torch_gpu/commit_slots/pyproject.toml": "verity/commitments/cuda/commit_slots/pyproject.toml",
+        "benchmarks/torch_gpu/commit_slots/tests/": "verity/commitments/cuda/commit_slots/tests/"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/pouw/circuit.py": "verity/protocols/accounting/pouw/prover/serving/circuit.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py": "verity/protocols/accounting/pouw/prover/serving/credit_gate.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/device.py": "verity/protocols/accounting/pouw/prover/serving/device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/native.py": "verity/protocols/accounting/pouw/prover/serving/native.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/operands.py": "verity/protocols/accounting/pouw/prover/serving/operands.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/lead/": "verity/protocols/accounting/pouw/prover/serving/lead/",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/serving/pearl_c/",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/README.md": "verity/protocols/accounting/pouw/prover/serving/h1/README.md",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py": "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/answers.py": "verity/protocols/accounting/pouw/prover/serving/h1/answers.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py": "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/commit.py": "verity/protocols/accounting/pouw/prover/serving/h1/commit.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/draw.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py": "verity/protocols/accounting/pouw/prover/serving/h1/drawn.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/drawn_rows.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/handoff.py": "verity/protocols/accounting/pouw/prover/serving/h1/handoff.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/hooks.py": "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py": "verity/protocols/accounting/pouw/prover/serving/h1/kept.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py": "verity/protocols/accounting/pouw/prover/serving/h1/live.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/model_key.py": "verity/protocols/accounting/pouw/prover/serving/h1/model_key.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/names.py": "verity/protocols/accounting/pouw/prover/serving/h1/names.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/nodes.py": "verity/protocols/accounting/pouw/prover/serving/h1/nodes.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/prover.py": "verity/protocols/accounting/pouw/prover/serving/h1/prover.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/public_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/public_rows.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/ranks.py": "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/receipts.py": "verity/protocols/accounting/pouw/prover/serving/h1/receipts.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/records.py": "verity/protocols/accounting/pouw/prover/serving/h1/records.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py": "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/registered_device.py": "verity/protocols/accounting/pouw/prover/serving/h1/registered_device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/requests.py": "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/served.py": "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py": "verity/protocols/accounting/pouw/prover/serving/h1/served_files.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/served_program.py": "verity/protocols/accounting/pouw/prover/serving/h1/served_program.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/settings.py": "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/static.py": "verity/protocols/accounting/pouw/prover/serving/h1/static.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py": "verity/protocols/accounting/pouw/prover/serving/h1/tables_device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py": "verity/protocols/accounting/pouw/prover/serving/h1/window.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py": "verity/protocols/accounting/pouw/prover/serving/h1/words.py",
+        "adapters/vllm/verity_vllm/commit/lead_rows.py": "verity/protocols/accounting/pouw/prover/serving/lead/rows.py",
+        "adapters/vllm/verity_vllm/records/pearl_served.py": "verity/protocols/accounting/pouw/prover/serving/pearl_c/served_record.py",
+        "adapters/vllm/verity_vllm/pipeline/serve_h1_draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_draw.py",
+        "adapters/vllm/verity_vllm/pipeline/serve_h1_gate.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_gate.py",
+        "adapters/vllm/tests/protocols/test_credit_gate_outside.py": "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py",
+        "adapters/vllm/tests/protocols/test_credit_gate_writes.py": "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_writes.py",
+        "adapters/vllm/tests/protocols/test_pouw_device.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_device.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_answers.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_answers.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_import_loads.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_import_loads.py",
+        "adapters/vllm/tests/protocols/test_pouw_pearl_c_host.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_pearl_c_host.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_device_lib.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_device_lib.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_nodes.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_nodes.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_prover.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_prover.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_receipts.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_receipts.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_records.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py",
+        "adapters/vllm/tests/protocols/test_pouw_lead_feed.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_feed.py",
+        "adapters/vllm/tests/protocols/test_pouw_lead_record.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_record.py",
+        "adapters/vllm/tests/protocols/test_pouw_native.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_native.py",
+        "adapters/vllm/tests/commit/test_lead_rows.py": "verity/protocols/accounting/pouw/prover/tests/test_lead_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py": "adapters/vllm/tests/protocols/test_credit_gate_outside.py",
+        "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py": "adapters/vllm/tests/protocols/test_pouw_h1_records.py",
+        "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py": "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py",
+        "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py": "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier.lean": "security/Definitions/Certifier.lean",
+        "security/Definitions/NetworkCertifier/": "security/Definitions/Certifier/",
+        "security/Proofs/NetworkCertifier.lean": "security/Proofs/Certifier.lean",
+        "security/Proofs/NetworkCertifier/": "security/Proofs/Certifier/",
+        "security/Proofs/Properties/NetworkCertifier/": "security/Proofs/Properties/Certifier/",
+        "security/Properties/NetworkCertifier/": "security/Properties/Certifier/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c/",
+        "benchmarks/pouw/pearl_c_sm120/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/",
+        "benchmarks/pouw/pearl_c_sm120/fixture.py": "benchmarks/pouw/pearl_c_sm120/fixture.py",
+        "benchmarks/pouw/pearl_c_sm120/ship.sh": "benchmarks/pouw/pearl_c_sm120/ship.sh",
+        "benchmarks/pouw/pearl_c_sm120/card.sh": "benchmarks/pouw/pearl_c_sm120/card.sh",
+        "benchmarks/pouw/pearl_c_sm90/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/",
+        "benchmarks/pouw/pearl_c_sm90/fixture.py": "benchmarks/pouw/pearl_c_sm90/fixture.py",
+        "benchmarks/pouw/pearl_c_sm90/ship.sh": "benchmarks/pouw/pearl_c_sm90/ship.sh",
+        "benchmarks/pouw/pearl_c_sm90/debit.py": "benchmarks/pouw/pearl_c_sm90/debit.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53.py": "benchmarks/pouw/pearl_c_sm90/glm53.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_passes.py": "benchmarks/pouw/pearl_c_sm90/glm53_passes.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_profile.py": "benchmarks/pouw/pearl_c_sm90/glm53_profile.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_slices.py": "benchmarks/pouw/pearl_c_sm90/glm53_slices.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_timing.py": "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
+        "benchmarks/pouw/pearl_c_sm90/grouped_check.py": "benchmarks/pouw/pearl_c_sm90/grouped_check.py",
+        "benchmarks/pouw/pearl_c_sm90/llama32_1b.py": "benchmarks/pouw/pearl_c_sm90/llama32_1b.py",
+        "benchmarks/pouw/pearl_c_sm90/overhead_arm.py": "benchmarks/pouw/pearl_c_sm90/overhead_arm.py",
+        "benchmarks/pouw/pearl_c_sm90/overhead_arm.json": "benchmarks/pouw/pearl_c_sm90/overhead_arm.json",
+        "benchmarks/pouw/pearl_c_sm90/h200.sh": "benchmarks/pouw/pearl_c_sm90/h200.sh",
+        "benchmarks/pouw/harness/ieee_pin.cu": "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/Registration.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean",
+        "verity/protocols/interface/CoreProtocol/RegistrationMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/Main.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
+        "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
+        "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
+        "benchmarks/one_stage/a5_memo.py": "verity/protocols/proofs/spot/verifier/one_stage/check_memo.py",
+        "benchmarks/one_stage/compose_circuit.py": "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py",
+        "benchmarks/prove_path/records_audit.py": "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py",
+        "benchmarks/one_stage/r2_population.py": "verity/protocols/proofs/spot/verifier/tests/other_population.py",
+        "benchmarks/one_stage/tests/test_member_trees.py": "verity/protocols/proofs/spot/verifier/tests/test_one_stage_member_trees.py",
+        "benchmarks/one_stage/tests/test_a5_memo.py": "verity/protocols/proofs/spot/verifier/tests/test_check_memo.py",
+        "benchmarks/one_stage/tests/test_r2_population.py": "verity/protocols/proofs/spot/verifier/tests/test_other_population.py",
+        "benchmarks/one_stage/tests/test_verdict_record.py": "verity/protocols/proofs/spot/verifier/tests/test_verdict_record.py",
+        "benchmarks/prove_path/tests/test_records_audit.py": "verity/protocols/proofs/spot/verifier/tests/test_records_audit.py",
+        "benchmarks/prove_path/tests/test_pearltie.py": "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py",
+        "benchmarks/prove_path/tests/test_remotetie.py": "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py",
+        "benchmarks/prove_path/tests/settings.py": "verity/protocols/proofs/spot/verifier/tests/settings.py",
+        "benchmarks/one_stage/a5_coins.py": "verity/protocols/proofs/spot/device/challenger_session.py",
+        "benchmarks/one_stage/challenger_party.py": "verity/protocols/proofs/spot/device/challenger_party.py",
+        "benchmarks/one_stage/two_stage.py": "verity/protocols/proofs/spot/device/two_stage.py",
+        "benchmarks/one_stage/tests/test_a5_coins.py": "verity/protocols/proofs/spot/device/tests/test_challenger_session.py",
+        "benchmarks/one_stage/tests/test_a5_reserve.py": "verity/protocols/proofs/spot/device/tests/test_challenger_session_reserve.py",
+        "benchmarks/one_stage/tests/test_challenger_party.py": "verity/protocols/proofs/spot/device/tests/test_challenger_party.py",
+        "benchmarks/one_stage/tests/test_two_stage_driver.py": "verity/protocols/proofs/spot/device/tests/test_two_stage_driver.py",
+        "benchmarks/one_stage/a0.py": "verity/protocols/proofs/spot/prover/audit/template_audit.py",
+        "benchmarks/one_stage/a5.py": "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+        "benchmarks/one_stage/a5.sh": "verity/protocols/proofs/spot/prover/audit/window_audit.sh",
+        "benchmarks/one_stage/stop_audit.py": "verity/protocols/proofs/spot/prover/audit/stop_audit.py",
+        "benchmarks/one_stage/prove_bundle.py": "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
+        "benchmarks/one_stage/prove_bundle.sh": "verity/protocols/proofs/spot/prover/audit/prove_bundle.sh",
+        "benchmarks/prove_path/prove_path.py": "verity/protocols/proofs/spot/prover/audit/prove_path.py",
+        "benchmarks/prove_path/run.sh": "verity/protocols/proofs/spot/prover/audit/prove_path.sh",
+        "benchmarks/prove_path/class_size.py": "verity/protocols/proofs/spot/prover/audit/class_size.py",
+        "benchmarks/one_stage/tests/test_a0_archive_once.py": "verity/protocols/proofs/spot/prover/tests/test_template_audit_archive_once.py",
+        "benchmarks/one_stage/tests/test_a0_challenger_draw.py": "verity/protocols/proofs/spot/prover/tests/test_template_audit_challenger_draw.py",
+        "benchmarks/one_stage/tests/test_a0_lean_refused.py": "verity/protocols/proofs/spot/prover/tests/test_template_audit_lean_refused.py",
+        "benchmarks/one_stage/tests/test_a0_session_challenger.py": "verity/protocols/proofs/spot/prover/tests/test_template_audit_session_challenger.py",
+        "benchmarks/one_stage/tests/test_a0_templated.py": "verity/protocols/proofs/spot/prover/tests/test_template_audit_templated.py",
+        "benchmarks/one_stage/tests/test_a0_verify_members.py": "verity/protocols/proofs/spot/prover/tests/test_template_audit_verify_members.py",
+        "benchmarks/one_stage/tests/test_a5_case_v2.py": "verity/protocols/proofs/spot/prover/tests/test_window_audit_case_v2.py",
+        "benchmarks/one_stage/tests/test_a5_history.py": "verity/protocols/proofs/spot/prover/tests/test_window_audit_history.py",
+        "benchmarks/one_stage/tests/test_a5_outputs.py": "verity/protocols/proofs/spot/prover/tests/test_window_audit_outputs.py",
+        "benchmarks/one_stage/tests/test_a5_sessions.py": "verity/protocols/proofs/spot/prover/tests/test_window_audit_sessions.py",
+        "benchmarks/one_stage/tests/test_a5_wiring.py": "verity/protocols/proofs/spot/prover/tests/test_window_audit_wiring.py",
+        "benchmarks/one_stage/tests/test_audit_two_members.py": "verity/protocols/proofs/spot/prover/tests/test_audit_two_members.py",
+        "benchmarks/one_stage/tests/test_compose_cache.py": "verity/protocols/proofs/spot/prover/tests/test_compose_cache.py",
+        "benchmarks/one_stage/tests/test_kept_compose_cache.py": "verity/protocols/proofs/spot/prover/tests/test_kept_compose_cache.py",
+        "benchmarks/one_stage/tests/test_prove_bundle.py": "verity/protocols/proofs/spot/prover/tests/test_prove_bundle.py",
+        "benchmarks/one_stage/tests/fixtures/bundle-window-public/": "verity/protocols/proofs/spot/prover/tests/fixtures/bundle-window-public/",
+        "benchmarks/prove_path/tests/test_prove_path.py": "verity/protocols/proofs/spot/prover/tests/test_prove_path.py",
+        "benchmarks/prove_path/tests/test_kept_scan.py": "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py",
+        "benchmarks/prove_path/tests/test_class_size.py": "verity/protocols/proofs/spot/prover/tests/test_class_size.py",
+        "benchmarks/sampling_plan/transformer.py": "verity/protocols/proofs/spot/prover/cost/transformer.py",
+        "benchmarks/sampling_plan/int8_llama.py": "verity/protocols/proofs/spot/prover/cost/int8_llama.py",
+        "benchmarks/sampling_plan/served_window.py": "verity/protocols/proofs/spot/prover/cost/served_window.py",
+        "benchmarks/sampling_plan/h200.py": "verity/protocols/proofs/spot/prover/cost/h200.py",
+        "benchmarks/sampling_plan/demo_a.py": "verity/protocols/proofs/spot/prover/cost/demo_a.py",
+        "benchmarks/sampling_plan/glm53.py": "verity/protocols/proofs/spot/prover/cost/glm53.py",
+        "benchmarks/sampling_plan/cpu_budget.py": "verity/protocols/proofs/spot/prover/cost/cpu_budget.py",
+        "benchmarks/sampling_plan/recursion.py": "verity/protocols/proofs/spot/prover/cost/recursion.py",
+        "benchmarks/prove_path/window_cost.py": "verity/protocols/proofs/spot/prover/cost/window_cost.py",
+        "benchmarks/prove_path/class_rows.py": "verity/protocols/proofs/spot/prover/cost/class_rows.py",
+        "benchmarks/sampling_plan/tests/test_transformer.py": "verity/protocols/proofs/spot/prover/tests/test_cost_transformer.py",
+        "benchmarks/sampling_plan/tests/test_demo_a.py": "verity/protocols/proofs/spot/prover/tests/test_cost_demo_a.py",
+        "benchmarks/sampling_plan/tests/test_glm53.py": "verity/protocols/proofs/spot/prover/tests/test_cost_glm53.py",
+        "benchmarks/sampling_plan/tests/test_recursion.py": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py",
+        "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
+        "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
+      }
     }
   ]
 }

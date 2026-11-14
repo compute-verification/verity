@@ -17,7 +17,7 @@ from the record -- the collector's own bytes never enter the expected side.
                          bytes                                                                    -> equal | MISMATCH (named; an opening
                          that does not verify is a mismatch)
     sampled_token_ids  : the committed id == the capture's SampleEnd id for that request at that step (every step, no snapshot needed)
-    not compared       : identities of a step the Match did not snapshot (row_pod MATCH_SNAP_STEPS, default 0,1), of a family the
+    not compared       : identities of a step the Match did not snapshot (the row's `--snapshot-steps`, MATCH_SNAP_STEPS: default 0,1), of a family the
                          Match has no value for (the FA2/FA3 M1 kernel-interior stream: its C2 is the tap's own bit-exact xcheck,
                          capacity FA2-01), registered inputs (weights: digest-pinned by the Build), or an op the fold did not instance
                          -> counted per reason, never silently dropped
@@ -35,8 +35,8 @@ from collections.abc import Callable
 from typing import Any
 
 # handed on: other modules and tests read the Match record's reader and the producers through this module
-from verity_vllm.check.match_oracle import _ITEMSIZE, MatchOracle
 from verity_vllm.check.match_oracle import _ROPE_MEMBER as _ROPE_MEMBER
+from verity_vllm.check.match_oracle import MatchOracle
 from verity_vllm.check.match_oracle import _contiguous as _contiguous
 from verity_vllm.check.match_oracle import _port_view as _port_view
 from verity_vllm.check.match_oracle import _prod as _prod
@@ -61,12 +61,14 @@ from verity_vllm.commit.opened import (  # noqa: F401  -- re-exported
     OpeningNotVerified,
     meta_by_name,
 )
+from verity_vllm.observe.events import DTYPE_BYTES
+from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 __all__ = ["MatchOracle", "OpenedReader", "OpeningNotVerified", "SCHEMA", "entry_read_name", "merge_producers",
            "oracle_compare", "producers_of", "producers_of_programs", "promote_handed_down", "query_families_of",
            "runtime_rows_of", "same_name_invocations"]
 
-SCHEMA = "verity-sweep/oracle-compare/v1"
+SCHEMA = ORACLE_COMPARE_SCHEMA
 METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fold's instance output views + SampleEnd ids)"
 
 
@@ -121,6 +123,15 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     wcheck = oracle.workload_check(workload)
     if wcheck.get("ok") is False:
         return _foreign_oracle(oracle, bmap, wcheck)
+    return _report(oracle, wcheck, max_report, query_families,
+                   **_walk(oracle, bmap, committed, producers, inv_alias, own, runtime_rows))
+
+
+def _walk(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
+          producers: dict[tuple[str, str], dict[str, Any]] | None, inv_alias: dict[tuple[str, int], str], own: frozenset[str],
+          runtime_rows: dict[tuple, tuple[int, int]] | None) -> dict[str, Any]:
+    """`oracle_compare`'s pass over the binding map's entries: what it compared, found equal, found different and did not compare,
+    each tally under the name `_report` takes it by."""
     compared = equal = 0
     mism: list[dict] = []
     not_cmp: Counter = Counter()
@@ -169,7 +180,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             pairs_seen.add((step, rid))
         enc = e.get("encoding")   # the member's dtype and shape; an entry that states no dtype has no byte range to read
         dtype = str(enc.get("dtype") or "") if enc else ""
-        isz = _ITEMSIZE.get(dtype)
+        isz = DTYPE_BYTES.get(dtype)
         lo, hi = ident.get("element_range") or [0, None]
         if isz is None or hi is None or int(hi) <= int(lo):
             not_cmp["identity without a byte range (dtype/range)"] += 1
@@ -246,6 +257,17 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             first = next((i for i in range(0, len(ob), isz) if ob[i:i + isz] != got[i:i + isz]), None)
             mism.append({"identity": ident, "family": fam, "name": e.get("name"), "why": f"bytes differ (first element {first // isz if first is not None else None} of {len(ob) // isz})",
                          "committed_sha256": hashlib.sha256(got).hexdigest()[:16], "oracle_sha256": hashlib.sha256(ob).hexdigest()[:16]})
+    return {"compared": compared, "equal": equal, "mism": mism, "not_cmp": not_cmp, "not_cmp_fam": not_cmp_fam,
+            "by_fam_cmp": by_fam_cmp, "not_cmp_qfam": not_cmp_qfam, "shared_inv": shared_inv, "steps_cmp": steps_cmp,
+            "steps_seen": steps_seen, "attrib": attrib, "pairs_seen": pairs_seen, "padding_not_cmp": padding_not_cmp,
+            "padding_pairs": padding_pairs}
+
+
+def _report(oracle: MatchOracle, wcheck: dict[str, Any], max_report: int, query_families: dict[str, int] | None, *, compared: int,
+            equal: int, mism: list[dict], not_cmp: Counter, not_cmp_fam: Counter, by_fam_cmp: Counter, not_cmp_qfam: Counter,
+            shared_inv: Counter, steps_cmp: set[int], steps_seen: set[int], attrib: dict[tuple[int, str], dict[str, Any]],
+            pairs_seen: set[tuple[int, str]], padding_not_cmp: Counter, padding_pairs: set[tuple[int, str]]) -> dict[str, Any]:
+    """The oracle-compare document from `_walk`'s tallies: the result, its grade and why, and every count."""
     steps_not_snap = sorted(s for s in steps_seen if s not in oracle.snapshot_steps)
     complete = compared > 0 and not mism and not steps_not_snap and sum(v for k, v in not_cmp.items() if not k.startswith("no oracle family")) == 0
     result: bool | None = False if mism else (True if complete else None)
@@ -262,7 +284,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         why = (f"C2 oracle mismatch: {len(mism)} identities differ from the Match oracle (first: step {i.get('step')} {i.get('op_path')}/{i.get('output_member')} "
                f"inv {i.get('invocation')} req {i.get('request_id')} range {i.get('element_range')} -- {m.get('why') or ('id ' + str(m.get('committed_id')) + ' vs ' + str(m.get('oracle_id')))})")
     elif result is None:
-        why = (f"{grade}: " + (f"steps {steps_not_snap[:8]}{'...' if len(steps_not_snap) > 8 else ''} not snapshotted by the Match (row_pod MATCH_SNAP_STEPS=all for a complete C2); " if steps_not_snap else "")
+        why = (f"{grade}: " + (f"steps {steps_not_snap[:8]}{'...' if len(steps_not_snap) > 8 else ''} not snapshotted by the Match (MATCH_SNAP_STEPS=all for a complete C2); " if steps_not_snap else "")
                + (f"request attribution unverified at {len(attrib_missing)} (step, request) pairs (first {attrib_missing[:4]}); " if attrib_missing else "")
                + (f"attribution ambiguous at steps {ambiguous[:8]} (equal ids + sampled id across requests, values not snapshotted); " if ambiguous else "")
                + "; ".join(f"{k} x{v}" for k, v in not_cmp.items() if not k.startswith("no oracle family")))
@@ -296,7 +318,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
                if padding_not_cmp else {}),
             "steps_compared": sorted(steps_cmp), "steps_not_snapshotted": steps_not_snap, "complete": complete,
             "attribution": {"complete": attribution_complete, "pairs": len(pairs_seen), "unverified": attrib_missing[:max_report], "unverified_n": len(attrib_missing),
-                            "ambiguous_steps": ambiguous, "requests": sorted({r for _, r in pairs_seen}, key=lambda x: int(x[1:]) if x[1:].isdigit() else 0)},
+                            "ambiguous_steps": ambiguous, "requests": sorted({r for _, r in pairs_seen}, key=lambda x: int(x[1:]) if x[1:].isdecimal() else 0)},
             "workload_check": wcheck, "oracle": oracle.provenance()}
 
 

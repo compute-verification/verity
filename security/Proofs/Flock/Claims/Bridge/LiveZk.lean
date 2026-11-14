@@ -39,9 +39,9 @@ import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The live `--zk` session decided by flock-verify, and the old transfer
+# The live `--zk` session decided by verity-verify-proof, and the old transfer
 
-The live session (`Live.liveV`) decided by flock-verify `--zk`'s verdict on the transcript `wr x o` the outcome is
+The live session (`Live.liveV`) decided by verity-verify-proof `--zk`'s verdict on the transcript `wr x o` the outcome is
 written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
 
 * `verdictZK I t`: `AcceptsZK`'s steps as an `OC` program: the session's statement set up from `zkInputs I` and the
@@ -50,7 +50,7 @@ written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
 * `Pr_acc_zk`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s
   probability of `AcceptsZK I (wr x o) ∧ Q o`, the event the old theorems bound.
 * `Pr_acc_zk_le`: so the old transfer (`live_le_sessionZJ`) bounds it by the compiled session's acceptance against the
-  simulated strategy, whenever every table's decoder is right on the outcomes flock-verify accepts (`hdec`; at the
+  simulated strategy, whenever every table's decoder is right on the outcomes verity-verify-proof accepts (`hdec`; at the
   deployed decoders and the writer `Custody.wrD`, `Custody.decodesOnZKJ_wrD`).
 
 The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the sample of the
@@ -68,7 +68,7 @@ namespace Claims.Bridge.LiveZk
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Tables
   FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec Claims.Bridge.Live
 
-/-- **flock-verify `--zk`'s verdict as an oracle program**: `AcceptsZK`'s setup and shape checks, then the verifier over
+/-- **verity-verify-proof `--zk`'s verdict as an oracle program**: `AcceptsZK`'s setup and shape checks, then the verifier over
 `OC`. -/
 def verdictZK (I : Inputs) (t : Exec.Transcript) : OC Bool :=
   match setupOf (zkInputs I) t.record with
@@ -114,7 +114,7 @@ theorem hOf_shaH : hOf shaH = Flock.Sha512.hash := by
   funext b
   simp [hOf, shaH]
 
-/-- **Against SHA-512, it is flock-verify `--zk`'s acceptance.** -/
+/-- **Against SHA-512, it is verity-verify-proof `--zk`'s acceptance.** -/
 theorem verdictZK_sha (I : Inputs) (t : Exec.Transcript) : ((verdictZK I t).eval shaH).1 = true ↔ AcceptsZK I t := by
   rw [verdictZK_eval, hOf_shaH]
   unfold AcceptsZK
@@ -122,8 +122,8 @@ theorem verdictZK_sha (I : Inputs) (t : Exec.Transcript) : ((verdictZK I t).eval
   rw [Flock.Zk.verify_eq_verifyWith_of_returns (Flock.With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _) h1]
 
 open Classical in
-/-- **Acceptance with an event of the outcome, at flock-verify `--zk`**: `Pr_r[run = acc ∧ Q(outcome)]` against SHA-512
-is `liveSession`'s probability that flock-verify `--zk` accepts the written transcript and `Q` holds. -/
+/-- **Acceptance with an event of the outcome, at verity-verify-proof `--zk`**: `Pr_r[run = acc ∧ Q(outcome)]` against SHA-512
+is `liveSession`'s probability that verity-verify-proof `--zk` accepts the written transcript and `Q` holds. -/
 theorem Pr_acc_zk (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : (x : Msg) → Wire nMax (J x) (mPts x)) (I : Msg → Inputs) (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Exec.Transcript)
     {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (Q : LiveOutJ (J x) (mPts x) → Prop) :
@@ -138,7 +138,7 @@ theorem Pr_acc_zk (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → Byte
   exact propext (and_congr_left' (verdictZK_sha _ _))
 
 open Classical in
-/-- **The old transfer bounds the run**: when every table's decoder is right on the outcomes flock-verify `--zk`
+/-- **The old transfer bounds the run**: when every table's decoder is right on the outcomes verity-verify-proof `--zk`
 accepts (`DecodesTable`, the hypothesis `live_le_sessionZJ` takes), `Pr_r[run = acc ∧ Q(outcome)]` against SHA-512 is
 at most the compiled session's acceptance against the simulated strategy of `liveStrat`. -/
 theorem Pr_acc_zk_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]

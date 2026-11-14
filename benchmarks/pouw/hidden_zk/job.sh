@@ -4,7 +4,7 @@
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build: sha512, glue; the
-#      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
+#      selftest build: + seed-injection), the Lean verity-verify-proof, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, sampled the same way, and the Lean
@@ -12,7 +12,7 @@
 #        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement verity-verify-proof
 #                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
 #                       before its config's refusal (below); output_row_committed_false (a tampered output row),
 #                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
@@ -21,7 +21,8 @@
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
 #      (no --program, NO_PROGRAM): summarize.py holds an honest check as expected only with its config's refusal, and
-#      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted
+#      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted. A config whose stage writes a
+#      Program (program.json; served_units' bound statements) is checked with it (--program).
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -70,7 +71,7 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   cp -r "$SRC/verity/protocols/proofs/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime wide; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
@@ -86,7 +87,7 @@ lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DES
   P=$(python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/proofs/flock/verifier" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
-build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
+build_lean() {      # build_lean DEST: DEST/.lake/build/bin/verity-verify-proof
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
@@ -125,7 +126,7 @@ setup() {
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }
-  [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/flock-verify
+  [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/verity-verify-proof
   [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cat "$W/venv.dir")/bin/python
   BIN=$FLOCK_PROVE SBIN=${FLOCK_SELFTEST:?} LEAN=$FLOCK_VERIFY PY=$HZ_PYTHON
   for p in "$BIN" "$SBIN" "$LEAN" "$PY"; do [ -x "$p" ] || { log "missing: $p"; fail=1; }; done
@@ -186,6 +187,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   local base="--zk --circuit $D/circuit.txt"
   [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
+  [ -e "$D/program.json" ] && base+=" --program $D/program.json"
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then

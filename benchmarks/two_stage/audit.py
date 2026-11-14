@@ -49,7 +49,7 @@ and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean mo
 copies it reads them against (``guard/``, `guard.export`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
-      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
+      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --main FILE \\
         --out DIR [--altered]
 """
 from __future__ import annotations
@@ -66,10 +66,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.device import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
@@ -97,12 +97,12 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
 
 
 class StageCoins(CC.ChallengerCoins):
-    """Both stages' coins of the run's one challenger session (``draws``, `a5_coins.Draws`' proxy) as the stream reads
+    """Both stages' coins of the run's one challenger session (``turns``, `a5_coins.Draws`' proxy) as the stream reads
     them: the first stage's rank 0's, the second's rank 1's, each its own family's, committed to its registration's
     digest in turn."""
 
-    def __init__(self, draws) -> None:
-        self.draws, self.stages, self.at = draws, (AC.RankCoins(draws, 0), AC.RankCoins(draws, 1)), -1
+    def __init__(self, turns) -> None:
+        self.turns, self.stages, self.at = turns, (AC.RankCoins(turns, 0), AC.RankCoins(turns, 1)), -1
 
     @property
     def label(self) -> str:
@@ -130,7 +130,7 @@ def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
     returns only then, so the two plan at once). It is made with the challenger's key and the verifier's copy of main's
     history as the session's start had them (`a5_coins.held`), which both stages' coin evidence is read under."""
     stream = S.Stream(T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES)), list(T.TEMPLATES), replay=T.REPLAY,
-                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, **AC.held(coins.draws))
+                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, **AC.held(coins.turns))
     with ThreadPoolExecutor(len(coins.stages)) as ex:
         list(ex.map(lambda c, n: c.plan(n), coins.stages, needs(stream, a.n, a.q)))
     return stream
@@ -177,7 +177,7 @@ def main(argv=None) -> int:
     ap.add_argument("--k", type=int, default=1, help="the second stage's proof blocks in each (replay block, template) cell")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True, help="flock-circuit")
-    ap.add_argument("--lean", required=True, help="flock-verify")
+    ap.add_argument("--lean", required=True, help="verity-verify-proof")
     ap.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
                     "prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--altered", action="store_true", help="span S[0] replayed on an ingress one bit off")

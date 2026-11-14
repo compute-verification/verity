@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Game
 
 /-!
-# Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`
+# Soundness at `fast100`'s numbers, over everything verity-verify-proof accepts without `--zk`
 
 `flock_verify_sound`'s claims without `--zk`, `SoundExec` (public outputs), `SoundExecH` (hidden) and `SoundExecHR`
 (hidden, `--registered F`), bound the knowledge term by `StrictCR.ksAvgStrict`, whose per-table term is the table's `tableError`. `flock_verify_sound_205` states them
@@ -32,7 +32,7 @@ acceptance gives it.
 * `tableError_le_205_wide`: `tableError` of a `fast100` schedule is at most `2^-205` at every shape in
   `Stmt.InRangeWide`, `Stmt.InRange` with two regions more (`tableError_le_of_le_33`'s kernel check at 1026 regions).
 * `ksAvgStrict_le_205`: with every plan table's shape in that range, `ksAvgStrict` is at most `ksAvgStrict205`.
-* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample flock-verify
+* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample verity-verify-proof
   sets up has its statement's range, which `Stmt.setupH` and `Stmt.setupHidden` check (`checkInRange`:
   `setupH_inRange`, `Hidden.Spec.inRange`). A refused sample's table is a reference setup's statement with `contra`'s two
   regions added (`DrawSetup.refused`), which is why the range is two regions wider.
@@ -1015,8 +1015,8 @@ def FlockVerifySound205PerTest : Prop :=
     ∀ (own : Array Flock.Registered.Port) (t : Exec.Transcript), FlockVerifyAcceptsR false I own t →
       I.tags.hiddenOutputs = true ∨ FlockVerifyAccepts false I t
 
-/-- **Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`.** At every statement `I`:
-the live session's probability that `flock-verify verify` accepts without `--zk` (`FlockVerifyAccepts false I`) while
+/-- **Soundness at `fast100`'s numbers, over everything verity-verify-proof accepts without `--zk`.** At every statement `I`:
+the live session's probability that `verity-verify-proof verify` accepts without `--zk` (`FlockVerifyAccepts false I`) while
 at least `K` of the statement's proof blocks are wrong is at most `flock_verify_sound`'s bound with each table's term
 `2^-205`: `SoundExec205` at public outputs, `SoundExecH205` at hidden, and with `--registered F` at hidden outputs
 `SoundExecHR205` (the registered reads checked). No hypothesis on the statement's range: the

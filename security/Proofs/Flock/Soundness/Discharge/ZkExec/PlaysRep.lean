@@ -200,7 +200,7 @@ theorem two_append_get! {γ : Type} [Inhabited γ] (a b : γ) (xs : Array γ) :
 
 theorem zk_rep_plays : ZkRepPlays := by
   intro mPts Sl Hs T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
   unfold repProg at hrun

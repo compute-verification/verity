@@ -6,16 +6,16 @@
 
 `--upstream` is M0's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Its plain
-sessions are upstream's form, which the Lean verdict of record (`flock-verify verify`) refuses (`UPSTREAM_PLAIN`), so the
-Lean side is `flock-verify agree --upstream-plain`, which never accepts: upstream's verdicts come first, and it reports
+sessions are upstream's form, which the Lean verdict of record (`verity-verify-proof verify`) refuses (`UPSTREAM_PLAIN`), so the
+Lean side is `verity-verify-proof agree --upstream-plain`, which never accepts: upstream's verdicts come first, and it reports
 whether the Lean verifier's checks pass exactly when upstream accepted, the first check that fails, and the first refusal
 once every check has passed (`UPSTREAM_PLAIN` where no other refuses). `--zk` sessions and `--upstream live` ones are
-the deployed form, verified by `flock-verify verify` itself. Each
+the deployed form, verified by `verity-verify-proof verify` itself. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D list): upstream must then return that
-verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim samples by, which the Lean
-verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
+verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sampling design no soundness claim samples by, which the
+Lean verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
 refused for that first), and upstream must return each session's expected verdict; a session with none (a fuzz case) only
 needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the soundness proof does not cover, and
@@ -28,9 +28,9 @@ session of upstream's plain files that `agree` refuses for upstream's form alone
 accepted. A session directory may carry its own public file (`pub.bin`, a forgery's false
 statement), the verifier's own registered reads (`registered.json`, in place of `--registered`; null for none; upstream
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
-their digests (`flock-verify --archive`); upstream reads the paths. Writes DIR/agreement.tsv, the two
+their digests (`verity-verify-proof --archive`); upstream reads the paths. Writes DIR/agreement.tsv, the two
 logs, DIR/upstream-verdicts.json (`agree`'s `--upstream-verdicts`) and DIR/result.json, whose `accepted` counts the sessions
-`flock-verify verify` accepted (none of upstream's plain files); exits 1 if the verifiers disagree on any session or either
+`verity-verify-proof verify` accepted (none of upstream's plain files); exits 1 if the verifiers disagree on any session or either
 misses an expectation.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
@@ -66,7 +66,7 @@ def drawn(s):
 
 def archived(a, path):
     """Hold `path` in the run's archive, `OUT/archive/sha512/<hex>`, and return its SHA-512: the Lean verifier loads the
-    statement's objects by content (`flock-verify --archive`)."""
+    statement's objects by content (`verity-verify-proof --archive`)."""
     h = hashlib.sha512(Path(path).read_bytes()).hexdigest()
     d = a.out / "archive" / "sha512"
     d.mkdir(parents=True, exist_ok=True)
@@ -86,7 +86,7 @@ NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 #: the Lean verifier's refusal of upstream's plain proof files (`FlockVerify.UPSTREAM_PLAIN`): `verify` refuses every such
 #: session with it, and `agree` reports it for a session no other refusal meets once every check has passed
 UPSTREAM_PLAIN = ("refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; "
-                  "flock-verify agree compares the verifier's checks on them with upstream's verdicts")
+                  "verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts")
 
 
 #: `--upstream live`: upstream's verdicts are its own live ones, recorded in each selftest session's `case.json`, for a
@@ -94,12 +94,12 @@ UPSTREAM_PLAIN = ("refused: upstream's plain proof files (--upstream-plain): a f
 LIVE = "live"
 
 
-#: upstream's verdict on each session, by its directory, which `flock-verify agree --upstream-verdicts` reads
+#: upstream's verdict on each session, by its directory, which `verity-verify-proof agree --upstream-verdicts` reads
 UPSTREAM_VERDICTS = "upstream-verdicts.json"
 
 
 def upstream_plain(a):
-    """The sessions are upstream's plain files (an upstream binary's, without `--zk`): the Lean side is `flock-verify agree`."""
+    """The sessions are upstream's plain files (an upstream binary's, without `--zk`): the Lean side is `verity-verify-proof agree`."""
     return a.upstream != LIVE and not getattr(a, "zk", False)
 
 
@@ -117,8 +117,8 @@ def chunks(xs, k):
 def lean_cmd(a, public, registered=None):
     """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
     run's archive, by SHA-512. An upstream binary's plain sessions are upstream's form (`--upstream-plain`: no zk patch,
-    so no `zk_level0` tag after the pair, `Flock.Proof`), which only `flock-verify agree` reads, against upstream's verdicts;
-    `--zk` sessions are the zk patch's, and the live ones the deployed prover's, which `flock-verify verify` verifies."""
+    so no `zk_level0` tag after the pair, `Flock.Proof`), which only `verity-verify-proof agree` reads, against upstream's verdicts;
+    `--zk` sessions are the zk patch's, and the live ones the deployed prover's, which `verity-verify-proof verify` verifies."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
@@ -157,7 +157,7 @@ def verdicts(a, slots=None):
     """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
     one upstream process per chunk, and each sampled session in its own upstream process (`replay --drawn-only` builds only its
     sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). On upstream's
-    plain files upstream runs first, since `flock-verify agree` reads its verdicts (`UPSTREAM_VERDICTS`). A session's verdict does
+    plain files upstream runs first, since `verity-verify-proof agree` reads its verdicts (`UPSTREAM_VERDICTS`). A session's verdict does
     not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
     tasks = []                                                        # (kind, order, command, sessions)
     order = {}
@@ -242,7 +242,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--stratified", default=None, metavar="K",
-                    help="the verifier's own K, for sessions sampled by the stratified law (Lean only; upstream reads the sample)")
+                    help="the verifier's own K, for sessions sampled by the stratified sampling design (Lean only; upstream reads the sample)")
     ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")
     ap.add_argument("--session-tables", default=None, help="the tables of every session")
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
@@ -250,7 +250,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--lean-refuses", default=None, metavar="WHY",
                     help="D12 at a statement's form: every session refused with WHY once every check has passed, compared as accepted")
     ap.add_argument("--lean-refuses-drawn", default=None, metavar="WHY",
-                    help="D12 at a sample law: every session whose record carries a unit sample refused at setup with WHY; upstream "
+                    help="D12 at a sampling design: every session whose record carries a unit sample refused at setup with WHY; upstream "
                          "gives each its expected verdict")
     ap.add_argument("--lean-refuses-drawless", default=None, metavar="WHY",
                     help="D12 at a session without a sample: refused with WHY once every check has passed, compared as accepted")

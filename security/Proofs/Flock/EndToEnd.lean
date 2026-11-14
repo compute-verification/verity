@@ -26,11 +26,11 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd` is `zk_session_soundJ_custody_reg` with its first and last
 terms in closed form:
 * `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset sample, is
-  sound against the public file, `Pr[flock-verify accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + δ_link`;
+  sound against the public file, `Pr[verity-verify-proof accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + δ_link`;
 * `Audit.Law.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
 * `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `δ_link` is its closed form.
 
-`EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample flock-verify accepts
+`EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample verity-verify-proof accepts
 gives one, at any number of tables.
 -/
 
@@ -51,8 +51,8 @@ theorem EndToEnd : Flock.Guarantees.EndToEnd := by
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed in
-/-- **`EndToEnd`'s reference setup exists at every sample flock-verify accepts, at any number of tables.** At the record's
-sample file (`DrawFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript flock-verify `--zk`
+/-- **`EndToEnd`'s reference setup exists at every sample verity-verify-proof accepts, at any number of tables.** At the record's
+sample file (`DrawFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript verity-verify-proof `--zk`
 accepts under `TagsOkZJ` whose record's sample is `dj S`, table 0 has a `DrawSetupZJ` at `mPtsOf c.g (kd / nTab I)` link
 points, at its part of `S` and its sample: `EndToEnd`'s `y₀`, at `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`.
 A setup of the whole sample at those link points, the binder `y₀` had before, exists only where `mPtsOf c.g kd` is the
@@ -70,7 +70,7 @@ theorem EndToEnd_refSetup {n : ℕ} (I : Inputs) (ht : I.tags.typed = false) {c 
   obtain ⟨-, _, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨_hs0, _, hz0, -⟩ := hall 0 (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Flock.Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  have hz' : Flock.Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨-, -, _, hf⟩ := schedule_spec hz'
   have hDraw := drawOkZKJ_of_file I ht hc kd pop hdiv dj hdj S ⟨0, nTab_pos I⟩
   obtain ⟨_, -, hdr⟩ := Layout.setupH_drawn hst

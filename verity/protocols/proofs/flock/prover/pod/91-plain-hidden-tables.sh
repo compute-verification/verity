@@ -3,7 +3,7 @@
 # (tests/plain_hidden.py: RoPE d64 instances with hidden outputs, hm96-sha512 leaves, its program and partition), proved
 # without --zk on the keyed coin tree (FC_COINS=tree), sampled and opened by the auditor's challenger (challenger.sh,
 # `serve --tree-from`), in loopback sessions of two tables under a subset sample (`serve/prove --session-tables 2 --draw
-# subset:K`), then Lean's `flock-verify verify --plain-tables --session-tables 2 --coins tree` on them with the verifier's
+# subset:K`), then Lean's `verity-verify-proof verify --plain-tables --session-tables 2 --coins tree` on them with the verifier's
 # own program and partition (`Flock.ProvedScope`, FailClosed.SoundExecHJ), and once without the flag. The staged files,
 # the sessions and the challenger's record go into the evidence store as a fixture (`research data put --kind fixture/v1
 # --preserve`), whose id `out/fixture.txt` names (else they are out/fixture). Run from the verity tree (research run
@@ -39,19 +39,19 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$PH_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, built once per source, and the challenger's Lean (challenger.sh), while the prover builds
+# Lean's verity-verify-proof, built once per source, and the challenger's Lean (challenger.sh), while the prover builds
 export PATH=$HOME/.elan/bin:$PATH
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
 . verity/protocols/proofs/flock/prover/pod/challenger.sh
 challenger_build
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 (
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
+      && (cd $LEAN_SRC && lake build verity-verify-proof) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

@@ -1,11 +1,12 @@
-/-
+module
+
+public import Flock.JsonParse
+
+/-!
 A key named twice in one JSON object. `JsonParse.parse` keeps one value per key, so a verifier input naming a key twice
 (a `--registered` file's port, or a port's key) would read as naming it once; `FlockVerify.registeredInput` refuses
 such a file by `dupKey`, on the text `JsonParse.parse` accepted.
 -/
-module
-
-public import Flock.JsonParse
 
 @[expose] public section
 

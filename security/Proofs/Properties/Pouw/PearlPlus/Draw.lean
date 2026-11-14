@@ -15,8 +15,8 @@ import Proofs.Pouw.Prob
 `weightedDraw` reads sample `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which
 is `uniformOn` of the stream at `("u", j)`. Over their running sums (`runSums`) `bisectRight` finds the unit the integer
 falls in (`pick_posOf`), the unit `finSigmaFinEquiv` numbers that ticket on (`ticketAt_fst`): both count every unit's
-weight before it and skip a unit of none. The statement's premise, that some ticket holds weight, is what keeps the
-filter's list nonempty (`posOf_ne_nil`).
+weight before it and skip a unit of none. Where some ticket holds weight the filter's list is nonempty
+(`posOf_ne_nil`); where none does it is empty (`posOf_eq_nil`) and the sample is too.
 
 `CoinBytesGiveUniformTickets`, by counting. `uniformOn` of a stream's bytes is Flock's rejection sampler on them
 (`uniformOn_bytesOf`, through `DrawExec.uniform_streamOf`), so at most `256^L / W` streams of `L` bytes give each
@@ -91,6 +91,13 @@ theorem posOf_ne_nil {ws : List ℕ} {n : ℕ} (h : ws.sum ≠ 0) : posOf ws n �
   have hl := last_sums ws n 0
   rw [ite_eq_right h, hp] at hl
   cases hl
+
+theorem posOf_eq_nil : ∀ (ws : List ℕ) (n : ℕ), ws.sum = 0 → posOf ws n = []
+  | [], n, _ => by simp [posOf]
+  | w :: ws, n, h => by
+    rw [List.sum_cons] at h
+    rw [posOf_cons, ite_eq_right (show ¬w > 0 by omega)]
+    exact posOf_eq_nil ws (n + 1) (by omega)
 
 /-- **`bisectRight` over the positive weights' running sums finds the unit the number falls in**, by its position in
 `ws`: the zero weights `pearlDraw` drops hold no number. -/
@@ -244,9 +251,11 @@ theorem drawIsOnItsStreams : DrawIsOnItsStreams := by
   unfold draw
   dsimp only
   generalize tickets passes = tk
-  intro hpos
-  have hW : ¬ticketTotal tk = 0 := by omega
-  rw [pearlDraw_eq, ite_eq_right (by simpa using posOf_ne_nil hW), toOption_bind_pure,
+  by_cases hW : ticketTotal tk = 0
+  · rw [if_pos hW, pearlDraw_eq, if_pos (by simpa using posOf_eq_nil _ 0 hW)]
+    rfl
+  have hpos : 0 < ticketTotal tk := Nat.pos_of_ne_zero hW
+  rw [if_neg hW, pearlDraw_eq, ite_eq_right (by simpa using posOf_ne_nil hW), toOption_bind_pure,
     toOption_bind_pure, weightedDraw_eq key _ t hW, toOption_mapM, map_mapM, map_mapM]
   congr 1
   funext j
@@ -376,7 +385,8 @@ theorem drawBytes_pos (tk : List ((ℕ × ℕ) × ℕ)) : 0 < drawBytes tk := by
   unfold drawBytes DRAW_WORDS Flock.Draw.width
   omega
 
-/-- **`DrawIsOnItsStreams`'s honest lemma**: its premise holds at the honest pass, whose tickets hold weight. -/
+/-- **`DrawIsOnItsStreams`'s honest lemma**: the honest pass's tickets hold weight, so the statement's sample there is
+the one its streams give, not the empty one. -/
 theorem drawIsOnItsStreams_honest : 0 < ticketTotal (tickets [honestPass]) := by
   rw [honest_ticketTotal]
   omega
@@ -389,14 +399,16 @@ theorem mapM_range_one_ne_nil {β : Type} (f : ℕ → Option β) : (List.range 
 (`.ok []`), at the honest pass and one sample: each sample on its stream names a tile or throws. -/
 theorem drawIsOnItsStreams_nontrivial :
     ¬ (Except.ok [] : Except String (List (ℕ × ℕ))).toOption =
+      if ticketTotal (tickets [honestPass]) = 0 then some [] else
       (List.range 1).mapM fun j =>
         (FlockSoundness.Randomness.uniformOn (ticketTotal (tickets [honestPass]))
             (FlockSoundness.Randomness.stream ByteArray.empty [.str "u", .int j]
               (drawBytes (tickets [honestPass])))).bind fun r =>
           if h : r < ∑ u : Fin (tickets [honestPass]).length, weightsOf (tickets [honestPass]) u then
             some (tileOf (tickets [honestPass]) (ticketAt (tickets [honestPass]) ⟨r, h⟩))
-          else none :=
-  fun h => mapM_range_one_ne_nil _ h.symm
+          else none := by
+  rw [if_neg (by rw [honest_ticketTotal]; omega)]
+  exact fun h => mapM_range_one_ne_nil _ h.symm
 
 /-- An event some `x` is outside has probability below 1. -/
 theorem pr_lt_one {α : Type} [Fintype α] {P : α → Prop} {x : α} (hx : ¬P x) : _root_.Pouw.pr P < 1 := by

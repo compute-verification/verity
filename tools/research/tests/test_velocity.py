@@ -37,6 +37,136 @@ def offline(monkeypatch, tmp_path):
     monkeypatch.setattr(V, "pod", no_pod)
     monkeypatch.setattr(V, "landing", no_landing)
     monkeypatch.setattr(V, "read_asks", lambda now: pytest.fail("a window that ended is not read from Linear"))
+    monkeypatch.delenv("STORE_PRIVATE_READER_URL", raising=False)
+
+
+def machine(monkeypatch, tmp_path: Path, name: str) -> Path:
+    """`name`'s own store, on the one bucket every machine pushes to: what `open_store()` opens from here on."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "bucket"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / name))
+    return tmp_path / name
+
+
+def build_index(tmp_path: Path, store: Path) -> None:
+    """`research data index` of the bucket, built where `store`'s machine reads it (`bucket_index.default_path`)."""
+    from research.store import bucket_index as BI
+    from research.store.remote import FsRemote
+
+    assert BI.index(FsRemote(tmp_path / "bucket"), BI.default_path(store), now=NOW)["errors"] == []
+
+
+def test_every_dump_in_the_store_is_known_from_its_index_whatever_machine_saved_it(offline, monkeypatch, tmp_path, capsys):
+    machine(monkeypatch, tmp_path, "pod")
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and why == ""
+    here = machine(monkeypatch, tmp_path, "vm")                 # another machine: its own store has never held the dump
+    build_index(tmp_path, here)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert [n for n in notes if "index" in n] == [f"the store's dumps were found from its index ({here / 'index.sqlite'}, "
+                                                  "complete as of 2026-11-10T02:00:00Z) and this machine's store"]
+    assert V.main(["--since", "2026-11-09T12:00-08:00", "--to", str(B), "--json"], now=NOW) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert r["dumps"]["earlier"]["source"] == art and r["goals"]["hand"]["window"]["finished"] == 1
+
+
+def store_notes(notes: list[str]) -> list[str]:
+    return [n for n in notes if n.startswith(("the store's", "this machine's store"))]
+
+
+def test_where_the_index_cant_be_asked_every_dump_is_known_from_its_label_on_the_stores_remote(offline, monkeypatch, tmp_path):
+    machine(monkeypatch, tmp_path, "pod")
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and why == ""
+    machine(monkeypatch, tmp_path, "vm")                         # an agent's machine: the store's keys, no index
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert store_notes(notes) == [
+        "the store's index not read: $STORE_PRIVATE_READER_URL is unset and this machine has no `research data index` build",
+        f"the store's dumps were found from their labels on its remote ({V.dumps_target()}, 1 dumps) and this machine's store"]
+
+
+def test_with_neither_the_index_nor_a_remote_the_dumps_are_this_machines_stores_and_the_reading_says_so(offline, monkeypatch, tmp_path):
+    machine(monkeypatch, tmp_path, "pod")
+    elsewhere, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    here = machine(monkeypatch, tmp_path, "vm")
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "no-store.toml"))
+    from research.store.local import LocalStore
+
+    mine = LocalStore(here).put_artifact(V.KIND, {"taken": "20261110T0200Z", "what": V.WHAT}, file=B)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW: mine} and elsewhere != mine
+    assert store_notes(notes) == [
+        "the store's index not read: $STORE_PRIVATE_READER_URL is unset and this machine has no `research data index` build",
+        "the store's labels not read: this machine's store has no remote (the store's R2_* keys, or a store.toml): the store's "
+        "dumps are this machine's store's alone"]
+
+
+def test_a_failing_index_query_is_said_and_the_dumps_are_still_found_from_their_labels(offline, monkeypatch, tmp_path):
+    from research.store import bucket_index as BI
+
+    machine(monkeypatch, tmp_path, "pod")
+    art, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    build_index(tmp_path, machine(monkeypatch, tmp_path, "vm"))
+
+    def down(idx, kind):
+        raise RuntimeError("the index is down")
+    monkeypatch.setattr(BI, "select_artifacts", down)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert store_notes(notes)[0] == "the store's index not read: RuntimeError: the index is down"
+    assert store_notes(notes)[1].startswith("the store's dumps were found from their labels on its remote")
+
+
+def test_one_bad_record_in_the_index_is_left_out_and_said_and_the_index_still_answers_for_the_rest(offline, monkeypatch, tmp_path):
+    from research.store.local import LocalStore
+
+    machine(monkeypatch, tmp_path, "pod")
+    art, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    st = LocalStore()
+    bad = st.put_artifact(V.KIND, {"taken": "yesterday", "what": V.WHAT}, file=B)
+    assert st.push(bad, preserve=True)["preserved"]
+    here = machine(monkeypatch, tmp_path, "vm")
+    build_index(tmp_path, here)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert store_notes(notes)[0].startswith(f"the store's index: {bad!r} at 'yesterday' left out (")
+    assert store_notes(notes)[1].startswith("the store's dumps were found from its index")
+
+
+def test_a_push_that_isnt_verified_is_not_preserved_and_puts_no_label(offline, monkeypatch, tmp_path):
+    from research.store.remote import FsRemote
+
+    machine(monkeypatch, tmp_path, "pod")
+    create = FsRemote.create
+    monkeypatch.setattr(FsRemote, "create", lambda r, key, path: {**create(r, key, path), "etag": "0" * 32})
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and "remote ETag 00000000000000000000000000000000 != local MD5" in why   # the service's word: other bytes
+    assert not (tmp_path / "bucket" / "labels").exists()
+
+
+def test_two_saves_of_one_copy_are_one_dump_in_the_store_and_one_known_dump(offline, monkeypatch, tmp_path):
+    from research.store import bucket_index as BI
+    from research.store import ids
+
+    here = machine(monkeypatch, tmp_path, "pod")
+    taken = NOW - timedelta(hours=6)
+    first = V.save(goals(A), taken)                                  # the hourly sweep's save of its copy
+    machine(monkeypatch, tmp_path, "vm")
+    again = V.save(goals(A), taken + timedelta(seconds=40))          # a person's save of that copy, read within the minute
+    assert first == again and first[1] == ""
+    assert len(list((tmp_path / "bucket" / "labels" / ids.target_dirname(V.dumps_target())).iterdir())) == 1
+    build_index(tmp_path, here)
+    idx = BI.reader(here)
+    try:
+        assert [i for i, _ in BI.select_artifacts(idx, kind=V.KIND)] == [first[0]]
+    finally:
+        idx.close()
+    assert V.known_dumps([]) == {taken: first[0]}
+    machine(monkeypatch, tmp_path, "pod")
+    assert V.known_dumps([]) == {taken: first[0]}
 
 
 def test_what_finished_and_what_moved_between_two_dumps_by_scope():
@@ -57,16 +187,45 @@ def test_what_finished_and_what_moved_between_two_dumps_by_scope():
                                     "new_done": 0, "removed": 0}
 
 
-def test_a_goal_stalls_on_a_step_past_its_hour_and_not_updated_or_with_no_step_due_within_a_day():
+def edit(goals: list[dict], gid: str, **fields) -> list[dict]:
+    """The goals with `gid`'s fields changed, a field given as None dropped."""
+    return [{k: v for k, v in (g | fields).items() if v is not None} if g["id"] == gid else g for g in goals]
+
+
+def test_a_goal_stalls_on_a_step_past_its_hour_and_not_updated_since():
     b = goals(B)
-    # beta waits, through its piece, on a step due at 3 PM that nobody touched since; gamma is due in 11 days and waits on nothing
+    # beta waits, through its piece, on a step due at 3 PM (23:00Z) last touched at 12:30 PM; gamma has gone unwritten
     assert V.stalls(b, NOW) == [{"goal": "top/beta", "why": "past its hour and not updated since", "steps": ["top/beta-step"]},
-                                {"goal": "top/gamma", "why": "no step due within 24 hours", "steps": []}]
+                                {"goal": "top/gamma", "why": "nothing under it written in 24 hours", "steps": []}]
     # half an hour past its hour a step is not dead yet, and alpha's step, due at 5:30 PM, is within its hour of grace at 6 PM
     assert [s["goal"] for s in V.stalls(b, NOW - timedelta(hours=2, minutes=30))] == ["top/gamma"]
-    touched = [g | {"updatedAt": "2026-11-09T23:30:00.000Z"} if g["id"] == "top/beta-step" else g for g in b]
-    assert [s["goal"] for s in V.stalls(touched, NOW)] == ["top/gamma"]
+    assert [s["goal"] for s in V.stalls(edit(b, "top/beta-step", updatedAt="2026-11-09T23:30:00.000Z"), NOW)] == ["top/gamma"]
+    # an update at its hour, or none at all, is not an update since
+    for at in ("2026-11-09T23:00:00.000Z", None):
+        assert V.stalls(edit(b, "top/beta-step", updatedAt=at), NOW)[0] == V.stalls(b, NOW)[0]
+    assert V.stalls(edit(b, "top/beta-step", status="done"), NOW)[0]["goal"] == "top/gamma"
     assert V.stalls([g | {"prioritySet": False} for g in b], NOW) == []
+
+
+def test_a_goal_stalls_when_nothing_under_it_is_written_in_a_day():
+    b = goals(B)
+    # gamma, due in 11 days and waiting on nothing, was last written 27 hours ago; alpha and beta were written today
+    assert [s for s in V.stalls(b, NOW) if s["goal"] == "top/gamma"] == [
+        {"goal": "top/gamma", "why": "nothing under it written in 24 hours", "steps": []}]
+    # written 24 hours ago to the second it is not stalled, and a second before that it is
+    assert [s["goal"] for s in V.stalls(edit(b, "top/gamma", updatedAt="2026-11-09T02:00:00.000Z"), NOW)] == ["top/beta"]
+    assert "top/gamma" in [s["goal"] for s in V.stalls(edit(b, "top/gamma", updatedAt="2026-11-09T01:59:59.000Z"), NOW)]
+    # a goal not written itself is not stalled while a step under it is: alpha's step was written at 10 AM
+    old = edit(b, "top/alpha", updatedAt="2026-11-08T00:00:00.000Z")
+    assert "top/alpha" not in [s["goal"] for s in V.stalls(old, NOW)]
+    # but a step with no updatedAt is not written, and neither is one written and done
+    for unwritten in (edit(old, "top/alpha-step", updatedAt=None), edit(old, "top/alpha-step", status="done")):
+        assert [s for s in V.stalls(unwritten, NOW) if s["goal"] == "top/alpha"] == [
+            {"goal": "top/alpha", "why": "nothing under it written in 24 hours", "steps": []}]
+    # what is due no longer counts: gamma brought due within the hour is still stalled, and alpha with nothing due is not
+    assert "top/gamma" in [s["goal"] for s in V.stalls(edit(b, "top/gamma", due="2026-11-09T18:30-08:00"), NOW)]
+    far = edit(edit(b, "top/alpha", due="2026-12-01"), "top/alpha-step", due="2026-12-01")
+    assert "top/alpha" not in [s["goal"] for s in V.stalls(far, NOW)]
 
 
 def test_agents_are_counted_by_lane_from_their_names():
@@ -190,8 +349,9 @@ def test_the_command_compares_two_dumps_and_exits_0_with_the_rows_it_cant_read_s
     assert out.startswith("research velocity: Mon 9 Nov 12:00 PM to 6:00 PM PST (6 h). A reading, not a gate.")
     assert "top priority, set by hand: 5 goals, 3 open, 1 of them off track" in out
     assert "  net days (earlier less later)     +0.5" in out and "since the baseline not read: its dump" in out
-    assert "stalled now                       2 of 3 open: 1 with a step past its hour and not updated since, 1 with no step" in out
-    assert "    top/beta: top/beta-step past its hour and not updated since" in out
+    assert ("stalled now                       2 of 3 open: 1 with a step past its hour and not updated since, 1 with nothing "
+            "under it written in 24 hours\n") in out
+    assert "    top/beta: top/beta-step past its hour and not updated since\n    top/gamma: nothing under it written in 24 hours\n" in out
     for name, why in (("LANDING", "a test has no queue table"), ("AGENTS", "give --agents FILE.json"),
                       ("MACHINES", "a test has no pod"), ("ASKS", "this window ends in the past")):
         assert f"{name:<10}not read: " in out and why in out

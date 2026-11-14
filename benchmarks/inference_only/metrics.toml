@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "training/inference-only-slowdown"
+title = "Hidden training slowdown"
+owner = "training"
+unit = "times"
+axis = "How many times slower training runs, at least, when hidden inside Llama 3.2 1B's inference."
+better = "higher"
+command = "research run --on auto --mem-gb 16 --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/inference_only/run.py --out \"$OUT\"'"
+every = "7d"
+goal = "training/small-model-slowdown-1000"

@@ -58,15 +58,17 @@ namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete FlockDeploy
 
+variable {wideLeaf : Bool}
+
 /-- The `--zk` schedule's level 0 caps at most its depth, and at most `32`. -/
-theorem zkSchedule_cap0 {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_cap0 {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     (v.1.levels.getD 0 default).cap ≤ (v.1.levels.getD 0 default).d ∧ (v.1.levels.getD 0 default).cap ≤ 32 := by
-  have key : ∀ k : Fin 11, (match Zk.schedule (k.val + 25) with
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide ((v.1.levels.getD 0 default).cap ≤ (v.1.levels.getD 0 default).d ∧
           (v.1.levels.getD 0 default).cap ≤ 32)
       | .error _ => false) = true := by
     decide +kernel
-  have := key ⟨m - 25, by omega⟩
+  have := key wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 
@@ -102,7 +104,7 @@ theorem commitRowsP_capSize {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).si
 /-- **Level 0's masked commitment's cap is non-empty and under `2^64` bytes**, for a SHA-512 of 64-byte outputs, at
 the `--zk` schedule's level 0. -/
 theorem commitPZk_cap {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35)
-    {v : Schedule × ℕ} (hv : Zk.schedule m = .ok v) {g : Array F128} {extra lanePad : ℕ → ℕ → F128}
+    {v : Schedule × ℕ} (hv : Zk.schedule wideLeaf m = .ok v) {g : Array F128} {extra lanePad : ℕ → ℕ → F128}
     {salt : ℕ → ByteArray} {cm : Commit}
     (hc : commitPZk (Hashes.ofSha512 h : Hashes V) MerkleScheme.hm96Sha512 (v.1.levels.getD 0 default) v.2 g extra
       lanePad salt = .ok cm) :
@@ -121,7 +123,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 case's table, on the table's extra claims at the link's points. -/
 def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
-    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v →
+    ∀ v, Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v →
       ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀

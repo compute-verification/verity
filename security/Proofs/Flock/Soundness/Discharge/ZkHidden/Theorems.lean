@@ -81,7 +81,7 @@ theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs
   rw [setupOne_hidden ((zkTags_hiddenOutputs I).trans hh), hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz, -⟩ := hall 0 (by simp)
-  have hz' : Flock.Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := by simp only [List.getElem_toArray] at hz; exact hz
+  have hz' : Flock.Zk.schedule st.wideLeaf st.m = .ok (schs[0].1, schs[0].2) := by simp only [List.getElem_toArray] at hz; exact hz
   obtain ⟨sch, hf⟩ := fast100_of_schedule hz'
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr

@@ -1,8 +1,3 @@
-/-
-`Net.ofRowsAt` on `Flock.Test.Tmpl`'s unit: at the identity map it is `Tmpl.unroll`'s net; at `Tmpl.posMap` under every
-layout mode its rows are the logical rows moved; and it refuses a map that sends two columns to one position, moves an
-input row, breaks an output group, or places a column past the constant.
--/
 module
 
 public import Flock.NetAt
@@ -10,6 +5,12 @@ public import Flock.Test.Tmpl
 public import Flock.TmplAt
 meta import Flock.Test.Tmpl
 meta import Flock.TmplAt
+
+/-!
+`Net.ofRowsAt` on `Flock.Test.Tmpl`'s unit: at the identity map it is `Tmpl.unroll`'s net; at `Tmpl.posMap` under every
+layout mode its rows are the logical rows moved; and it refuses a map that sends two columns to one position, moves an
+input row, breaks an output group, or places a column past the constant.
+-/
 
 @[expose] public section
 

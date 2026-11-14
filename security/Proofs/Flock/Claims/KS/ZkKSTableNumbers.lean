@@ -100,7 +100,7 @@ theorem tableErrJ_eq {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt}
 /-- A masked table's word's length is its level-0 codeword length. -/
 theorem wordLenJ_cast {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt}
     (h : (tables true x)[j]? = some (spec, st)) : (wordLenJ true x j : ℝ) = tableLen true st := by
-  have e : wordLenJ true x j = 2 ^ (Claims.Flock.zkLevel0 st.m).d := by
+  have e : wordLenJ true x j = 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d := by
     simp [wordLenJ, h]
   rw [e, Nat.cast_pow, Nat.cast_ofNat]
   simp only [tableLen, ite_true]

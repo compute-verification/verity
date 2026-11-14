@@ -47,12 +47,12 @@ from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.acquire import h1_commit as HC
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import ranks as PHR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity_vllm.protocols.pouw import h1_ranks as PHR
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 ROWS, STEPS = 32, 3
 KEY = hashlib.sha512(b"key").digest()[:32]
@@ -139,7 +139,7 @@ def _verdict(holder):
 
 
 def _reasons(run):
-    """The served calls' refusals were the window's coins the auditor host's: the in-process coins' refusal comes first
+    """The served calls' refusals were the window's coins the auditor device's: the in-process coins' refusal comes first
     (`pouw_h1.H1Run.gated`), and the stand-in's coins are in-process."""
     run.coin_source = PH.CHALLENGER
     return {g.get("reason") for g in run.gated().values()}
@@ -178,6 +178,21 @@ def test_a_zero_on_one_ranks_call_is_refused_at_arow(monkeypatch):
     own, the serving process credits nothing (`pouw_h1_commit.UNTIED`) and core refuses the window at ``arow``."""
     holder, _ = _window(monkeypatch, edits=(None, _zero_first))
     run = holder.run
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0, 1, 2, 3] is not "
+                                                      "the Commit's row-table/0/k64")
+    assert run.served.tap.own == 1 and _reasons(run) == {CT.UNTIED}
+    v = G.negative_verdict({"core": _verdict(holder), "roots1": run.details["roots1"], "same_tokens": True})
+    assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
+
+
+@pytest.mark.parametrize("kind", RG.NEGATIVES)
+def test_the_harness_edit_of_rank_1s_first_call_is_refused_at_arow_and_names_no_expert_site(monkeypatch, kind):
+    """The GPU harness's ``a-zero`` and ``a-row-off`` on rank 1 (`pouw_h1_ranks_gpu._w_edit`): H1 handed its first call's
+    codes all zero, or with row 1's first code off by one, every Commit honest. The window is refused as rank 1's own
+    edited call is, and the edit names no expert site."""
+    holder, _ = _window(monkeypatch, negative=kind)
+    run = holder.run
+    assert holder.edited == [{"tp": 1, "at": None}]
     assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0, 1, 2, 3] is not "
                                                       "the Commit's row-table/0/k64")
     assert run.served.tap.own == 1 and _reasons(run) == {CT.UNTIED}

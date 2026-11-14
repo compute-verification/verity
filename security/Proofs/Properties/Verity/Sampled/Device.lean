@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
-public import Proofs.Properties.NetworkCertifier.Check.TransferBlocks
+public import Proofs.Properties.Certifier.Check.TransferBlocks
 public import Proofs.Core.Game.Tape
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
@@ -116,14 +116,14 @@ theorem sortedKeys_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwi
 def Printed (d : Json) : Prop := sortedKeys d = true ∧ ∃ t, Flock.canon d = .ok t
 
 theorem printed_str (s : String) : Printed (.str s) :=
-  ⟨by unfold sortedKeys; rfl, Properties.NetworkCertifier.canon_str s⟩
+  ⟨by unfold sortedKeys; rfl, Properties.Certifier.canon_str s⟩
 
 theorem printed_nat (n : ℕ) : Printed (Lean.toJson n) :=
-  ⟨by unfold sortedKeys; rfl, Properties.NetworkCertifier.canon_nat n⟩
+  ⟨by unfold sortedKeys; rfl, Properties.Certifier.canon_nat n⟩
 
 theorem printed_mkObj {l : List (String × Json)} (hl : (l.map (·.1)).Pairwise (· < ·))
     (hv : ∀ p ∈ l, Printed p.2) : Printed (Json.mkObj l) :=
-  ⟨sortedKeys_mkObj hl fun p hp => (hv p hp).1, Properties.NetworkCertifier.canon_mkObj fun p hp => (hv p hp).2⟩
+  ⟨sortedKeys_mkObj hl fun p hp => (hv p hp).1, Properties.Certifier.canon_mkObj fun p hp => (hv p hp).2⟩
 
 theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
   refine printed_mkObj (by simp only [List.map_cons, List.map_nil]; decide) fun p hp => ?_
@@ -133,7 +133,7 @@ theorem printed_spec (spec : Flock.CoinTree.Spec) : Printed spec.toJson := by
   · exact printed_nat _
   · exact printed_str _
   · refine ⟨Properties.Challenger.CanonRead.sortedKeys_arr.2 fun x hx => ?_,
-      Properties.NetworkCertifier.canon_arr fun x hx => ?_⟩ <;>
+      Properties.Certifier.canon_arr fun x hx => ?_⟩ <;>
     · obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
       first | exact (printed_str s).1 | exact (printed_str s).2
 
@@ -1207,12 +1207,12 @@ accepted play whose log v2 read isn't the device's is at most as likely as the r
 forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
 and signed what the play's signatures are on (`signsPlay_dev`). -/
 theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
-    (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
+    (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤
-      ENNReal.ofReal ((Binding.readFinder V (dev (P.setupOf V.families)) θ F c σ).Pr Verity.sha512Msg) +
+      ENNReal.ofReal ((Binding.readFinder V T (dev (P.setupOf V.families)) θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal ((Binding.forger V (dev (P.setupOf V.families)) θ F c σ).Pr Verity.lmsVerify) :=
-  Binding.logged_le V k Binding.readsV2 (dev (P.setupOf V.families)) θ F c σ
+  Binding.logged_le V T k Binding.readsV2 (dev (P.setupOf V.families)) θ F c σ
     (binds_dev V k (P.setupOf V.families) θ) (signsPlay_dev V P θ F c hD)
 
 end Verity.Sampled.Device

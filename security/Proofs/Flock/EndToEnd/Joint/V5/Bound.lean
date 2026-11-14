@@ -11,8 +11,8 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
 
 * `JointAuditV5.accepted_drawnWrong_le`: the window's audit accepts with a sampled proof block incorrect with
   probability at most `Σ_m (ε_ks,m + ε_bind,m)`: an incorrect sampled proof block is member `m`'s, in its part of the
-  sample, and an accepted run accepted the session of member `m`, which has that proof block in its part
-  (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
+  sample, and an accepted run's sample ended and it accepted the session of member `m`, which has that proof block in
+  its part (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
   `JointAuditV5.member_accepted_drawnWrong_le` bounds it;
 * `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most the sampling design's own miss `P_a(B)`, under
   A3 (`Bridge.execSel_escape_le`);
@@ -48,6 +48,25 @@ open Classical
 
 variable (w : JointAuditV5)
 
+/-- **Where no outcome of the sample's coins ends the sample, no run is accepted**: every outcome of the window's
+audit carries a sample that ran out, which `Accepts` refuses. -/
+theorem prob_accepts_of_not_ends (h : ¬ Nonempty w.EndΩ) (τ : Strategy w.game) :
+    prob (fun o => w.Accepts o) w.game τ = 0 := by
+  have hle : prob (fun o => w.Accepts o) w.game τ ≤ avg fun _ : w.L.Ω => (0 : ℝ≥0∞) := by
+    show avg (fun ω => prob (fun o => w.Accepts o)
+      ((w.sessions (w.L.draw ω) τ.1).map fun ts => ((τ.1, w.ended ω), w.L.draw ω, ts)) (τ.2 ω)) ≤ _
+    refine avg_mono fun ω => ?_
+    rw [prob_map]
+    exact (prob_mono (q := fun _ => False)
+      (fun ts (hts : w.Accepts ((τ.1, w.ended ω), w.L.draw ω, ts)) => h ⟨⟨ω, hts.1⟩⟩) _ _).trans_eq (prob_false _ _)
+  have h0 : avg (fun _ : w.L.Ω => (0 : ℝ≥0∞)) = 0 := by
+    simp only [avg, mul_zero, Finset.sum_const_zero]
+  exact le_antisymm (hle.trans_eq h0) zero_le
+
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-- **The window's audit accepts with a sampled proof block incorrect** at the strategy `τ` that plays it: at most
 `Σ_m (ε_ks,m + ε_bind,m)`, under `cr/sha-512` and `ecr/sha-512` at each member's session played alone. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game)
@@ -59,19 +78,39 @@ theorem accepted_drawnWrong_le (τ : Strategy w.game)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun o => w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.eps := by
-  refine (prob_mono (q := fun o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript =>
+  refine (prob_mono (q := fun o : (w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript =>
       ∃ k ∈ Finset.univ, (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k)) (fun o ho => ?_) _ _).trans
+        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k) ∧ o.1.2 = true) (fun o ho => ?_) _ _).trans
     ((FlockSoundness.Discharge.ZkSession.prob_exists_le _ _ _ _).trans
       (Finset.sum_le_sum fun k _ => w.member_accepted_drawnWrong_le τ k (hCR k) (hA2 k)))
-  obtain ⟨hacc, u, hu, hw⟩ := ho
+  obtain ⟨⟨hend, hacc⟩, u, hu, hw⟩ := ho
+  rw [w.wrongSet_eq τ] at hw
   obtain ⟨k, -, hk⟩ := Finset.mem_biUnion.1 hw
   obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hk
   obtain ⟨t, ht, hacc'⟩ := forall₂_getElem? hacc k
   have hv' : v ∈ (w.ms.get k).part o.2.1 := Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩
-  refine ⟨k, Finset.mem_univ _, ?_⟩
+  refine ⟨k, Finset.mem_univ _, ?_, hend⟩
   rw [ht]
   exact And.intro (hacc' ⟨v, hv'⟩) ⟨v, hv', hv⟩
+
+end Ended
+
+/-- **The window's audit accepts with a sampled proof block incorrect**, at every window: `accepted_drawnWrong_le`
+where some outcome of the stream ends the sample, which is where its premises are asked; where none does, no run is
+accepted. -/
+theorem accepted_sampledWrong_le (τ : Strategy w.game)
+    (hCR : ∀ _ : Nonempty w.EndΩ, ∀ k ω j, TableCRZ execArith hs512
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+      (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
+      (w.ms.get k).qF (w.ms.get k).qS)
+    (hA2 : ∀ _ : Nonempty w.EndΩ, ∀ k, LinkCRZC execArith hs512 (w.ms.get k).P
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb
+      (reg (w.memberSim τ k)) (cont (w.memberSim τ k)) (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M
+      (w.ms.get k).t') :
+    prob (fun o => w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.eps := by
+  by_cases he : Nonempty w.EndΩ
+  · exact w.accepted_drawnWrong_le τ (hCR he) (hA2 he)
+  · exact ((prob_mono (fun _ ho => ho.1) _ _).trans_eq (w.prob_accepts_of_not_ends he τ)).trans zero_le
 
 private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s : Strategy g) :
     prob (fun _ => Q) g s = if Q then 1 else 0 := by
@@ -84,7 +123,8 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
 /-- **The window's sample misses a set `B`** with the acceptance probability of its live sampling design. -/
 theorem prob_drawMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
-  show avg (fun ω => prob _ ((w.sessions (w.L.draw ω) τ.1).map fun ts => (τ.1, w.L.draw ω, ts)) (τ.2 ω)) =
+  show avg (fun ω => prob _
+      ((w.sessions (w.L.draw ω) τ.1).map fun ts => ((τ.1, w.ended ω), w.L.draw ω, ts)) (τ.2 ω)) =
     prCoin fun ω => Disjoint (w.L.draw ω) B
   unfold prCoin
   refine congrArg avg (funext fun ω => ?_)
@@ -153,7 +193,8 @@ theorem JointSampledV5 : Flock.Guarantees.JointSampledV5 := by
         · exact Or.inr hd
     _ ≤ prob (fun o => w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ +
           prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ W) w.game τ := prob_or_le _ _ _ _
-    _ ≤ w.eps + ENNReal.ofReal (w.pa W) := add_le_add (w.accepted_drawnWrong_le τ hCR hA2) (w.drawMiss_le hA3 W τ)
+    _ ≤ w.eps + ENNReal.ofReal (w.pa W) :=
+        add_le_add (w.accepted_sampledWrong_le τ hCR hA2) (w.drawMiss_le hA3 W τ)
     _ = ENNReal.ofReal (w.pa W) + w.eps := add_comm _ _
 
 /-- **A window's sample over several members, the share form.** -/
@@ -179,11 +220,12 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
   intro W T δ ands bits hA3 s hT hL
   classical
   let cr : (t : ℕ) → Strategy (W t).game → Prop := fun t τ =>
-    (∀ k ω j, Assumptions.TableCRZAt execArith hs512
+    (∀ _ : Nonempty (W t).EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
       (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw τ k).draw ω) (reg ((W t).memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (cont ((W t).memberSim τ k) ω))
       ((W t).ms.get k).qF ((W t).ms.get k).qS) ∧
-    ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
+    ∀ _ : Nonempty (W t).EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
+      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
       (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) ((W t).ms.get k).vb (reg ((W t).memberSim τ k))
       (cont ((W t).memberSim τ k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M ((W t).ms.get k).t'
   have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
@@ -191,7 +233,7 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
       (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
   have hA := period_union (fun t => (W t).game) (JointAuditV5.record W)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).eps)
-    (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
+    (fun t τ hτ => (W t).accepted_sampledWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
   have hB := period_prod (fun t => (W t).game) (JointAuditV5.record W) (fun r => ¬ r.drawnWrong)
     AuditRecV5.pa (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨ENNReal.ofReal ((W t).pa ((W t).wrongSet τ)), ENNReal.ofReal_ne_top, fun _ => rfl,

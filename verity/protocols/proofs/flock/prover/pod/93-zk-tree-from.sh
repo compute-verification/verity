@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `serve --tree-from` against the real challenger, on a CPU machine, on hidden_zk's builds (benchmarks/pouw/hidden_zk/job.sh,
-# sourced: the proving build of flock-circuit and the Lean flock-verify). From a clone:
+# sourced: the proving build of flock-circuit and the Lean verity-verify-proof). From a clone:
 #   research run --on auto --source . --as LANE --project verity --cwd clone --cpus 16 --mem-gb 32 \
 #     -- bash verity/protocols/proofs/flock/prover/pod/93-zk-tree-from.sh
 # The challengers are challenger.sh's (verity/protocols/compose/device/live_challenger/serve.py on the Lean verifier's coins, a test LMS key and
@@ -17,7 +17,7 @@
 # `challenger_cases`: `challenger.sessions_tree_reason`, and the Lean's `challenger_session_trees`, which
 # `sampled-proofs-one-stage-zk` runs): the tree-from and plain-tree sessions'
 # pass; the own-tree session's, both --zk sessions at once, and the tree-from record with one round's coin or one link
-# point changed are refused, the Lean's reason the Python's. Lean's flock-verify accepts every session (the verdict reads
+# point changed are refused, the Lean's reason the Python's. Lean's verity-verify-proof accepts every session (the verdict reads
 # no challenger). Kept in $OUT: challenger/ and challenger-plain/ (record, key, releases.jsonl, hellos.jsonl,
 # challenger.json, audit.json), sessions/, audit.json, lean.log, verdict.json (every check, `ok` when all hold; the job
 # exits 1 otherwise) and the logs.
@@ -76,7 +76,7 @@ challenger_audit "$CHP" "$(one plain-tree)" | tee -a "$OUT/job.log"
 challenger_cases "$CH" "$(one tree-from)" "$(one own-tree)" "$OUT/audit.json"
 [ -s "$OUT/audit.json" ] || log "audit FAILED"
 
-verify() {   # verify SESSION zk|plain: Lean flock-verify's verdict, accepted and why
+verify() {   # verify SESSION zk|plain: Lean verity-verify-proof's verdict, accepted and why
   local coins=(--zk --session-tables 1); [ "$2" = plain ] && coins=(--coins tree)
   "$LEAN" verify "${coins[@]}" --statement verity/flock-circuit --circuit "$W/stage/circuit.txt" --public "$W/stage/pub-32.bin" \
     --partition "$W/stage/partition.json" --program "$W/stage/program.json" --session "$1" 2>&1 \
@@ -105,7 +105,7 @@ checks = {
        and cases[n]["python"] == cases[n]["lean"] for n in ("own-tree", "both", "coin-changed", "point-changed")},
     "plain challenger exit 0 (serve closed its session)": chp_rc == 0,
     "plain-tree audit passes, Python and Lean": plain.get("ok") is True,
-    **{f"flock-verify accepts {n}": lean.get(n, "").startswith("True") for n in ("tree-from", "own-tree", "plain-tree")},
+    **{f"verity-verify-proof accepts {n}": lean.get(n, "").startswith("True") for n in ("tree-from", "own-tree", "plain-tree")},
 }
 verdict = {"ok": all(checks.values()), "checks": checks}
 (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")

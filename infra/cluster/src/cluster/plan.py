@@ -153,12 +153,12 @@ def fit(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation],
     if cluster.standing(job.project, node) == GUEST:
         share = cluster.share(job.project, node)
         mine = [a for a in occ if a.job.project == job.project]
-        caps = ((share.max_gpus, sum(len(a.gpus) for a in mine) + job.gpus, "GPUs"),
+        limits = ((share.max_gpus, sum(len(a.gpus) for a in mine) + job.gpus, "GPUs"),
                 (share.max_cpus, sum(len(a.cpus) for a in mine) + job.cpus, "CPUs"),
                 (share.max_memory_gib, sum(a.memory_gib for a in mine) + job.memory_gib, "memory"),
                 (share.max_jobs, len(mine) + 1, "jobs"))
-        for cap, want, what in caps:
-            if cap is not None and want > cap:
+        for limit, want, what in limits:
+            if limit is not None and want > limit:
                 return f"at {job.project}'s share of {what} on {node}"
     w = cluster.workstream(job.workstream, node)
     if w is not None and w.borrow_gpus is not None and job.gpus:

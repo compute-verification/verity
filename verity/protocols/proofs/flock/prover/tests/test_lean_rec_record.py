@@ -1,4 +1,4 @@
-"""The challenger's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `flock-verify
+"""The challenger's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `verity-verify-proof
 rec-record`), which `Proofs.Flock.Claims.Recursion.RecRecord` proves reads back what `recordW` writes. The record's writer is Python
 (`rec_live.record_bytes`), so these tests are what ties the proof to the deployed record: on the honest records of the
 plain session and of `rec-c3-inner`'s candidate-3 session, and on one with every escape a stream name can need, `recordW` writes

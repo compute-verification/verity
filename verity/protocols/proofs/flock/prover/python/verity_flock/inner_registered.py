@@ -13,7 +13,7 @@ verifier's files and writes ``registered.json`` beside them, the verifier's own 
 position (the description port's ref of the unit's instance), which the Lean verifier does not read for an inner statement
 (`Registered.checkDescription`: no position depends on which unit an instance is). Every other port, each input row and
 output row, is the prover's own registration of its table under the value of its name, its rows and salts the staged
-ones, so the reads file names every port of the statement, as `flock-verify` requires of any `--registered` file
+ones, so the reads file names every port of the statement, as `verity-verify-proof` requires of any `--registered` file
 (`Registered.checkComplete`); those are no part of the circuit registration. The description's registered value is
 its packed row (16 description bits to a u16 word, as the class statement lays out the parameter), so its row width is
 the port's words, not the parameter's leaf count.

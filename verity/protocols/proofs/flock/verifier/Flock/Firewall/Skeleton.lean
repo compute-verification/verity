@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Firewall.Finish
+
+/-!
 # The algebraic phase's scheduled rounds (live PROTOCOL.md §10.1), a function of the statement
 
 A firewalled rep's algebraic phase (the masked zerocheck and lincheck) has a schedule the statement fixes: which frames
@@ -10,9 +14,6 @@ device's place. This is that schedule:
   `--zk` schedule's `k0`, level 0's cap and the rep's domain, but for the pads' label and root, which the masking
   challenger inserts itself (`padsFrames`). The coins it computes them on are `coin`'s; no round's frames depend on them.
 -/
-module
-
-public import Flock.Firewall.Finish
 
 @[expose] public section
 

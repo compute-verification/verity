@@ -61,7 +61,7 @@ gets no verdict.
 ## The auditor's parties
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
-challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
+challenger is an auditor device reached through its gate, and its live coins are PoUW's always and sampled proofs' when
 `PP_CHALLENGER` names it, V3c's audit, the sampled-proofs audit of record, among them. Otherwise a local development
 challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
 `served_verdicts.sh` takes it only in a development run, which the demo's `placement.toml` says it is (`DEVELOPMENT=1`).
@@ -84,7 +84,9 @@ doesn't control.
   varied traffic.
 - `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
   workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.
-  `run.sh` hands a run's script its node's paths as its environment, so no script names a node.
+  `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
+  address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
+  `run.sh` fills from the environment the demo is launched in, and without it the window run starts nothing and says so.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands
@@ -103,7 +105,7 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
    `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
-   phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
+   phase in the serve dir, for an audit of one later (`verity/protocols/proofs/spot/prover/audit/prove_path.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run

@@ -29,12 +29,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal
 
 from verity_vllm.config import option
-from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import hooks
+from verity_vllm.records.schema_ids import META_INVENTORY_SCHEMA
 
-SCHEMA = "verity-vllm/meta-inventory/v1"
+__all__ = ["Options", "main", "write_live"]
+
+SCHEMA = META_INVENTORY_SCHEMA
 
 #: attributes whose value says which kernel a module runs; recorded by type name (objects) or value (scalars)
 KERNEL_ATTRS = ("quant_method", "attn_backend", "impl", "router", "runner", "quant_config", "kernel", "linear_method",
@@ -198,10 +202,10 @@ class _Stream:
     def __init__(self, *a: Any, **k: Any) -> None:
         pass
 
-    def __enter__(self) -> "_Stream":
+    def __enter__(self) -> _Stream:
         return self
 
-    def __exit__(self, *exc: Any) -> bool:
+    def __exit__(self, *exc: Any) -> Literal[False]:
         return False
 
     def __getattr__(self, name: str) -> Any:
@@ -352,7 +356,10 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
+    from verity_vllm.program.frontend.target_profile import (
+        TargetProfile,
+        parse_target_arg,
+    )
 
     target = parse_target_arg(a.target, base=TargetProfile.default())
     model_dir = Path(a.config_dir) if a.config_dir else fetch_config(a.repo, a.revision,
@@ -364,7 +371,10 @@ def main(a: Options) -> int:
     from verity_vllm.engine import sparse_mla
     sparse_mla.install()             # as a serving process does before its model's first forward (`_selections` reads it)
 
-    from verity_vllm.program.frontend.export_compat import apply_target_profile, read_back_applied
+    from verity_vllm.program.frontend.export_compat import (
+        apply_target_profile,
+        read_back_applied,
+    )
 
     doc: dict[str, Any] = {"schema": SCHEMA, "repo": a.repo, "revision": a.revision,
                            "config_sha256": hashlib.sha256((model_dir / "config.json").read_bytes()).hexdigest(),

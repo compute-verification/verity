@@ -57,7 +57,7 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
     docs = [f"{build.VERIFIER}/README.md", f"{build.LEAN}/README.md"]
     assert set(docs) <= set(files) and not set(docs) & {*by[AGREE]["inputs"], *by[BUILD]["inputs"]}, \
         "no script of the agreement and no Lake build reads a README, so editing one reruns neither"
-    verify = [{"task": BUILD, "output": "flock-verify"}]
+    verify = [{"task": BUILD, "output": "verity-verify-proof"}]
     assert by[AGREE]["reads"] == by[UNIT]["reads"] == verify and not by[AGREE]["key"] and by[BUILD]["key"]
     assert {build.UNIT_CUT, "verity/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
         build.UNIT_CUT, *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
@@ -116,7 +116,7 @@ def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(
     tests = tomllib.loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pyproject.toml").read_text())["tool"]["verity"]["tests"]
     bins = [a for a in tests["artifacts"] if a.startswith(f"{build.LEAN}/.lake/build/bin/")]
     assert bins and set(bins) <= {o["path"] for o in lb["outputs"]}
-    assert agree["vars"]["verify"] == next(o["path"] for o in lb["outputs"] if o["name"] == "flock-verify")
+    assert agree["vars"]["verify"] == next(o["path"] for o in lb["outputs"] if o["name"] == "verity-verify-proof")
 
 
 def test_the_runners_run_what_check_runs():
@@ -211,8 +211,8 @@ def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monk
     lean = [f"{build.LEAN}/lakefile.toml", f"{build.LEAN}/V.lean"]
     assert [t["id"] for t in build.tasks(tmp_path, lean)] == [BUILD]
     assert [t["id"] for t in build.tasks(tmp_path, [*lean, f"{build.VERIFIER}/upstream.json", build.UNIT_CUT])] == [BUILD], \
-        "the agreement and the partition check need flock-verify among the executables"
-    (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["flock-verify"]\n[[lean_exe]]\nname = "flock-verify"\n')
+        "the agreement and the partition check need verity-verify-proof among the executables"
+    (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["verity-verify-proof"]\n[[lean_exe]]\nname = "verity-verify-proof"\n')
     pytest_ = "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
     for f, text in ((build.UNIT_CUT, "import json\n"),
                     (build.SUITES, 'AFTER_LEAN = ("a", "b/c", "d", "gone")\nTEST_PROCESS_GB = 9\n'),
@@ -375,13 +375,13 @@ def test_lean_agreement(tmp_path, monkeypatch, verify, fetched, status):
         return 0
     monkeypatch.setattr(lean_agreement, "call", call)
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/bin/flock-verify"}]},
-                 {"id": AGREE, "kind": "lean-agreement", "env": "py", "vars": {"verify": "pkg/bin/flock-verify"},
-                  "reads": [{"task": "lean-build:pkg", "output": "flock-verify"}],
+                  "outputs": [{"name": "verity-verify-proof", "path": "pkg/bin/verity-verify-proof"}]},
+                 {"id": AGREE, "kind": "lean-agreement", "env": "py", "vars": {"verify": "pkg/bin/verity-verify-proof"},
+                  "reads": [{"task": "lean-build:pkg", "output": "verity-verify-proof"}],
                   "outputs": [{"name": "sets", "path": lean_agreement.SETS}]})
     work = tmp_path / "work"
     (work / "pkg" / "bin").mkdir(parents=True)
-    (work / "pkg" / "bin" / "flock-verify").write_text(verify)                 # an artifact is its bytes: no mode bits
+    (work / "pkg" / "bin" / "verity-verify-proof").write_text(verify)                 # an artifact is its bytes: no mode bits
     res = _execute(doc, work, lean_agreement.run)
     assert res["status"] == status, res
     if status == "pass":
@@ -432,13 +432,13 @@ def test_lean_unit_cut(tmp_path, monkeypatch, how, status):
     compared none, the machine's exception and a kill are no result."""
     _tree(tmp_path, monkeypatch, {lean_unit_cut.SCRIPT: UNIT_STANDIN})
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/bin/flock-verify"}]},
-                 {"id": UNIT, "kind": "lean-unit-cut", "env": "py", "vars": {"verify": "pkg/bin/flock-verify"},
-                  "reads": [{"task": "lean-build:pkg", "output": "flock-verify"}],
+                  "outputs": [{"name": "verity-verify-proof", "path": "pkg/bin/verity-verify-proof"}]},
+                 {"id": UNIT, "kind": "lean-unit-cut", "env": "py", "vars": {"verify": "pkg/bin/verity-verify-proof"},
+                  "reads": [{"task": "lean-build:pkg", "output": "verity-verify-proof"}],
                   "outputs": [{"name": "result", "path": lean_unit_cut.RESULT}]})
     work = tmp_path / "work"
     (work / "pkg" / "bin").mkdir(parents=True)
-    (work / "pkg" / "bin" / "flock-verify").write_text(how)
+    (work / "pkg" / "bin" / "verity-verify-proof").write_text(how)
     res = _execute(doc, work, lean_unit_cut.run)
     assert res["status"] == status, res
     if status == "pass":
@@ -454,7 +454,7 @@ from pathlib import Path
 a = sys.argv[1:]
 names = a[:a.index("--lean-built")]
 assert shutil.which("lake") and a[a.index("--jobs") + 1] == "3" and a[a.index("--mem-gb") + 1] == "5" and "--timeouts" in a
-fv = Path(__file__).resolve().parents[3] / "pkg" / "bin" / "flock-verify"
+fv = Path(__file__).resolve().parents[3] / "pkg" / "bin" / "verity-verify-proof"
 assert os.access(fv, os.X_OK) and fv.read_text() in ("fv", "fv-old"), "the executable read, at its path in the tree"
 how = Path(os.environ["HOW"]).read_text()
 if how == "part":
@@ -494,21 +494,21 @@ def test_lean_suites(tmp_path, monkeypatch, how, status):
     one that failed on nothing its row names (a kill) and a usage error are no result.  A part's task runs `--files K/M` on a
     timing record that holds none of its suites' files, and its report's rows, of the suite's part, are the suite's."""
     root = _tree(tmp_path, monkeypatch, {lean_suites.SUITES: SUITES_STANDIN, "bin/lake": "#!/bin/sh\n",
-                                         **({"pkg/bin/flock-verify": "fv-old"} if how == "pass old" else {})})
+                                         **({"pkg/bin/verity-verify-proof": "fv-old"} if how == "pass old" else {})})
     (tmp_path / "how").write_text(how.removesuffix(" old"))
     monkeypatch.setenv("HOW", str(tmp_path / "how"))
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/bin/flock-verify"}]},
+                  "outputs": [{"name": "verity-verify-proof", "path": "pkg/bin/verity-verify-proof"}]},
                  {"id": SUITES, "kind": "lean-suites", "env": "py",
                   "vars": {"suites": "a b/c", "bin": "pkg/bin", **({"files": "2/4"} if how == "part" else {})},
-                  "reads": [{"task": "lean-build:pkg", "output": "flock-verify"}],
+                  "reads": [{"task": "lean-build:pkg", "output": "verity-verify-proof"}],
                   "outputs": [{"name": "report", "path": lean_suites.REPORT}], "resources": {"cores": 3, "mem_gb": 5, "disk_gb": 1}})
     work = tmp_path / "work"
     (work / "pkg" / "bin").mkdir(parents=True)
-    (work / "pkg" / "bin" / "flock-verify").write_text("fv")
+    (work / "pkg" / "bin" / "verity-verify-proof").write_text("fv")
     res = _execute(doc, work, lean_suites.run)
     assert res["status"] == status, res
-    assert (root / "pkg" / "bin" / "flock-verify").read_text() == "fv" and os.access(root / "pkg" / "bin" / "flock-verify", os.X_OK)
+    assert (root / "pkg" / "bin" / "verity-verify-proof").read_text() == "fv" and os.access(root / "pkg" / "bin" / "verity-verify-proof", os.X_OK)
     if how == "tests":
         assert res["detail"]["failed"] == [{"name": "b/c", "suite": "lean/b/c", "failed_tests": ["tests/test_v.py::test_v"]}]
         assert res["detail"]["suites"] == {"a": "passed", "b/c": "failed"}

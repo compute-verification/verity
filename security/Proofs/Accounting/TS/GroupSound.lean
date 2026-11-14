@@ -65,7 +65,7 @@ reads its one-row ports at their rows (`RowsSession.readsOwnRow_of`). Every unit
 (`RowsSession.ServedRegistered`) wherever the one-read check (`PouwWindow.Lanes.checkOneRead`) holds, which the
 sessions' reads built from `own` give (`RowsSession.servedRegistered_canon`). The sessions' registrants' rows agree
 unless two records clash (`rowsAgree_or_leafColl`, from `FlockSoundness.Registered.enc_eq_of_not_clash`), and the
-known rows hold unless a known-content tie collides (`knownHeld_or_coll`, from flock-verify's known-content check).
+known rows hold unless a known-content tie collides (`knownHeld_or_coll`, from verity-verify-proof's known-content check).
 Under the complete check the registered reads the checked layer opens are the port rows
 (`RowsSession.rowsReg_eq_portRead`), so each session's committed rows are the port rows of a wire assignment its
 circuit's evaluation agrees with, which `GroupRealizes` reads. The union bound over the group gives `|ι| δ`.
@@ -191,7 +191,7 @@ theorem rowsReg_eq_portRead (hS : ∀ u, s.ServedRegistered u)
   · rw [dite_eq_right h, dite_eq_right h]
 
 /-- **Under the complete check every port row of a sampled proof block is registered and opens at its registered root**: at
-an outcome flock-verify `--zk --registered` accepts, a sampled proof block `u` whose registrant reads its served roots' rows
+an outcome verity-verify-proof `--zk --registered` accepts, a sampled proof block `u` whose registrant reads its served roots' rows
 (`ServedRegistered`), in a circuit whose every port is a port of `own` (`Flock.Registered.checkComplete`; acceptance
 has the circuit name each port once), reads `u`'s row of every port `q` (each input port and output row, so whatever an
 output's cone reads, the lane index included) as a registered read through `own`'s port of `q`'s name (`ownPort`), and
@@ -227,7 +227,7 @@ theorem rowsAgree_or_leafColl {ι : Type} (sess : ι → RowsSession) : RowsAgre
         ht.2.2.2 hat
 
 /-- **The known-content tie at any known port** (`Accounting.TS.Held.tie_ok` at a port `nm` and its known rows `ks`,
-any row): where flock-verify's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
+any row): where verity-verify-proof's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
 unit's served roots are registered, a registrant's row at a registered read of a port named `nm` is at a position of
 the known rows (`checkKnown`'s one known row a leaf, and `opensLeaf`'s position below the leaves) and is the bytes of the
 known row there, unless the tie collides (`OkColl` at `nm`). -/

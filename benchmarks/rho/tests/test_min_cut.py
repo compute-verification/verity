@@ -1,6 +1,6 @@
 """The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, the
 bound over a period's blocks with untied words, with a threshold and with none, beside the work no block is credited
-for, the class in `CLASSES`, and `periods.py --bounds`."""
+for, the one way from a work to a slowdown (`slowdown_of`), the class in `CLASSES`, and `periods.py --bounds`."""
 
 import itertools
 import json
@@ -483,6 +483,87 @@ def test_a_slowdown_is_quoted_beside_the_work_no_block_is_credited_for():
     assert "is in no term here (`capped`)" in charged(54_300).rests_on
 
 
+def test_clique():
+    tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
+    assert min_cut.clique(tri) == 3
+    assert min_cut.clique(tri + [frozenset(e) for e in ((1, 4), (2, 4))]) == 4
+    assert min_cut.clique([frozenset((1, 2))]) == 2 and min_cut.clique([]) == 0
+
+
+def layer(pairs: bool = True, scale: float = 1.0) -> list:
+    """One linear layer's three products as the calculator takes them: the forward `X W`, the input gradient
+    `dY Wᵀ` and the weight gradient `Xᵀ dY`, a bf16 weight and activations at the served row's `β`."""
+    bx, o = min_cut.beta(TIED), SERVED["O"] * scale
+    edges = (("X", "W"), ("dY", "W"), ("X", "dY"))
+    return [min_cut.Product(MACS * scale, o, beta, weight, forward=f, dw=d,
+                            pairs=frozenset({frozenset(e)}) if pairs else None)
+            for beta, weight, f, d, e in (((16.0, bx), (False, True), True, False, edges[0]),
+                                          ((bx, 16.0), (False, True), False, False, edges[1]),
+                                          ((bx, bx), (False, False), False, True, edges[2]))]
+
+
+def test_one_product_is_the_bound_at_its_pair_and_past_the_rows_the_bound_at_none():
+    """`slowdown_of` on one forward product of a weight by an activation is `bound` at the weight's `β` and the
+    activation's, `F` = 1; past `β`'s rows it is `bound` with no pair, and no sub-work is chosen."""
+    one = [min_cut.Product(SERVED["N"], SERVED["O"], (min_cut.beta(TIED), 16.0), (False, True), forward=True)]
+    got = min_cut.slowdown_of(C, TIED, size=C, work=one)
+    assert got.bound == min_cut.bound(C, TIED, **SERVED, beta_w=16.0, beta_x=min_cut.beta(TIED), b=16, F=1.0)
+    assert (got.choice, got.products, got.F, got.omega) == (min_cut.SUBWORKS[0], (0,), 1.0, None)
+    assert got.terms[min_cut.SUBWORKS[2]] is None
+    past = min_cut.BETA[-1][0] * 2
+    none = min_cut.slowdown_of(C, past, size=C, work=one)
+    assert none.bound == min_cut.bound(C, past, **SERVED) and none.choice is None and none.products == ()
+
+
+def test_the_sub_work_that_binds_is_the_largest_term_at_its_own_pair_and_f():
+    """The chosen sub-work's term is the largest of them, and its `Bound` is `bound` at what it chose: `N` and
+    `O` are `scale` times its products' sums, and the weight gradients alone are at `F` = 1."""
+    for scale in (1.0, 0.25):
+        got = min_cut.slowdown_of(C, TIED, size=C, work=layer(), scale=scale)
+        assert got.term == max(t for t in got.terms.values() if t is not None)
+        assert got.bound == min_cut.bound(C, TIED, N=got.N, O=got.O, size=C, beta_w=got.beta_w, beta_x=got.beta_x,
+                                          b=got.b_y, F=got.F)
+        assert got.N == scale * sum(layer()[i].macs for i in got.products)
+        alone = min_cut.slowdown_of(C, TIED, size=C, work=layer()[2:], scale=scale)
+        assert alone.F == 1.0 and alone.terms[min_cut.SUBWORKS[0]] == got.terms[min_cut.SUBWORKS[2]]
+
+
+def test_f_is_the_graphs_where_the_pairs_are_stated_else_the_kinds_and_a_given_f_is_every_sub_works():
+    """A layer's three products close a triangle, `ω` = 3, as the kinds' rule says; forward and input gradient alone
+    are a path, `F` = 1 by the graph and `share(3)` by the kinds; attention's four arrays give `share(4)`."""
+    f = {name: min_cut.slowdown_of(C, TIED, size=C, work=w) for name, w in
+         (("graph", layer()), ("kinds", layer(pairs=False)), ("path", layer()[:2]), ("path kinds", layer(False)[:2]))}
+    assert (f["graph"].omega, f["graph"].F) == (3, min_cut.share(3)) and f["kinds"].F == min_cut.share(3)
+    assert f["graph"].bound == f["kinds"].bound and f["kinds"].omega is None
+    assert (f["path"].omega, f["path"].F) == (2, 1.0) and f["path kinds"].F == min_cut.share(3)
+    four = [replace(p, pairs=frozenset(frozenset(e) for e in itertools.combinations("QKPV", 2))) for p in layer()]
+    assert min_cut.slowdown_of(C, TIED, size=C, work=four).F == min_cut.share(4)
+    given = min_cut.slowdown_of(C, TIED, size=C, work=layer(), F=1.3)
+    assert given.F == 1.3 and given.omega is None and given.bound.F == 1.3
+
+
+def test_the_second_and_fourth_sub_works_are_the_best_cuts_at_a_contraction_length():
+    """`K_thr` is taken on the whole work's choice. The second sub-work is the best of the whole work's choice on the
+    products whose contraction is at least `K_thr` or at least a product's; the fourth, the best of it on the products
+    with a weight operand, or those without, cut so."""
+    got = min_cut.slowdown_of(C, TIED, size=C, work=layer())
+    assert got.K_thr == pytest.approx((got.F * TIED / 2) ** 2 * got.b_y
+                                      / (got.beta_w * got.beta_x * (TIED + got.alpha)), rel=1e-12)
+    short = [*layer(), replace(layer()[1], k_dim=got.K_thr / 2, macs=MACS / 3)]
+    cut = min_cut.slowdown_of(C, TIED, size=C, work=short)
+    assert cut.terms[min_cut.SUBWORKS[0]] != got.terms[min_cut.SUBWORKS[0]]
+
+    def best(sub, lengths):
+        terms = [min_cut.slowdown_of(C, TIED, size=C, work=[p for p in sub if p.k_dim >= K0]).terms[min_cut.SUBWORKS[0]]
+                 for K0 in lengths]
+        return max(t for t in terms if t is not None)
+
+    lengths = {p.k_dim for p in short}
+    assert cut.terms[min_cut.SUBWORKS[1]] == best(short, {cut.K_thr} | lengths) >= got.terms[min_cut.SUBWORKS[0]]
+    kinds = [[p for p in short if any(p.weight) == w] for w in (True, False)]
+    assert cut.terms[min_cut.SUBWORKS[3]] == max(best(s, lengths) for s in kinds if s)
+
+
 def test_the_class_reads_the_files_rows_so_other_rows_in_the_registry_are_refused():
     with pytest.raises(ValueError, match="edit the file"):
         premises(REG.override({"premise.training-cut-hardness.beta": [[1e5, 16.0], [1e9, 1.0]]}))
@@ -553,6 +634,47 @@ def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cov
         assert x["parts"]["setter"] == y["parts"]["setter"] == "min-cut"
         assert x["slowdown"] == pytest.approx(y["slowdown"], rel=1e-12) and 2.9 < x["slowdown"] < 3.1
         assert x["scaled"]["per_window_share"] < 1e-5 < 0.99 < x["scaled"]["routes_share"]
+        assert x["scaled"]["period"] is None
+        p = y["scaled"]["period"]
+        assert p["bound"] == periods.PERIOD_BOUND and [k for k, _ in p["premises"].values()] == ["open"] * 5
+        assert (p["tail"], p["p_evade"]) == (0.0, 0.0)
+        assert p["windows"]["year"] == [8760, pytest.approx(8760 * p["window_ks"])]
+    assert f": the terms of `{periods.PERIOD_BOUND}`, one statement pooled over the period" in text
+    assert "`PouwPerWindow` (open; `ε'` and `p/ε'`)" in text and "year 8.76e+03, 1.59e-08" in text
     monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", names[1]])
     periods.main()
     assert "--bounds" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("fleet", ["reference-h200", "world-h200"])
+@pytest.mark.parametrize(("name", "sampled"), [("reference-remote-h200", False), ("reference-remote-h200-sampled", True)])
+def test_a_remote_period_row_cites_dampener_remote_period_with_its_tail_and_windows(name, sampled, fleet):
+    """A remote row's pool and routes are `DampenerRemotePeriod`'s terms: each of the five premises the lock's record
+    of it takes, by section; the escape's tail within `p_evade` (0 where every unit is proved); and the windows'
+    knowledge errors, `⌈period / window_s⌉ window_ks`, the term the row's `δ_crypto` holds."""
+    import periods
+
+    (row,) = periods.evaluate(REG, names=(name,), fleets=((fleet, fleet),), periods=("year",))
+    p = row["scaled"]["period"]
+    assert {n: k for n, (k, _) in p["premises"].items()} == {n: lean.premises(periods.PERIOD_BOUND)[n]
+                                                             for n in periods.PERIOD_PREMISES}
+    assert (p["tail"] > 0) == sampled and p["tail"] <= p["p_evade"]
+    r = build(REG.override(periods.choices(name, fleet, "year")), name)
+    assert p["windows"]["year"][1] == pytest.approx(r.regime.delta(r.context).by["windows"][1])
+
+
+def test_a_remote_period_row_refuses_a_premise_neither_its_list_nor_the_per_block_record_names(monkeypatch):
+    """The period statement's premises are `PERIOD_PREMISES` and the ones it shares with `DampenerRemote`'s record: one
+    the lock's record adds beyond both is refused, naming the fix, and the row counts the shared ones from the
+    records."""
+    import periods
+    from rho import analysis
+
+    r = analysis.result(REG, "reference-remote-h200")
+    p = periods.pooled(r)
+    record, shared = lean.premises(periods.PERIOD_BOUND), lean.premises(periods.PER_BLOCK_BOUND)
+    assert (p["recorded"], p["shared"]) == (len(record), len(set(record) & set(shared)))
+    grown = dict(record) | {"Nci.Assumptions.Unnamed": "open"}
+    monkeypatch.setattr(lean, "premises", lambda name: grown if name == periods.PERIOD_BOUND else shared)
+    with pytest.raises(ValueError, match=r"\['Nci.Assumptions.Unnamed'\].*add each to PERIOD_PREMISES"):
+        periods.pooled(r)

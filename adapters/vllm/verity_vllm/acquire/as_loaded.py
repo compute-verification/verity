@@ -64,7 +64,8 @@ def load(name: str, layer: Any, compose: Callable[[str, list[int], int], np.ndar
 def attach_rank(model: Any, *, world: int, rank: int, composer: Callable[..., Callable[[str, list[int], int], np.ndarray]],
                 repack: Callable[..., tuple[torch.Tensor, ...]] = marlin_repack) -> tuple[Any, dict[str, Any] | None]:
     """A TP rank's weights as its Commit reads them, and what that replaced: `model` itself and None without an MXFP4 Marlin layer,
-    else its `WeightsView` with each layer's four fields as loaded (`composer(world=, rank=)` gives the rank's `compose`)."""
+    else its `WeightsView` with each layer's four fields as loaded (`composer(world=, rank=)` gives the rank's `compose`).
+    `repack` is a test seam: a conversion a CPU can run in place of Marlin's (`marlin_repack`).  No library call passes it."""
     layers = mxfp4_marlin_layers(model)
     if not layers:
         return model, None

@@ -27,6 +27,7 @@ from tests.observe.test_fold_glm53_defaults import (
 )
 from verity_vllm.check.match import global_match_fast as GF
 from verity_vllm.check.match import program_compare as CMP
+from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -41,7 +42,7 @@ from verity_vllm.observe.events import (
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA
 from verity_vllm.observe.fold.profiles import generic as G
-from verity_vllm.pipeline.match import INSTANCES_FORM_ENV, persist_program
+from verity_vllm.pipeline.match_fold import INSTANCES_FORM_ENV, persist_program
 from verity_vllm.program import compact as K
 
 CFG = json.loads((Path(__file__).parent / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
@@ -181,7 +182,7 @@ class _Rank:
         try:
             return CMP.load_oracle(d, f"{which}-{form}", compact=form == "progressions" if compact is None else compact)
         finally:
-            CMP.LOAD_NOTES.pop(d, None)
+            PL.LOAD_NOTES.pop(d, None)
 
     def prog(self, which: str, form: str) -> CMP.RootView:
         if (which, form) not in self.progs:
@@ -254,7 +255,7 @@ def test_the_progressions_compare_never_expands_a_strided_weight_read(rank, monk
 
 def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     """[799e16bad] Each token row's W_UV read after the first is an alias of the first: the compact load splices it in one list copy,
-    so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias (51 % of GM-01's fold load)."""
+    so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias."""
     calls, progression = [0], K._Acc.progression
 
     def counting(self, *a):

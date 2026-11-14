@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # What an accepted statement's public file is tied to (`flock_verify_public_ties`)
 
-Every statement `flock-verify verify` sets up passed the check of its public file (`Flock.HmRow`):
+Every statement `verity-verify-proof verify` sets up passed the check of its public file (`Flock.HmRow`):
 `HmRow.checkPublic` (`Exec.setupH_public`), with hidden outputs `HmOut.checkPublic` (`Hidden.Spec.checkPublic`). The
 check recomputes the frame-v3-sha512 trees natively; the circuit proves only the `hm96-sha512` leaves. `PublicTies`
 restates what it established as equalities, and `flock_verify_public_ties` states them of every statement an acceptance
@@ -219,7 +219,7 @@ theorem ties_of_setupOf {I : Inputs} {record : String} {spec : SessionSpec} {sts
   · rw [HiddenExec.setupOne_hidden ((tagsAt_hiddenOutputs _ _ _).trans hh)] at hd
     exact ties_of_check (.inr ⟨rfl, (Hidden.setupHidden_spec' hd).checkPublic⟩)
 
-/-- **The public file's ties, over everything flock-verify accepts.** When `flock-verify verify` accepts (with or without
+/-- **The public file's ties, over everything verity-verify-proof accepts.** When `verity-verify-proof verify` accepts (with or without
 `--zk` or `--registered F`: the acceptances `flock_verify_sound` quantifies), the statement it set up (`setupOf`, at the
 `--zk` inputs under `--zk`) has a table, and each table's public file is tied to it (`PublicTies`): its header's
 `frame_v3` pins the frame and row key, and its schemas, domains and roots are those of the population's `b ‖ c` rows and,

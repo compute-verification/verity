@@ -39,7 +39,7 @@ def parse(argv: list[str]) -> dict:
 NATIVE_PEAK = Tool(
     name="native_peak", version="1",
     command=["python", "benchmarks/native_peak/measure.py"],
-    closure=["benchmarks/native_peak/**"],
+    closure=["benchmarks/native_peak/**", "hardware/cards/h200-sxm-141gb.toml"],
     key_params=["dtype", "sizes", "warmup", "reps", "sustain_s"],
     key_conditions=["hw.family"],
     produces=["native-peak/v1", "run-files/v1"],

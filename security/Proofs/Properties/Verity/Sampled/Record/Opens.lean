@@ -12,7 +12,7 @@ import all Init.Data.Array.QSort.Basic
 /-!
 # A checked unit's Flock witness opens its proof block correct (`SessionOpens`)
 
-At the record's statement every checked unit's session is the one flock-verify `--zk` session at the statement the
+At the record's statement every checked unit's session is the one verity-verify-proof `--zk` session at the statement the
 sample file sets up (`sessionOf`). A Flock witness in that session's relation satisfies its one table (`tableLowers`),
 which is V5's sampled table for the unit (`tabOfZHJP_one`), so the message packing it (`packZ`) reveals openings that
 make the unit's proof block correct wherever the values carry those that open (`correct_of_revealV5`).
@@ -22,7 +22,7 @@ make the unit's proof block correct wherever the values carry those that open (`
   the unit (`TableSetup`); none where it doesn't set up. The openings are computed from the witness; only the table's
   setup is chosen, and it is unique (`DrawSetupZHJP.table_congr`). At most one per committed wire (`revealsLe`).
 * **What the record takes beside acceptance**:
-  * `Names`, v2's reads of the registered file and `A`'s partition object as v2's: through them, wherever flock-verify
+  * `Names`, v2's reads of the registered file and `A`'s partition object as v2's: through them, wherever verity-verify-proof
     reads the session's statement at a sample file that fits its length words, the reading is `--zk` at `A`'s inputs,
     with no public input words, and sets up as `A`'s session at the sample file's JSON (`SessionIns`, `sessionIns_of`
     through `read_sess`); the sample file round keeps only a sample file that fits (`drawOk`, `fits_of_drawOk`);
@@ -118,7 +118,7 @@ theorem revealsLe (o : Own) (e : Ext) (he : e.reveal = revealRec A) (hN : ∀ x,
 
 /-! ## What the record takes -/
 
-/-- **flock-verify reads the session's statement as `A`'s session**: wherever it reads the statement at a sample file
+/-- **verity-verify-proof reads the session's statement as `A`'s session**: wherever it reads the statement at a sample file
 that fits its length words, the reading is `--zk` at `A`'s tags, with no public input words, set up at `A`'s inputs and
 the sample file's JSON. -/
 def SessionIns (o : Own) : Prop :=
@@ -318,7 +318,7 @@ theorem nTab_one (hc1 : A.I.count = 1) : nTab A.I = 1 := by
   unfold FlockSoundness.Discharge.Composed.nTab
   exact ite_eq_left (by omega)
 
-/-- **A Flock witness the session's statement checks satisfies its one table**: flock-verify reads the statement at the
+/-- **A Flock witness the session's statement checks satisfies its one table**: verity-verify-proof reads the statement at the
 kept sample file, which fits its length words (`fits_of_drawOk`), as `A`'s session at the sample file's JSON (`SessionIns`),
 which sets up one table (`setupTables_okHP`) that the witness satisfies (`tableLowers`). -/
 theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) {d : Msg}
@@ -429,7 +429,7 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) (hroots : Flock.Bridge.RootFixe
 /-- **`SessionOpens` at the record**, at SHA-512: on an accepted run, a checked unit's session's Flock witness reveals
 (`revealRec`) openings such that values carrying those that open under the statement's roots make the unit's proof block
 correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one table among its inputs): where v2 reads
-`A`'s and `o`'s inputs (`Names`, with v2's reads and partition object), flock-verify reads the session as `A`'s
+`A`'s and `o`'s inputs (`Names`, with v2's reads and partition object), verity-verify-proof reads the session as `A`'s
 (`sessionIns_of`); where the public file's `units.indices` are the population's units in order, as v2 holds them
 (`units_of_checkBlobsAt`), the kept sample file proves every sampled proof block (`provedIn_of_range`); and where the record's
 commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is

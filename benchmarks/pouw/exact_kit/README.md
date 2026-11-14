@@ -10,11 +10,11 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
 
 **What a caller may import** is each module's `__all__` (`exact_kit.checks`, `exact_kit.f2`, `exact_kit.wrap`,
 `exact_kit.search`, `exact_kit.sat`); the package itself re-exports nothing. Its readers are `../theory/`'s scripts and
-`../edited_gemm/egemm_depthr_check.py`.
+`../../../verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm_depthr_check.py`.
 
 **What it never does.** It imports nothing of Verity and nothing of `research`: the standard library, numpy and pysat
-alone. It reads the environment in one place, `Checks.finish`, for where the verdict and the run's result go, and writes
-no other file.
+alone. It reads the environment in one place, `exact_kit.settings` (`OUT` and the three variables `research run` sets),
+which only `Checks.finish` asks, for where the verdict and the run's result go, and writes no other file.
 
 ## API
 

@@ -12,9 +12,9 @@ on the JSON `verity.core.site` writes, with the deployed digests (`Registration.
 
 * `site_refusal`, `{"auditor", "log", "entry"}`: the entry held to the log, `{"refusal": name | null, "head", "digest"}`;
 * `site_check`, `{"auditor", "log"}`: the log checked and folded, `{"site", "head"}`, or `{"refused": {"entry", "name"}}`;
-* `site_views`, `{"auditor", "log", "tick"}`: the views of the log's Site, unchecked: its `units` and `boundary`, and for
-  each of its locations' ids, `outside` and `nowhere`, its `sheet`, `device` (at ticks of `tick` seconds, with no CUDA-core
-  ops, oracle queries or side channels), `node`, `tiers`, `boundary`, `registered` and `host`.
+* `site_views`, `{"auditor", "log"}`: the views of the log's Site, unchecked: its `units` and `boundary`, and for each
+  of its locations' ids, `outside` and `nowhere`, its `sheet`, `device` (at ticks of the Site's own unit of time, with
+  no CUDA-core ops, oracle queries or side channels), `node`, `tiers`, `boundary`, `registered` and `host`.
 -/
 
 @[expose] public section
@@ -57,10 +57,10 @@ def model (m : DeviceModel Empty) : Json :=
     ("rate", Json.mkObj [("cuda", toJson (m.rate .cuda)), ("oracle", toJson (m.rate .oracle)),
       ("tc", toJson (m.rate .tc))])]
 
-def views (S : Site) (A : Auditor) (tick : Figure) (i : String) : Json :=
+def views (S : Site) (A : Auditor) (i : String) : Json :=
   Json.mkObj [
     ("boundary", ids (S.boundary (some i))),
-    ("device", optJson model (S.device D.sheet A i tick 0 0 (Empty.elim : Empty → Nat))),
+    ("device", optJson model (S.device D.sheet A i 0 0 (Empty.elim : Empty → Nat))),
     ("host", optJson .str (S.host i)),
     ("node", optJson Site.toJson (S.node D.sheet i)),
     ("registered", .bool (S.registered i)),
@@ -68,13 +68,12 @@ def views (S : Site) (A : Auditor) (tick : Figure) (i : String) : Json :=
     ("tiers", Json.mkObj ((S.tiers D.sheet i).map fun (t, n) => (t.name, toJson n)))]
 
 def siteViews (j : Json) : V Json := do
-  exactly j ["auditor", "log", "tick"] "the input"
+  exactly j ["auditor", "log"] "the input"
   let A ← Auditor.ofJson (← Flock.J.get j "auditor" "the input")
   let (_, log) ← Registration.ofJson (← Flock.J.get j "log" "the input")
-  let tick ← Figure.ofJson (← Flock.J.get j "tick" "the input") "the tick"
   let S := Site.ofLog log
   pure (Json.mkObj [("boundary", ids (S.boundary none)),
-    ("ids", Json.mkObj ((S.locs.map (·.id) ++ [outside, "nowhere"]).map fun i => (i, views S A tick i))),
+    ("ids", Json.mkObj ((S.locs.map (·.id) ++ [outside, "nowhere"]).map fun i => (i, views S A i))),
     ("units", .arr (S.units.map Json.str).toArray)])
 
 def table : List (String × (Json → V Json)) :=

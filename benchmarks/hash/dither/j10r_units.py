@@ -29,7 +29,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from verity_vllm.protocols.pouw.h1 import receipts as RC
+from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
 
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD

@@ -14,8 +14,9 @@ the float encodings.  Every evaluator is total on encodings.
 from __future__ import annotations
 
 import struct
+from collections.abc import Sequence
 
-from verity.circuits.defs import primitive
+from verity.circuits.defs import PrimitiveDefinition, primitive
 from verity.circuits.types import Array, Value
 from verity.circuits.ops import prims as _prims
 from verity.circuits.ops.sqrt import PouwF32SqrtRn  # noqa: F401  (Pearl-C4's root, registered in ops)
@@ -38,10 +39,6 @@ def sx(v: int, bits: int) -> int:
 def _rotr64(x: int, c: int) -> int:
     c &= 63
     return ((x >> c) | (x << (64 - c))) & M64 if c else x
-
-
-def _halves(x: int) -> tuple[int, int]:
-    return x >> 32, x & M32
 
 
 # ---- 32-bit words ------------------------------------------------------------------------------------------------------
@@ -261,7 +258,7 @@ def PouwSqGe(x: int, th: int) -> int:
 WINDOW, MASKS, MASKED = 128, 15, Value(480)
 
 
-def masked_words(atom, ab) -> list[int]:
+def masked_words(atom: PrimitiveDefinition, ab: Sequence[int]) -> list[int]:
     """The masked words of the window ``ab`` (its A codes, then its B codes) under the atom primitive ``atom``, by mask."""
     a, b = ab[:WINDOW], ab[WINDOW:]
     words = {0: 0}
@@ -305,7 +302,7 @@ def PouwWindowWord(x: int, m: int) -> int:
 F_ENDS = (0x43, 0xC3)
 
 
-def ends_agree(atom, acc: int, cb: int) -> int:
+def ends_agree(atom: PrimitiveDefinition, acc: int, cb: int) -> int:
     """1 iff the codes of the support's two ends under the atom primitive ``atom``, e4m3(atom(acc, [cb]^32, [±0x43]^32)),
     have one value: they are equal, or both are zeros (`SaltDead`'s `EndsAgree`, compared as its `codeVal_eq_iff` says)."""
     c = [_prims.F32ToE4m3Sat.evaluate(atom.evaluate(acc, *[cb] * 32, *[f] * 32)) for f in F_ENDS]
@@ -327,4 +324,5 @@ def PouwHopperE4m3SaltDead(acc: int, cb: int) -> int:
 
 
 __all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "F_ENDS", "I7", "M32", "MASKED", "MASKS", "U32", "U8", "WINDOW", "sx",
-           "ends_agree", "i32_to_f32_rn", "masked_words", *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
+           "ends_agree", "i32_to_f32_rn", "masked_words", "sq300", "up48",
+           *sorted(n for n in list(globals()) if n.startswith("Pouw"))]

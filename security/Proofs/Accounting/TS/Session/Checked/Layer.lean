@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 The proof layer a checked record (`Accounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
 round `w` on the path `x` is the Flock session `sess x w i` (a `RowsSession`) with outcome `out x w i`:
 
-* `accepted`: flock-verify `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof system's rule
+* `accepted`: verity-verify-proof `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof system's rule
   (`Accounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
 * `opened`: the registered rows, the committed trees' own: at each unit `u` and each wire of `u` at a registered read
   of `rdU u` (the unit's `zy` and A rows, its registered B, and its `ok` row), the bit of the registrant's opening
@@ -95,7 +95,7 @@ def CheckedRel (s : RowsSession) (o : s.Out) (ok : String) (v : ℕ → ℕ → 
   ((∃ q : Fin s.c.ports.size, s.c.ports[q].name = ok) ∧ ∃ pt ∈ s.own, pt.name = ok) ∧
     ∃ vals : Fin s.Circ.N → Bool, v = rowsReg s vals ∧ ∀ u ∈ o.2.1, ∀ g ∈ s.P.io u, s.Circ.eval vals g = vals g
 
-/-- **The checked layer through its Flock sessions**: proof `i` of round `w` is accepted where flock-verify
+/-- **The checked layer through its Flock sessions**: proof `i` of round `w` is accepted where verity-verify-proof
 `--zk --registered` accepts its session, opens the committed rows at the registered reads (`openedReg`), and its
 relation is the unit's Definition with its check word `ok` registered (`CheckedRel`). -/
 noncomputable def checkedLayer {Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)

@@ -38,7 +38,7 @@ variable {N m n k : ℕ}
 /-- The cyclic shift by 24: column `j < k` has its `1` in row `j + 24 mod k`. -/
 def shift24 (k : ℕ) : Mat := fun i j => if j < k ∧ i = (if j + 24 < k then j + 24 else j + 24 - k) then 1 else 0
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **`A1_cost` splits**: its quadratic and non-quadratic parts give it. -/
 def A1CostOfSplit : Prop :=

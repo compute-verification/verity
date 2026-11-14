@@ -4,6 +4,7 @@ public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Pouw.Period
 public import Proofs.Pouw.Period.Accept
 public import Properties.Pouw.Period
+public import Properties.Pouw.Period.Witnesses
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -48,7 +49,7 @@ The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
 `Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` windows at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
 parameters `Accept.h1Params`, and which meets every premise of the instance
-(`h1_meets`).
+(`h1_meets`). The instance itself is `Properties.Pouw.Period.Witnesses`', where the witnesses' statements read it.
 
 The check takes these numbers at `h1Params`: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
 all 24 sampled tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
@@ -83,23 +84,6 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The circuit -/
-
-/-- 128 committed words of no operands, one a unit, one live round. -/
-def circuit : Declared Unit where
-  dag := List.replicate 128 Honest.word
-  calls := 1
-  call := fun _ => 0
-  rounds := 1
-  round := fun _ => 0
-  coinMode := fun _ => .live
-  commitRound := fun _ => 0
-  seedNames := fun _ _ => false
-  units := 128
-  unit := fun i => i
-
-theorem hr1 : 0 < circuit.rounds := Nat.one_pos
-
-theorem hK24 : 24 ≤ 144 := by decide
 
 theorem length_dag : circuit.dag.length = 128 := List.length_replicate
 
@@ -195,67 +179,6 @@ theorem circuit_wf : circuit.Wf := by
 theorem scope {δs : ℝ} (hδs : 0 < δs) : Scope Honest.scheme circuit δs :=
   ⟨circuit_wf, fun _ _ _ => rfl, hδs, fun _ => by norm_num [Honest.scheme, LuckForm.value],
     fun _ _ => Or.inl (Nat.zero_le _)⟩
-
-/-! ## The period, its windows and its proofs -/
-
-/-- A window's coins: its round's coin, the sample's permutation and the proofs' (none). -/
-abbrev Ω1 : Type := Paths Bool circuit.rounds × (Equiv.Perm (Fin 144) × Unit)
-
-/-- A window's honest stages: every tile paid, its words right and its checked values honest. -/
-def stages : SplitStages Bool (Fin 144) 1 :=
-  .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
-
-/-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds n
-  | 0 => .done
-  | n + 1 => .window (fun _ => true) stages fun _ => period n
-
-/-- The check's parameters: `h1Params`. -/
-def prm : Params := h1Params ""
-
-/-- Every window's registration: the loop's honest one. -/
-def reg : PouwCheck.WindowCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
-
-/-- The units of the model's sample at permutation coin `β`, ascending. -/
-noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=
-  (Finset.sort (Finset.univ.image fun i : Fin 24 => (drawOf hK24 β i).val) (· ≤ ·)).toArray
-
-/-- The period's windows as the check reads them: the honest registration, and the service's answer accepting the
-units of the window's sample. -/
-noncomputable def windows (n : ℕ) : Executions Ω1 n where
-  reg := fun _ _ => reg
-  ev := fun x w => h1Evidence reg (unitsOf (coinAt x w).2)
-
-/-- The service's openings, in `Unit`. -/
-def opened {n : ℕ} : Paths Ω1 n → Fin n → ℕ → ℕ → Unit := fun _ _ _ _ => ()
-
-/-- A salt's bytes from a round coin. -/
-def enc (b : Bool) : ByteArray := ⟨#[if b then 1 else 0]⟩
-
-/-- Each window's salt: its round coin's. -/
-def salt {n : ℕ} (x : Paths Ω1 n) (w : Fin n) : ByteArray := enc (coinAt (coinAt x w).1 ⟨0, hr1⟩)
-
-/-- The staged and the flat statements: every opening meets them. -/
-def staged : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => True
-
-def flat : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => True
-
-/-- The period's proofs under the check. -/
-noncomputable def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
-  checkedRun hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
-
-noncomputable def layer (n : ℕ) :
-    SampledLayer Bool (Equiv.Perm (Fin 144) × Unit) n circuit.rounds 24 (Fin 144) ℕ (Fin n × ℕ) Unit :=
-  checkedLayer circuit hr1 hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
-
-/-- The honest run's anatomy: the 128 words fixed. -/
-noncomputable def anatomy : Anatomy Unit Unit Unit Unit := { Honest.anatomy with fixed := 128 }
-
-/-- The play: the period's ideal game at `liveCone`, accepted on every path. -/
-noncomputable def play (n : ℕ) : Play Ω1 n Unit Unit Unit Unit where
-  game := monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n)
-  accepts := fun _ => True
-  run := fun _ => anatomy
 
 /-! ## The check accepts every window, and its sample is the coin's -/
 

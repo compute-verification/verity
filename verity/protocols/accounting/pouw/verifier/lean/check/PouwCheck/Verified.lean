@@ -11,7 +11,7 @@ proof block's proof outcome from (`credit._lean_verified`, through `pouw-check-d
 
 A window's evidence carries its statements, one a call with a sampled proof block (`STATEMENT_KEYS`: the call, the paths of its
 circuit file and its public file, and its sessions' directories), never a verdict. The Flock verifier
-(`flock-verify verify --zk`) runs outside this process, so `verified` is asked twice:
+(`verity-verify-proof verify --zk`) runs outside this process, so `verified` is asked twice:
 
 * with no answers (`runs` null), it names each verifier run (`asks`): in statement order, up to the first statement a
   check before the verifier refuses, the statement's index, the circuit file's SHA-512 the period's open committed for
@@ -212,7 +212,7 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
       for fj in fs do
         let f ← finding fj
         unless f.accepted do
-          throw ("failed", s!"call {c}'s session {f.session} was rejected by the verifier of record ({f.why}): a " ++
+          throw ("failed", s!"call {c}'s session {f.session} was rejected by the verifier ({f.why}): a " ++
             "failed drawn unit refuses the whole window, not only its call (no partial credit, and no retry)")
         let opened := (finding? f.registered).getD []
         if opened.any fun (p, v, root) => (pubCall? (.str v)).isSome && (p, v, root) != (PUB_PORT, pv, pr) then

@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 `RunsZC` (`Coin.lean`) asks each rep for a `RepRun`: a run of the compiled rep (`ZkLink.repZCAt`) on its rounds' coins
 whose messages, cut at the spine's coins, are the decoder's groups. `ZkCut` gives the cut for the rep's messages
 `repMsgsZ`; here is the run. As the non-ZK session's `rep_refines` composes `zerocheck_refines`, `lincheck_refines`,
-`opening_refines` and `ligerito_refines`, the run is composed phase by phase from flock-verify's: each phase that
+`opening_refines` and `ligerito_refines`, the run is composed phase by phase from verity-verify-proof's: each phase that
 succeeds from `t` to `t'` gives a run of the model's phase on the coins of the rounds it consumed
 (`consumed t.rounds t.k t'.k`), played with the proof's messages.
 
@@ -127,7 +127,7 @@ def ZkRepPlays : Prop :=
   ∀ {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽)
     (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript),
-    Zk.schedule st.m = .ok (sch, tPad) → ZkTabSeam T st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → ZkTabSeam T st sch tPad →
     extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length →
     (∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j]) →
@@ -146,7 +146,7 @@ def ZkRepRun : Prop :=
   ∀ {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 → Fin mPts → 𝔽)
     (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray)
     (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 → ZkTabSeam T st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 → ZkTabSeam T st sch tPad →
     extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length →
     (∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j]) →

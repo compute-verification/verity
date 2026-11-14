@@ -1659,7 +1659,7 @@ theorem repHE_asks {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (ref
       ((UE.tapeZk τ).salt i r) ((UE.tapeZk τ).nonce i r) (priorE c i r)
       (MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))).go l =
         (.ok (p, t), l') ∧
-      _root_.Flock.Zk.schedule (stsOf x)[i]!.m = .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) ∧
+      _root_.Flock.Zk.schedule (stsOf x)[i]!.wideLeaf (stsOf x)[i]!.m = .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) ∧
       14 ≤ (stsOf x)[i]!.m ∧ 6 ≤ (stsOf x)[i]!.c.kLog ∧
       extras.size = spec.points * (stsOf x)[i]!.regions.size := by
   obtain ⟨hx, -, -, ⟨s, hsx⟩, -, -, -, hex, -⟩ := hC
@@ -1692,7 +1692,7 @@ theorem repExact : RepExact := by
   intro x w τ c spec i hi r cm0 extras ic l hC p t l' e
   obtain ⟨e', hv, hm, -, hx'⟩ := FinRep.repHE_asks hC e
   obtain ⟨-, -, -, ⟨s, hsx⟩, hr, -, -, -, hl⟩ := hC
-  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   obtain ⟨hl3, -, -, -⟩ := FlockComplete.repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0)
     (hL := hL2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e')
@@ -1712,7 +1712,7 @@ theorem repPoints : RepPoints := by
   intro x w τ c spec i hi cm0 extras ic l hC p t l' e
   obtain ⟨e', hv, hm, hk6, -⟩ := FinRep.repHE_asks hC e
   obtain ⟨-, -, -, ⟨s, hsx⟩, -, -, -, -, hl⟩ := hC
-  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   obtain ⟨hl3, -, -, -⟩ := FlockComplete.repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0)
     (hL := hL2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e')
@@ -1773,6 +1773,8 @@ namespace FinRep
 open FlockComplete FlockComplete.Replay FlockComplete.Replay.Lg FlockComplete.L0 Flock.With
 
 section Level0Bridge
+
+variable {wideLeaf : Bool}
 
 variable {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
 
@@ -2160,7 +2162,7 @@ position of some opened position (`coinedOf_s0_val`). -/
 theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) {p : ℕ}
     (hp : p ∈ q0At c j r) :
     p < 2 ^ (lv0 x j).d ∧ ∃ a : Fin (tabC PE x j).z.nS, (((tabC PE x j).T (czExe PE x c j)).s0 (.inl a)).val = p := by
-  obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨-, hL2, -, -, -, -, -⟩ := hdim
   obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 (zkTab x j).hz
   obtain ⟨hrate, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_pad _ _ _ (zkTab x j).hz
@@ -2250,7 +2252,7 @@ theorem repOpenRest_l0 : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ
   intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq _
   obtain ⟨e', hv, hm, hk6, hx'⟩ := FinRep.repHE_asks hC hq
   obtain ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, -, he, hl⟩ := hC
-  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
   have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
@@ -2269,7 +2271,7 @@ theorem repOpenRest_l0 : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ
   rw [htab] at hP
   have hslot : l.size + (FlockComplete.piopZk (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!) extras +
       (zkTab x ⟨i, hi⟩).sch.k0 + 8) = repSlot x (2 * i + r) (fun sch => sch.k0 + 8) := by
-    have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * i + r) / 2]!.m =
+    have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * i + r) / 2]!.wideLeaf (stsOf x)[(2 * i + r) / 2]!.m =
         .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := by
       rw [show (2 * i + r) / 2 = i by omega]
       exact hv

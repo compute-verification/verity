@@ -3,18 +3,21 @@ its own previous-step sampled ids over the executed prefix (`boundary_linkage`),
 to the declared workload (`prescribed_input_linkage`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-
-from verity_vllm.commit.opened import UnverifiedUnlinked
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity_vllm.program.sampling_event import circuit_token_id
+
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.commit.opened import UnverifiedUnlinked
+from verity_vllm.program.sampling_event import circuit_token_id
+from verity_vllm.records.schema_ids import BOUNDARY_LINKAGE_SCHEMA
 
+__all__ = ["LINKAGE_SCHEMA"]
 
-LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
+LINKAGE_SCHEMA = BOUNDARY_LINKAGE_SCHEMA
 
 
 def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], workload_requests: list[dict[str, Any]],
@@ -43,8 +46,9 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     for r in workload_requests:
         rid = str(r["request_id"])
         arrive = int(r.get("arrive_step") or 0)
-        prompt = [int(t) for t in (r.get("prompt_token_ids") or [])][int(r.get("cached") or 0):]
-        steps = [int(s) for s in (r.get("steps") or [])]
+        ids, served_steps = r.get("prompt_token_ids"), r.get("steps")            # a request that states none has no prompt row, no step
+        prompt = [int(t) for t in (ids if ids else [])][int(r.get("cached") or 0):]
+        steps = [int(s) for s in (served_steps if served_steps else [])]
         if not steps:
             continue
         # arrival step: the prescribed prompt
@@ -102,7 +106,8 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
         if r.get("max_tokens") is None and r.get("program_steps") is None:
             continue
         rid = str(r["request_id"])
-        steps = [int(s) for s in (r.get("steps") or [])]
+        served_steps = r.get("steps")
+        steps = [int(s) for s in (served_steps if served_steps else [])]
         h: dict[str, Any] = {"linked_steps": len(steps), "declared_cap": r.get("max_tokens"), "program_steps": r.get("program_steps")}
         if r.get("max_tokens") is not None and steps and len(steps) < int(r["max_tokens"]):
             last = steps[-1]
@@ -161,7 +166,8 @@ def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None
     out = {str(k): int(v) for k, v in (declared or {}).items()}
     if not isinstance(schedule, dict) or schedule.get("use") != "observed":
         return out, False
-    obs = {str(k): int(v) for k, v in (schedule.get("observed_arrive_steps") or {}).items() if str(k) in out}
+    observed = schedule.get("observed_arrive_steps")                            # a schedule that states none moves no arrival
+    obs = {str(k): int(v) for k, v in (observed if observed else {}).items() if str(k) in out}
     moved = any(out[k] != v for k, v in obs.items())
     out.update(obs)
     return out, moved
@@ -203,7 +209,8 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
     seed_checked = seed_linked = 0
     for r in workload_requests:
         rid = str(r["request_id"])
-        steps = [int(s) for s in (r.get("steps") or [])]
+        served_steps = r.get("steps")                                            # a request that states none sampled at no step
+        steps = [int(s) for s in (served_steps if served_steps else [])]
         live = [s for s in steps if store.has(rid, s, SAMPLER_OP, SAMPLED_MEMBER)]
         for s in live:
             live_at.setdefault(s, []).append(rid)

@@ -1,4 +1,9 @@
-/-
+module
+
+public import Spot.Draw
+public import Spot.Rate
+
+/-!
 The challenger's sample from a Spec's selection rule on (`service.selection_law`, `draw.derive` and `service.select_draw`,
 which `Stream.register` and `Stream.select` run): the sampling design the rule names over the population of the verifier's own
 program and query, that sampling design expanded over them, and the sample from the challenger's own bytes (every unit for `All`), with
@@ -23,10 +28,6 @@ sampled replay block's `n_t` instances of template `t` (`replayCells`, `Counts.o
 template-major interior (`secondLaw`). One-stage is the rule `law`: a two-stage rule whose replay blocks are single proof
 blocks is refused, so each design has one form.
 -/
-module
-
-public import Spot.Draw
-public import Spot.Rate
 
 @[expose] public section
 set_option backward.privateInPublic true

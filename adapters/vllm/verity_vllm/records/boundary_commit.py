@@ -11,6 +11,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, optional, required
 
+__all__ = ["BoundaryCommit", "FILE", "SCHEMA"]
+
 SCHEMA = "verity-vllm/boundary-rows/v1"
 #: its name in the class's directory, beside the prover's ``index.json``, ``index-salt.bin`` and ``salts.bin``
 FILE = "commit.json"
@@ -51,8 +53,9 @@ class BoundaryCommit:
         if doc.get("format") != SCHEMA:
             raise RecordError(where, "format", f"is {doc.get('format')!r}, not {SCHEMA}: not a boundary commitment")
         only(doc, ("format", *KINDS, *OPTIONAL), where)
-        return cls(**{k: required(doc, k, where, kind) for k, kind in KINDS.items()},
-                   **{k: optional(doc, k, where, kind) for k, kind in OPTIONAL.items()})
+        stated = {k: required(doc, k, where, kind) for k, kind in KINDS.items()}
+        held: dict[str, Any] = {k: optional(doc, k, where, kind) for k, kind in OPTIONAL.items()}
+        return cls(**stated, **held)
 
     def dump(self) -> dict[str, Any]:
         return {"format": SCHEMA, **{k: v for k, v in dataclasses.asdict(self).items() if k in KINDS or v is not None}}

@@ -1,0 +1,19 @@
+{
+ "held": {
+  "a served GEMM row whole over its N weight rows: serving stages it as its N = 1 slices (serving_templates.SLICES), which fit, a sixth of the block at K = 6,144": [
+   "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=2,DOT=HopperBF16WgmmaDot16_v1}",
+   "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}",
+   "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}",
+   "CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=2,DOT=HopperBF16WgmmaDot16_v1}",
+   "CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}",
+   "CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=1536,N=160,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=1536,N=256,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=2048,N=160,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=2048,N=256,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=3072,N=160,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=3072,N=256,DOT=HopperBF16WgmmaDot16_v1}",
+   "GemmF32Out_v1{K=6144,N=256,DOT=HopperBF16WgmmaDot16_v1}"
+  ]
+ }
+}

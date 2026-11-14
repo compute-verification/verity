@@ -7,6 +7,10 @@ developer's node reports of what it served.
 
 - `run.py`: the command. Its docstring states the number's formula, each file of a record it reads, what it prints
   beside the number, the result it writes and when it refuses.
+- `h200_share.py`: the number of the goal `accounting/h200-97-percent`, modeled: an honest H200's e4m3 rate (a
+  `benchmarks/tensor_duty --arms fp32-beside` run's arm A on uniform operands) over the card's ceiling at each reading
+  of its tensor clock, times `run.py`'s share of a served run of record. Its docstring states the model and what it
+  leaves out, which makes the number an upper bound on the served share.
 - `tests/`: the printer, the model's MAC count and the written result, held to the small record under
   `tests/fixtures/` with a stand-in for the evidence store, so the suite fetches nothing. Capacity is held to one
   card file's two clocks.
@@ -20,6 +24,7 @@ the command itself writes only the two files named below.
 ~~~text
 verity bench compute --from RUN
 verity bench compute --from RUN --per-call [--uncredited F] [--top N]
+uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN
 ~~~
 
 - **Hardware:** none. It runs on any machine that can read the evidence store, in seconds; the GPU work is the
@@ -33,10 +38,12 @@ verity bench compute --from RUN --per-call [--uncredited F] [--top N]
   - `$OUT/compute.json`: the printed document.
   - `result.json`: the same result in the fields every resource's benchmark reports, through the harness kit's writer
     (`verity_bench.kit`). Under `research run` it is the run directory's (`$RESEARCH_RUN_DIR/result.json`), where
-    `research` reads a run's result; outside one it is `$OUT/result.json`. Its measurements are `metric` (the printed
-    number, its unit and its target), `verified` (the credited MACs), `capacity`, `free` (capacity less verified) and
-    `error` (the answer's δ_s, sampling's alone). A recorded run's record holds no registration of its hardware and no
-    span the verifier holds its passes to, so `capacity` and `free` are one entry each, with no value and why.
+    `research` reads a run's result; outside one it is `$OUT/result.json`. Its measurements are
+    `compute-accounting/verified-compute-share` (the printed number, its unit and its target, under its id in
+    `metrics.toml`, where the console's Metrics tab reads it), `verified` (the credited MACs), `capacity`, `free`
+    (capacity less verified) and `error` (the answer's δ_s, sampling's alone). A recorded run's record holds no
+    registration of its hardware and no span the verifier holds its passes to, so `capacity` and `free` are one entry
+    each, with no value and why.
     `capacity()` in `run.py` gives them for a registered site and a span, at each data-sheet reading: a clock of a
     registered device's card file (`clock.tensor`, `clock.sm`).
 - **Exit code:** 0 with the number printed; 1 with none (the answer is not an accept, the Lean verifier's verdict is

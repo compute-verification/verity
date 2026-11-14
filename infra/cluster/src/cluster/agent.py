@@ -93,12 +93,11 @@ class PreemptedLog:
         self.offset = 0 if from_start or not path.exists() else path.stat().st_size
 
     def new(self) -> list[dict[str, Any]]:
-        try:
-            with self.path.open() as f:
-                f.seek(self.offset)
-                text = f.read()
-        except FileNotFoundError:
+        if not self.path.exists():
             return []
+        with self.path.open() as f:
+            f.seek(self.offset)
+            text = f.read()
         keep = text.rfind("\n") + 1
         self.offset += keep
         return [p for p in map(nebius2.preemption, text[:keep].splitlines()) if p]
@@ -131,6 +130,7 @@ class Executor:
         try:
             self.kill(pid, sig)
         except ProcessLookupError:
+            print(f"cluster agent: pid {pid} of {alloc} was gone before SIG{sig.name[3:]}; nothing to evict", file=sys.stderr)
             return
         with (self.lease_dir / "preempted.log").open("a") as log:
             for gpu in gpus:
@@ -199,8 +199,9 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
 
     try:
         signal.signal(signal.SIGTERM, on_term)
-    except ValueError:
-        pass
+    except ValueError as e:
+        print(f"cluster agent: SIGTERM not handled, so only the stop file or `until` stops it (ValueError: {e})",
+              file=sys.stderr)
     try:
         while stop["why"] is None:
             now = clock()
@@ -254,8 +255,8 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
     finally:
         try:
             signal.signal(signal.SIGTERM, prev_handler)
-        except ValueError:
-            pass
+        except ValueError as e:
+            print(f"cluster agent: SIGTERM's previous handler not restored (ValueError: {e})", file=sys.stderr)
         if lock_fd is not None:
             os.close(lock_fd)
     summary = {"mode": mode, "stopped": stop["why"], "exception": exception, "ticks_read": ticks,

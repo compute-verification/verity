@@ -71,7 +71,7 @@ else `0`. -/
 def coefAt (k m n : ℕ) (R : Mat) (q e a b : ℕ) : ℤ :=
   if q % (m * n) = e then ckMat k R (16 * (q / (m * n) + 1)) a b else 0
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The reduction, grouped by entry** (every input): if a rule is an identity in the noise at position `p`, then for
 every entry `e` the coefficients agree: position `p`'s coefficient is the rule applied to the operands' coefficients,

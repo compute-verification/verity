@@ -267,7 +267,7 @@ The auditor:
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
-  (`setup.sh` runs it). `public_lock.py`: a lock as the public export ships it.
+  (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
 - `module_keys.py`: a Lake module's key, under which the node's artifact cache, which every sandboxed build fills,
   restores it.
@@ -299,7 +299,7 @@ Lean's job in `check` and the tools around the audit:
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
   module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
-  the entry). Two PRs that each raise an area merge without a conflict: `merge.py --caps` sums their changes
+  the entry). Two PRs that each raise an area merge without a conflict: `merge.py --limits` sums their changes
   (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.

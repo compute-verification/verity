@@ -29,7 +29,7 @@ from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-TS = importlib.import_module("two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")
 
@@ -56,7 +56,8 @@ def run(served) -> dict:
     """The first stage under the class's own rule (`two_stage.rule_of`), ``stage1.json`` read again, and the replay
     side's half (`two_stage.replayed`)."""
     check, tmp = served["check"], served["tmp"]
-    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
+                   FC.Challenger("first", label=TS.family_of(served["class"].layout)))
     stage1 = json.loads(json.dumps(got.stage1()))
     again = TS.resume(stage1, check, FC.Challenger("second"))
     r = TS.replayed(again, served["class"], served["capture"], tmp / "interior", clock=iter((100.0, 102.5)).__next__)
@@ -66,7 +67,7 @@ def run(served) -> dict:
 def _handed(interior: Path, served: Path, mine: CS.Binding, reads: dict, drawn: list[int]) -> tuple[list[dict], dict]:
     """The sessions' statements and their verdicts of record without the sessions: each member's public file as the
     served path writes it for the written window (`flock_input_files`, as a5 stages a session), the verifier's reads,
-    and a stand-in for what `flock-verify verify`'s verdict of record names of the session it checked."""
+    and a stand-in for what `verity-verify-proof verify`'s verdict of record names of the session it checked."""
     from verity_flock.class_statement import member_stager
 
     def sha512(j) -> str:
@@ -320,7 +321,8 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     v = 4096
     got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
-    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")

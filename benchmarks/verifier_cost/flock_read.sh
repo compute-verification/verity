@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The Lean verifier's read of a real circuit, phase by phase: flock_read.py builds the H1 tile unit's statement circuit at
 # each K (`h1_prove/h1unit.Shape(K)`, the 4×8 tile) and one instance on it, and flock-read (flock_read/Main.lean, built in a
-# scratch Lake package against the checkout's verifier) times `flock-verify verify --zk`'s read of it. Run from a clone
+# scratch Lake package against the checkout's verifier) times `verity-verify-proof verify --zk`'s read of it. Run from a clone
 # (the build writes the verifier's .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/flock_read.sh 256 1024

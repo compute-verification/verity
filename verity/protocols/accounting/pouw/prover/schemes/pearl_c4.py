@@ -96,10 +96,12 @@ so no UE4M3 byte has bit 7 set, which sm_120 reads from its low 7 bits (a second
 scale from the committed rows, so no prover's byte reaches the checked values; the rule guards that forming, and every
 replayed step reads bytes as the hardware does (`hw_scales`).
 
-**Hashing.**  Under h0 seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack (`pearl_c`'s "Why -h3 seeds each row
-of A") applies: every row can be folded onto one A′ row whose C̃ is computed once per weight row.  -h3
-(``pearl-c-nvfp4-v0-h3``, not registered) keys each row's E_A on its own SHA-512 digest, as Pearl-C's -h3 does; no device
-path forms it yet.  The domain (`PearlC4.check`), B-OVF's credit discount (`B_OVF`), D-SK (`seed_b`) and the accounting
+**Hashing.**  Under h0 seed_A reads A's root (`unit_seed_a`), which commits every row of the unit before any row's E_A
+line is known, so Pearl-C's adaptive-A attack (`pearl_c`'s "Why -h3 seeds each row of A") has no first step; forming
+waits on the whole unit's tree.  h0 is a plain format (TurboSHAKE128 digests, SHA-256 trees) that no served commitment
+uses.  -h3 (``pearl-c-nvfp4-v0-h3``, not registered) keys each row's E_A on its own SHA-512 digest, as Pearl-C's -h3
+does; no device path forms it yet.
+The domain (`PearlC4.check`), B-OVF's credit discount (`B_OVF`), D-SK (`seed_b`) and the accounting
 (`wref`, `credit_of`) are stated where they are coded.  The reference replay (`benchmarks/pouw/pearl_c4/replay.py`) opens
 rows and is a development shortcut: the protocol checks a sampled tile by a zero-knowledge proof of `circuit.pc4`'s hiding
 Programs, which opens nothing.
@@ -1146,9 +1148,10 @@ class PearlC4:
                     "live-verifier"),
             hypotheses=(
                 ("TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
-                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                 "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
-                 "of the units whose replayed debit is under the cap for less than their credit less the debit"),
+                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the inert work's "
+                 "F1′ and F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and "
+                 "U words of the units whose replayed inert work is within the inert-work bound for less than their credit "
+                 "less the inert work"),
                 (f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
                  "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090"),
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",
@@ -1156,8 +1159,8 @@ class PearlC4:
             allowances=(
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
                 ("savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
-                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
-                 "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
+                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replay charges the rest as inert "
+                 "work (tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
                  "(B_OVF, credit_of)"),
                 "the unscale is glue outside the checked values",
             ),
@@ -1332,8 +1335,8 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-#: the private names these four had, which readers outside the module still import
-_E2M1_MIDPOINTS, _F2, _pair_excess, _scale_value = E2M1_MIDPOINTS, E2M1_SIGNED_HALVES, pair_excess, scale_value
+#: the private names these two had, which a test and a Lean docstring outside the module still name
+_E2M1_MIDPOINTS, _scale_value = E2M1_MIDPOINTS, scale_value
 
 __all__ = ["ATOM", "B_OVF", "B_OVF_MIN_N", "DEAD_RHO_SQ", "DELTA", "DENSE_CORRECTION", "E2M1_MIDPOINTS",
            "E2M1_SIGNED_HALVES", "F1_B_OVERFIT", "F1_EPS", "FFMA_UNITS", "FLOOR", "FORMATS", "FORMING_CREDITED",

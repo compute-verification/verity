@@ -254,7 +254,7 @@ theorem innerY : InnerY := by
   have hst : (stsOf x)[(2 * j.val + r.val) / 2]! = (stsOf x)[j.val] := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega]
     exact getElem!_pos (stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]
     exact y.hz
   have hβs : betaSlot x j.val r.val = innerSlotE x j r + 2 := by

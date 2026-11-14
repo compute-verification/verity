@@ -282,7 +282,7 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
     replay, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert replay["verdict"] == "undecided" and len(calls) == 1
     assert replay["reason"].startswith(f"the memory challenger's session on {AUDITOR} did not complete: RuntimeError: "
-                                       f"the side on {AUDITOR} refused: a session has run for audit")
+                                       f"the side on {AUDITOR} refused: a session has run for the request's `audit`")
     assert len(auditor.log.path.read_text().splitlines()) == 2
 
 
@@ -295,8 +295,8 @@ def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(served, tm
                                                                            b"the prover's own" * 4)[1])
     answer, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert answer["verdict"] == "undecided" and calls == []
-    assert answer["reason"].endswith(f"refused: setup's published outputs do not carry the commitment and salt the memory "
-                                     f"challenger logged for audit {SP.binding(REPO, REV, 3, None).hex()}")
+    assert answer["reason"].endswith("refused: setup's published outputs (`published`) do not carry the commitment and "
+                                     "salt the memory challenger logged for the request's `audit`")
     assert auditor.log.path.read_text() == f"{mc.SESSION_LOG}\n"
 
 
@@ -582,7 +582,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                     for k, v in SP.HB.p2_party.SESSION.items())
     assert lean == own | {"profile": None, "public": None, "reason": f"the request is refused: {why}", "verdict": "reject"}
     assert own["commitment"] == p2_case.digest(case).hex() and own["profile"]["units"] == 2
-    assert _jsonl(tmp_path / "parties" / "bw" / "private" / "cases.jsonl") == [case]
+    kept = tmp_path / "parties" / "bw" / "private"
+    assert (kept / SP.HB.p2_party.CASE_DIGESTS).read_text().splitlines() == [SP.HB.p2_party.case_digest(case)]
+    assert sorted(p.name for p in kept.iterdir()) == [SP.HB.p2_party.CASE_DIGESTS]
     assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]

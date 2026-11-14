@@ -39,7 +39,7 @@ from verity_vllm.commit import index as IX
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))
 TEMPLATES = [P.template_id(d) for d in DEFS]
-LAW = D.parse_design("subset:1")
+DESIGN = D.parse_design("subset:1")
 RUN = "ab" * 32
 
 
@@ -50,7 +50,7 @@ def population(n0: int, n1: int) -> tuple[SR.Member, SR.Member]:
 
 def window(n0: int, n1: int, run: str = RUN) -> SR.Binding:
     program, query = SR.population_program([(DEFS[0], n0), (DEFS[1], n1)])
-    return SR.Binding(program, query, LAW, run, population(n0, n1))
+    return SR.Binding(program, query, DESIGN, run, population(n0, n1))
 
 
 def data(w: SR.Binding, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
@@ -114,9 +114,9 @@ def test_population_is_the_partitions():
     w = window(6, 2)
     assert (w.population, [m.base for m in w.members]) == (8, [0, 6])
     with pytest.raises(ValueError, match="partition's units"):
-        SR.Binding(w.program, w.query, LAW, RUN, population(6, 3))
+        SR.Binding(w.program, w.query, DESIGN, RUN, population(6, 3))
     with pytest.raises(ValueError, match="partition's units"):
-        SR.Binding(w.program, w.query, LAW, RUN, population(6, 2)[::-1])
+        SR.Binding(w.program, w.query, DESIGN, RUN, population(6, 2)[::-1])
     bad = data(w)
     bad[1]["rows"]["in0"] = bad[1]["rows"]["in0"][:1]
     with pytest.raises(ValueError, match="SiluMul_v1"):
@@ -144,15 +144,15 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     # the verifier's own copies: its window over its program, the run root of record, and the public bodies it holds
     mine = window(9, 4)
     publics = {m.template: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
-    v = R.check(rec, mine.program, mine.query, LAW, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
     assert v.ok, v.detail
     other = window(9, 4, "cd" * 32)
-    v = R.check(rec, other.program, other.query, LAW, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, other.program, other.query, DESIGN, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics))
     assert not v.ok and "R3-domain" in v.codes
     flipped = dict(publics, **{TEMPLATES[1]: publics[TEMPLATES[1]][:-1] + bytes([publics[TEMPLATES[1]][-1] ^ 1])})
-    assert R.check(rec, mine.program, mine.query, LAW, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped)).codes == ("R4-leaf-layer",)
+    assert R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped)).codes == ("R4-leaf-layer",)
     fewer = window(9, 3)
-    assert "R2-population" in R.check(rec, fewer.program, fewer.query, LAW, SR.SCHEME, SR.expected_ports(fewer),
+    assert "R2-population" in R.check(rec, fewer.program, fewer.query, DESIGN, SR.SCHEME, SR.expected_ports(fewer),
                                       leaf_layer=SR.leaf_layer(publics)).codes
     # a stand-in is the same record but for its kind, which provenance cannot override; a kind core does not know is refused
     stand = SR.registration(c, {"kind": "served", "run": "other", "of": {"run_root": RUN}}, kind="stand-in", registrar=R)
@@ -262,7 +262,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     y = rng.integers(0, 1 << 16, size=(15, 1), dtype=np.uint16)
     gemm = bind(REGISTRY["GemmCoordinate_v1"], K=64)
     m = SR.Member(P.template_id(gemm), (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
-    w = SR.Binding(*SR.population_program([(gemm, 15)]), LAW, RUN, (m,))
+    w = SR.Binding(*SR.population_program([(gemm, 15)]), DESIGN, RUN, (m,))
     assert SR.port_leaves(m) == {"x": 3, "w": 5, "y": 15}
     assert {p: e["leaves"] for p, e in SR.expected_ports(w).items()} == {m.port("x"): 3, m.port("w"): 5, m.port("y"): 15}
     c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))

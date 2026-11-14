@@ -44,12 +44,12 @@ from verity.protocols.proofs.spot.verifier.one_stage import served as RS
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,
     FIELD_AT,
-    HEAD_U32,
     REQUEST,
     SCHEMA,
     Span,
     class_size,
     layout_of,
+    row_type,
 )
 from verity_vllm.records.boundary_commit import FILE as COMMIT
 from verity_vllm.records.boundary_commit import BoundaryCommit
@@ -69,9 +69,10 @@ def _stop_refusal(S: Mapping[str, Any]) -> str | None:
 
 
 def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`EgressStop_v1{T, STOP, MAX_MODEL_LEN}` (request: Array<`HEAD_U32`, i32>, ids: Array<T, i32>) -> u16 at T =
-    ``outputs``: `StopRule16_v1{T, NSTOP}`'s word over ``ids``, ``request``'s ``max_tokens`` and prompt length
-    (`FIELD_AT`), the stop ids STOP and MAX_MODEL_LEN: where a span's `b.egress` row stops and why, n + finish * 8192.
+    """`EgressStop_v1{T, STOP, MAX_MODEL_LEN}` (request, ids: a span's rows of the values `STOP_READS` names, as
+    `boundary_rows.row_type` gives them, the ids T) -> u16 at T = ``outputs``: `StopRule16_v1{T, NSTOP}`'s word over
+    ``ids``, ``request``'s ``max_tokens`` and prompt length (`FIELD_AT`), the stop ids STOP and MAX_MODEL_LEN: where a
+    span's `b.egress` row stops and why, n + finish * 8192.
     A request whose ``ignore_eos`` word in ``request`` is not 0 has no stop id: the rule reads `stop_check.NOT_AN_ID`,
     no token's id, in place of each, as it does where STOP is empty (`StopCheck_v1`'s way). Its gates are the rule's,
     the constants' and that choice's: the registered stop ids and model length are statics, public in its id, where the
@@ -83,7 +84,7 @@ def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> Speci
     I32 = X.WORDS.I32
 
     def signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
-        return (("request", Array(HEAD_U32, I32)), ("ids", Array(S.T, I32))), X.WORDS.U16
+        return tuple((p, row_type(v, S.T)) for p, v in STOP_READS.items()), X.WORDS.U16
 
     def body(B: Any, S: Any, request: Any, ids: Any) -> Any:
         o = X.word_ops(B)
@@ -166,8 +167,10 @@ def filed(spans: Sequence[Span], stop: Stop | None = None,
     no stop class. Each class's spans in admission order, the classes in order of their first span."""
     out: dict[tuple[int, int, bool], list[Span]] = {}
     for s in spans:
-        held = stop is not None and not (released and s.release is None) and stop.word(s) is not None
-        out.setdefault((s.shape[0], stop.outputs, True) if held else (*s.shape, False), []).append(s)
+        if stop is not None and not (released and s.release is None) and stop.word(s) is not None:
+            out.setdefault((s.shape[0], stop.outputs, True), []).append(s)
+        else:
+            out.setdefault((*s.shape, False), []).append(s)
     return out
 
 

@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 # The headline over the salted session, and at the executable
 
 `Prog.flock_headline` (`Headline.lean`) restated for the session at a leaf scheme `Lp` (`batchedSessionL H512 enc512 Lp
-plan`), the session flock-verify checks for `hm96Rows` statements: `leaf512` under `hm96-sha512/v1` leaves, `leafPlain`
+plan`), the session verity-verify-proof checks for `hm96Rows` statements: `leaf512` under `hm96-sha512/v1` leaves, `leafPlain`
 under plain SHA-512 leaves. Every term is generic in `Lp`; its binding is `Lp.bind`, a collision of `H512`:
 
 * `Prog.flock_headline_L`: the count curve on the statement's rows, at the live sample, with the same bound as
@@ -129,7 +129,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List Flo
 /-- **The headline at the executable, for the salted session.** Let the verifier sample the units as in
 `Prog.flock_headline_L` (the live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by
 the prover `τ`, refine the audit with `batchedSessionL H512 enc512 Lp plan` played by `σ`, up to the live event
-`bad` (`hRef`). If `σ`'s committed values have at least `K` incorrect proof blocks, flock-verify accepts with probability at most
+`bad` (`hRef`). If `σ`'s committed values have at least `K` incorrect proof blocks, verity-verify-proof accepts with probability at most
 `miss(K) + ε_ks + δ_link + Pr[bad]`. `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` are open as in
 `Prog.flock_headline`; `hRef` is the refinement. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}

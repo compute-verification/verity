@@ -68,7 +68,7 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
     for s in requested:
         m = re.search(r"wall=(\d+)s", v.get(s, ("", ""))[1])
         if m:
-            meas.append({"name": f"{s}_wall", "value": int(m.group(1)), "unit": "s"})
+            meas.append({"name": f"proofs/one-stage.{s}-wall", "value": int(m.group(1)), "unit": "s"})
     files: list[str] = []
     if run_dir is not None:
         ev = run_dir / "evidence"

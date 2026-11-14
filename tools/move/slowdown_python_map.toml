@@ -2,7 +2,7 @@
 # renames, on a tree `slowdown_calculator_names_map.toml` and `slowdown_prose_map.toml` have run on. They rename no
 # path, module or Lean declaration, so the change they make is an ordinary one, reviewed as such; the suites that import
 # the calculator are its evidence.
-# - In the calculator (`verity/protocols/inference_only/slowdown/`): the class `Overhead` is `Slowdown` and its
+# - In the calculator (`benchmarks/slowdown/`): the class `Overhead` is `Slowdown` and its
 #   number `Overhead.rho` is `Slowdown.value`; `theorem.overhead`, which returns one, is `theorem.slowdown`; an
 #   estimate's field holding one, `Estimate.overhead`, is `Estimate.parts`, since the number has the name:
 #   `Estimate.rho`, `Corner.rho` and `Point.rho` are `.slowdown`, as `min_cut.Bound.slowdown` already is;
@@ -30,44 +30,44 @@
 
 # a `Slowdown`'s number is its `value`
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/slowdown/theorem.py", "verity/protocols/inference_only/slowdown/tests/test_theorem.py", "verity/protocols/inference_only/slowdown/tests/test_envelopes.py"]
+files = ["benchmarks/slowdown/slowdown/theorem.py", "benchmarks/slowdown/tests/test_theorem.py", "benchmarks/slowdown/tests/test_envelopes.py"]
 words = { "`rho` (the hardware multiple" = "`value` (the hardware multiple", ".rho" = ".value", "def rho" = "def value", "overhead(" = "slowdown(" }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/tests/test_theorem.py"]
+files = ["benchmarks/slowdown/tests/test_theorem.py"]
 words = { "overhead," = "slowdown," }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/tests/test_envelopes.py"]
+files = ["benchmarks/slowdown/tests/test_envelopes.py"]
 words = { "multiple_bound, overhead" = "multiple_bound, slowdown" }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/run.py"]
+files = ["benchmarks/slowdown/run.py"]
 words = { "s.rho" = "s.value" }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/slowdown/scenario.py"]
+files = ["benchmarks/slowdown/slowdown/scenario.py"]
 words = { "self.overhead.rho" = "self.parts.value", "overhead: Overhead" = "parts: Slowdown", "least, overhead" = "least, slowdown", "overhead(" = "slowdown(" }
 
 # the README's names: once the bare rows have run, the JSON's two keys are one, and no name says overhead
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/README.md"]
+files = ["benchmarks/slowdown/README.md"]
 [words_in.words]
 "overhead(" = "slowdown("
 "and the JSON's `rho` and `slowdown` all name the slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);" = "and a bound's or an attack's `slowdown` in the JSON all name the slowdown, once called the overhead; a result's or a family's `slowdown` and"
 
 # an estimate's `Slowdown` is its `parts`
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/slowdown/scenario.py", "verity/protocols/inference_only/slowdown/slowdown/analysis.py", "verity/protocols/inference_only/slowdown/run.py", "verity/protocols/inference_only/slowdown/periods.py", "verity/protocols/inference_only/slowdown/tests/test_analysis.py",
-         "verity/protocols/inference_only/slowdown/tests/test_scenario.py", "verity/protocols/inference_only/slowdown/tests/test_circuits.py"]
+files = ["benchmarks/slowdown/slowdown/scenario.py", "benchmarks/slowdown/slowdown/analysis.py", "benchmarks/slowdown/run.py", "benchmarks/slowdown/periods.py", "benchmarks/slowdown/tests/test_analysis.py",
+         "benchmarks/slowdown/tests/test_scenario.py", "benchmarks/slowdown/tests/test_circuits.py"]
 words = { ".overhead" = ".parts" }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/tests/test_attacks.py"]
+files = ["benchmarks/slowdown/tests/test_attacks.py"]
 words = { "p.rho" = "p.slowdown" }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/slowdown/**"]
+files = ["benchmarks/slowdown/**"]
 words = { "Overhead.rho" = "Slowdown.value", "Overhead" = "Slowdown", "theorem.overhead" = "theorem.slowdown", "rho_worst" = "slowdown_worst", "rho_best" = "slowdown_best", "rhos" = "slowdowns", "test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho" = "test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_the_slowdown", "test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_one" = "test_pouw_as_deployed_on_the_h200_certifies_so_little_that_the_slowdown_stays_near_one", "test_rho_and_the_time_to_the_target_do_not_depend_on_gates_per_flop" = "test_the_slowdown_and_the_time_to_the_target_do_not_depend_on_gates_per_flop", "rho" = "slowdown" }
 
 # --- beside it: the names that hold the calculator's path or data
@@ -103,11 +103,11 @@ files = ["benchmarks/spot_figures/figure1.py"]
 words = { "RHO_HARDWARE" = "SLOWDOWN_HARDWARE", "RHO_MODEL" = "SLOWDOWN_MODEL", "RHO" = "SLOWDOWN", "from_rho" = "from_registry", "rho" = "registry" }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/nci/bracket.py"]
+files = ["benchmarks/nci/bracket.py"]
 words = { "rho = Gamma" = "slowdown = Gamma", "or rho <" = "or slowdown <", '"rho": rho' = '"rho": slowdown' }
 
 [[words_in]]
-files = ["verity/protocols/inference_only/nci/tests/test_kappa.py"]
+files = ["benchmarks/nci/tests/test_kappa.py"]
 words = { "test_every_shape_is_rhos" = "test_every_shape_is_the_slowdown_calculators", "test_the_library_models_rho_also_has_are_its_sizes" = "test_the_library_models_the_slowdown_calculator_also_has_are_its_sizes", "rhos" = "theirs" }
 
 [[words_in]]
@@ -193,6 +193,6 @@ strings = ["the board's `\"rho\"`"]
 
 [keep_in]
 # SPOT's risk ρ(m), the integrity profile's
-"verity/protocols/inference_only/slowdown/tests/test_held_to_core.py" = ["rho"]
+"benchmarks/slowdown/tests/test_held_to_core.py" = ["rho"]
 # the harness's keys, each a row of its block
 "benchmarks/training_slowdown/**" = ["\"rho\"", "'rho'", "`rho`", "\"rho_fit\"", "`rho_fit`"]

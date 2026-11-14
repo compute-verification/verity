@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.commitments.merkle import tree_levels
 from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
@@ -25,12 +26,13 @@ from verity.protocols.accounting.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
-from verity.commitments.merkle import tree_levels
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+
 from verity_vllm.program.predict.window_class import PearlTables
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"
@@ -138,8 +140,8 @@ def test_w_is_refused_for_rounds_it_cant_register(tmp_path, monkeypatch):
              (lambda: PWR.record([good, wider], rounds=[2, 3]),
               "round 3's pass commits pearl-b/0 as other rows than an earlier round's"),
              (lambda: PWR.record([reshaped], rounds=[2]),
-              "round 2's call 1 (index 3) reads weight 0 as 128 rows of 128 words, and an earlier call as 64 of 128: W "
-              "registers one shape of each weight's B rows")]
+              ("round 2's call 1 (index 3) reads weight 0 as 128 rows of 128 words, and an earlier call as 64 of 128: W "
+               "registers one shape of each weight's B rows"))]
     for call, why in cases:
         with pytest.raises(ValueError, match=why.replace("(", r"\(").replace(")", r"\)")):
             call()
@@ -157,10 +159,11 @@ def committed(key: bytes, calls: list[tuple[int, int, int, int, int]], s: int = 
     them (u16 words, an FP32 word's low first), and each weight's B rows (N rows of K FP32 words, a random BF16 weight
     widened), committed as PoUW commits them (`audit.commit_rows` at `weight_binding`, owner -2, salted at `HM96_WEIGHTS`
     plus the weight: `clear_audit.Prover`'s tree, the device's `weight_roots`)."""
-    rng, mm, rows, b, weights = np.random.default_rng(1), [], {}, {}, {}
+    rng, mm, b, weights = np.random.default_rng(1), [], {}, {}
+    rows: dict[str, np.ndarray] = {}
     for c, (i, m, real, k, n) in enumerate(calls):
         x, y = (rng.integers(0, 1 << 16, (real, w), dtype=np.uint16) for w in (k, n))
-        a = np.zeros((m, k), "<u4")
+        a: np.ndarray = np.zeros((m, k), "<u4")
         a[:real] = x.astype("<u4") << 16
         root_a = commit_rows(activation_binding(SALT, i), i, [r.tobytes() for r in a], HM96, key, i).commitment.root
         mm.append({"index": i, "m": m, "k": k, "n": n, "weight": c, "real_rows": real, "root_a": root_a.hex(),

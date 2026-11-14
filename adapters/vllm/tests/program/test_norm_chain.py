@@ -32,14 +32,18 @@ BF = torch.bfloat16
 EPS = 1e-6
 
 
-class GemmaNorm(nn.Module):
-    """vLLM `GemmaRMSNorm.forward_native` verbatim (layernorm.py + ir/ops/layernorm.py): `(1 + w.float()) * rms_norm(x)`, the
-    residual form returning `(normed, residual)`."""
+class _NormWeights(nn.Module):
+    """A norm's bf16 weight and epsilon, which each norm below reads in its own `forward`."""
 
     def __init__(self, H: int, eps: float = EPS) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.zeros(H, dtype=BF), requires_grad=False)
         self.variance_epsilon = eps
+
+
+class GemmaNorm(_NormWeights):
+    """vLLM `GemmaRMSNorm.forward_native` verbatim (layernorm.py + ir/ops/layernorm.py): `(1 + w.float()) * rms_norm(x)`, the
+    residual form returning `(normed, residual)`."""
 
     def forward(self, x, residual=None):
         weight = self.weight.float() + 1.0
@@ -56,7 +60,7 @@ class GemmaNorm(nn.Module):
         return x.to(orig_dtype), x_residual
 
 
-class CubeNorm(GemmaNorm):
+class CubeNorm(_NormWeights):
     """`pow(x, 3)` in place of the square: no registered kind."""
 
     def forward(self, x):
@@ -249,12 +253,9 @@ def test_rsqrt_of_widened_refused():
 
 def test_kinds_registered_in_the_pinned_vocabulary_only():
     from verity_vllm.program.frontend.rules.vocab import PROFILES
-    from verity.definitions.registry import dense as DN
-    from verity_vllm.program.quarantine.dense import mean_triton as q
     v3 = PROFILES["b1-eager-v3"]
     assert v3.kinds["mean_triton"](N=2304).id == "MeanTriton_v1{N=2304}"
     assert v3.kinds["attention_softcap"](T=5, NH=8, KVH=4, D=256, CAP=50.0).id == "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}"
-    assert q.MeanTriton is DN.MeanTriton, "quarantine must re-export the promoted Definition (no registry clash)"
     for k in ("mean_triton", "square_bf16", "narrow_f32_bf16", "gelu_tanh_mul", "attention_softcap"):
         assert k not in PROFILES["b1-eager"].kinds and k not in PROFILES["b1-eager-v2"].kinds, "the accepted b1-eager vocabularies are unchanged"
     assert PROFILES["dense2-eager-v1"].kinds.keys() == v3.kinds.keys()
@@ -333,7 +334,7 @@ class Variance(nn.Module):
         return x.to(torch.float32).pow(2).mean(dim=-1, keepdim=True)
 
 
-class LlamaStyleNorm(GemmaNorm):
+class LlamaStyleNorm(_NormWeights):
     """`w * x/rms(x)` (RMSNorm) in place of Gemma's `(1 + w) * x/rms(x)`: a weight-semantics perturbation the comparison must catch."""
 
     def forward(self, x):

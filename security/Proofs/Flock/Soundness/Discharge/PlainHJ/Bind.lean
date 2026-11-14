@@ -128,7 +128,7 @@ theorem tablePHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' 
   exact tableH_bcSiteI p₁ p₂ hrf (fun _ => d) ((loadPublicH_tagsAt _ _ _ _ _).trans hpub) x h
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** at `J` hidden-output tables: at a table flock-verify sets up by
+/-- **`BcSiteH` at every satisfiable site** at `J` hidden-output tables: at a table verity-verify-proof sets up by
 `tablePHJ_bcSiteI`; at a refused one no message satisfies the table. -/
 theorem sitesPHJI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)

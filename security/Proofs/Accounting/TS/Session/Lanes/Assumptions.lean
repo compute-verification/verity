@@ -47,12 +47,12 @@ and `combineComputes_of_lowers`):
   every wire assignment its evaluation agrees with at every unit, the decoded `ok` word reads `1` only where `LaneOk`
   (or `CombineOk`) holds of the decoded inputs. It reads every port row (`portRead`), registered or not, so it is a fact
   of the circuits alone; that every port they read is registered and opens at its registered root is proved from
-  flock-verify's complete check, part of `leafLayer`'s acceptance (`RowsSession.rowsReg_eq_portRead`,
+  verity-verify-proof's complete check, part of `leafLayer`'s acceptance (`RowsSession.rowsReg_eq_portRead`,
   `RowsSession.portRow_opens`, `Flock.Registered.complete_opens`), not assumed.
 
 Nothing is asked of the rows the sessions open. The leaf the layer opens and the receipt it checks are the ones those
 rows decode to (`Accounting.TS.Lanes.leafOf`, `receiptOf`); the known ports' rows (the admit bits, the public inputs,
-lane `l`'s index and every `ok` word `1`) are flock-verify's known-content and known-read checks', part of `leafLayer`'s
+lane `l`'s index and every `ok` word `1`) are verity-verify-proof's known-content and known-read checks', part of `leafLayer`'s
 acceptance (`Accounting.TS.Lanes.laneKnownHolds_of_check`, `combKnownOk_of_check`); the rows several statements read
 (each A row four lanes, each B row four lanes, each partials row lane `l` and the combine) are read in full at one
 registered tree (`PouwWindow.Lanes.ownOf`, `readFull`, which acceptance checks), so they decode alike
@@ -85,9 +85,9 @@ holds of `decC`'s view with `CombineOk`: the rows' XOR in lane order is the rece
 
 It reads every port row, registered or not, and asks nothing of `own`: that every port the decodes read (`ok`'s cone,
 the A and B rows, admit bits, record, partials row, salt, position, roots and lane index) is a port of `own` that opens
-at its registered root is flock-verify's complete check (`Flock.Registered.checkComplete`, part of `leafLayer`'s
+at its registered root is verity-verify-proof's complete check (`Flock.Registered.checkComplete`, part of `leafLayer`'s
 acceptance), from which `RowsSession.rowsReg_eq_portRead` proves the registered reads are the port rows. What stays
-assumed is that the circuit file a session's flock-verify reads computes its Definition, read through the decodes: the
+assumed is that the circuit file a session's verity-verify-proof reads computes its Definition, read through the decodes: the
 Lean has no lowering of a Definition to a circuit, and the session's relation (`CheckedRel`) is that circuit's own
 evaluation. The circuit's input wires follow `PouwWindow.Lanes.wireOf?`'s map (`class_statement.unit_lowering`'s order:
 the input rows one after another, wire `w` the port, row bit and field `wireOf?` gives), which makes the port rows

@@ -158,8 +158,8 @@ def test_one_ptxas_build_may_have_an_entry_per_target():
     p["toolkits"]["12.9.1-sm_90a"] = {**p["toolkits"]["12.9.1"], "args": ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]}
     sm90 = note(args="-arch sm_90a -m 64 -fmad false")
     assert SG.toolkit_of(sm90, p) == ("12.9.1-sm_90a", None) and SG.toolkit_of(NOTES["plain"], p) == ("12.9.1", None)
-    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 "
-                                                                        "with unpinned arguments '-arch sm_100a -m 64'")
+    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (
+        None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 with unpinned arguments '-arch sm_100a -m 64'")
     p["toolkits"]["12.9.1-sm_90a"]["numeric"] = None
     assert SG.toolkit_of(sm90, p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned without a numeric run")
 
@@ -171,8 +171,8 @@ def test_ptxas_verbose_flag_is_not_an_argument_that_matters():
 
 def test_a_toolkit_pinned_without_a_numeric_run_exempts_nothing():
     v = verdict("plain", p=pins(numeric=None))
-    assert v["toolkit"] is None and v["unpinned"] == "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned " \
-                                                     "without a numeric run"
+    assert v["toolkit"] is None and v["unpinned"] == ("ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned "
+                                                      "without a numeric run")
     assert v["offending_n"] == v["flagged"]
 
 
@@ -312,6 +312,22 @@ def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
     assert verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800000"))["covered"] == PLAIN_COVERED
     v = verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800001"))
     assert {o["function"] for o in v["offending"]} == {"udiv16_k"} and "__cuda_sm20_div_u16's body" in v["offending"][0]["why"]
+
+
+def test_a_signature_writes_each_branch_target_by_what_it_names():
+    """A subroutine by its name, a RET's as the caller, a label of the body as how many basic blocks ahead it is, and a
+    label past the body's end as END."""
+    fn = next(f for f in map(SG.Function, SG.parse_nvdisasm(listing("plain"))) if f.name == "sqrt_k")
+    (name, start, end), = fn.subroutines.values()
+
+    def targets(s: int, e: int) -> list[str]:
+        items = [item for block in SG.signature(fn, s, e) for item in block]
+        return sorted(t for item in items for t in re.findall(r"`\(([^)\s]+)\)", item))
+
+    assert name == "__cuda_sm20_sqrt_rn_f32_slowpath"
+    assert targets(start, end) == ["B+2", "B+3", "B+4", "caller"]
+    assert targets(0, len(fn.insns)) == ["B+2", "B+2", "B+2", "B+3", "B+4", "B+4", name, "caller"]
+    assert targets(start, (start + end) // 2) == ["END", "END", "END"]
 
 
 def test_a_float_immediate_is_the_bits_struct_packs_and_none_exactly_where_float_or_struct_refuse():
@@ -800,6 +816,14 @@ def test_tool_notes_reads_every_record_and_refuses_a_short_one():
         SG.tool_notes(elf(SG.EM_CUDA, {".note.nv.tkinfo": short}))
 
 
+def test_a_tool_notes_last_string_may_end_with_its_record():
+    """A string no NUL closes runs to the record's end, and bytes that aren't UTF-8 are read as U+FFFD."""
+    desc = struct.pack("<II4I", 0x81, 0, 1, 7, 9, 11) + b"\0pt\xffas\0v\0b\0-arch  sm_120a"
+    note = struct.pack("<III", 12, len(desc), 2000) + b"NVIDIA Corp\0" + desc
+    assert SG.tool_notes(elf(SG.EM_CUDA, {".note.nv.tkinfo": note})) == [
+        {"tool": "pt\ufffdas", "version": "v", "branch": "b", "args": "-arch sm_120a"}]
+
+
 # ---- the binary's verdict -------------------------------------------------------------------------------------------------
 
 
@@ -828,8 +852,8 @@ def test_why_failed_names_the_first_instruction_and_why():
 
 
 def test_ftz_or_approximate_ptx_fails():
-    r = judge("plain", ptx=["\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
-                            "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n"])
+    r = judge("plain", ptx=[("\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
+                             "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n")])
     assert not r["ok"] and r["ptx_bad"] == ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;", "div.full.f32 %f5, %f1, %f2;",
                                             "sqrt.approx.f32 %f6, %f1;"]
 

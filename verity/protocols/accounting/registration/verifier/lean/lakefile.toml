@@ -1,0 +1,21 @@
+# The registration log's check (`Core.Registration`, `verity/registration/log/v1`) as a core protocol, and the executable
+# its difftest drives. It requires the interface every core protocol implements (`core_protocol`), whose Site it reads,
+# and through it the base packages.
+name = "core_registration"
+defaultTargets = ["RegistrationLog", "core-registration"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_protocol"
+path = "../../../../interface"
+
+[[lean_lib]]
+name = "RegistrationLog"
+
+[[lean_exe]]
+name = "core-registration"
+root = "RegistrationLog.Main"

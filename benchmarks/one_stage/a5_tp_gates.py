@@ -58,7 +58,7 @@ rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``-
 (``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+      python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
@@ -446,8 +446,8 @@ def main(argv=None) -> int:
         ap.error("one refused statement a run: --altered or --made-for")
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
-    import a5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)

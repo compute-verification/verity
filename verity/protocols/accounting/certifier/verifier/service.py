@@ -30,7 +30,7 @@ established: except with probability δ, at most `wrong_units["bound"]` of the n
 uniform K-subset's exact bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's sample
 is Python's
 (`service.select_draw`), which records the coin bytes it read (`read`); the sample of record is the Lean
-verifier's on those bytes (`lean_draw`: Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
+verifier's on those bytes (`lean_draw`: Flock's `verity-verify-proof draw --population n --k K --stream-file`, the Lean
 `draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
 sample is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample
@@ -176,7 +176,7 @@ Lean takes as an input rather than checks:
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
 ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
 through both to the verdict it recorded, and the properties of the Lean's verdict are
-`security/Properties/NetworkCertifier/Check/TransferBlocks.lean`.
+`security/Properties/Certifier/Check/TransferBlocks.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered proof block whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
@@ -421,7 +421,7 @@ def _root_of(record: Any) -> Any:
 def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
     """The period's sample of record: Flock's Lean verifier (`proofs.executable`, which verifies the
     windows' proofs) sampling `subset:k` of n on `read`, the coin bytes the period sample read, in order
-    (``flock-verify draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
+    (``verity-verify-proof draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
     byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
     object, or ``{"refused": why}`` where the bytes run out or the Lean refuses or can't run."""
     try:
@@ -430,14 +430,14 @@ def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
             p = subprocess.run([str(PF.executable()), "draw", "--population", str(n), "--k", str(k), "--stream-file",
                                 str(Path(d) / "coins.bin")], capture_output=True, text=True)
     except (OSError, PF.LeanError) as e:
-        return {"refused": f"flock-verify draw can't run: {e}"}
+        return {"refused": f"verity-verify-proof draw can't run: {e}"}
     lines = [x[len("DRAW "):] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
     if p.returncode != 0 or len(lines) != 1:
-        return {"refused": f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}"}
+        return {"refused": f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}"}
     try:
         return json.loads(lines[0])
     except ValueError:
-        return {"refused": f"flock-verify draw answered a DRAW line that is not JSON: {lines[0][:300]}"}
+        return {"refused": f"verity-verify-proof draw answered a DRAW line that is not JSON: {lines[0][:300]}"}
 
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "

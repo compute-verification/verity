@@ -741,7 +741,7 @@ struct Collector {
   // A device copy of the ring: a flush copies its descriptors there (one H2D on the gather's stream) and the kernel reads them from
   // device memory, not over PCIe from every block (VERITY_GATHER_DESC_DEV=0, read at enable_gather, keeps the host-mapped reads).
   GatherDesc* ring_gpu = nullptr;
-  int64_t ring_cap = 0, ring_pos = 0, staged_from = 0;
+  int64_t ring_capacity = 0, ring_pos = 0, staged_from = 0;
   std::vector<at::Tensor> held;
   int blocks_per_desc = 8;
   int64_t tot_flushes = 0, tot_staged = 0, step_flushes = 0, tot_blocks = 0;
@@ -756,7 +756,7 @@ struct Collector {
     if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaHostGetDevicePointer: ") + cudaGetErrorString(rc));
     ring = reinterpret_cast<GatherDesc*>(h);
     ring_dev = reinterpret_cast<GatherDesc*>(d);
-    ring_cap = capacity;
+    ring_capacity = capacity;
     ring_pos = staged_from = 0;
     if (const char* e = std::getenv("VERITY_DRAIN_SIDE")) side_drain = std::string(e) != "0";
     const char* dd = std::getenv("VERITY_GATHER_DESC_DEV");
@@ -780,8 +780,8 @@ struct Collector {
   }
 
   inline void push_one(const char* src, char* dst, int64_t nb, int64_t width, int64_t pitch, int64_t skip) {
-    if (ring_pos - staged_from >= ring_cap) throw std::runtime_error("gather ring full (flush more often)");
-    GatherDesc& g = ring[ring_pos % ring_cap];
+    if (ring_pos - staged_from >= ring_capacity) throw std::runtime_error("gather ring full (flush more often)");
+    GatherDesc& g = ring[ring_pos % ring_capacity];
     g.src = src; g.dst = dst; g.nbytes = nb; g.width = width; g.pitch = pitch; g.skip = skip;
     if (nb > win_max_nb) win_max_nb = nb;
     ++ring_pos;
@@ -811,7 +811,7 @@ struct Collector {
     }
   }
 
-  // Size-adaptive gather geometry.  `blocks_per_desc` is the CAP (the committer's default 1024; 32 is the Llama geometry);
+  // Size-adaptive gather geometry.  `blocks_per_desc` is the upper bound (the committer's default 1024; 32 is the Llama geometry);
   // a decode window whose largest descriptor is a few KB gets ceil(max_nbytes / auto_bytes_per_block) blocks instead (1-2), so the 49
   // launches per decode step stop occupying thousands of mostly idle thread blocks on the serving stream (SM time the worker's SHA
   // kernels and the model's own kernels then compete for).  Same descriptors, same bytes, same destination offsets.
@@ -924,15 +924,15 @@ struct Collector {
     cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();
     cudaStream_t s = side ? fork_side(cur) : cur;
     double t0 = now_s();
-    const int64_t start = staged_from % ring_cap;
+    const int64_t start = staged_from % ring_capacity;
     const int bpd = blocks_for_window();
     win_max_nb = 0;
     tot_blocks += static_cast<int64_t>(bpd) * n;
-    if (start + n <= ring_cap) {
+    if (start + n <= ring_capacity) {
       int rc = verity_gather_launch(descs_for(start, n, s), static_cast<int>(n), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
     } else {                                                         // ring wrap: two launches
-      const int64_t n1 = ring_cap - start;
+      const int64_t n1 = ring_capacity - start;
       int rc = verity_gather_launch(descs_for(start, n1, s), static_cast<int>(n1), bpd, s);
       if (rc == 0) rc = verity_gather_launch(descs_for(0, n - n1, s), static_cast<int>(n - n1), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
@@ -1133,7 +1133,7 @@ struct Fa2Wrap {
   at::Tensor boundbuf;
   int64_t seq_base = 0;
   bool hold_launch = false;
-  int64_t tot_split_launches = 0, tot_groups = 0, bound_used_peak_words = 0, tot_cap_exceeded = 0, cap_exceeded_peak_bytes = 0;
+  int64_t tot_split_launches = 0, tot_groups = 0, bound_used_peak_words = 0, tot_over_bound = 0, cap_exceeded_peak_bytes = 0;
   int64_t bound_alloc_bytes = 0;
   std::unordered_map<uint64_t, std::vector<int64_t>> seqlens_cache;   // (cu_seqlens_q data_ptr, numel) -> per-sequence lengths (one D2H each)
 
@@ -1202,7 +1202,7 @@ struct Fa2Wrap {
   void advance_launch() { ++launch; ++launches_in_step; }
   void end_launch() { advance_launch(); ++tot_launches; ++tot_split_launches; }
 
-  // a prefix view of the one bounded buffer when the group fits, else the per-geometry buffer (recorded: cap exceeded)
+  // a prefix view of the one bounded buffer when the group fits, else the per-geometry buffer (recorded: bound exceeded)
   at::Tensor bounded_or_geometry_buffer(int64_t HB, int64_t M, int64_t NB, int64_t BN, int64_t D, bool split_path) {
     const int64_t words = ((mat_total_words(HB, M, NB, BN, D) + 63) / 64) * 64;
     if (split_path && bound_words > 0 && words <= bound_words) {
@@ -1213,8 +1213,8 @@ struct Fa2Wrap {
       if (words > bound_used_peak_words) bound_used_peak_words = words;
       return boundbuf.narrow(0, 0, words);
     }
-    if (split_path && bound_words > 0) {                      // a single sequence (or group) larger than the cap: named on the record, not hidden
-      ++tot_cap_exceeded;
+    if (split_path && bound_words > 0) {                      // a single sequence (or group) larger than the bound: named on the record, not hidden
+      ++tot_over_bound;
       if (words * 4 > cap_exceeded_peak_bytes) cap_exceeded_peak_bytes = words * 4;
     }
     return buffer(HB, M, NB, BN, D);
@@ -1261,8 +1261,8 @@ struct Fa2Wrap {
     const int64_t NB = (max_k + BN - 1) / BN;
     // The compacted multi-sequence path is the bounded one.  A GROUP of a split launch (hold_launch, set by the driver) is on
     // that path whatever its own b: a one-sequence group is NOT a B=1 launch -- it must stage the same per-sequence rectangle under the
-    // same global name as the unsplit launch (in the whole-buffer b == 1 branch below, a cap of 512 MiB commits 27,376 tensors /
-    // 243,529,063 leaves where caps 0 and 2048 commit 28,016 / 133,679,303).
+    // same global name as the unsplit launch (in the whole-buffer b == 1 branch below, a bound of 512 MiB commits 27,376 tensors /
+    // 243,529,063 leaves where bounds 0 and 2048 commit 28,016 / 133,679,303).
     const bool in_split = hold_launch;
     const bool compacted_path = ((b >= 2 || in_split) && compact && !swapped);
     const bool split_path = (compacted_path && bound_words > 0);
@@ -1284,7 +1284,7 @@ struct Fa2Wrap {
       set_tap_tag.callBoxed(st2);
     }
     py::object res = tapped_op(*args, **kwargs);
-    if (skipped() != skipped0) {                                  // the kernel refused the declared tile/caps and wrote nothing
+    if (skipped() != skipped0) {                                  // the kernel refused the declared tile/bounds and wrote nothing
       refuse("skipped by the kernel (declared tile BN=" + std::to_string(BN) + " D=" + std::to_string(D) + ", HB=" + std::to_string(HB)
              + " M=" + std::to_string(M) + " NB=" + std::to_string(NB) + "); stream not bound");
       if (!hold_launch) advance_launch();
@@ -1358,7 +1358,7 @@ struct Fa2Wrap {
       try { c->put(name_id(launches_in_step, HB, M, NB, BN, D), buf); } catch (const std::exception& e) { c->errors.emplace_back(std::string("fa2: ") + e.what()); }
       tot_bytes += buf.numel() * 4;
       if (b >= 2 && zero_after) {
-        // Whole-buffer (swapped decode) launches of a multi-sequence batch: a slab whose sequence has fewer key blocks than the buffer's NB cap
+        // Whole-buffer (swapped decode) launches of a multi-sequence batch: a slab whose sequence has fewer key blocks than the buffer's NB bound
         // leaves its upper blocks unwritten, so without zeroing the staged identity carries the previous launch's values there (measured:
         // B=4 pair-0 vs pair-1 roots differed only in unprocessed key-block regions of these rows).  Zero after staging so the identity is
         // this launch's writes + zeros.  In gather mode put() only records the descriptor and the D2D runs at the next flush(), so flush
@@ -1391,10 +1391,10 @@ struct Fa2Wrap {
     d["launches"] = tot_launches; d["bytes"] = tot_bytes; d["wrap_s"] = tot_wrap_s; d["geometries"] = geometries;
     d["compacted_launches"] = tot_compacted; d["compact"] = compact; d["zero_after"] = zero_after;
     d["refused"] = tot_refused; d["tap_layout"] = set_tap_v8 ? 8 : 7; d["hdims_mask"] = hdims_mask; d["ms"] = ms;
-    // bounded-tap telemetry (bytes): the cap, the one bounded allocation, its peak prefix in use, split counts
+    // bounded-tap telemetry (bytes): the bound, the one bounded allocation, its peak prefix in use, split counts
     d["bound_bytes"] = bound_words * 4; d["bound_alloc_bytes"] = bound_alloc_bytes; d["bound_used_peak_bytes"] = bound_used_peak_words * 4;
     d["split_launches"] = tot_split_launches; d["split_groups"] = tot_groups;
-    d["cap_exceeded_launches"] = tot_cap_exceeded; d["cap_exceeded_peak_bytes"] = cap_exceeded_peak_bytes;
+    d["cap_exceeded_launches"] = tot_over_bound; d["cap_exceeded_peak_bytes"] = cap_exceeded_peak_bytes;
     int64_t geom_bytes = 0;
     for (auto& kv : bufs) geom_bytes += kv.second.numel() * 4;
     d["geometry_buffers_bytes"] = geom_bytes;                 // the per-geometry buffers still resident (unsplit launches: b == 1, decode)
@@ -1408,7 +1408,7 @@ struct Fa2Wrap {
 // cu_seqlens_q cu_seqlens_k cu_seqlens_k_new seqused_q seqused_k max_seqlen_q max_seqlen_k page_table ... num_splits at 30).  Geometry: slab =
 // (sequence, KV head) -> HB = b * h_k; M = max_seqlen_q * (h / h_k) packed rows; tile (kBlockM, kBlockN) = tile_size_fwd_sm90 under
 // use_one_mma_wg (max_seqlen_q * g <= 64): hd 64 -> 64x192 / 192x128, hd 128 -> 64x128 / 128x128 (hidden_source.fa3_tile); NB = ceil(max_seqlen_k
-// / kBlockN).  Names `fa3.m1/L<k>/g<HB>x<M>x<NB>x<BN>x<D>` (hidden_source.fa3_stream_name).  A kernel skip (declared tile != selected, caps,
+// / kBlockN).  Names `fa3.m1/L<k>/g<HB>x<M>x<NB>x<BN>x<D>` (hidden_source.fa3_stream_name).  A kernel skip (declared tile != selected, bounds,
 // split path) or an uncovered launch is refused -> the identity check fails the run closed.
 struct Fa3Wrap {
   Collector* c;
@@ -1535,7 +1535,7 @@ struct Fa3Wrap {
     tot_bytes += buf.numel() * 4;
     if (b >= 2 && zero_after) {
       // Fa2Wrap's zeroing rule, for the FA3 tap: a multi-sequence launch stages the whole (HB, M, NB) buffer: a slab whose sequence has
-      // fewer key blocks / query rows than the launch's NB / M cap leaves those positions unwritten, so the staged identity would carry the
+      // fewer key blocks / query rows than the launch's NB / M bound leaves those positions unwritten, so the staged identity would carry the
       // previous launch's values there (measured on the Llama H100 b8 1024/128 workload: pair-0 root != pair-1 == pair-2 -- history, not values).
       // Zero after staging so the identity is this launch's writes + zeros; in gather mode put() only records the descriptor and the D2D
       // runs at the next flush(), so flush first -- a memset straight after put() would bind zeros.  b == 1 unchanged (roots of the b1 rows hold).
@@ -1952,7 +1952,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readonly("launch", &Fa2Wrap::launch)
       .def_readwrite("compact", &Fa2Wrap::compact)
       .def_readwrite("zero_after", &Fa2Wrap::zero_after)
-      .def_readwrite("bound_words", &Fa2Wrap::bound_words)      // bounded tap: cap in i32 words (0 = off)
+      .def_readwrite("bound_words", &Fa2Wrap::bound_words)      // bounded tap: bound in i32 words (0 = off)
       .def_readwrite("seq_base", &Fa2Wrap::seq_base)
       .def_readwrite("hold_launch", &Fa2Wrap::hold_launch)
       .def_readwrite("ms", &Fa2Wrap::ms)

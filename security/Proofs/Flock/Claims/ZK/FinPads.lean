@@ -440,7 +440,7 @@ theorem repOpenRest_pads : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w 
   have hst : (stsOf x)[(2 * i + r) / 2]! = stAt x ⟨i, hi⟩ := by
     rw [show (2 * i + r) / 2 = i by omega]
     exact getElem!_pos (stsOf x) i hi'
-  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * i + r) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * i + r) / 2]!.wideLeaf (stsOf x)[(2 * i + r) / 2]!.m =
       .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := by
     rw [hst]
     exact (zkTab x ⟨i, hi⟩).hz

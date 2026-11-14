@@ -11,8 +11,9 @@ select, the second stage's and round 2's check with no code. The held copies agr
 (`HeldMatches`), so the model's replay sample on round 0's coin is the select's units (part 1, `sample_read`), which are
 the units the sample proves (`proved_select`), and the model's second sample is the run's (part 2, `secondDraw_read`). What
 the verifier holds is the model's (`OwnAgrees`), round 2 had statements (`statements_some`), and round 2's check gives
-the model's statement check (part 3, `RoundTwo`). The sessions accept (`SessionsAccept`), so the play accepts on its
-coins (part 4, `accepts_seqCoins`). The clauses round 2 does not make are the statement's premises.
+the model's statement check (part 3, `RoundTwo`): `stmtOk_of_accepted`, which reads no session. The sessions accept
+(`SessionsAccept`), so the play accepts on its coins (part 4, `accepts_seqCoins`). The clauses round 2 does not make
+are the statement's premises.
 -/
 
 @[expose] public section
@@ -21,7 +22,7 @@ namespace SpotFlock.RunsAs
 
 open Claims
 open Lean (Json)
-open Round2 (core OwnAgrees)
+open Round2 (core OwnAgrees NamesDistinct StmtsAre TwoHolds RecordsHeld RegistersNone RoundsHeld ScopeHeld PinHeld)
 
 /-- Failing a check at each of a list's entries leaves a code where the check had one or the list has an entry. -/
 theorem foldl_fail_ne : ∀ (l : List (String × Json)) (c : Spot.Check), (c.codes ≠ #[] ∨ l ≠ []) →
@@ -69,9 +70,16 @@ theorem resolve_ne_all {rule : Spot.Select.Rule} {p query} {resolved : Spot.Sele
     simp
   · cases h
 
-/-- **`SpotRunAcceptsPlay`.** -/
-theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
-  intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm htwo hnd hrec hnone hx hm₁ hr2 hsa hpc
+/-- **An accepted two-stage run's session statements pass the model's statement check**, at any round-0 coin and
+second stage's coins that carry the bytes the run's samples read (`PlayCoins`): parts 1 to 3 and 5, with no session
+read. The statements' message `m₂` states the run's statements (`StmtsAre`), each with its template's rounds, in scope
+and its reference statement but for the run's fields. -/
+theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} {h : Held} {x m₁ m₂ : Msg}
+    {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (ha : AcceptedTwo i it j) (hm : HeldMatches i it h) (htwo : TwoHolds h)
+    (hnd : NamesDistinct h) (hrec : RecordsHeld h x m₁) (hnone : RegistersNone it.record)
+    (hx : jsonMsg x = some i.record) (hm₁ : jsonMsg m₁ = some it.record) (hr2 : RoundTwo h)
+    (hstm : StmtsAre h m₂ (it.statements.getD #[])) (hrounds : RoundsHeld h m₂) (hscope : ScopeHeld h m₂)
+    (hpin : PinHeld h m₂) (hpc : PlayCoins h i it c₀ c₁) : stmtOk h x m₁ m₂ c₀ c₁ = true := by
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂, read₂,
     strata, hrule, hns, hids, hks, hss, -, hstrata, hcodes⟩ := accepted_steps ha
   obtain ⟨n, rule, law, workTable', resolved', -, -, -, ht', hres', hreg⟩ := hm.first
@@ -108,14 +116,18 @@ theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
     all_goals rfl
   obtain ⟨ss, hst⟩ := statements_some hcodes
   rw [hst] at hcodes
-  rw [hst, Option.getD_some] at hsa
-  obtain ⟨hstm, hrounds, hscope, hpin, hacc⟩ := hsa
+  rw [hst, Option.getD_some] at hstm
   have hdec : decode x = some ⟨i.record, portRoots i.record⟩ := by
     unfold decode
     rw [hx]
     rfl
-  have hok : stmtOk h x m₁ m₂ c₀ c₁ = true :=
-    hr2 _ ss x m₁ m₂ c₀ c₁ _ it.record draw₂ hdec hm₁ hsd hown hstm hnone htwo hnd hrec hrounds hscope hpin hcodes
-  exact accepts_seqCoins h H x [] m₁ m₂ c₀ c₁ hok P' (fun _ => ()) r' hacc
+  exact hr2 _ ss x m₁ m₂ c₀ c₁ _ it.record draw₂ hdec hm₁ hsd hown hstm hnone htwo hnd hrec hrounds hscope hpin hcodes
+
+/-- **`SpotRunAcceptsPlay`.** -/
+theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
+  intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm htwo hnd hrec hnone hx hm₁ hr2 hsa hpc
+  obtain ⟨hstm, hrounds, hscope, hpin, hacc⟩ := hsa
+  exact accepts_seqCoins h H x [] m₁ m₂ c₀ c₁
+    (stmtOk_of_accepted ha hm htwo hnd hrec hnone hx hm₁ hr2 hstm hrounds hscope hpin hpc) P' (fun _ => ()) r' hacc
 
 end SpotFlock.RunsAs

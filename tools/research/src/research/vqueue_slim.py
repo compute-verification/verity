@@ -126,7 +126,7 @@ AUDIT_BUILT_RE = re.compile(r"build: |lean: proved_in: \S+'s build did not pass 
 #: failure, not the tree's
 STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.M)
 #: what a log prints when its machine failed it, beyond `vqueue_records.FAULT_RE`: `tele run` refusing a run its machine's cgroups
-#: would leave without a memory cap (`telemetry.cgroup.uncapped`)
+#: would leave without a memory limit (`telemetry.cgroup.uncapped`)
 MACHINE_SAYS = re.compile(r"refused to start the workload: this machine caps each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
 SUITE_RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard")
@@ -157,6 +157,9 @@ HEAVY_PART, HEAVY_REST = "lean-audit:security/Proofs", "lean-audit:*"
 CARRY_WAIT_S = 180
 #: what names the runs ``after`` holds to the candidate's check.py, whose launch sends their packs first (`check.carried_packs`)
 CARRY_ENV = "TRAIN_CARRY_FROM"
+#: what names the candidate a check is built on to its check.py, whose suites that candidate's check answers for where their
+#: key there is their key here (`start`'s ``suites_from``, `check.lender`)
+LEND_ENV = "TRAIN_SUITES_FROM"
 
 
 @functools.cache
@@ -328,9 +331,23 @@ def _carrying(runs: Iterable[str]):
         os.environ.pop(CARRY_ENV, None)
 
 
+@contextlib.contextmanager
+def _lending(sha: str | None):
+    """`LEND_ENV` naming ``sha`` while a launch starts, and in no launch after, as `_carrying` names its runs.  Only this sets
+    it in the loop's process."""
+    if not sha:
+        yield
+        return
+    os.environ[LEND_ENV] = sha
+    try:
+        yield
+    finally:
+        os.environ.pop(LEND_ENV, None)
+
+
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
           audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "",
-          avoid: Iterable[str] = ()) -> dict | None:
+          avoid: Iterable[str] = (), suites_from: str | None = None) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -338,7 +355,13 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
     `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
     With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
-    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  Each sends only the steps the
+    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  With ``suites_from``, which
+    is ``base`` while it is a candidate in flight whose check that gates runs the suites (`lends_suites`), each launch names
+    it (`LEND_ENV`, `_lending`) and the record keeps it (``suites_from``): the candidate's check leaves out each suite whose
+    key in ``base``'s tree is its key in the candidate's (`suites.py --lend-from`), which ``base``'s check is running.  This
+    check's verdict then stands on that one's: it passes only once that check passed both suite steps (`borrowed`), and
+    ``base`` dropped drops its candidate.  Not with a ``deselect`` list in force, under which the two checks may run
+    different tests of a suite.  Each sends only the steps the
     candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
     that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
     alone, the others to theirs, and its record keeps them (``heavy_on``), so an auto plan's shards launched later do too, as
@@ -363,8 +386,12 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     if audit_from and not n:
         raise ValueError(f"audit_from {audit_from[:12]}: only the check that gates (``shards``) runs lean-audit, so only it "
                          "can take another check's verdict on it")
+    if suites_from and (not n or suites_from != base):
+        raise ValueError(f"suites_from {suites_from[:12]}: only the check that gates (``shards``) of a candidate built on it "
+                         f"(its base is {base[:12]}) can leave suites to its check")
     kw, skip, flags = driver.beside_args(sha, base)
     if left := deselection(driver, deselect):
+        suites_from = None
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
     every = declared_steps(driver, sha, [s for s in (AFTER_LANDING if n else SLIM_STEPS) if not (audit_from and s == LEAN_STEP)])
@@ -376,12 +403,14 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
             + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
             + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else "")
+            + (f", the suites keyed as in {suites_from[:12]} its check's" if suites_from else "")
             + (f", {HEAVY_PART}'s shard on {heavy_on}" if heavy_on else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
     rec = {"ids": [], "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
+           **({"suites_from": suites_from} if suites_from else {}), **({"deselect": True} if left else {}),
            **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {}),
            **({"avoid": sorted(set(avoid))} if avoid else {})}
     go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
@@ -395,21 +424,22 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
-    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`), the shard that audits `HEAVY_PART` (the
+    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`) and ``suites_from`` (`_lending`), the
+    shard that audits `HEAVY_PART` (the
     whole run, of one) on ``rec``'s ``heavy_on``; ``gone``, the runs it waited for in vain, kept as ``carry_without``.  None,
     logged, once launched; the tail of a launch that registered no run, logged."""
-    sha, sent, kw, n, carry = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or ()
+    sha, sent, kw, n, carry, lend = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or (), rec.get("suites_from")
     heavy_on, avoid = rec.get("heavy_on") or "", rec.get("avoid") or ()
     if go["auto"]:
         got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid, lend=lend)
         if got is not None and not any("launch" in r for r in got["shards"]):
             _grouped(got)
     else:
-        with _carrying(carry):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
+        with _carrying(carry), _lending(lend):
+            got, tail = driver._started(driver.launch_after_landing(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
                                                                **kw, train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
@@ -435,10 +465,11 @@ def _waited(driver: Landing, rec: dict) -> Verdict:
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
             carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None,
-            avoid: Iterable[str] = ()) -> tuple[dict | None, str]:
+            avoid: Iterable[str] = (), lend: str | None = None) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
     plan, or of the auto plan ``doc`` whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry``
-    (`_carrying`); with ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead; each
+    (`_carrying`) and the candidate ``lend`` whose check answers for suites keyed as there (`_lending`); with
+    ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead; each
     shard's machines but ``avoid``'s where another remains (`landing.elsewhere`).  The record of every shard's launch
     (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
     ons = shard_machines(driver.on, n)
@@ -446,8 +477,8 @@ def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | 
         heavy = heavy_shards(driver, sha, n, doc)
         ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
     ons = [elsewhere(on, avoid) for on in ons]
-    with _carrying(carry):
-        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
+    with _carrying(carry), _lending(lend):
+        got = [driver._started(driver.launch_after_landing(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
                for k, on in enumerate(ons, 1)]
     if any(r is None for r, _ in got):
@@ -500,7 +531,7 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
         driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or (),
-        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or ())
+        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or (), lend=rec.get("suites_from"))
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -1319,6 +1350,48 @@ def audits(driver: Landing, rec: dict | None) -> bool:
     """Whether ``rec`` records the check that gates judged on lean-audit (`_gate`), whose verdict on it a check built on its
     candidate, or on one that took it from this one's, may take in place of running it (`start`'s ``audit_from``)."""
     return rec is not None and rec.get("gate") == CHECK and LEAN_STEP in _gate(driver, rec)
+
+
+def answers_suites(rec: dict | None) -> bool | None:
+    """Whether the check ``rec`` records passed both suite steps (`SUITE_STEPS`), every test of them, so that it answers for
+    the suites a check left to it (`start`'s ``suites_from``): the check that gates, launched with no deselect list, its
+    kept verdict's ``passed`` holding both.  None while it keeps no verdict: it may yet.  False for any other, which never
+    will: a check that failed one, though its candidate landed on that failure as inherited; one that ended in infra; one
+    that ran under a deselect list; a run that isn't the check that gates."""
+    if rec is None:
+        return None
+    if rec.get("gate") != CHECK or rec.get("deselect"):
+        return False
+    if not isinstance(got := rec.get("verdict"), dict):
+        return None
+    return set(SUITE_STEPS) <= set(got.get("passed") or ())
+
+
+def lends_suites(driver: Landing, rec: dict | None, main: dict | None) -> bool:
+    """Whether a check built on the candidate of the check ``rec`` records may leave suites to it (`start`'s
+    ``suites_from``): it is the check that gates, judged on both suite steps (`_gate`, `SUITE_STEPS`), launched with no
+    deselect list, its candidate's policy its base's, so that an allowance it is judged under is one the check built on it
+    is judged under too, and ``main``, the record of the check of `main` below the chain, passed both
+    (`answers_suites`).  These only keep a check from leaving suites to one that won't answer for them, which costs it a
+    second start: what its pass counts on is the lender's verdict itself (`borrowed`)."""
+    if rec is None or rec.get("gate") != CHECK or rec.get("deselect") or not set(SUITE_STEPS) <= set(_gate(driver, rec)):
+        return False
+    if driver._policy(rec["tip"]) != driver._policy(rec.get("base") or rec["tip"]):
+        return False
+    return answers_suites(main) is True
+
+
+def borrowed(v: Verdict, rec: dict | None, source: dict | None) -> Verdict:
+    """``v``, `judge`'s verdict of the check ``rec`` records, where that check left suites to the check of the candidate it
+    is built on (``suites_from``): ``v`` once ``source``, that candidate's record as judged now, or the record of the check
+    of `main` once it has landed, answers for them (`answers_suites`); until then ``v`` never passes, a pass pending and
+    a fail not ended, which `vqueue.decide` holds while every failure is inherited.  So the candidate lands only where a
+    check that gates passed each suite it left out, under the key it has in its own tree.  A ``source`` that never will
+    answer holds it for good: the loop starts its check again once that candidate has landed, to run them itself
+    (`vqueue_loop.Loop._beside`)."""
+    if not rec or not rec.get("suites_from") or answers_suites(source):
+        return v
+    return Verdict(PENDING) if v.state == PASS else replace(v, ended=False) if v.state == FAIL else v
 
 
 def _audit(rec: dict | None) -> tuple[Failed, ...] | None:

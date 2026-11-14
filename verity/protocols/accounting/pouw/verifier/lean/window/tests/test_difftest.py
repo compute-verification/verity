@@ -880,7 +880,7 @@ server = D.server_fixture(PORTS["constants"][0])
 
 
 #: What six recorded served execution phases of the current registration registered: a name for the execution phase, the work item, the
-#: law's K′ and the entries root's domain, each at ε 1/2, δ 1/10, 3 grid bits and w = 4096
+#: sampling design's K′ and the entries root's domain, each at ε 1/2, δ 1/10, 3 grid bits and w = 4096
 SERVED = [
     ("e5f4", {"credited": 33554432, "credited_tiles": 8192, "level": 87, "n": 9216}, 4,
      "033a13db83abc925f5f87e5a3c586d3ec3d9cc7ae21245a150aaff0388ae3204d480216a98dbf8e7ea9d369a3b7eeb7e1d7283897e157c5a93c3d47fde9b27e1"),

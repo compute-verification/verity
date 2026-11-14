@@ -11,8 +11,8 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   ones that hold a GPU while mostly computing on the CPU); within a prio, owners take turns (the owner with the fewest
 #   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
     #   project pous (default) or verity (Verity's work, which runs only when no pous job is queued, except circuits' Commit
-#   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory cap
-#   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128
+#   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory limit
+#   (default 128; a GPU job's limit is gpu-lease's, 90% of RAM over the GPU count, a timing job's its own scope's, default 128
 #   and at most gpu-lease's);
 #   timing=1: a timing chunk (network accounting's), from an owner FILL_DIR/timing-owners lists (one glob per line, infra's:
 #   `network-accounting  # who, why`; anyone else's goes to failed/), on one GPU with cpus CPUs of its own (1 to 16, whole
@@ -29,7 +29,7 @@ A wrapper in the job's own scope writes that status to running/.<job>.rc as the 
 runner has adopted it is filed by it too.  A job whose status the runner can't learn goes to held-unknown-exit/, never back to the
 queue: it may have finished, and rerunning a finished job can delete its result.  Exit 0 is done even when a stop raced it.
 It runs with FILL=1, FILL_JOB=<name>, GPU_LEASE_WHO=fill:<owner>; a GPU job through `gpu-lease 1 --preemptible`, so the
-oldest waiter can stop it, and a CPU job in a systemd user scope with its memory cap.
+oldest waiter can stop it, and a CPU job in a systemd user scope with its memory limit.
 
 Every POLL_S seconds the runner:
   - finds the free GPUs (gpu-lease's locks), the waiting `gpu-lease ... --wait` requests, and a timed window (one holder of
@@ -53,7 +53,7 @@ Every POLL_S seconds the runner:
     claimed in CLAIMS beside node 2's queued runs (research's cores.py), at nice 0 in a scope that holds them (AllowedCPUs);
     a job whose cores aren't free, or any while a queued run waits in the claims' line, stays queued;
   - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
-    those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory cap lowered to mem_gb if
+    those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory limit lowered to mem_gb if
     given, and paused (none started) while a train check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
     each scoped CPU job's peak memory (mem_peak_gb) when it exits;
   - keeps fill off each fence in FILL_DIR/fences (`<owner> <gpu> <cpus> <until UTC> [<job glob> <minutes>]  # why`, read each
@@ -112,7 +112,7 @@ YIELD_LOCK = Path(os.environ.get("FILL_YIELD_LOCK", "/workspace/research/locks/c
 YIELD_CPUS = os.environ.get("FILL_YIELD_CPUS", "0-47")
 MAX_TRIES = 2
 # Verity's CPU-only jobs (project=verity, gpus=0) get their own pool, so they never take pous's CPU slots (the terms agreed with
-# the nebius-infra steward): their CPU set, a job count, a per-job and a total memory cap, no start once the disk reaches
+# the nebius-infra steward): their CPU set, a job count, a per-job and a total memory limit, no start once the disk reaches
 # VERITY_DISK_PCT, and none after VERITY_UNTIL; running ones are stopped at VERITY_STOP, before the node stops itself.
 VERITY_CPU_SET = os.environ.get("FILL_VERITY_CPU_SET", "48-95")
 VERITY_CPU_SLOTS = int(os.environ.get("FILL_VERITY_CPU_SLOTS", "6"))
@@ -210,7 +210,7 @@ def fence_for(name: str, fs: list[dict]) -> dict | None:
 
 
 def max_min_exception(name: str, t: float | None = None) -> int | None:
-    """FILL_DIR/max-min: exceptions to the 30-min GPU cap, each approved by infra, one per line, read at each start:
+    """FILL_DIR/max-min: exceptions to the 30-min GPU limit, each approved by infra, one per line, read at each start:
     `<job name glob> <minutes> <until UTC, 2026-10-02T14:45Z>  # who, why`.  A job it names may set max_min up to those minutes
     and never past the line's until, so the exception ends on its own; a line past its until is ignored.  A job a fence names
     gets the fence's minutes the same way."""
@@ -246,7 +246,7 @@ def timing_owners() -> list[str]:
 
 
 def mem_share(n: int) -> int:
-    """gpu-lease's memory cap per GPU, in GB: GPU_LEASE_MEM_GB_PER_GPU, else 90% of MemTotal over the n GPUs."""
+    """gpu-lease's memory limit per GPU, in GB: GPU_LEASE_MEM_GB_PER_GPU, else 90% of MemTotal over the n GPUs."""
     per = os.environ.get("GPU_LEASE_MEM_GB_PER_GPU", "")
     if per.isdigit():
         return int(per)
@@ -295,14 +295,14 @@ def header(p: Path, t: float | None = None) -> dict:
         # the pool's job gets that many CPUs of its own, in whole cores
         h["cpus"] = min(max(whole("cpus"), 1), len(gpu_set(VERITY_CPU_SET, 1 << 16) or ()) or 1)
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
-    cap = max_min_exception(p.name, t)
-    if cap is None:
-        cap = (COMMIT_MAX_MIN if commit and h["gpus"] else TIMING_MAX_MIN if h["timing"]
+    limit = max_min_exception(p.name, t)
+    if limit is None:
+        limit = (COMMIT_MAX_MIN if commit and h["gpus"] else TIMING_MAX_MIN if h["timing"]
                else 360 if h["project"] == "verity" and not h["gpus"] else 30)
     if h["timing"]:
         # nothing stops a timing job before its max_min, so no exception lifts that
-        cap = min(cap, TIMING_MAX_MIN)
-    h["max_min"] = min(h["max_min"], cap)
+        limit = min(limit, TIMING_MAX_MIN)
+    h["max_min"] = min(h["max_min"], limit)
     if bad:
         h["bad"] = " ".join(bad)
     return h
@@ -475,7 +475,7 @@ def start(p: Path, h: dict, backfill: bool = False, claim_fd: int | None = None)
     if timing:
         # root's systemd-run makes the scope in a top-level slice at nice 0 and runs gpu-lease in it as this user, with this user's
         # groups (setpriv; sudo leaves USER and LOGNAME root's): the lease's locks are taken inside the scope, and KEEP holds
-        # them there until nothing else is left in it.  --mem-gb 0: the scope's MemoryMax is the cap, and a user scope of
+        # them there until nothing else is left in it.  --mem-gb 0: the scope's MemoryMax is the limit, and a user scope of
         # gpu-lease's own would take the job out of this one.
         unit_name = f"fill-timing-{int(time.time() * 1000)}"
         # one compute thread per core in each pool `research run --queue --cpus 8` set for the chunks on node 1; the SMT siblings
@@ -1032,8 +1032,8 @@ def tick(n: int) -> str:
             busy = sum(1 for j in running.values() if j["h"].get("cpuset") and j["h"]["owner"] == owner)
             mine = sorted((x for x in own if x[1]["owner"] == owner), key=lambda x: (x[2], x[0].name))
             for p, h, _ in mine[:max(0, s["slots"] - busy)]:
-                cap = int(h.get("mem_gb", CPU_MEM_GB))
-                start(p, {**h, "cpuset": s["cpus"], "mem_gb": min(cap, s["mem_gb"]) if s["mem_gb"] else cap})
+                limit = int(h.get("mem_gb", CPU_MEM_GB))
+                start(p, {**h, "cpuset": s["cpus"], "mem_gb": min(limit, s["mem_gb"]) if s["mem_gb"] else limit})
         pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity"
                     and not j["h"].get("lent") and not j["h"].get("cpuset")]
         left = [x for x in rest if not x[1]["gpus"] and x[1]["project"] != "verity"]
@@ -1116,7 +1116,7 @@ def fence(argv: list[str], t: float | None = None) -> int:
     ap.add_argument("--until", help=f"UTC, at most {FENCE_MAX_H} h from now: 2026-10-02T23:00Z")
     ap.add_argument("--jobs", help="a fill job name glob whose jobs run on the GPU and cores (fill jobs still: a window or a "
                                    "waiter stops them)")
-    ap.add_argument("--max-min", type=int, help="the --jobs jobs' max_min cap, to --until at most")
+    ap.add_argument("--max-min", type=int, help="the --jobs jobs' max_min limit, to --until at most")
     ap.add_argument("--why")
     ap.add_argument("--release", action="store_true")
     a = ap.parse_args(argv)

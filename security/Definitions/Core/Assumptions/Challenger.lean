@@ -16,8 +16,8 @@ randomness of its own.
   nothing there depends on that coin or a later one;
 * `VerifierReadsLog`: the verifier's coins are the ones it reads from the challenger's log.
 
-The challenger is an auditor device on a host the prover doesn't control (`trusted-host`,
-`Verity.Assumptions.TrustedHost`), which is why we believe the first two. The third is the verifier's: it reads coins
+The challenger is an auditor device on a host the prover doesn't control (`trusted-device`,
+`Verity.Assumptions.TrustedDevice`), which is why we believe the first two. The third is the verifier's: it reads coins
 from nowhere else. The two cases where randomness is derived from a coin by hashing are named in
 `Definitions.Core.Challenger`; they read their coin through these premises.
 -/

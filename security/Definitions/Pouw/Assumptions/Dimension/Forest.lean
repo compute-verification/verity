@@ -73,7 +73,7 @@ def wordsQ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ �
   Submodule.span ℚ (Set.range fun x : ↥(U ×ˢ range (nonFinal k m n)) =>
     (Submodule.Quotient.mk (word k m n N R A B x.1.1 x.1.2) : QPart N m n k))
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **Rank ≥ 3 on the grid, in the form Theorem 1 uses**: under checkpoint independence and MinRank ≥ 5, no
 nonzero element of the checked words' span modulo `V₀` is a sum of two atoms, for every `A = g(F₁)` and `B`. -/

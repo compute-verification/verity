@@ -49,7 +49,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The plain verdict at the statement's sample, at `VK keep`
 
-`PlainDraw`'s verdict at every `keep`, the facts about `PlainDrawKDefs`' definitions: flock-verify's acceptance is
+`PlainDraw`'s verdict at every `keep`, the facts about `PlainDrawKDefs`' definitions: verity-verify-proof's acceptance is
 `verifyWithMK keep` at SHA-512 (`With.std`), the record decodes through `Record.decodeWithK keep`, and a recorded round
 is the live outcome's up to its digest (`Round.erase`), since at `keep := fun _ => true` the decoder drops S12's
 comparison of a retained round's bytes with its recorded digest (`decodeWithK_live`). Every reader of the rounds here

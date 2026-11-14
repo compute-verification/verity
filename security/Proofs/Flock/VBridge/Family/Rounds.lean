@@ -299,7 +299,7 @@ message-round ports are the statement's.
 (`ZkOuter.own`, `registeredInput`, `FlockVerify.lean:228-242`) has `own j`'s message-round ports (`SameMsg`). V*'s
 staging writes them (`rec_vstage.messages`, `rec_vstage.py:156-168`; `rec_residuals.write`, `rec_residuals.py:452-454`);
 no check of the verifier's compares a file's port names with the statement's. The check that establishes it: at
-`flock-verify --registered`, the file's ports named `m<k>` or registering `rec-c<k>` are the statement's ports `m<k>`,
+`verity-verify-proof --registered`, the file's ports named `m<k>` or registering `rec-c<k>` are the statement's ports `m<k>`,
 each under `rec-c<k>` with reads `[0, 1]` (`msgPorts` against `ownOf`). -/
 def HOwn : Prop := ∀ R ω t R₂ j, SameMsg (F.zs R ω t R₂ j).own (F.own j)
 

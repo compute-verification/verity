@@ -1,0 +1,58 @@
+# Dither's kernels beside its protocol: what `tools/move/layout.py --map tools/move/dither_kernels_map.toml` moves and
+# rewrites.
+#
+# Dither's GPU kernels, `benchmarks/hash/dither/{h1c,h1f,h1o,h1r,h1u}.cu` and `h1sha.cuh`, become
+# `verity/protocols/experimental/dither/prover/kernels/`, and h1u.cu's own test `tests/test_h1u_domain.py` the protocol's
+# `tests/`. The rest of the directory stays in `benchmarks/hash/dither/`: what drives vLLM, a model, a checkpoint or a
+# leased GPU, and the kernels' Python front ends, which measurement files import by name. Kernel sources are rewritten,
+# each only where a relative `#include` crosses the move's edge (the circuits' headers, at the new depth); the includes
+# between the moved kernels are unchanged. No file is split or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/hash/dither/h1c.cu" = "verity/protocols/experimental/dither/prover/kernels/h1c.cu"
+"benchmarks/hash/dither/h1f.cu" = "verity/protocols/experimental/dither/prover/kernels/h1f.cu"
+"benchmarks/hash/dither/h1o.cu" = "verity/protocols/experimental/dither/prover/kernels/h1o.cu"
+"benchmarks/hash/dither/h1r.cu" = "verity/protocols/experimental/dither/prover/kernels/h1r.cu"
+"benchmarks/hash/dither/h1u.cu" = "verity/protocols/experimental/dither/prover/kernels/h1u.cu"
+"benchmarks/hash/dither/h1sha.cuh" = "verity/protocols/experimental/dither/prover/kernels/h1sha.cuh"
+"benchmarks/hash/dither/tests/test_h1u_domain.py" = "verity/protocols/experimental/dither/tests/test_h1u_domain.py"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = []
+
+[drop]
+paths = []
+
+[split]
+# A reference to `benchmarks/hash/dither/`, which the map splits, stays where it means what stays (the larger part) and
+# follows the kernels where it means the kernels' directory: "old file: old directory" = why, or { to, why }.
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
+           "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "benchmarks/network_e2e/tests/data/**",
+           "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**",
+           "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+           "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+           "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "verity/protocols/flock/prover/tests/fixtures/inner_claims.json", "verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json",
+           "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json",
+           "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_two_lean.json", "verity/protocols/spot/verifier/tests/fixtures/history_read_vector.json", "verity/protocols/proofs/spot/verifier/tests/fixtures/history_read_vector.json",
+           "verity/protocols/pouw/verifier/tests/vectors/pearl_c_u.json", "verity/protocols/accounting/pouw/verifier/tests/vectors/pearl_c_u.json"]
+root_prefixes = ["/opt/vy-verifier/current/"]
+
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.hash.dither.tests.test_h1u_domain" = "verity.protocols.experimental.dither.tests.test_h1u_domain"

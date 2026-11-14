@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.PortRoots
+meta import Flock.PortRoots
+
+/-!
 `PortRoots`: circuits of `row/v1` ports, of `row/v2` ports, and of `row/v2` and `row-seg/v1` ports pass `rowsOk`; a mix
 of `row/v1` and bit rows, or a bit row of the wrong shape, is refused before its public file is read, and so is one that
 names a port twice. Each port's leaves are framed at its own schema, so two ports of one name at different schemas have
@@ -11,10 +16,6 @@ distinct and not their registered ones; a short domain, a missing one, one that 
 `frame_v3` are refused (`IDS_WHY`), and so are two ports of one domain (`DUP_IDS_WHY`) and a row of `2^64` bits
 (`WORDS_WHY`). At shared rows each port's published tree is over its table's rows.
 -/
-module
-
-public import Flock.PortRoots
-meta import Flock.PortRoots
 
 @[expose] public section
 

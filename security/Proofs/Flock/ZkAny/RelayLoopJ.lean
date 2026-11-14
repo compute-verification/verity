@@ -54,6 +54,8 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock.Firewall.Session (State Placed byte? helloOf reqAt)
 open _root_.Flock (SessionSpec Stmt F128)
 
+variable {wideLeaf : Bool}
+
 /-- **What the loop holds of rep stream `k`'s frame** `p` (table `k / 2`'s rep `k % 2`) at the model `M`'s history
 `h`, on the session's entry `rel`, the table's name `name` and its level 0 `l0`, in the loop's frames `R`, the next
 round being at `h.length - 2` of the setup's rounds (`roundsOf`). Where that round is stream `k`'s, past its first,
@@ -158,7 +160,7 @@ def BuiltAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array
     (L0 : _root_.Flock.Firewall.Level0.Slots) (sid : Nat) : Prop :=
   ∀ name l0, _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0 →
     ∃ j g d hi, spec.tables[j]? = some name ∧ M.src (2 * j) = .ok (g, d, hi) ∧
-      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok l0
+      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l0
 
 /-- `BuiltAt` is kept where the session's tables' level 0 stay (`Stays`). -/
 theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {sid : Nat}
@@ -169,10 +171,10 @@ theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {s
 
 /-- **A level 0 `Level0.ofDraws` gives is a `Level0.build`.** -/
 theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
-    (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l) :
-    ∃ lv tPad extra pads salts, l = _root_.Flock.Firewall.Level0.build m lv tPad g extra pads salts := by
+    (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l) :
+    ∃ lv tPad extra pads salts, l = _root_.Flock.Firewall.Level0.build wideLeaf m lv tPad g extra pads salts := by
   unfold _root_.Flock.Firewall.Level0.ofDraws at h
-  cases hz : _root_.Flock.Zk.schedule m with
+  cases hz : _root_.Flock.Zk.schedule wideLeaf m with
   | error e => rw [hz] at h; cases h
   | ok p =>
     obtain ⟨s, tPad⟩ := p
@@ -186,7 +188,7 @@ theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.
 `Finish.tabOfLevel0` commits it as `commitOf` does, and a `build`'s cap is its root (`cap_root_build`). -/
 theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
     {st : _root_.Flock.Setup} {t : _root_.Flock.Firewall.Finish.Tab}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l)
+    (hl : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l)
     (ht : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
     _root_.Flock.Firewall.Finish.flat t.cm0.cap = l.root := by
   have hcm : t.cm0 = _root_.Flock.Firewall.Finish.commitOf l := by
@@ -196,7 +198,9 @@ theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Floc
     · cases ht
     split at ht
     · cases ht
-    rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+    split at ht
+    · cases ht
+    rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
     · rw [hs] at ht; cases ht
     · rw [hs] at ht
       simp only at ht
@@ -218,7 +222,7 @@ theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {
     {R : _root_.Flock.Firewall.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.Firewall.Level0.Level0}
     {f : ByteArray} (hd : DrawInv sid ls R)
     (hdr : ∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok ls[j]) :
+      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) :
     BuiltAt M spec sts (commitRead R sid (spec.tables.zip (sts.map (·.m))) f).2 sid := by
   have hR : ∀ name l0, _root_.Flock.Firewall.Level0.ofSession R sid name = some l0 → False := by
     intro name l0 h

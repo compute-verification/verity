@@ -3,7 +3,7 @@
 #   research run --on vy-nebius-1 --cwd source --project verity --declared-output 'out/*' -- \
 #     bash benchmarks/private_circuit/pod.sh CLS="16,16,8 64,64,32" N=64 CPUS=128-159
 # Builds Flock's circuit prover (CPU, 60-circuit.sh MODE=build: the proving build, `--zk` included) and the Lean verifier
-# (`lake build flock-verify`) once per FLOCK_WORK, each cached under a key of its sources, then runs universal.py per class.
+# (`lake build verity-verify-proof`) once per FLOCK_WORK, each cached under a key of its sources, then runs universal.py per class.
 # env: CLS (space-separated G,N_IN,N_OUT)  N=64 (instances per class)  WARM=1 RUNS=3  SEED=0  WIRED (non-empty: universal.py --wired)
 #      CPUS (a taskset CPU list the whole job runs on; nproc, the build's -j and the prover's threads follow it)
 #      FLOCK_WORK=/workspace/jobs/pc-flock (builds, the Lean build directory, the venv; never the run dir)
@@ -16,14 +16,14 @@ nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.t
 KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protocols/proofs/flock/prover/pod/60-circuit.sh verity/protocols/proofs/flock/prover/*.patch verity/protocols/proofs/flock/prover/cuda_*_patch.py \
   $(find verity/protocols/proofs/flock/prover/cuda verity/protocols/proofs/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 LKEY=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
+B=$W/bin/flock-circuit-$KEY; L=$W/bin/verity-verify-proof-$LKEY
 exec 8>$W/build.lock; flock 8
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   if [ ! -x $L ]; then
     rm -rf $W/lean && cd $(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $W/lean) \
-      && lake build flock-verify && cp .lake/build/bin/flock-verify $L
+      && lake build verity-verify-proof && cp .lake/build/bin/verity-verify-proof $L
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

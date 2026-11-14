@@ -15,7 +15,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
   tree), with each phase's compressions counted from the layout as the engine hashes them, and its G compressions/s;
 - ``--reps`` unmarked steps at each ``--temps`` pass size, ``--leaf-minb`` leaf kernel and ``--graphs`` mode (the first of
   each is the marked step's and the profile's), with the peak memory and how long the host took to enqueue the step (an
-  NVTX range, ``enqueue``, for ``launches.py``); on graphs, after a step that captures them, and each step's roots held to
+  NVTX range, ``enqueue``); on graphs, after a step that captures them, and each step's roots held to
   the marked step's, then one more pair under another salt key;
 - the leaf kernel alone over the widest group's first pass, at 1 and 2 CTAs an SM;
 - one step under torch's profiler (on graphs if they were timed): each kernel's launches and time, and the side stream's
@@ -43,8 +43,7 @@ from typing import Any
 import numpy as np
 from verity_config.settings import SHARED
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
 
 import slots as S  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
@@ -199,7 +198,7 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
     run_dir = Path(SHARED.need("RESEARCH_RUN_DIR"))
     ms = []
     for k, d in docs.items():
-        ms.append({"name": f"{k}.step_gpu_s", "value": best_s(d), "unit": "s"})
+        ms.append({"name": f"kernels/commit-slots.{k}.step-gpu-s", "value": best_s(d), "unit": "s"})
         for g in sorted({st["graphs"] for st in d["steps"]}):
             ms.append({"name": f"{k}.{'graphs' if g else 'eager'}.enqueue_s", "value": best_enqueue_s(d, g), "unit": "s"})
         ms.append({"name": f"{k}.rows_a_slot", "value": d["layout"]["rows"], "unit": "rows"})

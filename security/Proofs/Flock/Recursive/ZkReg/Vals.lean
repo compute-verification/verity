@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The committed values of a `--zk --registered` session at its registered reads
 
-`zk_session_regValsR`: in `flock-verify verify --zk --registered F` sessions of `J` hidden-output tables, at the committed
+`zk_session_regValsR`: in `verity-verify-proof verify --zk --registered F` sessions of `J` hidden-output tables, at the committed
 values the simulation `simZHJ` decodes (`XplurZC` at the rows `rsZHJS`, whose value binding is `vbHJ`), no sampled proof block
 reads a registered read whose session leaf is the registrant's and whose committed value is not the registrant's, except
 with probability `ε_ks + δ_link + δ_reg` (`RegValsSound`'s event, at `layShHJ`'s registered reads `rd`). The registrant's

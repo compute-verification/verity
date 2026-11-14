@@ -243,7 +243,7 @@ def DecodesZk : Prop := ∀ o : Run H rel, Record.decodeWith o.hs o.spec o.recor
 def PublicsZk : Prop := ∀ o : Run H rel, ∀ q ∈ (o.tabs.zip o.sess.publics).toList, q.1.publics q.2 = .ok ()
 
 /-- **Each table has its `--zk` schedule** (`Zk.schedule`: fast100's, level 0 at `q_0` queries). -/
-def SchedulesZk : Prop := ∀ o : Run H rel, ∀ st ∈ o.tabs.toList, ∃ v, Zk.schedule st.m = .ok v
+def SchedulesZk : Prop := ∀ o : Run H rel, ∀ st ∈ o.tabs.toList, ∃ v, Zk.schedule st.wideLeaf st.m = .ok v
 
 /-- **One proof file per rep stream.** -/
 def ProofCountZk : Prop := ∀ o : Run H rel, (o.proofs.size != o.spec.repStreams.size) = false

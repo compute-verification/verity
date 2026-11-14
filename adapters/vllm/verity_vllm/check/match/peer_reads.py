@@ -52,7 +52,7 @@ class PeerReads:
         return parts
 
     def _peer_srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """`_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
+        """`_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", (k, lo', hi'), (0, dL, dH), c)
         iff every run's [lo, hi) lies inside the SAME field (the whole span does: fields are disjoint and sorted), else the record's
         per-run answer (a run outside every field or spanning two is ("PEER?", ..) run by run)."""
         _space, (idx0, lo0, hi0), (_dI, dL, dH), c = p
@@ -65,5 +65,5 @@ class PeerReads:
                 base, k = flds[j]
                 end = flds[j + 1][0] if j + 1 < len(flds) else None
                 if end is None or span_hi <= end:
-                    return [("PEER", k, (lo0 - base, hi0 - base), (dL, dH), c)]
+                    return [("PEER", (k, lo0 - base, hi0 - base), (0, dL, dH), c)]
         return self._per_run(p, unfold)

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.TileCheckWords
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # The plain `pc8` tile check's words under rev1 and its row caps

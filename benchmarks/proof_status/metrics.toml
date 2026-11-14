@@ -1,0 +1,52 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "lean/deployed-guarantees"
+title = "Deployed Lean guarantees"
+owner = "lean"
+unit = "guarantees"
+axis = "Guarantees the Lean locks list as deployed."
+better = "higher"
+command = "research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py"
+every = "1d"
+
+[[metric]]
+id = "lean/deployed-gap-zero"
+title = "Guarantees with no trust gap"
+owner = "lean"
+unit = "guarantees"
+axis = "Deployed guarantees that rest only on the trust base and on premises a ruling allows."
+better = "higher"
+command = "research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py"
+every = "1d"
+
+[[metric]]
+id = "lean/trust-gap"
+title = "Trust gap per guarantee"
+owner = "lean"
+unit = "premises"
+axis = "Premises one deployed guarantee rests on beyond the trust base and those a ruling allows, one series for each guarantee."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py"
+every = "1d"
+
+[[metric]]
+id = "lean/open-premises"
+title = "Open premises per lead"
+owner = "lean"
+unit = "premises"
+axis = "Premises the Lean locks still list as open, each waiting on the issue that discharges it, one series for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py"
+every = "1d"
+
+[[metric]]
+id = "lean/no-honest-witness"
+title = "Guarantees without an honest witness"
+owner = "lean"
+unit = "guarantees"
+axis = "Deployed guarantees with no honest run shown to meet their premises, one series for each lead."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/proof_status/run.py"
+every = "1d"

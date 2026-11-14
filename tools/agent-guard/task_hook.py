@@ -27,8 +27,9 @@ from pathlib import Path
 
 from settings import record_event
 
-REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY",
-                               Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"))
+#: the Slack registry of the checkout this file is in; `hook.sh` names origin/main's copy in its place
+OWN_REGISTRY = Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"
+REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY", OWN_REGISTRY))
 LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
@@ -43,11 +44,12 @@ LINEAR_WRITES = frozenset({
     "create_attachment_from_upload", "prepare_attachment_upload", "prepare_file_upload"})
 
 
-def holders() -> dict[str, str]:
-    """Agent id -> the handle it holds."""
+def holders(text: str | None = None) -> dict[str, str]:
+    """Agent id -> the handle it holds, by the registry whose text this is (REGISTRY's when none is given)."""
     try:
-        reg = json.loads(REGISTRY.read_text())
-    except (OSError, ValueError):
+        reg = json.loads(REGISTRY.read_text() if text is None else text)
+    except (OSError, ValueError) as e:
+        print(f"task_hook: the registry is unreadable, so no agent holds a handle ({type(e).__name__}: {e})", file=sys.stderr)
         return {}
     return {a: h.get("handle", "?") for h in reg.get("handles") or [] for a in AGENT_ID.findall(str(h.get("holder", "")))}
 
@@ -102,7 +104,8 @@ def linear_write(event: dict) -> str | None:
 def main() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
-    except ValueError:
+    except ValueError as e:
+        print(f"task_hook: the event is not JSON, so the call passes ({e})", file=sys.stderr)
         event = {}
     event = event if isinstance(event, dict) else {}
     record_event("task_hook.py", event)
@@ -123,8 +126,8 @@ def main() -> int:
                                 "deny": bool(why), "input_keys": sorted(args),
                                 **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background", "model")},
                                 "resume": bool(args.get("resume"))}) + "\n")
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"task_hook: verdict not logged to {LOG} ({type(e).__name__}: {e})", file=sys.stderr)
     print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why} if why else {"permission": "allow"}))
     return 0
 

@@ -20,8 +20,8 @@ import Proofs.Flock.Soundness.Discharge.Tables.Headline
 # The soundness half of one plain sampled session of `J` tables
 
 `plain_session_soundJ`: for any live prover `τ` of a public-output plain session of `J ≥ 1` tables
-(`flock-verify verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
-`Pr[flock-verify accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+(`verity-verify-proof verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
+`Pr[verity-verify-proof accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesPJ`, `tabPJ`) and bound to the rows it commits
 (`rsPJ`), at the simulated prover `simAuditJ … τ` in the batched session of the `J` tables `planPJ`.
 

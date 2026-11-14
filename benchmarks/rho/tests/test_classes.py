@@ -153,7 +153,7 @@ def test_every_premise_a_class_cites_is_listed_with_a_known_standing():
 
 
 def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
-    assert premise_status(CLASSES["cover"].cites, K) == "supported"
+    assert premise_status(CLASSES["cover"].cites, K) == "assumed"
     assert premise_status(CLASSES["threaded"].cites, K) == "assumed"
     assert premise_status(CLASSES["fanout-priced"].cites, WINDOW.inputs) == "contested"
     assert premise_status(("Nci.Guarantees.CoveringBound",), K) == "supported"
@@ -165,6 +165,24 @@ def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
 def test_every_class_cites_its_statement_first():
     for arg in CLASSES.values():
         assert lean.status(arg.cites[0]) in ("proved", "draft"), arg.name
+
+
+def test_cover_cites_every_premise_its_guarantee_takes_at_a_block():
+    assert {"Nci.Cover.Assumptions.BlockFits", "Nci.Cover.Assumptions.CapBelowDepth",
+            "Nci.Cover.Assumptions.UpdateHardness", "Nci.Cover.MulBlocks.Upstream"} <= set(CLASSES["cover"].cites)
+
+
+def test_a_structure_states_mu_and_none_defaults_it():
+    """`μ` is the serving cut's boundary term's overlap (`Structure.per_bit = ω_max μ`), read from each structure."""
+    reg = Registry.load()
+    for name in reg.names("structure"):
+        st = classes.structure(reg, name)
+        assert st.per_bit == st.omega_max * reg[f"structure.{name}.mu"]
+    doubled = classes.structure(reg.override({"structure.reference.mu": 2}), "reference")
+    assert doubled.per_bit == 2 * doubled.omega_max
+    without = Registry({p.key: p for p in reg.params() if p.key != "structure.reference.mu"})
+    with pytest.raises(ValueError, match="structure.reference states no mu"):
+        classes.structure(without, "reference")
 
 
 def test_a_class_caps_a_block_of_gates_through_the_one_conversion():

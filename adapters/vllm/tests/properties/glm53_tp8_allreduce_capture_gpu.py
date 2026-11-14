@@ -21,7 +21,7 @@ vLLM's defaults: FlashInfer to 36 tokens (one-shot to 9), multimem from 37, with
 
 This process makes every operand, spawns one GPU process per rank for each set of rank processes (`spawns`), which run vLLM's own
 calls on their rank's operands and save their words, and compares those words with the numpy models (`tp_allreduce_check`).  It
-writes `<out>/glm53_tp8_allreduce_capture.json`, the property record `glm53_tp8_allreduce_capture` (`properties.record`), the
+writes `<out>/glm53_tp8_allreduce_capture.json`, the property record `glm53_tp8_allreduce_capture` (`records.property_record`), the
 probes' words under `<out>/words/`, prints one line per case and then `GLM53-TP8-ALLREDUCE GO` or `NO-GO` with the served
 setting, the route prefill takes, its trees and FTZ, each shot's FMA and the h7168 verdict.  The device gate runs first and
 nothing else runs when it fails (exit 3).
@@ -113,7 +113,7 @@ from verity.definitions.registry import tp_allreduce_nodes as TN
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.config import RowEngine
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v3"
 RECORD = "glm53_tp8_allreduce_capture.json"
@@ -739,7 +739,8 @@ class FusedTap:
         from vllm.models.common.ops import fused_allreduce_rms_norm as FAR
 
         self.calls: list[dict[str, Any]] = []
-        self.saved = [(FAR, "_can_use_flashinfer"), (FAR, "tensor_model_parallel_all_reduce"), (FA, "trtllm_mnnvl_fused_allreduce_add_rmsnorm")]
+        self.saved: list[tuple[Any, ...]] = [(FAR, "_can_use_flashinfer"), (FAR, "tensor_model_parallel_all_reduce"),
+                                             (FA, "trtllm_mnnvl_fused_allreduce_add_rmsnorm")]
         self.saved = [(m, n, getattr(m, n)) for m, n in self.saved]
         can_use, reduce, mnnvl = (f for _, _, f in self.saved)
 

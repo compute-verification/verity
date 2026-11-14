@@ -6,26 +6,29 @@ With `--out DIR` it also writes its result, through the harness kit's writer for
 nothing else; the kit says where the file is, `DIR/result.json` outside a research run (`benchmarks/harness/README.md`).
 The result holds the fields every resource's benchmark reports (`measurements`), for the row the term of record is read
 from, the scan at two release schedules, at each scope and monitoring period the calculator's document holds. Every
-figure is the model's and its name says so (`MODELED`); none is computed from a run's K.
+figure is the model's, and its mark and every name but the metric's say so (`MODELED`); none is computed from a run's K.
 
-- `metric`: the term of record as the document gives it, in GB, beside the document's target. Its row is the scan's
-  over the world's year (`RECORD`).
-- the card's figure, a `metric` named under the card's mark (`CARD`: `simulated`): the same row's term at the other
-  jitter bound, what a network certifier whose network card releases at a set time would be charged, as the document
-  gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its `inputs` open
-  with the card as the document states it: that it is simulated, and the clause the figure rests on.
+- `METRIC`, the metric's id: the term of record as the document gives it, in GB, beside the document's target. Its row
+  is the scan's over the world's year (`RECORD`).
+- the card's figure, a `metric` named under `MODELED` and the card's mark (`CARD`: `simulated`): the same row's term at
+  the other jitter bound, what a network certifier whose network card releases at a set time would be charged, as the
+  document gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its
+  `inputs` open with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
 - `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
-  link of its host that a network certifier splits (`uplink`), at its `beta` bits a tick. `beta` is each way and the
+  link of its host that a network certifier splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
   no value, and its `inputs` say why.
 - `verified`: capacity less free, where both have a value.
-- `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases.
+- `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases. Its
+  `inputs` state the δ each execution phase's scan is at and where it is from (`at_delta`): with no `--scan-delta`,
+  the δ at which the world's year carries the calculator's error over a monitoring period, so every row's error is
+  that or less.
 
-A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `metric` and the
-card's figure where the row is the term of record's, are written with no value and that reason in their `inputs`; its
-`error` is written.
+Under a δ the command gives (`--scan-delta`), a row whose error is 1 or more has no bound at its period (`NO_BOUND`):
+its `free` and `verified`, and `METRIC` and the card's figure where the row is the term of record's, are written with
+no value and that reason in their `inputs`; its `error` is written.
 
 Each measurement's `inputs` name what it was computed from, and among them the class the term is at, the most ids a
 response holds, and the scan's δ its error is at, as the document states them (`at_class`, `at_delta`).
@@ -46,8 +49,10 @@ from typing import Any, NamedTuple
 
 #: the directory of the calculator of K, which is loaded from its file
 CALCULATOR = Path(__file__).resolve().parents[1] / "network_traces"
-#: what every measurement's name starts with: the benchmark, and that the figure is the model's
+#: what every measurement's name but the metric's starts with: the benchmark, and that the figure is the model's
 MODELED = "certifier_term/modeled"
+#: the metric's id, OWNER/NAME, the name the term of record is written under
+METRIC = "network-accounting/certifier-term"
 #: the row the term of record is read from: the scan, as `main` charges it
 ROW = "scan"
 #: the scope and monitoring period of that row, the document's `value`: the world's year
@@ -68,17 +73,15 @@ NO_BOUND = "no bound at this period"
 NO_REGISTRATION = ("absent: no registration is given (--registration FILE), and capacity is read only from a "
                    "registered link's beta")
 SCALED = ("modeled: each machine of the scope registered as this one, so the scope's machines times beta times the "
-          "period's ticks; beta is each way and the term is egress, so one direction")
+          "period's seconds; beta is each way and the term is egress, so one direction")
 UNION = (f"{EPS}, the calculator's key: a union bound over the period's execution phases, their number times "
          f"{DELTA}; at 1 or more it bounds nothing")
 
 
 class Uplink(NamedTuple):
-    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a tick each
-    way, of which the term's, egress, is one; a tick's seconds; and what a measurement's inputs say of where they were
-    read."""
+    """A machine's certified boundary links as a registration registers them: their `beta` summed, in bits a second
+    each way, of which the term's, egress, is one; and what a measurement's inputs say of where they were read."""
     beta: int
-    tick: Fraction
     said: str
 
 
@@ -90,12 +93,13 @@ def calculator() -> Any:
 
 
 def uplink(path: Path, links: int) -> Uplink:
-    """A machine's uplink as the registration log at ``path`` registers it (`verity.hardware.registration`'s committed
-    log): the site its site entries register (`Site.of_log`) holds one host, and each of that host's boundary links is
-    split by a network certifier (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
+    """A machine's uplink as the registration log at ``path`` registers it
+    (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the site its site entries
+    register (`Site.of_log`) holds one host, and each of that host's boundary links is split by a network certifier
+    (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
-    from verity.hardware import registration
-    from verity.device import TICK, Entry, Site
+    from verity.protocols.accounting.registration.verifier import registration
+    from verity.device import Entry, Site
 
     try:
         composite, log = registration.log_of(json.loads(path.read_text()))
@@ -104,14 +108,14 @@ def uplink(path: Path, links: int) -> Uplink:
     site = Site.of_log([e for e in log if isinstance(e, Entry)])
     hosts, boundary = [x.id for x in site.locs if x.kind == "host"], site.boundary()
     split = [k for k in boundary if site.certified(k)]
-    if len(hosts) != 1 or len(split) != links or len(boundary) != len(split):
+    if len(hosts) != 1 or len(split) != links or len(boundary) != len(split) or any(k.beta is None for k in split):
         raise SystemExit(f"certifier_term: {path} doesn't register the model's machine, one host whose {links} boundary "
                          f"link(s) a network certifier splits: it registers the hosts {hosts}, whose boundary links are "
-                         f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified")
-    return Uplink(sum(k.beta for k in split), TICK,
+                         f"{[k.id for k in boundary]}, {[k.id for k in split]} of them certified, each at a capacity")
+    return Uplink(sum(k.beta for k in split),
                   f"registration {registration.head(composite, log)}, read as given: host {hosts[0]}'s certified "
-                  f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits each way a tick of "
-                  f"{TICK} s (verity.device)")
+                  f"boundary link(s) {', '.join(f'{k.id} at beta {k.beta}' for k in split)}, in bits a second each way "
+                  "(verity.device)")
 
 
 def stated(key: str, entry: dict) -> str:
@@ -125,14 +129,11 @@ def at_class(doc: dict) -> str:
     return stated(CLASS, doc["inputs"][CLASS])
 
 
-def at_delta(lb: Any, doc: dict) -> str:
-    """The scan's δ the document's ε are at (`DELTA`): as the document states it where it is the calculator's default,
-    and where the command gives another, that it is given and assumed, no scan having run at it."""
-    entry = doc["inputs"][DELTA]
-    if entry["value"] == float(lb.SCAN_DELTA):
-        return stated(DELTA, entry)
-    return (f"{DELTA} = {entry['value']} ({entry['mark']}): each execution phase's scan's δ as the command gives it "
-            "(--scan-delta), to the document's float; no scan has run at it")
+def at_delta(doc: dict) -> str:
+    """The scan's δ the document's ε are at (`DELTA`), as the document states it: the δ, that it is assumed, no scan
+    having run at it, and where it is from, the command (`--scan-delta`) or the error the row that pools the most
+    execution phases is to carry over its monitoring period."""
+    return stated(DELTA, doc["inputs"][DELTA])
 
 
 def unbounded(row: dict) -> list[str]:
@@ -179,31 +180,31 @@ def record(lb: Any, argv: Sequence[str], doc: dict) -> dict:
 
 def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> list[dict]:
     """The calculator ``lb``'s document ``doc`` in the fields every resource's benchmark reports, as the kit writer's
-    measurements, each named under `MODELED`: the term of record (`metric`), whose row is ``head`` (`record`); the
-    card's figure, ``head``'s term at the other jitter bound, a `metric` named under the card's mark; and for
+    measurements: the term of record (`METRIC`), whose row is ``head`` (`record`), and, each named under `MODELED`, the
+    card's figure, ``head``'s term at the other jitter bound, a `metric` named under the card's mark, and for
     each scope and monitoring period the document holds, that row's `free`, `capacity`, `verified` and error (`ERROR`),
-    the row being the scan's at the release schedules of record (`ROW`). `metric`, the card's figure and `free` stand
+    the row being the scan's at the release schedules of record (`ROW`). `METRIC`, the card's figure and `free` stand
     against the document's target, in their own units. Capacity is the scope's machines times a machine's uplink ``up``
     one way over the period, rounded up; with no uplink, capacity and verified have no value and their inputs say why.
-    A row whose error is 1 or more carries no `free`, no `verified` and, where it is ``head``, no `metric` and no card's
+    A row whose error is 1 or more carries no `free`, no `verified` and, where it is ``head``, no `METRIC` and no card's
     figure, and their inputs say why (`unbounded`); its error is written. Every measurement's inputs name the class the
-    term is at and the scan's δ its error is at (`at_class`, `at_delta`), `metric`'s, the card's figure's and `free`'s
+    term is at and the scan's δ its error is at (`at_class`, `at_delta`), `METRIC`'s, the card's figure's and `free`'s
     among the document's inputs; the card's figure's open with the card (`CARD`), whose source is the clause the
     figure rests on."""
     at, target = str(lb.OF_RECORD), doc["target"]["value"]
-    basis = [at_class(doc), at_delta(lb, doc)]
-    by = {k: basis[1] if k == DELTA else stated(k, i) for k, i in doc["inputs"].items()}
+    basis = [at_class(doc), at_delta(doc)]
+    by = {k: stated(k, i) for k, i in doc["inputs"].items()}
     said, card = list(by.values()), doc[CARD_FIGURE]
 
     def stands(value: float, ceiling: float, none: list[str]) -> str | None:
         return None if none else "over target" if value > ceiling else "within target"
 
     none = unbounded(head)
-    out = [{"name": f"{MODELED}/metric", "value": None if none else doc["value"], "unit": doc["unit"], "target": target,
+    out = [{"name": METRIC, "value": None if none else doc["value"], "unit": doc["unit"], "target": target,
             "verdict": stands(doc["value"], target, none), "inputs": [f"modeled: {doc['name']}", *none, *said]},
            {"name": f"{MODELED}/{card['mark']}/metric", "value": None if none else card["value"], "unit": card["unit"],
             "target": target, "verdict": stands(card["value"], target, none),
-            "inputs": [f"modeled: the row of {MODELED}/metric at D_j = {card_bound(lb)}, {card['label']}: no term of "
+            "inputs": [f"modeled: the row of {METRIC} at D_j = {card_bound(lb)}, {card['label']}: no term of "
                        "record", by[CARD], *none, *(s for k, s in by.items() if k != CARD)]}]
     for r in doc["rows"]:
         if r["row"] != ROW:
@@ -212,7 +213,7 @@ def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> li
         row = (f"modeled: benchmarks/network_traces/leak_bounds.py's row {ROW} at D_j = {at}, scope {r['scope']}, "
                f"period {r['period']}, request count {r['request_count']}")
         free, ceiling, none = r["term"][at]["bits"], target * lb.GB, unbounded(r)
-        capacity = None if up is None else math.ceil(r["machines"] * up.beta * Fraction(lb.PERIODS[r["period"]]) / up.tick)
+        capacity = None if up is None else math.ceil(r["machines"] * up.beta * Fraction(lb.PERIODS[r["period"]]))
         absent = [NO_REGISTRATION] if up is None else []
         out += [
             {"name": f"{name}/free", "value": None if none else free, "unit": "bit", "target": ceiling,
@@ -236,8 +237,8 @@ def main(argv: Sequence[str]) -> int:
                        help="also write the result through the harness kit's writer for DIR, which says where the file "
                             "is (DIR/result.json outside a research run): for the scan at two release schedules, each "
                             f"scope and monitoring period's free, capacity, verified and {ERROR}, the term of record, "
-                            "and beside it the same row's figure with a simulated set-time card, every one modeled; a "
-                            "row whose error is 1 or more carries no amount")
+                            "and beside it the same row's figure with a simulated set-time card, every one modeled; "
+                            "under a --scan-delta at which a row's error is 1 or more, that row carries no amount")
     group.add_argument("--registration", type=Path, metavar="FILE",
                        help="with --out: the registration log a machine's certified boundary link is read from, for "
                             "capacity and verified (default: none, and they are written with no value and why)")
@@ -260,7 +261,7 @@ def main(argv: Sequence[str]) -> int:
     try:
         writer = kit.writer(own.out)
         for m in measurements(lb, doc, head, up):
-            writer.measurement(**m)
+            writer.measurement(**m, mark="modeled")
     except ValueError as e:
         raise SystemExit(f"certifier_term: {e}") from e
     return lb.main(rest)

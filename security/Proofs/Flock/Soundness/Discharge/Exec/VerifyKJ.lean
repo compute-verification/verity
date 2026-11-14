@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
-# flock-verify's acceptance through `keep`, at the record's parsed value
+# verity-verify-proof's acceptance through `keep`, at the record's parsed value
 
 `VerifyK.lean`'s walkers read `Record.decodeWithK keep` and `verifyWithMK keep` on the record's text. The recursion's
 last step at the parsed value (`FlockDeploy.nextJ`) runs the verdict on a parsed value `j`, never on a text, so the KS

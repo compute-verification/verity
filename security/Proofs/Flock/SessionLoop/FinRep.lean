@@ -467,7 +467,7 @@ at most `1024 · 65536` (`scope_regions`, `wordsAt_size_le`). -/
 theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) {s0 spec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < 2 * spec.tables.size)
     {ρ h tb hi q f} (hR : RepAt L₀.draws src x w ρ h spec k tb hi q f) :
-    25 ≤ tb.st.m ∧ tb.st.m ≤ 35 ∧ _root_.Flock.Zk.schedule tb.st.m = .ok (tb.sch, tb.tPad) ∧
+    25 ≤ tb.st.m ∧ tb.st.m ≤ 35 ∧ _root_.Flock.Zk.schedule tb.st.wideLeaf tb.st.m = .ok (tb.sch, tb.tPad) ∧
       (_root_.Flock.Firewall.Finish.claimsOf q.xs).size + 2 < 2 ^ 64 := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
     intro α β y f b hb

@@ -28,7 +28,7 @@ The receipt folds take their keys, and their chains their starts, from a second 
 so no fold key is a function of the noise seed seed_j.  `noise` derives the dither, coins and keyed word from seed_j and the
 fx1 fold keys `st` from σ_R (`receipt_seed`).
 
-**The served arm and the receipt.** sm_120's H1 (co32c-u16, `benchmarks/pouw/edited_gemm/cgemm_ref.py`) serves
+**The served arm and the receipt.** sm_120's H1 (co32c-u16, `verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm_ref.py`) serves
 `O = (W + c) Xᵀ` with the dithered `X = V + b` and `W' = W + c + U`, `U` a keyed per-row word with period 32 along k
 (fx1: one keyed IMAD a word before duo's fold).  The arm is the s8 family at its noised layout, `S8Dot_v1`
 with `NOISE "weight"`, `COMMIT "prefix"` and the byteclamp peel of `U` as its tail (`ops.s8`); its committed prefix

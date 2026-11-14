@@ -28,13 +28,13 @@ if [ "${SETUP:-0}" = 1 ]; then
   bash benchmarks/pouw/pearl_c_vllm/setup.sh > "$OUT/setup.log" 2>&1 || { stamp "SETUP_FAIL"; tail -20 "$OUT/setup.log"; exit 10; }
   tail -2 "$OUT/setup.log"
 fi
-KTREE=$(git rev-parse HEAD:benchmarks/pouw/pearl_c_sm120); SHIPS=${SHIPS:-/workspace/pouw/noise-sweep/ships}
+KTREE=$(git rev-parse HEAD:benchmarks/pouw/pearl_c_sm120 HEAD:verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120 | git hash-object --stdin); SHIPS=${SHIPS:-/workspace/pouw/noise-sweep/ships}
 export SHIP_TAR=$SHIPS/$KTREE.tar
 if [ -f "$SHIP_TAR" ]; then
   stamp "ship of kernel tree $KTREE from $SHIP_TAR"
 else
   stamp "ship build"
-  CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+  CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/ship.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
     || { stamp "BUILD_FAIL"; tail -20 "$OUT/build.log"; exit 11; }
   mkdir -p "$SHIPS" && tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}" && mv "$S/ship.tar" "$SHIP_TAR.$$" && mv "$SHIP_TAR.$$" "$SHIP_TAR"
 fi

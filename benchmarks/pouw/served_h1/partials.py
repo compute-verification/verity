@@ -38,7 +38,7 @@ import torch
 
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
-from verity_vllm.protocols.pouw.h1 import receipts as RC
+from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
 
 LANES = RC.LANES
 

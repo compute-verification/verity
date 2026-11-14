@@ -1,7 +1,7 @@
 import Flock
 
 /-!
-`flock-read CIRCUIT PUBLIC [STATEMENT]`: the phases of `flock-verify verify --zk`'s read of a circuit file, each timed,
+`flock-read CIRCUIT PUBLIC [STATEMENT]`: the phases of `verity-verify-proof verify --zk`'s read of a circuit file, each timed,
 one `PHASE {json}` line per phase on stdout: the file's read, its SHA-512 (the pin), its UTF-8 decode and line split,
 `Zk.maskLogOf` (a second decode and split, which `verifyCmd` runs for the statement's tags), each section's `Net.parse`
 split into its tokenizer and `Net.ofRows` (and that into `Sparse.ofRows`, `checkOrder`, `inputsOk`), the class digest,
