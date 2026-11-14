@@ -104,11 +104,11 @@ def DsMlaFp8Tile(B, S, x):
     return tile_quant(D.word_ops(B), [x[i] for i in range(S.T)])
 
 
-def latent_row(o: D.Ops, S, kv, w, cs, to_bf16, sumsq, rope, tile, t=BF16, f32=F32, e4m3=E4M3):
-    """`DsaLatentRowDsMla`'s body over ``o``'s steps: r a Call of ``sumsq``, y_i = r * x_i * f32(w_i) once, kv_c_out its Calls of
-    ``to_bf16``, k_pe_out a Call of ``rope``, and each TILE of y a Call of ``tile``."""
+def latent_row(o: D.Ops, S, kv, w, cs, to_bf16, scale, rope, tile, t=BF16, f32=F32, e4m3=E4M3):
+    """`DsaLatentRowDsMla`'s body over ``o``'s steps: r = ``scale`` of kv's first KVL words, y_i = r * x_i * f32(w_i) once, kv_c_out
+    its Calls of ``to_bf16``, k_pe_out a Call of ``rope``, and each TILE of y a Call of ``tile``."""
     check_row(S.KVL, S.R, S.TILE, S.EPS)
-    r = o.B.call(sumsq, kv[0:S.KVL])
+    r = scale(kv[0:S.KVL])
     y = [o.mul(o.mul(r, o.cvt(kv[i])), o.cvt(w[i])) for i in range(S.KVL)]
     kvc = [o.B.call(to_bf16, v) for v in y]
     kpe = o.B.call(rope, kv[S.KVL:S.KVL + S.R], cs)
@@ -129,8 +129,9 @@ def DsaLatentRowDsMla(B, S, kv, w, cs):
     """One token's program-1 row under `fp8_ds_mla`: r = `DsaRMSNormSumSq_v1{KVL, EPS}` of kv's first KVL words, y_i = `F32Mul(F32Mul(r,
     f32(kv_i)), f32(w_i))`; latent = [`F2fpBf16`(y) | `RoPEHeadGptJ_v2{R}`(kv's last R, cs)], `DsaLatentRow_v1`'s words (kv_c_out
     and k_pe_out); nope and scale `DsMlaFp8Tile_v1{TILE}` of each TILE of y.  The cache row is nope, scale, latent[KVL:]."""
-    return latent_row(D.word_ops(B), S, kv, w, cs, P.F2fpBf16, bind(DN.DsaRMSNormSumSq, N=S.KVL, EPS=S.EPS),
-                      bind(RoPEHeadGptJV2, D=S.R), bind(DsMlaFp8Tile, T=S.TILE))
+    sumsq = bind(DN.DsaRMSNormSumSq, N=S.KVL, EPS=S.EPS)
+    return latent_row(D.word_ops(B), S, kv, w, cs, P.F2fpBf16, lambda x: B.call(sumsq, x), bind(RoPEHeadGptJV2, D=S.R),
+                      bind(DsMlaFp8Tile, T=S.TILE))
 
 
 DSA_DS_MLA_COMPOSITES = [DsMlaFp8Tile, DsaLatentRowDsMla]

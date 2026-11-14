@@ -140,7 +140,7 @@ DsaRMSNormSquareFma = _piece("DsaRMSNormSquareFma", (), lambda S: ((("x", BF16),
 DsaRMSNormMeanRsqrt = _piece("DsaRMSNormMeanRsqrt", ("N", "EPS"), lambda S: ((("sum", F32),), F32), _mean_rsqrt)
 
 
-def _sum_sq_calls(B, S, x):
+def sum_sq_calls(B, S, x):
     """`DsaRMSNormSumSq_v1`'s body on bits as Calls: register k of the 128 threads (`dsa_norm.layout`) is one row of the batch
     that takes it, `DsaRMSNormSquares` for the first two and `DsaRMSNormSquareFma` for each next one; the warps' butterflies
     and their halving tree are `F32Add_v3`s, in `dsa_norm.rms_scale`'s order; then `DsaRMSNormMeanRsqrt{N, EPS}`."""
@@ -159,7 +159,7 @@ def _sum_sq_calls(B, S, x):
     return B.call(bind(DsaRMSNormMeanRsqrt, N=S.N, EPS=S.EPS), D.halving_tree(warps, add))
 
 
-DsaRMSNormSumSqV3 = EW.on_bits("DsaRMSNormSumSq", 3, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), _sum_sq_calls,
+DsaRMSNormSumSqV3 = EW.on_bits("DsaRMSNormSumSq", 3, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), sum_sq_calls,
                                DN.DsaRMSNormSumSq)
 
 _ELEMENT = (("x", BF16), ("w", BF16), ("r", F32))
@@ -200,7 +200,7 @@ DsaRMSNormApplyV3 = EW.on_bits("DsaRMSNormApply", 3, ["G"],
 def _rms_calls(B, S, x, w):
     """`DsaRMSNorm_v1`'s body on bits as Calls: `DsaRMSNormSumSq_v3{N, EPS}`'s body for the scale, then `DsaRMSNormApply_v3`'s
     over the row's N elements."""
-    return _apply_calls(B, SimpleNamespace(G=S.N), x, w, _sum_sq_calls(B, S, x))
+    return _apply_calls(B, SimpleNamespace(G=S.N), x, w, sum_sq_calls(B, S, x))
 
 
 DsaRMSNormV3 = EW.on_bits("DsaRMSNorm", 3, ["N", "EPS"],
