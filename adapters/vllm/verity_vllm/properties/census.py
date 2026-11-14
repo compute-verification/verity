@@ -388,10 +388,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         declared = set(pats) | allow
         residue = []
         seen_declared: set[str] = set()
-        claims_by_kernel: dict[str, list[str]] = {}
         for name, d in cs["kernels"].items():
             cl = claims_for(name, declared)
-            claims_by_kernel[name] = cl
             seen_declared.update(cl)
             row = kernel_rows.setdefault(name, {"counts": {}, "us": {}, "claims": set(), "patterns": set(), "grid": d.get("grid"),
                                                 "block": d.get("block"), "cat": d.get("cat")})
