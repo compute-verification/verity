@@ -444,7 +444,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
         raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs gave {port.accepted!r}; the strategy reaches "
                       f"only refusals")
     if port.need_rejects and total == seen[port.accepted]:
-        raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs was rejected; draw invalid inputs too, or set "
+        raise Vacuous(f"difftest of {port.label!r}: none of {total} inputs was rejected; sample invalid inputs too, or set "
                       f"need_rejects=False for a total function")
     return Stats(total, dict(seen))
 

@@ -289,7 +289,7 @@ theorem group_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {ι V : Type} [Fint
     (full : Paths Ω S → Fin S → Fin nπ → ι → Array String)
     (want : Paths Ω S → Fin S → Fin nπ → ι → List _root_.Flock.Registered.Port)
     (gate : Paths Ω S → Fin S → Fin nπ → Prop) (ok : String) (δ : ℝ)
-    (hCR : Accounting.Premises.TS.SessionsCR sess) (hLaw : Accounting.Premises.TS.ExecutionPhaseDesigns sess out)
+    (hCR : Accounting.Premises.TS.SessionsCR sess) (hSamplingDesign : Accounting.Premises.TS.ExecutionPhaseDesigns sess out)
     (hS : ∀ x w i k, PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok () →
       ∀ u, (sess x w i k).ServedRegistered u)
     (hO : ∀ x w i k, ∃ ks, (ok, ks) ∈ known x w i k)
@@ -305,10 +305,10 @@ theorem group_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {ι V : Type} [Fint
       (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)).SoundAt δ := fun k =>
     checkedOn_soundAt (fun x w i => sess x w i k) (fun x w i => out x w i k) ok
       (fun s => PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u) δ
-      (fun x w i => hCR x w i k) (hLaw k) (fun _ h => h) (fun x w i => hδ x w i k) hδ0
+      (fun x w i => hCR x w i k) (hSamplingDesign k) (fun _ h => h) (fun x w i => hδ x w i k) hδ0
   have hUnwritten : ∀ k (w : Fin S) (i : Fin nπ),
       Pouw.RelativeSecurity.prob (fun x => ¬ (sess x w i k).Written (out x w i k)) ≤ 0 := fun k w i =>
-    (hLaw k w i fun s o => ¬ s.Written o).trans (avg_le _ le_rfl fun x => le_of_eq
+    (hSamplingDesign k w i fun s o => ¬ s.Written o).trans (avg_le _ le_rfl fun x => le_of_eq
       ((congrArg ENNReal.toReal (RowsSession.prob_unwritten (sess x w i k))).trans ENNReal.toReal_zero))
   intro w i
   have hIn : ∀ x, pf.Unsound x w i →
@@ -403,10 +403,10 @@ open Accounting.TS Accounting.TS.Group in
 verifier builds ending in its `o0` row (`okKnown_names`), the served roots registered by the reads built from `own`
 and the one-read check (`RowsSession.servedRegistered_canon`), and `GroupRealizes` at its relation's first disjunct. -/
 theorem Accounting.SecurityProofs.TS.LeafGroupSound : Accounting.Guarantees.TS.LeafGroupSound := by
-  intro Ω _ S nπ n V T sess₀ op sess out known okSalt full want opened rel right δ hCR hLaw hR hδ hδ0
+  intro Ω _ S nπ n V T sess₀ op sess out known okSalt full want opened rel right δ hCR hSamplingDesign hR hδ hδ0
   have h := group_soundAt (groupLayer T n sess out known okSalt full want opened rel right) sess out
     (fun x w i k => okKnown (known x w i k) (okSalt x w i k)) full want
-    (fun _ _ _ => PouwWindow.Lanes.checkChunks T n = .ok ()) "o0" δ hCR hLaw
+    (fun _ _ _ => PouwWindow.Lanes.checkChunks T n = .ok ()) "o0" δ hCR hSamplingDesign
     (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => okKnown_names _ _) hδ hδ0 (fun _ _ _ h => h)
     (fun x w i hg hc hS hn hRo hA hK hV => Or.inl (hR x w i hg hc hS hn hRo hA hK hV))

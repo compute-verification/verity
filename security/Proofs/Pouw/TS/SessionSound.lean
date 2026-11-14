@@ -57,12 +57,12 @@ open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 `ServedRootsLinked`'s event, at most `δs`. Otherwise some sampled proof block is wrong or off, `RowsSession.BadU`, at most
 `n · bound ≤ δ` by `Flock.SecurityProofs.EndToEndRegisteredRows` (`RowsSession.prob_badU_le`). -/
 theorem Accounting.SecurityProofs.TS.SessionSoundAt : Accounting.Guarantees.TS.SessionSoundAt := by
-  intro Ω _ S nπ V pf sess out rows δs δ hCR hAcc hLaw hChk hLink hδ hδ0
+  intro Ω _ S nπ V pf sess out rows δs δ hCR hAcc hSamplingDesign hChk hLink hδ hδ0
   refine soundAt_of_sessions pf (Out := fun s : RowsSession => s.Out) (fun s => s.G)
     (fun s => s.τ) (fun s => s.BadU) sess out
     (fun x w i => LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
       (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
-      rows (sess x w i) (sess x w i).Xv ≠ pf.opened x w i) δs δ hLaw hLink
+      rows (sess x w i) (sess x w i).Xv ≠ pf.opened x w i) δs δ hSamplingDesign hLink
     (fun x w i => (RowsSession.prob_badU_le Flock.SecurityProofs.EndToEndRegisteredRows _ (hCR x w i)).trans
       (hδ x w i)) hδ0 ?_
   rintro x w i ⟨hA, hR⟩

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
-public import Flock
+public import Flock.HmRow
 import all Init.Data.String.TakeDrop
 import all Init.Data.String.Slice
 import all Init.Data.String.Pattern.Basic

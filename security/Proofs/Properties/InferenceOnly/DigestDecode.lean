@@ -5,7 +5,6 @@ public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.Complete.Json.Value
 import Base.Sizes
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 

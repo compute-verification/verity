@@ -1,7 +1,7 @@
 /-
 A recursive session's inner coins as the challenger's release log shows it sampled and opened them: `rec_live`'s live-coin
 part (`verity_flock.rec_live.LiveCoinPart`) on the challenger's coin tree, held to the log as `rec_live.tree_held_reason`
-holds it (`tests/test_challenger_inner_trees.py` holds that to this, the verifier).
+holds it (Flock's prover `tests/test_challenger_audit.py` holds that to this, the verifier).
 
 `rec_live`'s live-coin part opens each round of its session's tree once given what the round answers, which are other bytes
 than the ones `flock-circuit serve` opens a round after (`sessionTreeReason`): the link points, the tree's `session`
