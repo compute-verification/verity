@@ -12,15 +12,15 @@ whole against a challenger side on a host of its own (`wipe_side.py`), its recor
 (the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
 session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
-says `trusted-device` holds only for a session signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's
-host: a run's own pin, or a rehearsal's host name, gives a rehearsal with no bound."""
+says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]` entries
+give the memory challenger for the wipe (`period.json`'s `deployment`): a run's own pin, a rehearsal's host name or a
+configuration nobody committed gives a rehearsal with no bound."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import re
 import socket
 import sys
 import threading
@@ -247,7 +247,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert WP.placement("n0", "n0", OTHER)["kind"] == "prover-node" and WP.placement("n0", "a", OTHER)["kind"] == "own-host"
     simulated = WP.placement("n0", "n0", OTHER, simulated=True)
     assert simulated["kind"] == "simulated" and simulated[WP.PREMISE] == (
-        f"{REHEARSAL}; the memory challenger ran as a process of its own on the developer's node n0, standing in for a "
+        f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran as a process of its own on the developer's node n0, standing in for a "
         "host the developer doesn't control")
     with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the developer's node"):
         WP.placement("n0", "a", OTHER, simulated=True)
@@ -256,47 +256,72 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 AUDITOR = "vy-auditor-2"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 OTHER = hashlib.sha512(b"a key that is no auditor's").hexdigest()
+PINNED = hashlib.sha512(b"the auditor's wipe key").hexdigest()
+CONF = hashlib.sha512(b"a committed configuration").hexdigest()
+PINS = [{"key-sha512": PINNED, "party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"},
+        {"key-sha512": OTHER, "party": "memory-challenger", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]
+UNDER = {"pins": PINS, "configuration": CONF, "committed": frozenset({CONF})}
 
 
-def test_the_auditor_keys_are_sha512s_in_lowercase_hex() -> None:
-    assert WP.AUDITOR_KEYS and all(re.fullmatch("[0-9a-f]{128}", k) for k in WP.AUDITOR_KEYS.values())
-    assert WP.REHEARSAL == REHEARSAL
+def test_the_premise_text_is_the_device_modules() -> None:
+    assert mc.REHEARSAL == REHEARSAL and WP.PREMISE == mc.PREMISE == "trusted-device"
+    assert mc.pinned(PINS, "memory-challenger", "wipe") == {PINNED} and not mc.pinned(PINS, "network-certifier", "wipe")
 
 
 def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() -> None:
     """Every party on the prover's node, the challenger's host named `on-node-rehearsal` and its key the run's own: the
     names say `own-host`, and the premise is a rehearsal's all the same, with the key custody left out of the bound."""
-    where = WP.placement("node-a", "on-node-rehearsal", OTHER)
+    where = WP.placement("node-a", "on-node-rehearsal", OTHER, **UNDER)
     assert where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == f"{REHEARSAL}; the memory challenger ran on on-node-rehearsal, not the developer's node-a"
+    assert where[WP.PREMISE] == (f"{REHEARSAL} (configuration {CONF}); the memory challenger ran on on-node-rehearsal, "
+                                 "not the developer's node-a")
     assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
-    assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None))
+    assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None, **UNDER))
 
 
 def test_the_auditor_host_under_its_pinned_key_holds() -> None:
-    where = WP.placement("vy-dc-h200", AUDITOR, WP.AUDITOR_KEYS[AUDITOR])
+    where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER)
     assert where["kind"] == "own-host" and WP.holds(where) and W.uncertified(where, None) == []
-    assert where[WP.PREMISE] == ("holds: the session is signed under vy-auditor-2's pinned key; the memory challenger ran "
-                                 "on vy-auditor-2, not the developer's vy-dc-h200")
+    assert where[WP.PREMISE] == (f"holds: the session is signed under the key configuration {CONF} pins for "
+                                 "memory-challenger's wipe sessions; the memory challenger ran on vy-auditor-2, not the "
+                                 "developer's vy-dc-h200")
 
 
 def test_the_auditor_hosts_name_under_another_key_is_a_rehearsal() -> None:
-    """The name `vy-auditor-2` is a label: under any key but its pinned one, the premise is a rehearsal's."""
-    for key in (OTHER, WP.AUDITOR_KEYS[AUDITOR].upper(), None):
-        where = WP.placement("vy-dc-h200", AUDITOR, key)
-        assert where["kind"] == "own-host" and not WP.holds(where) and where[WP.PREMISE].startswith(f"{REHEARSAL}; ")
-    assert not WP.holds(WP.placement("n0", "on-node-rehearsal", WP.AUDITOR_KEYS[AUDITOR]))
+    """The name `vy-auditor-2` is a label: under any key but a pinned one for the wipe (the PoUS pin included), the
+    premise is a rehearsal's."""
+    for key in (OTHER, PINNED.upper(), None):
+        where = WP.placement("vy-dc-h200", AUDITOR, key, **UNDER)
+        assert where["kind"] == "own-host" and not WP.holds(where) and where[WP.PREMISE].startswith(f"{REHEARSAL} (")
+
+
+def test_a_configuration_nobody_committed_bounds_nothing() -> None:
+    """Under a configuration whose hash is not one `demos/configurations.toml` commits, or under none, the pinned key
+    reads rehearsal, no bound, whatever key the session carries."""
+    for configuration in (hashlib.sha512(b"a run's own file").hexdigest(), None):
+        where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER | {"configuration": configuration})
+        assert not WP.holds(where) and where[WP.PREMISE].startswith(f"{mc.UNCOMMITTED} (")
+    assert not WP.holds(WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER | {"committed": frozenset()}))
+
+
+def side_pin() -> list[dict[str, str]]:
+    """The configuration's pin of `wipe_side.py`'s key for the memory challenger's wipe sessions."""
+    return [{"key-sha512": wipe_side.key_sha512(), "party": "memory-challenger", "protocol": "wipe",
+             "scheme": "lms-sha512/n64-w1-h20/v0"}]
 
 
 CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
-def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
-    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says."""
+def _side(tmp_path, monkeypatch, wipe: dict, pins: list | None = None) -> Path:
+    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says,
+    under the committed configuration `CONF` with `pins` (by default none)."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
+                                                    "deployment": {"configuration": CONF, "pins": pins or []},
                                                     "wipe": {"trusted_sha512": wipe_side.key_sha512()} | wipe}))
+    monkeypatch.setattr(mc, "committed", lambda: frozenset({CONF}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
@@ -306,19 +331,19 @@ def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
 
 def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
-    (`wipe_side.py`, its key here the one `AUDITOR_KEYS` pins for its host), its case and record written, the premise
+    (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
     recorded as held. No network certifier counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
-    monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
-    period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
+    period = _side(tmp_path, monkeypatch, {"links": [CONTROL]}, side_pin())
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
-    assert answer["profile"]["placement"]["trusted-device"] == ("holds: the session is signed under auditor's pinned key; "
-                                                              "the memory challenger ran on auditor, not the developer's n0")
+    assert answer["profile"]["placement"]["trusted-device"] == (
+        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe sessions; "
+        "the memory challenger ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
@@ -386,9 +411,8 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
     holds and the count is 0, which no network certifier signed, so the wipe is accepted and not certified, and the
     record names the egress as the evidence writer's count."""
-    monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
     out = tmp_path / "out"
-    answer = W.leg(_side(tmp_path, monkeypatch, {"egress_bits": 0}), "n0", out)
+    answer = W.leg(_side(tmp_path, monkeypatch, {"egress_bits": 0}, side_pin()), "n0", out)
     assert answer["verdict"] == "accept", answer
     assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
@@ -463,7 +487,7 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
 
 def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path, monkeypatch) -> None:
     """The run pins its own challenger's key (`wipe.trusted_sha512`, as `--trusted-sha512` and `WIPE_KEY_SHA512` do), so
-    the verifier accepts its session; the challenger's host is not one `AUDITOR_KEYS` pins that key for, so the record
+    the verifier accepts its session; the configuration pins no such key for the wipe, so the record
     says rehearsal, no bound, and leaves the key custody out of the bound."""
     period = _side(tmp_path, monkeypatch, {})
     assert W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"]) == 0
@@ -472,7 +496,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path,
     assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
     where = record["placement"]
     assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == f"{REHEARSAL}; the memory challenger ran on auditor, not the developer's n0"
+    assert where[WP.PREMISE] == f"{REHEARSAL} (configuration {CONF}); the memory challenger ran on auditor, not the developer's n0"
     assert record["uncertified"][0] == f"key custody: {where[WP.PREMISE]}"
 
 

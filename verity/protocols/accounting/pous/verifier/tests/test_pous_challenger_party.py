@@ -352,10 +352,17 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     wired = CS.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {
         "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", tmp_path)
     assert wired == Side("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
-    assert CS.placement("n0", "n0")[CS.PREMISE].startswith("unmet: ")
-    assert CS.placement("n0", "auditor-host") == {
-        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
-        CS.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
+    key, conf = "ab" * 64, "cd" * 64
+    under = {"pins": [{"key-sha512": key, "party": CS.CHALLENGER, "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}],
+             "configuration": conf, "committed": frozenset({conf})}
+    assert CS.placement("n0", "n0", key, **under)["kind"] == "prover-node"
+    assert CS.placement("n0", "auditor-host", key, **under) == {
+        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
+        CS.PREMISE: f"holds: the session is signed under the key configuration {conf} pins for memory-challenger's "
+                    "pous sessions; the memory challenger ran on auditor-host, not the prover's n0"}
+    assert not mc.holds(CS.placement("n0", "auditor-host", "ef" * 64, **under))
+    assert not mc.holds(CS.placement("n0", "auditor-host", key, **under | {"committed": frozenset()}))
+    assert CS.placement("n0", "auditor-host")[CS.PREMISE].startswith(f"{mc.UNCOMMITTED} (no configuration); ")
 
 
 def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:

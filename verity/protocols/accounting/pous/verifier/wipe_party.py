@@ -35,7 +35,7 @@ import secrets
 import socket
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -47,13 +47,9 @@ from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
 logger = logging.getLogger(__name__)
-PREMISE = "trusted-device"
-AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
-                                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
-"""Each auditor device's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
-`placement` says `trusted-device` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
-which session the verifier accepts, never this."""
-REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+PREMISE = mc.PREMISE
+PARTY = "memory-challenger"
+"""The configuration's party whose `[[pin]]` entries for the wipe name the keys `placement` reads."""
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -203,13 +199,15 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 
 
-def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
+def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Mapping[str, str]] = (),
+              configuration: str | None = None, committed: Collection[str] = frozenset(), verifier: str | None = None,
               store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
-    session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
-    `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    machine the developer doesn't control (`memory_challenger.trusted_device`). It holds (`holds: …`) only under a
+    configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
+    session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe;
+    under any other configuration or key, a run's own pin included, it reads rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
     `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
     `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
     `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
@@ -221,16 +219,16 @@ def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | N
              "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
                           "in for a host the developer doesn't control",
              "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
-    premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
-               if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
+    premise = mc.trusted_device(pins, PARTY, "wipe", key_sha512, names, configuration=configuration,
+                                committed=committed)
     out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
            PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
     return out if store is None else out | {"prover_store": dict(store)}
 
 
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `trusted-device` holds: the session signed under the challenger host's pinned key."""
-    return where[PREMISE].startswith("holds: ")
+    """Whether a placement's `trusted-device` holds: the session signed under a key the committed configuration pins."""
+    return mc.holds(where)
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:

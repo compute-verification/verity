@@ -527,8 +527,10 @@ written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
 
 **Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory challenger, as `holds`
-only when the session was signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's host. Under any other
-key, a key the run pinned for itself included, it reads `rehearsal: key not the auditor's pinned key, no bound`, and
+only under a committed configuration (`demos/configurations.toml`) when the session was signed under a key its
+`[[pin]]` entries give the memory challenger for the wipe (`memory_challenger.trusted_device`). Under any other
+configuration it reads `rehearsal, no bound: the configuration is not a committed one`, and under any other key, a key
+the run pinned for itself included, `rehearsal: key not the auditor's pinned key, no bound`; either way
 the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
 `prover-node`), a label and never the reason. Which keys the verifier accepts is the run's pin, and a separate matter.
 `verity/protocols/accounting/pous/device/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
