@@ -116,11 +116,14 @@ theorem SketchBoundDeployed_nontrivial :
       ∃ t, acceptAll.tick ω p ≤ t ∧ t < acceptAll.tick ω (p + 1) ∧ j ∈ acceptAll.present ω t) := by
     intro ω
     refine ⟨trivial, fun hp => ?_⟩
-    obtain ⟨t, -, -, ht⟩ := hp 0 (by simp [acceptAll]) ⟨0, by simp [acceptAll]⟩ (by simp [acceptAll])
-    simp [Trace.present, acceptAll] at ht
+    obtain ⟨t, -, -, ht⟩ := hp 0 Nat.zero_lt_one ⟨0, Nat.zero_lt_one⟩ (mem_univ _)
+    unfold Trace.present at ht
+    exact notMem_empty _ ((mem_union.1 ht).elim id id)
   have h1 : (1 : ℝ) ≤ _ := le_trans (Pouw.pr_eq_one hev).symm.le h
-  have a : ((2 : ℝ) ^ 512)⁻¹ ≤ 4⁻¹ := inv_anti₀ (by norm_num) (by norm_num)
-  have b : ((2 : ℝ) ^ 513)⁻¹ ≤ 4⁻¹ := inv_anti₀ (by norm_num) (by norm_num)
+  have a : ((2 : ℝ) ^ 512)⁻¹ ≤ 1 / 4 :=
+    le_trans (inv_anti₀ (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num : 2 ≤ 512))) (by norm_num)
+  have b : ((2 : ℝ) ^ 513)⁻¹ ≤ 1 / 4 :=
+    le_trans (inv_anti₀ (by positivity) (pow_le_pow_right₀ (by norm_num) (by norm_num : 2 ≤ 513))) (by norm_num)
   norm_num at h1
   linarith
 
