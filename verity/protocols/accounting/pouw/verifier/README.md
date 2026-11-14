@@ -167,7 +167,9 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's FP4 with scale groups, NVFP4 only.
+  replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel is
+  `verity/protocols/experimental/pearl_c4/`'s, and its scheme and circuit (`prover/circuit/pc4.py`) stay here while PoUW's
+  own circuits build on `pc4`.
 - **NCP** (`ncp-v1`, `verity/protocols/accounting/pouw/prover/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
