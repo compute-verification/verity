@@ -46,7 +46,7 @@ trace, "wrong" is the incorrect set at the registration, and the binding error i
 registration and `⊤` at any other. -/
 noncomputable def analysis (h : Ex.Covers Correct) : ExtractionAnalysis L Reg PS.session where
   Tr := Reg × B.Trace
-  wrong Xt := incorrect B Correct Xt.1 Xt.2
+  incorrect Xt := incorrect B Correct Xt.1 Xt.2
   committed R τ := (R, Xc R τ)
   ks := Ex.ks
   link S R τ u Xt := if Xt.1 = R then Ex.link S R τ u Xt.2 else ⊤

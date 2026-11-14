@@ -26,9 +26,9 @@ slot is bound to its unit's committed record by its opening of the root.
   the inner shape V* is staged over for each (`Menu.vstar`, Lean's `VStar.statements`), each shape's type bound and the
   padded sessions of an audit of `k` samples (`Menu.padded`); the obligations that V* stages the menu and that the live
   verifier's range check accepts it (`Menu.rangeCheck`); a placement of types at the menu's shapes within its bounds.
-* `Trace`, `Types`, `Types.FitsIn`, `wrong`: the committed trace, partial (it holds nothing at a position no record
+* `Trace`, `Types`, `Types.FitsIn`, `incorrect`: the committed trace, partial (it holds nothing at a position no record
   opens); each type's relation, its matrix's nonzeros and its unit's template instances; a type within a shape's nonzero
-  bound and unit positions; the units wrong in a trace.
+  bound and unit positions; the units incorrect in a trace.
 * `Batching`, `Hidden`, `Hidden.honest`: the prover's sessions, with their slots' hidden types; those with each slot's
   opening; and the honest prover's openings.
 * `drawOrder`, `CoverCheck`, `Bound`, `Covers`: the sampled proof blocks in order; the outer proof's coverage check; each held
@@ -124,8 +124,8 @@ structure Types.FitsIn {T V : Type} (Ty : Types T V) (t : T) (s : Shape) : Prop 
   instances : Ty.instances t ≤ s.positions
 
 open Classical in
-/-- The units wrong in a trace: those with no record, and those whose values their type's relation refuses. -/
-noncomputable def wrong {N : ℕ} {T V : Type} (Ty : Types T V) (X : Trace N T V) : Finset (Fin N) :=
+/-- The units incorrect in a trace: those with no record, and those whose values their type's relation refuses. -/
+noncomputable def incorrect {N : ℕ} {T V : Type} (Ty : Types T V) (X : Trace N T V) : Finset (Fin N) :=
   Finset.univ.filter fun i => ∀ t v, X i = some (t, v) → ¬ Ty.holds t v
 
 /-- **A placement within the menu's bounds** of the types `U`: each placed at a shape on the menu it fits, and at most

@@ -101,12 +101,12 @@ noncomputable def rowsLayer (sess : Paths Ω S → Fin S → Fin nπ → RowsSes
     ProofLayer Ω S nπ V where
   accepted x w i := LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
   opened x w i := rows (sess x w i) (sess x w i).Xv
-  rel x w i _ := ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u
+  rel x w i _ := ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u
   right := right
 
 /-- **The layer's premises hold together, at flock-verify's acceptance** (non-vacuity of `AcceptedLive`,
 `OpenedPlurAt` and `RelOfRows`): at any family of sessions, `rowsLayer` accepts exactly where flock-verify accepts, and
-meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`. `WindowLaw` and `RowsSession.CR` are premises of the
+meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`. `ExecutionPhaseLaw` and `RowsSession.CR` are premises of the
 sessions, not of the layer. -/
 theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) :
@@ -119,7 +119,7 @@ theorem rowsLayer_premises (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
 /-- **`SoundAtBridge` from `EndToEndRegisteredRows`**: an unsound proof whose opening is the value layer's reading
 fails its relation there, so by `RelOfRows` some sampled proof block of its session is wrong or off at its own reads, and by
 `AcceptedLive` flock-verify accepted: the per-unit event, at most `n · bound ≤ δ` in every session
-(`RowsSession.prob_badU_le`); one whose opening isn't is in `OpenedPlurAt`'s event, at most `δo`. `WindowLaw` carries
+(`RowsSession.prob_badU_le`); one whose opening isn't is in `OpenedPlurAt`'s event, at most `δo`. `ExecutionPhaseLaw` carries
 the sessions' bound to the window's paths (`soundAt_of_sessions`). -/
 theorem soundAtBridge_of_rows (hE : Flock.Guarantees.EndToEndRegisteredRows) : Flock.Guarantees.SoundAtBridge := by
   intro Ω _ S nπ V pf sess out rows δo δ hCR hLaw hAcc hOpen hRel hδ hδ0

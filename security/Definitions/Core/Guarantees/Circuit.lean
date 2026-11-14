@@ -13,24 +13,24 @@ namespace Verity.Guarantees
 carries its value in the circuit's evaluation. -/
 def Compose : Prop :=
   ∀ (C : Circuit) (n : ℕ) (P : Partition C n) (X a : C.Trace),
-    C.InputsAgree X a → P.wrong X = ∅ → ∀ g ∈ P.committed, X g = C.eval a g
+    C.InputsAgree X a → P.incorrect X = ∅ → ∀ g ∈ P.committed, X g = C.eval a g
 
 /-- **Composition through a cone**: the same for the committed wires of `T`, given only that no unit of `T`'s cone is
-wrong. -/
+incorrect. -/
 def ComposeCone : Prop :=
   ∀ (C : Circuit) (n : ℕ) (P : Partition C n) (X a : C.Trace) (T : Finset (Fin C.N)),
-    C.InputsAgree X a → Disjoint (P.wrong X) (P.cone T) → ∀ t ∈ T, t ∈ P.committed → X t = C.eval a t
+    C.InputsAgree X a → Disjoint (P.incorrect X) (P.cone T) → ∀ t ∈ T, t ∈ P.committed → X t = C.eval a t
 
 /-- A unit's correctness is decided by its committed inputs and outputs, what an opening shows. -/
 def CorrectOfOpening : Prop :=
   ∀ (C : Circuit) (n : ℕ) (P : Partition C n) (X Y : C.Trace) (u : Fin n),
     (∀ g ∈ P.io u, X g = Y g) → (P.Correct X u ↔ P.Correct Y u)
 
-/-- Under a refinement, a trace that agrees with another on the coarse committed wires has at least as many wrong
-fine units as the other has wrong coarse units. -/
+/-- Under a refinement, a trace that agrees with another on the coarse committed wires has at least as many incorrect
+fine units as the other has incorrect coarse units. -/
 def RefineIncorrect : Prop :=
   ∀ (C : Circuit) (nf nc : ℕ) (Pf : Partition C nf) (Pc : Partition C nc), Pf.Refines Pc →
-    ∀ X Y : C.Trace, (∀ g ∈ Pc.committed, Y g = X g) → (Pc.wrong X).card ≤ (Pf.wrong Y).card
+    ∀ X Y : C.Trace, (∀ g ∈ Pc.committed, Y g = X g) → (Pc.incorrect X).card ≤ (Pf.incorrect Y).card
 
 /-- A declaration that contains another, through a containment that sends no novel input gate of `t` into `d`'s
 baseline, implements it. -/

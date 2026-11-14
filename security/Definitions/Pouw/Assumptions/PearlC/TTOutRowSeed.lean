@@ -88,9 +88,9 @@ def rowCodes (M : Codes) (i : ℕ) : Codes := fun _ l => M i l
 /-- Row `i` of a unit's commitment: that row of its activations, ticket words and useful words. -/
 def rowCommit (c : Commit) (i : ℕ) : Commit := ⟨rowCodes c.act i, rowCodes c.ticket i, rowCodes c.useful i⟩
 
-/-- A transcript relabelled row by row: split unit `v` commits its row of its unit's commitment, and is blank where its
+/-- A trace relabelled row by row: split unit `v` commits its row of its unit's commitment, and is blank where its
 unit is. -/
-def splitTranscript (L : Layout) (τ : Transcript) : Transcript := fun v =>
+def splitTrace (L : Layout) (τ : Trace) : Trace := fun v =>
   if v < rowsOf L then (τ (unitOfRow L v)).map fun c => rowCommit c (rowOfRow L v) else none
 
 /-! ## The conditions -/
@@ -170,12 +170,12 @@ noncomputable def pearlCTilesDevRev1RowCapAt (d : PearlCDevice) (sem : PearlCSem
       (pearlCTilesDevRev1 d sem ρ).capOK H s U g act ∧ (pearlCTilesDevRev1RowCap d sem ρr).capOK H s U g act }
 
 /-- **(C3) The cost model is closed under splitting rows into units:** every program on a workload has a program on its
-split workload whose transcript is the original's relabelled row by row (`splitTranscript`), at no more cost and no
+split workload whose trace is the original's relabelled row by row (`splitTrace`), at no more cost and no
 more calls, for every oracle, state and salt. -/
 def CostModel.SplitClosed (CM : CostModel Q R S) : Prop :=
   ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Codes), ∃ (prog' : CM.Prog) (act' : ℕ → Codes),
     ∀ (H : Q → R) (σ : State) (s : S),
-      CM.run prog' H (splitWorkload U) act' σ s = splitTranscript U.layout (CM.run prog H U act σ s) ∧
+      CM.run prog' H (splitWorkload U) act' σ s = splitTrace U.layout (CM.run prog H U act σ s) ∧
         CM.cost prog' H (splitWorkload U) act' σ s ≤ CM.cost prog H U act σ s ∧
         CM.calls prog' H (splitWorkload U) act' σ s ≤ CM.calls prog H U act σ s
 
@@ -189,8 +189,8 @@ def TTOutRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostM
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
-          P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
+        T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2),
+          P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
         ≤ δPearlC q (rowsOf U.layout)
 
 /-- **The row-seeded TT_OUT per audit tile** (a target form): `TTOutTile` with the error read at the row count. -/
@@ -200,8 +200,8 @@ def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : C
   ∀ U : Workload, U.InDomain P D → rowsOf U.layout ≤ 2 ^ 64 → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q →
       pr (fun x : (Q → R) × S =>
-        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
-          TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
+        T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.trace U x.1 x.2),
+          TR.credit x.1 x.2 U g (actOf (A.trace U x.1 x.2) ((TR.tiling U.layout).unit g)))
         ≤ δPearlC q (rowsOf U.layout)
 
 /-! ## The code-form seed (`-h3`) -/

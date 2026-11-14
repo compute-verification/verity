@@ -13,32 +13,32 @@ import Mathlib.Tactic.Finiteness.Attr
 Definitions only. They mirror `verity/core/protocols/certifier/arith_encode.py`'s references one for one, with each
 Python name in its docstring: `ChargeCount_v1{N}`'s charge (`reference_charge`), the bits ENC-CODE's 32-bit
 Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`'s `ArithEncoder`) would write for a
-window that sends only decisions, counted rather than written (the counting variant, which the composition charges).
+executionPhase that sends only decisions, counted rather than written (the counting variant, which the composition charges).
 
-A window codes the number of decisions it sends (n_arrived) as the book's Exp-Golomb bin and its offset in the bin, then
-each decision at the book's KT estimate for its context `min(run, 2)`, then the four counts the window sends as 0, and
-the finish. The window's charge is the scalings the coder takes, one segment bit each, and 2 more at the finish of a
-window that used the coder.
+A executionPhase codes the number of decisions it sends (n_arrived) as the book's Exp-Golomb bin and its offset in the bin, then
+each decision at the book's KT estimate for its context `min(run, 2)`, then the four counts the executionPhase sends as 0, and
+the finish. The executionPhase's charge is the scalings the coder takes, one segment bit each, and 2 more at the finish of a
+executionPhase that used the coder.
 
 **Scope: decision-only windows.** The windows modelled send decisions only: their four counts are sent as 0 (`zeros`),
-which is `ChargeCount_v1`'s scope. A window that sends a nonzero count is not covered.
+which is `ChargeCount_v1`'s scope. A executionPhase that sends a nonzero count is not covered.
 
-**The decision stream.** A window's slots are the scan's asks, and `ChargeCount_v1`'s witness is which slots ask (`en`)
+**The decision stream.** A executionPhase's slots are the scan's asks, and `ChargeCount_v1`'s witness is which slots ask (`en`)
 and their decisions (`bit`). A slot that doesn't ask changes nothing, so the charge is a function of the decisions of the
-slots that ask, in order: the window's decision stream, a `List Bool`. The run's decision stream is one per window. The
-asks themselves are not advice: the compile slice, its charge included, is proved on every advised window and never
-sampled, so `en` is the scan that slice proves, pinned by it. The carry from window to window (the KT counts and the
+slots that ask, in order: the executionPhase's decision stream, a `List Bool`. The run's decision stream is one per executionPhase. The
+asks themselves are not advice: the compile slice, its charge included, is proved on every advised executionPhase and never
+sampled, so `en` is the scan that slice proves, pinned by it. The carry from executionPhase to executionPhase (the KT counts and the
 run) is committed across windows and chained from the book's priors (`charge_chain.check_chain`), as `charges`
-starts from `priors` and passes each window's carry on.
+starts from `priors` and passes each executionPhase's carry on.
 
-**What is left.** That `ChargeCount_v1`'s circuit computes `window` is not proved in Lean. circuit-check holds the circuit
+**What is left.** That `ChargeCount_v1`'s circuit computes `executionPhase` is not proved in Lean. circuit-check holds the circuit
 to the Python reference, and these definitions are held to that reference by the charge difftest: the certifier
 program's `NetworkCertifier.AdviceV1`, which `Proofs.NetworkCertifier.Code` proves equal to these (`CodeChargesV1`), gives
 what `reference_charge` gives on 4,000 random instances, accepted and refused (`runs` in the certifier program's
 `lean-audit.json`).
 
 **Refusals.** Each reference refuses (ok 0) where the Python does, and then specifies nothing else, so each function here
-returns `none` there. On the states a window reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are
+returns `none` there. On the states a executionPhase reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are
 `% HALF`, as below.
 -/
 
@@ -64,7 +64,7 @@ def MAX_TOTAL : ℕ := 2 ^ 16
 /-- `K_MAX`: the scalings one symbol may take. -/
 def K_MAX : ℕ := 18
 
-/-- `CW`: the count's width, a window's charge below `2^CW`. -/
+/-- `CW`: the count's width, a executionPhase's charge below `2^CW`. -/
 def CW : ℕ := 20
 
 /-- `KW`: a KT count's width. -/
@@ -78,7 +78,7 @@ structure Tally where
   used : Bool
   bits : ℕ
 
-/-- A window's first state (`Tally()`). -/
+/-- A executionPhase's first state (`Tally()`). -/
 def Tally.fresh : Tally := ⟨0, TOP, false, 0⟩
 
 /-- code.py's loop scales the interval: E1 or E2 (`high < HALF or low >= HALF`), or E3. -/
@@ -128,7 +128,7 @@ def ktBump (c : ℕ × ℕ) (b : Bool) : ℕ × ℕ :=
 def ktRaise (counts : List (ℕ × ℕ)) (ctx : ℕ) (b : Bool) : List (ℕ × ℕ) :=
   counts.set ctx (ktBump (counts.getD ctx (0, 0)) b)
 
-/-- **What a window carries to the next for the decisions** (`Carry`): each context's KT counts `(n0, n1)`, and
+/-- **What a executionPhase carries to the next for the decisions** (`Carry`): each context's KT counts `(n0, n1)`, and
 `min(run, 2)`, the decisions since the last arrival. -/
 structure Carry where
   counts : List (ℕ × ℕ)
@@ -150,7 +150,7 @@ def zeros : Tally → List (ℕ × ℕ) → Option Tally
   | st, [] => some st
   | st, z :: zs => (countStep st 0 z.1 z.2).bind fun st' => zeros st' zs
 
-/-- **The finish, counted** (`reference_count_finish`): the window's charge, `bits` and 2 more when `used`, which must
+/-- **The finish, counted** (`reference_count_finish`): the executionPhase's charge, `bits` and 2 more when `used`, which must
 be below `2^CW`. -/
 def finish (st : Tally) : Option ℕ :=
   if st.bits + 2 * st.used.toNat < 2 ^ CW then some (st.bits + 2 * st.used.toNat) else none
@@ -170,28 +170,28 @@ def arrive (bk : Book) (n : ℕ) : Option Tally :=
   (countStep Tally.fresh (bk.arrived.take n.size).sum (bk.arrived.getD n.size 0) bk.total).bind fun st =>
     if 2 ≤ n.size then countStep st (n - 2 ^ (n.size - 1)) 1 (2 ^ (n.size - 1)) else some st
 
-/-- **One window's charge** (`reference_charge`, `ChargeCount_v1{N}`): of a window of `N` slots whose slots that ask
-decide `ds`, under the book `bk` and the carry `cy`, the charge and the next window's carry. -/
-def window (bk : Book) (N : ℕ) (cy : Carry) (ds : List Bool) : Option (ℕ × Carry) :=
+/-- **One executionPhase's charge** (`reference_charge`, `ChargeCount_v1{N}`): of a executionPhase of `N` slots whose slots that ask
+decide `ds`, under the book `bk` and the carry `cy`, the charge and the next executionPhase's carry. -/
+def executionPhase (bk : Book) (N : ℕ) (cy : Carry) (ds : List Bool) : Option (ℕ × Carry) :=
   if ds.length ≤ N ∧ cy.run < 3 then
     (arrive bk ds.length).bind fun st =>
       (decisions st cy ds).bind fun p => ((zeros p.1 bk.zeros).bind finish).map fun L => (L, p.2)
   else none
 
-/-- **A run's charges**: each window's, the carry passed along. -/
+/-- **A run's charges**: each executionPhase's, the carry passed along. -/
 def session (bk : Book) (N : ℕ) : Carry → List (List Bool) → Option (List ℕ)
   | _, [] => some []
-  | cy, ds :: ws => (window bk N cy ds).bind fun p => (session bk N p.2 ws).map fun ls => p.1 :: ls
+  | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (session bk N p.2 ws).map fun ls => p.1 :: ls
 
-/-- **The run's charges per window**, from the book's priors and run 0, for the decision streams of `W` windows. -/
+/-- **The run's charges per executionPhase**, from the book's priors and run 0, for the decision streams of `W` windows. -/
 def charges (bk : Book) (N : ℕ) {W : ℕ} (a : Fin W → List Bool) : Option (List ℕ) :=
   session bk N ⟨bk.priors, 0⟩ (List.ofFn a)
 
-/-- **Advice v1's decision streams**: those of `W` windows whose charge no window refuses. A refused window fails its
+/-- **Advice v1's decision streams**: those of `W` windows whose charge no executionPhase refuses. A refused executionPhase fails its
 compile slice's proof block, so no accepted run has other advice. -/
 def Streams (bk : Book) (N W : ℕ) : Type := {a : Fin W → List Bool // (charges bk N a).isSome}
 
-/-- **Advice v1's charge** (I1's `bits(advice, w)`): window `w`'s. -/
+/-- **Advice v1's charge** (I1's `bits(advice, w)`): executionPhase `w`'s. -/
 def bits (bk : Book) (N : ℕ) {W : ℕ} (a : Streams bk N W) (w : Fin W) : ℕ :=
   ((charges bk N a.1).getD []).getD w 0
 

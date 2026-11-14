@@ -156,7 +156,7 @@ theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ 
 /-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every sampled proof block is right at its owned reads,
 and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
-  LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
+  LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
 
 /-- **No outcome of the audit meets `ServedEv`** under full checking, at every unit's served roots registered: every unit is sampled, so `Flock.SecurityProofs.ServedRowsLinked` puts the
 committed row at each of its registered reads. -/
@@ -188,7 +188,7 @@ served roots: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it f
 committed rows. -/
 theorem prob_servedOn (P : RowsSession → Prop)
     (hN : P s → s.kd = s.n ∧ ∀ u, s.ServedRegistered u) :
-    prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
+    prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s) s.G s.τ = 0 := by
   by_cases hp : P s
   · have e : rowsOn P s s.Xv = rowsReg s s.Xv := if_pos hp
@@ -258,7 +258,7 @@ theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths �
     exact ⟨(hP _ hp).1, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
   have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 := by
     intro w i
-    refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
+    refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P
       (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero

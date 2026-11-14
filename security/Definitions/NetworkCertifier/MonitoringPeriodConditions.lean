@@ -40,13 +40,13 @@ import Mathlib.Topology.Sheaves.Init
 Definitions only. A statement over a monitoring period of sampled audits takes these conditions, each named once:
 
 * each window's statement has its partition, and each of its possible incorrect sets commits a bounded number of bits
-  (`WindowsPlaced`);
+  (`ExecutionPhasesPlaced`);
 * the network certifier's record reads back under a registered parameter (`RecordFormat.ReadsBy`): the client's view
   is a function of the record and of a parameter fixed at registration, in place of the whole schedule, so a count
   over the records pays for the parameters and not for the schedules;
 * a covert sender's channel over registered parameters (`MonitoringPeriodChannelReg`): each secret's schedule is one the record
   format holds and a registered parameter allows, and a decoder recovers the secret from the client's view;
-* the windows' count (`windowsCount`): what the windows' audits leave free, the product over the windows of each one's
+* the windows' count (`executionPhasesCount`): what the windows' audits leave free, the product over the windows of each one's
   free inputs outside the pinned ones, its possible incorrect sets, their committed bits and the timing.
 -/
 
@@ -58,7 +58,7 @@ open Claims Claims.Sampling Finset
 
 /-- **The windows' registrations**: each window's statement `sw i` has the partition `Pw i` under `partition`, and each
 of its possible incorrect sets at `δ` commits at most `β i` bits. -/
-def WindowsPlaced {n : ℕ} (partition : AuditStatement → Option Partition) (δ : ℝ) (sw : Fin n → AuditStatement)
+def ExecutionPhasesPlaced {n : ℕ} (partition : AuditStatement → Option Partition) (δ : ℝ) (sw : Fin n → AuditStatement)
     (Pw : Fin n → Partition) (β : Fin n → ℕ) : Prop :=
   (∀ i, partition (sw i) = some (Pw i)) ∧
     ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i
@@ -85,7 +85,7 @@ def MonitoringPeriodChannelReg {Conn Cell Srv Ob Z Par : Type} (f : RecordFormat
 /-- **The windows' count**: the product over the windows of what each one's audit leaves free with the inputs `pin`
 pinned, `2^#(freeInputs_i \ pin_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the free inputs outside the pinned ones, the
 possible incorrect sets, their committed bits and the timing. -/
-noncomputable def windowsCount {L S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
+noncomputable def executionPhasesCount {L S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (pin : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
     (β : Fin n → ℕ) : ℕ :=
   ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ pin (sw i)).card *

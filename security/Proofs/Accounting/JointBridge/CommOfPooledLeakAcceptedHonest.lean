@@ -106,7 +106,7 @@ proof block is incorrect, so the miss probability given the earlier phases' coin
 each execution phase's record meets the leak relation at the empty incorrect set and at the phase's operator, which
 sends `false` at every record of the earlier phases, so the leak relation fails with probability `0`. -/
 theorem CommOfPooledLeakAccepted_honest :
-    MonitoringPeriodEscapes Set.univ honestPooled.acc honestPooled.W (1 / 2) (fun _ => 0) ∧
+    MonitoringPeriodMissProb Set.univ honestPooled.acc honestPooled.W (1 / 2) (fun _ => 0) ∧
       PhaseLeaks (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 honestPooled.sw honestPooled.Pw honestPooled.ρ
         honestPooled.op Set.univ honestPooled.acc honestPooled.W honestPooled.record (fun _ => 0) := by
   refine ⟨fun ξ _ i ω => ?_, fun ξ _ i => ?_⟩

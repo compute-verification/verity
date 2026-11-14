@@ -15,7 +15,7 @@ public import Proofs.Core.Accel.Model
   root's arrival, before its coins at `t b` (`CommitAfterWork`, `Timed`), and its work ends by its root's arrival, at
   most `Δ` after them (`RootAfterCoin`), so the two run in a window from `t b − wall(commit b)` to `t b + wall(work b)`.
   G2 bounds their use by `ρ_r` times that window, and block `b + 1`'s commit phase starts after block `b`'s work
-  (`CommitAfterWork`), so the windows are disjoint inside `[0, T]` (`sum_windows_le_T`). A selected answer starts after
+  (`CommitAfterWork`), so the windows are disjoint inside `[0, T]` (`sum_periods_le_T`). A selected answer starts after
   its block's dither coins, inside the period, and arrives within `τ_ans` of its check coin, before the period's end
   (`AnswerAfterWork`, `Timed`), so it runs within the period (`AnswersFit`). No count of sampling blocks or of selected
   ones is read.
@@ -43,12 +43,12 @@ open scoped NNRat
 
 /-- **Windows in sequence telescope**: when each window ends no later than the next one starts, the windows' lengths
 add up to at most the span from the first start to the last end. -/
-theorem sum_windows_le : ∀ (n : ℕ) (a e : Fin (n + 1) → ℝ),
+theorem sum_periods_le : ∀ (n : ℕ) (a e : Fin (n + 1) → ℝ),
     (∀ b b' : Fin (n + 1), (b : ℕ) + 1 = b' → e b ≤ a b') → ∑ b, (e b - a b) ≤ e (Fin.last n) - a 0
   | 0, a, e, _ => by simp
   | n + 1, a, e, h => by
     rw [Fin.sum_univ_castSucc]
-    have ih := sum_windows_le n (fun b => a b.castSucc) (fun b => e b.castSucc) fun b b' hb =>
+    have ih := sum_periods_le n (fun b => a b.castSucc) (fun b => e b.castSucc) fun b b' hb =>
       h _ _ (by simpa using hb)
     have hl := h (Fin.last n).castSucc (Fin.last (n + 1)) (by simp)
     simp only [Fin.castSucc_zero] at ih
@@ -57,12 +57,12 @@ theorem sum_windows_le : ∀ (n : ℕ) (a e : Fin (n + 1) → ℝ),
 /-- **Windows in sequence inside `[0, T]` fit in `T`**: sampling block `b`'s window runs from `s b` to `e b ≤ T`, the
 first starting at `s 0 ≥ 0`, and the next block's window starts only after it ends, so the windows' lengths add up
 to at most `T`, at any number of blocks. -/
-theorem sum_windows_le_T {n : ℕ} (s e : Fin n → ℝ) (T : ℝ) (hT : 0 ≤ T) (h0 : ∀ b : Fin n, (b : ℕ) = 0 → 0 ≤ s b)
+theorem sum_periods_le_T {n : ℕ} (s e : Fin n → ℝ) (T : ℝ) (hT : 0 ≤ T) (h0 : ∀ b : Fin n, (b : ℕ) = 0 → 0 ≤ s b)
     (he : ∀ b, e b ≤ T) (hs : ∀ b b' : Fin n, (b : ℕ) + 1 = b' → e b ≤ s b') : ∑ b, (e b - s b) ≤ T := by
   cases n with
   | zero => simpa using hT
   | succ n =>
-    have h1 := sum_windows_le n s e hs
+    have h1 := sum_periods_le n s e hs
     have h2 := h0 0 rfl
     have h3 := he (Fin.last n)
     linarith
@@ -115,7 +115,7 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
   show ∑ b, (G.use (A.commit b) (A.commitIn o x b) r + G.use (A.work b) (A.workIn o x b) r) ≤ G.rate r * Pd.T
   refine (Finset.sum_le_sum fun b _ => hw b).trans ?_
   rw [← Finset.mul_sum]
-  refine mul_le_mul_of_nonneg_left (sum_windows_le_T
+  refine mul_le_mul_of_nonneg_left (sum_periods_le_T
     (fun b => t (dev A o x) b - G.wall (A.commit b) (A.commitIn o x b))
     (fun b => t (dev A o x) b + G.wall (A.work b) (A.workIn o x b)) Pd.T hT0 (fun b hb => ?_) (fun b => ?_)
     fun b b' hb => ?_) hrate

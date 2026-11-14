@@ -52,8 +52,8 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   finite game of rounds with fresh coins, one check a round, accepted iff every check passes (`RoundGame`); with the
   per-round pass bound `1 − (1−p)·d` named (`PassBound`, or `PathBound` along guard paths),
   `Pr[accept ∧ deficiency ≥ D] ≤ e^{−(1−p)D} + R(δ_bind + δ_ZK)` (`theoremS`, `theoremS_G`), by the supermartingale
-  `Π 1[pass]·e^{(1−p)d}` as a product over rounds and Markov. The window's corollary (`window_le`; it reads only the
-  exponential form `E[1[pass_w] e^{(1−p) d_w}] ≤ 1`, `window_le_exp`) is a service floor (`RoundsHyp`, over
+  `Π 1[pass]·e^{(1−p)d}` as a product over rounds and Markov. The window's corollary (`executionPhase_le`; it reads only the
+  exponential form `E[1[pass_w] e^{(1−p) d_w}] ≤ 1`, `executionPhase_le_exp`) is a service floor (`RoundsHyp`, over
   `ExpBound`, `serviceFloor_of_rounds`), and the B_θ certified fraction rests on it in place of Theorem M
   (`certifiedFraction120θ_rounds`, at `2^{−40}` `_rounds_40`).
 * The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
@@ -525,7 +525,7 @@ theorem theoremS_G [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGam
 
 /-- **The window form from the exponential bound**: the per-round `E[1[pass_w] e^{(1−p) d_w}] ≤ 1` (`ExpBound`) is
 all the window form reads, so rounds with several samples inside (`RoundGame.Staged`) have it too. -/
-theorem window_le_exp [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.ExpBound (1 - p))
+theorem executionPhase_le_exp [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.ExpBound (1 - p))
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
     (hacc : ∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (cost V : Paths Ω R → ℝ) {F₀ sl : ℝ}
@@ -542,14 +542,14 @@ theorem window_le_exp [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : Round
 `(R − Σ_w d_w) F₀ − V − R sl` (Theorem E½'s per-round `x_w F₀ − L(M + K)` summed, with `V` the noise reads priced
 on the realized paths, `0` for straight-line rounds), then accepted runs costing below `(R − D) F₀ − V − R sl` have
 probability at most `e^{−(1−p) D} + R (δb + δz)`. -/
-theorem window_le [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PathBound p)
+theorem executionPhase_le [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PathBound p)
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
     (hacc : ∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (cost V : Paths Ω R → ℝ) {F₀ sl : ℝ}
     (hF₀ : 0 < F₀) (hcost : ∀ x, (R - G.deficiency x) * F₀ - V x - R * sl ≤ cost x) (D : ℝ) :
     prob (fun x => acc x ∧ cost x < (R - D) * F₀ - V x - R * sl) ≤
       Real.exp (-((1 - p) * D)) + R * (δb + δz) :=
-  G.window_le_exp hp (G.expBound_of_pathBound hG) acc Bind ZK hBind hZK hacc cost V hF₀ hcost D
+  G.executionPhase_le_exp hp (G.expBound_of_pathBound hG) acc Bind ZK hBind hZK hacc cost V hF₀ hcost D
 
 /-- Theorem S's straight-line rounds are guarded rounds with one path. -/
 theorem pathBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PassBound p →
@@ -602,7 +602,7 @@ A round may be a sequence of stages, each committing its operands, then sampling
 cheat step `a` is fixed before its sample, and its sample raises the round's wrong share `U` by `u` with
 `E[u] ≥ (1 − p) a`. Then `Φ(U, D) = (1 − U) e^{(1−p) D}` is a supermartingale over the stages (`StageGame.expect_le`),
 so a round whose check passes with probability at most `1 − U` meets the exponential bound with `d_w = Σ_s a_s`
-(`RoundGame.Staged`, `RoundGame.expBound_of_staged`), which is all the window form reads (`window_le_exp`). -/
+(`RoundGame.Staged`, `RoundGame.expBound_of_staged`), which is all the window form reads (`executionPhase_le_exp`). -/
 
 namespace StageGame
 
@@ -2413,7 +2413,7 @@ theorem serviceFloor_of_rounds {Mc : Machine} {S : Service} {Ω : Type} [Fintype
   obtain ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, hcost⟩ := h Ω' M hc r
   rw [prob_equiv e]
   refine (prob_mono fun x hx => ⟨hx.1, hx.2.trans_le ?_⟩).trans
-    (G.window_le_exp hp hG _ Bind ZK hB hZ hacc (fun x => Mc.charge M (e.symm x, r)) V hF₀ hcost D)
+    (G.executionPhase_le_exp hp hG _ Bind ZK hB hZ hacc (fun x => Mc.charge M (e.symm x, r)) V hF₀ hcost D)
   linarith [hV x]
 
 /-- **One slice of the window's rounds**: `RoundsHyp`'s conclusion at one adversary and one value of its coins, with

@@ -218,7 +218,7 @@ theorem getElem?_map_pair {R : Type} (run : R → Transcript) {l : List R} {j : 
 
 /-- **An incorrect proof block is wrong at any interior values**: at slot `v` of the incorrect set, whatever interior values `ι`, its
 proof block `b` is not correct on `ref_ι`. -/
-theorem faulty_wrong {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
+theorem faulty_incorrect {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
     (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
     ∃ b, P.blocks[v]? = some b ∧ ¬ s.prog.Correct (s.prog.refIn b (w.val H Cm s) ι) b := by
   classical

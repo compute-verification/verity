@@ -1,13 +1,13 @@
 import Proofs.Flock.Soundness.PlanDraw
 
 /-!
-Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness package's Lean spec
+Vectors for `verity.randomness` v2 and the PoUW executionPhase draw, from the soundness package's Lean spec
 (`FlockSoundness/Randomness.lean`, `FlockSoundness/PlanDraw.lean`), for `tests/fixtures/randomness_lean.json`.
 
 * `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
-* `window`: `PlanDraw.window` on small windows: the draw of each, and a repeated call index refused.
+* `executionPhase`: `PlanDraw.executionPhase` on small executionPhases: the draw of each, and a repeated call index refused.
 
 Regenerate with `tests/lean/generate.sh`.
 -/
@@ -132,22 +132,22 @@ def extra : Json := .arr <| keys.toArray.map fun (src, dom, ctx) =>
 def stratumJson (s : Stratum) : Json :=
   Json.mkObj [("name", .str s.name), ("units", .arr (s.units.toArray.map num)), ("k", num s.k)]
 
-/-- Small windows: two calls, and the same with a call index repeated. -/
-def windows : List (List Call) :=
+/-- Small executionPhases: two calls, and the same with a call index repeated. -/
+def executionPhases : List (List Call) :=
   [[⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2, 3, 4, 5], 2⟩, ⟨"NcpDigest_v1", [6, 7], 1⟩]⟩,
     ⟨[.int 1, .int 5], [⟨"NcpTile_v1", [8, 9, 10, 11], 2⟩, ⟨"NcpDigest_v1", [12], 1⟩]⟩],
    [⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2], 1⟩]⟩, ⟨[.int 0, .int 5], [⟨"NcpTile_v1", [3, 4, 5], 1⟩]⟩]]
 
-def windowVectors : Json := .arr <| windows.toArray.map fun calls =>
+def executionPhaseVectors : Json := .arr <| executionPhases.toArray.map fun calls =>
   let (src, dom, ctx) := keys.head!
   Json.mkObj [("source", .str (hexOf src)), ("domain", .str dom),
     ("context", Json.mkObj (ctx.map fun (k, v) => (k, partToJson v))),
     ("calls", .arr <| calls.toArray.map fun c =>
       Json.mkObj [("index", .arr (c.index.toArray.map partToJson)), ("strata", .arr (c.strata.toArray.map stratumJson))]),
-    ("drawn", match window (derive src dom ctx) calls L with
+    ("drawn", match executionPhase (derive src dom ctx) calls L with
       | some d => .arr (d.toArray.map num) | none => .null)]
 
 def main (args : List String) : IO Unit := do
   let .ok j := Json.parse (← IO.FS.readFile args[0]!) | throw (IO.userError "vectors.json is not JSON")
   IO.println (Json.mkObj [("source", .str "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh"),
-    ("kat", kat j), ("extra", extra), ("window", windowVectors)]).compress
+    ("kat", kat j), ("extra", extra), ("window", executionPhaseVectors)]).compress

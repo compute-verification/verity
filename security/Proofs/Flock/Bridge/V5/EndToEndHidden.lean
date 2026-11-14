@@ -11,10 +11,10 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at flock-verify `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
   at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's law), at `keyProgP` and the binding
-  `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's escape of `W` and the extraction's
+  `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's missProb of `W` and the extraction's
   terms (`zk_flock_escapeC_regC`), at any sample `L`;
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
-  `execSel` under the sampling design, whose escape of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`), and the
+  `execSel` under the sampling design, whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`), and the
   last term in closed form as `endToEndHiddenC_of`'s.
 -/
 
@@ -43,7 +43,7 @@ variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session of `J` tables at the verifier's public inputs, under the registration's
 law, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
-wrong with probability at most the sample's escape of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
+wrong with probability at most the sample's missProb of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
 theorem zk_session_soundHJ_custody_escCP
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -76,7 +76,7 @@ theorem zk_session_soundHJ_custody_escCP
     (∀ ω j, TableCRZ execArith hs512 (planZHJP dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJP dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKP I own o ∧
-        W ⊆ wrongRegZc execArith ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP dj y₀)
+        W ⊆ incorrectRegZc execArith ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP dj y₀)
           (tabZHJP dj y₀)
           ((rsZHJP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHJP_computes dj y₀ ht hc hscope hU hpi hpub)) canon
           (reg σ)
@@ -85,7 +85,7 @@ theorem zk_session_soundHJ_custody_escCP
             ((rsZHJP dj y₀ ht hc hscope hU hpi hpub).bindingZ (rsZHJP_computes dj y₀ ht hc hscope hU hpi hpub))
             (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
-      L.escape W +
+      L.missProb W +
         ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP dj y₀)
           (tabZHJP dj y₀)
@@ -110,7 +110,7 @@ namespace Flock.Bridge
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.ZkLink
 
 /-- **`OpeningsCanonTargetV5` gives `EndToEndHiddenV5`**: the session's bound at the verifier's sample under the sampling design,
-whose escape of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`). -/
+whose missProb of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`). -/
 theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope law kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2

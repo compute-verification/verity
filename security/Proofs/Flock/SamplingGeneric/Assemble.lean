@@ -64,7 +64,7 @@ namespace Claims.SamplingGeneric
 open Claims Finset
 open Claims.Sampling (AuditStatement Opening waitAccC forkOn flatMapRP checkRevealed assemble ownLog ownLog_bind accList
   OwnColl flatMapRP_eval waitAccC_eval_nil accList_map mem_zip_finRange getElem?_map_pair mem_checkRevealed
-  agree_of_passes val_assemble ιOf ιOf_eq faulty_wrong acc_of_accList accList_length_eq)
+  agree_of_passes val_assemble ιOf ιOf_eq faulty_incorrect acc_of_accList accList_length_eq)
 open Claims.Recursion (serve viewing)
 
 namespace Compiled
@@ -273,7 +273,7 @@ theorem good_found (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prov
 /-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
 collide. Otherwise the kept openings agree (`agree_of_passes`); take `B` the assembled witness's incorrect set, refused
 at `δ`, and a kept outer run `r`. At the interior values the kept openings under `r`'s interior roots give, the proof
-block at each `v ∈ B` is wrong (`faulty_wrong`); a kept inner run at which `v` is good would make it correct
+block at each `v ∈ B` is wrong (`faulty_incorrect`); a kept inner run at which `v` is good would make it correct
 (`Sessions.opens`, its revealed openings kept by `good_found`, the interior roots `r`'s by `Sessions.interior`), so `r`
 is bad for `B`. -/
 theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H) (δ : ℝ)
@@ -312,7 +312,7 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
     ((List.finRange (L.capIn x)).map (c.2.1 j))).length < L.kIn x
   · exact Or.inl hshort2
   refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
-  obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (L.iroots x (run' r).seen v))
+  obtain ⟨b, hb, hnc⟩ := faulty_incorrect hv (ιOf fd (L.iroots x (run' r).seen v))
   obtain ⟨hvc, xS, vS, wS, hsess, hRw, hkept⟩ := L.good_found H P ω x s c (hS.shared x Ω P ω) hjZ hl hgood
   have hacc' : (run' (forkOn (L.stage2 x) r d)).out = .acc := by
     have h := acc_of_accList hl

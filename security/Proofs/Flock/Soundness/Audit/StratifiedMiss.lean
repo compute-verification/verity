@@ -35,7 +35,7 @@ namespace Law
 variable {n m : ℕ}
 
 /-- Stratum `s`'s escape with `c` of its units wrong: `C(n_s − c, k_s) / C(n_s, k_s)`. -/
-noncomputable def stratumEscape (σ : Fin n → Fin m) (k : Fin m → ℕ) (s : Fin m) (c : ℕ) : ℝ≥0∞ :=
+noncomputable def stratumMissProb (σ : Fin n → Fin m) (k : Fin m → ℕ) (s : Fin m) (c : ℕ) : ℝ≥0∞ :=
   (((stratum σ s).card - c).choose (k s) : ℝ≥0∞) / ((stratum σ s).card.choose (k s) : ℝ≥0∞)
 
 /-- The factor by which stratum `s`'s escape falls when its `(c + 1)`-th unit is wrong: `(n_s − c − k_s)/(n_s − c)`. -/
@@ -143,7 +143,7 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
     (a : Fin m → ℕ) (ha : ∀ s, a s ≤ (stratum σ s).card) {τ : ℝ≥0∞} (hτ0 : 0 < τ) (hτ1 : τ ≤ 1)
     (htake : ∀ s, 0 < a s → τ ≤ stratumRatio σ k s (a s - 1))
     (hleave : ∀ s, a s < (stratum σ s).card → stratumRatio σ k s (a s) ≤ τ) :
-    (stratified σ k hk).miss (∑ s, a s) = ∏ s, stratumEscape σ k s (a s) := by
+    (stratified σ k hk).miss (∑ s, a s) = ∏ s, stratumMissProb σ k s (a s) := by
   classical
   have hfib : ∀ B : Finset (Fin n), B.card = ∑ s, (B.filter (σ · = s)).card := fun B =>
     Finset.card_eq_sum_card_fiberwise (fun u _ => Finset.mem_univ (σ u))
@@ -154,7 +154,7 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
       rw [hc]; simp only
       rw [filter_eq_inter_stratum]; exact card_le_card inter_subset_right
     have hsum : ∑ s, a s ≤ ∑ s, c s := (hfib B) ▸ hB
-    have hex : ∀ s, stratumEscape σ k s (c s) * τ ^ a s ≤ stratumEscape σ k s (a s) * τ ^ c s := by
+    have hex : ∀ s, stratumMissProb σ k s (c s) * τ ^ a s ≤ stratumMissProb σ k s (a s) * τ ^ c s := by
       intro s
       have hN := ha s
       have e := stratum_exchange (N := (stratum σ s).card) (k := k s) (τ := τ) hN (hcN s)
@@ -170,7 +170,7 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
           have hpos : ((stratum σ s).card - a s : ℕ) ≠ 0 := by omega
           rwa [ENNReal.div_le_iff_le_mul (Or.inl (by exact_mod_cast hpos)) (Or.inl (ENNReal.natCast_ne_top _))]
             at this)
-      unfold stratumEscape
+      unfold stratumMissProb
       calc _ = ((((stratum σ s).card - c s).choose (k s) : ℝ≥0∞) * τ ^ a s) /
               ((stratum σ s).card.choose (k s) : ℝ≥0∞) := by rw [div_eq_mul_inv, div_eq_mul_inv]; ring
         _ ≤ ((((stratum σ s).card - a s).choose (k s) : ℝ≥0∞) * τ ^ c s) /
@@ -178,12 +178,12 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
         _ = _ := by rw [div_eq_mul_inv, div_eq_mul_inv]; ring
     have hτt : τ ^ (∑ s, a s) ≠ ⊤ := ENNReal.pow_ne_top (ne_top_of_le_ne_top ENNReal.one_ne_top hτ1)
     refine (ENNReal.mul_le_mul_iff_left (pow_ne_zero _ hτ0.ne') hτt).1 ?_
-    calc (∏ s, stratumEscape σ k s (c s)) * τ ^ (∑ s, a s) = ∏ s, stratumEscape σ k s (c s) * τ ^ a s := by
+    calc (∏ s, stratumMissProb σ k s (c s)) * τ ^ (∑ s, a s) = ∏ s, stratumMissProb σ k s (c s) * τ ^ a s := by
           rw [Finset.prod_mul_distrib, Finset.prod_pow_eq_pow_sum]
-      _ ≤ ∏ s, stratumEscape σ k s (a s) * τ ^ c s := Finset.prod_le_prod fun s _ => hex s
-      _ = (∏ s, stratumEscape σ k s (a s)) * τ ^ (∑ s, c s) := by
+      _ ≤ ∏ s, stratumMissProb σ k s (a s) * τ ^ c s := Finset.prod_le_prod fun s _ => hex s
+      _ = (∏ s, stratumMissProb σ k s (a s)) * τ ^ (∑ s, c s) := by
           rw [Finset.prod_mul_distrib, Finset.prod_pow_eq_pow_sum]
-      _ ≤ (∏ s, stratumEscape σ k s (a s)) * τ ^ (∑ s, a s) :=
+      _ ≤ (∏ s, stratumMissProb σ k s (a s)) * τ ^ (∑ s, a s) :=
           mul_le_mul_right (pow_le_pow_right_of_le_one' hτ1 hsum) _
   · choose T hTs hTc using fun s => Finset.exists_subset_card_eq (ha s)
     set B := univ.biUnion T with hBdef

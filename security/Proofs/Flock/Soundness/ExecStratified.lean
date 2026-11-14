@@ -13,9 +13,9 @@ local indices mapped to the stratum's units (`Stratum.unit`), and the union sort
 units run over `σ`'s stratum.
 
 * `stratified_exec_escape_le`: over independent uniform streams, the executable sample misses `B` with probability at most
-  `Law.stratified`'s escape, the product over strata of `subset_exec_escape_le` (`ExecDraw.lean`).
+  `Law.stratified`'s missProb, the product over strata of `subset_exec_escape_le` (`ExecDraw.lean`).
 * `execStratified`: the executable sample as a sampling design, a sample that runs out sampling every unit. `execStratified_escape_le`: it
-  misses each set with at most `Law.stratified`'s escape. `execStratified_miss_le`: its count curve is at most
+  misses each set with at most `Law.stratified`'s missProb. `execStratified_miss_le`: its count curve is at most
   `Law.stratified`'s, which `stratified_miss_eq_greedy` computes.
 * `flock_e2e_drawn_exec`, `flock_e2e_count_exec`: `flock_e2e_drawn` and `flock_e2e_count` (`E2E.lean`) at that sampling design, the
   count curve bounded by `Law.stratified`'s `miss`.
@@ -113,7 +113,7 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
     prCoin (fun f : (s : Fin m) → Fin (L s) → Fin 256 =>
         ∃ D, Flock.Draw.stratified (Array.ofFn S) (Array.ofFn fun s => streamOf (f s)) = some D ∧
           ∀ u ∈ B, u.val ∉ D) ≤
-      (stratified σ k hk).escape B := by
+      (stratified σ k hk).missProb B := by
   classical
   -- stratum `s`'s local indices whose units are in `B`
   let Bl : (s : Fin m) → Finset (Fin (S s).size) := fun s =>
@@ -140,9 +140,9 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
           ∃ D, Flock.Draw.subset (S s).k (S s).size (streamOf g) = some D ∧ ∀ j ∈ Bl s, j.val ∉ D) :=
         prCoin_pi_forall (Ω := fun s => Fin (L s) → Fin 256) univ (fun s (g : Fin (L s) → Fin 256) =>
           ∃ D, Flock.Draw.subset (S s).k (S s).size (streamOf g) = some D ∧ ∀ j ∈ Bl s, j.val ∉ D)
-    _ ≤ ∏ s, (subset (S s).size (S s).k (hkS s)).escape (Bl s) :=
+    _ ≤ ∏ s, (subset (S s).size (S s).k (hkS s)).missProb (Bl s) :=
         Finset.prod_le_prod fun s _ => subset_exec_escape_le _ _ _ (hkS s) (Bl s)
-    _ ≤ (stratified σ k hk).escape B := by
+    _ ≤ (stratified σ k hk).missProb B := by
         rw [stratified_escape]
         refine Finset.prod_le_prod fun s _ => ?_
         rw [subset_escape]
@@ -174,10 +174,10 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
 /-- The executable sample as a sampling design escapes no more often than `Law.stratified`: a sample that runs out samples every unit. -/
 theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
-    (execStratified (n := n) S L).escape B ≤ (stratified σ k hk).escape B := by
+    (execStratified (n := n) S L).missProb B ≤ (stratified σ k hk).missProb B := by
   classical
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
-  · have h1 : (stratified σ k hk).escape ∅ = 1 := by
+  · have h1 : (stratified σ k hk).missProb ∅ = 1 := by
       rw [stratified_escape]
       refine Finset.prod_eq_one fun s _ => ?_
       simp only [Finset.filter_empty, Finset.card_empty, Nat.sub_zero]
@@ -226,7 +226,7 @@ theorem flock_e2e_drawn_exec
     (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := Law.execStratified St Ls) plan tab vb k Rw M ρ t' :=
   P.flock_e2e_drawn H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr ht σ hCR
@@ -245,7 +245,7 @@ theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks :
     (K : ℕ) (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       (Law.stratified σs ks hks).miss K + ksAvgBE H E plan k (reg σ) (cont σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab vb k Rw M ρ t' := by

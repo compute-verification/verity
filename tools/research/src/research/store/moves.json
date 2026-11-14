@@ -2410,6 +2410,11 @@
       "paths": {
         "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Pouw/EndToEndWindow/": "security/Proofs/Pouw/EndToEndExecutionPhase/"
+      }
     }
   ]
 }

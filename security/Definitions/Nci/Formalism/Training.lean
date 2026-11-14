@@ -16,7 +16,7 @@ given `θ`, is `totalUpdate` (a decoder `M` allowed `c` steps, `Verity.LDL`). `�
 passed between blocks, is what a reduction block's children hold (`ReductionBlock`); `Δ_t`, the weights in the form the
 update rule reads and writes (a straight-through run's latents; `Δ_t = Δ` for any other run), is what an update
 application block reads beside the reduced state (`UpdateBlock`); and `d` is the decoder's gates, the room a block
-leaves it beside at least `c - d` gates of the computation (`SessionBlocks`).
+leaves it beside at least `c - d` gates of the computation (`InferenceBlocks`).
 
 A1 (`Nci.Formalism.Assumptions.CutCost`) prices an inference block `I` by where its work on each token begins, at values
 a finite family `𝒲` of witness blocks of the circuit sets. What a set of gates `S` reads beyond `θ` is `in(S) \ θ`, as

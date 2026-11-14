@@ -270,7 +270,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     pure (Json.arr ((sidePath d lv (← nat j "index")).map hexJ).toArray)),
   ("window_problem", fun j => do
     let rows ← hexes j "rows"
-    pure (toJson (← windowProblem rows.toList (← work j) (← int j "bound") (← hex j "root_h3") (← nat j "bits")
+    pure (toJson (← executionPhaseProblem rows.toList (← work j) (← int j "bound") (← hex j "root_h3") (← nat j "bits")
       (← optList j "records") (← optList j "indices")))),
   ("session_cap", fun j => do pure (toJson (← sessionCap? (← int j "k_log") (← int j "per_block")))),
   ("sessions", fun j => do pure (toJson (← sessions? (← int j "k") (← int j "cap")))),

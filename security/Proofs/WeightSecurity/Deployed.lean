@@ -12,10 +12,10 @@ its timing bucket and on its advice, and then the window's audit runs (`JointAud
 session on one live sample). The probability that it leaves `M` incorrect proof blocks undetected is at most
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
-knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le`). Its sample misses its `w` incorrect proof blocks
+knowledge and binding terms (`JointAuditV5.accepted_drawnIncorrect_le`). Its sample misses its `w` incorrect proof blocks
 with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block miss: a
 premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata each have
-`(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
+`(n − k)/n ≤ x`). The named assumptions are `JointPooledV5`'s, at every window, and weight security's own.
 -/
 
 @[expose] public section
@@ -46,7 +46,7 @@ noncomputable def servedAudit (w : JointAuditV5) {Rel : Type} (τ : Strategy (se
 release. -/
 noncomputable def servedRec (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
     (b : Release O V Tick Adv × (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) : Served O V Tick Adv :=
-  ⟨w.Accepts b.2, ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ), (w.wrongSet (servedAudit w τ)).card,
+  ⟨w.Accepts b.2, ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ), (w.incorrectSet (servedAudit w τ)).card,
     b.1.1, b.1.2.1, b.1.2.2⟩
 
 /-- The deployment's run over `T` windows at the datacenter's strategy `s`. -/
@@ -65,22 +65,22 @@ theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (R
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim (servedAudit w τ) k))
       (cont (w.memberSim (servedAudit w τ) k)) (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun b => (servedRec w τ b).accepted ∧ (servedRec w τ b).sampledIncorrect) (servedGame w _) τ ≤ w.eps := by
-  show prob (fun b => w.Accepts b.2 ∧ ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ))
+  show prob (fun b => w.Accepts b.2 ∧ ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ))
     (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
   rw [prob_map]
-  exact w.accepted_drawnWrong_le (servedAudit w τ) hCR hA2
+  exact w.accepted_drawnIncorrect_le (servedAudit w τ) hCR hA2
 
 theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (x : ℝ) (hx : 0 ≤ x)
     (hpa : ∀ B, w.pa B ≤ x ^ B.card) (τ : Strategy (servedGame w (Release O V Tick Adv))) :
     prob (fun b => ¬ (servedRec w τ b).sampledIncorrect) (servedGame w _) τ ≤
-      ENNReal.ofReal x ^ (w.wrongSet (servedAudit w τ)).card := by
-  show prob (fun b => ¬ ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ)) (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
+      ENNReal.ofReal x ^ (w.incorrectSet (servedAudit w τ)).card := by
+  show prob (fun b => ¬ ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ)) (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
   rw [prob_map, ← ENNReal.ofReal_pow hx]
   exact (w.drawMiss_le hA3 _ (servedAudit w τ)).trans (ENNReal.ofReal_le_ofReal (hpa _))
 
 /-- **Model weight security at the deployed audit.** `TheftServed` with the probability of leaving `M` incorrect proof
 blocks undetected bounded by the windows' knowledge and binding terms plus `x^M`, at every datacenter strategy `s θ r`,
-under `JointHorizonV5`'s named assumptions at every window and weight security's `HonestUseHard` and `Simulable`. -/
+under `JointPooledV5`'s named assumptions at every window and weight security's `HonestUseHard` and `Simulable`. -/
 theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (W : ℕ → JointAuditV5) (T L E M : ℕ) (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
@@ -133,7 +133,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
   have h := period_undetected (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t))
     (fun t τ => t < T ∧ cr t τ) (fun t => (W t).eps) (ENNReal.ofReal x) (ENNReal.ofReal_le_one.2 hx1)
     (fun t τ hτ => servedRec_accepted_le (W t) τ hτ.2.1 hτ.2.2)
-    (fun t τ hτ => ⟨((W t).wrongSet (servedAudit (W t) τ)).card, fun _ => rfl,
+    (fun t τ hτ => ⟨((W t).incorrectSet (servedAudit (W t) τ)).card, fun _ => rfl,
       servedRec_miss_le (W t) (hA3 t hτ.1) x hx0 (hpa t hτ.1) τ⟩)
     T 0 (s θ r) M hs
   rw [← ENNReal.ofReal_pow hx0] at h

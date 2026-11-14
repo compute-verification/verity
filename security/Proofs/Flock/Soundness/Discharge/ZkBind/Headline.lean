@@ -40,7 +40,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
 /-- **The compiled `--zk` count curve on the circuit's units, every term on the accepted assumptions.** If
-`execAccept` holds, the probability that at least `K` units of the circuit's program (`keyProg c hU n`) are wrong at
+`execAccept` holds, the probability that at least `K` units of the circuit's program (`keyProg c hU n`) are incorrect at
 the committed values (the plurality value layer of the rows' binding) is at most
 `miss(K) + ε_ks + δ_link + δ_tree`, as in `zk_flock_countC_execOS_cr`. Each sampled proof block is read at its template instance and block in its
 `--zk` table's accepted statement (`si`, every such table's circuit file parsing to `c`), and the committed values are
@@ -69,7 +69,7 @@ theorem zk_flock_countC_execOS_keyProg (hA : A.Correct) {c : Flock.Circuit} (hU 
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (((keyProg c hU n).partition outs).wrong
+    prob (fun o => execAccept o ∧ K ≤ (((keyProg c hU n).partition outs).incorrect
         (XplurZC A Hs ((keyProg c hU n).partition outs) planZ tab (rs.bindingZ hHm) (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
       (Law.stratified σs ks hks).miss K +

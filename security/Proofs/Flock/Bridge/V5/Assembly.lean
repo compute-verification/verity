@@ -83,7 +83,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     hCust (Bridge.lawSized_size (Bridge.lawSized_drawsUnder hlaw hb) hCust.2) τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h
-  have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ wrongRegZc execArith P (planZHJP dj y₀)
+  have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ incorrectRegZc execArith P (planZHJP dj y₀)
       (tabZHJP dj y₀) vb (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr := by
     intro u hu
     have hv : u.val ∈ Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ r desc q roots)
@@ -91,7 +91,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
       rw [hFe]
       exact (Finset.mem_filter.1 hu).2
     by_contra hu'
-    obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_wrongRegZc _ _ _ _ _ _).2 hu')
+    obtain ⟨-, op, hop⟩ := not_not.1 (mt (mem_incorrectRegZc _ _ _ _ _ _).2 hu')
     refine hF P vb.pos (fun o g => vb.bit (vb.val o) g) id vb.com (vb.cs (reg σ))
       (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
       Claims.Sampling.sha512Msg Cd roots Xr κ u hκin ⟨op, hop⟩

@@ -22,7 +22,7 @@ open scoped ENNReal
 /-- **Sampling every unit certifies any `ℓ ≥ 0`**, with the harm bound `0` and the count `0`. -/
 theorem certifies_full (n : ℕ) (b : Fin n → ℕ) {δ ℓ : ℝ} (hδ : 0 < δ) (hℓ : 0 ≤ ℓ) :
     CertifiesLeak (Law.subset n n le_rfl) b δ ℓ := by
-  have hzero : ∀ B : Finset (Fin n), B.Nonempty → (Law.subset n n le_rfl).escape B = 0 := by
+  have hzero : ∀ B : Finset (Fin n), B.Nonempty → (Law.subset n n le_rfl).missProb B = 0 := by
     intro B hB
     have h1 := hB.card_pos
     have h2 : B.card ≤ n := by simpa using Finset.card_le_univ B

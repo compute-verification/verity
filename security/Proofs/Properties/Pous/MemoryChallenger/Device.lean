@@ -59,41 +59,41 @@ theorem plain_of_recorded (r : Run) {e : String} (h : r.recorded.ended = some e)
 
 /-! ## The strings a session hashes -/
 
-theorem coinKey_mem (pk : ByteArray) (c : SessionCommitment) (e : String) (rounds : Array Round) :
-    c.coinKey ∈ sessionStrings pk c e rounds := by
-  simp [sessionStrings]
+theorem coinKey_mem (pk : ByteArray) (c : ChallengePhaseCommitment) (e : String) (rounds : Array Round) :
+    c.coinKey ∈ challengePhaseStrings pk c e rounds := by
+  simp [challengePhaseStrings]
 
-theorem tree_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {vs : Array ByteArray}
+theorem tree_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {vs : Array ByteArray}
     (hv : rounds.mapM Round.value = .ok vs) {x : ByteArray}
-    (hx : x ∈ treeStrings (domain RECORD_BINDING c.session rounds.size) vs) : x ∈ sessionStrings pk c e rounds := by
-  simp only [sessionStrings, hv, List.mem_append]
+    (hx : x ∈ treeStrings (domain RECORD_BINDING c.session rounds.size) vs) : x ∈ challengePhaseStrings pk c e rounds := by
+  simp only [challengePhaseStrings, hv, List.mem_append]
   exact Or.inl (Or.inl (Or.inr hx))
 
-theorem session_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {root : ByteArray}
+theorem challengePhase_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {root : ByteArray}
     (hr : recordsRoot c.session rounds = .ok root) :
     SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++ (header c e rounds.size).toUTF8 ++ root ∈
-      sessionStrings pk c e rounds := by
-  simp [sessionStrings, hr]
+      challengePhaseStrings pk c e rounds := by
+  simp [challengePhaseStrings, hr]
 
-theorem signed_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
+theorem signed_mem {pk : ByteArray} {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
     (hm : message c e rounds = .ok rec) (hI : (pk.extract 0 16).size = 16) :
     field MEMORY_CHALLENGER_TAG.toUTF8 ++ pk.extract 0 16 ++ field (field c.session) ++ field rec ∈
-      sessionStrings pk c e rounds := by
-  simp [sessionStrings, hm, hI]
+      challengePhaseStrings pk c e rounds := by
+  simp [challengePhaseStrings, hm, hI]
 
-theorem own_mem {s : SignedSession} {dev : Challengers} {x : ByteArray}
-    (hx : x ∈ sessionStrings s.publicKey s.commitment s.ended s.rounds) : x ∈ runStrings s dev :=
+theorem own_mem {s : SignedChallengePhase} {dev : Challengers} {x : ByteArray}
+    (hx : x ∈ challengePhaseStrings s.publicKey s.commitment s.ended s.rounds) : x ∈ runStrings s dev :=
   List.mem_append_left _ hx
 
-theorem device_mem {s : SignedSession} {dev : Challengers} {r : Run} (hr : r ∈ dev.sessions s.publicKey) {e : String}
+theorem device_mem {s : SignedChallengePhase} {dev : Challengers} {r : Run} (hr : r ∈ dev.sessions s.publicKey) {e : String}
     (he : r.recorded.ended = some e) {x : ByteArray}
-    (hx : x ∈ sessionStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ runStrings s dev := by
+    (hx : x ∈ challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ runStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
   simpa only [he] using hx
 
 /-! ## The argument -/
 
-theorem commitment_ext {c c' : SessionCommitment} (h1 : c.session = c'.session) (h2 : c.coinRoot = c'.coinRoot)
+theorem commitment_ext {c c' : ChallengePhaseCommitment} (h1 : c.session = c'.session) (h2 : c.coinRoot = c'.coinRoot)
     (h3 : c.coinKey = c'.coinKey) (h4 : c.blocks = c'.blocks) (h5 : c.k = c'.k) (h6 : c.limitNs = c'.limitNs)
     (h7 : c.blockBytes = c'.blockBytes) (h8 : c.binding = c'.binding) : c = c' := by
   cases c
@@ -102,7 +102,7 @@ theorem commitment_ext {c c' : SessionCommitment} (h1 : c.session = c'.session) 
 
 /-- Under no collision among the run's strings, a session whose message the device signed for one of its sessions is
 that session. -/
-theorem same_session {s : SignedSession} {dev : Challengers} (cf : CF (runStrings s dev)) (he : s.ended = COMPLETE)
+theorem same_challengePhase {s : SignedChallengePhase} {dev : Challengers} (cf : CF (runStrings s dev)) (he : s.ended = COMPLETE)
     {m M : ByteArray} (hm : s.message = .ok m)
     (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
     (hsig : Signed dev s.publicKey M) :
@@ -118,8 +118,8 @@ theorem same_session {s : SignedSession} {dev : Challengers} (cf : CF (runString
   obtain ⟨-, hMM⟩ := Inputs.signedMessage_ok hmcm
   have e1 := cf _ (own_mem (signed_mem hm hI)) _ (device_mem hr hend (signed_mem hmsg hI)) hMM
   have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
-  have e3 := cf _ (own_mem (session_mem hroot)) _ (device_mem hr hend (session_mem hroot')) e2
-  obtain ⟨e4, e5⟩ := Inputs.session_split (by rw [Tree.root_width, Tree.root_width]) e3
+  have e3 := cf _ (own_mem (challengePhase_mem hroot)) _ (device_mem hr hend (challengePhase_mem hroot')) e2
+  obtain ⟨e4, e5⟩ := Inputs.challengePhase_split (by rw [Tree.root_width, Tree.root_width]) e3
   have hp : Header.Plain s.ended := he ▸ Header.plain_complete
   obtain ⟨hb, hbb, hbl, hck, hcr, hk, hl, hs, hen, hn⟩ :=
     Header.header_inj hp (plain_of_recorded r hend) (String.toByteArray_inj.mp e4)
@@ -133,7 +133,7 @@ theorem same_session {s : SignedSession} {dev : Challengers} (cf : CF (runString
   exact (Inputs.rounds_inj hvs hvs').symm
 
 /-- **A verifying signature is the device's, or the run carries a break.** -/
-theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession} (dev : Challengers)
+theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedChallengePhase} (dev : Challengers)
     {p : Lms.Params} (hp : schemes.lookup s.scheme = some p) (ht : s.publicKey ∈ trusted) {m : ByteArray}
     (hm : s.message = .ok m) (hv : lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
     (he : s.ended = COMPLETE) : SignedByDevice schemes trusted s dev := by
@@ -152,8 +152,8 @@ theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : Si
       have cf : CF (runStrings s dev) := fun x hx y hy hxy =>
         Classical.byContradiction fun hne => hcol ⟨x, hx, y, hy, hne, hxy⟩
       by_cases hsig : Signed dev s.publicKey M
-      · exact Or.inl (same_session cf he hm hM hsig)
+      · exact Or.inl (same_challengePhase cf he hm hM hsig)
       · refine Or.inr (Or.inr ⟨p, M, hp, ht, ?_, ⟨σ, hd, hv⟩, hsig⟩)
-        simp [sessionMessage, hm, hM, bind, Except.bind, Except.toOption]
+        simp [challengePhaseMessage, hm, hM, bind, Except.bind, Except.toOption]
 
 end MemoryChallenger.Properties.SecurityProofs.Device

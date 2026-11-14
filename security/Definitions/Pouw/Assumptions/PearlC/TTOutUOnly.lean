@@ -37,18 +37,18 @@ def CorrectU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ)
 
 open Classical in
 /-- `K′`: the units of `τ` correct under U-only binding. -/
-noncomputable def correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+noncomputable def correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) : Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ CorrectU P U H s u c
 
 /-- The adversary wins under U-only binding: the honest work of its U-correct units exceeds `T / (1 − g)`. -/
-def WinsU (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+def WinsU (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Trace) (H : Q → R) (s : S) : Prop :=
   T / (1 - g) < ∑ u ∈ correctSetU P U H s τ, P.Wref U.layout u
 
 /-- **The gap property under U-only binding** `G_g^U` with failure probability `δ(q, N)`. -/
 def GGapU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => WinsU P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
+    pr (fun x : (Q → R) × S => WinsU P U g T (A.trace U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
 end Pouw.PearlC
 
@@ -63,8 +63,8 @@ def TTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
+      T / (1 - g₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
       ≤ δ q U.layout.N
 
 /-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`**: `TTOutU` at `pearlCProtocolDevRev1 d sem ρ`,
@@ -96,8 +96,8 @@ def TTOutUW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Devi
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
+      T / (1 - g₀) < ∑ u ∈ correctSetU P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
       ≤ δ q U.layout.N
 
 /-- **TT_OUT(1/400) over U alone for Pearl-C at a device record `d`, at W1 on `dv`**: `TTOutPearlCDevUOnly` with its cost

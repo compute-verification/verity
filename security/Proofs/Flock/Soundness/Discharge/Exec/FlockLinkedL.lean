@@ -10,7 +10,7 @@ import Mathlib.Combinatorics.Matroid.Init
 The batched Flock audit with the expected-time extractor (`flock_batched_countEL`), composed with the link theorem
 (`flock_batched_linkSoundEL`) at the plurality value layer (`XplurL`). The count curve and the drawn-unit bound no longer
 carry `δ_link` as a hypothesis:
-$$\Pr[\text{accept} \wedge \text{at least } K \text{ wrong}] \le \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
+$$\Pr[\text{accept} \wedge \text{at least } K \text{ incorrect}] \le \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
 \frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}} + \frac{1}{eM} + \frac{k}{eR_w}\Big).$$
 
 What it rests on, all named:
@@ -51,14 +51,14 @@ theorem linkBoundCR_eqL {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg 
   rfl
 
 /-- **The compiled-layer count curve, with `δ_link` discharged**: at the plurality value layer,
-`Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
+`Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
 and the lowering. -/
 theorem flock_batched_count_linkedL (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (flock_batched_countEL P H E Lf plan tab decode (fun R τ => XplurL P H E Lf plan tab vb R τ k Rw) hk
@@ -73,7 +73,7 @@ theorem flock_batched_drawn_linkedL (hlow : P.LoweringSoundB plan tab decode)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (flock_batched_drawnEL P H E Lf plan tab decode (fun R τ => XplurL P H E Lf plan tab vb R τ k Rw) hk
@@ -96,7 +96,7 @@ theorem flock_batched_count_placedL
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   flock_batched_count_linkedL P H E Lf plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
@@ -111,7 +111,7 @@ theorem flock_batched_drawn_placedL
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   flock_batched_drawn_linkedL P H E Lf plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr

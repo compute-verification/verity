@@ -189,7 +189,7 @@ theorem ksAvgZK_le {c : ℝ≥0∞} (h : ∀ S R (j : Fin (planZ S R).length), (
   (avg_mono fun _ => iSup_le fun j => h _ _ j).trans (avg_const c).le
 
 /-- **The `--zk` count curve at the live sample, every table at Flock ZK's parameters**:
-`Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + δ_link`. -/
+`Pr[accept ∧ at least K incorrect units] ≤ miss(K) + 2^-203 + δ_link`. -/
 theorem zk_flock_count_execOS_m1 (hA : A.Correct) (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -205,7 +205,7 @@ theorem zk_flock_count_execOS_m1 (hA : A.Correct) (hM1 : ∀ S R (j : Fin (planZ
     (K : ℕ)
     (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
       (Law.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) + δlink (reg σ) (cont σ) :=
   (zk_flock_count_execOS A P planZ tab hA σs ks hks St hS Kd pop Lb src hA3 place Xc hlink K σ).trans

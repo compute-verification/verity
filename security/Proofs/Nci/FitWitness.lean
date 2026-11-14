@@ -52,8 +52,8 @@ abbrev threading : Threading decl where
   reuse := 1
   reuse_le := by decide +kernel
 
-/-- Two windows: gate 3 in window 0, gate 4 in window 1. -/
-abbrev windows : Partition decl.D 2 where
+/-- Two serverBlocks: gate 3 in window 0, gate 4 in window 1. -/
+abbrev serverBlocks : Partition decl.D 2 where
   unit g := if g.val = 3 then some 0 else if g.val = 4 then some 1 else none
   input_iff := by decide +kernel
 
@@ -64,21 +64,21 @@ theorem M_nonempty : threading.M.Nonempty := by decide +kernel
 
 theorem gap : (3 : ℝ) < ((2 : ℕ) : ℝ) * 2 := by norm_num
 
-theorem reads_le : ∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ 3 := by
-  have h : ∀ j, novelReads decl (windows.gates j) ≤ 3 := by decide +kernel
+theorem reads_le : ∀ j, (novelReads decl (serverBlocks.gates j) : ℝ) ≤ 3 := by
+  have h : ∀ j, novelReads decl (serverBlocks.gates j) ≤ 3 := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
 theorem reach : Assumptions.Reach decl threading 2 := by
   unfold Assumptions.Reach
   decide +kernel
 
-theorem fits : Assumptions.Fits decl threading windows start 2 1 := by
-  have h : ∀ j, 2 * (threading.weightsUsed (windows.gates j)).card + 1 * (threading.entered windows start j).card ≤
-      novelReads decl (windows.gates j) := by decide +kernel
+theorem fits : Assumptions.Fits decl threading serverBlocks start 2 1 := by
+  have h : ∀ j, 2 * (threading.weightsUsed (serverBlocks.gates j)).card + 1 * (threading.entered serverBlocks start j).card ≤
+      novelReads decl (serverBlocks.gates j) := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
 /-- `FitBound` at the witness. -/
 theorem bound : 4 * (1 : ℝ) * ((2 : ℕ) * 2 - 3) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (3 : ℝ) ^ 2 :=
-  FitBound decl threading 2 windows start 2 3 2 1 gap reads_le reach fits
+  FitBound decl threading 2 serverBlocks start 2 3 2 1 gap reads_le reach fits
 
 end Nci.SecurityProofs.FitWitness

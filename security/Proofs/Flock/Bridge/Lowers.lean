@@ -46,7 +46,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 `lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) (unitGates P u) φ Xv`, at any
 `φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
-evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads
+evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_incorrectRegZ` reads
 it at `b u := unitGates P u`. It is `lowers_of` at `C.eval Xv`, which holds at any wire values that apply the unit's
 gates, on committed values given only where the unit reads from outside or commits (`correct_of_local`, at a unit's
 local evaluation). Slot `u` of `partOf P κ ns`, at any strata `ns` that sum to `n`

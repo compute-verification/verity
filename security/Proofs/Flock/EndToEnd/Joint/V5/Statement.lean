@@ -22,15 +22,15 @@ A prover may read every coin it has seen, so member `m`'s session is played with
 earlier members' sessions. `JointAuditV5.memberLaw` and `JointAuditV5.memberStrat` are that session played alone: its
 sampling design samples the sample and the earlier sessions' coins together (`seqTape`), samples member `m`'s part, and
 plays the strategy `τ` leaves for member `m`'s session there (`seqStrat`). Member `m`'s incorrect proof blocks are
-`wrongRegZc` at V5's canonical openings in the committed trace fixed at the joint registration (`XplurZC`), at that
-play; the window's are their images in the population (`JointAuditV5.wrongSet`), fixed by `τ` before the sample.
+`incorrectRegZc` at V5's canonical openings in the committed trace fixed at the joint registration (`XplurZC`), at that
+play; the window's are their images in the population (`JointAuditV5.incorrectSet`), fixed by `τ` before the sample.
 
 * `JointSampledV5`, per window, `EndToEndHiddenV5`'s form: a set `W` of the population's proof blocks is incorrect in an
   accepted run with probability at most the sampling design's own miss of `W` (`P_a(W)` of `oneStageOf law` on the strata `ns`) plus
   `Σ_m (ε_ks,m + ε_bind,m)`.
 * `JointShareV5`, per window, the share form: more than an `ε` share of the population incorrect in an accepted run, at
   most the most the sampling design misses of any such set plus the same terms.
-* `JointHorizonV5`, pooled over a monitoring period of `T` such windows played by one adaptive prover: except with
+* `JointPooledV5`, pooled over a monitoring period of `T` such windows played by one adaptive prover: except with
   probability `δ + Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)`, if every window is accepted, their samples miss their incorrect proof
   blocks together with probability at least `δ` (the product of their `P_a`s), and their ANDs and output bits are each at
   most the most any choice in that confidence set holds.
@@ -159,10 +159,10 @@ noncomputable def sim (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L
     (decodesZCJH_custodyAt m.I m.own m.ht m.hcS m.hcount _ m.dj m.y₀ m.wr L m.hTags m.hCust hL)
     τ
 
-/-- **The member's incorrect proof blocks** at `τ`: `wrongRegZc` at V5's canonical openings in the committed trace fixed
+/-- **The member's incorrect proof blocks** at `τ`: `incorrectRegZc` at V5's canonical openings in the committed trace fixed
 at registration (`XplurZC`), as in `SampledKSLiveV5`. -/
-noncomputable def wrongSet (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) : Finset (Fin m.n) :=
-  wrongRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon (reg (m.sim L hL τ))
+noncomputable def incorrectSet (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) : Finset (Fin m.n) :=
+  incorrectRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon (reg (m.sim L hL τ))
     (XplurZC execArith hs512 m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb (reg (m.sim L hL τ))
       (cont (m.sim L hL τ)) m.k m.Rw)
 
@@ -261,12 +261,12 @@ noncomputable def memberSim (τ : Strategy w.game) (k : Fin w.ms.length) :=
   (w.ms.get k).sim (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k)
 
 /-- **Member `k`'s incorrect proof blocks** at `τ`, in the committed trace fixed at the joint registration. -/
-noncomputable def memberWrong (τ : Strategy w.game) (k : Fin w.ms.length) : Finset (Fin (w.ms.get k).n) :=
-  (w.ms.get k).wrongSet (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k)
+noncomputable def memberIncorrect (τ : Strategy w.game) (k : Fin w.ms.length) : Finset (Fin (w.ms.get k).n) :=
+  (w.ms.get k).incorrectSet (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k)
 
 /-- **The window's incorrect proof blocks** at `τ`: every member's, in the population. -/
-noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
-  Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb
+noncomputable def incorrectSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
+  Finset.univ.biUnion fun k => (w.memberIncorrect τ k).image (w.ms.get k).emb
 
 /-- **The sampling design of member `k`'s part of the sample**: the sample's coins, member `k`'s part. -/
 noncomputable def design (k : Fin w.ms.length) : Law (w.ms.get k).n where
@@ -303,7 +303,7 @@ def JointSampledV5 : Prop :=
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') →
     ∀ W : Finset (Fin w.nJ),
-      prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
+      prob (fun o => w.Accepts o ∧ W ⊆ w.incorrectSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
 
 /-- **A window's sample over several members, the share form.** For a window's audit as in `JointAuditV5`, every live
 prover `τ` and every share `ε`, the probability that flock-verify accepts the session of every member with a proof block
@@ -320,15 +320,15 @@ def JointShareV5 : Prop :=
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') →
     ∀ ε : ℝ,
-      prob (fun o => w.Accepts o ∧ ε * w.nJ < (w.wrongSet τ).card) w.game τ ≤
+      prob (fun o => w.Accepts o ∧ ε * w.nJ < (w.incorrectSet τ).card) w.game τ ≤
         ENNReal.ofReal (⨆ B : {B : Finset (Fin w.nJ) // ε * w.nJ < B.card}, w.pa B.1) + w.eps
 
 /-- What a monitoring period's run records of window `idx`: whether its run accepted (`JointAuditV5.Accepts`), its
-incorrect proof blocks (`JointAuditV5.wrongSet`), and whether a sampled proof block is one of them. -/
+incorrect proof blocks (`JointAuditV5.incorrectSet`), and whether a sampled proof block is one of them. -/
 structure AuditRecV5 (W : ℕ → JointAuditV5) where
   idx : ℕ
   accepted : Prop
-  wrong : Finset (Fin (W idx).nJ)
+  incorrect : Finset (Fin (W idx).nJ)
   drawnWrong : Prop
 
 namespace AuditRecV5
@@ -336,11 +336,11 @@ namespace AuditRecV5
 variable {W : ℕ → JointAuditV5}
 
 /-- The record's window's sampling design's own miss of its incorrect proof blocks. -/
-noncomputable def pa (r : AuditRecV5 W) : ℝ≥0∞ := ENNReal.ofReal ((W r.idx).pa r.wrong)
+noncomputable def pa (r : AuditRecV5 W) : ℝ≥0∞ := ENNReal.ofReal ((W r.idx).pa r.incorrect)
 
 /-- The record's incorrect proof blocks' total weight `Σ_{u ∈ B} h u`, with `h t` window `t`'s per-proof-block
 weights. -/
-def harm (h : (t : ℕ) → Fin (W t).nJ → ℕ) (r : AuditRecV5 W) : ℕ := ∑ u ∈ r.wrong, h r.idx u
+def harm (h : (t : ℕ) → Fin (W t).nJ → ℕ) (r : AuditRecV5 W) : ℕ := ∑ u ∈ r.incorrect, h r.idx u
 
 end AuditRecV5
 
@@ -349,7 +349,7 @@ namespace JointAuditV5
 /-- Window `t`'s record, at the strategy `τ` that played it and its output `o`. -/
 noncomputable def record (W : ℕ → JointAuditV5) (t : ℕ) (τ : Strategy (W t).game)
     (o : (W t).Reg × Finset (Fin (W t).nJ) × List Discharge.Exec.Transcript) : AuditRecV5 W :=
-  ⟨t, (W t).Accepts o, (W t).wrongSet τ, ∃ u ∈ o.2.1, u ∈ (W t).wrongSet τ⟩
+  ⟨t, (W t).Accepts o, (W t).incorrectSet τ, ∃ u ∈ o.2.1, u ∈ (W t).incorrectSet τ⟩
 
 end JointAuditV5
 
@@ -397,7 +397,7 @@ many windows and members the period has. Its named assumptions, at every window:
 for its sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw`), and `cr/sha-512`
 (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at each member's session played alone at every
 strategy the window is played with on some run (`JointPeriodV5.Plays`). -/
-def JointHorizonV5 : Prop :=
+def JointPooledV5 : Prop :=
   ∀ (W : ℕ → JointAuditV5) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
     ∀ s : Strategy (JointPeriodV5.game W T),

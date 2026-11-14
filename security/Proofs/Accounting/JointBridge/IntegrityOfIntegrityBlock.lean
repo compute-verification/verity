@@ -22,9 +22,9 @@ import Proofs.Pouw.Prob
 # Proof of the integrity audit of a server-time block from Flock's integrity audit of that block
 
 At each value of the other coins, a sample of the period's sampled coins on which its audit accepts while more than `ε` of
-its units are wrong is one on which every sampling block of the server-time block is accepted and their incorrect proof blocks
+its units are incorrect is one on which every sampling block of the server-time block is accepted and their incorrect proof blocks
 total more than `ε·units ≥ ln(1/δ)/q`. Read on the monitoring period's records, that is the block escaping
-(`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `law`
+(`ServerBlocks.BlockMissProb`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `law`
 carries the bound from the monitoring period's game to the uniform coins.
 -/
 
@@ -42,23 +42,23 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
         ¬ r.Holds c p .sampled (Function.update ξ (r.own .sampled) x)) →
       (∀ w ∈ R.record (Function.update ξ (r.own .sampled) x), w.accepted) ∧
         Real.log (1 / δ) / q ≤
-          (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.wrong).sum : ℝ) := by
+          (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.incorrect).sum : ℝ) := by
     rintro x ⟨hacc, hfail⟩
     refine ⟨(R.accepts_iff _).1 hacc, ?_⟩
-    have hfail' : ¬ (((r.parts.wrong (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
+    have hfail' : ¬ (((r.parts.incorrect (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
         c.ε * r.units) := hfail
     have hlt := not_le.mp hfail'
     rw [R.wrong_eq] at hlt
     exact hcert.trans hlt.le
   have hlaw := R.law ξ fun l => (∀ w ∈ l, w.accepted) ∧
-    Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ)
+    Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.incorrect).sum : ℝ)
   have hev : FlockSoundness.Game.value (fun l => (∀ w ∈ l.filter (fun w => w.idx ∈ S.sessions b), w.accepted) ∧
         Real.log (1 / δ) / q ≤
-          (((l.filter fun w => w.idx ∈ S.sessions b).map Flock.Guarantees.WindowRec.wrong).sum : ℝ))
+          (((l.filter fun w => w.idx ∈ S.sessions b).map Flock.Guarantees.WindowRec.incorrect).sum : ℝ))
         (S.run (R.strat ξ)) =
-      FlockSoundness.Game.value (S.BlockEscapes q δ b) (S.run (R.strat ξ)) :=
+      FlockSoundness.Game.value (S.BlockMissProb q δ b) (S.run (R.strat ξ)) :=
     FlockSoundness.Game.value_congr (fun l => by
-      simp only [Flock.Guarantees.ServerBlocks.BlockEscapes, Flock.Guarantees.ServerBlocks.blockWrong,
+      simp only [Flock.Guarantees.ServerBlocks.BlockMissProb, Flock.Guarantees.ServerBlocks.blockIncorrect,
         List.mem_filter, decide_eq_true_eq, and_imp]) _
   have hsrc := Flock.SecurityProofs.IntegrityBlockCarried S b q δ hq hδ hqt hA3 (R.strat ξ) (hT ξ) (hL ξ) (hA2 ξ)
   have hfin' : ENNReal.ofReal δ + S.err b + S.carry b ≠ ⊤ :=

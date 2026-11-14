@@ -13,7 +13,7 @@ import Proofs.Pouw.Prob
 /-!
 # Proofs of the deadline's guarantees
 
-The honest clock names a program that outputs the adversary's transcript wherever it is received by the deadline, after
+The honest clock names a program that outputs the adversary's trace wherever it is received by the deadline, after
 the same preprocessing, at a cost within the run's spending between the salt and the deadline. That program is within
 the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
 deadline.
@@ -36,7 +36,7 @@ theorem CostModel.honestClock_iff {CM : CostModel Q R S} {U : Workload} {A : Adv
     {td : ℝ} :
     Assumptions.HonestClock (CM.adversaries U) A run td ↔
       ∃ A' : Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
-        (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s ∧ ∀ m ∈ A'.hashed U H s, m ∈ A.hashed U H s) ∧
+        (run.tr H s ≤ td → A'.trace U H s = A.trace U H s ∧ ∀ m ∈ A'.hashed U H s, m ∈ A.hashed U H s) ∧
         CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
         CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
   Iff.rfl
@@ -46,7 +46,7 @@ theorem PearlC.CostModel.honestClock_iff {CM : PearlC.CostModel Q R S} {U : Pear
     {run : TimedRun Q R S} {td : ℝ} :
     Assumptions.HonestClock (CM.adversaries U) A run td ↔
       ∃ A' : PearlC.Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
-        (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+        (run.tr H s ≤ td → A'.trace U H s = A.trace U H s) ∧
         CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
         CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s :=
   ⟨fun ⟨A', hpre, h⟩ => ⟨A', hpre, fun H s => ⟨fun ht => ((h H s).1 ht).1, (h H s).2⟩⟩,

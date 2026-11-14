@@ -21,8 +21,8 @@ import Proofs.Pouw.Prob
 # Proof of the integrity audit of a period from Flock's integrity audit over a monitoring period
 
 At each value of the other coins, a sample of the sampled audit's own coins on which it accepts while more than `ε` of
-the units are wrong is one on which every sampling block is accepted and the incorrect proof blocks total more than
-`ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityHorizon` bounds; the realization's `law` carries the
+the units are incorrect is one on which every sampling block is accepted and the incorrect proof blocks total more than
+`ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityPooled` bounds; the realization's `law` carries the
 bound from the period's game to the uniform coins.
 -/
 
@@ -40,10 +40,10 @@ theorem IntegrityOfIntegrityMonitoringPeriod : Accounting.Guarantees.Bridge.Inte
         ¬ r.Holds c p .sampled (Function.update ξ (r.own .sampled) x)) →
       (∀ w ∈ R.record (Function.update ξ (r.own .sampled) x), w.accepted) ∧
         Real.log (1 / δ) / q ≤
-          (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.wrong).sum : ℝ) := by
+          (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.incorrect).sum : ℝ) := by
     rintro x ⟨hacc, hfail⟩
     refine ⟨(R.accepts_iff _).1 hacc, ?_⟩
-    have hfail' : ¬ (((r.parts.wrong (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
+    have hfail' : ¬ (((r.parts.incorrect (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
         c.ε * r.units) := hfail
     have hlt := not_le.mp hfail'
     rw [R.wrong_eq] at hlt
@@ -51,13 +51,13 @@ theorem IntegrityOfIntegrityMonitoringPeriod : Accounting.Guarantees.Bridge.Inte
   have hlaw : ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) =>
         (∀ w ∈ R.record (Function.update ξ (r.own .sampled) x), w.accepted) ∧
           Real.log (1 / δ) / q ≤
-            (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.wrong).sum : ℝ)) =
+            (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.incorrect).sum : ℝ)) =
       FlockSoundness.Game.value (fun l => (∀ w ∈ l, w.accepted) ∧
-          Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ))
+          Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.incorrect).sum : ℝ))
         (Flock.Guarantees.Period.run W T (R.strat ξ)) :=
     R.law ξ fun l => (∀ w ∈ l, w.accepted) ∧
-      Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ)
-  have hsrc := Flock.SecurityProofs.IntegrityHorizon W T q δ hq hδ hqt hA3 (R.strat ξ) (hT ξ) (hL ξ)
+      Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.incorrect).sum : ℝ)
+  have hsrc := Flock.SecurityProofs.IntegrityPooled W T q δ hq hδ hqt hA3 (R.strat ξ) (hT ξ) (hL ξ)
   refine (Pouw.pr_mono hsub).trans ?_
   rw [← ENNReal.toReal_ofReal (Pouw.pr_nonneg _), hlaw]
   exact ENNReal.toReal_mono hfin hsrc

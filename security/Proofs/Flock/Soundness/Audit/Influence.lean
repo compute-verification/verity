@@ -15,25 +15,25 @@ import Proofs.Flock.Soundness.Game
 /-!
 # Influence through a separator
 
-An accepted audit bounds which units are wrong; this file bounds what the wrong units can make the audited computation
+An accepted audit bounds which units are incorrect; this file bounds what the incorrect units can make the audited computation
 deliver. `D` is the set of delivered wires: what the consumer receives (the served tokens). It can be smaller than the
 circuit's outputs, since commitments and leaves are outputs that the verifier sees and nobody is delivered.
 
 * `Circuit.FeedsAvoiding K g t`: `g` feeds `t` along a path none of whose gates is in `K`.
 * `Partition.Separates K B D` (a downstream cut): `K` meets every path from a gate of a unit of `B` to a wire of `D`.
-* `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in
+* `outputs_eq_of_separates`, **the influence cap**: two transcripts with the anchors' inputs, whose incorrect units lie in
   `B`, and that agree on a committed separator of `B`, deliver the same values on `D`. So they deliver at most `2^|K|`
   values on `D` (`card_delivered_le`): in a Boolean circuit a gate is one bit, and `|K|` is the separator's width.
 * `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay unit, those are its exports.
   `Separates.mono` and `Separates.union` build separators for larger sets from smaller ones.
-* `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their wrong units form a set
-  whose escape `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the law and `δ`, never by
+* `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their incorrect units form a set
+  whose missProb `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the law and `δ`, never by
   the prover, and `card_influenceSet_le` bounds its size by `∑_{B : δ ≤ e B} 2^|K B|`.
 * `audit_influence`: the audit accepts while the delivered values lie outside the influence set with probability at most
   `δ + ε_ks + δ_link + δ_in`. The influence in bits is `log₂ |influenceSet|`.
 * `card_influenceSet_le_harm` and `card_admissible_le`: the influence is at most `H + log₂ ∑_{j ≤ K} C(n, j)` bits. `H` is
   a harm bound (`IsHarmBound`) with each unit's harm the width it adds to a separator, for example its exits
-  (`card_exits_le`): the value bits. The second term is the choice of which units are wrong, when `miss (K + 1) < δ`.
+  (`card_exits_le`): the value bits. The second term is the choice of which units are incorrect, when `miss (K + 1) < δ`.
 * `audit_exfiltration`: a prover that picks its strategy from a uniform message `m`, and a receiver that sees only what
   is delivered, recover `m` from an accepted audit with probability at most `2^H · ∑_{j ≤ K} C(n, j) / |M|` plus the
   audit's error: the value bits and the location term together. `card_guess_le` is its counting step.
@@ -124,7 +124,7 @@ theorem separates_exits (B : Finset (Fin n)) {D : Finset (Fin C.N)} (hD : D ⊆ 
 transcripts' local evaluations agree, and so do their committed values. -/
 theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
-    (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.wrong X ⊆ B) (hwY : P.wrong Y ⊆ B)
+    (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.incorrect X ⊆ B) (hwY : P.incorrect Y ⊆ B)
     (hXY : ∀ g ∈ K, X g = Y g) :
     ∀ m (g : Fin C.N), g.val = m → (∃ t ∈ D, C.FeedsAvoiding K g t) →
       (∀ u, P.unit g = some u → P.localEval X u g = P.localEval Y u g) ∧
@@ -136,8 +136,8 @@ theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Fin
   have hcor : ∀ u, P.unit g = some u → P.Correct X u ∧ P.Correct Y u := by
     intro u hu
     have huB : u ∉ B := fun huB => hsep g t u hu huB ht hgt
-    exact ⟨not_not.1 fun hc => huB (hwX (P.mem_wrong.2 hc)),
-      not_not.1 fun hc => huB (hwY (P.mem_wrong.2 hc))⟩
+    exact ⟨not_not.1 fun hc => huB (hwX (P.mem_incorrect.2 hc)),
+      not_not.1 fun hc => huB (hwY (P.mem_incorrect.2 hc))⟩
   have hB : ∀ u, P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
     intro u hu
     rw [P.localEval_of_mem X hu, P.localEval_of_mem Y hu]
@@ -162,11 +162,11 @@ theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Fin
     exact hB u hu
   · rw [hX g hi, hY g hi]
 
-/-- **The influence cap**: two transcripts with the anchors' inputs, whose wrong units lie in `B`, and that agree on a
+/-- **The influence cap**: two transcripts with the anchors' inputs, whose incorrect units lie in `B`, and that agree on a
 committed separator `K` of `B` from the committed delivered wires `D`, deliver the same values on `D`. -/
 theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) {X Y a : Fin C.N → Bool}
-    (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.wrong X ⊆ B) (hwY : P.wrong Y ⊆ B)
+    (hX : C.InputsAgree X a) (hY : C.InputsAgree Y a) (hwX : P.incorrect X ⊆ B) (hwY : P.incorrect Y ⊆ B)
     (hXY : ∀ g ∈ K, X g = Y g) : ∀ t ∈ D, X t = Y t := by
   intro t ht
   by_cases htK : t ∈ K
@@ -177,19 +177,19 @@ theorem outputs_eq_of_separates {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D :
 def out (D : Finset (Fin C.N)) (X : Fin C.N → Bool) : D → Bool := fun t => X t
 
 open Classical in
-/-- What the transcripts with the anchors' inputs whose wrong units lie in `B` deliver on `D`. -/
+/-- What the transcripts with the anchors' inputs whose incorrect units lie in `B` deliver on `D`. -/
 noncomputable def delivered (D : Finset (Fin C.N)) (a : Fin C.N → Bool) (B : Finset (Fin n)) : Finset (D → Bool) :=
-  univ.filter fun y => ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y
+  univ.filter fun y => ∃ X, C.InputsAgree X a ∧ P.incorrect X ⊆ B ∧ out D X = y
 
 /-- **At most `2^|K|` delivered values** behind a committed separator `K` of `B`. -/
 theorem card_delivered_le {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finset (Fin C.N)}
     (hK : K ⊆ P.committed) (hD : D ⊆ P.committed) (hsep : P.Separates K B D) (a : Fin C.N → Bool) :
     (P.delivered D a B).card ≤ 2 ^ K.card := by
   classical
-  have hspec : ∀ y ∈ P.delivered D a B, ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y :=
+  have hspec : ∀ y ∈ P.delivered D a B, ∃ X, C.InputsAgree X a ∧ P.incorrect X ⊆ B ∧ out D X = y :=
     fun y hy => (mem_filter.1 hy).2
   let f : (D → Bool) → (K → Bool) := fun y =>
-    if h : ∃ X, C.InputsAgree X a ∧ P.wrong X ⊆ B ∧ out D X = y then fun g => Classical.choose h g
+    if h : ∃ X, C.InputsAgree X a ∧ P.incorrect X ⊆ B ∧ out D X = y then fun g => Classical.choose h g
     else fun _ => false
   calc (P.delivered D a B).card ≤ (univ : Finset (K → Bool)).card := by
         refine card_le_card_of_injOn f (fun _ _ => mem_coe.2 (mem_univ _)) ?_
@@ -205,7 +205,7 @@ theorem card_delivered_le {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Finse
     _ = 2 ^ K.card := by rw [card_univ, Fintype.card_fun, Fintype.card_bool, Fintype.card_coe]
 
 open Classical in
-/-- **The influence set at `δ`**: what is delivered on `D` with the wrong units of some set whose escape `e B` is at
+/-- **The influence set at `δ`**: what is delivered on `D` with the incorrect units of some set whose missProb `e B` is at
 least `δ`. -/
 noncomputable def influenceSet (D : Finset (Fin C.N)) (e : Finset (Fin n) → ℝ≥0∞) (a : Fin C.N → Bool)
     (δ : ℝ≥0∞) : Finset (D → Bool) :=
@@ -220,10 +220,10 @@ theorem card_influenceSet_le {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) (e 
   card_biUnion_le.trans (sum_le_sum fun B _ => P.card_delivered_le (hK B) hD (hsep B) a)
 
 theorem out_mem_influenceSet {D : Finset (Fin C.N)} {e : Finset (Fin n) → ℝ≥0∞} {a X : Fin C.N → Bool}
-    {δ : ℝ≥0∞} (hia : C.InputsAgree X a) (he : δ ≤ e (P.wrong X)) : out D X ∈ P.influenceSet D e a δ := by
+    {δ : ℝ≥0∞} (hia : C.InputsAgree X a) (he : δ ≤ e (P.incorrect X)) : out D X ∈ P.influenceSet D e a δ := by
   classical
   simp only [influenceSet, mem_biUnion, mem_filter, mem_univ, true_and]
-  exact ⟨P.wrong X, he, mem_filter.2 ⟨mem_univ _, X, hia, subset_rfl, rfl⟩⟩
+  exact ⟨P.incorrect X, he, mem_filter.2 ⟨mem_univ _, X, hia, subset_rfl, rfl⟩⟩
 
 theorem exits_subset_biUnion (B : Finset (Fin n)) : P.exits B ⊆ B.biUnion fun u => P.exits {u} := by
   intro g hg
@@ -240,26 +240,26 @@ section Harm
 variable {L : Law n} {a : Fin C.N → Bool} {D : Finset (Fin C.N)}
 
 /-- **Influence from a harm bound**: when every set's separator is no wider than the harm `hb` of its units and `H` is a
-harm bound at `δ`, `|influenceSet| ≤ 2^H · #{B : δ ≤ escape B}`. -/
+harm bound at `δ`, `|influenceSet| ≤ 2^H · #{B : δ ≤ missProb B}`. -/
 theorem card_influenceSet_le_harm (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
     {δ : ℝ≥0∞} {H : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) :
-    (P.influenceSet D L.escape a δ).card ≤ 2 ^ H * (univ.filter fun B => δ ≤ L.escape B).card := by
-  refine (P.card_influenceSet_le hD L.escape a δ K hK hsep).trans ?_
-  calc ∑ B ∈ univ.filter (fun B => δ ≤ L.escape B), 2 ^ (K B).card
-      ≤ ∑ B ∈ univ.filter (fun B => δ ≤ L.escape B), 2 ^ H := by
+    (P.influenceSet D L.missProb a δ).card ≤ 2 ^ H * (univ.filter fun B => δ ≤ L.missProb B).card := by
+  refine (P.card_influenceSet_le hD L.missProb a δ K hK hsep).trans ?_
+  calc ∑ B ∈ univ.filter (fun B => δ ≤ L.missProb B), 2 ^ (K B).card
+      ≤ ∑ B ∈ univ.filter (fun B => δ ≤ L.missProb B), 2 ^ H := by
         refine sum_le_sum fun B hB => pow_le_pow_right₀ (by norm_num) ((hw B).trans ?_)
         have h1 := hH B (mem_filter.1 hB).2
         have h2 : ((∑ u ∈ B, hb u : ℕ) : ℝ) ≤ (H : ℝ) := by push_cast; exact h1
         exact_mod_cast h2
-    _ = 2 ^ H * (univ.filter fun B => δ ≤ L.escape B).card := by rw [sum_const, smul_eq_mul, mul_comm]
+    _ = 2 ^ H * (univ.filter fun B => δ ≤ L.missProb B).card := by rw [sum_const, smul_eq_mul, mul_comm]
 
 /-- **The location term**: when `miss (K + 1) < δ`, the sets escaping with probability at least `δ` hold at most `K`
 units, so there are at most `∑_{j ≤ K} C(n, j)` of them. -/
 theorem card_admissible_le {δ : ℝ≥0∞} {K : ℕ} (hK : L.miss (K + 1) < δ) :
-    (univ.filter fun B : Finset (Fin n) => δ ≤ L.escape B).card ≤ ∑ j ∈ range (K + 1), n.choose j := by
+    (univ.filter fun B : Finset (Fin n) => δ ≤ L.missProb B).card ≤ ∑ j ∈ range (K + 1), n.choose j := by
   classical
-  have hsub : (univ.filter fun B : Finset (Fin n) => δ ≤ L.escape B) ⊆
+  have hsub : (univ.filter fun B : Finset (Fin n) => δ ≤ L.missProb B) ⊆
       (range (K + 1)).biUnion fun j => (univ : Finset (Fin n)).powersetCard j := by
     intro B hB
     have hle : B.card ≤ K := by
@@ -283,18 +283,18 @@ variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Boo
 theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
     (hlink : (P.analysis X ext).BindSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
     (σ : Strategy (audit L Reg session)) :
-    prob (fun o => o.1 = true ∧ out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)
+    prob (fun o => o.1 = true ∧ out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.missProb a δ)
         (audit L Reg session) σ ≤ δ + εks + δlink + δin := by
-  refine (prob_split_inputs X a σ (fun _ => out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)).trans ?_
+  refine (prob_split_inputs X a σ (fun _ => out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.missProb a δ)).trans ?_
   rw [add_comm]
   refine add_le_add ?_ (hin σ)
   have key : ∀ o : Bool × Finset (Fin n), (o.1 = true ∧ (C.InputsAgree (X (reg σ) (cont σ)) a ∧
-      out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)) →
-      o.1 = true ∧ L.escape (P.wrong (X (reg σ) (cont σ))) < δ := by
+      out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.missProb a δ)) →
+      o.1 = true ∧ L.missProb (P.incorrect (X (reg σ) (cont σ))) < δ := by
     rintro o ⟨hacc, hia, hout⟩
     exact ⟨hacc, lt_of_not_ge fun hge => hout (P.out_mem_influenceSet hia hge)⟩
   refine (prob_mono key _ _).trans ?_
-  refine (audit_profile (P.analysis X ext) hks hlink (fun B => L.escape B < δ) σ).trans ?_
+  refine (audit_profile (P.analysis X ext) hks hlink (fun B => L.missProb B < δ) σ).trans ?_
   gcongr
   exact iSup₂_le fun B hB => hB.le
 
@@ -306,9 +306,9 @@ theorem audit_exfiltration_influenceSet {M : Type} [Fintype M] [Nonempty M] [Dec
     (hin : AnchorsSound X a δin) (δ : ℝ≥0∞) (σ : M → Strategy (audit L Reg session)) (g : (D → Bool) → M) :
     avg (fun m => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ m)) (cont (σ m)))) = m)
         (audit L Reg session) (σ m)) ≤
-      ((P.influenceSet D L.escape a δ).card : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) + (δ + εks + δlink + δin) := by
+      ((P.influenceSet D L.missProb a δ).card : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) + (δ + εks + δlink + δin) := by
   classical
-  let Y := P.influenceSet D L.escape a δ
+  let Y := P.influenceSet D L.missProb a δ
   let y : M → (D → Bool) := fun m => out D (X (reg (σ m)) (cont (σ m)))
   have step : ∀ m, prob (fun o => o.1 = true ∧ g (y m) = m) (audit L Reg session) (σ m) ≤
       (if y m ∈ Y ∧ g (y m) = m then 1 else 0) +
@@ -339,7 +339,7 @@ theorem audit_exfiltration_influenceSet {M : Type} [Fintype M] [Nonempty M] [Dec
 /-- **Exfiltration, with the location term**: a prover that picks its strategy `σ m` from a uniform message `m`, and a
 receiver `g` that sees only what is delivered on `D`, succeed together with probability at most
 `2^H · ∑_{j ≤ k} C(n, j) / |M| + δ + ε_ks + δ_link + δ_in`. Here `H` is a harm bound at `δ` of each unit's width `hb` on
-a separator (the value bits) and `miss (k + 1) < δ` (which units are wrong). With `|M| = 2^ℓ`, the first term is
+a separator (the value bits) and `miss (k + 1) < δ` (which units are incorrect). With `|M| = 2^ℓ`, the first term is
 `2^(H + log₂ ∑_{j ≤ k} C(n, j) − ℓ)`. -/
 theorem audit_exfiltration {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
     (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)

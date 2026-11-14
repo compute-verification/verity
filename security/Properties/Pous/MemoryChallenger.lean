@@ -26,8 +26,8 @@ proved (`Proofs.Properties.Pous.MemoryChallenger`).
 namespace MemoryChallenger.Properties
 
 /-- What an accepted verdict establishes about its inputs. -/
-def Accepted (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening) : Prop :=
+def Accepted (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening) : Prop :=
   (∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
       ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) ∧
     s.commitment = c ∧ s.ended = COMPLETE ∧ s.rounds.size = c.k ∧
@@ -37,8 +37,8 @@ def Accepted (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → 
         0 ≤ s.rounds[j].elapsedNs ∧ s.rounds[j].elapsedNs ≤ c.limitNs
 
 def VerdictAccepts : Prop :=
-  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening),
+  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening),
     (verdict schemes trusted expected s c openings).accepted = true → Accepted schemes trusted expected s c openings
 
 def JudgeAccepts : Prop :=
@@ -67,7 +67,7 @@ under that one-role reading.
 
 Nothing is assumed of SHA-512 or LMS. `VerdictSigned` holds, or the run's own data carries a break: two distinct
 strings of `runStrings`, the strings the session and the device's sessions under its key hash, with one SHA-512 digest
-(`cr/sha-512`), or a signature that verifies under the session's key over its message (`sessionMessage`) though the
+(`cr/sha-512`), or a signature that verifies under the session's key over its message (`challengePhaseMessage`) though the
 device never signed that message (`euf-cma/lms-sha512-n64`). -/
 
 /-- What the device observes in a round it records: its clock's reading as it reveals the index, its reading as the
@@ -87,7 +87,7 @@ structure Run where
   observed : List Observed
 
 /-- The commitment the device builds before the session (`MemoryChallenger.__init__`) and releases once it is signed. -/
-def Run.commitment (r : Run) : SessionCommitment :=
+def Run.commitment (r : Run) : ChallengePhaseCommitment :=
   ⟨r.coins.session, r.coins.root, r.coins.key, r.coins.blocks, r.coins.k, r.limitNs, r.blockBytes, r.binding⟩
 
 /-- The device's record of a session: its rounds, and how it ended once it has. -/
@@ -125,7 +125,7 @@ def LmsVerifies (p : Lms.Params) (pk m sig : ByteArray) : Prop :=
 
 /-- The message a signed session's signature signs: `memoryChallengerMessage` of its key's identifier, its session id
 and its `message`. -/
-def sessionMessage (s : SignedSession) : Option ByteArray :=
+def challengePhaseMessage (s : SignedChallengePhase) : Option ByteArray :=
   (s.message >>= memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session).toOption
 
 /-! ### The strings a run hashes -/
@@ -141,7 +141,7 @@ def treeStrings (d : Flock.FV3.Sha512.Domain) (values : Array ByteArray) : List 
 
 /-- What SHA-512 hashes for a session `(c, ended, rounds)` signed under the key `pk`: the coin key (the header holds
 its digest), the records tree, the input of the session's `message`, and that of `memoryChallengerMessage`. -/
-def sessionStrings (pk : ByteArray) (c : SessionCommitment) (ended : String) (rounds : Array Round) : List ByteArray :=
+def challengePhaseStrings (pk : ByteArray) (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : List ByteArray :=
   let head := (header c ended rounds.size).toUTF8
   [c.coinKey] ++
     (match rounds.mapM Round.value with
@@ -158,27 +158,27 @@ def sessionStrings (pk : ByteArray) (c : SessionCommitment) (ended : String) (ro
     | .error _ => []
 
 /-- The strings the run hashes: the signed session's, and those of each session the device ends under its key. -/
-def runStrings (s : SignedSession) (dev : Challengers) : List ByteArray :=
-  sessionStrings s.publicKey s.commitment s.ended s.rounds ++
+def runStrings (s : SignedChallengePhase) (dev : Challengers) : List ByteArray :=
+  challengePhaseStrings s.publicKey s.commitment s.ended s.rounds ++
     (dev.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
-      | some e => sessionStrings s.publicKey r.commitment e r.recorded.rounds
+      | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
       | none => []
 
 /-- The signed session `s` is one the device ran under its key: its commitment is the one the device built, and
 its end and every round (index, digest, send and receipt times) are the ones the device recorded; or two distinct
 strings of the run have one SHA-512 digest; or `s`'s signature verifies under a trusted key and an accepted scheme over
 its message, which the device never signed under that key. -/
-def SignedByDevice (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (dev : Challengers) : Prop :=
+def SignedByDevice (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (dev : Challengers) : Prop :=
   (∃ r ∈ dev.sessions s.publicKey, r.commitment = s.commitment ∧ r.recorded.ended = some s.ended ∧
       r.recorded.rounds = s.rounds) ∨
     (∃ x ∈ runStrings s dev, ∃ y ∈ runStrings s dev, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
-    ∃ p m, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ sessionMessage s = some m ∧
+    ∃ p m, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ challengePhaseMessage s = some m ∧
       LmsVerifies p s.publicKey m s.signature ∧ ¬ Signed dev s.publicKey m
 
 /-- **An accepted session is the device's.** For every device, an accepted verdict's session is `SignedByDevice`. -/
 def VerdictSigned : Prop :=
-  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening) (dev : Challengers),
+  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (dev : Challengers),
     (verdict schemes trusted expected s c openings).accepted = true → SignedByDevice schemes trusted s dev
 
 /-- `VerdictSigned` for `Judge.judge` on a record as its caller holds it, under the schemes the record names. The

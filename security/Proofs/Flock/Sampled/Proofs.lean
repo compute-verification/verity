@@ -19,7 +19,7 @@ import Proofs.Flock.Soundness.Game
 * `composition_holds`: at each sample, the recursion's soundness bounds the sessions verifying with the statement failing
   by `ε`; at each outcome the run reaches where it holds, `slotsSound_holds` puts the sample clear of the incorrect proof blocks or
   gives a reached slot break, and the outcomes it doesn't reach carry probability 0 (`prob_mono_reaches`). So a sample
-  that hits an incorrect proof block accepts with probability at most `ε`, and averaging over the samples gives the escape plus
+  that hits an incorrect proof block accepts with probability at most `ε`, and averaging over the samples gives the missProb plus
   `E_ω[ε]`.
 * `zeroKnowledge_holds`: the recursion's `hides` at the honest audit's reveal list.
 * `menuComplete_holds`, `menuCompleteAt_holds`, `zeroKnowledgeAt_holds`: the honest prover fills a fitting batching's
@@ -130,9 +130,9 @@ theorem composition_holds : Composition := by
   · exact Or.inr (Or.inl hS)
   refine Or.inr (Or.inr ?_)
   have key : ∀ ω, prob (fun o => Accepts M view I.verifies (L.draw ω) o) (session (L.draw ω) R) (contOf σ ω) ≤
-      (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) := by
+      (if Disjoint (L.draw ω) (incorrect Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) := by
     intro ω
-    by_cases hd : Disjoint (L.draw ω) (wrong Ty X)
+    by_cases hd : Disjoint (L.draw ω) (incorrect Ty X)
     · rw [ite_eq_left hd]
       exact (prob_le_one _ _ _).trans le_self_add
     · rw [ite_eq_right hd, zero_add]
@@ -146,10 +146,10 @@ theorem composition_holds : Composition := by
       = avg fun ω => prob (fun o => Accepts M view I.verifies (L.draw ω) o) (session (L.draw ω) R) (contOf σ ω) := by
         refine (prob_coin _ _ _ σ).trans ?_
         exact congrArg avg (funext fun ω => prob_map _ _ _ _)
-    _ ≤ avg fun ω => (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) :=
+    _ ≤ avg fun ω => (if Disjoint (L.draw ω) (incorrect Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) :=
         avg_mono key
-    _ = L.escape (wrong Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω) := by
-        unfold Verity.Law.escape
+    _ = L.missProb (incorrect Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω) := by
+        unfold Verity.Law.missProb
         rw [avg_add, avg_ite_eq_prCoin]
 
 theorem zeroKnowledge_holds : ZeroKnowledge := by

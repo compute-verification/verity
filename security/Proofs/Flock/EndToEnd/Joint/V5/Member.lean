@@ -16,9 +16,9 @@ and the earlier sessions' sampled together, by `JointAuditV5.memberStrat`:
   over the sample's coins and, for each, the earlier sessions' coins);
 * `JointAuditV5.epsKs_memberLaw`, `JointAuditV5.link_memberLaw`: `ε_ks` and `ε_bind` read only member `k`'s part of the
   sample, so they are the same at `memberLaw` as at `design k`, which samples the sample's coins alone;
-* `JointAuditV5.member_accepted_drawnWrong_le`: member `k`'s session in the window's audit accepts with a sampled proof
+* `JointAuditV5.member_accepted_drawnIncorrect_le`: member `k`'s session in the window's audit accepts with a sampled proof
   block of its part incorrect with probability at most `ε_ks,k + ε_bind,k` at `design k`
-  (`MemberV5.accepted_drawnWrong_le` at `memberLaw`).
+  (`MemberV5.accepted_drawnIncorrect_le` at `memberLaw`).
 
 `JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
 and most sampled proof blocks have different link points (`mPtsOf_mono`).
@@ -122,7 +122,7 @@ theorem link_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) :
 /-- **Member `k`'s session in the window's audit accepts with a sampled proof block of its part incorrect** with
 probability at most `ε_ks,k + ε_bind,k` at `design k`, under `cr/sha-512` and `ecr/sha-512` at its session played
 alone. -/
-theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.length)
+theorem member_accepted_drawnIncorrect_le (τ : Strategy w.game) (k : Fin w.ms.length)
     (hCR : ∀ ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
@@ -131,12 +131,12 @@ theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.lengt
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun o => (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k)) w.game τ ≤
+        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberIncorrect τ k)) w.game τ ≤
       (w.ms.get k).epsKs (w.design k) + (w.ms.get k).link (w.design k) := by
   refine (w.prob_member τ k fun S t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-    ∃ u ∈ S, u ∈ w.memberWrong τ k).trans_le ?_
+    ∃ u ∈ S, u ∈ w.memberIncorrect τ k).trans_le ?_
   rw [← w.epsKs_memberLaw τ k, ← w.link_memberLaw τ k]
-  exact (w.ms.get k).accepted_drawnWrong_le (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k) hCR hA2
+  exact (w.ms.get k).accepted_drawnIncorrect_le (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k) hCR hA2
 
 /-- **`hcls` from the registration's refusal**: if at every sample member `k`'s part holds between `lo k` and `hi k` of its
 proof blocks, its record's count `kd / nTab I` lies between them too, and `lo k` and `hi k` give the same link points

@@ -45,13 +45,13 @@ Definition and its Flock soundness land.
 structure TileReadSession (Q R S : Type) where
   Root : Type
   Opening : Type
-  root : Workload → Transcript → Opening → Root
+  root : Workload → Trace → Opening → Root
   Out : Workload → Type
   game : (Q → R) → S → (U : Workload) → Root → ℕ → Verity.Game (Out U)
   verdict : {U : Workload} → Out U → Bool
-  Cls : (U : Workload) → (τ : Transcript) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
+  Cls : (U : Workload) → (τ : Trace) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
     Verity.Game.Strategy (game H s U (root U τ o) g) → ℕ → Prop
-  Bad : (U : Workload) → (τ : Transcript) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
+  Bad : (U : Workload) → (τ : Trace) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
     Verity.Game.Strategy (game H s U (root U τ o) g) → Out U → Prop
 
 namespace TileReadSession
@@ -71,7 +71,7 @@ def stratOf {H : Q → R} {s : S} {U : Workload} {r : F.Root} {g : ℕ}
 /-- **The hidden audit's single-game class.** A strategy `σ` of a game `G`, on the transcript `τ` committed under the
 opening `o`, is in the class at `q` when, at every tile whose proof game `G` is (for every workload, oracle and salt), the
 session's strategy that `σ` is meets the session's class `Cls` there. -/
-def cls (τ : Transcript) (o : F.Opening) (G : Verity.Game Bool) (σ : Verity.Game.Strategy G) (q : ℕ) : Prop :=
+def cls (τ : Trace) (o : F.Opening) (G : Verity.Game Bool) (σ : Verity.Game.Strategy G) (q : ℕ) : Prop :=
   ∀ (U : Workload) (H : Q → R) (s : S) (g : ℕ) (e : F.proofGame H s U (F.root U τ o) g = G),
     F.Cls U τ o H s g (F.stratOf (cast (congrArg Verity.Game.Strategy e.symm) σ)) q
 
@@ -93,7 +93,7 @@ session's class at `q`: flock-verify accepts on a run in the event `Bad` with pr
 the restack plan's T3 (`Flock.Guarantees.EndToEndCanonicalP` at the sampled proof blocks, with its CR hypotheses as `Cls` and
 its event as `Bad`), at the TileRead statement. -/
 def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
+  ∀ U : Workload, U.InDomain P D → ∀ (τ : Trace) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
     (σ : Verity.Game.Strategy (F.game H s U (F.root U τ o) g)) (q : ℕ), F.Cls U τ o H s g σ q →
     Verity.Game.prob (fun x => F.verdict x = true ∧ F.Bad U τ o H s g σ x) (F.game H s U (F.root U τ o) g) σ ≤
       ENNReal.ofReal (δzk q)
@@ -106,7 +106,7 @@ hm96-sha512's binding to `τ`'s rows under `o`, the tile check computing the goo
 anchors (L8). -/
 def TileReadBinds (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) :
     Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
+  ∀ U : Workload, U.InDomain P D → ∀ (τ : Trace) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
     (σ : Verity.Game.Strategy (F.game H s U (F.root U τ o) g)) (x : F.Out U),
     F.verdict x = true → ¬ F.Bad U τ o H s g σ x → g ∈ goodTiles P TR U H s τ ∪ blankTiles TR U τ
 

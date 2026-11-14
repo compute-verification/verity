@@ -318,7 +318,7 @@ theorem findingOf_none {α : Type} {y : Found α} (h : findingOf y = none) : ∃
   | ok v => exact ⟨v, rfl⟩
 
 /-- The rows form's link-windows' findings, as `check` computes them. -/
-def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
+def rowsExecutionPhases (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
     Array (Found (Option (Facts × ℕ))) :=
   (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
     some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + i) reg x
@@ -328,8 +328,8 @@ rows form's (`rowsPublic`) with the schedule's response cap. -/
 theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
     {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) :
     c.audits.size = p.audits.size ∧ e.windows.size = c.windows.size ∧ e.audits.size = c.audits.size ∧
-      (∀ y ∈ rowsWindows p c e s sd, findingOf y = none) ∧ (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
-      pub = { rowsPublic p c (auditChecks p c e) scan ((rowsWindows p c e s sd).filterMap (·.toOption.join)) with
+      (∀ y ∈ rowsExecutionPhases p c e s sd, findingOf y = none) ∧ (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
+      pub = { rowsPublic p c (auditChecks p c e) scan ((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join)) with
         maxTokensCap := p.form.maxTokensCap } := by
   unfold check at h
   split at h
@@ -446,12 +446,12 @@ theorem factsOf_stratified_whole {what : String} {prof : Core.Integrity} {pub : 
   exact fun st m => (strata_whole ss.toList hle 0 0 (Nat.le_refl 0) hk).2 st (Array.mem_toList_iff.mpr m)
 
 /-- A link-window with no finding has its scan's facts and its tied audits' free inputs. -/
-theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
-    (hws : ∀ y ∈ rowsWindows p c e s sd, findingOf y = none) :
-    ∀ y ∈ rowsWindows p c e s sd, ∃ u, y = .ok (some u) := by
+theorem rowsExecutionPhases_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
+    (hws : ∀ y ∈ rowsExecutionPhases p c e s sd, findingOf y = none) :
+    ∀ y ∈ rowsExecutionPhases p c e s sd, ∃ u, y = .ok (some u) := by
   intro y hy
   obtain ⟨v, rfl⟩ := findingOf_none (hws y hy)
-  unfold rowsWindows at hy
+  unfold rowsExecutionPhases at hy
   obtain ⟨z, -, hz⟩ := Array.mem_map.mp hy
   cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
   | error r => simp [hr, Functor.map, Except.map] at hz
@@ -512,20 +512,20 @@ theorem rowsTiedCharged : RowsTiedCharged := by
       have hxw : e.windows[w]? = some (e.windows[w]'(by omega)) := Array.getElem?_eq_getElem (by omega)
       have hz : (c.windows.zip e.windows)[w]? = some (wreg, e.windows[w]'(by omega)) :=
         Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
-      have hwget : (rowsWindows p c e s sd)[w]? =
+      have hwget : (rowsExecutionPhases p c e s sd)[w]? =
           some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
-        simp [rowsWindows, Array.getElem?_zipIdx, hz]
-      obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
+        simp [rowsExecutionPhases, Array.getElem?_zipIdx, hz]
+      obtain ⟨u, hu⟩ := rowsExecutionPhases_ok hws _ (Array.mem_of_getElem? hwget)
       rw [hu] at hwget
-      have hwall : ∀ y ∈ rowsWindows p c e s sd, (y.toOption.join).isSome = true := by
+      have hwall : ∀ y ∈ rowsExecutionPhases p c e s sd, (y.toOption.join).isSome = true := by
         intro y hy
-        obtain ⟨u, rfl⟩ := rowsWindows_ok hws y hy
+        obtain ⟨u, rfl⟩ := rowsExecutionPhases_ok hws y hy
         rfl
-      have hscan : ((rowsWindows p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
+      have hscan : ((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
         rw [getElem?_filterMap_of_isSome _ _ hwall, hwget]
         rfl
       refine ⟨scan.terms u.1 u.2 (faultyEntries p c (auditChecks p c e) scan wreg) p.jitter, ?_, ?_⟩
-      · have hzip : (((rowsWindows p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, wreg) :=
+      · have hzip : (((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, wreg) :=
           Array.getElem?_zip_eq_some.mpr ⟨hscan, hw⟩
         simp [rowsPublic, rowsTerms, hzip]
       · show faultyEntries p c (auditChecks p c e) scan wreg = scan.entries

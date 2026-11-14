@@ -493,7 +493,7 @@ theorem u4Gate_mem {i j : ℕ} (hi : i < TM) (hj : j < TN) : u4Gate K TM TN i j 
 `Verity.Partition.compose`). -/
 theorem tile4_out (X : (tile4Spec K TM TN).toCircuit.Trace) (hX : (tile4Spec K TM TN).part.Correct X 0) :
     ∀ g ∈ (tile4Spec K TM TN).outs, val X g = tile4Val K TM TN X g := by
-  have hw : (tile4Spec K TM TN).part.wrong X = ∅ := by
+  have hw : (tile4Spec K TM TN).part.incorrect X = ∅ := by
     ext u
     simp only [Verity.Partition.mem_incorrect, Finset.notMem_empty, iff_false, not_not]
     rwa [Subsingleton.elim u 0]

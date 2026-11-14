@@ -103,7 +103,7 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
         prCoin_pi_forall (ι := Fin S.size) (Ω := fun s : Fin S.size => Fin S[s].need → Fin 256) univ
           (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
           ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
-    _ ≤ ∏ s : Fin S.size, (Law.subset S[s].size S[s].k (hk s)).escape (localOf S B s) :=
+    _ ≤ ∏ s : Fin S.size, (Law.subset S[s].size S[s].k (hk s)).missProb (localOf S B s) :=
         Finset.prod_le_prod fun s _ => Law.subset_exec_escape_le _ _ _ (hk s) _
     _ = _ := Finset.prod_congr rfl fun s _ => Law.subset_escape (hk s) _
 
@@ -129,7 +129,7 @@ theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k 
   exact (ENNReal.toReal_mono ENNReal.coe_ne_top h).trans_eq (ENNReal.coe_toReal _)
 
 /-- **The work sampling design's weighted AM-GM**: strata of `N s` units, `k s` sampled and `M s` in the set, each unit doing `w s`,
-sample sizes at least `K w_s N_s / W` (or all), escape with at most `((W − Σ_s w_s M_s)/W)^K`. -/
+sample sizes at least `K w_s N_s / W` (or all), missProb with at most `((W − Σ_s w_s M_s)/W)^K`. -/
 theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) (hMN : ∀ s, M s ≤ N s) (hkN : ∀ s, k s ≤ N s)
     (hW : 0 < W) (hWsum : ∑ s, w s * N s = W) (hge : ∀ s, k s = N s ∨ K * w s * N s ≤ W * k s)
     (hk1 : ∀ s, 0 < w s → 0 < N s → 1 ≤ k s) :
@@ -408,9 +408,9 @@ theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-theorem drawSession_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
-    (h : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
-  unfold PouwCheck.Credit.drawSession at h
+theorem drawChallengePhase_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (h : PouwCheck.Credit.drawChallengePhase ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
+  unfold PouwCheck.Credit.drawChallengePhase at h
   obtain ⟨_, -, h⟩ := bind_eq_ok h
   by_cases hw : withheldOn ledger root = true
   · exact hw
@@ -425,7 +425,7 @@ theorem creditedDraw_withheld {ledger : Json} {k : ChallengerKey} {pins main dra
   split at h
   · next hr =>
     obtain ⟨_, hx, -⟩ := bind_eq_ok h
-    refine ⟨Flock.hexOf root, ?_, drawSession_withheld hx⟩
+    refine ⟨Flock.hexOf root, ?_, drawChallengePhase_withheld hx⟩
     revert hr; cases PouwCheck.get draw "root" <;> simp [PouwCheck.str?]
   · cases h
 
@@ -437,12 +437,12 @@ theorem drawWithheld : DrawWithheld := by
   cases u
   exact creditedDraw_withheld hu
 
-/-- The sample session's step (`drawSession`) accepts every session the ledger opens withheld on the sample root and
+/-- The sample session's step (`drawChallengePhase`) accepts every session the ledger opens withheld on the sample root and
 `trustedChallengePhaseOf` trusts, as a withheld deployment's is. -/
-theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+theorem drawChallengePhase_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
-    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
-  simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
+    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawChallengePhase ledger k pins main session root = .ok x := by
+  simp [PouwCheck.Credit.drawChallengePhase, ht, hw, Except.mapError]
 
 /-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the sample
 `{root: ""}`, for every root `r`: the empty ledger withholds no sample root. -/
@@ -536,7 +536,7 @@ theorem groupedDrawMisses_honest :
   linarith
 
 /-- **`GroupedDrawMisses`'s nontrivial lemma**: its conclusion fails under the strata a sampling design that accepts everything may
-give, none (`idleLaw`): the sample is empty whatever the streams, so the lanes window's blocks all escape, with
+give, none (`idleLaw`): the sample is empty whatever the streams, so the lanes window's blocks all missProb, with
 probability 1 > 1/256. -/
 theorem groupedDrawMisses_nontrivial :
     ¬ Pouw.RelativeSecurity.prob (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤

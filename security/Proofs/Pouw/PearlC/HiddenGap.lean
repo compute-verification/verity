@@ -84,20 +84,20 @@ theorem gapHidden_of_sampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (η : ℕ → ℕ → ℝ) (h : GGapSampled CM P TR D γ η) (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ)
     (hq : q ≤ 2 ^ 64) (A : Adversary CM) (hA : A.Bounded U T q) (w : ℕ → ℕ) (κ : ℝ) (hκ : 0 < κ)
     (hw : ∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) (t : ℕ) (εs : ℝ) (hεs : εs ≤ 1)
-    (op : (Q → R) → S → HA.Opening) (σ : HA.Prover TR U (A.transcript U) op w t) (δzk : ℝ)
-    (hσ : TileProofSound P TR HA U (A.transcript U) op σ δzk) :
-    HA.winProb TR U (A.transcript U) op σ γ T εs ≤ (1 - εs) ^ t + η q U.layout.N + t * δzk := by
+    (op : (Q → R) → S → HA.Opening) (σ : HA.Prover TR U (A.trace U) op w t) (δzk : ℝ)
+    (hσ : TileProofSound P TR HA U (A.trace U) op σ δzk) :
+    HA.winProb TR U (A.trace U) op σ γ T εs ≤ (1 - εs) ^ t + η q U.layout.N + t * δzk := by
   classical
   have hs := h U hU T hT q hq A hA w κ hκ hw t εs hεs
   refine le_trans (ex_mono fun x => hidden_pointwise _ (σ x)
-    (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪ blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2
-    (T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))) ?_
+    (goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪ blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2
+    (T < (1 - γ) * (claimedWref TR U (A.trace U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))) ?_
   rw [ex_add, ex_sum, ex_ite_one]
   have hz : ∑ i : Fin t, ex (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-      if ((x.2.2 i).1 : ℕ) ∈ goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-          blankTiles TR U (A.transcript U x.1 x.2.1) then 0 else
+      if ((x.2.2 i).1 : ℕ) ∈ goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+          blankTiles TR U (A.trace U x.1 x.2.1) then 0 else
         (Verity.Game.prob (fun v => v.getD i false = true)
-          (HA.batch x.1 x.2.1 U (HA.root U (A.transcript U x.1 x.2.1) (op x.1 x.2.1)) x.2.2) (σ x)).toReal) ≤
+          (HA.batch x.1 x.2.1 U (HA.root U (A.trace U x.1 x.2.1) (op x.1 x.2.1)) x.2.2) (σ x)).toReal) ≤
         t * δzk := by
     refine le_trans (Finset.sum_le_sum fun i _ => hσ i) ?_
     simp
@@ -112,7 +112,7 @@ theorem gapHidden_of_sampled_all [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
     GGapHidden CM P TR D HA g δ δzk :=
   fun U hU T hT q hq A hA w κ hκ hw t εs hεs op σ hσ =>
     gapHidden_of_sampled CM P TR D HA g δ h U hU T hT q hq A hA w κ hκ hw t εs hεs op σ (δzk q)
-      (hzk U hU (A.transcript U) op w t q σ hσ)
+      (hzk U hU (A.trace U) op w t q σ hσ)
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 

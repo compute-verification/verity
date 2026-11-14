@@ -18,8 +18,8 @@ and the escapes multiply below `δ` either has a verification phase accepted wit
 its boundary values, at most `Σ_t ε_t` by `period_union` and the hypothesis on the event, or every sample misses with
 the product of the escapes below `δ`, at most `δ` by `period_prod`.
 
-`period_prod` asks that the strategy that plays a verification phase fix its escape before the phase's coins and that
-the escape bound the phase's miss. Both hold at `escAt`: it reads the statement and the boundary values that strategy
+`period_prod` asks that the strategy that plays a verification phase fix its missProb before the phase's coins and that
+the missProb bound the phase's miss. Both hold at `escAt`: it reads the statement and the boundary values that strategy
 fixes, and the two stages, sampling by the design, miss with probability at most `P̄_a` at the boundary values'
 footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`), whatever interiors the prover commits after the first
 stage's coins.
@@ -32,7 +32,7 @@ stage's coins.
 * `periodTwoProd_of`: `PeriodTwoProd` from each verifier's contract.
 * `period_leadEscape`: the escapes of the verification phases before the first whose sample holds an incorrect proof
   block multiply below `c` with probability at most `c`. It is `period_lead` with the escapes multiplied: a phase
-  whose sample misses passes the rest of the run the budget `c / e`, `e` its escape.
+  whose sample misses passes the rest of the run the budget `c / e`, `e` its missProb.
 * `periodTwoLead_of`: `PeriodTwoLead` from each verifier's contract, by `period_union` and `period_leadEscape`. So
   **`CompilerPeriodTwoProd` is proved** (`compilerPeriodTwoProd`).
 * `periodTwoProd_regVal`, `periodTwoLead_regVal`: both at the committed boundary trace, where knowledge soundness of
@@ -44,7 +44,7 @@ stage's coins.
 namespace Claims.Sampling
 
 /-- **`P̄_a` reads a footprint through its replay blocks' escapes**: two footprints at which every replay block's
-escape agrees have one `P̄_a`. -/
+missProb agrees have one `P̄_a`. -/
 theorem Design.Two.Pa_congr_esc (d : Design.Two) (Pt : Partition) {fp fp' : ℕ → ℕ → ℕ}
     (h : ∀ ρ < d.part.blocks.length, d.esc Pt fp ρ = d.esc Pt fp' ρ) : d.Pa Pt fp = d.Pa Pt fp' := by
   unfold Design.Two.Pa
@@ -71,17 +71,17 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric.CompiledTwo
 
 open Claims
-open Claims.Sampling (AuditStatement Partition wrongAllAt)
+open Claims.Sampling (AuditStatement Partition incorrectAllAt)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 /-- On a statement that parses and whose partitions evaluate, the incorrect set at boundary values `val` is
-`wrongAllAt` at `val` and the committed interiors. -/
+`incorrectAllAt` at `val` and the committed interiors. -/
 theorem FregTwoAt_eq (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (ω : Ω) (val : ℕ → Option Bool)
     (r : Fin (L.V.k x) → Coin) :
-    L.FregTwoAt H P x ω val r = wrongAllAt s Pt d.part val (L.iregVal H P x ω r) := by
+    L.FregTwoAt H P x ω val r = incorrectAllAt s Pt d.part val (L.iregVal H P x ω r) := by
   simp only [FregTwoAt, hs, hPt, hd]
 
 end Claims.SamplingGeneric.CompiledTwo
@@ -96,7 +96,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 open Classical in
-/-- **The escape a verification phase fixes** is `1`, or its statement is in the two-stage scope and the escape is
+/-- **The missProb a verification phase fixes** is `1`, or its statement is in the two-stage scope and the missProb is
 `P̄_a` at the boundary values' footprint at best interiors. -/
 theorem escAt_cases (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) :
     escAt L x val = 1 ∨ ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧
@@ -112,7 +112,7 @@ theorem escAt_cases (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Boo
   · exact Or.inl (by simp only [escAt, hs, hPt, hd, ite_eq_right hin])
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- The escape a verification phase fixes is finite. -/
+/-- The missProb a verification phase fixes is finite. -/
 theorem escAt_ne_top (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) : escAt L x val ≠ ⊤ := by
   rcases escAt_cases L x val with h | ⟨s, Pt, d, -, -, -, -, h⟩
   · rw [h]
@@ -145,8 +145,8 @@ theorem twoAtRec_accepted_le (H : Msg → Msg) (L : CompiledTwo Coin A)
     exact zero_le
 
 /-- **A verification phase's sample misses** the proof blocks incorrect at its boundary values with probability at most
-the escape there (`escAt`): in scope, the two stages, sampling by the design, miss with probability at most `P̄_a` at
-the boundary values' footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`); out of scope the escape is `1`. -/
+the missProb there (`escAt`): in scope, the two stages, sampling by the design, miss with probability at most `P̄_a` at
+the boundary values' footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`); out of scope the missProb is `1`. -/
 theorem twoAtRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H)
     (val : (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞)
     (τ : Strategy (twoGame L ((O → V) × Tick × Adv))) :
@@ -191,17 +191,17 @@ theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
   have hB := period_prod (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
       (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
-    (fun r : ServedEsc O V Tick Adv => ¬ r.sampledIncorrect) ServedEsc.escape
+    (fun r : ServedEsc O V Tick Adv => ¬ r.sampledIncorrect) ServedEsc.missProb
     (fun t τ => (Lv t).Scope τ.2.1.1 →
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t)
     (fun t τ _ => ⟨escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2), escAt_ne_top _ _ _, fun _ => rfl,
       twoAtRec_missed_le H (Lv t) (hS t) (val t) _ _ τ⟩)
     T 0 s (ENNReal.ofReal δ) hs
   calc Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
-          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ) (twoAtRun H Lv val T s)
+          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ) (twoAtRun H Lv val T s)
       ≤ Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
           (∃ r ∈ l, r.accepted ∧ r.sampledIncorrect) ∨
-            ((∀ r ∈ l, ¬ r.sampledIncorrect) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ))
+            ((∀ r ∈ l, ¬ r.sampledIncorrect) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ))
           (twoAtRun H Lv val T s) := by
         refine Verity.Game.value_mono (fun l hl => ?_) _
         by_cases hd : ∃ r ∈ l, r.sampledIncorrect
@@ -211,27 +211,27 @@ theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     _ ≤ Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) => ∃ r ∈ l, r.accepted ∧ r.sampledIncorrect)
           (twoAtRun H Lv val T s) +
         Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
-          (∀ r ∈ l, ¬ r.sampledIncorrect) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
+          (∀ r ∈ l, ¬ r.sampledIncorrect) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ)
           (twoAtRun H Lv val T s) := Verity.Game.value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)) + ENNReal.ofReal δ := add_le_add hA hB
     _ = ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) := add_comm _ _
 
 /-- **The escapes before the first sampled incorrect proof block multiply below `c` with probability at most `c`.**
-If at every strategy satisfying `good` a verification phase's records all carry one escape `e` and its sample misses
+If at every strategy satisfying `good` a verification phase's records all carry one missProb `e` and its sample misses
 with probability at most `e`, the escapes of the phases before the first whose sample holds an incorrect proof block
-(`ServedEsc.leadEscape`) multiply below `c` with probability at most `c`. -/
+(`ServedEsc.leadMissProb`) multiply below `c` with probability at most `c`. -/
 theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β i))
     (rec : (i : ℕ) → Strategy (G i) → β i → ServedEsc O V Tick Adv) (good : (i : ℕ) → Strategy (G i) → Prop)
-    (hstage : ∀ i τ, good i τ → ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, (rec i τ b).escape = e) ∧
+    (hstage : ∀ i τ, good i τ → ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, (rec i τ b).missProb = e) ∧
       prob (fun b => ¬ (rec i τ b).sampledIncorrect) (G i) τ ≤ e) :
     ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (c : ℝ≥0∞), MonitoringPeriodGood G good i T s →
-      value (fun l => ServedEsc.leadEscape l < c) (monitoringPeriodRun G rec i T s) ≤ c
+      value (fun l => ServedEsc.leadMissProb l < c) (monitoringPeriodRun G rec i T s) ≤ c
   | 0, i, s, c, _ => by
       classical
-      show value (fun l => ServedEsc.leadEscape l < c) (Verity.Game.ret []) ≤ _
+      show value (fun l => ServedEsc.leadMissProb l < c) (Verity.Game.ret []) ≤ _
       rw [value_ret]
       split_ifs with h
-      · exact le_of_lt (by simpa only [ServedEsc.leadEscape] using h)
+      · exact le_of_lt (by simpa only [ServedEsc.leadMissProb] using h)
       · exact zero_le
   | T + 1, i, s, c, hs => by
       classical
@@ -241,14 +241,14 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
       by_cases he0 : e = 0
       · have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
           (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
-          (fun l => ServedEsc.leadEscape l < c)
+          (fun l => ServedEsc.leadMissProb l < c)
           (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) 1 (G i) s
           (atEnds_mono (fun b s' _ => by
             rw [value_map]
             by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
             · rw [ite_eq_right (not_not.2 hm)]
               refine (value_mono (q := fun _ => False) (fun l hl => ?_) _).trans_eq (value_false _)
-              simp only [ServedEsc.leadEscape, ite_eq_left hm] at hl
+              simp only [ServedEsc.leadMissProb, ite_eq_left hm] at hl
               exact not_lt.2 hc hl
             · rw [ite_eq_left hm]
               exact value_le_one _ _) (G i) s hs.2)
@@ -257,21 +257,21 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
         exact (hp.trans_eq he0).trans zero_le
       · have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
           (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
-          (fun l => ServedEsc.leadEscape l < c)
+          (fun l => ServedEsc.leadMissProb l < c)
           (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (c / e) (G i) s
           (atEnds_mono (fun b s' hg => by
             rw [value_map]
             by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
             · rw [ite_eq_right (not_not.2 hm)]
               refine (value_mono (q := fun _ => False) (fun l hl => ?_) _).trans_eq (value_false _)
-              simp only [ServedEsc.leadEscape, ite_eq_left hm] at hl
+              simp only [ServedEsc.leadMissProb, ite_eq_left hm] at hl
               exact not_lt.2 hc hl
             · rw [ite_eq_left hm]
               refine (value_mono (fun l hl => ?_) _).trans
                 (period_leadEscape G rec good hstage T (i + 1) s' (c / e) hg)
-              simp only [ServedEsc.leadEscape, ite_eq_right hm, hw b] at hl
+              simp only [ServedEsc.leadMissProb, ite_eq_right hm, hw b] at hl
               exact (ENNReal.lt_div_iff_mul_lt (Or.inl he0) (Or.inl he)).2 (by rwa [mul_comm])) (G i) s hs.2)
-        calc value (fun l => ServedEsc.leadEscape l < c) (monitoringPeriodRun G rec i (T + 1) s)
+        calc value (fun l => ServedEsc.leadMissProb l < c) (monitoringPeriodRun G rec i (T + 1) s)
             ≤ prob (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (G i)
                 (Strategy.ofBind _ (G i) s) * (c / e) := h
           _ ≤ e * (c / e) := by gcongr
@@ -307,7 +307,7 @@ theorem periodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     T 0 s (ENNReal.ofReal δ) hs
   rw [add_comm (ENNReal.ofReal δ)]
   show Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
-      (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ ServedEsc.leadEscape l < ENNReal.ofReal δ)
+      (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ ServedEsc.leadMissProb l < ENNReal.ofReal δ)
       (twoAtRun H Lv val T s) ≤ _
   exact (Verity.Game.value_or_le _ _ _).trans (add_le_add hA hB)
 
@@ -329,7 +329,7 @@ theorem acceptedSampledAt_regVal_le {H : Msg → Msg} {L : CompiledTwo Coin A} (
   unfold acceptedSampledAt
   simp only [CompiledTwo.FregTwoAt_eq H L P hs hPt hd]
   exact (Pr_unit fun r : Fin (L.V.k x) → Coin => (run H P L.V x () r).out = .acc ∧
-    ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part (L.regVal H P x ()) (L.iregVal H P x () r)).symm.trans_le h
+    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part (L.regVal H P x ()) (L.iregVal H P x () r)).symm.trans_le h
 
 /-- **The period's one failure probability at the committed boundary trace**: when the argument is knowledge sound and
 every verification phase's verifier binds and meets the contract, at every strategy whose verification phases'
@@ -343,7 +343,7 @@ theorem periodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       (Lv t).εregTwo H τ.2.1.1 τ.2.1.2 ≤ ε t) (δ : ℝ) :
     Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
-        (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
+        (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ)
         (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) :=
   periodTwoProd_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s

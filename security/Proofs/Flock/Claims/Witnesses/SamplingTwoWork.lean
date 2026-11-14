@@ -192,7 +192,7 @@ theorem notNot_footprint (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notN
   have s2 : notNotStmt.prog.refIn [1, 2] (w.val H notNotCm notNotStmt) (fun _ => false) 2 = some true := by
     rw [Prog.refIn_of_boundary hb2, h2]
   funext ρ t
-  unfold footprint wrongIn
+  unfold footprint incorrectIn
   refine Finset.card_eq_zero.2 (Finset.filter_eq_empty_iff.2 fun v hv => not_not.2 ?_)
   have hv3 : v < 3 := by simpa [notNotPt, Partition.blocks] using Finset.mem_range.1 (cell_subset _ _ _ _ hv)
   have hρ : replayOf notNotPt notNotPρ v = some ρ := (Finset.mem_filter.1 hv).2.1
