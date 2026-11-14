@@ -1,5 +1,5 @@
 """`python host_sample.py OUT CPUS NAME=PID|NAME:PID...`: the host's load every `PERIOD` seconds, one JSON line each to
-OUT, until SIGTERM, so that a warden trace's late ticks can be laid against what the machine was doing.
+OUT, until SIGTERM, so that a network certifier trace's late ticks can be laid against what the machine was doing.
 
 Each line: `t` (unix seconds), `load` (/proc/loadavg's 1-minute load, running and total tasks), `procs` (/proc/stat's
 running and blocked), `busy` (the share of the period the whole host's CPUs were busy, and `steal`), `cpus` (the busy

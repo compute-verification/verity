@@ -151,7 +151,7 @@ def test_a_key_that_reads_only_starts_no_load(stored):
 
 
 def test_a_lane_key_starts_a_load_a_warden_rehearsal_with_its_load_whose_minutes_come_first(stored):
-    """The request is a warden rehearsal's with ``load``; a `--prompts` request's least minutes are its prompts' after
+    """The request is a network certifier rehearsal's with ``load``; a `--prompts` request's least minutes are its prompts' after
     the load's, as `warden_prompts` counts them."""
     rc, out = gate(stored, LOAD)
     doc = json.loads(out)

@@ -1,5 +1,5 @@
 """IoTieRequest on the network certifier's own ingress (`io_request`): each request's prompt_len and arrival ordinal held to the
-warden's ingress cells, a bucket row at a time, by the reference and by the Boolean Definitions. The first negative
+network certifier's ingress cells, a bucket row at a time, by the reference and by the Boolean Definitions. The first negative
 is the swapped split: two requests' prompt lengths swapped with their total kept, which no count of the link's frames
 refuses."""
 from __future__ import annotations
