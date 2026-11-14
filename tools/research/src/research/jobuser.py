@@ -188,8 +188,12 @@ def allowed_cpus() -> str | None:
 def memory_max(proc_cgroup: str = "/proc/self/cgroup", root: str = "/sys/fs/cgroup") -> int | None:
     """The tightest memory.max on this process's cgroup and its ancestors (the queue's scope, gpu-lease's), in bytes; None if none."""
     try:
-        path = next(ln.split(":", 2)[2].strip() for ln in Path(proc_cgroup).read_text().splitlines() if ln.startswith("0::"))
-    except (OSError, StopIteration):
+        path = next((ln.split(":", 2)[2].strip() for ln in Path(proc_cgroup).read_text().splitlines() if ln.startswith("0::")),
+                    None)
+    except OSError as e:
+        log(f"{proc_cgroup} unread, so no memory.max is known ({type(e).__name__}: {e})")
+        return None
+    if path is None:
         return None
     limits = []
     p = Path(path)

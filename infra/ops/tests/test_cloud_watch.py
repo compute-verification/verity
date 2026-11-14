@@ -429,3 +429,10 @@ def test_the_agent_watchs_stall_names_the_top_group_and_pages_a_person_an_hour_l
         assert rep.findings[0].text.startswith("<!subteam^S0C977GL9R7> *Agent watch*")
         assert [f.key for f in rep.findings][1:] == (["loop|Agent watch|page"] if pages else [])
     assert rep.findings[1].text.startswith(f"<@{loop['page_user']}> *Agent watch* has not succeeded for")
+
+
+def test_a_state_file_that_does_not_parse_starts_the_watch_from_none_and_says_so(tmp_path, capsys):
+    assert W.load_state(tmp_path / "state.json") == {} and capsys.readouterr().err == ""
+    (tmp_path / "state.json").write_text("{")
+    assert W.load_state(tmp_path / "state.json") == {}
+    assert "state.json: unreadable, so the watch starts from no state (JSONDecodeError" in capsys.readouterr().err
