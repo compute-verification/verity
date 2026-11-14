@@ -44,3 +44,52 @@ What stops the push: the collect tip has 12 more moves since 090ff6c3069c (`acco
 
 Next, as you say: `rename.py --map` for each word map over my lines, and `restack.py` one move at a time per its own carry line, then the merge and the tests, then the push in your parts (1)+(2)+(4) together, then (3). They are one writer, so (1), (2) and (4) are one commit. I'll send one line per push.
 
+[2026-11-14T22:07Z] 2258fc9ebeab
+SCANCOUNT2, push 57d807b796a0 on cursor/na-architecture-b51f (commit af48f8f3efd, merged over the tip; no word of stage2_words_map or memory_gpu_weights_map in my lines).
+
+1. LeakPartsRegistered (security/Definitions/Accounting/Guarantees/RegisteredSite.lean), the one changed hypothesis.
+BEFORE:
+      S.RatedOn β Set.univ → CausalStrategy R ℓ → DeclaredLinks R S.placeEnds β link →
+AFTER:
+      S.RatedOn β ↑((boundary S.placeEnds (S.placesIn (S.proverUnder i))).filter fun e =>
+        (S.placeEnds e).1 ∉ S.placesIn (S.auditorsOf pinned i) ∧
+          (S.placeEnds e).2 ∉ S.placesIn (S.auditorsOf pinned i)) →
+      CausalStrategy R ℓ → DeclaredLinks R S.placeEnds β link →
+The set is uncertifiedCapacity's own body at the conclusion's arguments (boundary of the prover places, filtered to neither end among the auditor's devices). DeclaredLinks reads β at every link (Alphabet and Links quantify every e), so including its set would be Set.univ again: it is not in the set; see item 4.
+Re-proved: the proof no longer reads the rates at all. New Site.uncertified_sealed (Proofs/Accounting/Actual/RegisteredSite.lean): at the Site's links and ANY β, β° of X ∪ sink under cert = β° of X under cert ∪ sink where each link at a sink has its other end in X (pointwise, as uncovered_sealed). leak_le_registered drops its hβ; uncertified_registered_eq (now unread) deleted.
+
+4. Each universally quantified object:
+- β: the hypothesis fixes β e to the Site's registered rate on exactly the links the conclusion sums (uncertifiedCapacity S.placeEnds β (auditors) (prover) is Σ over that same filtered boundary); nothing the conclusion sums is left free. Off that set β is free and appears only in DeclaredLinks, which holds the runs to it; the conclusion doesn't read it, and the theorem is proved for every such β, so an unrated link there costs nothing.
+- K: free, but only through RecordsWithin (each trusted device's record within K), by design (no device's record limit is given a value). jitter: bound by TrustedUnits. pinned, units: units ⊆ challengersOf, sharedOf ⊆ units. R, ℓ, link, 𝒱, spec, record, bucket, a, b: held by the premises as before. D A c l: Valid.
+- EgressRegistered (unchanged statement): RatedOn on boundary (S.placesIn (S.under i)) is exactly the set linkCapacity sums at the same X; β elsewhere appears only in Links. Nothing summed is free.
+- B4Via (unchanged statement): RatedOn on Set.univ fixes β everywhere, so nothing summed is free for any X B4Under chooses; the cost is that it says nothing of a Site with any unrated link.
+
+2. B4Via: STOP. Its narrowest true form needs B4Under restated, because the rated set depends on cert and X, which B4Under quantifies inside. Proposal for soundness:
+BEFORE:
+def B4Under {L : Type u} {E : Type v} [LinearOrder L] [Fintype L] [Fintype E] (f : L → L) (ends : E → L × L)
+    (β : E → ℕ) : Prop :=
+  ∀ {Ω : Type w} (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec) (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ),
+    (∀ y, y ∈ cert ↔ f y ∈ cert) → (∀ y, y ∈ X ↔ f y ∈ X) →
+    CausalStrategy S ℓ → DeclaredLinksVia S f ends β link → … (conclusion unchanged)
+def B4Via : Prop :=
+  ∀ (T : Verity.Site) (β : Fin T.links.length → ℕ), T.RatedOn β Set.univ →
+    B4Under.{0, 0, w} T.linkPlace T.placeEnds β
+AFTER (proposed, not on the branch):
+def B4UnderWhere … (f : L → L) (ends : E → L × L) (β : E → ℕ) (Rated : Finset L → Finset L → Prop) : Prop :=
+  ∀ {Ω : Type w} S ℓ link 𝒱 cert X spec record bucket jitter a b,
+    Rated cert X → (∀ y, y ∈ cert ↔ f y ∈ cert) → (∀ y, y ∈ X ↔ f y ∈ X) →
+    CausalStrategy S ℓ → DeclaredLinksVia S f ends β link → … (B4Under's body otherwise verbatim)
+def B4Under f ends β : Prop := B4UnderWhere f ends β fun _ _ => True
+def B4Via : Prop :=
+  ∀ (T : Verity.Site) (β : Fin T.links.length → ℕ),
+    B4UnderWhere.{0, 0, w} T.linkPlace T.placeEnds β fun cert X =>
+      T.RatedOn β ↑((boundary T.placeEnds X).filter fun e => (T.placeEnds e).1 ∉ cert ∧ (T.placeEnds e).2 ∉ cert)
+B4UnderId's text stays; its meaning is the same (B4Under's extra premise is True), and its proof gains one `trivial`. C stays: f is T.linkPlace, read off the Site; DeclaredLinksVia and AlphabetVia are untouched, so a link's alphabet is still counted once at the host. b4Via_of_ownLinkEnds re-proves by ignoring Rated. The locks' reads of B4Under, B4UnderId and B4Via change. Until soundness agrees, B4Via stays on Set.univ, and its docstring now says what that costs.
+
+3. Docstrings, one sentence each (EgressRegistered, LeakPartsRegistered, B4Via): the registration's check asks a rate only of a link with no `unmediated` (stated beside Properties.Core.Site, not proved), the network check's `registered` holds only the one certifier link it is named to a rate (Properties.Certifier.Registered.RegisteredLinkRated), and an unmediated link may be unrated, and then no limit is stated across it. EgressRegistered's adds that onsite a boundary link may be unmediated instead of certified. B4Via's adds that on Set.univ it says nothing of a registered Site with any unrated link.
+
+Built (local, at 57d807b796a0): Definitions.Core.SiteSubtree, Definitions.Accounting.Guarantees.{RegisteredSite,LinkEnds}, Proofs.Accounting.Actual.{RegisteredSite,RegisteredWitness,LinkEnds}. Axioms of LeakPartsRegistered, EgressRegistered, Site.uncertified_sealed, Site.leak_le_registered and LeakPartsRegistered_nontrivial: only propext, Classical.choice, Quot.sound. The lock record of LeakPartsRegistered (security/lean-audit.json, its statement) changes for the close's regeneration; uncertified_registered_eq is in no lock. I regenerated nothing.
+
+Also from GATERELAY2: Lean comments in our certifier Lean still name old Python paths (layout_one: verity/core/protocols/certifier/*, verity.ml.*; protocol_groups: verity.protocols.certifier.verifier.scan_ok; security_dir: Security/). Prose only; I'll mend them next unless you'd rather someone else does.
+
