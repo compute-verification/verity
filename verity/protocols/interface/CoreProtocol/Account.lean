@@ -28,13 +28,20 @@ value beside a protocol, never a field of it: for each amount the protocol publi
   answer holds when nothing is certified (`Uncertified`);
 * the terms the error names beside it and does not price (`unpriced`);
 
-and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`), and the
-answers its own rest on (`Account.rests`): those its check read as given and did not verify.
+and, for the protocol, the key under which an accepted answer names the key its check ran under (`Account.witness`),
+none for a protocol that needs no device of the auditor's on the site, and the answers its own rest on
+(`Account.rests`): those its check read as given and did not verify. An answer names no location and no registration's
+head: the composite reads the head once, from the window's record, and hands `rows` the Site registered at it and the
+answers of the windows whose records name a head of the period.
 
-`rows` reads a site, the head of its registration, the protocols' answers and their accounts into the accounting rows.
-An answer counts only when it accepts, names that head, and rests only on accepted answers `rows` is given. Each amount
-certified of a registered resource gets a row, at each reading of the registration its capacity can be read at: the
-capacity, the certified amount with its error, and the other, which follows.
+`rows` reads a site, the auditor, the protocols' answers and their accounts into the accounting rows. An answer counts
+only when it accepts and rests only on accepted answers `rows` is given. Where its protocol names a witness, it counts
+only when the key it names is held by exactly one of the auditor's devices (`Site.holder`), and its amounts are then
+about the hardware that device reaches (`Site.hostLinks`, `Site.hostsOf`): a link's egress at its links, and compute,
+memory and reads under its hosts. Where its protocol names none, its amounts are about the whole site. Each amount
+certified of a registered resource gets a row for each device, or one for the whole site, at each reading of the
+registration its capacity can be read at: the capacity, the certified amount with its error, and the other, which
+follows. Rows of two devices never add.
 
 * A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
   their spans (`Steps`), in one series of steps, and the spans share no step: a verified amount is the largest total
@@ -46,7 +53,7 @@ capacity, the certified amount with its error, and the other, which follows.
 * A period's error, of a flow and of a moment alike, is its answers' errors as the amount's `Pool` says: summed, or
   the one answer's that states it once for the period.
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
-* What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
+* What no counted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
   that none of its leaves holds.
 
 The comparison of the rows with what an auditor states it accepts is not here.
@@ -156,13 +163,22 @@ def leaves (p : Part) (S : Site) : List String :=
   | .read ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
   | .egress => (S.boundary none).map (·.id)
 
-/-- The part's leaves at `place`: all of them when an answer names no place, a link by its id, and otherwise the leaves
-at or under the location. -/
-def leavesAt (p : Part) (S : Site) (place : Option String) : List String :=
-  match place, p with
+/-- The part's leaves that the auditor's device `witness` reaches: all of them where there is no device, the whole
+site's; a link's egress at the device's links; and otherwise the leaves at or under the hosts it reaches. -/
+def leavesAt (p : Part) (S : Site) (witness : Option String) : List String :=
+  match witness, p with
   | none, _ => p.leaves S
-  | some i, .egress => (p.leaves S).filter (· == i)
-  | some i, _ => (p.leaves S).filter fun x => (S.loc? x).any (S.within i (S.locs.length + 1))
+  | some i, .egress => (p.leaves S).filter fun x => (S.hostLinks i).any (·.id == x)
+  | some i, _ => (p.leaves S).filter fun x =>
+      (S.loc? x).any fun y => (S.hostsOf i).any fun h => S.within h (S.locs.length + 1) y
+
+/-- Where the leaves `witness` reaches are, as a row names them: the device's links for a link's egress, else its
+hosts; nothing for the whole site. -/
+def placeAt (p : Part) (S : Site) (witness : Option String) : String :=
+  match witness, p with
+  | none, _ => ""
+  | some i, .egress => ", ".intercalate ((S.hostLinks i).map (·.id))
+  | some i, _ => ", ".intercalate (S.hostsOf i)
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
 def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (d : String) : Option Nat :=
@@ -252,14 +268,13 @@ inductive Uncertified where
   deriving DecidableEq, Repr
 
 /-- **The form of one amount a protocol publishes**, and the part of the registered hardware it is about. `metric` names
-the amount among its protocol's; `place` is the key under which an answer names the location or the link it ran on, none
-when it is about the whole site. `series` is the key under which an answer names the series its steps are numbered in
-(a session whose steps are counted from its own start), none when every answer's steps are numbered in one series: two
-answers that name different series cannot be shown disjoint. -/
+the amount among its protocol's. Which of the part's leaves it is about is never the answer's to say: it is what the
+auditor's device its check ran under reaches (`Account.witness`). `series` is the key under which an answer names the
+series its steps are numbered in (a session whose steps are counted from its own start), none when every answer's steps
+are numbered in one series: two answers that name different series cannot be shown disjoint. -/
 structure Amount where
   metric : String
   part : Part
-  place : Option Key := none
   key : Key
   unit : Measure
   side : Side
@@ -283,13 +298,15 @@ instance Amount.instDecidableFormed (m : Amount) : Decidable m.Formed := by unfo
 
 end Account
 
-/-- **What a protocol accounts for**: its id, the key under which an accepted answer names the registration's head (none
-while the protocol names no registration: `Account.rows` then holds its answers to none), the form of each amount it
-publishes, and the answers its own rest on (`rests`, none for a protocol whose check verifies all it reads): an answer
-that rests on one `Account.rows` was not given, or on one that does not accept, counts for nothing. -/
+/-- **What a protocol accounts for**: its id; the key under which an accepted answer names the key its check ran under,
+the public key of one of the auditor's devices on the site (`witness`; none for a protocol that needs no such device,
+whose answers are about the whole site); the form of each amount it publishes; and the answers its own rest on
+(`rests`, none for a protocol whose check verifies all it reads). An answer that names no key under `witness`, or a key
+that no auditor's device or more than one holds (`Site.holder`), counts for nothing, as does one that rests on an answer
+`Account.rows` was not given, or on one that does not accept. -/
 structure Account where
   protocol : String
-  head : Option Account.Key
+  witness : Option Account.Key
   amounts : List Account.Amount
   rests : Option Account.Rests := none
   deriving DecidableEq, Repr
@@ -304,12 +321,13 @@ def Formed (c : Account) : Prop := (∀ m ∈ c.amounts, m.Formed) ∧ (c.amount
 
 instance instDecidableFormed (c : Account) : Decidable c.Formed := by unfold Formed; infer_instance
 
-/-- What one accepted answer certifies of one amount, in its part's unit: the place it names, whether it certifies
+/-- What one accepted answer certifies of one amount, in its part's unit: the auditor's device it was witnessed by
+(`witness`, its id; none where its protocol needs none, and the reading is of the whole site), whether it certifies
 anything, the amount with its share taken off, its error, the ticks its span covers, the steps it names its span by
 (the first, and the one after the last; none where it names none) with the series they are numbered in, and the
 capacity it carries. -/
 structure Reading where
-  place : Option String
+  witness : Option String := none
   certified : Bool
   amount : Nat
   error : Ratio
@@ -391,7 +409,8 @@ def stepsWithin (ticks : Nat) (seconds : Ratio) (tick : Figure) (drift : Option 
 /-- **Where a series of steps lies in the monitoring period**: step `first` of the series begins at the period's tick
 `tick`, and `device` is the auditor's device that numbers the steps, on the clock of the auditor's device it is in, so
 the drift the Site states for that host is the series' (`Site.drift?`). A series older than the period gives the step
-it was at when the period began, at tick 0; one that began in the period gives its step 0, at the tick it began. -/
+it was at when the period began, at tick 0; one that began in the period gives its step 0, at the tick it began. The
+auditor gives it, independent of the device an answer's key names (`Account.witness`). -/
 structure Origin where
   first : Nat
   tick : Nat
@@ -421,13 +440,12 @@ def Origin.inside (o : Origin) (seconds : Ratio) (tick : Figure) (ticks : Nat) (
     (x : Nat × Nat) : Bool :=
   decide (o.first ≤ x.1) && decide (x.2 ≤ o.first + stepsWithin (ticks - o.tick) seconds tick drift)
 
-/-- **A monitoring period, as `rows` reads it**: its length in ticks; every head the registration had in it, an answer
-counting when it names one of them; and where each series of steps lies in it (`Origin`), by the series' name as an
-answer writes it: the compact JSON under its amount's `series`, or the empty text where the amount names none. A series
-with no origin covers no tick and adds no amount. The three are the auditor's: no answer states them. -/
+/-- **A monitoring period, as `rows` reads it**: its length in ticks, and where each series of steps lies in it
+(`Origin`), by the series' name as an answer writes it: the compact JSON under its amount's `series`, or the empty text
+where the amount names none. A series with no origin covers no tick and adds no amount. Both are the auditor's: no
+answer states them. -/
 structure Monitored where
   ticks : Nat
-  heads : List String
   origin : String → Option Origin
 
 /-- The steps answer `a` names its span by: its first, and the one after its last. None where it does not hold the
@@ -444,11 +462,8 @@ def Steps.read (name : Steps) (a : Answer) : Option (Nat × Nat) :=
 
 /-- **An answer read by an amount's form**: none when the answer does not hold what the form names. An answer that does
 not name the steps its form asks for, or the series they are numbered in, is read as one that names no span: it covers
-no tick. -/
+no tick. The reading is of the whole site; `readings` gives it its device. -/
 def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
-  let place : Option String ← match m.place with
-    | none => some none
-    | some k => (k.read a).bind fun j => j.getStr?.toOption.map some
   let ns : List Nat ← (m.key.read a).bind natsOf
   let es : List (Option Ratio) ← match m.share with
     | none => some (ns.map fun _ => some (Ratio.ofNat 0))
@@ -472,7 +487,7 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let capacity : Option Nat ← match m.capacity with
     | none => some none
     | some k => (k.read a).bind fun j => (natOf j).map fun n => some (n * m.unit.base)
-  pure { place, certified, error, ticks, steps, capacity, series := series.getD "",
+  pure { certified, error, ticks, steps, capacity, series := series.getD "",
          amount := m.unit.base * ((ns.zip es).map fun x => kept x.1 x.2).sum }
 
 /-- A row's standing: an amount certified, an error of 1 or more ("no bound at this period"), or a resource no accepted
@@ -571,8 +586,9 @@ private def certifiedRow (m : Amount) (place reading : String) (total : Option N
     free := if bounded then (match m.side with | .verified => other | .free => some n) else none,
     unpriced := m.unpriced }
 
-/-- The rows of amount `m` at `place`, from its accepted answers' readings `rs`, at each reading of the capacity of the
-leaves it is about. None when the site holds no such leaf.
+/-- The rows of amount `m` witnessed by the auditor's device `witness` (none: of the whole site), from its accepted
+answers' readings `rs`, at each reading of the capacity of the leaves that device reaches. None when the site holds no
+such leaf.
 
 A named span counts only where it surely lies in the period, which `origin` says for its series: a series with no
 origin, one whose device has no drift under `clock`, a step before the period and a step that might end past its last
@@ -595,14 +611,14 @@ ticks not covered it prints no amount.
 An amount at a moment has a row for each session and one for the period: the least verified, or the most free, of its
 sessions. The period's error is its answers' as the amount's `pool` says, for a flow and for a moment alike. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
-    (ticks : Nat) (origin : String → Option Origin) (clock : String → Option Figure) (place : Option String)
+    (ticks : Nat) (origin : String → Option Origin) (clock : String → Option Figure) (witness : Option String)
     (rs : List Reading) : List Row :=
-  let xs := m.part.leavesAt S place
+  let xs := m.part.leavesAt S witness
   let totals : List (String × Option Nat) :=
     match m.part.capacity S digest A ticks xs with
     | [] => [("", none)]
     | cs => cs.map fun c => (c.1, some c.2)
-  let at_ : String := place.getD ""
+  let at_ : String := m.part.placeAt S witness
   let error : Ratio := match m.pool, rs with
     | .once, [r] => r.error
     | .once, _ => whole
@@ -658,24 +674,36 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
       (each.zipIdx.map fun (x, i) => certifiedRow m at_ reading total x.1 x.2 1 (some i)) ++
         [certifiedRow m at_ reading total worst error rs.length none]
 
-/-- **What the accepted answers certify**, amount by amount. An answer counts for an account when it names the
-account's protocol, accepts, names one of `heads` under the account's key, and rests only on accepted answers among
-`answers` (`Rests.held`); of such an answer, each amount of a form `rows` reads that the answer holds. -/
-def readings (heads : List String) (tick : Figure) (accounts : List Account) (answers : List Answer) :
-    List (Amount × Reading) :=
-  accounts.flatMap fun c =>
-    let named : List Answer := answers.filter fun a =>
-      a.protocol == c.protocol && a.verdict == .accept &&
-        ((c.head.bind fun k => (k.read a).bind fun j => j.getStr?.toOption).any fun h => heads.contains h) &&
-        c.rests.all fun r => r.held a answers
-    (c.amounts.filter fun m => m.Formed).flatMap fun m => named.filterMap fun a => (m.read tick a).map fun r => (m, r)
+/-- The device an answer under account `c` was witnessed by, at `S` registered for auditor `A`: `some none` where the
+account names no witness, the whole site; `some (some i)` where the key the answer names under `c.witness` is held by
+the auditor's one device `i` (`Site.holder`); none where it names no key, or one that no device or more than one
+holds. -/
+def witnessOf (S : Site) (A : Site.Registration.Auditor) (c : Account) (a : Answer) : Option (Option String) :=
+  match c.witness with
+  | none => some none
+  | some k => (((k.read a).bind fun j => j.getStr?.toOption).bind (S.holder A)).map fun x => some x.id
 
-/-- The rows of what no accepted answer covers: for each part, the leaves under no reading's place, charged at capacity
-over the period. Their capacity is none where the registration holds none. -/
+/-- **What the accepted answers certify**, amount by amount, at `S` registered for auditor `A`. An answer counts for an
+account when it names the account's protocol, accepts, rests only on accepted answers among `answers` (`Rests.held`),
+and is witnessed as the account says (`witnessOf`); of such an answer, each amount of a form `rows` reads that the
+answer holds, at the device that witnessed it. -/
+def readings (S : Site) (A : Site.Registration.Auditor) (tick : Figure) (accounts : List Account)
+    (answers : List Answer) : List (Amount × Reading) :=
+  accounts.flatMap fun c =>
+    let named : List (Answer × Option String) := answers.filterMap fun a =>
+      if a.protocol == c.protocol && a.verdict == .accept && c.rests.all fun r => r.held a answers then
+        (witnessOf S A c a).map fun w => (a, w)
+      else none
+    (c.amounts.filter fun m => m.Formed).flatMap fun m =>
+      named.filterMap fun (a, witness) => (m.read tick a).map fun r => (m, { r with witness })
+
+/-- The rows of what no counted answer covers: for each part, the leaves no reading's device reaches, where no reading
+is of the whole site, charged at capacity over the period. Their capacity is none where the registration holds
+none. -/
 def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (ticks : Nat)
     (cs : List (Amount × Reading)) : List Row :=
   Part.all.flatMap fun p =>
-    let covered : List String := (cs.filter fun x => x.1.part.same p).flatMap fun x => x.1.part.leavesAt S x.2.place
+    let covered : List String := (cs.filter fun x => x.1.part.same p).flatMap fun x => x.1.part.leavesAt S x.2.witness
     let rest : List String := (p.leaves S).filter fun x => !covered.contains x
     let totals : List (String × Option Nat) :=
       match p.capacity S digest A ticks rest with
@@ -696,10 +724,14 @@ def unregistered (S : Site) (digest : Sheet → String) : List Row :=
                 status := .notAudited, capacity := some rest, verified := some 0, free := some rest }
 
 /-- **The accounting rows** of the site `S`, over the monitoring period `period` in the Site's units of time, from the
-protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows of
-what none covers and of the device memory no leaf holds. `S` is the Site at the period's last head: the registration
-only adds, so what an answer read at an earlier head of the period is in `S` unchanged. `digest` and `A` are the
-registration's: the sheets' digest and the auditor, whose estimate compute's `bound` reading reads. No row where the
+protocols' `answers` read by their `accounts`: the rows of each amount for each of the auditor's devices its answers
+were witnessed by, or for the whole site, then the rows of what none covers and of the device memory no leaf holds.
+`S` is the Site at the period's last head, and `answers` those of the windows whose records name a head of the period,
+both the composite's: the registration only adds, so a device and a key registered at an earlier head of the period
+are in `S` unchanged. A witness's key is read in `S`, so a key registered later in the period than an answer is still
+found: that the key was registered at the head the answer's window fixed is the composite's to hold, a limit of this
+file. `digest` and `A` are the registration's: the sheets' digest and the auditor, whose devices' keys
+`Site.holder` reads and whose estimate compute's `bound` reading reads. No row where the
 Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
 
@@ -716,15 +748,15 @@ def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) 
   if let some q := premised.find? fun q => S.kind? q.host ≠ some .auditorHost then
     throw s!"premise {q.premise}: {q.host} is no auditor's device of the Site"
   let some tick := S.timeUnit | pure []
-  let cs := readings period.heads tick accounts answers
-  let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
+  let cs := readings S A tick accounts answers
+  let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.witness)).eraseDups
   let stated : String → Option Figure := S.drift?
   let taken : String → Option Premised := fun d =>
     if (stated d).isSome then none else (S.clock? d).bind fun h => premised.find? fun q => q.host == h
   let assumed : String → Option Figure := fun d => (stated d).orElse fun _ => (taken d).map fun q => q.drift
   let all : List Row :=
     (groups.flatMap fun g =>
-        let rs : List Reading := (cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2
+        let rs : List Reading := (cs.filter fun x => x.1 = g.1 ∧ x.2.witness = g.2).map fun x => x.2
         let names : List String :=
           ((rs.filter fun r => r.certified).filterMap fun r =>
             (period.origin r.series).bind fun o => (taken o.device).map fun q => q.premise).eraseDups
@@ -755,14 +787,15 @@ def Row.toJson (r : Row) : Json :=
 
 namespace Example
 
-open Core.Registration.Example (sheet links auditor fig rated)
+open Core.Registration.Example (sheet links fig rated)
 
 /-- **The example protocol's account** (`Core.Example.protocol`): the units it reports passed, each counted as one
 tensor-core MAC of the site's devices, verified from below, with the error its profile states, once a period. It
-states no span, no capacity and no registration's head, and a refusal publishes nothing. -/
+states no span and no capacity, needs no device of the auditor's, so its answers are of the whole site, and a refusal
+publishes nothing. -/
 def account : Account :=
   { protocol := Core.Example.protocol.id
-    head := none
+    witness := none
     amounts := [{ metric := "passed", part := .compute, key := .published "passed", unit := macs, side := .verified,
                   time := .unstated, error := .profile "delta", pool := .once,
                   uncertified := .refused, unpriced := ["the toy's units are not work"] }] }
@@ -772,15 +805,34 @@ private def rowsOf (S : Site) (digest : Sheet → String) (A : Site.Registration
     (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : List Row :=
   (rows S digest A period accounts answers premised).toOption.getD []
 
+/-- The auditor whose registered keys are the keys the locations `xs` of the auditor's state. -/
+private def keysOf (xs : List Site.Loc) : Site.Registration.Auditor :=
+  { Core.Registration.Example.auditor with
+    key := fun i => (xs.find? (·.id == i)).bind fun x => if x.kind.auditor then some x.key else none }
+
+/-- The keys of the example's certifier and challenger in lower-case hex, the one form `Site.holder` reads. -/
+private def certKey : String := "c0"
+private def chalKey : String := "e1"
+private def hexed (x : Site.Loc) : Site.Loc :=
+  match x.id with
+  | "cert0" => { x with key := certKey }
+  | "chal0" => { x with key := chalKey }
+  | _ => x
+
+/-- The example's locations, its devices' keys in lower-case hex. -/
+private def base : List Site.Loc := Core.Registration.Example.locs.map hexed
+
 /-- An auditor's device, at the site, whose clock may run `drift` from real time, or states none. -/
 private def vm (id : String) (drift : Option Figure) : Site.Loc :=
-  { id, kind := .auditorHost, parent := some "site0", owner := .auditor, key := "k2",
+  { id, kind := .auditorHost, parent := some "site0", owner := .auditor, key := "a2",
     scheme := Core.Registration.Example.lms, timebase := some "tb0", drift }
+
+/-- The example's auditor, who registers the keys of its devices, `vm0`'s among them. -/
+private def auditor : Site.Registration.Auditor := keysOf (base ++ [vm "vm0" none])
 
 /-- The example's locations with its certifier in an auditor's device, `vm0`, which states `drift` for its clock. -/
 private def hostedBy (drift : Option Figure) : List Site.Loc :=
-  (Core.Registration.Example.locs.map fun x => if x.id == "cert0" then { x with parent := some "vm0" } else x) ++
-    [vm "vm0" drift]
+  (base.map fun x => if x.id == "cert0" then { x with parent := some "vm0" } else x) ++ [vm "vm0" drift]
 
 /-- The example's locations with a drift of `n / d` stated for its certifier's host. -/
 private def drifting (n d : Nat) : List Site.Loc := hostedBy (some (fig n d))
@@ -803,72 +855,75 @@ private def passed : Answer :=
     { protocol := Core.Example.protocol.id, verdict := .reject, reason := none, digest := none, published := none,
       profile := none }
 
-private def accept (protocol : String) (published profile : List (String × Json)) (head : String := "h") : Answer :=
-  { protocol, verdict := .accept, reason := none, digest := none,
-    published := some (Json.mkObj (("registration_head", .str head) :: published)),
+private def accept (protocol : String) (published profile : List (String × Json)) : Answer :=
+  { protocol, verdict := .accept, reason := none, digest := none, published := some (Json.mkObj published),
     profile := some (Json.mkObj profile) }
 
-/-- Toy accounts in the shapes a row takes: memory held, at a moment, from below; memory after a wipe, at a moment,
-from above, with its own capacity and a flag; a link's bits, over a span named by its first step and its count, from
-above, summed; work, over a span that is only counted, from below, with a share, pooled once; and work over a span
-named by its first and last steps, from below. -/
+/-- Toy accounts in the shapes a row takes: memory held, at a moment, from below, under a memory challenger's key;
+memory after a wipe, at a moment, from above, with its own capacity and a flag; a link's bits, over a span named by its
+first step and its count, from above, summed, under a network certifier's key; work, over a span that is only counted,
+from below, with a share, pooled once; and work over a span named by its first and last steps, from below. Those that
+name no key are of the whole site. -/
 private def held : Account :=
-  { protocol := "toy/held", head := some (.published "registration_head")
-    amounts := [{ metric := "held", part := .memory [.hbm], place := some (.profile "device"),
-                  key := .published "s_bits", unit := bits, side := .verified, time := .moment,
-                  error := .published "eps", uncertified := .flagged (.published "certified") }] }
+  { protocol := "toy/held", witness := some (.profile "key")
+    amounts := [{ metric := "held", part := .memory [.hbm], key := .published "s_bits", unit := bits,
+                  side := .verified, time := .moment, error := .published "eps",
+                  uncertified := .flagged (.published "certified") }] }
 
 private def wiped : Account :=
-  { protocol := "toy/wiped", head := some (.published "registration_head")
+  { protocol := "toy/wiped", witness := none
     amounts := [{ metric := "after a wipe", part := .memory [.hbm, .dram, .disk], key := .published "foreign_bits",
                   unit := bits, side := .free, time := .moment, error := .published "eps",
                   capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified"),
                   unpriced := ["the keyed stream's PRF advantage"] }] }
 
 private def sent : Account :=
-  { protocol := "toy/sent", head := some (.published "registration_head")
-    amounts := [{ metric := "sent", part := .egress, place := some (.profile "link"), key := .published "K",
-                  unit := bits, side := .free,
+  { protocol := "toy/sent", witness := some (.profile "key")
+    amounts := [{ metric := "sent", part := .egress, key := .published "K", unit := bits, side := .free,
                   time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .refused }] }
 
 private def worked : Account :=
-  { protocol := "toy/worked", head := some (.published "registration_head")
+  { protocol := "toy/worked", witness := none
     amounts := [{ metric := "work", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .span (.published "windows") ⟨1, 1000000⟩, share := some (.published "eps"),
                   error := .published "delta", pool := .once, uncertified := .safe }] }
 
 private def ranged : Account :=
-  { protocol := "toy/ranged", head := some (.published "registration_head")
+  { protocol := "toy/ranged", witness := none
     amounts := [{ metric := "audited", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .steps (.range (.published "first") (.published "last")) ⟨1, 1000000⟩,
                   series := some (.profile "session"), error := .published "delta", uncertified := .safe }] }
 
 /-- A read rate bounded from above over two tiers, one of them a host's, whose rate no sheet states. -/
 private def spare : Account :=
-  { protocol := "toy/spare", head := some (.published "registration_head")
+  { protocol := "toy/spare", witness := none
     amounts := [{ metric := "unread", part := .read [.hbm, .dram], key := .published "K", unit := bits, side := .free,
                   time := .span (.published "span_ns") ⟨1, 1000000000⟩, error := .published "eps",
                   uncertified := .refused }] }
 
-private def session (n : Nat) (eps : String) (certified : Bool := true) : Answer :=
+/-- A session of the memory challenger whose key is `key`, or of none. -/
+private def session (n : Nat) (eps : String) (certified : Bool := true) (key : Option String := some chalKey) :
+    Answer :=
   accept "toy/held" [("certified", .bool certified), ("eps", .str eps), ("s_bits", Lean.toJson n)]
-    [("device", .str "gpu0")]
+    (key.map fun k => ("key", .str k)).toList
 
 private def wipe (foreign memory : Nat) (certified : Bool := true) : Answer :=
   accept "toy/wiped" [("certified", .bool certified), ("eps", .str "1/1000"), ("foreign_bits", Lean.toJson foreign),
     ("memory_bits", Lean.toJson memory)] []
 
-private def check (k ns : Nat) (eps : String) (head : String := "h") (start : Option Nat := some 0) : Answer :=
+/-- A check of the link under the network certifier's key. -/
+private def check (k ns : Nat) (eps : String) (start : Option Nat := some 0) : Answer :=
   accept "toy/sent" ([("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)] ++
-    (start.map fun s => ("start_ns", Lean.toJson s)).toList) [("link", .str "up0")] head
+    (start.map fun s => ("start_ns", Lean.toJson s)).toList) [("key", .str certKey)]
 
 /-- An audit of `work` MACs over the steps `span` names, first and last, numbered in `session`; over no named span
-where it is none. -/
-private def audit (work : Nat) (span : Option (Nat × Nat)) (session : String := "s0") : Answer :=
+where it is none. It names the key `key` where there is one. -/
+private def audit (work : Nat) (span : Option (Nat × Nat)) (session : String := "s0") (key : Option String := none) :
+    Answer :=
   accept "toy/ranged" ([("delta", .str "1/1000"), ("work", Lean.toJson work)] ++
     (span.map fun s => [("first", Lean.toJson s.1), ("last", Lean.toJson s.2)]).getD [])
-    [("session", .str session)]
+    (("session", .str session) :: (key.map fun k => ("key", .str k)).toList)
 
 private def firstVerified (rs : List Row) : List (Option Nat × String) :=
   (rs.take 1).map fun r => (r.verified, r.error.toString)
@@ -882,9 +937,10 @@ private def credit : Answer :=
     ("work", Json.arr #[Lean.toJson (1000 : Nat), Lean.toJson (500 : Nat)])]
     []
 
-/-- A period of `ticks` ticks at head `h`, every series' step 0 at its first tick unless `origin` says. -/
-private def period (ticks : Nat := 1000) (heads : List String := ["h"])
-    (origin : String → Option Origin := fun _ => some ⟨0, 0, "cert0"⟩) : Monitored := { ticks, heads, origin }
+/-- A period of `ticks` ticks, every series' step 0 at its first tick unless `origin` says. -/
+private def period (ticks : Nat := 1000) (origin : String → Option Origin := fun _ => some ⟨0, 0, "cert0"⟩) :
+    Monitored :=
+  { ticks, origin }
 
 private def table (accounts : List Account) (answers : List Answer) (A : Site.Registration.Auditor := auditor)
     (ticks : Nat := 1000) : List Row :=
@@ -966,11 +1022,11 @@ private def cached : Site :=
 -- the example protocol's own answer reads by its account: two units at its profile's error
 #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
   [some (2, "1/1000000")]
--- it names no registration, so it is held to none: nothing is certified, and every part of the site is charged, the
--- 63 GiB of the device's sheet that its one leaf does not hold among them
+-- it needs no device of the auditor's, so its row is of the whole site: its two units verified of every device's
+-- compute; every other part is charged, the 63 GiB of the device's sheet that its one leaf does not hold among them
 #guard cells (table [account] [passed]) ==
-  [("not audited", "gpu0", "stated", some 4000000000, some 0, some 4000000000, "0"),
-   ("not audited", "gpu0", "bound", some 4000000000, some 0, some 4000000000, "0"),
+  [("passed", "", "stated", some 4000000000, some 2, some 3999999998, "1/1000000"),
+   ("passed", "", "bound", some 4000000000, some 2, some 3999999998, "1/1000000"),
    ("not audited", "hbm0", "registered", some 8589934592, some 0, some 8589934592, "0"),
    ("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
    ("not audited", "up0", "registered", some 100000, some 0, some 100000, "0"),
@@ -978,15 +1034,15 @@ private def cached : Site :=
 -- a device whose leaves hold all of its sheet's memory has no such row
 #guard unregistered ⟨[{ sheet with mem := 1 <<< 30 }], locs.map (fun x =>
     if x.id = "gpu0" then { x with sheet := digest { sheet with mem := 1 <<< 30 } } else x), links⟩ digest == []
-#guard (table [account] [passed]).all fun r => r.status = .notAudited
+#guard (table [account] [passed]).map (·.status) == [.certified, .certified] ++ List.replicate 4 .notAudited
 -- compute's capacity at each reading: the sheet's own figures, and the larger of those and the auditor's estimate
 #guard ((table [] [] { auditor with sheet := fun _ => some (rated .zero 4200000000000000) }).take 2).map
     (fun r => (r.reading, r.capacity)) == [("stated", some 4000000000), ("bound", some 4200000000)]
 -- an amount at a moment: a row for each session and one for the period, the least verified at the errors summed
 #guard cells ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3) ==
-  [("held", "gpu0", "registered", some 8589934592, some 6000000000, some 2589934592, "1/100"),
-   ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "1/50"),
-   ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "3/100")]
+  [("held", "node0", "registered", some 8589934592, some 6000000000, some 2589934592, "1/100"),
+   ("held", "node0", "registered", some 8589934592, some 5000000000, some 3589934592, "1/50"),
+   ("held", "node0", "registered", some 8589934592, some 5000000000, some 3589934592, "3/100")]
 #guard ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map
     (fun r => (r.session, r.sessions)) == [(some 0, 1), (some 1, 1), (none, 2)]
 -- sessions whose protocol says one answer pools the period's error state no error for the period, each still its own
@@ -995,7 +1051,7 @@ private def cached : Site :=
   [.certified, .certified, .noBound]
 -- a session that certifies nothing verifies nothing, whatever amount it states
 #guard cells ((table [held] [session 6000000000 "0" false]).take 1) ==
-  [("held", "gpu0", "registered", some 8589934592, some 0, some 8589934592, "0")]
+  [("held", "node0", "registered", some 8589934592, some 0, some 8589934592, "0")]
 -- a free amount with its own capacity: the memory the wipe did not cover is free too, and a wipe of more memory than
 -- is registered frees nothing
 #guard cells ((table [wiped] [wipe 1000 8000000000]).take 1) ==
@@ -1005,15 +1061,15 @@ private def cached : Site :=
 #guard ((table [wiped] [wipe 1000 8000000000]).take 1).map (fun r => r.unpriced) ==
   [["the keyed stream's PRF advantage"]]
 -- a link: its checks' bits and errors summed, and the ticks no check covers charged at the link's capacity
-#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" (some 400)]).take 1) ==
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" (some 400)]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 65000, some 35000, "1/500")]
 -- a tick's cover counts once: two checks of one span cover it once, two that overlap cover the steps of both once,
 -- and a check that names no span covers no tick
 #guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 400 "1/1000"]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
-#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" (some 200)]).take 1) ==
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" (some 200)]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 45000, some 55000, "1/500")]
-#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" none]).take 1) ==
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" none]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
 -- verified amounts add only over spans shown disjoint: two audits of one span, or of overlapping spans, count the
 -- larger once; two of disjoint spans add; of three in a chain, the two ends add where they outweigh the middle
@@ -1034,8 +1090,6 @@ private def cached : Site :=
 #guard (Steps.index (.published "first")).read (audit 1 (some (7, 9))) == some (7, 8)
 #guard (Steps.range (.published "first") (.published "last")).read (audit 1 (some (7, 9))) == some (7, 10)
 #guard (Steps.range (.published "first") (.published "last")).read (audit 1 (some (9, 7))) == none
--- a check under another registration's head counts for nothing
-#guard cells (table [sent] [check 3000 400 "1/1000" "g"]) == cells (table [] [])
 -- errors that sum to 1 or more: no bound at this period
 #guard ((table [sent] [check 3000 400 "1/2", check 2000 300 "1/2"]).take 1).map
     (fun r => (r.status, r.verified, r.free, r.error.toString)) == [(.noBound, none, none, "1")]
@@ -1057,7 +1111,7 @@ private def cached : Site :=
 
 /-- A read rate verified from below, in bytes, by an answer that names no span. -/
 private def reads : Account :=
-  { protocol := "toy/reads", head := some (.published "registration_head")
+  { protocol := "toy/reads", witness := none
     amounts := [{ metric := "reads", part := .read [.hbm], key := .published "q_bytes", unit := bytes,
                   side := .verified, time := .unstated, error := .published "eps", uncertified := .safe }] }
 
@@ -1077,7 +1131,7 @@ private def resting : Account :=
 private def rested (audits : List Answer) : Answer :=
   accept "toy/resting" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
     ("start_ns", Lean.toJson (0 : Nat)),
-    ("rests", Json.arr (audits.filterMap fun b => (nameOf b).map Json.str).toArray)] [("link", .str "up0")]
+    ("rests", Json.arr (audits.filterMap fun b => (nameOf b).map Json.str).toArray)] [("key", .str certKey)]
 
 -- an answer that rests on an audit counts beside it; it counts for nothing without it, beside another audit, beside
 -- the audit refused, or where it lists no names; one that rests on none counts
@@ -1116,7 +1170,7 @@ private def keyed : Account :=
               amounts := sent.amounts.map fun m => { m with series := some (.published "key") } }
 private def under (key : String) (k ns : Nat) : Answer :=
   accept "toy/keyed" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("key", .str key), ("span_ns", Lean.toJson ns),
-    ("start_ns", Lean.toJson (0 : Nat))] [("link", .str "up0")]
+    ("start_ns", Lean.toJson (0 : Nat))] [("key", .str certKey)]
 private def twoKeys (second : Nat) : Monitored :=
   period (origin := fun s =>
     if s == "\"k1\"" then some ⟨0, 0, "cert0"⟩
@@ -1124,10 +1178,6 @@ private def twoKeys (second : Nat) : Monitored :=
 #guard (linkRow (twoKeys 500) [keyed] [under "k1" 3000 500, under "k2" 2000 500]).map (·.2.2) == [some 5000]
 #guard (linkRow (twoKeys 400) [keyed] [under "k1" 3000 500, under "k2" 2000 500]).map (·.2.2) ==
   (linkRow period [sent] [check 5000 900 "1/1000"]).map (·.2.2)
--- an answer that names an earlier head of the period counts; one that names a head the period does not hold does not
-#guard linkRow (period (heads := ["g", "h"])) [sent] [check 3000 400 "1/1000" "g"] ==
-  linkRow period [sent] [check 3000 400 "1/1000"]
-#guard linkRow (period (heads := ["h"])) [sent] [check 3000 400 "1/1000" "g"] == linkRow period [] []
 -- the verified side: a span counts only whole in the period
 #guard firstVerified (rowsOf site digest auditor (period 20000 (origin := fun _ => some ⟨5, 0, "cert0"⟩)) [ranged]
   [audit 700 (some (0, 9)), audit 500 (some (10, 19))]) == [(some 500, "1/500")]
@@ -1158,7 +1208,7 @@ private def drifted (p : Monitored) (accounts : List Account) (answers : List An
 -- nothing; a device at the site, in no host, the same
 #guard ((rowsOf ⟨[sheet], hostedBy none, links⟩ digest auditor period [sent]
     [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
-#guard ((rowsOf ⟨[sheet], Core.Registration.Example.locs, links⟩ digest auditor period [sent]
+#guard ((rowsOf ⟨[sheet], base, links⟩ digest auditor period [sent]
     [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
 -- an origin that names a device the Site does not hold: the same
 #guard ((rowsOf site digest auditor (period (origin := fun _ => some ⟨0, 0, "nobody"⟩)) [sent]
@@ -1171,7 +1221,7 @@ private def drifted (p : Monitored) (accounts : List Account) (answers : List An
 private def spans (n len : Nat) : List Answer :=
   (List.range n).map fun i =>
     accept "toy/sent" [("K", Lean.toJson (10 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson len),
-      ("start_ns", Lean.toJson (i * len))] [("link", .str "up0")]
+      ("start_ns", Lean.toJson (i * len))] [("key", .str certKey)]
 #guard drifted (period 2000) [sent] (spans 10 100) == [some (100 + 1001 * 100)]
 #guard drifted (period 2000) [sent] (spans 1 1000) == [some (10 + 1001 * 100)]
 -- a Site that is not mediated: a boundary link says no certifier splits it, so every link's row prints no amount,
@@ -1243,7 +1293,7 @@ private def refused (S : Site) (host : String) : Option String :=
 #guard refused bare "vm0" == none
 #guard refused bare "vm1" == some "premise ClockRateWithin(vm0, 5e-4): vm1 is no auditor's device of the Site"
 #guard (refused bare "cert0").isSome ∧ (refused bare "node0").isSome
-private def atSite : Site := ⟨[sheet], Core.Registration.Example.locs, links⟩
+private def atSite : Site := ⟨[sheet], base, links⟩
 #guard (refused atSite "vm0").isSome ∧ (refused atSite "cert0").isSome
 #guard (weekRows atSite []).map (fun r => (r.premises, r.capacity, r.verified, r.free)) ==
   [([], some 60480000000000000, some 0, some 60480000000000000)]
@@ -1252,6 +1302,88 @@ private def atSite : Site := ⟨[sheet], Core.Registration.Example.locs, links�
 #guard ticksKept 1000 (some (fig 1 1000)) == 999
 #guard stepsWithin 1000 ⟨1, 1000000000⟩ tick (some (fig 1 1000)) == 999
 #guard stepsWithin 1000 ⟨1, 1000000000⟩ tick none == 0
+
+/-! The auditor's device a key names (`Site.holder`), what it reaches (`Site.hostLinks`, `Site.hostsOf`), and the rows
+of the answers it witnessed. -/
+
+private def host1 : Site.Loc := { id := "node1", kind := .host, parent := some "site0", chip := some (1 <<< 25) }
+private def dram (id h : String) : Site.Loc :=
+  { id, kind := .memory, parent := some h, tier := some .dram, bytes := 1 <<< 31 }
+private def device (id : String) (kind : Site.Kind) (key : String) : Site.Loc :=
+  { id, kind, parent := some "site0", owner := .auditor, key, scheme := Core.Registration.Example.lms }
+private def link (id a b : String) : Site.Link := { id, ends := (a, b), β := some 10000000000, latency := 1 }
+
+/-- Beside the example: a second host, joined to the challenger and to the first host; a DRAM leaf under each host; a
+second challenger, joined to the first host; and a certifier with no link. -/
+private def wideLocs : List Site.Loc :=
+  locs ++ [host1, dram "dram0" "node0", dram "dram1" "node1", device "chal1" .challenger "e2",
+    device "cert1" .certifier "c1"]
+private def wide : Site :=
+  ⟨[sheet], wideLocs, links ++ [link "mc1" "chal0" "node1", link "mc2" "chal1" "node0", link "hh0" "node0" "node1"]⟩
+private def wideRows (accounts : List Account) (answers : List Answer) (ticks : Nat := 1000) : List Row :=
+  rowsOf wide digest (keysOf wideLocs) (period ticks) accounts answers
+
+/-- The example's locations with a second certifier that holds the first's key. -/
+private def twice : List Site.Loc := locs ++ [device "cert1" .certifier certKey]
+private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with key := "C0" } else x
+
+-- a key names its device: the certifier's its certifier, the challenger's its challenger
+#guard (site.holder auditor certKey).map (·.id) == some "cert0"
+#guard (site.holder auditor chalKey).map (·.id) == some "chal0"
+-- and names none: an auditor's device's key, a key no location of the auditor's holds, a key the auditor registers for
+-- none of them, a key two of its devices hold, a key not in lower-case hex though its device holds it: the
+-- registration's example's own, and one in upper case
+#guard (site.holder auditor "a2").isNone ∧ (site.holder auditor "ff").isNone
+#guard (site.holder (keysOf []) certKey).isNone
+#guard (Site.holder ⟨[sheet], twice, links⟩ (keysOf twice) certKey).isNone
+#guard (Site.holder ⟨[sheet], Core.Registration.Example.locs, links⟩ Core.Registration.Example.auditor "k0").isNone
+#guard (Site.holder ⟨[sheet], locs.map upper, links⟩ (keysOf (locs.map upper)) "C0").isNone
+-- the certifier reaches its uplink's half on its host's side, never the half to the outside, and no host; the
+-- challenger reaches the hosts its links join it to, each once, and no link
+#guard (site.hostLinks "cert0").map (·.id) == ["up0"] ∧ site.hostsOf "cert0" == []
+#guard site.hostLinks "chal0" == [] ∧ site.hostsOf "chal0" == ["node0"]
+#guard wide.hostsOf "chal0" == ["node0", "node1"] ∧ wide.hostsOf "chal1" == ["node0"]
+-- a certifier the Site gives no link reaches nothing, though its key names it; a link between hosts, no device's
+#guard (wide.holder (keysOf wideLocs) "c1").map (·.id) == some "cert1" ∧ wide.hostLinks "cert1" == []
+#guard !(["cert0", "cert1", "chal0", "chal1"].any fun i => (wide.hostLinks i).any (·.id == "hh0"))
+
+-- an answer that names no key, a key no device holds, a key two devices hold, or a device that reaches none of its
+-- part's leaves counts for nothing
+#guard cells (table [held] [session 6000000000 "1/100" (key := none)]) == cells (table [] [])
+#guard cells (table [held] [session 6000000000 "1/100" (key := some "ff")]) == cells (table [] [])
+#guard cells (rowsOf ⟨[sheet], twice, links⟩ digest (keysOf twice) period [sent] [check 3000 400 "1/1000"]) ==
+  cells (rowsOf ⟨[sheet], twice, links⟩ digest (keysOf twice) period [] [])
+#guard cells (table [held] [session 6000000000 "1/100" (key := some certKey)]) == cells (table [] [])
+-- a challenger's key: a read row over a host's DRAM leaf, at the host, as the whole site's row reads it there
+private def spareAt : Account := { spare with witness := some (.profile "key") }
+#guard ((rowsOf hostRated digest auditor period [spareAt]
+    [{ unread 3000 400 with profile := some (Json.mkObj [("key", .str chalKey)]) }]).take 1).map
+    (fun r => (r.place, r.status, r.capacity, r.verified, r.free)) ==
+  [("node0", .certified, some (9754 * 1000), some (9754 * 1000 - (3000 + 9754 * 600)), some (3000 + 9754 * 600))]
+-- a challenger that reaches two hosts: one row over both
+private def heldDram : Account := { held with amounts := held.amounts.map fun m => { m with part := .memory [.dram] } }
+#guard cells ((wideRows [heldDram] [session 6000000000 "1/100"]).take 1) ==
+  [("held", "node0, node1", "registered", some (8 * 2 * 2 ^ 31), some 6000000000, some (8 * 2 * 2 ^ 31 - 6000000000),
+    "1/100")]
+-- audits under a challenger's key: two of one key over overlapping spans count the larger once; two devices' give a
+-- row each, and their amounts never add, though their spans are disjoint
+private def rangedAt : Account := { ranged with witness := some (.profile "key") }
+private def audits (answers : List Answer) (S : Site := wide) (xs : List Site.Loc := wideLocs) :
+    List (String × String × Option Nat) :=
+  ((rowsOf S digest (keysOf xs) (period 20000) [rangedAt] answers).filter (·.metric == "audited")).map fun r =>
+    (r.place, r.reading, r.verified)
+#guard audits [audit 700 (some (0, 9)) (key := some chalKey), audit 500 (some (5, 14)) (key := some chalKey)] ==
+  [("node0, node1", "stated", some 700), ("node0, node1", "bound", some 700)]
+#guard audits [audit 700 (some (0, 9)) (key := some chalKey), audit 500 (some (10, 19)) (key := some "e2")] ==
+  [("node0, node1", "stated", some 700), ("node0, node1", "bound", some 700), ("node0", "stated", some 500),
+   ("node0", "bound", some 500)]
+-- two devices that reach one host: two rows at one place, separate audits of the same hardware, never added
+private def pairLocs : List Site.Loc := locs ++ [device "chal1" .challenger "e2"]
+private def pair : Site := ⟨[sheet], pairLocs, links ++ [link "mc2" "chal1" "node0"]⟩
+#guard audits [audit 700 (some (0, 9)) (key := some chalKey), audit 500 (some (10, 19)) (key := some "e2")]
+    pair pairLocs ==
+  [("node0", "stated", some 700), ("node0", "bound", some 700), ("node0", "stated", some 500),
+   ("node0", "bound", some 500)]
 
 end Example
 
