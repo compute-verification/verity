@@ -1076,10 +1076,10 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         _w, salts[p], entries[p] = side.cells.statement(bs)
         ports[p] = {**WR.bucket_port(side.head, at.params, mb.base), "reads": bs}
         bcs[p] = [WR.bc(made[p][k] if p in made else side.cells.rows[r], side.cells.salts[r]) for k, r in enumerate(bs)]
-    for p, (kind, reg, ps) in reads.items():
+    for p, (tk, reg, ps) in reads.items():
         table, refs[p] = REG.table(ps) if p.startswith("prog") else (ps, list(range(len(ps))))
-        salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(kind, reg, table)
-        ports[p] = tree_port(kind, reg, ps, mb.base)
+        salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(tk, reg, table)
+        ports[p] = tree_port(tk, reg, ps, mb.base)
         said = made.get(p) or (own[p] if tp == "start" else None)
         bcs[p] = [None if said and said[k] is None else tree_bc(reg, i, said[k] if said else None)
                   for k, i in enumerate(ps)]
