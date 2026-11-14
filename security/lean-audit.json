@@ -4819,6 +4819,26 @@
   "Verity.Sampled.remote_soundness_deployedReady": {
    "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.PooledSample": {
+   "honest": ["Accounting.SecurityProofs.Remote.PooledSample_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.PooledSample_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.LiveCoinsSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.LiveCoinsSampled_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.HeldSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.HeldSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.HeldSampled_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.HeldOverTimeSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": {
+   "honest": ["Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5129,26 +5149,6 @@
   "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": {
    "type_hash": "1d80b85ac63a83d13745f1efaaa3b28b669426784b4c01aa4e864f3291c0b344",
    "unfolded_hash": "c30e732c651905a05460d3a02ef33d2f8561a0a8d8876c3a608b6b067349ef68"
-  },
-  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": {
-   "type_hash": "36a591ddef83ba3e44e4724f4a12f4be19cfe40a6348a94312b3b021943331aa",
-   "unfolded_hash": "8437f2dfbbb95fa30df0f01bbe756eeffad587be1ae222e0acb0ebb5bf333adb"
-  },
-  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
-   "type_hash": "3bb5b48c6eadb3c43ecad98991310e007b821125b826b0dd0f7302cdc75b2dd5",
-   "unfolded_hash": "f69c6c586caa250e43f3a2f6cb4f5a329cad2576bfff434fd9b7a4e31ca6bd5c"
-  },
-  "Accounting.SecurityProofs.Remote.HeldSampled": {
-   "type_hash": "55578c104e1dc7aebbaf476702004f43247cf1f78c23d7d7ea80dcb194a764b7",
-   "unfolded_hash": "5983759a7305169d474ba14a3c44dd8a80f031d6220bba7e2a60f0a0fcd92362"
-  },
-  "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
-   "type_hash": "323da1a731bafc04b3f297c8e55c97b1fa40e5c65e1de4e04e1f5ab55554903e",
-   "unfolded_hash": "b5f00900f4cba21f8afbc1506f403e0472bf93ba2d370506661bf024912b7786"
-  },
-  "Accounting.SecurityProofs.Remote.PooledSample": {
-   "type_hash": "ffdcb6b6df33d9e044a1a6d7dc12c82655d3fd9a736b18b5b85e39cfc7346e4b",
-   "unfolded_hash": "b96e17ab299c1a3caa23876a038efae3fb6deafe354dc831b3e5d1f8aca3fdec"
   },
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
    "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067",
@@ -9248,6 +9248,12 @@
    "type_hash": "36a591ddef83ba3e44e4724f4a12f4be19cfe40a6348a94312b3b021943331aa",
    "unfolded_hash": "8437f2dfbbb95fa30df0f01bbe756eeffad587be1ae222e0acb0ebb5bf333adb"
   },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Remote.HeldOverTimeSampled": {
    "owner": "@memory-accounting",
    "signature": [
@@ -9275,6 +9281,12 @@
    "type_hash": "3bb5b48c6eadb3c43ecad98991310e007b821125b826b0dd0f7302cdc75b2dd5",
    "unfolded_hash": "f69c6c586caa250e43f3a2f6cb4f5a329cad2576bfff434fd9b7a4e31ca6bd5c"
   },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.HeldOverTimeSampled_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Remote.HeldSampled": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.HeldSampled : Accounting.Guarantees.Remote.HeldSampled"],
@@ -9299,6 +9311,12 @@
    "type_hash": "55578c104e1dc7aebbaf476702004f43247cf1f78c23d7d7ea80dcb194a764b7",
    "unfolded_hash": "5983759a7305169d474ba14a3c44dd8a80f031d6220bba7e2a60f0a0fcd92362"
   },
+  "Accounting.SecurityProofs.Remote.HeldSampled_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.HeldSampled_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Remote.LiveCoinsSampled": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.LiveCoinsSampled : Accounting.Guarantees.Remote.LiveCoinsSampled"],
@@ -9316,6 +9334,12 @@
    "type_hash": "323da1a731bafc04b3f297c8e55c97b1fa40e5c65e1de4e04e1f5ab55554903e",
    "unfolded_hash": "b5f00900f4cba21f8afbc1506f403e0472bf93ba2d370506661bf024912b7786"
   },
+  "Accounting.SecurityProofs.Remote.LiveCoinsSampled_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.LiveCoinsSampled_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Remote.PooledSample": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.PooledSample : Accounting.Guarantees.Remote.PooledSample"],
@@ -9332,6 +9356,12 @@
    },
    "type_hash": "ffdcb6b6df33d9e044a1a6d7dc12c82655d3fd9a736b18b5b85e39cfc7346e4b",
    "unfolded_hash": "b96e17ab299c1a3caa23876a038efae3fb6deafe354dc831b3e5d1f8aca3fdec"
+  },
+  "Accounting.SecurityProofs.Remote.PooledSample_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.PooledSample_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
    "owner": "@memory-accounting",
