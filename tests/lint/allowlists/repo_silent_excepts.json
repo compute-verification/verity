@@ -9,8 +9,6 @@
     {"file": "benchmarks/codec_tensor/bench.py", "count": 1},
     {"file": "benchmarks/codec_tensor/sketching.py", "count": 1},
     {"file": "benchmarks/commitments/hiding_leaf_cost.py", "count": 1},
-    {"file": "benchmarks/harness/verity_bench/vllm/arms.py", "count": 1},
-    {"file": "benchmarks/harness/verity_bench/vllm/commit_arm.py", "count": 2},
     {"file": "benchmarks/hash/dither/dither_a.py", "count": 1},
     {"file": "benchmarks/hash/dither/sbench.py", "count": 2},
     {"file": "benchmarks/hash/dither/stepprof.py", "count": 2},

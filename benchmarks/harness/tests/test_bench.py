@@ -4,6 +4,7 @@ import argparse
 import calendar
 import gc
 import json
+import logging
 import os
 import re
 import statistics
@@ -627,6 +628,13 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
     assert build_bound(resolve_arms("stock")[0]) == ()
     with pytest.raises(ValueError, match="Build"):
         ProcessEngineFactory(eager=False).create(bound_arm, load_spec("llama31-8b-fp8-1gpu").preset, resident=True)
+
+
+def test_a_protocol_entry_that_is_refused_binds_no_build_and_says_so(caplog):
+    unknown, _control = resolve_arms("no-such-protocol:x,stock-fp8")
+    with caplog.at_level(logging.INFO, logger="verity_bench.vllm.arms"):
+        assert build_bound(unknown) == ()
+    assert "'no-such-protocol:x' refused" in caplog.text and "the engine's build refuses it" in caplog.text
 
 
 def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
