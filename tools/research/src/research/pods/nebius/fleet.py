@@ -53,7 +53,7 @@ try:
 except ModuleNotFoundError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command): this file's own tree
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     from research.pods.nebius import settings
-from research import metrics  # noqa: E402 (after the tree is importable)
+from research import metrics
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
