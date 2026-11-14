@@ -1,7 +1,7 @@
 module
 
+public import Definitions.Pouw.Advantage
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
@@ -19,28 +19,30 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.PearlC.DeviceChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 
 /-!
-# Pearl-C's guarantees (trusted)
+# Pearl-C's statements at device records: lemmas
 
-Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
-hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`.
-The gap at the RTX PRO 6000's v1 record under rev1 at the cap 1/1,000 (`Pouw.PearlC.pearlCGapSm120v1LoopCast8p72Rev1Cap1000_8192`
-in `Pouw.SecurityProofs.PearlC.DeviceCapRev1Gap`), its binders written as a `∀`. `Pouw.CostModel` and `Pouw.GGap` are
-the game's, so Pearl-C's are named in full.
+Pearl-C's gap statements at a named device record (`devSm120v1`, `devSm120v2`, `devH100`, `devFp4Sm120`) and its prices,
+each a `def G : Prop` under the guarantees' namespace, proved by the theorem `Pouw.SecurityProofs.PearlC.G` and audited
+with the proofs: no record pins it. The listed statements are the same forms over every device record
+(`Definitions.Pouw.Guarantees.PearlCDev`); a statement here is one of them at a record's numbers, or an earlier revision
+or comparison (v2 without promotion, other casts, chain-only, chain-cap, U-only, Pearl-C4, the H100).
 
-**At W1.** A guarantee that rests on a device TT_OUT form (`TTOutPearlCDev`, `TTOutPearlCDevRev1`, their tile forms and
+**At W1.** A statement that rests on a device TT_OUT form (`TTOutPearlCDev`, `TTOutPearlCDevRev1`, their tile forms and
 the H100's; the chain-only, chain-cap and U-only forms) is stated at the cost model `W1.w1Priced dv salt`, the W1
 machine on the record's device `dv` (`W1Device.sm120`, `.sm120Loop` or `.h100` at prices `sha` and `fetch`) with the
 salt's bytes `salt`, and rests on that form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`,
 `Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1`, and the chain-cap and U-only forms' `…W1` beside them).
-Pearl-C4's headline readers rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
+Pearl-C4's rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
 `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
-row-seed readers) are still stated over any `CostModel`.
+row-seed readers) are still stated over any `CostModel`. `EpsSm120v1LoopCast8p72Rev1Cap1000_8192` and
+`EpsFp4Sm120_8192` are the served record's and Pearl-C4's gaps at 8192³ in ε form.
+The hidden-audit form at the served record is `Proofs.Pouw.Lemmas.PearlCFlockTile`'s.
 -/
 
 @[expose] public section
@@ -58,6 +60,16 @@ def GapSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
     Pouw.PearlC.GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
       ((1648180439 / 446072750000 : ℚ) : ℝ) δPearlC
+
+/-- **v1 under rev1 at the cap 1/1,000, 8192³, in ε form**: `GapSm120v1LoopCast8p72Rev1Cap1000_8192` at the
+advantage `ε = g/(1 − g) = 1648180439/444424569561` (0.37086%). -/
+def EpsSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
+    (sem : PearlCSem Q R S),
+    TTOutPearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    Pouw.PearlC.Gε (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
+      ((1648180439 / 444424569561 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
 
@@ -999,3 +1011,18 @@ def SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
       ((106307 / 27386000 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
+
+namespace Pouw.PearlC
+open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
+
+/-- **Pearl-C4's headline on sm_120, 8192³, in ε form**: `GapFp4Sm120_8192` at the advantage
+`ε = g/(1 − g) = 9875013901/1366788186099` (0.72250%). Like `GapFp4Sm120_8192`, it holds only for noise the domain's
+rule allows (D-SK, `Fp4Sem.SaltKeyedB`) and says nothing yet about the deployed NVFP4 noise, at which the domain is
+empty. -/
+def _root_.Pouw.Guarantees.PearlC.EpsFp4Sm120_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S),
+    TTOutFp4Sm120W1 sha fetch salt sem (1 / 400) →
+    Pouw.PearlC.Gε (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
+    ((9875013901 / 1366788186099 : ℚ) : ℝ) δPearlC
+
+end Pouw.PearlC

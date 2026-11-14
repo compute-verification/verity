@@ -94,6 +94,7 @@ public import Proofs.Pouw.PearlC.ChainCapLoopGap
 public import Proofs.Pouw.PearlC.ChainOnlyGap
 public import Proofs.Pouw.PearlC.Completeness
 public import Proofs.Pouw.PearlC.DeadlineWitness
+public import Proofs.Pouw.PearlC.DevGap
 public import Proofs.Pouw.PearlC.DeviceCapGap
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 public import Proofs.Pouw.PearlC.DeviceChainCapGap
@@ -154,6 +155,7 @@ public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.W1BudgetAbort
 public import Proofs.Pouw.PearlC.W1Checks
+public import Proofs.Pouw.PearlC.Records
 public import Proofs.Pouw.PearlC.W1Priced
 public import Proofs.Pouw.PearlC.W1Stop
 public import Proofs.Pouw.PearlC.W1Tabulate
