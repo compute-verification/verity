@@ -1,0 +1,148 @@
+# The retired word family DRAW in the modules and namespaces the proof system's own paths declare: each module's path
+# and name, the namespaces `Spot.Draw`, `FlockSoundness.PlanDraw`, `DrawnAt`, `Properties.Challenger.Drawn` and
+# `Flock.Test.FullDraw`, and, in the files that read `Spot.Draw` unqualified (inside `namespace Spot` or under `open Spot`),
+# each `Draw.X` of a name `Spot.Draw` declares. `Flock.Draw` (the commitments base), Accounting's and PoUW's `Draw` are
+# their owners': [keep] holds every `Draw.X` another namespace qualifies.
+
+[rewrite]
+exclude = ["tools/move/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py"]
+
+[keep]
+patterns = ["(?<![\\w.])(?!Spot\\b)(?!_root_\\b)[A-Za-z_][\\w']*\\.Draw\\.[\\w']+"]
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"Proofs.Flock.Bridge.Draw" = "Proofs.Flock.Bridge.Sample"
+"Proofs/Flock/Bridge/Draw" = "Proofs/Flock/Bridge/Sample"
+"Proofs.Flock.Claims.Sampling.Draws" = "Proofs.Flock.Claims.Sampling.Samples"
+"Proofs/Flock/Claims/Sampling/Draws" = "Proofs/Flock/Claims/Sampling/Samples"
+"Proofs.Flock.EndToEnd.Joint.Drawn" = "Proofs.Flock.EndToEnd.Joint.Sampled"
+"Proofs/Flock/EndToEnd/Joint/Drawn" = "Proofs/Flock/EndToEnd/Joint/Sampled"
+"Proofs.Flock.EndToEnd.Joint.MT.Draw" = "Proofs.Flock.EndToEnd.Joint.MT.Sample"
+"Proofs/Flock/EndToEnd/Joint/MT/Draw" = "Proofs/Flock/EndToEnd/Joint/MT/Sample"
+"Proofs.Flock.EndToEnd.Joint.MT.Drawn" = "Proofs.Flock.EndToEnd.Joint.MT.Sampled"
+"Proofs/Flock/EndToEnd/Joint/MT/Drawn" = "Proofs/Flock/EndToEnd/Joint/MT/Sampled"
+"Proofs.Flock.Recursive.ZkReg.DrawnRefines" = "Proofs.Flock.Recursive.ZkReg.SampledRefines"
+"Proofs/Flock/Recursive/ZkReg/DrawnRefines" = "Proofs/Flock/Recursive/ZkReg/SampledRefines"
+"Proofs.Flock.Soundness.Audit.RegDraw" = "Proofs.Flock.Soundness.Audit.RegSample"
+"Proofs/Flock/Soundness/Audit/RegDraw" = "Proofs/Flock/Soundness/Audit/RegSample"
+"Proofs.Flock.Soundness.Discharge.Layout.Drawn" = "Proofs.Flock.Soundness.Discharge.Layout.Sampled"
+"Proofs/Flock/Soundness/Discharge/Layout/Drawn" = "Proofs/Flock/Soundness/Discharge/Layout/Sampled"
+"Proofs.Flock.SpotFlock.AddressFacts.RowDraw" = "Proofs.Flock.SpotFlock.AddressFacts.RowSampleJson"
+"Proofs/Flock/SpotFlock/AddressFacts/RowDraw" = "Proofs/Flock/SpotFlock/AddressFacts/RowSampleJson"
+"Proofs.Flock.SpotFlock.Drawn" = "Proofs.Flock.SpotFlock.Sampled"
+"Proofs/Flock/SpotFlock/Drawn" = "Proofs/Flock/SpotFlock/Sampled"
+"Proofs.Properties.Verity.Sampled.Members.Draw" = "Proofs.Properties.Verity.Sampled.Members.Sample"
+"Proofs/Properties/Verity/Sampled/Members/Draw" = "Proofs/Properties/Verity/Sampled/Members/Sample"
+"Proofs.Properties.Verity.Sampled.RecordDraw" = "Proofs.Properties.Verity.Sampled.RecordSample"
+"Proofs/Properties/Verity/Sampled/RecordDraw" = "Proofs/Properties/Verity/Sampled/RecordSample"
+"Proofs.Properties.Verity.Sampled.Window.Draw" = "Proofs.Properties.Verity.Sampled.Window.Sample"
+"Proofs/Properties/Verity/Sampled/Window/Draw" = "Proofs/Properties/Verity/Sampled/Window/Sample"
+"Proofs.Properties.Verity.SampledDraw" = "Proofs.Properties.Verity.SampledUnits"
+"Proofs/Properties/Verity/SampledDraw" = "Proofs/Properties/Verity/SampledUnits"
+"Proofs.Properties.Verity.SampledTwo.DrawRoots" = "Proofs.Properties.Verity.SampledTwo.SampleRoots"
+"Proofs/Properties/Verity/SampledTwo/DrawRoots" = "Proofs/Properties/Verity/SampledTwo/SampleRoots"
+"Proofs.Properties.Verity.SampledTwo.FormDraw" = "Proofs.Properties.Verity.SampledTwo.FormSample"
+"Proofs/Properties/Verity/SampledTwo/FormDraw" = "Proofs/Properties/Verity/SampledTwo/FormSample"
+"Properties.Spot.Draw" = "Properties.Spot.Sample"
+"Properties/Spot/Draw" = "Properties/Spot/Sample"
+"PlanDraw" = "PlanSample"
+"DrawnAt" = "SampledAt"
+"Challenger.Drawn" = "Challenger.Sampled"
+"Challenger/Drawn" = "Challenger/Sampled"
+"Test.FullDraw" = "Test.FullSample"
+"Test/FullDraw" = "Test/FullSample"
+"Spot.Draw" = "Spot.Sample"
+"Spot/Draw" = "Spot/Sample"
+
+[[words_in]]
+files = [
+  "benchmarks/verifier_cost/whole_run/Main.lean",
+  "security/Proofs/Flock/Bridge/SampledDesign.lean",
+  "security/Proofs/Flock/Bridge/V5/Statement.lean",
+  "security/Proofs/Flock/Claims/Sampling/Reference/DeployedCode.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Bounds.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Code.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Design.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Misses.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/OS.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Prefix.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Second.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/SecondCount.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/SecondFirst.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/SecondSamplingDesign.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/SecondStrata.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/SecondUnits.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/SecondWitness.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Size.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Steps.lean",
+  "security/Proofs/Flock/Claims/Sampling/Select/Take.lean",
+  "security/Proofs/Flock/SpotFlock/RunsAs/Proved.lean",
+  "security/Proofs/Flock/SpotFlock/RunsAs/Released.lean",
+  "security/Proofs/Flock/SpotFlock/RunsAs/SecondUnits.lean",
+  "security/Proofs/Properties/Spot.lean",
+  "security/Proofs/Properties/Spot/Credited.lean",
+  "security/Proofs/Properties/Spot/Rate.lean",
+  "security/Proofs/Properties/Spot/SecondFormed.lean",
+  "security/Proofs/Properties/Spot/SecondSample.lean",
+  "security/Proofs/Properties/Verity/Sampled/LiveOf.lean",
+  "security/Proofs/Properties/Verity/SampledDraw.lean",
+  "security/Proofs/Properties/Verity/SampledTwo/FirstSample.lean",
+  "security/Proofs/Properties/Verity/SampledTwo/InputMap.lean",
+  "security/Proofs/Properties/Verity/SampledTwo/RoundOne.lean",
+  "security/Proofs/Properties/Verity/SampledTwo/Within.lean",
+  "security/Properties/Accounting/Served.lean",
+  "security/Properties/Compose/Compose.lean",
+  "security/Properties/Spot.lean",
+  "security/Properties/Spot/Draw.lean",
+  "security/Properties/Spot/Rate.lean",
+  "security/Properties/Spot/Second.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Docket.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/LinkPoints.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZkStatement.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Select.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Slots.lean",
+  "verity/protocols/proofs/spot/verifier/lean/Spot/Stream.lean",
+  "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/SampledTwo.lean",
+]
+
+[words_in.words]
+"Draw.deriveSamplingDesign" = "Sample.deriveSamplingDesign"
+"Draw.derive" = "Sample.derive"
+"Draw.sameSamplingDesign" = "Sample.sameSamplingDesign"
+"Draw.samplingDesignOf" = "Sample.samplingDesignOf"
+"Draw.STRATUM_KEYS" = "Sample.STRATUM_KEYS"
+"Draw.WORK_STRATUM_KEYS" = "Sample.WORK_STRATUM_KEYS"
+"Draw.ranges" = "Sample.ranges"
+"Draw.natRanges" = "Sample.natRanges"
+"Draw.stratum" = "Sample.stratum"
+"Draw.strataProblem" = "Sample.strataProblem"
+"Draw.samplingDesignKeys" = "Sample.samplingDesignKeys"
+"Draw.ascending" = "Sample.ascending"
+"Draw.digits" = "Sample.digits"
+"Draw.probability" = "Sample.probability"
+"Draw.bernoulli" = "Sample.bernoulli"
+"Draw.BERNOULLI" = "Sample.BERNOULLI"
+"Draw.sumSizes" = "Sample.sumSizes"
+"Draw.strataMessage" = "Sample.strataMessage"
+"Draw.checkSampleFull" = "Sample.checkSampleFull"
+"Draw.checkDraw" = "Sample.checkDraw"
+"Draw.proved" = "Sample.proved"
+"Draw.checkProvedFull" = "Sample.checkProvedFull"
+"Draw.checkProved" = "Sample.checkProved"
+"Draw.RAN_OUT" = "Sample.RAN_OUT"
+"Draw.take" = "Sample.take"
+"Draw.flockSamplingDesign" = "Sample.flockSamplingDesign"
+"Draw.sampleUnits" = "Sample.sampleUnits"
+"Draw.sampleFirstRead" = "Sample.sampleFirstRead"
+"Draw.sampleFirst" = "Sample.sampleFirst"
+"Draw.ranOutOf" = "Sample.ranOutOf"
