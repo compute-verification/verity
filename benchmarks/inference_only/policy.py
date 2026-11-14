@@ -96,15 +96,21 @@ class Policy:
 
 
 def pinned(model: str) -> tuple[str, Path]:
-    """The checkpoint ``model`` as the integration's manifests pin it: its revision and its `config.json` of record."""
+    """The checkpoint ``model`` as the integration's manifests pin it: its revision and its `config.json` of record. A
+    model pinned at several revisions of one `config.json` (other weights of the same model, each under a role of its
+    own) has that config's shape, and is taken at its first pin: its class circuit reads no weight byte."""
     from verity_vllm.engine.profiles import dense_generic as DG
 
-    revisions = sorted({str(e["revision"]) for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == model})
-    config = DG.pinned_hf_config(model, revisions[0]) if len(revisions) == 1 else None
+    entries = [e for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == model]
+    revisions = list(dict.fromkeys(str(e["revision"]) for e in entries))
+    configs = {e.get("config_sha256") for e in entries}
+    one = len(revisions) == 1 or (len(configs) == 1 and None not in configs)
+    config = DG.pinned_hf_config(model, revisions[0]) if revisions and one else None
     if config is None:
         raise ValueError(f"{model}: the integration's manifests ({DG.MANIFEST.relative_to(ROOT)}) pin "
-                         f"{len(revisions) or 'no'} revision{'s' * (len(revisions) != 1)} of it, so its shape isn't known "
-                         "here: name a model they pin at one revision, or pin this one there")
+                         f"{len(revisions) or 'no'} revision{'s' * (len(revisions) != 1)} of it"
+                         f"{' of more than one config.json' if len(revisions) > 1 else ''}, so its shape isn't known "
+                         "here: name a model they pin at one config, or pin this one there")
     return revisions[0], config
 
 

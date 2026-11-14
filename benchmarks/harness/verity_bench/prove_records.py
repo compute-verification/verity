@@ -11,6 +11,7 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
 | `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
+| `flock-warm` | any number of runs of `benchmarks/served_units/stage_prove.sh` | each group's `WARM_SUMMARY` (`prove_time.py`'s) with its `WARM_CONFIG`: a statement proved on one card, after WARM warm sessions the median of RUNS timed ones, every session accepted (`prove.Warm`, `warm_rows`) |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
 | `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove.LeanVerify`, `lean_verify`) |
 
@@ -52,7 +53,8 @@ record. With one, a block type the Lean verifier was run on takes its record's f
 from them (`prove`'s rules: its Definition's measured types at its size, else the rate fitted over every measured
 statement), and both totals print as `modeled`, each line naming what was measured (the block type, its share of the
 proving time, its statement, the run and its host) and the share of the figure its own records, its family's and the
-fitted rate price, with the basis. A run
+fitted rate price, with the basis. A table of its own gives each block type's Lean verifier seconds a block with its
+mark (`P.LEAN_MARKS`: measured, modeled or assumed) and the run, statement and circuit file it rests on. A run
 whose record the Lean verifier refused, that holds no record or whose block type the census doesn't hold measures
 nothing and is listed under "Refused".
 
@@ -76,11 +78,12 @@ it is read from. A table with every block proved records nothing.
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from verity_bench import exfiltration as E
 from verity_bench import jobs, kit, overhead_records, settings, steady
@@ -133,6 +136,12 @@ FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
            "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
            "proof_bytes_per_token": "proof bytes a served token",
            AT_RECORD: "prover GPUs a serving GPU"}
+#: the target the goal benchmarks/proof-system-performance holds the prover GPUs a serving GPU to, at most this many:
+#: proving's share of the 10% compute budget, in prover GPUs a serving GPU; replaced when the proof system's own
+#: number is set
+GPUS_PER_SERVING_GPU_TARGET = 0.0545
+#: the figures whose measurements carry that target, lower being better; no other figure carries one
+TARGETED = ("gpus_per_serving_gpu", AT_RECORD)
 #: the scope of the exfiltration run of record's rows that `AT_RECORD` is read over, at `exfiltration.SHARE`: the
 #: planner's world year, `verity bench exfiltration`'s figure
 DESIGN_SCOPE = "world year"
@@ -143,7 +152,10 @@ TABLE = "out/prove.json"
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
-LEAN = "lean-verify"
+LEAN, WARMED = "lean-verify", "flock-warm"
+#: each card's group of a `stage_prove.sh` run: `prove_time.py`'s summary and `prove_time.sh`'s config, whose last
+#: fields are the warm and timed sessions it ran a statement (`warm=W runs=R`)
+WARM_SUMMARY, WARM_CONFIG = "out/gpu*/out/summary.json", "out/gpu*/out/config.txt"
 
 
 @dataclass(frozen=True)
@@ -205,7 +217,7 @@ def _read(store: Any, art: str, path: str | None = None) -> dict:
 
     if store.get_manifest(art).payload.type == "file":
         return json.loads(Path(store.fetch(art)).read_text())
-    if not store.listing(art, [path]):
+    if path is None or not store.listing(art, [path]):
         raise ValueError(f"{art} holds no `{path}`")
     return json.loads((Path(store.fetch(art, paths=[path])) / path).read_text())
 
@@ -252,7 +264,7 @@ def _field(row: Mapping[str, Any], name: str) -> Any:
 _ABSENT = object()
 
 
-def _count(x: Any) -> bool:
+def _count(x: Any) -> TypeGuard[int]:
     return isinstance(x, int) and not isinstance(x, bool) and x > 0
 
 
@@ -314,7 +326,7 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
     name = f"`{row.get('type')}` at {row.get('provers')} provers"
     definition = _field(row, "stage.definition")
     if not isinstance(definition, str):
-        why = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
+        why: str | None = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
                "it lacks `stage.definition`")
         return f"its row {name}: {why}"
     why = row_why(row)
@@ -356,8 +368,8 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
     held = {row["path"] for row in store.listing(files, [REPORTS, REPORTS.rsplit("/", 1)[0] + "/" + TYPES])}
     paths = sorted(p for p in held if p.endswith("/server.json") and p.rsplit("/", 1)[0] + "/" + TYPES in held)
     if not paths:
-        return [], [f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes) and no "
-                    f"proof server report (`{REPORTS}` with its `{TYPES}`)"]
+        return [], [(f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes) and no "
+                     f"proof server report (`{REPORTS}` with its `{TYPES}`)")]
     tree = Path(store.fetch(files, paths=[*paths, *(p.rsplit("/", 1)[0] + "/" + TYPES for p in paths)]))
     found = []
     for path in paths:
@@ -418,8 +430,8 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     if manifest.payload is None or not store.listing(target, [ART_RATES]):
         return {run: found for named in runs for run, found in steady_rows(store, named, superseded).items()}
     if len(runs) != 1:
-        return {target: ([], [f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
-                              "one run's, so each run's go in an art of their own"])}
+        return {target: ([], [(f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
+                               "one run's, so each run's go in an art of their own")])}
     return {target: _rows(_read(store, target, ART_RATES), runs[0], target)}
 
 
@@ -485,10 +497,11 @@ def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
             and all(isinstance(x, (int, float)) and not isinstance(x, bool) and x > 0 for x in seconds)):
         return (f"its `block` ({ {k: block[k] for k in ('k_log', 'blocks', 'full')} }), `proof.bytes` "
                 f"({doc['proof']['bytes']}) and runs' `wall_s` ({seconds}) aren't a statement's blocks, bytes and seconds")
-    host = doc["host"]
+    host, form = doc["host"], _field(doc, "statement.id")
     return P.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
                         block["full"], tuple(seconds), doc["proof"]["bytes"], run,
-                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"])
+                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"],
+                        form if isinstance(form, str) else None)
 
 
 def lean_run(store: Any, run: str) -> P.LeanVerify | str:
@@ -535,6 +548,82 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
                           "measured")], refused
 
 
+def warm_rows(summary: Any, config: str, run: str) -> list[P.Warm | str]:
+    """A group's statements proved on one card from warm sessions (`WARM_SUMMARY`, `WARM_CONFIG`), each as the
+    statement it measured, or why it measures nothing: one on the CPU, one that names no census type (`word`), a
+    session not accepted, fewer timed sessions than the group's RUNS, or figures that aren't a statement's. A full
+    statement holds `prove.STATEMENT_BITS` over 2^k_log blocks."""
+
+    got = re.search(r"\bwarm=(\d+) runs=(\d+)\s*$", config)
+    statements = summary.get("statements") if isinstance(summary, Mapping) else None
+    if not got or not isinstance(statements, Mapping):
+        return [f"its `{WARM_CONFIG}` states no `warm=W runs=R`, or its `{WARM_SUMMARY}` no `statements`"]
+    warm, runs = int(got[1]), int(got[2])
+    out: list[P.Warm | str] = []
+    for key, st in sorted(statements.items()):
+        name = key.partition("/")[2]
+        if not isinstance(st, Mapping) or st.get("device") != "gpu":
+            out.append(f"`{name}`: not proved on a card")
+        elif not isinstance(st.get("word"), str):
+            out.append(f"`{name}`: names no census type (`word`)")
+        elif not (isinstance(st.get("accepted"), list) and st["accepted"] and all(a is True for a in st["accepted"])):
+            out.append(f"`{name}`: not every session was accepted ({st.get('accepted')})")
+        elif st.get("timed") != runs or len(st["accepted"]) != warm + runs:
+            out.append(f"`{name}`: {st.get('timed')} timed of {len(st['accepted'])} sessions, not RUNS={runs} after WARM={warm}")
+        elif not (_count(st.get("n")) and _count(st.get("k_log")) and isinstance(st.get("prove_total_s"), (int, float))
+                  and st["prove_total_s"] > 0 and st["n"] <= max(1, P.STATEMENT_BITS >> st["k_log"])):
+            out.append(f"`{name}`: its `n` ({st.get('n')}), `k_log` ({st.get('k_log')}) and `prove_total_s` "
+                       f"({st.get('prove_total_s')}) aren't a statement's blocks and seconds")
+        else:
+            out.append(P.Warm(P.definition_id(st["word"]), st["k_log"], st["n"], max(1, P.STATEMENT_BITS >> st["k_log"]),
+                              st["prove_total_s"], warm, runs, run, name))
+    return out
+
+
+def warm_run(store: Any, run: str) -> list[P.Warm | str]:
+    """A run of record's statements proved from warm sessions, every card's group (`warm_rows`), or why the run
+    measures nothing."""
+
+    if superseded := _superseded(store, run):
+        return [f"superseded by {', '.join(superseded)}"]
+    attempt = store.get_attempt(run) if not run.startswith("art:") else None
+    if attempt is None:
+        return ["not a run in the store or on its remote"]
+    out = attempt.get("outputs") or {}
+    files = out.get("run_files") or out.get("run_record")
+    if not files:
+        return ["kept no run files"]
+    held = {row["path"] for row in store.listing(files, [WARM_SUMMARY, WARM_CONFIG])}
+    groups = sorted(p.rsplit("/", 1)[0] for p in held if p.endswith("/summary.json") and
+                    p.rsplit("/", 1)[0] + "/config.txt" in held)
+    if not groups:
+        return [f"holds no `{WARM_SUMMARY}` with its `{WARM_CONFIG}`, which `stage_prove.sh` writes"]
+    tree = Path(store.fetch(files, paths=[f"{g}/{f}" for g in groups for f in ("summary.json", "config.txt")]))
+    return [x for g in groups
+            for x in warm_rows(json.loads((tree / g / "summary.json").read_text()), (tree / g / "config.txt").read_text(), run)]
+
+
+def warm(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.Warm], list[dict], list[dict]]:
+    """The statements of `census`'s block types proved from warm sessions, from the workload's `flock-warm` runs of
+    record; their input, where a run carries the label; and the statements and runs that measure nothing, with why."""
+
+    held = {P.definition_id(b.name) for b in census.blocks}
+    found, refused = [], []
+    for run in sorted(records(store).get(workload.record(WARMED), []), reverse=True):
+        for got in warm_run(store, run):
+            if isinstance(got, P.Warm) and got.definition not in held:
+                got = f"`{got.statement}`: its block type, `{got.definition}`, is no block type of the census under its cut"
+            if isinstance(got, str):
+                refused.append({"target": run, "record": workload.record(WARMED), "why": got})
+            else:
+                found.append(got)
+    if not found and not refused:
+        return [], [], []
+    return found, [_input(WARMED, workload, sorted({w.run for w in found}),
+                          f"{len({w.definition for w in found})} block type(s) proved on one card from warm sessions"
+                          if found else "none that measures a block type")], refused
+
+
 def plan(store: Any, workload: Workload, given: str | None) -> tuple[P.SamplingPlan, dict]:
     """The workload's sampling plan of record (`given` must be it), and its input."""
 
@@ -557,7 +646,8 @@ def at_record(store: Any) -> dict:
         scopes, plans, _, _ = E.rows_of_record(store)
         if DESIGN_SCOPE not in scopes:
             return out | {"why": f"no run of record holds the {DESIGN_SCOPE}'s rows (they hold {', '.join(sorted(scopes))})"}
-        p = E.at_share(DESIGN_SCOPE, *scopes[DESIGN_SCOPE], E.SHARE, plans.get(DESIGN_SCOPE))
+        run, rows = scopes[DESIGN_SCOPE]
+        p = E.at_share(DESIGN_SCOPE, run, rows, E.SHARE, plans.get(DESIGN_SCOPE))
     except ValueError as e:
         return out | {"why": str(e)}
     if "prove" not in p["parts"]:
@@ -606,17 +696,19 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     blocks, inputs = census(store, w)
     prover, more, refused = flock(store, w, blocks, provers, cores)
     timed, its, unread = lean(store, w, blocks)
-    prover = replace(prover, lean=tuple(timed))
+    warmed, its_warm, unwarmed = warm(store, w, blocks)
+    prover = replace(prover, lean=tuple(timed), warm=tuple(warmed))
     rate = serving(root, w)
     seconds = rate.gpu_seconds_per_token(blocks)
-    inputs += more + its
-    refused += unread
+    inputs += more + its + its_warm
+    refused += unread + unwarmed
     sampled = None
+    priced: P.ProofSystem = prover
     if system == "spot":
-        sampled, its = plan(store, w, sampling)
-        inputs.append(its)
-        prover = P.Spot(prover, sampled, rate)
-    doc = P.report(prover.table(blocks), seconds)
+        sampled, planned = plan(store, w, sampling)
+        inputs.append(planned)
+        priced = P.Spot(prover, sampled, rate)
+    doc = P.report(priced.table(blocks), seconds)
     return {"schema": P.SCHEMA, "workload": w.name, "model": w.model, "cut": blocks.cut, "provers": provers, "cores": cores,
             "macs_in_blocks": blocks.macs_in_blocks, "inputs": inputs,
             "refused": refused, "serving": {"gpu_seconds_per_token": seconds, "status": "modeled", "basis": rate.basis},
@@ -634,7 +726,8 @@ def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan 
     year = O.PERIODS_H["year"] * 3600
     if sampled is not None:
         fleets = {sampled.scope: sampled.serving_gpu_seconds / sampled.period_s}
-        spans = {name: hours * 3600 for name, hours in O.PERIODS_H.items() if hours * 3600 == sampled.period_s} or {
+        spans: dict[str, float] = {name: hours * 3600 for name, hours in O.PERIODS_H.items()
+                                   if hours * 3600 == sampled.period_s} or {
             f"{sampled.period_s:g} s": sampled.period_s}
     else:
         fleets = {f"datacenter ({c['datacenter']})": float(c["gpus"]),
@@ -705,14 +798,16 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     the records the table read; a total with none has those words as its `why`. The prover GPUs a serving GPU are the
     proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
     their inputs, then proving's words and the serving rate's. The figure at the exfiltration run of record's design
-    (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records."""
+    (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
+    `TARGETED` carry `GPUS_PER_SERVING_GPU_TARGET` as their `target`, and, where they have a value, its check against
+    it as their `verdict`: `meets` at or under it, `misses` over it."""
 
     if bad := sorted(set(metrics.values()) - FIGURES.keys()):
         raise ValueError(f"no total of the table is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
     if AT_RECORD in metrics.values() and "at_record" not in doc:
         raise ValueError(f"`{AT_RECORD}` is SPOT's: only a table at a sampling plan holds it")
     targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
-    s, out = doc["serving"], []
+    s, out = doc["serving"], list[dict[str, Any]]()
     for name, figure in metrics.items():
         value, mark, said = _mark(doc, figure)
         if figure == AT_RECORD:
@@ -729,6 +824,11 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
             mark = max(mark, s["status"], key=STRENGTH.index)
             inputs = [mark, f"proving: {said}", f"serving rate ({s['status']}, a stated input): {s['basis']}"]
         out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
+    for m, figure in zip(out, metrics.values(), strict=True):
+        if figure in TARGETED:
+            m["target"] = GPUS_PER_SERVING_GPU_TARGET
+            if m["value"] is not None:
+                m["verdict"] = "meets" if m["value"] <= GPUS_PER_SERVING_GPU_TARGET else "misses"
     return out
 
 
@@ -816,10 +916,10 @@ def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
     """The same blocks at the sampling plan's own prices, and where they leave the table's: each source's GPU-seconds
     at the table's prices over the plan's, and the block type that holds most of the difference."""
 
-    lines = [f"- the same blocks at the sampling plan's own prices: {_n(planned['gpus_per_serving_gpu'])} prover GPUs per "
-             "serving GPU. Its planner sized the sample at them; they are the plan's record's, no source this table "
-             "reads, and hold whatever its planner counts in a block's price. Every other figure here prices a block "
-             "from this table's sources"]
+    lines = [(f"- the same blocks at the sampling plan's own prices: {_n(planned['gpus_per_serving_gpu'])} prover GPUs per "
+              "serving GPU. Its planner sized the sample at them; they are the plan's record's, no source this table "
+              "reads, and hold whatever its planner counts in a block's price. Every other figure here prices a block "
+              "from this table's sources")]
     ratios = ", ".join(
         f"{P.SOURCES[x['source']]} {x['gpu_seconds_per_token'] / x['planned_gpu_seconds_per_token']:.3g}x "
         f"({x['block_types']} block types)" for x in planned["sources"] if x["planned_gpu_seconds_per_token"])
@@ -847,10 +947,10 @@ def _record_lines(doc: Mapping[str, Any]) -> list[str]:
     head = "- prover GPUs per serving GPU at"
     lines = [f"{head} the sampling plan of record ({plan}): {t['gpus_per_serving_gpu']:.4g}, {t['status']}"]
     if r["gpus_per_serving_gpu"] is None:
-        return [*lines, f"{head} the exfiltration run of record's design (`{RUN_OF_RECORD}={r['record']}`): not read: "
-                        f"{r['why']}"]
-    return [*lines, f"{head} the exfiltration run of record's design: {r['gpus_per_serving_gpu']:.4g}, {r['status']}: "
-                    f"{_design(r)}"]
+        return [*lines, (f"{head} the exfiltration run of record's design (`{RUN_OF_RECORD}={r['record']}`): not read: "
+                         f"{r['why']}")]
+    return [*lines, (f"{head} the exfiltration run of record's design: {r['gpus_per_serving_gpu']:.4g}, {r['status']}: "
+                     f"{_design(r)}")]
 
 
 def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
@@ -864,8 +964,8 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
     t = doc["totals"]
     seconds, size, measured = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"], t["lean_verify"]
     if not measured:
-        return ["- Lean verifier seconds per token: not measured (no Lean verifier run of record measures a block type: "
-                f"label one {_label(record_name(doc['workload'], LEAN))})", "- proof bytes per token: not measured"]
+        return [("- Lean verifier seconds per token: not measured (no Lean verifier run of record measures a block type: "
+                 f"label one {_label(record_name(doc['workload'], LEAN))})"), "- proof bytes per token: not measured"]
     m = measured[0]
     of = "the proving time at the sampling plan" if doc["system"].startswith("spot") else "the proving time"
     share = "none" if m["time_share"] is None else f"{m['time_share']:.1%}"
@@ -901,6 +1001,43 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
                  "a witness bit", "2^k_log witness bits")]
 
 
+#: what each mark of a block type's Lean verifier row rests on (`P.LEAN_MARKS`), as its table's heading words it
+LEAN_ROWS = ("The Lean verifier's seconds, a row a block type (measured: the median of its own statement's runs over its "
+             "blocks; modeled: its Definition's measured statement's seconds an AND gate times its own AND gates; "
+             "assumed: the rate fitted over every measured statement times its AND gates, which no measurement of its "
+             "Definition backs; none: no AND gates to price it by)")
+
+
+def _lean_rows(doc: Mapping[str, Any], rows: int | None) -> list[str]:
+    """The Lean verifier's table: each block type's seconds a block, its mark, the run that measured the statement it
+    rests on and that statement, in the main table's order; with `rows`, the rest in one row counting their marks."""
+
+    shown = doc["rows"] if rows is None else doc["rows"][:rows]
+    lines = ["", LEAN_ROWS + ":", "", "| block type | Lean verifier ms per block | mark | record | rests on |",
+             "| --- | --- | --- | --- | --- |"]
+    for r in shown:
+        ms = "—" if r["lean_verifier_seconds"] is None else _n(1e3 * r["lean_verifier_seconds"])
+        lines.append(f"| `{_short(r['block'])}` | {ms} | {r['lean_mark'] or 'none'} | {r['lean_record'] or '—'} | "
+                     f"{_lean_basis(r)} |")
+    if rest := doc["rows"][len(shown):]:
+        marks = [r["lean_mark"] or "none" for r in rest]
+        counts = ", ".join(f"{mark} {marks.count(mark)}" for mark in (*P.LEAN_MARKS.values(), "none") if mark in marks)
+        lines.append(f"| {len(rest)} more block types | | {counts} | | |")
+    return lines
+
+
+def _lean_basis(r: Mapping[str, Any]) -> str:
+    if r["lean_record"] is None:
+        return "the fitted rate" if r["lean_mark"] else "—"
+    blocks, full = r["lean_statement_blocks"]
+    whose = "its own statement" if r["lean_mark"] == "measured" else f"`{_short(r['lean_definition'])}`'s statement"
+    size = "a full statement" if blocks == full else f"{blocks}/{full} of a full statement"
+    form = r["lean_form"]
+    read = ("its record names no statement id" if form is None else
+            f"measured from {P.LEAN_FORMS.get(form, f'statement `{form}`')}")
+    return f"{whose} of {blocks} blocks ({size}), {read}"
+
+
 def _record(target: str | None) -> str:
     return "—" if target is None else target[:16] if target.startswith("art:") else target
 
@@ -920,10 +1057,10 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
                  "held that many, else from those that held the fewest above it, which its row names; a row that held "
                  f"fewer prices nothing, and one whose record states no cores is read as {P.UNSTATED_CORES}")
     s = doc["serving"]
-    lines += [f"- serving rate ({s['status']}, a stated input, not a record): {_n(s['gpu_seconds_per_token'])} GPU-seconds a "
-              f"served token, {_n(1 / s['gpu_seconds_per_token'])} tokens a serving GPU-second: {s['basis']}", "",
-              f"| block type | k_log | blocks {'proved ' if spot else ''}per token | ms per block | "
-              f"{'ms per block in the plan | ' if planned else ''}source | record | share of proving time | note |",
+    lines += [(f"- serving rate ({s['status']}, a stated input, not a record): {_n(s['gpu_seconds_per_token'])} GPU-seconds a "
+               f"served token, {_n(1 / s['gpu_seconds_per_token'])} tokens a serving GPU-second: {s['basis']}"), "",
+              (f"| block type | k_log | blocks {'proved ' if spot else ''}per token | ms per block | "
+               f"{'ms per block in the plan | ' if planned else ''}source | record | share of proving time | note |"),
               "| --- | --- | --- | --- | --- | --- | --- | --- |" + (" --- |" if planned else "")]
     shown = doc["rows"] if rows is None else doc["rows"][:rows]
     for r in shown:
@@ -938,11 +1075,11 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     lines += ["", "## At the sampling plan" if spot else "## Every block proved", "",
               f"- blocks {'proved ' if spot else ''}per token: {_n(t['blocks_per_token'])}",
               f"- prover GPU-seconds per token: {_n(t['gpu_seconds_per_token'])}{_range(t['gpu_seconds_per_token_range'])}",
-              f"- {'served tokens covered' if spot else 'tokens proved'} per second per prover GPU: "
-              f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}",
-              f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
-              f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
-              f"{'the proving time it prices' if t['missing'] else 'its proving time'}"]
+              (f"- {'served tokens covered' if spot else 'tokens proved'} per second per prover GPU: "
+               f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}"),
+              (f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
+               f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
+               f"{'the proving time it prices' if t['missing'] else 'its proving time'}")]
     if t["missing"]:
         named = "; ".join(f"`{_short(m['block'])}` ({_missing_share(m)})" for m in t["missing"][:MISSING_NAMED])
         more = len(t["missing"]) - MISSING_NAMED
@@ -966,14 +1103,15 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
                      f"them for, {v['block_share']:.1%} of the blocks{basis}; the rest: not measured")
     lines += _lean_lines(doc)
     lines += ["", "Share of the proving time each source covers:", "",
-              "| source | block types | blocks per token | share of blocks | prover GPU-seconds per token | "
-              "share of proving time |", "| --- | --- | --- | --- | --- | --- |"]
+              ("| source | block types | blocks per token | share of blocks | prover GPU-seconds per token | "
+               "share of proving time |"), "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {P.SOURCES[x['source']]} | {x['block_types']} | {_n(x['per_token'])} | "
               f"{'—' if x['block_share'] is None else format(x['block_share'], '.2%')} | {_n(x['gpu_seconds_per_token'])} | "
               f"{'—' if x['time_share'] is None else format(x['time_share'], '.2%')} |" for x in doc["sources"]]
+    lines += _lean_rows(doc, rows)
     p = doc["periods"]
-    lines += ["", f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
-              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:", "",
+    lines += ["", (f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
+              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:"), "",
               "| compute | period | serving GPUs | served AND gates | prover GPUs | prover GPU-seconds |",
               "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {x['compute']} | {x['period']} | {_n(x['serving_gpus'])} | {_n(x['served_gates'])} | {_n(x['prover_gpus'])} | "
@@ -984,8 +1122,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += ["", "Refused (not read):", ""]
         lines += [f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"]]
     if doc["unread"]:
-        lines += ["", "Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
-                  "its cut; they are in no figure above):", ""]
+        lines += ["", ("Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
+                  "its cut; they are in no figure above):"), ""]
         lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else ', run ' + x['run']}: `{x['type']}` at "
                   f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "
                   + (f"not a steady-state measurement: {x['why']}" if x["seconds"] is None else
