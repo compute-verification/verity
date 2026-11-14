@@ -136,8 +136,10 @@ default: a file that isn't there is named as one the run did not write. It print
   Otherwise one block's value is the smaller of its two limits at `s` under the tie (`tied.priced` on the record's
   class: its `c`, `n` and work, and `k` its policy's own `k_by_kind` but the linears' outputs, with `tied.toml`'s
   `[fresh]`), `partial`, its inputs saying which are the record's and which are premises; and each fleet and period's
-  is the least of its four readings, `modeled`. A policy with no `k_by_kind`, or with kinds other than the linears'
-  outputs and those `tied.toml`'s source names, gives no figure and says why.
+  is the least of its four readings, `modeled`. `k_by_kind` is keyed as its writer (`benchmarks/one_stage/inference_only.py`)
+  keys it: `linears`, the linears' outputs, and `scan_state`, the scan state row. A policy with no `k_by_kind` (one
+  written before its writer stated it), or with kinds other than the linears' outputs and those `tied.toml`'s source
+  names, gives no figure and says why.
 
 ## What it does not mean
 

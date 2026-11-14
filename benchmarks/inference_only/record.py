@@ -18,8 +18,8 @@ the clear, and the share of a block's work that no PoUW check credits.
   verdict holds its passes to (`quantity.tie.record`) is the `previous` of the run's registration, the log's last
   record, whose chain the check holds; another is refused.
 * **The class under the tie** (`tied_of`): the record's policy with the linears' outputs taken out of its k and
-  `tied.toml`'s `[fresh]` put in, by the policy's own k by kind (`k_by_kind`), whose kinds must be the linears' outputs
-  (`OUTPUTS`) and the others `tied.toml`'s source names, exactly.
+  `tied.toml`'s `[fresh]` put in, by the policy's own k by kind (`k_by_kind`, its keys `KINDS`), whose kinds must be
+  the linears' outputs (`OUTPUTS`) and the others `tied.toml`'s source names, exactly.
 """
 from __future__ import annotations
 
@@ -59,9 +59,13 @@ POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
 VERDICT = "protocols.work.verdict"
 #: the kind of a record policy's k that the tie takes out
 OUTPUTS = "the outputs of the linears"
+#: a record policy's kinds of k by its writer's keys (`inference_only.KINDS` in benchmarks/one_stage), each by the name
+#: `policy.stated` gives that part
+KINDS = {"linears": OUTPUTS, "scan_state": "the scan state row"}
 NO_TIE = "nothing ties the PoUW verdict to the record the check read"
 NO_KINDS = ("the record's policy states k as one number, with no k by kind (k_by_kind), so the linears' outputs the tie "
-            "takes out of k can't be read from it: its writer (benchmarks/one_stage/inference_only.py) writes none")
+            "takes out of k can't be read from it: it was written before its writer (benchmarks/one_stage/"
+            "inference_only.py) stated one, and there is no figure for the tied class")
 
 
 class Refused(Exception):
@@ -198,14 +202,16 @@ def tied_of(policy: Mapping[str, Any], run: str | None, path: Path = P.TIED) -> 
     t = P.tied(path)
     fresh = tomllib.loads(Path(path).read_text()).get("fresh") or {}
     want = {kind for kind, _, _ in t.policy.parts} - set(fresh)
-    kinds = policy.get("k_by_kind")
-    if kinds is None:
+    keyed = policy.get("k_by_kind")
+    if keyed is None:
         raise Refused(NO_KINDS)
-    if not (isinstance(kinds, dict) and all(type(b) is int and b >= 0 for b in kinds.values())):
+    if not (isinstance(keyed, dict) and all(type(b) is int and b >= 0 for b in keyed.values())):
         raise Refused("the record's policy's k_by_kind is an object of kinds, each its bits")
-    if set(kinds) != want | {OUTPUTS}:
-        raise Refused(f"the record's policy's k is made of {sorted(kinds)}; under the tie it is {OUTPUTS!r} and the "
-                      f"kinds {path.name}'s source names but its [fresh], {sorted(want)}, exactly")
+    if {KINDS.get(key) for key in keyed} != want | {OUTPUTS}:
+        raise Refused(f"the record's policy's k is made of {sorted(keyed)}; under the tie it is the kinds "
+                      f"{sorted(k for k, name in KINDS.items() if name in want | {OUTPUTS})}: {OUTPUTS!r} and the kinds "
+                      f"{path.name}'s source names but its [fresh], {sorted(want)}, exactly")
+    kinds = {KINDS[key]: bits for key, bits in keyed.items()}
     if sum(kinds.values()) != policy["k"]:
         raise Refused(f"the record's policy's kinds sum to {sum(kinds.values()):,} bits, not its k = {policy['k']:,}")
     cls = tuple(policy["class"][x] for x in ("slots", "prompt", "outputs"))

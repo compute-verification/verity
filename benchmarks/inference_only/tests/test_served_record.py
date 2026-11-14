@@ -90,7 +90,7 @@ def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9
                         "positions": P.class_of(CLASS).positions},
               "n_inputs": {"work": {**{x: work[x] for x in P.WORK}, "theta_macs": work[P.TOTAL]}}}
     if kinds:
-        policy["k_by_kind"] = {R.OUTPUTS: count["k"] - 16, SCAN: 16}
+        policy["k_by_kind"] = {"linears": count["k"] - 16, "scan_state": 16}
     (out / "inference-only-policy.json").write_text(json.dumps(policy))
     if accept:
         macs = CLASS[0] * work["linears"] if macs is None else macs
@@ -245,22 +245,24 @@ def test_served_takes_the_files_it_names_and_they_take_it(case, stand_in, tmp_pa
 
 def test_the_record_class_under_the_tie_is_its_own_kinds(tmp_path) -> None:
     """On tied.toml's own class, a record policy whose k is the served policy's by kind gives tied.toml's k: its kinds
-    but the linears' outputs, with tied.toml's salt. A policy with no k by kind, other kinds, or kinds that don't sum to
-    its k is refused."""
+    but the linears' outputs, with tied.toml's salt. A policy with no k by kind (one written before its writer stated
+    it) gives no figure for the tied class, and one with other kinds, kinds by their names rather than the writer's
+    keys, or kinds that don't sum to its k is refused."""
     served, t = P.stated(), P.tied()
     doc = {"c": served.c, "k": served.k, "n": served.n, "serve": {"model": t.policy.model},
            "class": {"slots": served.cls[0], "prompt": served.cls[1], "outputs": served.cls[2],
                      "positions": P.class_of(served.cls).positions},
            "n_inputs": {"work": {**{x: served.work[x] for x in P.WORK}, "theta_macs": served.work[P.TOTAL]}},
-           "k_by_kind": {R.OUTPUTS: served.outside, SCAN: P.scan_state_bits(served.cls)}}
+           "k_by_kind": {"linears": served.outside, "scan_state": P.scan_state_bits(served.cls)}}
     got = R.tied_of(doc, RUN)
     assert got.policy.k == t.policy.k == 146_080 and (got.policy.c, got.policy.n, got.policy.work) == (
         t.policy.c, t.policy.n, t.policy.work)
     assert [(kind, bits) for kind, bits, _ in got.policy.parts] == [(SCAN, 145_568), ("the execution phase's salt", 512)]
     assert (got.words, got.blocks, got.word_bits) == (t.words, t.blocks, t.word_bits)
     for kinds, why in ((None, R.NO_KINDS), ({**doc["k_by_kind"], "more": 0}, "exactly"),
-                       ({R.OUTPUTS: served.k}, "exactly"), ({R.OUTPUTS: served.outside, SCAN: 1}, "sum to")):
-        with pytest.raises(R.Refused, match="k_by_kind" if kinds is None else why):
+                       ({"linears": served.k}, "exactly"), ({R.OUTPUTS: served.outside, "scan_state": 1}, "exactly"),
+                       ({"linears": served.outside, "scan_state": 1}, "sum to")):
+        with pytest.raises(R.Refused, match="no figure for the tied class" if kinds is None else why):
             R.tied_of({**doc, "k_by_kind": kinds} if kinds else {x: v for x, v in doc.items() if x != "k_by_kind"}, RUN)
 
 
