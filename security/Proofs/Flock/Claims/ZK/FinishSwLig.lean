@@ -223,13 +223,13 @@ holds level 0's opening at the request's pads (`Finish.padsOf q.draws`), given t
 theorem swSrcE_ligHyp_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
-    (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.Firewall.Finish.RepIn)
+    (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.ZkServer.Finish.RepIn)
     (coin : ℕ → ℕ → _root_.Flock.F128) (n p0 : ℕ) (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule)
     (t b : Array _root_.Flock.F128) (rp tPad : ℕ) (extra lanePad : ℕ → ℕ → _root_.Flock.F128)
     (salt : ℕ → ℕ → ByteArray)
     (hB : B j r = FlockComplete.LigLock.l0Clear coin p0 sch t b (layE x j) extra rp)
     (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
-    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (L.lay x (rep j.val r.val)))
+    (hz : (L.draws ρ (rep j.val r.val)).size = _root_.Flock.ZkServer.Frame.drawBytes (L.lay x (rep j.val r.val)))
     (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
       (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
@@ -259,10 +259,10 @@ theorem swSrcE_ligHyp_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (
       ∀ i, 1 ≤ i → i < sch.levels.size → ∀ p < 2 ^ (sch.levels.getD i default).d,
         FlockComplete.fitBytes ms.saltBytes (((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).hiSalt i p) =
           FlockComplete.fitBytes ms.saltBytes (salt i p)) :
-    FlockComplete.LigLock.LigHyp coin n p0 ms sch t b (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).h rp
+    FlockComplete.LigLock.LigHyp coin n p0 ms sch t b (layE x j) (_root_.Flock.ZkServer.Finish.padsOf q.draws).h rp
       tPad extra lanePad salt ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val) :=
   FlockComplete.LigLock.ligHyp_of_l0 coin n p0 ms sch t b (layE x j)
-    (_root_.Flock.Firewall.Finish.padsOf q.draws).h rp tPad extra lanePad salt
+    (_root_.Flock.ZkServer.Finish.padsOf q.draws).h rp tPad extra lanePad salt
     ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val) hk0 hn0 hlv rfl hlk
     (fun i hi0 hi => by rw [swSrcE_l0_frame L ρ t₀ rep x c w A B τ j r q hq hlay hz htape hrows i hi0 hi, hB])
     hy1 hybar hsalt

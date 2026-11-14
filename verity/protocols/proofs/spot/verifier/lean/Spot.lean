@@ -33,6 +33,7 @@ public import Spot.SecondStage
 public import Spot.Returned
 public import Spot.SecondStageExamples
 public import Spot.SecondWires
+public import Spot.CertifiedRows
 public import Spot.BoundaryWritten
 public import Spot.Run
 public import Spot.Stream
@@ -55,7 +56,6 @@ public import Spot.WiresOrder
 public import Spot.WiresSound
 public import Spot.WiresComplete
 public import Spot.WiresDrawn
-public import Spot.SiteDifftest
 public import Spot.Interval
 public import Spot.FactorUpper
 public import Spot.TwoStageCheck

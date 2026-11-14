@@ -166,13 +166,13 @@ import numpy as np
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
-from verity_vllm.pipeline import interior_rows as IR
+from verity_vllm.pipeline import interior_links as IL, interior_rows as IR
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 FORMAT = "verity-vllm/two-stage/stage1/v0"
@@ -602,6 +602,38 @@ def template_fn(t: str) -> SpecializedDefinition:
     return BR.check_template(t)
 
 
+#: the last part of the name of the value a registered table's reads' verdicts read, after their ``root``'s (`verdicts`)
+OPENED = "opened"
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """The verdict of a read of registered tables and the value it reads: template ``template``'s output ``port``
+    (`second_stage.OPENING_VERDICT`) reads ``value``, which the verifier fills with 1 at every row
+    (`second_stage.VERDICT_ONE`, `verdict_sources`), ``per`` rows a sampled span, unit j its row ``at[j]``, as the
+    template's ``root`` and ``domain`` are placed. Lean's registered reads then open the read's verdict only where it is
+    1, so a read that does not open its table at its key is refused there, and not only on the prover's side."""
+    template: str
+    port: str
+    value: str
+    per: int
+    at: tuple[int, ...]
+
+
+def verdicts(members: Sequence[CS.Member], links: Sequence[IR.Link]) -> tuple[Verdict, ...]:
+    """The verdicts of ``members`` whose reads open registered tables (`interior_links.tied` on ``links``): each one's
+    ``o1`` at the value ``<its root's value>/opened``, placed as its ``root``."""
+    ms = list(members)
+    return tuple(Verdict(ms[k].template, SS.OPENING_VERDICT, f"{x.value}/{OPENED}", x.per, x.at)
+                 for k, (x, *_r) in IL.tied(ms, links).items())
+
+
+def verdict_sources(vs: Sequence[Verdict], q: int) -> dict[str, list[list[dict[str, str]]]]:
+    """The challenger's copy of each of ``vs``' values for ``q`` sampled spans (`Stream.register_interiors`'
+    ``supplied``): every row `second_stage.VERDICT_ONE`, the verifier's bytes of 1."""
+    return {v.value: [[{k: n} for k, n in SS.VERDICT_ONE] for _ in range(q * v.per)] for v in vs}
+
+
 @dataclass(frozen=True)
 class Design:
     """What a class's replay block makes of a sampled span's interior, from the class's layout alone, so the replay side
@@ -613,8 +645,10 @@ class Design:
     each unit writes, and whether round 1's record commits it); the rows its links' and wires' ports read
     (``rows``, `second_stage.replay_rows`), which say which of a writer's units a block each unit of a wired port
     reads; and its parameters round 1's record commits as ports (``inputs``, `interior_rows.inputs`: the port that
-    reads one and the row of round 1's port each unit reads), which are none of ``links``. The interior never registers
-    a return or such a parameter: round 2 reads each only at a port round 1's record commits."""
+    reads one and the row of round 1's port each unit reads), which are none of ``links``; and the verdicts of its reads
+    of registered tables (``verdicts``, `verdicts`), each at a value the verifier fills with 1, which the interior
+    registers beside ``links``. The interior never registers a return or such a parameter: round 2 reads each only at
+    a port round 1's record commits."""
 
     key: str
     members: tuple[CS.Member, ...]
@@ -624,6 +658,7 @@ class Design:
     returns: tuple[IR.Return, ...]
     rows: tuple[SS.Rows, ...] = ()
     inputs: tuple[IR.Input, ...] = ()
+    verdicts: tuple[Verdict, ...] = ()
 
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary registration ``boundary``
@@ -632,12 +667,16 @@ class Design:
                                   IR.link_values(self.links, len(sample)), self.rows)
 
 
-def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False) -> Design:
+def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False,
+           tables: Mapping[str, Sequence[str]] | None = None) -> Design:
     """The class's `Design`, its links named as round 1's record ``record`` names its ports (the layout's own ports
     where none is given). ValueError where round 2 derives no links or no wires from the replay block (its
     ``second-links`` and ``second-wires``): such a class has no second stage to run. ``unlinked``: such a class's
     members and cells alone, with no link and no wire: its sampled proof blocks can be committed and proved, each port
-    at its own rows, but nothing ties one to another or to round 1, and round 2 refuses its statements by that code."""
+    at its own rows, but nothing ties one to another or to round 1, and round 2 refuses its statements by that code.
+    ``tables``: the block's parameters that are registered tables' roots and domain ids, by name, each the tables a row
+    (`interior_rows.links`' ``tables``): the verifier supplies them from the entries it pinned, and each read of them
+    has its verdict (`verdicts`)."""
     key = descriptor_id(layout.replay)
     record = {"roots": [{"port": p} for p in layout.ports()]} if record is None else record
     members = tuple(IR.member(P.template_id(t)) for t in layout.templates)
@@ -648,9 +687,10 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
     if wires is None:
         raise ValueError(f"replay block {key} makes no wires round 2 derives (`second_stage.replay_wires`): "
                          f"{SS.WIRES_WHY}")
-    links = IR.links(layout.program, key, record, members, cells)
+    links = IR.links(layout.program, key, record, members, cells, dict.fromkeys(tables) if tables else None, tables)
     return Design(key, members, cells, links, tuple(wires), IR.returns(layout.program, key, record, members, cells),
-                  SS.replay_rows(layout.program, key), IR.inputs(layout.program, key, record, members, cells))
+                  SS.replay_rows(layout.program, key), IR.inputs(layout.program, key, record, members, cells),
+                  verdicts(members, links))
 
 
 def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
@@ -748,7 +788,9 @@ class Replayed:
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
              rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False,
-             kept: Path | None = None, clock: Callable[[], float] | None = None) -> Replayed:
+             kept: Path | None = None, clock: Callable[[], float] | None = None,
+             tables: Mapping[str, Sequence[str]] | None = None, registered: Mapping[str, Any] | None = None,
+             pins: Mapping[str, Mapping[str, Any]] | None = None) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
     (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
@@ -765,22 +807,29 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     for a class whose record commits them: the rows are held to the record's root before anything is committed.
     ``clock``: read before the capture and after the window's files are written, for `Replayed.commit_s`: the
     interior's commitment, without its registration or its sample, which wait on the challenger.
+    ``tables``, ``registered`` and ``pins``: a block whose reads open registered tables (`design`'s ``tables``), the
+    tables with their rows held (core's `Registered`, by parameter) and the entries the verifier pinned for them
+    (`interior_rows.interior`'s); the stream is handed the values the verifier fills, their roots and domain ids from
+    the pins and their reads' verdicts 1 (``supplied``: `interior_rows.sources`, `verdict_sources`).
     ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', the class's record
     commits a parameter and ``kept`` doesn't hold it at that root, or a replayed unit takes or returns another row than
     round 1 committed for it. `service.Refused` as the stream refuses the registration."""
     if {k: v for k, v in c.public().items() if k != "seconds"} != {k: v for k, v in again.pub.items() if k != "seconds"}:
         raise ValueError("the class's files are not the commitment its first stage registered")
-    d = design(again.layout, again.record, unlinked=unlinked)
+    d = design(again.layout, again.record, unlinked=unlinked, tables=tables)
     sample = [int(u) for u in again.sample.units]
     t0 = None if clock is None else clock()
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
                      wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
                      returns=[(x, c.port(x.value)) for x in d.returns if x.held],
-                     inputs=[(x, kept_port(c, x.value, kept)) for x in d.inputs])
+                     inputs=[(x, kept_port(c, x.value, kept)) for x in d.inputs], registered=registered, pins=pins)
     record = IR.write(it, directory)
     commit_s = None if clock is None else clock() - t0
+    supplied = ({**IR.sources(d.links, len(sample), pins=pins), **verdict_sources(d.verdicts, len(sample))}
+                if tables else {})
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
+           **({"supplied": supplied} if supplied else {}),
            **({} if window_root is None else {"window_root": window_root})}
     ireg, draw = again.second(record, it.ports, leaf_layer=it.leaf_layer, **tie)
     return Replayed(again, d, it, Path(directory), record, ireg, draw, tie, launches, commit_s)
@@ -805,11 +854,13 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     record commits, and a port that reads a parameter it commits, reads that port of ``boundary``, at the root, leaves
     and domain that record gives it, unit j of the i-th sampled block its row ``sample[i]·per + at[j]``
     (`interior_rows.Return.rows`, `interior_rows.Input.rows`); a wired port its writer's
-    output port of the interior record, and any other its own, each unit its own leaf (`rows.Binding.held`). A return
+    output port of the interior record, and any other its own, each unit its own leaf (`rows.Binding.held`). A read's
+    verdict of registered tables (``d.verdicts``) reads its value as a link's port does, so a verdict the interior
+    registers no such value for is refused by name and never read at the read's own port. A return
     round 1's record doesn't commit is read at its own port too: round 2 refuses that read (``second-read``), and
     nothing here stands in for the port."""
     values = {e["value"]: e for e in interior.get("registered", ())}
-    linked = {(x.template, x.port): x for x in d.links}
+    linked = {(x.template, x.port): x for x in (*d.links, *d.verdicts)}
     back = {(x.template, x.port): x for x in (*(x for x in d.returns if x.held), *d.inputs)}
     q, out = window.population // sum(d.cells), {}
     if len(sample) != q:
@@ -844,15 +895,16 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
     sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
     ``circuit.txt`` beside it, and its prover file is deleted. Its registered reads name none of the run's fields: each
-    port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, else
-    the port holding it), its words and schema. Both are
+    port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, a
+    read's verdict's of registered tables, else the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
     first-stage law can sample; this command builds them after the sample, which is why its run is a development run."""
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
     bind = {"partition": window.partition_digest, "program": window.partition["program"]}
-    linked = {(x.template, x.port): x.value for x in (*d.links, *(x for x in d.returns if x.held), *d.inputs)}
+    linked = {(x.template, x.port): x.value
+              for x in (*d.links, *(x for x in d.returns if x.held), *d.inputs, *d.verdicts)}
     named = []
     for k, m in enumerate(window.members):
         at, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
@@ -877,7 +929,7 @@ def _a5() -> Any:
     for d in (HERE.parent / "prove_path", HERE):
         if str(d) not in sys.path:
             sys.path.insert(0, str(d))
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     return a5
 
@@ -930,7 +982,7 @@ def statements(audit_dir: Path, window: CS.Binding) -> list[dict]:
     """Each member session's statement as round 2 takes it (``{"template", "header", "draw", "registered"}``): its
     template, its public file's header, its session record's ``unit_draw`` and the reads it was verified against. A
     member the second stage drew nothing of has no session and no statement."""
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 
     out = []
     for k, m in enumerate(window.members):
@@ -955,13 +1007,32 @@ def pins(proofs: Mapping[str, Any], stmts: Sequence[Mapping[str, Any]]) -> dict[
 def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
               brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
               record: Mapping[str, Any], proofs: Mapping[str, Any], tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
+    """Round 2's verdict of record on the sessions (`second_stage.check`, the form allowed): the Lean's, which raises
+    until an interface reaches it (`verifier.not_written`); `round_two_twin` is its Python twin."""
+    return SS.check(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
+                    stmts).to_json()
+
+
+def round_two_twin(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
+                   brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
+                   record: Mapping[str, Any], proofs: Mapping[str, Any],
+                   tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`round_two`'s Python twin (`second_stage.check_twin`), for tests only."""
+    return SS.check_twin(True, _round_two_own(replay, key, sample, window, irec, brec, drawn, record, proofs, tie),
+                         stmts).to_json()
+
+
+def _round_two_own(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
+                   brec: Mapping[str, Any], drawn: Sequence[int], record: Mapping[str, Any], proofs: Mapping[str, Any],
+                   tie: Mapping[str, Any] | None) -> SS.Own:
+    """What round 2 holds of the run: over the links and wires the
     replay block ``replay`` defines under descriptor id ``key`` makes (`second_stage.replay_links`, at the boundary
     record's ports, and `second_stage.replay_wires`, as the stream derives them), their rows
     (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
     the audit record's verdicts of record report, what they name of each session they accepted
     (`second_stage.verified_of`), each template's reference header and registered reads the params ``proofs`` give,
-    the templates they record as table reads (`service.template_reads`), and, of the challenger's copies the interior
+    the templates they record as table reads (`service.template_reads`) and the registered tables they pin
+    (`service.pinned_tables`), and, of the challenger's copies the interior
     registration was held to (``tie``), the values it fills itself
     (``supplied``, a history table's root and domain id as the bytes its ``history`` registers:
     `registration.resolved`) and those it pinned or holds to an earlier record (``pinned``, ``outputs``), as the
@@ -976,8 +1047,9 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
                  wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
                  returns=SS.replay_returns(replay, key, brec),
                  supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
-                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs))
-    return SS.check(True, own, stmts).to_json()
+                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs),
+                 tables=S.pinned_tables(proofs))
+    return own
 
 
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],
@@ -998,7 +1070,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}
@@ -1134,7 +1206,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     the challenger's key and the verifier's copy of main's history as the session's start had them (`a5_coins.held`),
     and the order is read under them; a ``local`` challenger is kept where the second stage reopens it
     (`challenger_host`)."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     root = pubs[0]["run"]
     caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
@@ -1256,7 +1328,7 @@ def challenger_host(a: argparse.Namespace, made: Path | None = None) -> Path | N
     it); None for a challenger on another machine, whose key the verifier has on record. `Ch.CoinError` (`NO_HOST`)
     for a ``local`` one with neither, or, where the command makes none (``made`` None), for a directory that holds no
     challenger."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     if a.challenger != "local":
         return None
@@ -1312,7 +1384,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     opens (`first_coins`). ``summary.json`` under ``--out`` says what happened, and what it cost (module docstring: the
     interior's commitment by ``clock``, the replay's own record's seconds); exit 0 when the second stage held
     (`held`)."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

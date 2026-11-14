@@ -63,7 +63,7 @@ from typing import Any, Mapping, Sequence
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 
 _HEX64 = re.compile(r"[0-9a-f]{128}")
 #: the row formats a served tree may name, each one the registered form reads

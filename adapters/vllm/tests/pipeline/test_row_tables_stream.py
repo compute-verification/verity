@@ -16,7 +16,7 @@ import pytest
 from verity.circuits.program import Program
 from verity.commitments import row_table as RT
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
 from verity.commitments.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed

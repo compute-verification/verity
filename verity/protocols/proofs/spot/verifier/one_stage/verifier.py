@@ -7,11 +7,15 @@ every call, both outcomes are recorded beside the one of record (a `Verdict`'s `
 `verifiers`), and where they disagree the check is refused naming both (`DISAGREE`): a `Verdict` failing with that code
 alone, or an audit record that does not accept, has no profiles and fails its `verifiers` check. Lean that can't be built
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
+What stands in the Lean's place then is `{"refused": reason}`, with `"answered": False` where the refusal is not the
+Lean's own (`lean`).
 
 * `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out and tied values a template query's
   verdict publishes (`Verdict.fanout` and `Verdict.rests_on_period_check`, the Lean's `fanout` and
   `rests_on_period_check`); the details are Python's (the Lean reports codes).
-  History tables both refuse are the registration's refusal, `R.HISTORY`, with both reasons; one refusing alone disagrees;
+  History tables both refuse, the Lean's refusal its own answer, are the registration's refusal, `R.HISTORY`, with
+  both reasons, which nothing holds to each other (the Lean's refusals carry no code); the Python refusing them alone,
+  or a Lean that gave no answer, disagrees;
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
@@ -45,13 +49,13 @@ import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import audit, draw as D, hello as H, link_points as LP, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, hello as H, link_points as LP, docket as R
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
@@ -162,12 +166,23 @@ atexit.register(_server.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
-    """The Lean's answer: its output, or `{"refused": reason}` where it refuses the input or can't run."""
+    """The Lean's answer: its output, or `{"refused": reason}` where it refuses the input. Where it can't be built or
+    run, or answers outside its protocol, `{"refused": reason, "answered": False}`: a refusal that is not the Lean's."""
     try:
         kind, body = _server.call(fn, value)
     except LeanError as e:
-        return {"refused": str(e)}
+        return {"refused": str(e), "answered": False}
     return body if kind == "output" else {"refused": body}
+
+
+#: the goal under which a check `not_written` stands for gets its Lean interface
+GOAL = "proofs/spot-two-stage-sound"
+
+
+def not_written(fn: str, lean: str) -> NoReturn:
+    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
+    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
+    raise NotImplementedError(GOAL)
 
 
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
@@ -300,12 +315,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     it passes `tied`, the roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
     supplied values' `history` sources, and R7's certified entries when it passes `certified`
-    (``{value: {"root", "leaves", "words", "domain"}}``, `registration.check`'s). History tables both verifiers refuse
-    fail it with `R.HISTORY` alone. With `members`, the per-member form's (each its units' ``[lo, hi)`` ranges and its
-    circuit's units a proof block), both hold them to `link-points` after R8 (`registration.check`'s ``members``,
-    `Registration.linkRefused`: a sample that ends misses no member and gives each one count of link points), as the
-    compiled check of that form does the members its parameters name (`OneStageZk.membersParamsOfJson`); with none, the
-    one-statement form's, neither does."""
+    (``{value: {"root", "leaves", "words", "domain"}}``, `registration.check`'s). History tables the Python refuses and
+    the Lean itself refuses fail it with `R.HISTORY` alone, each side's outcome recorded as that refusal and both
+    reasons in its detail; where the Lean accepts them or gave no answer, it fails with `DISAGREE`. With `members`, the
+    per-member form's (each its units' ``[lo, hi)`` ranges and its circuit's units a proof block), both hold them to
+    `link-points` after R8 (`registration.check`'s ``members``, `Registration.linkRefused`: a sample that ends misses no
+    member and gives each one count of link points), as the compiled check of that form does the members its parameters
+    name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does."""
     log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:
         py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
@@ -326,9 +342,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         got = {"ok": not got["codes"], "codes": got["codes"],
                **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
     if py is None:
+        if "refused" in got and got.get("answered", True):
+            both = {"ok": False, "codes": [R.HISTORY]}
+            return Verdict(False, (R.HISTORY,), {R.HISTORY: {"lean": got["refused"], "python": why}},
+                           {"of_record": RECORD_VERDICT, "lean": both, "python": dict(both)})
         verifiers = {"of_record": RECORD_VERDICT, "lean": _summary(got), "python": {"refused": why}}
-        if "refused" in got:
-            return Verdict(False, (R.HISTORY,), {R.HISTORY: {"lean": got["refused"], "python": why}}, verifiers)
         return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": {"refused": why}}}, verifiers)
     return _decide(got, py, whole=False)
 
@@ -602,6 +620,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "GOAL", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
            "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
-           "matches_public", "run", "select", "select_second", "stream"]
+           "matches_public", "not_written", "run", "select", "select_second", "stream"]

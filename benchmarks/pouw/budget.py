@@ -223,7 +223,7 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
     sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
-    import int8_llama as P
+    from verity.protocols.proofs.spot.prover.cost import int8_llama as P
     from inputs import I
 
     P.DELTA = math.exp(-LN_INV_DELTA)

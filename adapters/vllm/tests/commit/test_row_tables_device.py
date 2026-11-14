@@ -19,6 +19,7 @@ import pytest
 from verity.commitments import row_table as RT
 
 from verity_vllm.commit import row_tables as RTB
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
 from verity_vllm.commit import row_tables_device as D
 
 CTX, KEY = bytes(range(64)), bytes(range(100, 132))
@@ -84,7 +85,7 @@ def _recorder(tmp_path: Path, monkeypatch) -> tuple[str, Path]:
     rec.mkdir()
     tool.write_text(RECORDER.replace("@REC@", str(rec)))
     tool.chmod(0o755)
-    monkeypatch.setattr(D, "BUILD_DIR", tmp_path / "built")
+    monkeypatch.setattr(K, "BUILD_DIR", tmp_path / "built")
     return str(tool), rec
 
 
@@ -92,9 +93,9 @@ def test_a_build_hands_its_compiler_no_path_in_the_tree(tmp_path, monkeypatch):
     """The compiler runs in a directory of the build's own that holds a copy of each source and header under its base name,
     and is given the last source by that name: of its arguments only -o's is a path, and it is the build's output."""
     tool, rec = _recorder(tmp_path, monkeypatch)
-    flags = (*D.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90")
-    sources = (str(D.SHA512), *D.DEVICE_SOURCES)                # a header named among the sources and the headers: one file
-    lib = D.built(tool, sources, flags, "librow_table_cuda.so", D.SHARED)
+    flags = (*K.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90")
+    sources = (str(K.SHA512), *K.DEVICE_SOURCES)                # a header named among the sources and the headers: one file
+    lib = K.built(tool, sources, flags, "librow_table_cuda.so", K.SHARED)
     argv = (rec / "argv").read_text().splitlines()
     out = argv[argv.index("-o") + 1]
     assert argv == [*flags, "-o", out, "row_table.cu"] and not any("/" in a for a in argv if a != out)
@@ -102,9 +103,9 @@ def test_a_build_hands_its_compiler_no_path_in_the_tree(tmp_path, monkeypatch):
     stage = Path((rec / "cwd").read_text().strip())
     assert stage.name.startswith("verity-build.") and stage.parent.resolve() == Path(tempfile.gettempdir()).resolve()
     assert not stage.exists()
-    assert set((rec / "files").read_text().split()) == {Path(s).name for s in sources} | {p.name for p in D.SHARED}
+    assert set((rec / "files").read_text().split()) == {Path(s).name for s in sources} | {p.name for p in K.SHARED}
     (rec / "argv").unlink()
-    assert D.built(tool, sources, flags, "librow_table_cuda.so", D.SHARED) == lib and not (rec / "argv").exists()
+    assert K.built(tool, sources, flags, "librow_table_cuda.so", K.SHARED) == lib and not (rec / "argv").exists()
 
 
 def test_two_files_with_one_name_are_refused_before_the_compiler_runs(tmp_path, monkeypatch):
@@ -113,8 +114,8 @@ def test_two_files_with_one_name_are_refused_before_the_compiler_runs(tmp_path, 
     other.parent.mkdir()
     other.write_text("// another file of that name\n")
     with pytest.raises(ValueError) as refused:
-        D.built(tool, D.DEVICE_SOURCES, D.NVCC_FLAGS, "librow_table_cuda.so", (*D.SHARED, other))
-    assert f"two files named ncp2.cuh among a build's sources and headers, {D.CUDA_DIR / 'ncp2.cuh'} and {other}" in str(refused.value)
+        K.built(tool, K.DEVICE_SOURCES, K.NVCC_FLAGS, "librow_table_cuda.so", (*K.SHARED, other))
+    assert f"two files named ncp2.cuh among a build's sources and headers, {K.CUDA_DIR / 'ncp2.cuh'} and {other}" in str(refused.value)
     assert not list(rec.iterdir()) and not (tmp_path / "built").exists()
 
 
@@ -129,19 +130,19 @@ def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
     from verity.protocols.accounting.pouw.prover.serving.h1 import receipts
     from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as RD
 
-    assert D.CUDA_DIR == PD.HERE == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
-    named = {*D.DEVICE_SOURCES, *D.HOST_SOURCES, *PD.SOURCES, *PD.CUDA_SOURCES, *PD.FUSED_SOURCES, *RD.DEVICE_SOURCES,
+    assert K.CUDA_DIR == PD.HERE == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
+    named = {*K.DEVICE_SOURCES, *K.HOST_SOURCES, *PD.SOURCES, *PD.CUDA_SOURCES, *PD.FUSED_SOURCES, *RD.DEVICE_SOURCES,
              *RD.HOST_SOURCES, *RD.ZY_DEVICE_SOURCES, *RD.ZY_HOST_SOURCES, receipts.NOISE_CU}
-    assert sorted(s for s in named if not (D.CUDA_DIR / s).is_file()) == []
+    assert sorted(s for s in named if not (K.CUDA_DIR / s).is_file()) == []
 
 
 def _declared(name: str) -> list[Any]:
     """The ctypes of ``name``'s parameters as `row_table.cu` declares them: `Args`' pointer for a ``const Args*``, a void pointer
     for any other pointer, and the integer of the declared width."""
-    (parameters,) = re.findall(rf'extern "C" int {name}\(([^)]*)\)', (D.CUDA_DIR / "row_table.cu").read_text())
+    (parameters,) = re.findall(rf'extern "C" int {name}\(([^)]*)\)', (K.CUDA_DIR / "row_table.cu").read_text())
     kinds = [" ".join(p.split()).rsplit(" ", 1)[0] for p in parameters.split(",")]
     integers = {"uint64_t": ctypes.c_uint64, "uint32_t": ctypes.c_uint32}
-    return [ctypes.POINTER(D.Args) if k == "const Args*" else ctypes.c_void_p if k.endswith("*") else integers[k] for k in kinds]
+    return [ctypes.POINTER(K.Args) if k == "const Args*" else ctypes.c_void_p if k.endswith("*") else integers[k] for k in kinds]
 
 
 def test_the_device_build_is_called_as_its_source_declares_it(monkeypatch):
@@ -155,10 +156,10 @@ def test_the_device_build_is_called_as_its_source_declares_it(monkeypatch):
         handed.append(given)
         return lib
 
-    monkeypatch.setattr(D, "nvcc", lambda: "an-nvcc")
-    monkeypatch.setattr(D, "_build", build)
-    assert D.device_lib.__wrapped__("90") is lib
-    assert handed == [("an-nvcc", D.DEVICE_SOURCES, (*D.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90"), "librow_table_cuda.so")]
+    monkeypatch.setattr(K, "nvcc", lambda: "an-nvcc")
+    monkeypatch.setattr(K, "_build", build)
+    assert K.device_lib.__wrapped__("90") is lib
+    assert handed == [("an-nvcc", K.DEVICE_SOURCES, (*K.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90"), "librow_table_cuda.so")]
     for name in ("rt_midstates", "rt_step"):
         kernel = getattr(lib, name)
         assert list(kernel.argtypes) == _declared(name) and kernel.restype is ctypes.c_int

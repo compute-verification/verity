@@ -159,7 +159,7 @@ theorem piopCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {st : Setup} (hm : 1
   try dsimp only
   rw [bind_go h₂]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.rankCheck_pass_go l₂ hrk')]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.rankCheck_pass_go l₂ hrk')]
   try dsimp only
   rw [bind_go h₃]
   try dsimp only
@@ -308,11 +308,11 @@ theorem repCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claim
   try dsimp only
   rw [bind_go h₄]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.get_run_go _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.get_run_go _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hq _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hq _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hlgc _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hlgc _ _)]
   try dsimp only
   rw [bind_go h₅]
   exact ⟨_, _, _, pure_go _ _ _, by simp only [CutEq.repSends, CutEq.innerAt, CutEq.ligAt]; omega⟩

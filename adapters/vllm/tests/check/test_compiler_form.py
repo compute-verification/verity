@@ -158,7 +158,7 @@ def test_a_component_naming_only_the_dead_free_versions_is_in_the_form_whatever_
     qkv on the prompt rows), so its derive report alone keeps the fold as it ran and every request compares unequal (Llama-3.2-1B
     int8 B4 on an H200: RMSNormTriton_v5 against the fold's v1 at each request's first norm).  Its Program
     names the dead-free versions and none of the v1s they replace, as the Build's histogram of TINY's request Program does; the
-    unpruned request, a row of record's, and one naming both or neither are not in the form."""
+    unpruned request, a workload of record's, and one naming both or neither are not in the form."""
     from verity_vllm.pipeline.build import _spec_histogram
 
     dead = {"dead_computed_gates": 30912, "approximate": False}
