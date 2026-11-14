@@ -38,10 +38,13 @@ from typing import Any
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.handle import engine_of
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.row_json import read_json, write_json
 from verity_vllm.query.manifest.format import SERVED_IDS
 
 __all__ = ["Options", "ServedCommit", "main"]
+
+logger = init_logger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -291,10 +294,10 @@ class ServedCommit:
         with open(f"{out}/artifact_check.json", "w") as f:
             json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff}, f, indent=1)
         if diff:
-            print(f"[delta] REFUSE: this process loaded compile artifact {str(loaded.get('digest', 'of a refused Build'))[:16]}, not the Build of record's "
-                  f"{self.pin['digest'][:16]} ({len(diff)} differences: {diff[:3]})", flush=True)
+            logger.error("[delta] REFUSE: this process loaded compile artifact %s, not the Build of record's %s (%d differences: %s)",
+                         str(loaded.get("digest", "of a refused Build"))[:16], self.pin["digest"][:16], len(diff), diff[:3])
             sys.exit(3)
-        print(f"[delta] compile artifact {self.pin['digest'][:16]}: this process's is the Build of record's", flush=True)
+        logger.info("[delta] compile artifact %s: this process's is the Build of record's", self.pin["digest"][:16])
         return b
 
     def c2(self, com: Any, rc: Any, reqs: list[dict[str, Any]], challenge: str, replay_seed: int | None) -> dict[str, Any]:
@@ -383,7 +386,7 @@ def main(a: Options) -> int:
     t0 = time.perf_counter()
 
     def log(s: str) -> None:
-        print(f"[served-match {time.perf_counter() - t0:7.1f}s] {s}", flush=True)
+        logger.info("[served-match %7.1fs] %s", time.perf_counter() - t0, s)
 
     wl = read_json(a.workload)
     schedule, steps = schedule_of(wl)
