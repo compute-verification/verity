@@ -40,8 +40,13 @@ plain CUDA graph the pass is captured with the op, and what the wrappers decide 
 `max_seq_len` is at most `k` launches nothing: vLLM passes the batch's longest sequence there.
 
 `python dsa_topk.py site DIR` writes the plugin's entry point into `DIR`; a server or replay with `DIR` on its
-`PYTHONPATH` loads it. `VERITY_DSA_TOPK_LOG=DIR` keeps each process's counters in `DIR/dsa_topk.PID.json`: calls and
-launches per op, and the rows rewritten, those with a tie across the k-th key, and those bisected.
+`PYTHONPATH` loads it. `VERITY_DSA_TOPK_LOG=DIR` keeps each process's counters in `DIR/dsa_topk.PID.json`, from the
+plugin's load on: calls and launches per op, and the rows rewritten, those with a tie across the k-th key, and those
+bisected. vLLM kills its workers, which then run no exit handler, so a process writes its record over, in place, at
+the end of every call: one write on the host, nothing synced to the disk. Its calls and launches are there whatever
+ends it. A call is a wrapper's run on the host, so a call a CUDA graph replays adds rows and no call. The rows are the
+device's own counters, read every 4,096 calls outside a capture and when the process exits in order; `rows_at` is the
+calls it had made by then, so a killed process's rows are a lower bound.
 
 ## Using it
 
@@ -72,8 +77,10 @@ outputs unpatched and canonical across processes and repetitions, whether the ca
 k-th, and whether rows of at most `k` keys are unchanged. `stress.py time` writes `time.json`: the device time a call
 (CUDA events, queued behind a sleep) and the host time, unpatched and canonical, per parameter variant (`--variants`).
 `stress.py plugin`, run from a site directory under `VERITY_DSA_TOPK=canonical`, loads the plugin as vLLM does and calls
-each case through the indexer's own entry points (`plugin.json`).
+each case through the indexer's own entry points (`plugin.json`). `log_cost.py` needs no device: it times what keeping
+the counters adds to a call on the host, a wrapper's time a call over stand-in ops with the record kept and without.
 
 `replay.sh` replays a served replay-ladder window with the plugin in every engine process (its header has the command).
-The tests (`tests/`) hold the definition, the torch reference, the wrappers' dispatch on stand-in ops, and the kernels in
-Triton's interpreter where Triton is importable.
+The tests (`tests/`) hold the definition, the torch reference, the wrappers' dispatch on stand-in ops, the kept counters
+(one write a call, and a killed process's counts in its file), and the kernels in Triton's interpreter where Triton is
+importable.
