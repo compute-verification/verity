@@ -696,7 +696,7 @@ KNOWN: dict[str, str] = {
         "homonym, a served request's benchmark row: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py::Window":
+    "benchmarks/pouw/served_zk/replay_window.py::Window":
         "homonym, one replayed window's checks: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
