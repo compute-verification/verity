@@ -64,7 +64,7 @@ which adds the rep's pads at those values' absorbed positions, releases it as th
 namespace Claims.ZKServer
 
 open _root_.Flock (F128 F256)
-open _root_.Flock.Firewall.Frame (Cfg Masker absorbed nLig Draws MaskSlot)
+open _root_.Flock.ZkServer.Frame (Cfg Masker absorbed nLig Draws MaskSlot)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ## Level 0's masked rounds, value by value -/

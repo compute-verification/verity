@@ -286,8 +286,8 @@ theorem foldl_bytes : ∀ (ws : List ℕ) (pre : ByteArray),
     simp [wordBytes, ByteArray.push]
 
 theorem rowDigest_eq (row : Array ℕ) :
-    Firewall.rowDigest (RecCoins.padTo row (Registered.rowWords row.size 16)) = Sha512.hash ⟨(rowInV row).toArray⟩ := by
-  unfold Firewall.rowDigest rowInV
+    ZkServer.rowDigest (RecCoins.padTo row (Registered.rowWords row.size 16)) = Sha512.hash ⟨(rowInV row).toArray⟩ := by
+  unfold ZkServer.rowDigest rowInV
   refine congrArg Sha512.hash (ByteArray.ext ?_)
   apply Array.ext'
   rw [← Array.foldl_toList, foldl_bytes]
@@ -300,9 +300,9 @@ theorem treeLeaf_commitRow (row : Array ℕ) (salt : ByteArray) :
   exact (hm96_treeLeaf (Val := List UInt8) id Function.injective_id (rowInV row) salt).symm
 
 theorem topRows_of_size {top : ByteArray} (htop : top.size = 64) :
-    Firewall.topRows top = [(Array.range 32).map (fun j => (top.get! (64 * 0 + 2 * j)).toNat +
+    ZkServer.topRows top = [(Array.range 32).map (fun j => (top.get! (64 * 0 + 2 * j)).toNat +
       256 * (top.get! (64 * 0 + 2 * j + 1)).toNat) ++ Array.replicate 32 0] := by
-  unfold Firewall.topRows
+  unfold ZkServer.topRows
   rw [htop]
   rfl
 
@@ -313,7 +313,7 @@ theorem capRow_size {top : ByteArray} (htop : top.size = 64) : (capRow top).size
 /-- **A 64-byte node's commit string is `commitRow`'s of its row**: the row is 64 words, a whole block, so `commitRow`
 pads nothing. -/
 theorem commitRow_capRow {top : ByteArray} (htop : top.size = 64) (s : ByteArray) :
-    RecCoins.commitRow (capRow top) s = Hm96.Default512.commitString (Firewall.rowDigest (capRow top)) s := by
+    RecCoins.commitRow (capRow top) s = Hm96.Default512.commitString (ZkServer.rowDigest (capRow top)) s := by
   unfold RecCoins.commitRow RecCoins.padTo Registered.rowWords
   rw [capRow_size htop, show (64 * (16 / 16) + 63) / 64 * 64 - 64 = 0 by rfl, Array.replicate_zero,
     Array.append_empty]

@@ -82,7 +82,7 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     rw [← hCe]
     exact ⟨hcap0.symm.trans (hcm j.val).1.symm, hlay0.symm.trans (hcm j.val).2.symm⟩
   -- the ZK server's rep at the opened coins
-  obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.Firewall.Finish.proofFile_ok hRep.2.2
+  obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.ZkServer.Finish.proofFile_ok hRep.2.2
   have hrun := finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hk tb hi q _ hRep ic' p tr
     hic' hfw l hl
   -- the pads commitment: the ZK server's is the views', which is the switched cut's
@@ -150,7 +150,7 @@ theorem finRepRounds_of_erased (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _
     | _ k ih =>
     intro hk extras hex ic l hic hl
     obtain ⟨tb, hi, q, hRep⟩ := proofsOf_at hp (by rw [hrs]; exact hk)
-    obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.Firewall.Finish.proofFile_ok hRep.2.2
+    obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.ZkServer.Finish.proofFile_ok hRep.2.2
     have hcut := finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx k hk tb hi q _ hRep ic' p tr
       hic' hfw l hl
     obtain ⟨p', l', hv, -⟩ := hEr ν t κ m₀ ρ₀ ops hF s0 spec hsx schs hs cms hcms k hk extras hex ic l hic hl tb hi q _

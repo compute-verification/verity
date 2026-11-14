@@ -116,7 +116,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # the salts the prover's workers committed R's level-0 top rows under, at which the guarantee is applied
     Entry("registrant-holds-openings", "model",
           "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
-          "verifier's reads file names, and its own workers behind the firewall hold the salts they committed R's level-0 "
+          "verifier's reads file names, and its own workers behind the ZK server hold the salts they committed R's level-0 "
           "top rows under; a prover that registers a hash it can't open is outside the guarantee",
           "Registrant holds openings"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
@@ -579,7 +579,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
     # (security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
     Entry("flock-relay-serves", "assumption",
-          "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
+          "The ZK server's relay serves each session's requests as its IO code reads: at each request that reaches a "
           "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
           "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
           "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
@@ -591,14 +591,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "standard"),
     # `Claims.ZKServer.Loop.Src` (security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
-    Entry("flock-firewall-os-src", "assumption",
-          "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
+    Entry("flock-zk-server-os-src", "assumption",
+          "Every input the ZK server's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
           "tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
-          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
+          "since zero knowledge protects the developer", "ZkServer OS source", "standard"),
     # the training formalism v2's assumptions (security/Definitions/Assumptions.lean): A1 is
     # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
     # `Nci.Formalism.Assumptions.EfficiencyFloor`

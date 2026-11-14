@@ -198,7 +198,7 @@ theorem lincheckCut_fold {c : CircuitFold} {m : ℕ} {lay : Zk.PadLayout} {mk : 
   rcases e : c.fold (coin l.size 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) with err | w
   · simp only [e] at h
     obtain ⟨_, _, _, hthrow, -⟩ := run_bind_ok h
-    rw [Flock.Firewall.Finish.throw_run_go] at hthrow
+    rw [Flock.ZkServer.Finish.throw_run_go] at hthrow
     cases hthrow
   · exact ⟨w, rfl⟩
 
@@ -241,7 +241,7 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
       ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ss[0]! = shArr sh (2 * r.val) ∧ ss[1]! = shArr sh (2 * r.val + 1))
     {zp : ZerocheckProof} {zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ lg zl rec t₄ l₄ rp tt}
@@ -252,7 +252,7 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
         (Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ =
       (.ok ((lp, lc), t₂), l₂))
     (h₃ : ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-        (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+        (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
         (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃))
     (h₄ : ((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash)
         Flock.MerkleScheme.hm96Sha512 sch T cm0 g (FlockComplete.basisVals sws (st.m - 7))
@@ -371,7 +371,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
       ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ss[0]! = shArr sh (2 * r.val) ∧ ss[1]! = shArr sh (2 * r.val + 1))
     (hlen : (layOf Tz stm).len = nE + 4)
@@ -382,7 +382,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
       ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash)
           Flock.MerkleScheme.hm96Sha512 sch T cm0 g (FlockComplete.basisVals sws (st.m - 7))
@@ -397,7 +397,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
         (Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ =
       (.ok ((lp, lc), t₂), l₂))
     (h₃ : ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-        (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+        (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
         (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃))
     (h₄ : ((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash)
         Flock.MerkleScheme.hm96Sha512 sch T cm0 g (FlockComplete.basisVals sws (st.m - 7))
@@ -459,7 +459,7 @@ theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Coin
       ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ss[0]! = shArr sh (2 * r.val) ∧ ss[1]! = shArr sh (2 * r.val + 1))
     (hlen : (layOf Tz stm).len = nE + 4)
@@ -471,7 +471,7 @@ theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Coin
         (Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ =
       (.ok ((lp, lc), t₂), l₂))
     (h₃ : ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-        (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+        (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
         (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃))
     (h₄ : ((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash)
         Flock.MerkleScheme.hm96Sha512 sch T cm0 g (FlockComplete.basisVals sws (st.m - 7))
@@ -540,7 +540,7 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
       ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ss[0]! = shArr sh (2 * r.val) ∧ ss[1]! = shArr sh (2 * r.val + 1))
     (hlen : (layOf Tz stm).len = nE + 4)
@@ -551,7 +551,7 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
       ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m (Zk.PadLayout.new st.m st.kLog sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut coin n)
-          (fun k => Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+          (fun k => Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
           (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash)
           Flock.MerkleScheme.hm96Sha512 sch T cm0 g (FlockComplete.basisVals sws (st.m - 7))
@@ -559,40 +559,40 @@ theorem tauFw {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (Res
         (.ok ((lg, zl, rec), t₄), l₄) →
       _root_.Claims.ZKMal.Masked.LaneAt Tz stm c r v sh T' lg rec zl)
     {p : Zk.ZkProof} {t : Flock.Transcript} {l' : Array _root_.Claims.Msg}
-    (h : ((Flock.Firewall.Finish.repFwC (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash) st sch
+    (h : ((Flock.ZkServer.Finish.repFwC (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash) st sch
       tPad rep dom g cm0 extras pads ic vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ (rp : Zk.Replayed) (ss : Array (Array Flock.F128)) (lgc : Array (String × Zk.Lin)),
-      Flock.Firewall.Finish.failingOn (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
+      Flock.ZkServer.Finish.failingOn (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
           ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) pads.h = #[] ∧
       ∀ k (hk : k < 7), (ofZk (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
           ss[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc)[k]!.2 :
           ZkSession.Lin 𝔽 (nE + 4)) = rowsOf Tz stm c r v sh T' ρσ (Fin.castAdd 3 ⟨k, by omega⟩) := by
-  dsimp only [Flock.Firewall.Finish.repFwC] at h
-  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  dsimp only [Flock.ZkServer.Finish.repFwC] at h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := Flock.Firewall.Finish.run_bind_ok h
-  rw [Flock.Firewall.Finish.get_run_go] at h₅
+  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := Flock.ZkServer.Finish.run_bind_ok h
+  rw [Flock.ZkServer.Finish.get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
   obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
   subst tr' t₅ l₅
   try dsimp only at hg
-  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := Flock.Firewall.Finish.run_bind_ok hg
-  obtain ⟨hrp, ht₆, hl₆⟩ := Flock.Firewall.Finish.liftV_run_ok h₆
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := Flock.ZkServer.Finish.run_bind_ok hg
+  obtain ⟨hrp, ht₆, hl₆⟩ := Flock.ZkServer.Finish.liftV_run_ok h₆
   subst t₆ l₆
   try dsimp only at hr₆
-  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := Flock.Firewall.Finish.run_bind_ok hr₆
-  obtain ⟨hlgc, ht₇, hl₇⟩ := Flock.Firewall.Finish.liftV_run_ok h₇
+  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := Flock.ZkServer.Finish.run_bind_ok hr₆
+  obtain ⟨hlgc, ht₇, hl₇⟩ := Flock.ZkServer.Finish.liftV_run_ok h₇
   subst t₇ l₇
   try dsimp only at hc
   split at hc
-  · obtain ⟨_, _, _, h', _⟩ := Flock.Firewall.Finish.run_bind_ok hc
-    rw [Flock.Firewall.Finish.throw_run_go] at h'
+  · obtain ⟨_, _, _, h', _⟩ := Flock.ZkServer.Finish.run_bind_ok hc
+    rw [Flock.ZkServer.Finish.throw_run_go] at h'
     cases h'
   rename_i hf
   exact ⟨rp, ss, lgc, by simpa using hf, tauFw_at Tz stm c r v sh T' ρσ coin n st sch tPad rep dom g cm0 extras pads ic

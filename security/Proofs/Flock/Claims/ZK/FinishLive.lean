@@ -41,7 +41,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 /-!
 # The live inner rep runs the ZK server's rep
 
-`flock-firewall finish`'s live inner rep (`innerLive`) runs the ZK server's rep (`repFw`) but for its stop: its PIOP and
+`flock-zk-server finish`'s live inner rep (`innerLive`) runs the ZK server's rep (`repFw`) but for its stop: its PIOP and
 opening (`repCons`) on the request's recorded coins, answered by `liveAsks … false` in `LiveM`, then the constraints
 sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itself, for the proof file, runs in
 `StateT Nat V` on every round's coins (`asksOf`). Here one is held to the other:
@@ -66,7 +66,7 @@ sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itsel
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
@@ -343,4 +343,4 @@ theorem innerProg_run (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) 
   exact bind_repCons_live ch q.coins C' hC false t.st hm t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs) (padsOf q.draws)
     ic q.vals t.extra t.lanePad _ _ h _
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

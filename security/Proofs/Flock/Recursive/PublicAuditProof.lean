@@ -14,7 +14,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.ForkInnerC
 import Proofs.Flock.Recursive.Loads
 import Proofs.Flock.Recursive.Private
@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Game
 # The recursive audit at public units: its proof
 
 `Flock.SecurityProofs.PublicAudit : Flock.Guarantees.PublicAudit`, `RecursiveAudit`'s proof
-(`Proofs.Flock.Recursive.Audit`) at a public inner unit, and `RecursiveFirewallPrivate`.
+(`Proofs.Flock.Recursive.Audit`) at a public inner unit, and `RecursiveZkServerPrivate`.
 
 In (i), from the statement and the premises, as in `RecursiveAudit`'s:
 * where some index has no session that types, the event is empty: a session that verifies as V*'s statement of its
@@ -38,7 +38,7 @@ In (i), from the statement and the premises, as in `RecursiveAudit`'s:
   registered rows enter, and the raw event is bounded by the typed sessions' at the transported prover
   (`prob_recT_le`, `verifies_zsOf`).
 
-(ii) is `RecursiveFirewallPrivate`, as in `RecursiveAudit`'s proof.
+(ii) is `RecursiveZkServerPrivate`, as in `RecursiveAudit`'s proof.
 
 The inner model is the executable's (`Recursion.innerAt_leaf`): `innerAt` runs the compiled table at `Refine.leafPlain`,
 and an accepted statement commits its rows with the scheme `RecVStar.innerTags` names, whose leaf that is.
@@ -125,7 +125,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK vi
 theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by
   refine And.intro ?_ ?_
   swap
-  · exact RecursiveFirewallPrivate
+  · exact RecursiveZkServerPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt
     msg k Rw M hk hRw hM ρ hρ hr hbr
   replace hob := vstarParsesScoped_of hob
@@ -177,7 +177,7 @@ theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by
 theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   refine And.intro ?_ ?_
   swap
-  · exact RecursiveFirewallPrivate
+  · exact RecursiveZkServerPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt
     msg _hA3 k Rw M hk hRw hM ρ hρ hr hbr
   exact PublicAuditNoA3.1 T CT obj prog st zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr

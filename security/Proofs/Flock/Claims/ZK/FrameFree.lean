@@ -60,7 +60,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame
+open _root_.Flock.ZkServer.Frame
   (Cfg Masker labelFrame bytesFrame roundFree LABEL_ZC K_SKIP N_INNER INNER_ROUNDS absorbed)
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length)
 
@@ -75,7 +75,7 @@ def fvals : List Frame → List F128
   | .sq _ _ :: fs => fvals fs
 
 /-- The word at byte `o` of `L`, as the loop reads a free value (`Frame.words`). -/
-def wd (L : List UInt8) (o : ℕ) : F128 := (_root_.Flock.Firewall.Frame.words (ByteArray.mk L.toArray) o 1)[0]!
+def wd (L : List UInt8) (o : ℕ) : F128 := (_root_.Flock.ZkServer.Frame.words (ByteArray.mk L.toArray) o 1)[0]!
 
 theorem wd_drop {L : List UInt8} {q : ℕ} {v : F128} {rest : List UInt8}
     (h : L.drop q = v.toBytes.data.toList ++ rest) : wd L q = v := by
@@ -90,7 +90,7 @@ theorem wd_drop {L : List UInt8} {q : ℕ} {v : F128} {rest : List UInt8}
     ⟨L.take q, by rw [List.append_assoc, ← h, List.take_append_drop],
       by rw [List.length_take]; exact Nat.min_eq_left hq⟩
   subst hpre hlen
-  unfold wd _root_.Flock.Firewall.Frame.words
+  unfold wd _root_.Flock.ZkServer.Frame.words
   rw [getElem!_pos _ 0 (by simp), Array.getElem_map, Array.getElem_range]
   simp only [Nat.mul_zero, Nat.add_zero]
   rw [word_lo, word_hi]
@@ -580,7 +580,7 @@ theorem piopFr_frames (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_
 PIOP's frames and squeezes (`piopFr`, the zerocheck's binding without the stream's domain) with coin counts `piopN`,
 answered by coins of those counts with no zerocheck outer coin `1`, the frame takes the masked values at the absorbed
 order's pads through `z_partial`'s, in order. -/
-theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.Firewall.Frame.MaskSlot)
+theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (m kLog : ℕ) (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hm64 : m < 2 ^ 64) (hn : lay.nMlv = m - 6) (hl : lay.nLc = kLog - 6)
     (digest cap root : ByteArray) (hdg : digest.size < 2 ^ 64) (hcap : cap.size < 2 ^ 64) (hroot : root.size < 2 ^ 64)
     (mk : ℕ → F128) (C : ℕ → Array F128) (rs : List (ByteArray × ℕ × Array F128))
@@ -588,13 +588,13 @@ theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Op
       (Frame.sq (piopK jj) (piopN m jj)).enc).toArray, piopN m jj, C jj))
     (hC : ∀ jj, jj + 1 < piopNR m kLog → (C jj).size = piopN m jj)
     (hout : ∀ e < m - 13, ((C 1)[e]! + 1).isZero = false) :
-    ∃ tail, (Loop.maskedOf (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) {} rs).toList =
+    ∃ tail, (Loop.maskedOf (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) {} rs).toList =
       (List.range (lay.fa + 2) ++ List.range' (lay.fa + 3) (2 * lay.nLc + 64)).map mk ++ tail := by
-  set c := Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms with hcdef
+  set c := Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms with hcdef
   have hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size := ofDraws_order lay b ms
   have hN : c.nPiop ≤ c.order.size := Nat.sub_le _ _
   have hNP : c.nPiop = lay.fa + 2 + (2 * lay.nLc + 64) := by
-    show (absorbed lay).size - _root_.Flock.Firewall.Frame.nLig lay = _
+    show (absorbed lay).size - _root_.Flock.ZkServer.Frame.nLig lay = _
     rw [absorbed_size]
     omega
   have hlen := piopV_length m kLog digest cap root lay mk hm hk hn hl
@@ -718,20 +718,20 @@ theorem maskedOf_piop (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Op
 
 /-- **The value a rep's frame took at pad `i`** (`valsOf`) below `z_partial`'s end, but `final_c`'s: the masked value
 at `i`'s absorbed position plus pad `i`. -/
-theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.Firewall.Frame.MaskSlot)
+theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option _root_.Flock.ZkServer.Frame.MaskSlot)
     (M : Array F128) (fc : F128) {i : ℕ} (hi : i < lay.zp 64) (hne : i ≠ lay.fc)
     (hM : lay.fa + 2 + (2 * lay.nLc + 64) ≤ M.size) :
-    (Loop.valsOf (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms) M fc)[i]! =
-      M[absPos lay i]! + (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h[i]! := by
-  have hcl : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
-  have hco : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).order = absorbed lay := rfl
-  have hch : (Cfg.ofDraws lay (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b) ms).h =
-      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h := rfl
+    (Loop.valsOf (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms) M fc)[i]! =
+      M[absPos lay i]! + (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h[i]! := by
+  have hcl : (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).lay = lay := rfl
+  have hco : (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).order = absorbed lay := rfl
+  have hch : (Cfg.ofDraws lay (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b) ms).h =
+      (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h := rfl
   have hfc : lay.fc = lay.fa + 2 := rfl
   have hzp : lay.zp 64 = lay.fa + 3 + 2 * lay.nLc + 64 := by
     show lay.fc + 1 + 2 * lay.nLc + 0 + 64 = _
     omega
-  have hsz : (absorbed lay).size = lay.fa + 2 + (2 * lay.nLc + 64 + _root_.Flock.Firewall.Frame.nLig lay) :=
+  have hsz : (absorbed lay).size = lay.fa + 2 + (2 * lay.nLc + 64 + _root_.Flock.ZkServer.Frame.nLig lay) :=
     absorbed_size lay
   have hp : absPos lay i < (absorbed lay).size := by unfold absPos; split_ifs <;> omega
   have hpM : absPos lay i < M.size := by unfold absPos; split_ifs <;> omega
@@ -739,7 +739,7 @@ theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option
     rw [absorbed_getElem! lay hp]
     unfold absPos
     split_ifs <;> omega
-  have hih : i < (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.size := by
+  have hih : i < (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h.size := by
     have := ofDraws_order lay b ms (absPos lay i) hp
     rwa [hco, hord, hch] at this
   have hzl : ((absorbed lay).zip M).toList.length = min (absorbed lay).size M.size := by simp
@@ -752,7 +752,7 @@ theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option
   unfold Loop.valsOf
   simp only [hcl, hco, hch]
   rw [set!_ne _ _ (Ne.symm hne), ← Array.foldl_toList]
-  refine (foldl_set_at (fun i m => m + (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.getD i 0) _
+  refine (foldl_set_at (fun i m => m + (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h.getD i 0) _
     (by intro v e; cases e; rfl) _ _ hpz ?_ ?_ ?_).trans ?_
   · rw [hz _ hpz]; exact hord
   · intro q hq he
@@ -766,6 +766,6 @@ theorem valsOf_at (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) (ms : Option
   · rw [hz _ hpz]
     dsimp only
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hih, Option.getD_some,
-      getElem!_pos (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h i hih]
+      getElem!_pos (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay b).h i hih]
 
 end Claims.ZKServer

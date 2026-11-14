@@ -57,7 +57,7 @@ reads off the statement's extra claims. -/
 theorem xs_pt {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coin) {s spec}
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (xs : Array _root_.Flock.Claim)
     (hxsz : xs.size = spec.points * (stAt x j).regions.size)
-    (hxs : xs.map (·.x) = _root_.Flock.Firewall.Drive.extras (stAt x j) (ptsE c spec)) (i : ℕ)
+    (hxs : xs.map (·.x) = _root_.Flock.ZkServer.Drive.extras (stAt x j) (ptsE c spec)) (i : ℕ)
     (hi : i < 2 * (stAt x j).regions.size) :
     (xs[i]!).x.size = (stAt x j).m - 6 ∧
       ((xs[i]!).x.extract 1).toList = Composed.regionPtOf (stAt x j)
@@ -131,7 +131,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals)
     (xs : Array _root_.Flock.Claim) (hxsz : xs.size = spec.points * (stAt x j).regions.size)
-    (hxs : xs.map (·.x) = _root_.Flock.Firewall.Drive.extras (stAt x j) (ptsE c spec))
+    (hxs : xs.map (·.x) = _root_.Flock.ZkServer.Drive.extras (stAt x j) (ptsE c spec))
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
     (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array _root_.Flock.F128)
@@ -140,7 +140,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     (salt : ℕ → ℕ → ByteArray) {t₀ : _root_.Flock.Transcript} {l : Array Msg}
     (hl : l.size = repBase x (2 * j.val + r.val)) {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript}
     {l' : Array Msg}
-    (h : ((_root_.Flock.Firewall.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
+    (h : ((_root_.Flock.ZkServer.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st (zkTab x j).sch tPad r.val dom g cm0 xs pads ic
       vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     gOf p.level0.tPrime = ∑ col, ((tabC PE x j).T (czExe PE x c j)).tab.onVals.y1' (wtOf PE x w j, v j)
@@ -149,41 +149,41 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
         Composed.bFold (zkTab x j).table (stAt x j) (czExe PE x c j) r col.val := by
   subst hg
   -- the run's steps
-  dsimp only [_root_.Flock.Firewall.Finish.repFwC] at h
-  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  dsimp only [_root_.Flock.ZkServer.Finish.repFwC] at h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
-  rw [_root_.Flock.Firewall.Finish.get_run_go] at h₅
+  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
+  rw [_root_.Flock.ZkServer.Finish.get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
   obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
   subst tr' t₅ l₅
   try dsimp only at hg
-  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hg
-  obtain ⟨hrp, ht₆, hl₆⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₆
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hg
+  obtain ⟨hrp, ht₆, hl₆⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₆
   subst t₆ l₆
   try dsimp only at hr₆
-  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hr₆
-  obtain ⟨hlgc, ht₇, hl₇⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₇
+  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hr₆
+  obtain ⟨hlgc, ht₇, hl₇⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₇
   subst t₇ l₇
   try dsimp only at hc
   split at hc
-  · obtain ⟨_, _, _, h', _⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-    rw [_root_.Flock.Firewall.Finish.throw_run_go] at h'
+  · obtain ⟨_, _, _, h', _⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc
+    rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h'
     cases h'
   have hzl : p.level0 = zl := by
     first
-    | (obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
+    | (obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc
        simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        rfl)
-    | (obtain ⟨_, _, _, -, hc'⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-       obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc'
+    | (obtain ⟨_, _, _, -, hc'⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc
+       obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc'
        simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        rfl)
