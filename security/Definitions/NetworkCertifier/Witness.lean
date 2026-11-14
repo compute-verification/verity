@@ -3,6 +3,7 @@ module
 public import Definitions.NetworkCertifier.SampledAudit
 public import Definitions.NetworkCertifier.Schedule
 public import Definitions.NetworkCertifier.RecordRows
+public import Definitions.NetworkCertifier.Tap
 
 /-!
 # The instances the network certifier's honest and nontrivial lemmas are stated at (trusted definitions; used only by
@@ -31,7 +32,9 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `sampProg`: two inputs and the negation of the first, with one proof block `{0, 1, 2}` (`sampPart`) sampled Bernoulli
   at rate `1/2` (`sampDesign`);
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections), one window of ten
-  buckets, whose schedule is `fxQueueSched`.
+  buckets, whose schedule is `fxQueueSched`;
+* `noFormat`: the record format of a network certifier with no connection over a monitoring period of no execution
+  phases, at which `MonitoringPeriodLeakChecked`'s honest lemma states its period's premises.
 -/
 
 @[expose] public section
@@ -46,6 +49,11 @@ def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
 /-- The network certifier's openings: the input and its negation, both `true`. -/
 def certOps : List (Claims.Sampling.Opening Bool) := [⟨0, true, []⟩, ⟨1, true, []⟩]
+
+/-- The record format of a network certifier with no connection, over a monitoring period of no windows: it holds every
+schedule, its record is the empty one and no cell reads back from it, as the code sends none. -/
+def noFormat : RecordFormat Empty Unit (Fin 0 → List (Obs 1 1 1)) :=
+  ⟨fun _ _ _ => Fin.elim0, fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
