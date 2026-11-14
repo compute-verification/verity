@@ -1,8 +1,8 @@
 # network_traces
 
 The network certifier (`verity/protocols/accounting/certifier/`) on real served traffic: per-token timing traces for its
-calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
-record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
+calibration, the certifier in front of a served endpoint as a relay of the egress record's one form (`warden`), the
+zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
 ## Running it
@@ -409,8 +409,9 @@ extension. A JSON file under no list and no `not_yet` glob fails as an undeclare
 binary, a log, free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
-`warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
-through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
+`warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records came
+through the older certifier's proxy in front of the endpoint, is refused by name wherever it is given: that code is
+gone, and kept records of its runs are refused by the form that stays. The certificates step reruns
 the relay's own offline check on its witness (`relay_check.check`) and holds the public `certificates.jsonl` to the
 certified lines. That check requires the session's certified start, so a gate run made by a device that certifies no
 start is refused here: such a run is read by the chain of the tree its gate ran. The relay signs no clock certificate,
