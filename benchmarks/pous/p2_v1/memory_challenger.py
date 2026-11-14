@@ -44,7 +44,7 @@ from verity.protocols.accounting.pous.device.timed_audit import (  # noqa: E402
     limit_of,
     quantiles,
 )
-from p2_v1 import reference  # noqa: E402
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference  # noqa: E402
 from verity.protocols.accounting.pous.verifier.verifier import MerkleTree
 
 

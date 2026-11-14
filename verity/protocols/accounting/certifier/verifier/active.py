@@ -1073,11 +1073,13 @@ async def wait_until(deadline: float, clock: Callable[[], float],
     await sleep(deadline - clock())
 
 
-async def precise_sleep(delay: float) -> None:
-    """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against the loop's clock: the proxy's sleep unless its
-    caller injects one. An injected sleep (a `VirtualClock`) gets one wait a tick."""
-    loop = asyncio.get_running_loop()
-    await wait_until(loop.time() + delay, loop.time)
+async def precise_sleep(delay: float, clock: Callable[[], float] | None = None) -> None:
+    """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against `clock`, the loop's unless one is given: the
+    proxy's sleep unless its caller injects one, and the network certifier's against its own clock. An injected sleep
+    (a `VirtualClock`) gets one wait a tick."""
+    if clock is None:
+        clock = asyncio.get_running_loop().time
+    await wait_until(clock() + delay, clock)
 
 
 class VirtualClock:
@@ -1170,7 +1172,8 @@ class Proxy:
     - with `compact` (which takes `ordinals`), each server connection is compact records (`CompactUnits`: an HTTP
       response head, then (position, record) units, `compact_unit`), and each egress frame is a record zero-filled to
       B (`compact_cell`), B ≥ 8: a record that isn't one (`compact_record_data`) or names another request than its
-      connection's is malformed. The gate's rehearsal runs it (`certifier-rehearse --traffic varied --compact B`);
+      connection's is malformed. The proxy's rehearsal runs it
+      (`certifier_serve.py rehearse --traffic varied --compact B`);
     - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
       slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A

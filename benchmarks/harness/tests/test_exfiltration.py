@@ -8,7 +8,8 @@ rows. The runs' case is row (i); here its rows stand for the command's row, the 
 (`as_row`), and row (i) is made up from them at `ASSUMED` times their bound (`as_assumed`), printed only under its
 label, with what prices each row's proving or that its rows don't record it. Then the network certifier's part beside
 them at the requests its calculator counts by default, the sampling plan's; its figures of record at two release schedules, held to its own document; what rests on the set-time card printed
-only under the calculator's label; the output count beside the sums that take it at 0; every figure's error, summed
+only under the calculator's label; the output count beside the sums that take it at 0, which the stop verdicts'
+reader's answer names, and it names none while the reader asks the rule without a schedule; every figure's error, summed
 over everything it covers, at the scans' δ the term states, and no amount where it is 1 or more, on term documents
 with made-up errors; every input's mark; each refusal by name; and the command."""
 
@@ -441,10 +442,12 @@ def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
             "block families priced each way is 52.4% computed, 47.17% measured, 0.4277% measured and computed, 0.001791% "
             "modeled: the largest families are SparseMlaSplitPart_v1 (52.33%, computed)") in text
     assert f"| world week | {PLANNED} (rows) | 5.500% | computed | 53.457% | 7 | SparseMlaSplitPart_v1 53.390%, " in text
-    assert ("| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 0.01 | 973,357 | 35,627 | 506,156 | 37,194 | 8.259e-20 | "
-            "1.829e-08 | 987,319 | 49,589 | 520,117 | 51,155 | 0.01 | 468,962 |") in text
-    assert ("| world | week | 0 | 13,962 | 937,924 | 193.8 | 470,722 | 1,760 | 951,885 | 14,155 | 484,684 | 15,722 | 8.259e-20 | "
-            "1.829e-08 | 0.01 |") in text
+    # no run carries the stop class's record, so the design's stop class is charged its whole schedule: its columns
+    # are those of the design before its stop block, and `all three`'s hold its schedules
+    assert ("| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 0.01 | 973,357 | 35,627 | 506,156 | 506,156 | 8.259e-20 | "
+            "1.829e-08 | 987,319 | 49,589 | 520,117 | 520,117 | 0.01 | 468,962 |") in text
+    assert ("| world | week | 468,962 | 482,924 | 937,924 | 193.8 | 470,722 | 470,722 | 951,885 | 14,155 | 484,684 | 484,684 | "
+            "8.259e-20 | 1.829e-08 | 0.01 |") in text
     assert "'s plan (" not in text
 
 
@@ -560,15 +563,22 @@ def test_the_scan_rows_mark_is_this_commands_mark_of_that_name():
 def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
     """The network certifier's figures of record are its document's at D_j = 2, held here to that document: the scan's
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
-    the command reads, and the design's is the jitter and the count on either. The headline and the sums are those figures,
+    the command reads, and the design's is each class's own: with no run carrying the stop class's record its stop
+    class is charged its whole schedule, so it is the jitter, the count and each connection's schedule, the figure of
+    the design before its stop block. The headline and the sums are those figures,
     and the calculator's own figure is printed beside the command's where their classes differ. A document of
     another schema is refused by name."""
 
     lb = term()
     theirs = lb.document(lb.inputs())
-    design = next(r for r in theirs["rows"] if (r["scope"], r["period"], r["row"]) == ("world", "year", "design"))
+
+    def of_year(document: dict, name: str) -> dict:
+        return next(r for r in document["rows"] if (r["scope"], r["period"], r["row"]) == ("world", "year", name))
+
+    design = of_year(theirs, "design")
     assert (theirs["schema"], theirs["request_count"], lb.OF_RECORD) == (E.TERM_SCHEMA, "plan", 2)
-    assert theirs["value"] == pytest.approx(59_645_644, abs=0.5) and design["term"]["2"]["GB"] == pytest.approx(1_939_394, abs=0.5)
+    assert theirs["value"] == pytest.approx(59_645_644, abs=0.5) and design["term"]["2"]["GB"] == pytest.approx(30_838_408, abs=0.5)
+    assert design["term"] == of_year(theirs, E.OUTPUT_COUNT)["term"]
 
     wide = E.build(store=recorded(tmp_path / "wide").fresh(), root=REPO, response_ids=lb.RESPONSE_IDS)
     sums = wide["periods"][-1]["together"]
@@ -578,7 +588,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     text = E.render(wide)
     assert ("- **the network certifier's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
             "as the scan's check charges it today, 26.83 bits a request, and 1,857,720 GB as N2 charges it today, ") in text
-    assert ("1,939,394 GB by the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, "
+    assert ("30,838,408 GB by the design no run has behind it, its stop class charged its whole schedule, each at D_j = 2, "
             "its term of record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of "
             "8.259e-20 (2^-63.39).\n") in text
     assert "assumes by default" not in text
@@ -587,24 +597,25 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     narrow = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS))
     sums = doc["periods"][-1]["together"]
     assert E.RESPONSE_IDS == 1024 and sums["scan"]["certifier_GB"] == narrow["value"] == pytest.approx(50_753_639, abs=0.5)
-    assert sums["design"]["certifier_GB"] == design["term"]["2"]["GB"]
-    assert sums["scan"]["GB"] == pytest.approx(narrow["value"] + YEAR_GB) and sums["design"]["GB"] == pytest.approx(1_953_634, abs=0.5)
+    assert sums["design"]["certifier_GB"] == of_year(narrow, "design")["term"]["2"]["GB"] == pytest.approx(26_392_406, abs=0.5)
+    assert sums["design"]["certifier_GB"] == sums[E.OUTPUT_COUNT]["certifier_GB"]
+    assert sums["scan"]["GB"] == pytest.approx(narrow["value"] + YEAR_GB) and sums["design"]["GB"] == pytest.approx(26_406_646, abs=0.5)
     assert doc["certifier"]["default_class"] == wide["certifier"]["default_class"]
     text = E.render(doc)
     assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today, 22.83 bits a request, and 1,857,720 GB as N2 charges it today, "
-            "26,392,406 GB by the design no run has behind it, before a served audit has sampled a stop block, 1,939,394 GB by "
-            "the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, its term of "
+            "26,392,406 GB by the design no run has behind it, before a served audit has sampled a stop block, 26,392,406 GB by "
+            "the design no run has behind it, its stop class charged its whole schedule, each at D_j = 2, its term of "
             "record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of 8.259e-20 "
             "(2^-63.39). On the class of at most 4,096 ids a response that `verity bench certifier_term` assumes by "
             "default, the scan's is 59,645,644 GB.\n") in text
-    assert ("at D_j = 2, with no advice priced and with a response's output count taken at 0 under `all three` and `design`: "
+    assert ("at D_j = 2, with no advice priced and with a response's output count taken at 0 under no row: "
             "50,767,879 GB as the scan's check charges it today; 1,871,959 GB as N2 charges it today; 26,406,646 GB by the "
-            "design no run has behind it, before a served audit has sampled a stop block; 1,953,634 GB by the design no run "
-            "has behind it, once a served audit has sampled a stop block; each failing with at most 0.01, the two parts' "
+            "design no run has behind it, before a served audit has sampled a stop block; 26,406,646 GB by the design no run "
+            "has behind it, its stop class charged its whole schedule; each failing with at most 0.01, the two parts' "
             "errors summed.\n") in text
-    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | 26,392,406 | 1,939,394 | "
-            "8.259e-20 | 9.537e-07 | 50,767,879 | 1,871,959 | 26,406,646 | 1,953,634 | 0.01 | 24,453,012 |") in text
+    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | 26,392,406 | 26,392,406 | "
+            "8.259e-20 | 9.537e-07 | 50,767,879 | 1,871,959 | 26,406,646 | 26,406,646 | 0.01 | 24,453,012 |") in text
     assert "| scan | 24,453,012 | 24,453,012 | 50,753,639 | 134,745 | 48,906,024 | 4.108e+10 | 8.259e-20 | 9.537e-07 |" in text
 
     document = lb.document
@@ -638,20 +649,23 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
              if under.rpartition(" | ")[2].startswith(("timing", "all three")) or ", all three" in under.partition(" | ")[0]]
     assert (len(at_one), len(timed)) == (60, 30) and all(label in under for under, _ in at_one + timed)
     # the scan's term and its two sums at D_j = 1, N2's sum there, and the sum under `all three`
-    for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("24,344", 2), ("14,240 GB with the lengths held", 1)):
+    # with no run carrying the stop class's record, `all three` and the design are charged their whole schedules
+    for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("24,344", 2), ("24,467,252 GB with the timing taken once", 1)):
         under = [under for under, cell in shown if figure in cell]
         assert len(under) >= least and all(label in u for u in under), figure
-    assert "- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop block" in text
-    assert ("- together, with a simulated set-time card: 14,240 GB with the lengths held by a stop block, the timing "
-            "taken once and the entries charged through the compute audit; and at D_j = 1, 48,920,264 GB as the scan's "
-            "check charges it today; 24,344 GB as N2 charges it today; 24,559,030 GB by the design no run has behind it, "
-            "before a served audit has sampled a stop block; 106,018 GB by the design no run has behind it, once a served "
-            "audit has sampled a stop block; error 0.01.\n") in text
-    assert ("| all three, with a simulated set-time card | 0 | 0 | 0 | 0 | 0 | the compute side's | 8.259e-20 | "
-            "9.537e-07 |") in text
+    assert ("- the network certifier's part with a simulated set-time card: 24,453,012 GB with the timing taken once and "
+            "the entries charged through the compute audit, its stop class charged its whole schedule; and at D_j = 1, ") in text
+    assert ("- together, with a simulated set-time card: 24,467,252 GB with the timing taken once and the entries "
+            "charged through the compute audit, its stop class charged its whole schedule; and at D_j = 1, 48,920,264 GB as "
+            "the scan's check charges it today; 24,344 GB as N2 charges it today; 24,559,030 GB by the design no run has "
+            "behind it, before a served audit has sampled a stop block; 24,559,030 GB by the design no run has behind it, its "
+            "stop class charged its whole schedule; error 0.01.\n") in text
+    assert ("| all three, with a simulated set-time card | 24,453,012 | 0 | 24,453,012 | 64,920 | 24,453,012 | the compute "
+            "side's | 8.259e-20 | 9.537e-07 |") in text
     assert "\n## Each monitoring period over all compute, with a simulated set-time card: in GB\n" in text
-    assert ("| world | year | 0 | 14,240 | 48,906,024 | 10,104 | 24,544,790 | 91,778 | 48,920,264 | 24,344 | 24,559,030 | 106,018 | "
-            "8.259e-20 | 9.537e-07 | 0.01 |") in text
+    assert ("| world | year | 24,453,012 | 24,467,252 | 48,906,024 | 10,104 | 24,544,790 | 24,544,790 | 48,920,264 | 24,344 | "
+            "24,559,030 | 24,559,030 | 8.259e-20 | 9.537e-07 | 0.01 |") in text
+    assert "with the lengths held by a stop block" not in text and "once a served audit has sampled a stop block" not in text
     # no figure of record is under the label: the headline's and the table of record's lines don't carry it
     assert not [line for line in text.splitlines() if label in line and ("its term of record, " in line or "at D_j = 2, with no" in line)]
     assert label not in text.split("## Each monitoring period over all compute: the two parts side by side")[1].split("\n## ")[0]
@@ -662,44 +676,99 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     assert label not in again and again.count(other) == text.count(label) and again == text.replace(label, other)
 
 
-def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path):
+def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, listed):
     """Until a served audit has sampled a stop block the server chooses a response's output count. The network
     certifier's row for the design before its stop block charges it, as its schedules, and the command reads it from
-    there: beside the sums under the rows whose schedules are 0, which take it at 0, marked assumed, in every
-    monitoring period and where the print says no advice is priced."""
+    there, in every monitoring period. The sums that take it at 0 are named from the stop verdicts' reader's answer,
+    never from a schedule that reads 0: with no run carrying the stop class's record no sum does, the rows that
+    would hold it as their schedules, the inputs list no output count and the print says so. The reader's answer
+    holds no execution phase whatever a run's files hold, since the reader asks the network certifier's rule
+    without a schedule and the rule charges no class below a schedule it was not handed: with a class's four
+    verdicts in the run of record, in the reader's own format and with its formats listed, no row is named, no sum
+    takes the count at 0, and the print's lines say the schedule was not handed."""
 
     lb = term()
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     theirs = {(r["scope"], r["period"], r["row"]): r for r in lb.document(lb.inputs(response_ids=E.RESPONSE_IDS))["rows"]}
     for p in doc["periods"]:
         count, row = p["output_count"], theirs[p["compute"], p["period"], E.OUTPUT_COUNT]
-        assert (count["row"], count["mark"], count["at_zero_in"]) == ("design, no stop block", "assumed", ["all three", "design"])
+        assert (count["row"], count["mark"], count["at_zero_in"]) == ("design, no stop block", "assumed", [])
         assert (count["GB"], count["bits"]) == (row["schedules"]["GB"], row["schedules"]["bits"])
         assert count["bits_a_request"] == pytest.approx(11) and count["bits"] == pytest.approx(11 * p["requests"])
         sums = p["together"]
-        assert sums[E.OUTPUT_COUNT]["certifier_GB"] - sums["design"]["certifier_GB"] == pytest.approx(count["GB"])
-        assert all(theirs[p["compute"], p["period"], name]["schedules"]["bits"] == 0 for name in count["at_zero_in"])
+        assert sums[E.OUTPUT_COUNT]["certifier_GB"] == sums["design"]["certifier_GB"]
+        assert all(theirs[p["compute"], p["period"], name]["schedules"]["bits"] == count["bits"] for name in ("all three", "design"))
     year = doc["periods"][-1]
     assert year["output_count"]["GB"] == pytest.approx(24_453_012, abs=0.5)
-    assert year["together"][E.OUTPUT_COUNT]["GB"] - year["together"]["design"]["GB"] == pytest.approx(year["output_count"]["GB"])
-    by = {i["input"]: i for i in doc["inputs"]}
-    assert (by["output_count"]["part"], by["output_count"]["value"], by["output_count"]["mark"]) == ("network certifier", 0, "assumed")
-    assert by["output_count"]["source"] == (
-        "not counted in the sums under `all three` and `design`: until a served audit has sampled a stop block the server "
-        "chooses a response's output count, which the network certifier's row `design, no stop block` charges 11 bits a "
-        "request as its schedules")
+    assert year["together"][E.OUTPUT_COUNT]["GB"] == year["together"]["design"]["GB"]
+    assert doc["certifier"]["stop"] == {"rows": ["lengths", "all three", "design"], "held_phases": 0, "below": False,
+                                        "why": list(lb.NO_RECORDS.why), "verdicts": [], "runs": [], "superseded": []}
+    assert [i for i in doc["inputs"] if i["input"] == "output_count"] == []
     text = E.render(doc)
-    assert "with no advice priced and with a response's output count taken at 0 under `all three` and `design`: " in text
+    assert "with no advice priced and with a response's output count taken at 0 under no row: " in text
     assert ("- the output count: 24,453,012 GB (assumed), 11 bits a request. Until a served audit has sampled a stop block the "
             "server chooses a response's output count, and the network certifier's row `design, no stop block` charges it "
-            "as its schedules. The sums under `all three` and `design` take it at 0, as they price no advice.\n") in text
+            "as its schedules. No sum takes it at 0: those under `all three` and `design` hold it too, their stop class "
+            "charged its whole schedule.\n") in text
+    assert ("- the stop class of the network certifier's rows `lengths`, `all three` and `design` is charged its whole "
+            "schedule, as the calculator charges it with no record read: no run carries the stop class's record, so the "
+            "stop verdicts' reader (`stop_verdicts.of_runs`) was not asked. A sum takes the output count at 0 "
+            "only on an execution phase the reader's answer holds, never because its row's schedules read 0:\n"
+            "  - no verdict record was read, so each connection is charged its whole schedule: the stop record, the "
+            "response tie, the certified read, the compute audit are each missing\n") in text
     assert "| together, design | together's error | output count (assumed) |\n" in text
-    assert "the sum under `design` takes it at 0." in text
-    assert "The sum under `all three` takes the output count at 0 too." in text
+    assert "what a response's output count is charged while the server chooses it (assumed): no sum of this table takes it at 0.\n" in text
+    assert "he sum under" not in text and "| output_count |" not in text
     # on the class the calculator assumes by default a connection's count is 13 bits
     wide = E.build(store=recorded(tmp_path / "wide").fresh(), root=REPO, response_ids=lb.RESPONSE_IDS)
     count = wide["periods"][-1]["output_count"]
     assert count["bits_a_request"] == pytest.approx(13) and count["GB"] == pytest.approx(28_899_014, abs=0.5)
+
+    # the run of record holds a class's four verdicts in the reader's own format, each accepted and complete, with
+    # its controls and its rates, and the reader lists their formats. The reader asks the rule without a schedule,
+    # so its answer holds no execution phase: no row is named, and no sum takes the count at 0
+    store = with_verdicts(tmp_path / "held", [], held=held_phase(listed)).store
+    held = E.build(store=store, root=REPO)
+    answer = held["certifier"]["stop"]
+    assert (answer["rows"], answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (
+        ["lengths", "all three", "design"], 0, False, [HOLDER], [])
+    assert len(answer["verdicts"]) == 4 and {v["mark"] for v in answer["verdicts"]} == {E.RUN_NOT_PROVED}
+    # the document is the calculator's on the reader's own answer on the run that carries the record, and no other's
+    asked = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS), stop=reader().of_runs(store, [HOLDER], []))
+    assert answer == {k: asked["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
+        "runs": [HOLDER], "superseded": []}
+    assert answer["why"] == [
+        "each connection is charged its whole schedule: the schedule was not handed for 1 of the 1 class(es) that hold "
+        "a row in the 1 execution phase(s) read, so the rule charges none of those below it, and 0 of the 1 lack a "
+        "verdict: this reader is handed no schedule and asks the rule without one",
+        reader().SERVE_NAMED,
+        "the link responses, execution phase 3, class 0: charged its whole schedule on each of its 4 rows: the "
+        "schedule was not handed",
+        f"`out/registrations.jsonl` of {HOLDER} says its registrations were checked under the network certifier's key "
+        f"whose SHA-512 is {'5a' * 64}, in the session {'c3' * 32}: the reader holds neither, and compares them with "
+        "nothing"]
+    bare = E.build(store=recorded(tmp_path / "bare", planned=False).store, root=REPO)
+    assert held["periods"] == bare["periods"] == doc["periods"] and held["inputs"] == bare["inputs"]
+    assert {tuple(p["output_count"]["at_zero_in"]) for p in held["periods"]} == {()}
+    text = E.render(held)
+    assert "with no advice priced and with a response's output count taken at 0 under no row: " in text
+    assert ("as its schedules. No sum takes it at 0: those under `all three` and `design` hold it too, their stop class "
+            "charged its whole schedule.") in text
+    assert ("- the stop class of the network certifier's rows `lengths`, `all three` and `design` is charged its whole "
+            "schedule, by the answer of the stop verdicts' reader (`stop_verdicts.of_runs`) on the runs that carry "
+            f"`{E.VERDICTS}` ({HOLDER}). A sum takes the output count at 0 only on an execution phase the reader's answer "
+            "holds, never because its row's schedules read 0:\n"
+            "  - each connection is charged its whole schedule: the schedule was not handed for 1 of the 1 class(es) ") in text
+    assert [line[4:] for line in text.splitlines() if line.startswith("  - ")] == answer["why"]
+    assert "what a response's output count is charged while the server chooses it (assumed): no sum of this table takes it at 0.\n" in text
+    assert "he sum under" not in text and "| output_count |" not in text and "execution phase(s) of a link" not in text
+    # the same files with no format listed in the reader hold nothing either, each verdict missing: as with no record
+    reader().FORMATS.clear()
+    unlisted = E.build(store=with_verdicts(tmp_path / "unlisted", [], held=held_phase(listed)).store, root=REPO)
+    assert (unlisted["certifier"]["stop"]["held_phases"], unlisted["certifier"]["stop"]["runs"]) == (0, [HOLDER])
+    assert unlisted["certifier"]["stop"]["verdicts"] == [] and unlisted["certifier"]["stop"]["why"][2].endswith(
+        "the compute audit is missing; the schedule was not handed")
+    assert unlisted["periods"] == held["periods"] and unlisted["inputs"] == held["inputs"]
 
 
 def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_path):
@@ -747,15 +816,16 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
             "link's execution phases, 1.155e+13 of them: 9.537e-07 (2^-20). The two together fail with at most the sum of "
             "both, 0.01. A figure whose error, summed over everything it covers, is 1 or more is printed as \"no bound at "
             "this period\", with that error and no amount.\n") in text
-    assert ("- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop "
-            "block, the timing taken once and the entries charged through the compute audit; and at D_j = 1, ") in text
-    assert "once a served audit has sampled a stop block; ε = 9.537e-07 (2^-20).\n" in text
+    assert ("- the network certifier's part with a simulated set-time card: 24,453,012 GB with the timing taken once and "
+            "the entries charged through the compute audit, its stop class charged its whole schedule; and at D_j = 1, ") in text
+    assert ("24,544,790 GB by the design no run has behind it, its stop class charged its whole schedule; "
+            "ε = 9.537e-07 (2^-20).\n") in text
     assert ("| compute | period | GPU-seconds | requests | compute audit | bits a request | compute audit's δ | certifier, scan | "
             "certifier, N2 | certifier, design, no stop block | certifier, design | scan's δ | certifier's ε | together, scan | "
             "together, N2 | together, design, no stop block | together, design | together's error | output count (assumed) |\n") in text
-    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 517.2 | 8.259e-20 | "
-            "2.543e-10 | 27,244 | 14,203 | 20,747 | 14,225 | 0.01 | 6,521 |") in text
-    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 9.919 | "
+    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 7,039 | 8.259e-20 | "
+            "2.543e-10 | 27,244 | 14,203 | 20,747 | 20,747 | 0.01 | 6,521 |") in text
+    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 135 | "
             "8.259e-20 | 4.878e-12 | none | none | none | none | none | 125.1 |") in text
     shown = printed(text)
     assert {cell for under, cell in shown if under.startswith("scan's δ | ")} == {"8.259e-20"}
@@ -814,7 +884,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     # 1 or more, 1 itself among them: no amount of the network certifier's, the output count's among them, and no sum
     for p in (none, year):
         assert set(amounts(p)[0]) == set(amounts(p)[1]) == {None}
-        assert p["output_count"]["at_zero_in"] == ["all three", "design"] and p["gpu_seconds"] and p["requests"]
+        assert p["output_count"]["at_zero_in"] == [] and p["gpu_seconds"] and p["requests"]
     assert [sorted(r.keys() & set(E.AMOUNTS)) for r in doc["certifier"]["rows"]] == [[]] * 8
     assert {r["eps"] for r in doc["certifier"]["rows"]} == {3.5} and doc["certifier"]["rows"][0]["row"] == "scan"
     assert doc["certifier"]["default_class"] == {"response_ids": 4096, "eps": 3.5, "value": None, "unit": "GB"}
@@ -834,9 +904,10 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     assert " GB" not in "".join(line for line in head.splitlines()
                                 if line.startswith(("- **the network certifier's part", "- **together", "- the output count")))
     assert "with a set-time card" not in head and "its term of record" not in head
-    # none of the world year's amounts of the network certifier is printed, at either jitter bound or summed
-    for figure in ("50,753,639", "1,857,720", "26,392,406", "1,939,394", "48,906,024", "24,453,012", "50,767,879", "1,953,634",
-                   "59,645,644", "22.83 bits a request", "11 bits a request"):
+    # none of the world year's amounts of the network certifier is printed, at either jitter bound or summed; the
+    # design's are those of the design before its stop block, its stop class charged its whole schedule
+    for figure in ("50,753,639", "1,857,720", "26,392,406", "48,906,024", "24,453,012", "24,544,790", "50,767,879",
+                   "26,406,646", "24,467,252", "59,645,644", "22.83 bits a request", "11 bits a request"):
         assert figure not in text, figure
     assert "| scan | " + "no bound at this period | " * 6 + "0.125 | 3.5 |" in text
     assert text.count("| " + "no bound at this period | " * 6 + "0.125 | 3.5 |\n") == 8
@@ -847,11 +918,11 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     assert ("| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | none | " + no * 4 + "0.125 | 1 | "
             + "none | " * 4 + "none | no bound at this period |") in text
     assert "| world | week | no bound at this period | none | " + no * 4 + "none | " * 4 + "0.125 | 1 | none |" in text
-    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 517.2 | 0.125 | 0.995 | "
+    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 7,039 | 0.125 | 0.995 | "
             + no * 4 + "1.005 | 6,521 |") in text
-    assert ("| datacenter | year | 0 | no bound at this period | 13,043 | 2.695 | 6,546 | 24.48 | " + no * 4
+    assert ("| datacenter | year | 6,521 | no bound at this period | 13,043 | 2.695 | 6,546 | 6,546 | " + no * 4
             + "0.125 | 0.995 | 1.005 |") in text
-    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 9.919 | 0.125 | "
+    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 135 | 0.125 | "
             "0.25 | none | none | none | none | none | 125.1 |") in text
     # the δ printed is the document's own on every line that carries one, and the one the command gave is nowhere
     shown = printed(text)
@@ -909,7 +980,8 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
     assert "β = 5.542%: its bound, 13,562 GB, times λ = 1.05." in text
     assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today") in text
-    assert "14,240 GB with the lengths held by a stop block, the timing taken once and the entries charged through the compute audit" in text
+    assert ("24,467,252 GB with the timing taken once and the entries charged through the compute audit, its stop class "
+            "charged its whole schedule; and at D_j = 1, ") in text
     assert "the audit budget is β = 5.243% and the compute audit's part 15,054 GB." in text
     assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(ii) honest`" in text
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
@@ -1337,9 +1409,10 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
 # ---- the stop class's verdicts -----------------------------------------------------------------------------------------------
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
-#: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "18f6a38053d8914f78f2d1e26bcc495f9ce34e7f30d19e589c4ce4b08d21d8cc",
-               "json": "8b65c04bb87e17e2581f076de4beb1006e25bd7a90e11714dcb1baf8d4b9fbcb"}
+#: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
+#: elsewhere that moves the print on purpose pins the new digests here
+NO_VERDICTS = {"text": "7337287797ad2bb6a02fd9d3c19034f9d09147b957e1e2fc864e3942001687a8",
+               "json": "b7f00c5fc3ad4d8008e3f5f9ad9b928c122e78279fea424fcf081b0daf3fc460"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -1373,12 +1446,72 @@ def complete() -> list[dict]:
             made_up_verdict("request_tie", "max_tokens")]
 
 
-def with_verdicts(tmp: Path, verdicts: list[dict] | str, run: str = HOLDER) -> Store:
-    """The fixture's rows of record, and ``run`` labelled the stop class's record holding ``verdicts`` (or that text)."""
+def with_verdicts(tmp: Path, verdicts: list[dict] | str, run: str = HOLDER,
+                  held: Mapping[str, list[dict]] | None = None) -> Store:
+    """The fixture's rows of record, and ``run`` labelled the stop class's record holding ``verdicts`` (or that text)
+    and, with ``held``, those files beside them (`held_phase`)."""
 
     s = recorded(tmp, planned=False)
-    s.label(s.ran(run, {E.VERDICTS_FILE: verdicts}), value=E.VERDICTS)
+    s.label(s.ran(run, {E.VERDICTS_FILE: verdicts, **(held or {})}), value=E.VERDICTS)
     return s
+
+
+def reader():
+    """The stop verdicts' reader, as the command loads it."""
+
+    return E._load(REPO, "network_traces", E.READER)
+
+
+@pytest.fixture
+def listed(monkeypatch) -> dict[str, str]:
+    """The reader with a format listed for each of its four verdicts, as its own tests list them: it lists none, so
+    without this every verdict of a run's files reads as missing. With it the reader still holds no execution
+    phase: it asks the network certifier's rule without a schedule. The formats, by verdict."""
+
+    sv = reader()
+    formats = {kind: f"a format of the {kind}" for kind in sv.CC.VERDICTS}
+    monkeypatch.setattr(sv, "FORMATS", {form: kind for kind, form in formats.items()})
+    return formats
+
+
+def held_phase(formats: Mapping[str, str]) -> dict[str, list[dict]]:
+    """A run's files, in the stop verdicts' reader's own format and by the names it reads, of one execution phase
+    of a link with everything the reader holds a class to: the registrations' file, whose first line says what its
+    offline check was handed, with the registration of a head whose one class holds 4 rows; the four verdicts on
+    that class and head, each accepted and complete, the stop record's and the response tie's at the registered
+    rate; each verifier's negative control, refused for its word; and the serve's registration with those two
+    verdicts' streams, each registering every block of 4. ``formats`` is each verdict's format (`listed`). The
+    reader holds no execution phase on them: it asks the network certifier's rule without a schedule, and the rule
+    charges no class below a schedule it was not handed. Nothing here is read by the command: the reader reads it
+    and answers."""
+
+    sv = reader()
+    CC, C = sv.CC, sv.C
+    tables = [("lengths", 4, 8), ("fails", 4, 8), *((name, 4, 16) for name in sv.CT.names(0))]
+    head = C.Head("responses", 3, bytes(64), tuple(C.Entry(name, rows, size, bytes(64), bytes(64))
+                                                   for name, rows, size in tables))
+    registration = {"format": C.REGISTRATION, "link": head.link, "window": head.window,
+                    "parameters": head.parameters.hex(), "word_bits": C.WORD_BITS, "row_schema": C.SCHEMA,
+                    "tables": [{"name": e.name, "rows": e.rows, "words": e.row_bytes * 8 // C.WORD_BITS,
+                                "domain": e.domain.hex(), "root": e.root.hex()} for e in head.tables],
+                    "certificate": {"key": "", "digest": head.digest().hex(), "signature": ""}}
+    serve = {"format": "a serve's registration"}
+    streams = {kind: {"format": "a stream's registration", "window": f"the {kind}'s stream", sv.POPULATION: 4,
+                      sv.DESIGN: {sv.DESIGN: sv.SUBSET, "k": 4}, sv.PREVIOUS: sv.digest_of(serve)} for kind in sv.RATED}
+    by = {kind: {"module": f"the {kind}'s verifier", "commit": "a commit"} for kind in CC.VERDICTS}
+    verdicts = [{CC.RUN: f"run of the {kind}", CC.SERVE: "the serve", CC.REGISTRATION: sv.digest_of(serve),
+                 CC.VERIFIER: by[kind],
+                 CC.VERDICT: {sv.FORMAT: formats[kind], CC.LINK: head.link, CC.WINDOW: head.window, CC.CLASS: 0,
+                              CC.HEAD: head.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
+                              CC.COMPLETE: True, "withheld": None, "codes": []},
+                 CC.PROVED_BY: None} | ({sv.RATE: "1/1", sv.STREAM: sv.digest_of(streams[kind])} if kind in sv.RATED else {})
+                for kind in CC.VERDICTS]
+    controls = [{CC.RUN: f"control run of the {kind}", CC.VERIFIER: by[kind], sv.CONTROL: sv.CONTROLS[kind][0],
+                 CC.VERDICT: {sv.FORMAT: formats[kind], CC.ACCEPTED: False, "withheld": None, "codes": ["a refusal"]},
+                 sv.REASON: sv.REASONS[kind]} for kind in CC.VERDICTS]
+    under = {"format": sv.CHECKED, sv.CHECKED_UNDER: {sv.KEY_SHA512: "5a" * 64, sv.SESSION: "c3" * 32}}
+    return {sv.REGISTRATIONS_FILE: [under, registration], "out/the-verdicts.jsonl": verdicts,
+            "out/the-controls.jsonl": controls, sv.SERVES_FILE: [serve, *streams.values()]}
 
 
 def digests(doc: dict) -> dict:
@@ -1388,25 +1521,40 @@ def digests(doc: dict) -> dict:
 
 def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
     """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
-    the command gave before it read verdicts (`NO_VERDICTS`), the output count assumed as it was."""
+    pinned (`NO_VERDICTS`): the stop verdicts' reader is not asked and the calculator's rows are as with no record
+    read, the design as the design before its stop block and the network certifier's figure in the headline the
+    `scan` row's. The output count is assumed as it was, and no sum takes it at 0, so the inputs list none."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     assert "stop_class" not in doc and E.VERDICTS not in E.render(doc)
     assert digests(doc) == NO_VERDICTS, (
         f"the print with no verdicts of record moved: {digests(doc)}; where a change elsewhere moved it on purpose, pin "
         "these in NO_VERDICTS")
-    assert {i["input"]: i["mark"] for i in doc["inputs"]}["output_count"] == "assumed"
+    year = doc["periods"][-1]
+    assert {p["output_count"]["mark"] for p in doc["periods"]} == {"assumed"}
+    assert [i for i in doc["inputs"] if i["input"] == "output_count"] == [] and year["output_count"]["at_zero_in"] == []
+    assert (doc["certifier"]["stop"]["runs"], doc["certifier"]["stop"]["why"]) == ([], list(term().NO_RECORDS.why))
+    assert year["together"]["design"] == year["together"][E.OUTPUT_COUNT]
+    assert doc["certifier"]["rows"][0]["row"] == "scan" and doc["certifier"]["rows"][0]["term"]["2"]["GB"] == pytest.approx(
+        term().document(term().inputs(response_ids=E.RESPONSE_IDS))["value"])
 
 
-def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured(tmp_path):
+def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured(tmp_path, listed):
     """Every piece accepted and every control refused by the verifier that accepted its piece, none of them proved: the
-    output count's 0 is `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-    verifier, and the summary counts it apart from measured. The class prints `complete on class C of serve S at rate
-    1/1 (run, not proved: ...; Python verifier for ...)`, with what is open in words and no issue's id, and no line
-    calls it proved. The controls name another class, which is not read."""
+    class prints `complete on class C of serve S at rate 1/1 (run, not proved: ...; Python verifier for ...)`, with
+    what is open in words and no issue's id, and no line calls it proved. The controls name another class, which is
+    not read.
+
+    The output count's 0 would carry that mark, printed "run (Python verifier, not proved)" with each verdict's run
+    and verifier and counted apart from measured, only where the stop verdicts' reader's answer holds an execution
+    phase. It holds none: the run of record holds a class's four verdicts in the reader's own format beside these
+    (`held_phase`), the reader asks the network certifier's rule without a schedule, and the rule charges no class
+    below a schedule it was not handed. So no sum takes the count at 0, no input carries the mark and no figure
+    moves: the periods and the inputs are those of the store with no verdict. The same verdicts in a run that holds
+    nothing the reader reads say the same of the class."""
 
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
-    doc = E.build(store=with_verdicts(tmp_path, complete()).store, root=REPO)
+    doc = E.build(store=with_verdicts(tmp_path, complete(), held=held_phase(listed)).store, root=REPO)
     stop = doc["stop_class"]
     said = f"{ON} (run, not proved: {OPEN}; Python verifier for {ALL})"
     assert (stop["record"], stop["runs"], stop["complete"], stop["mark"], stop["class"], stop["lacks"], stop["said"]) == (
@@ -1415,32 +1563,43 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
         ("stop_record", None), ("response_tie", None), ("response_tie", "id"), ("request_tie", None),
         ("request_tie", "max_tokens"), ("second_stage", None)]
     assert [sorted(v.keys() & set(E.CLASS_FIELDS)) for v in stop["verdicts"] if v["control"]] == [[], []]
-    by, before = {i["input"]: i for i in doc["inputs"]}, {i["input"]: i for i in base["inputs"]}
-    count = by["output_count"]
-    assert (count["part"], count["value"], count["mark"]) == ("network certifier", 0, E.RUN_NOT_PROVED)
-    assert count["source"].startswith(
-        f"taken at 0 in the sums under `all three` and `design`: the stop class's verdicts of record, `{E.VERDICTS}` "
-        f"({HOLDER}), are {said}, its boundary's registration `{'ab' * 64}`: the stop record, `accept` on "
-        "r20261113-000000-a001 by `made_up.stop_verifier` at "
-        f"{VERIFIER['commit']}, not proved: {OPEN}; the response tie, `accept` on r20261113-000000-a002 by ")
-    assert ("the response tie, the control with a changed id, `refuse` on r20261113-000000-a006 by `made_up.stop_verifier`"
-            in count["source"])
-    assert count["source"].endswith("Without them the server chooses a response's output count, which the network "
-                                    "certifier's row `design, no stop block` charges 11 bits a request as its schedules")
-    assert {k: i for k, i in by.items() if k != "output_count"} == {k: i for k, i in before.items() if k != "output_count"}
-    assert doc["periods"] == base["periods"] and doc["value"] == base["value"]
+    # the reader read the class's four verdicts and holds no execution phase: the schedule was not handed. No row is
+    # named, so no input is the output count's and nothing of a monitoring period moves
+    answer = doc["certifier"]["stop"]
+    assert (answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (0, False, [HOLDER], [])
+    assert len(answer["verdicts"]) == 4 and answer["why"][0].endswith(reader().NO_SCHEDULE)
+    assert answer["why"][2].endswith("class 0: charged its whole schedule on each of its 4 rows: the schedule was not handed")
+    assert doc["inputs"] == base["inputs"] and "output_count" not in {i["input"] for i in base["inputs"]}
+    assert doc["periods"] == base["periods"] and {tuple(p["output_count"]["at_zero_in"]) for p in doc["periods"]} == {()}
+    assert doc["value"] == base["value"]
 
     text = E.render(doc)
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
-    assert (marks[E.RUN_NOT_PROVED], marks["measured"], marks["assumed"] + 1) == (
-        1, sum(i["mark"] == "measured" for i in base["inputs"]), sum(i["mark"] == "assumed" for i in base["inputs"]))
-    assert (f"of {len(doc['inputs'])} inputs, {marks['measured']} is measured, {marks['modeled']} modeled, 1 simulated, "
-            f"{marks['assumed']} assumed and 1 run (Python verifier, not proved).\n") in text
-    assert f"| network certifier | output_count | 0 | bit/request | run (Python verifier, not proved) | {count['source']} |" in text
-    assert (f"take it at 0, as they price no advice. The stop class's verdicts of record (`{E.VERDICTS}`, {HOLDER}): "
-            f"{said}.\n") in text
+    assert (marks[E.RUN_NOT_PROVED], marks["measured"], len(doc["inputs"])) == (0, 1, len(base["inputs"]))
+    assert (f"of {len(doc['inputs'])} inputs, 1 is measured, {marks['modeled']} modeled, 1 simulated and "
+            f"{marks['assumed']} assumed.\n") in text
+    assert "run (Python verifier" not in text and "| output_count |" not in text
+    assert ("No sum takes it at 0: those under `all three` and `design` hold it too, their stop class charged its whole "
+            f"schedule. The stop class's verdicts of record (`{E.VERDICTS}`, {HOLDER}): {said}.\n") in text
     assert f"- the stop class: {HOLDER} (`{E.VERDICTS}`): 6 verdicts, {said}\n" in text
+    assert [line[4:] for line in text.splitlines() if line.startswith("  - ")] == answer["why"]
     assert [line for line in text.splitlines() if "proved" in line.replace("not proved", "")] == []
+
+    # the same verdicts in a run that holds nothing the reader reads: the class is complete, the reader's answer
+    # holds no execution phase, and so no sum takes the count at 0 and no input carries the mark
+    alone = E.build(store=with_verdicts(tmp_path / "alone", complete()).store, root=REPO)
+    assert (alone["stop_class"]["complete"], alone["stop_class"]["mark"]) == (True, E.RUN_NOT_PROVED)
+    assert alone["inputs"] == base["inputs"] and alone["periods"] == base["periods"]
+    assert alone["certifier"]["stop"] == base["certifier"]["stop"] | {"runs": [HOLDER], "why": [
+        *term().NO_RECORDS.why,
+        f"{HOLDER} is not read: it holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, "
+        "`out/*-controls.jsonl`, `out/serve-registrations.jsonl`"]}
+    text = E.render(alone)
+    assert ("No sum takes it at 0: those under `all three` and `design` hold it too, their stop class charged its whole "
+            f"schedule. The stop class's verdicts of record (`{E.VERDICTS}`, {HOLDER}): {said}.\n") in text
+    assert ("is charged its whole schedule, by the answer of the stop verdicts' reader (`stop_verdicts.of_runs`) on the "
+            f"runs that carry `{E.VERDICTS}` ({HOLDER}). ") in text
+    assert "run (Python verifier" not in text and "| output_count |" not in text
 
     # a piece proved and the others not: still run, not proved, and the Python verifier is the others'
     mixed = [v | {"proved_by": "Made.Up.StopRecordSound", "open": None} if v["piece"] == "stop_record" else v
@@ -1450,25 +1609,34 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
                                             "for the response tie, the request tie and the compute audit's second stage)")
 
 
-def test_proved_by_on_every_piece_makes_it_measured(tmp_path):
-    """Only where every piece's record names the Lean guarantee that proves its verifier is the output count's 0
-    measured; it is then counted with the measured inputs and nothing prints as not proved but the scan's accept, in
-    the `scan` row's own line."""
+def test_proved_by_on_every_piece_makes_it_measured(tmp_path, listed):
+    """Only where every piece's record names the Lean guarantee that proves its verifier is the class's mark
+    measured, and then nothing of the command's prints as not proved but the scan's accept, in the `scan` row's own
+    line, and the reader's own line that the serve its verdicts name is run, not proved, which the command prints
+    as the reader says it. The output count's 0 would be measured with the class, and counted with the measured
+    inputs, only where the stop verdicts' reader's answer holds an execution phase. It holds none, the schedule
+    not handed, though the run of record holds a class's four verdicts in the reader's own format (`held_phase`):
+    so no input is the output count's and nothing is measured more."""
 
     proved = [v | {"proved_by": f"Made.Up.{v['piece']}", "open": None} for v in complete()]
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
-    doc = E.build(store=with_verdicts(tmp_path, proved).store, root=REPO)
+    doc = E.build(store=with_verdicts(tmp_path, proved, held=held_phase(listed)).store, root=REPO)
     stop = doc["stop_class"]
     assert (stop["complete"], stop["mark"], stop["said"]) == (True, "measured", (
         f"{ON} (measured: proved by `Made.Up.stop_record`, `Made.Up.response_tie`, `Made.Up.request_tie` and "
         "`Made.Up.second_stage`)"))
-    count = next(i for i in doc["inputs"] if i["input"] == "output_count")
-    assert count["mark"] == "measured" and "proved by `Made.Up.second_stage`" in count["source"]
+    answer = doc["certifier"]["stop"]
+    assert (answer["held_phases"], len(answer["verdicts"])) == (0, 4) and answer["why"][0].endswith(reader().NO_SCHEDULE)
+    assert (doc["inputs"], doc["periods"]) == (base["inputs"], base["periods"])
     measured = sum(i["mark"] == "measured" for i in base["inputs"])
     text = E.render(doc)
-    assert f"inputs, {measured + 1} are measured, " in text
-    assert [line for line in text.splitlines() if "not proved" in line and term().SCAN_ACCEPT not in line] == []
-    assert "| network certifier | output_count | 0 | bit/request | measured | taken at 0 " in text
+    assert measured == 1 and f"- of {len(base['inputs'])} inputs, 1 is measured, " in text
+    assert [line for line in text.splitlines() if "not proved" in line and term().SCAN_ACCEPT not in line] == [
+        f"  - {reader().SERVE_NAMED}"]
+    assert "| output_count |" not in text and "taken at 0 in the sums" not in text
+    # with nothing in the reader's format the class is as proved and no sum takes the count at 0: nothing is measured more
+    alone = E.build(store=with_verdicts(tmp_path / "alone", proved).store, root=REPO)
+    assert (alone["stop_class"]["mark"], alone["inputs"], alone["periods"]) == ("measured", base["inputs"], base["periods"])
 
 
 @pytest.mark.parametrize("field", E.VERDICT_FIELDS)
@@ -1638,17 +1806,29 @@ def test_an_honest_verdicts_class_field_holding_what_it_cant_is_refused(tmp_path
         E.build(store=with_verdicts(tmp_path, [v | {"rate": "2/4"}, *complete()[1:]]).store, root=REPO)
 
 
-def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path):
+def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path, monkeypatch):
+    """The runs the stop verdicts' reader is handed are the record's runs as this command lists them, each one the
+    print names as read or as refused, and its superseded ones are those this command leaves out as superseded: one
+    list, read once."""
+
+    handed, of_runs = [], reader().of_runs
+    monkeypatch.setattr(reader(), "of_runs", lambda store, runs, superseded=(): handed.append(
+        (list(runs), list(superseded))) or of_runs(store, runs, superseded))
     s = with_verdicts(tmp_path, complete())
     again = s.label(s.ran("r20261113-000000-a100", complete()[:1], name=E.VERDICTS_FILE), value=E.VERDICTS)
     with pytest.raises(ValueError, match=f"^{HOLDER} and {again} both hold a verdict on the stop record and neither is "
                                          "superseded: label the one the other replaces .*superseded_by NEWER"):
         E.build(store=s.store, root=REPO)
+    assert handed == []
     s.label(again, E.SUPERSEDED_BY, HOLDER)
     doc = E.build(store=s.store, root=REPO)
     assert doc["stop_class"]["complete"] and {x["target"]: x["why"] for x in doc["refused"]} == {
         again: f"superseded by {HOLDER}"}
     assert f"- {again} (`{E.VERDICTS}`): superseded by {HOLDER}" in E.render(doc)
+    answer = doc["certifier"]["stop"]
+    assert handed == [([HOLDER, again], [again])] == [(answer["runs"], answer["superseded"])]
+    assert answer["runs"] == sorted([*doc["stop_class"]["runs"], *(x["target"] for x in doc["refused"])])
+    assert (f"on the runs that carry `{E.VERDICTS}` ({HOLDER}, {again}, of which superseded: {again}). ") in E.render(doc)
     with pytest.raises(ValueError, match=f"^{HOLDER} holds two verdicts on the request tie, the control with a changed "
                                          "`max_tokens`"):
         E.build(store=with_verdicts(tmp_path / "twice", [*complete(), complete()[-1]]).store, root=REPO)
@@ -1658,6 +1838,8 @@ def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path
     assert doc["refused"] == [{"target": HOLDER, "record": E.VERDICTS, "why": f"holds no verdicts (`{E.VERDICTS_FILE}`)"}]
     assert doc["stop_class"]["runs"] == [] and not doc["stop_class"]["complete"]
     assert f"(`{E.VERDICTS}`, no run read): not complete: no verdict on the stop record; " in E.render(doc)
+    # a run this command reads no verdict from is handed to the reader all the same: it carries the record
+    assert handed[1:] == [([HOLDER], [])] == [(doc["certifier"]["stop"]["runs"], doc["certifier"]["stop"]["superseded"])]
 
 
 # ---- the command -------------------------------------------------------------------------------------------------------------

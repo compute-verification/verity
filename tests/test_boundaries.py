@@ -25,7 +25,8 @@ Beside the order:
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
     imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
-    packages or its analysis (``SPOT_NOT_CERTIFIER``).
+    packages or its analysis (``SPOT_NOT_CERTIFIER``);  a module the tree imports from the repository's root as
+    ``benchmarks.network_traces.NAME`` is imported by its bare name nowhere (``ONE_NAME``).
 
 An import is an import statement (a relative one resolved against its package), a string handed to
 ``importlib.import_module``, ``__import__`` or ``importorskip``, or a ``"module:attr"`` string naming what to load at run
@@ -127,13 +128,6 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
-                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
-                                                                          "(`benchmarks/remote_session`, "
-                                                                          "its `REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
@@ -150,10 +144,8 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
-    **dict.fromkeys(("verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py",
-                     "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py"),
-                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
-                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
+    "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
+                                                                      "responder (`benchmarks/pous/band_gpu/harness.py`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
@@ -161,16 +153,16 @@ BENCHMARKS_IMPORTERS = {
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
-    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
+    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "imported since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/accounting/poub/device/live_verifier/tests/stub_verifier.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "memory-accounting: the remote session's in-process harness "
+        "(`benchmarks/remote_session/tests/test_session.py`), loaded by path",
     "verity/protocols/accounting/poub/device/live_verifier/tests/test_host.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "memory-accounting: the remote session's store layout and line of record "
+        "(`benchmarks/remote_session/store_layout.py`, `auditor_line.py`), loaded by path",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
@@ -816,6 +808,76 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
     }, found
+
+
+#: The directory of ``benchmarks/`` whose modules the tree imports from the repository's root
+#: (``benchmarks.network_traces.NAME``).  It is no package and stays on the path of the files beside those modules, so a
+#: bare ``import NAME`` still resolves, to a second copy of the module.
+ONE_NAME = "benchmarks/network_traces"
+
+
+def _second_names(texts: dict[str, str], one_name: str = ONE_NAME) -> list[str]:
+    """``file:line: NAME`` for each import in ``texts`` (repository path -> source) of a module of ``one_name`` by its
+    bare name, where another import names that module from the repository's root: a process that runs both holds the
+    module twice, each copy with its own state and its own classes.  An import is a statement or a constant string
+    handed to an import call (``IMPORT_CALLS``).  A name computed at run time is not read, and a load by file under a
+    private name is a copy its loader asked for.  A bare name that a file outside ``one_name`` has too may mean that
+    file, and is left.  Nothing is executed (AST only), and only files a text search can't rule out are parsed."""
+    dotted = one_name.replace("/", ".")
+
+    @functools.cache
+    def named(rel: str) -> list[tuple[int, str]]:
+        out: list[tuple[int, str]] = []
+        for node in ast.walk(ast.parse(texts[rel], filename=rel)):
+            if isinstance(node, ast.Import):
+                out += [(node.lineno, a.name) for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                out += [(node.lineno, f"{node.module}.{a.name}") for a in node.names]
+            elif (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant)
+                  and isinstance(node.args[0].value, str)
+                  and (node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)) in IMPORT_CALLS):
+                out.append((node.lineno, node.args[0].value))
+        return out
+
+    own = {Path(rel).stem for rel in texts if posixpath.dirname(rel) == one_name}
+    others = {Path(rel).parent.name if rel.endswith("/__init__.py") else Path(rel).stem
+              for rel in texts if posixpath.dirname(rel) != one_name}
+    rooted = {name[len(dotted) + 1:].split(".")[0] for rel, text in texts.items() if dotted in text
+              for _, name in named(rel) if name.startswith(dotted + ".")}
+    held = (rooted & own) - others
+    if not held:
+        return []
+    return [f"{rel}:{line}: {name.split('.')[0]}" for rel, text in sorted(texts.items()) if any(m in text for m in held)
+            for line, name in sorted(named(rel)) if name.split(".")[0] in held]
+
+
+def test_a_module_the_tree_imports_from_the_root_has_no_second_name() -> None:
+    """A module of ``ONE_NAME`` that any file imports from the repository's root is imported by its bare name in no
+    file of the tree: every file is read, since any can put the directory on its path."""
+    dotted = ONE_NAME.replace("/", ".")
+    found = _second_names(_tracked_python())
+    assert not found, (f"{ONE_NAME}/ is on the path beside the repository's root, so a module of it imported as "
+                       f"`{dotted}.NAME` in one file and as a bare `NAME` in another is loaded twice by a process that "
+                       f"runs both. Import it as `{dotted}.NAME` (`from {dotted} import NAME`), with the root on the "
+                       "file's path:\n" + "\n".join(found))
+
+
+def test_a_second_name_is_found() -> None:
+    """The check above isn't vacuous: a bare import of a module that another file imports from the root is found as a
+    statement, a ``from`` import and an import call's string; a module imported by its bare name alone, a bare name a
+    file of another directory has too, and a load by file are not."""
+    dotted = ONE_NAME.replace("/", ".")
+    texts = {
+        **dict.fromkeys((f"{ONE_NAME}/relay.py", f"{ONE_NAME}/rows.py", f"{ONE_NAME}/plan.py", "x/plan.py"), ""),
+        f"{ONE_NAME}/tests/test_relay.py": f"from {dotted} import relay as R\nimport rows\n",
+        "x/rooted.py": f"def build():\n    from {dotted}.plan import build\n    return build\n",
+        "x/bare.py": ("import sys\nimport relay as R\nfrom relay import commit\nimport importlib\n"
+                      "M = importlib.import_module('relay')\nimport plan\nimport rows\n"),
+        "x/by_file.py": ("import importlib.util\n"
+                         f"SPEC = importlib.util.spec_from_file_location('private_relay', '{ONE_NAME}/relay.py')\n"),
+    }
+    found = _second_names(texts)
+    assert found == ["x/bare.py:2: relay", "x/bare.py:3: relay", "x/bare.py:5: relay"], found
 
 
 def _is_test(rel: str) -> bool:

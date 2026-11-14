@@ -79,8 +79,9 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
@@ -143,7 +144,7 @@ def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
     """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
     the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
 
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
@@ -603,8 +604,8 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    warden = a.warden_run is not None
-    run = Path(a.warden_run if warden else a.run)
+    warden = a.network_certifier_run is not None
+    run = Path(a.network_certifier_run if warden else a.run)
     summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
                      "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
@@ -719,8 +720,9 @@ def main(argv=None) -> int:
                                      "record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (warden_serve.py's, or the gate's "
-                     "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
+    run.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+                     help="an active network certifier's run (warden_serve.py's, or the gate's warden-rehearse's): "
+                          "its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
@@ -746,7 +748,7 @@ def main(argv=None) -> int:
         return 0
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
-    if a.warden_run is not None and (a.extra or a.late):
+    if a.network_certifier_run is not None and (a.extra or a.late):
         raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
                          "tampered")
     if not a.dry and not (a.bin and a.lean):

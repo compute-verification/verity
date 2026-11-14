@@ -20,7 +20,11 @@ process, which alone holds the key, lays the tables (`connection_rows.tables`), 
 head: a line of `rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables,
 their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
 (witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
-(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. A hand the tables refuse
+(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. In a schedule with
+content rows the process also writes a line of `filed.jsonl` an execution phase, after its line of `rows.jsonl`:
+the releases the hand filed in each class, under the digest of the head it signed, or the record with no list for
+an execution phase whose head it did not sign (`connection_rows`' "The filed releases"). It is witness, for the
+prover's serve: which class a release is in turns on how the network certifier ended it. A hand the tables refuse
 has no line and no salts: under form 2 one that files more than R = `WardenParams.phase_releases` releases in a
 class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
 publisher process ends on it, which fails the run at its next record's close.
@@ -42,6 +46,26 @@ execution phase of the run has the word that it has no head, which `connection_r
 execution phase with neither, with both, or with the one where the other is due is a problem. The reading takes each
 release's place in the release order from the run's `warden.json` where there is one, since the records stop
 counting it at an execution phase that isn't complete.
+
+**The registrations' file** (`check`'s ``registrations`` and ``under``, `keep_registrations`). The check writes each
+registration that passed both of its holds, as the publisher kept it, one JSON object a line and in the execution
+phases' order, after a first line that says what they were checked under:
+``{"format": CHECKED, "checked_under": {"key_sha512": HEX, "session": HEX}}``. `CHECKED` is that line's own
+``format`` word, which no registration has, so a reader refuses every other first line by the one word. The
+auditor hands the check the two: the SHA-512 of the network certifier's public key (`key_sha512`: over the LMS
+public key ``I ‖ T[1]``, the bytes a deployment record and the period check's parameters write in hex) and its
+session. The run's deployment record is held to them: one that names a key of another hash, or another session,
+is a problem that says which, the first of the check's problems. So the key and the session the registrations
+verify under are the ones handed, and a run made under any other key, a rehearsal's own among them, gets no file
+under this one. A check that is handed neither writes no file, and one asked for a file without them refuses. It
+is the file a reader of connection rows takes its heads from
+(`stop_verdicts.REGISTRATIONS_FILE`), and the one place the network certifier's signature on such a head is
+checked: that reader holds no key, and reads from the first line what the file was checked under. A refusal, the
+word that no head comes and a registration that fails either hold give no line. Where the check, or the caller's
+check it is part of, found any problem, or did not end, there is no file at all, and one already at that path is
+removed before the check reads anything: a run its check refused vouches for no head, and an execution phase with
+no line is charged its whole schedule. The file is unsigned: it is as good as the run of the check that wrote it,
+and as the hash and the session that run was handed.
 
 **The cost** of a close, for a schedule and its classes:
 
@@ -68,30 +92,41 @@ is `--out`'s JSON.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pickle
 import statistics
+import sys
 import tempfile
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import active_replay as ar
-import certifier_serve as cs
+from benchmarks.network_traces import certifier_serve as cs
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import VirtualClock, id_request
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
 HAND = "connection-rows"
 ROWS, SALTS = "rows.jsonl", "rows.salts"
+#: in a schedule with content rows, the releases each execution phase's hand filed in each class, a line each
+FILED = "filed.jsonl"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
+#: the ``format`` of the registrations' file's first line, the line that says what the file was checked under
+CHECKED = "verity-network-certifier/checked-registrations/v1"
+#: what a check says that is asked for the registrations' file and was handed nothing to check under
+UNHANDED = ("the registrations' file is written only by a check that is handed the SHA-512 of the network "
+            "certifier's public key and its session")
 #: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
 CLASSES = tuple((size, size, 16) for size in (2, 16, 64, 256, 1024, 4096))
 
@@ -181,6 +216,7 @@ class Keeper:
             ar.write_blobs(self.out / SALTS, b"")
             with open(self.out / ROWS, "a") as fh:
                 fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
+            self._filed(CR.not_filed(self.link, window))
             return
         t0 = time.perf_counter()
         tables = CR.tables(self.params, strides)
@@ -199,6 +235,14 @@ class Keeper:
         ar.write_blobs(self.out / SALTS, rows.witness)
         with open(self.out / ROWS, "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
+        self._filed(CR.not_filed(self.link, window) if cert is None else CR.filed_record(head, self.params, strides))
+
+    def _filed(self, record: Mapping) -> None:
+        """An execution phase's line of `filed.jsonl`, in a schedule with content rows: written once its head is
+        signed, or its word that it has none, so the list is final where it is written."""
+        if self.params.content is not None:
+            with open(self.out / FILED, "a") as fh:
+                fh.write(json.dumps(record) + "\n")
 
 
 # The offline check.
@@ -259,14 +303,64 @@ def _spread(xs: list[float]) -> dict:
             "max": round(max(xs), 3) if xs else None}
 
 
+def key_sha512(key: LmsKey) -> bytes:
+    """The SHA-512 a check is handed a network certifier's public key by: over the LMS public key ``I ‖ T[1]``, the
+    bytes a deployment record and the period check's parameters write in hex. The key's parameter set is not under
+    it."""
+    return hashlib.sha512(key.public).digest()
+
+
+def not_under(dep: Mapping, under: tuple[bytes, bytes]) -> list[str]:
+    """The problems of a deployment record `dep` that is not of what a check was handed, ``under``: the SHA-512 of
+    the network certifier's public key (`key_sha512`) and its session. Each says which of the two differs."""
+    key, session = key_sha512(cs.read_public(dep["key"])), bytes.fromhex(dep["session"])
+    return [f"the deployment record's {what} is not the one the check was handed: {own.hex()}, not {handed.hex()}"
+            for what, own, handed in (("key's SHA-512", key, under[0]), ("session", session, under[1]))
+            if own != handed]
+
+
+def open_registrations(path: Path | None, under: tuple[bytes, bytes] | None) -> None:
+    """What a check does about the registrations' file at `path` before it reads anything: it removes one already
+    there, so that none stands from an earlier check and a check that doesn't end leaves none, and then refuses,
+    ValueError, to go on to a file it was handed nothing to check under. Nothing for no path."""
+    if path is None:
+        return
+    path.unlink(missing_ok=True)
+    if under is None:
+        raise ValueError(UNHANDED)
+
+
+def keep_registrations(path: Path | None, held: Sequence[Mapping], problems: Sequence[str],
+                       under: tuple[bytes, bytes]) -> None:
+    """The registrations' file at `path` (the module docstring's "The registrations' file"), where there is a
+    registration and the check found no problem: its first line, of the format `CHECKED`, what the check was handed
+    and held the deployment record to (``under``), then `held`, the registrations the check held to both, one a
+    line. Else no file. Nothing for no path."""
+    if path is None or problems or not held:
+        return
+    first = {"format": CHECKED, "checked_under": {"key_sha512": under[0].hex(), "session": under[1].hex()}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    whole = path.with_name(path.name + ".part")
+    whole.write_text("".join(json.dumps(doc) + "\n" for doc in (first, *held)))
+    whole.replace(path)
+
+
 def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
-          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
+          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str, registrations: Path | None = None,
+          found: Sequence[str] = (), under: tuple[bytes, bytes] | None = None) -> tuple[dict | None, list[str]]:
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
-    with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows."""
+    with the word that they have no head, of those that have none) and the problems. None for a schedule without
+    lengths rows. ``under`` is what the auditor hands the check, the SHA-512 of the network certifier's public key
+    (`key_sha512`) and its session: a deployment record that is not of them is a problem (`not_under`), the first
+    of those returned. With ``registrations`` it leaves the registrations' file there (`keep_registrations`),
+    written only where neither it nor its caller found a problem: ``found`` is the problems of the caller's own
+    check, of which this one is the last part, and a problem of the deployment record that is already among them
+    is not returned again. ValueError for ``registrations`` without ``under``."""
+    open_registrations(registrations, under)
+    problems: list[str] = [p for p in ([] if under is None else not_under(dep, under)) if p not in found]
     if params.lengths is None:
-        return None, []
+        return None, problems
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
     kept_records = run / "certified.jsonl"
     withheld = {doc["refused"][2] for doc in map(json.loads, kept_records.read_text().splitlines())
@@ -279,7 +373,6 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     else:
         want = [w for w in range(windows - 1) if w in whole and w + 1 in whole]
     without = [w for w in range(windows) if w not in want] if params.closes else []
-    problems: list[str] = []
     kept: dict[int, tuple[dict, dict]] = {}
     try:
         for doc, salts in read(run, params):
@@ -297,7 +390,18 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     except ValueError as e:
         held = {}
         problems.append(f"connection rows: the records don't read as releases: {e}")
-    costs, registered, worded = [], 0, 0
+    listed: dict[int, dict] = {}
+    if (run / FILED).exists():
+        try:
+            listed = {doc["window"]: doc for doc in map(json.loads, (run / FILED).read_text().splitlines())}
+        except (ValueError, KeyError, TypeError) as e:
+            problems.append(f"connection rows: {FILED} doesn't read: {e}")
+
+    def filing(w: int, record: Mapping) -> None:
+        """A problem where the run kept a line of `filed.jsonl` for execution phase `w` that is not `record`."""
+        if w in listed and listed[w] != record:
+            problems.append(f"execution phase {w}'s line of {FILED} is not its records' filing under its head")
+    costs, registered, worded, passed = [], 0, 0, []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
         if w not in want and not params.closes:
@@ -315,6 +419,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
                 try:
                     CR.check_no_head(doc[NO_HEAD], key, session, params, link, w)
                     worded += 1
+                    filing(w, CR.not_filed(link, w))
                 except ValueError as e:
                     problems.append(f"execution phase {w}'s word that it has no head: {e}")
             continue
@@ -328,11 +433,16 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
                     CR.Rows.commit(link, w, mine, params, session, salts).head == head
                 if not ok:
                     problems.append(f"execution phase {w}'s connection rows aren't its records' releases")
+                else:
+                    filing(w, CR.filed_record(head, params, held[w]))
             except ValueError as e:
                 problems.append(f"execution phase {w}'s connection rows: {e}")
         registered += ok
-        if not ok:
+        if ok:
+            passed.append(doc["registration"])
+        else:
             problems.append(f"execution phase {w}'s connection rows aren't registered")
+    keep_registrations(registrations, passed, [*found, *problems], under)
     summary = {"registered": registered, "of": len(want), "tables": sorted({c["tables"] for c in costs}),
                "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
                **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}
@@ -415,7 +525,7 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest = [], [], []
@@ -423,7 +533,7 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
         cs.load_key(key, height)
-        publish = ws.PublisherProcess(out, key, bytes(32), params)
+        publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0)  # a scratch key's first session
         try:
             for phase in range(phases):
                 handed: list = []

@@ -67,8 +67,9 @@ from typing import NamedTuple
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC  # noqa: E402
@@ -183,7 +184,7 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
-    import warden_serve as WS
+    from benchmarks.network_traces import warden_serve as WS
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
@@ -662,8 +663,9 @@ def main(argv=None) -> int:
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
-    p.add_argument("--warden-run", type=Path, help="--class warden: a warden_serve run's directory (the gate's "
-                                                   "warden-rehearse's, its witness under witness/)")
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+                   help="--class warden: a warden_serve run's directory (the gate's warden-rehearse's, its witness "
+                        "under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--port", type=int, default=7981)
@@ -677,7 +679,7 @@ def main(argv=None) -> int:
     Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    use(a.cls, a.warden_run, a.windows)
+    use(a.cls, a.network_certifier_run, a.windows)
     return prove(a)
 
 

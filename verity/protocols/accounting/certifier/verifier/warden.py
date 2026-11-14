@@ -34,7 +34,8 @@ which it ends inside the run ("The lengths rows").
 a bucket each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
-  and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
+  and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells, and
+  in a schedule with content rows within the bytes its largest class holds (the schedule's `request_bound`). Its
   release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
   `release.with_release` puts it, N the count of `END`s the network certifier released before (so the order of the `END`
   cells in the ingress records), the run the network certifier's `run_id` and the bucket a; what it releases before
@@ -61,9 +62,11 @@ parameters' digest is no id form's, and the period check reads only the id form'
 **The response cap** (`WardenParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
 in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
 reads each request's `max_tokens` from its first request cell, where `active.id_request` puts it
-(`active.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32 or exceeds the cap
-is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is padding, and
-it fails at once, as the client's other problems do. Every other request's response is held to its `max_tokens`: an
+(`active.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32, is 0 or exceeds
+the cap is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is
+padding, and it fails at once, as the client's other problems do. A request that asks for no token is refused because
+no response answers it: its response would be held to no `DATA` cell, and the stop rule ends no response of it.
+Every other request's response is held to its `max_tokens`: an
 egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives
 holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTiming.Guarantees.ResponseCapped`). The
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
@@ -127,6 +130,11 @@ rows under form 2 and a response cap only) has a fourth table a class, of two wo
 `max_tokens` and the count of its prompt's ids, read from the request's bytes in the hand
 (`content_rows.request_words`) by the form every cell of a released request was held to at ingress, and from nothing
 more of the device or of a server.
+It releases no request that no class holds: a request longer than the schedule's largest class holds (the
+schedule's `request_bound`) is ingress past its bounds, so its connection fails closed (ingress) and none of it is
+released. A released request that no class held would be filed in none (`content_rows.file`), with no content row
+for any verdict on a class to be of. Under form 2 one release is filed in none by the rule itself: one that ended
+in a `FAIL` before any `DATA` cell, of which it released no id.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
@@ -145,11 +153,16 @@ whether and where a connection fails, chooses one of at most (cells + 1) outcome
 (with lengths rows at the connection's first egress slot), and are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`), as the active certifier's do.
 
+**The clock.** The network certifier has one clock, the host's raw monotonic clock (`pacer.raw_clock`), which no time
+service steers: `origin` is a reading of it, a tick runs once it reads the tick's boundary and never before, a tick's
+lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network certifier does
+not start (`pacer.ClockRefused`): it runs on no other.
+
 **The pacer** (`Warden(paced=…)`, which a warden on the host's clock must have): a bucket written on the loop leaves
 when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
 moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
 connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
-at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made; each connection's
+at `origin` + t·τ + `paced` on the network certifier's clock, a time fixed before the bucket is made; each connection's
 socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached
 the pacer after its time, whose release started more than `slack` after it, or that the pacer released with a
 connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
@@ -220,7 +233,7 @@ from verity.protocols.accounting.certifier.verifier.active import (DATA, HEADER,
                                                    decode_frame, encode_frame, id_request_max_tokens, precise_sleep)
 from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
-from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
+from verity.protocols.accounting.certifier.verifier.pacer import CLOCKS, Pacer, Report, raw_clock
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.protocols.accounting.certifier.verifier.release import one_request, to_watermark
 
@@ -331,6 +344,13 @@ class WardenParams:
         """A window's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
 
+    def rows_cells(self, windows: int) -> list[int]:
+        """Each connection's cell limit over `windows` windows, the period check's rows-form `cells`
+        (`NetworkCheck.Period.Schedule.rowsCells`): `egress_cells` for each of the `lanes · windows · window`
+        connections the network certifier can carry, as `_tick` admits only while fewer than `lanes` are live and serves
+        each connection in its admission bucket."""
+        return [self.egress_cells] * (self.lanes * windows * self.window)
+
     @property
     def stride_releases(self) -> int:
         """K: the most requests the network certifier releases in one slot stride with lengths rows, a lengths row's
@@ -372,6 +392,16 @@ class WardenParams:
     def payload(self) -> int:
         """P: the bytes a `DATA` cell carries."""
         return self.cell_bytes - HEADER.size
+
+    @property
+    def request_bound(self) -> int:
+        """The bytes of the longest request ingress admits: `ingress_cells` cells' payloads and, in a schedule with
+        content rows, no more than its largest class holds (`content_rows.request_room`), so that every request
+        the network certifier releases is one a class of the schedule holds."""
+        most = self.ingress_cells * self.payload
+        if self.content is None:
+            return most
+        return min(most, max(_content_rows().request_room(self.cell_bytes, c[0]) for c in self.content))
 
     @property
     def grid(self) -> GridParams:
@@ -584,7 +614,9 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
 class Warden:
     """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection,
     `run()` ticks the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts
-    whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair.
+    whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair. `clock` is the
+    host's raw clock (the module docstring's "The clock") unless a caller that drives the run injects its own, and
+    `sleep` waits against `clock`.
 
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
       default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a
@@ -605,15 +637,15 @@ class Warden:
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
     - with `paced`, seconds past `slack`, each tick hands its bucket to the pacer (`pacer.Pacer`; the module
-      docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock, `origin`'s
+      docstring's "The pacer"), which releases it `paced` after its boundary on the host's raw clock, `origin`'s
       clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
-      `pacer.Report` once its writes end. On the host's clock (`clock` `time.monotonic`) `paced` is required: only a
-      warden on an injected clock writes each bucket on its loop;
+      `pacer.Report` once its writes end. On a clock of the host's (`pacer.CLOCKS`: the raw one, its default, or the
+      steered one) `paced` is required: only a warden on an injected clock writes each bucket on its loop;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
-                 windows: int, clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], Awaitable[None]] = precise_sleep,
+                 windows: int, clock: Callable[[], float] = raw_clock,
+                 sleep: Callable[[float], Awaitable[None]] | None = None,
                  publish: Callable[[BlockGrid, GridParams], None] | None = None,
                  withhold: Callable[[BlockGrid, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
@@ -621,7 +653,7 @@ class Warden:
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
                  watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
                  lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
-        if paced is None and clock is time.monotonic:
+        if paced is None and any(clock is host for host in CLOCKS.values()):
             raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
                              "runs, which a server's writes move; give it `paced`, seconds past the slack")
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
@@ -644,7 +676,8 @@ class Warden:
         self._watermark_unsent = bytearray()
         self._watermark_lines: deque[tuple[int, int, list[_Connection]]] = deque()
         self.params, self.connect = params, connect
-        self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
+        self.origin, self.windows, self.clock, self.slack = origin, windows, clock, slack
+        self.sleep = sleep if sleep is not None else (lambda delay: precise_sleep(delay, self.clock))
         self.egress = Certifier(egress_link, params.grid)
         self.ingress = Certifier(ingress_link, params.grid)
         self.fails = Certifier(fails_link, params.fails_grid)
@@ -662,6 +695,7 @@ class Warden:
         self._ended = 0  # under form 2, the windows whose lengths rows are ended: 0 … _ended − 1
         #: the first bucket that admits nothing: under form 2, the first from which a connection may end past the run
         self._admits = windows * params.window - (params.span if params.closes else 0)
+        self._request_bound = params.request_bound
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -701,15 +735,17 @@ class Warden:
     async def run(self) -> None:
         tau = self.params.bucket_ms / 1000
         reports = None
+        self.clock()  # a clock that can't be read refuses here, before the pacer starts or a tick runs
         if self.paced is not None:
-            self._pacer = await Pacer.start(backlog=WRITE_BACKLOG)
+            self._pacer = await Pacer.start(backlog=WRITE_BACKLOG, clock="raw")
             reports = asyncio.create_task(self._reports(self._pacer))
         opening = asyncio.create_task(self._open_watermark()) if self.watermark is not None else None
         try:
             for t in range(self.windows * self.params.window):
                 deadline = self.origin + t * tau
                 await self.sleep(deadline - self.clock())
-                late = self.clock() - deadline
+                while (late := self.clock() - deadline) < 0:  # a wait that ended early: no tick runs before its time
+                    await self.sleep(-late)
                 self.lateness.append(late)
                 if late > self.slack:
                     for grid in (self.ingress, self.egress, self.fails):
@@ -874,8 +910,9 @@ class Warden:
         c.tasks = [asyncio.create_task(self._client(c)), asyncio.create_task(self._server(c))]
 
     async def _client(self, c: _Connection) -> None:
-        """Read the client's cells into `c.ingress` until its `END` (or its end of stream), at most `ingress_cells`
-        cells' bytes. Only the payload of each passes: the network certifier makes every cell it sends."""
+        """Read the client's cells into `c.ingress` until its `END` (or its end of stream), at most the ingress
+        bound's bytes (the schedule's `request_bound`). Only the payload of each passes: the network certifier makes
+        every cell it sends."""
         B, p = self.params.cell_bytes, self.params.payload
         try:
             while not c.ingress_ended:
@@ -893,7 +930,7 @@ class Warden:
                 c.ingress += raw[HEADER.size:HEADER.size + n]
                 c.bytes_in += n
                 c.ingress_ended = kind == END
-                if c.bytes_in > self.params.ingress_cells * p:
+                if c.bytes_in > self._request_bound:
                     c.problem = c.problem or "ingress"
                     return
                 self._changed.set()
@@ -944,7 +981,7 @@ class Warden:
             if c.ingress_end is None and not c.refused and not c.ingress_cells and not sent and \
                     self.params.max_tokens_cap is not None and (len(c.ingress) >= p or c.ingress_ended):
                 c.max_tokens = id_request_max_tokens(bytes(c.ingress[:p]))
-                if c.max_tokens is None or c.max_tokens > self.params.max_tokens_cap:
+                if not c.max_tokens or c.max_tokens > self.params.max_tokens_cap:
                     c.refused, c.problem = True, c.problem or "cap"
             if c.ingress_end is not None or c.refused or (c.problem is not None and self.params.lengths is not None):
                 out.append(pad)
@@ -1137,9 +1174,9 @@ def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[B
     to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
     In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
     schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
-    request cell as the network certifier read it: a request cut into cells has one at most the cap, its response at
-    most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
-    records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
+    request cell as the network certifier read it: a request cut into cells has one from 1 to the cap, its response
+    at most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its
+    three records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With
     lengths rows every `FAIL` is at an egress slot, a client's reason (`CLIENT_REASONS`) is a connection's whose request
     has no `END` and a server's one whose request has, and a connection that was never released fails no window: its
     failure is its client's, no server saw its request, and its entry still names its reason. Each
@@ -1231,8 +1268,8 @@ def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[B
         max_tokens = None
         if cap is not None and requested:
             max_tokens = id_request_max_tokens(requested[0])
-            if max_tokens is None or max_tokens > cap:
-                problems.append(f"its request's max_tokens ({max_tokens}) is past the cap, and was released")
+            if not max_tokens or max_tokens > cap:
+                problems.append(f"its request's max_tokens ({max_tokens}) is not from 1 to the cap, and was released")
             elif live.count(DATA) > max_tokens:
                 problems.append(f"its response has {live.count(DATA)} DATA cells, past its max_tokens ({max_tokens})")
         if failed == "cap" and requested:

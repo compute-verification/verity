@@ -1,6 +1,6 @@
 """The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
-rehearsal (a certifier's or a warden's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
+rehearsal while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
 warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment, registrations and
 certificates, and writes its end, a stop of its unit included; `fetch` gives `witness/` to the run's own lane and
 vy-admin alone."""
@@ -63,13 +63,11 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
         {k: v for k, v in doc.items() if k != "unit"}
     assert A.read_ledger(host.ledger) == []
 
-    certifier = ["certifier-rehearse", "--peer", "vy-nebius-1", "--port", "8011", "--minutes", "30"]
-    for argv in (REQUEST, certifier):
-        rc, out = gate(host, argv, active=lambda r: r == doc["run"], started=started, token="cd34")
-        assert rc == 3 and "rehearsal c20261024T110000Z-ab12 still runs: one at a time" in json.loads(out)["refused"]
-    assert started == [doc["run"]]
-    rc, out = gate(host, certifier, started=started, token="cd34")
-    assert rc == 0 and "device" not in json.loads(out)
+    rc, out = gate(host, REQUEST, active=lambda r: r == doc["run"], started=started, token="cd34")
+    assert rc == 3 and "rehearsal c20261024T110000Z-ab12 still runs: one at a time" in json.loads(out)["refused"]
+    assert started == [doc["run"]] and A.certifier_runs(host) == [doc["run"]]
+    rc, out = gate(host, REQUEST, started=started, token="cd34")
+    assert rc == 0 and started == [doc["run"], "c20261024T110000Z-cd34"]
     small = ["--tokens", "64", "--requests", "4", "--minutes", "4", "--height", "10"]
     rc, out = gate(host, REQUEST + small, active=lambda r: r == "c20261024T110000Z-cd34", started=started, token="ef56")
     assert rc == 3 and "c20261024T110000Z-cd34 still runs" in json.loads(out)["refused"]
@@ -92,7 +90,8 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--minutes", "6", "--height", "10"], "--minutes 6: 100 requests take 7 minutes"),
     (["--requests", "4", "--minutes", "3", "--height", "10"], "give --minutes 4 or more"),
     (["--requests", "400", "--minutes", "16", "--height", "10"], "give --minutes 17 or more, or fewer --requests"),
-    *[(["--height", v], f"--height {v!r}: 10 to 20") for v in ("9", "21", "010", "20.0", "H", "")],
+    *[(["--height", v], f"--height {v!r}: 10 to 20")
+      for v in ("9", "1", "0", "21", "30", "010", "20.0", "+20", "20 ", "1e1", "H", "")],
     (["--requests", "3"], "--requests '3': 4 to 1700"),
     (["--requests", "1701"], "--requests '1701': 4 to 1700"),
     (["--requests", "1700", "--minutes", "59", "--height", "13"], "--minutes 59: 1700 requests take 60 minutes"),
@@ -110,14 +109,12 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--delay", "21"], "unrecognized arguments: --delay"),
     (["--window", "32"], "unrecognized arguments: --window"),
     (["--scan", "1"], "unrecognized arguments: 1"),
-    (["--temperature", "2.5"], "--temperature '2.5': 0 to 2"),
-    (["--temperature", "-0.1"], "--temperature '-0.1': 0 to 2"),
-    (["--temperature", "nan"], "--temperature 'nan': 0 to 2"),
-    (["--temperature", "1e-1"], "--temperature '1e-1': 0 to 2"),
-    (["--top-p", "0"], "--top-p '0': above 0, at most 1"),
-    (["--top-p", "1.01"], "--top-p '1.01': above 0, at most 1"),
-    (["--top-p", ".9"], "--top-p '.9': above 0, at most 1"),
-    (["--top-p", "0.99999"], "--top-p '0.99999': above 0, at most 1"),
+    *[(["--temperature", v], f"--temperature {v!r}: 0 to 2")
+      for v in ("2.01", "2.5", "3", "-0.1", "-1", ".5", "1.", "0.00001", "1e-1", "nan", "inf", "+1", "0x1", "1,5",
+                " 1", "1\n", "")],
+    *[(["--top-p", v], f"--top-p {v!r}: above 0, at most 1")
+      for v in ("0", "0.0", "0.0000", "1.01", "1.0001", "1.1", "2", "-0.5", ".9", "nan", "1e0", "9e-1", "0.99999",
+                "")],
 ])
 def test_the_gate_refuses_a_warden_rehearsal_it_cant_check(host, bad, why):
     good = dict(zip(REQUEST[1::2], REQUEST[2::2]))
@@ -160,13 +157,14 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
 
 def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
     """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
-    so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
-    first. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
+    after one for the session's start, so height 12's 4096 sign the start and 819 windows, exactly, and 1031 (55 minutes
+    of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next
+    height. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
     takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
     runs out 819 windows in. The default height, 20, signs anything the gate takes."""
     assert [A.warden_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]
     assert A.warden_height(1031, heads=733) == 13
-    assert A.warden_height(819, heads=1) == 12 and A.warden_height(819, heads=2) == 13
+    assert A.key_signatures(819) == 4096 and A.warden_height(819) == 12 and A.warden_height(819, heads=1) == 13
     assert (A.warden_windows(1559), A.warden_windows(1700), A.warden_windows(1700, scan=False)) == (1031, 1119, 60)
     assert (A.warden_minutes(1559, 13), A.warden_minutes(1700)) == (55, 64)
     long = REQUEST[:-1] + ["55", "--scan", "--prompts", "--requests", "1559", "--height"]
@@ -175,8 +173,8 @@ def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_an
         {"requests": 1559, "minutes": 55, "height": 13}
     rc, out = gate(host, long + ["12"], stdin=b"[[1]]", started=[], token="cd34")
     assert rc == 3 and json.loads(out)["refused"] == (
-        "--height 12: 1559 requests take 1031 link-windows, 5155 one-time signatures (5 a window), past the key's "
-        "4096: give --height 13 or more, or fewer --requests")
+        "--height 12: 1559 requests take 1031 link-windows, 5156 one-time signatures (the session's start and 5 a "
+        "window), past the key's 4096: give --height 13 or more, or fewer --requests")
     assert not (host.certifier / "c20261024T110000Z-cd34").exists()
     rc, out = gate(host, REQUEST[:-1] + ["60", "--scan", "--requests", "1700", "--height", "12"], started=[],
                    token="ef56")
@@ -308,6 +306,52 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
     assert end["rc"] == 1 and end["ended"] == "the rehearsal exited 1" and end["verdict"] is None
 
 
+def test_a_rehearsal_past_its_minutes_is_stopped_and_one_that_ran_runs_no_second_time(host):
+    """The run opens its tunnel with the peer's line of the peers file, waits the request's minutes and stops the
+    rehearsal there; a run that has its `out/` is refused a second time, and `status` and `fetch` refuse a run the
+    gate never wrote."""
+    rc, out = gate(host, REQUEST, started=[])
+    run = json.loads(out)["run"]
+    tunnels, waited = [], []
+
+    def tunnel_argv(ssh, local):
+        tunnels.append(ssh)
+        return TUNNEL
+
+    def past_its_minutes(proc, seconds):
+        waited.append(seconds)
+        proc.send_signal(signal.SIGTERM)
+        return proc.wait()
+
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=tunnel_argv, up=lambda t, p: True,
+                          command=rehearsal("import signal; signal.pause()"), wait=past_its_minutes)
+    assert tunnels == [["-i", "/var/lib/vy-challenger/.ssh/vy-challenger-tunnel", "research@10.0.0.2"]]
+    assert waited == [20 * 60] and end["rc"] == -signal.SIGTERM and end["ended"] == "stopped at --minutes 20"
+    assert end["verdict"] is None and set(end["files"]) == {"tunnel.log", "rehearse.log"}
+    with pytest.raises(A.Refused, match="has run already"):
+        A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+                        command=rehearsal(WARDEN_FILES), wait=lambda proc, s: proc.wait())
+    for argv in (["status", "c20261024T110000Z-ffff"], ["fetch", "c20261024T110000Z-ffff"], ["status", "c../../etc"]):
+        rc, out = A.gate(argv, host)
+        assert rc == 3 and json.loads(out)["refused"]
+
+
+def test_the_rehearsal_unit_runs_a_request_of_its_own_devices_alone(host):
+    """The unit's verbs are `REHEARSALS`, and the gate takes no other as one. A request that names neither of the
+    unit's devices, as one written before a pin that no longer runs its verb, is refused before anything is
+    written."""
+    assert REQUEST[0] in A.REHEARSALS and "certifier-rehearse" not in A.REHEARSALS
+    rc, out = gate(host, ["certifier-rehearse", *REQUEST[1:]], started=[])
+    assert rc == 3 and not host.certifier.exists()
+    rc, out = gate(host, REQUEST, started=[])
+    d = host.certifier / json.loads(out)["run"]
+    request = json.loads((d / "request.json").read_text())
+    (d / "request.json").write_text(json.dumps({k: v for k, v in request.items() if k != "device"}))
+    with pytest.raises(A.Refused, match="names no device the rehearsal unit runs"):
+        A.certifier_run(host, d.name, pinned=PIN, now=lambda: T1, command=lambda *a: pytest.fail("ran"))
+    assert not (d / "out").exists()
+
+
 def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the_tunnels_local_end(tmp_path):
     """A request.json written before the gate took `--height` runs at the deployed key's, 20, as one that gives none."""
     req = {"device": "warden", "requests": 100}
@@ -319,6 +363,8 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
                             tree=Path("/opt/vy-challenger") / PIN) == argv
     assert A.warden_command(req | {"height": 10}, tmp_path, "u")[7:9] == ["--height", "10"]
     assert A.warden_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
+    assert A.REHEARSAL_HEIGHT == (10, A.lms.DEPLOYED.H) and A.lms.DEPLOYED.H == 20
+    assert A.certifier_env(Path("/opt/vy-challenger") / PIN)["PYTHONPATH"] == f"/opt/vy-challenger/{PIN}"
 
 
 def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_the_scans_schedule(host, tmp_path):
@@ -397,7 +443,9 @@ def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(ho
     of the traffic carries both (`warden_serve.varied_traffic`) and an endpoint's own generation config never applies;
     a request.json written before the gate took them runs at the defaults."""
     for k, (given, recorded) in enumerate((([], (0.0, 1.0)), (["--temperature", "0.6", "--top-p", "0.9"], (0.6, 0.9)),
-                                          (["--temperature", "2", "--top-p", "0.0001"], (2.0, 0.0001)))):
+                                          (["--temperature", "2", "--top-p", "0.0001"], (2.0, 0.0001)),
+                                          (["--temperature", "2.0000", "--top-p", "1.0"], (2.0, 1.0)),
+                                          (["--temperature", "1.2345"], (1.2345, 1.0)))):
         rc, out = gate(host, REQUEST + given, started=[], token=f"{k:04x}")
         assert rc == 0, out
         request = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
@@ -879,12 +927,10 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
 def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
     """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_warden_serve` holds
     it to `scan_zk.CLASS.KI`): the scan refuses a request of more, so the gate takes exactly KI and refuses KI + 1 at
-    input. A varied certifier rehearsal's prompts, which no scan reads, keep the varied plan's 2048
-    (`CERTIFIER_PROMPTS`)."""
+    input."""
     assert A.prompts_of(json.dumps([[0] * 1024, [1]]).encode()) == [[0] * 1024, [1]]
     with pytest.raises(A.Refused, match="each an array of 1 to 1024 token ids"):
         A.prompts_of(json.dumps([[0] * 1025]).encode())
-    assert A.prompts_of(json.dumps([[0] * 2048]).encode(), A.CERTIFIER_PROMPTS) == [[0] * 2048]
 
 
 def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_and_tokens(host, tmp_path):

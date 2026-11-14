@@ -184,6 +184,13 @@ VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 
+# The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+CERTIFIER_MARK = "verity-network-certifier/mark/v1"
+
+# The network certifier's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+CERTIFIER_SPAN = "verity-network-certifier/span/v0"
+CERTIFIER_SPAN_PROTOCOL = "verity/certifier/span/v0"
+
 # Not yet read from here: the commitments' own (`verity.commitments`)
 BLAKE3_KEYED_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
@@ -368,6 +375,7 @@ CERTIFIER_ROW_SHA512 = "verity-network-certifier/row-sha512/v1"
 CERTIFIER_SCAN_OK_ROW_SALT = "verity-network-certifier/scan-ok-row-salt/v1"
 CERTIFIER_SERVICE_SPEC = "verity-network-certifier/service-spec/v0"
 CERTIFIER_SESSION = "verity-network-certifier/session/v0"
+CERTIFIER_START = "verity-network-certifier/start/v1"
 CERTIFIER_STATEMENT = "verity-network-certifier/statement/v0"
 CERTIFIER_TRANSFER_REGISTRATION = "verity-network-certifier/transfer-registration/v1"
 CERTIFIER_TRANSFER = "verity-network-certifier/transfer/v1"

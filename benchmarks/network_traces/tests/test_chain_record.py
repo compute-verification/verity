@@ -50,6 +50,7 @@ BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/inter
 
 def _load(name: str):
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location(f"network_traces_{name}", HERE / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -247,7 +248,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest": {"audit": {"window_accepted": True}}}}),
-        job=put("job.json", job), warden_run="g1/warden")
+        job=put("job.json", job), network_certifier_run="g1/warden")
 
 
 def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(tmp_path):
@@ -259,7 +260,7 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     assert cr.report(_steps(tmp_path, ok | {"profile": "planned"}, endpoint=False))["verdict"] == "accepted"
     assert cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))["verdict"] == "refused"
     steps = _steps(tmp_path, ok)
-    steps.warden_run = None
+    steps.network_certifier_run = None
     assert cr.report(steps)["verdict"] == "refused"
     failed = cr.report(_steps(tmp_path, {"profile": "advice", "rc": {"n2": "1", "scan": "0"},
                                          "why": {"n2": "ValueError: no profile"}}))
@@ -335,8 +336,9 @@ def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
     p, c = case["params"], json.loads(bytes.fromhex(case["commitment"]))
     regs = {r["window"]["window"]: R.digest(r) for r in c["windows"]}
-    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"], "session": p["session"],
-                                             "key": {"public": p["key"]},
+    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"],
+                                             "session": p["keys"][0]["session"],
+                                             "key": {"public": p["keys"][0]["key"]},
                                              "rows": [{"window": w, "certified": True} for w in regs]}))
     n2 = json.loads(Path(steps.n2).read_text())
     n2["members"]["honest"]["windows"] = [{"window": w, "registration": d, "accepted": True, "proof": {"proved": True},
@@ -360,9 +362,11 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     """certifier/v0 cases from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest), which
     also re-decides them here in the Lean executable's place."""
     import jsonschema
-    from block_certifier import block_leg
+    from benchmarks.network_traces.block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
-    case = period.case("accept", 1, "clock")
+    # a chain's certifier session numbers its execution phases from 0: the first case whose one entry starts there
+    case = next(c for n in range(1, 64) for c in [period.case("accept", n, "clock")]
+                if [e["start"] for e in c["params"]["keys"]] == [0])
     answer = period.reference(case)
     steps = _chain_of(tmp_path, case)
     honest = steps.period_answer = _period(tmp_path / "period", case, answer)
@@ -378,7 +382,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     assert f"K = {K} bits over 1 link-windows, error {eps} (quantity.eps); at δ = 1/100: {at}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
-                    "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,
+                    "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.network_certifier_run,
                     "--audit", *steps.audit, "--period-answer", steps.period_answer, "--server", steps.server,
                     "--out", str(out)]) == 0
     assert json.loads((out / "block.json").read_text()) == entry
@@ -391,10 +395,20 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         return block["why"]
 
     foreign = period.case("accept", 0, "clock")
+    theirs = [k for k in ("link", "keys") if foreign["params"][k] != case["params"][k]]
+    assert "keys" in theirs
     assert why(period_answer=_period(tmp_path / "foreign", foreign, period.reference(foreign))) == (
-        "the case's link, session: not the chain's, so another certifier session's period")
+        f"the case's {', '.join(theirs)}: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
+    # another entry listed after the period's execution phases: the verifier accepts it, and it is not this chain's
+    p = case["params"]
+    another = {"key": period.lms.public_key(period._key(0, 2)).hex(), "session": bytes(32).hex(),
+               "start": p["first"] + p["windows"]}
+    trusting = case | {"params": p | {"keys": [*p["keys"], another]}}
+    assert period.reference(trusting) == answer
+    assert why(period_answer=_period(tmp_path / "trusting", trusting, answer)) == (
+        "the case's keys: not the chain's, so another certifier session's period")
     rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
@@ -422,7 +436,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     assert why(period_answer=honest, server=None).startswith("no --server")
     assert why(period_answer=None) == cr.NO_PERIOD_ANSWER
     refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "server": "node-1",
-                                           "warden_run": None}))
+                                           "network_certifier_run": None}))
     assert refused["verdict"] == "refused" and refused["block"]["why"].startswith("the chain is refused")
     assert "no certifier entry: the chain is refused" in cr.markdown(refused)
     scan_only = cr.report(SimpleNamespace(**{**vars(steps), "n2": None, "period_answer": honest, "server": "node-1"}))
@@ -437,7 +451,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
         {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}}))
     args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
-            steps.scan, "--job", steps.job, "--warden-run", steps.warden_run]
+            steps.scan, "--job", steps.job, "--warden-run", steps.network_certifier_run]
     run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
                         json.loads((tmp_path / name / "report.json").read_text()))
 
@@ -551,7 +565,7 @@ def test_subset_bound():
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
     job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
     steps = _steps(tmp_path, job)
-    steps.scan = steps.warden_run = None
+    steps.scan = steps.network_certifier_run = None
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
          "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))

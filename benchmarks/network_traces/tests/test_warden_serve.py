@@ -1,8 +1,9 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
-id `deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
-another bucket, and a response that isn't the record's; a window in which the network certifier refused a connection is
+id `deployment.json` names, and refuses a deployment whose start isn't the one certified, a record that isn't what
+was certified, a cell that reached its client in another bucket, and a response that isn't the record's; a window in
+which the network certifier refused a connection is
 certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
 certifier's process, moves no tick in `serve`'s publisher process."""
 
@@ -43,6 +44,7 @@ SLOW_COMMIT_S = 0.4
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_warden_serve",
                                                   ROOT / "benchmarks/network_traces/warden_serve.py")
     mod = importlib.util.module_from_spec(spec)
@@ -652,27 +654,29 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
          late: dict[int, float] | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
-    `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`, its
-    connection rows kept as the publisher process keeps them when the schedule has lengths rows (its key then a
-    height taller, for their heads), `deployment.json`, and `client.json` with every cell's arrival 1 ms into the
-    bucket it was sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side
-    of each connection, in connect order. Returns the network certifier."""
+    `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
+    before any record, each window committed by `commit`, its connection rows kept as the publisher process keeps
+    them when the schedule has lengths rows (its key then a height taller, for their heads), `deployment.json`, and
+    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at
+    P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
+    network certifier."""
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
     if process:
-        import warden_serve  # by name, so that the spawned process finds its functions
+        from benchmarks.network_traces import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, height)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
                  "lengths": publisher.lengths}
-        public = publisher.key
+        public, start = publisher.key, publisher.start
     else:
         signer = ws.cs.signer(key, height)
         issuer = ws.Issuer(signer, SESSION)
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold,
                          "lengths": ws.crr.Keeper(out, issuer, params, ws.LINK).keep}, signer.public_key()
+        start = ws.start_json(ws.certify_start(issuer, 0, params))
     answers = iter(responses)
 
     async def connect():
@@ -724,7 +728,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     clients, warden = asyncio.run(main())
     publisher.close()
     deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows, slack=warden.slack,
-                                      run_id=warden.run_id)
+                                      run_id=warden.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -761,7 +765,8 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert s["cells_in_their_bucket"][0] == s["cells_in_their_bucket"][1] > 0
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
-    assert "ACCEPTED: 3/3 ended" in ws.table(result)
+    assert "ACCEPTED: 3/3 ended" in ws.table(result) and "start at 0 ms of the key's life" in ws.table(result)
+    assert s["start"] == {"base_ms": 0, "certified": True}
     assert s["cell_rows"] == \
         {"registered": 2, "of": 2, "rows": [PARAMS.window], "row_bytes": [PARAMS.lanes * PARAMS.slots * PARAMS.cell_bytes]}
     assert s["cell_timing"]["commit_ms"]["n"] == s["cell_timing"]["sign_ms"]["n"] == 2
@@ -787,6 +792,16 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
         ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+
+    def edit_start(change) -> None:
+        doc = json.loads((out / "deployment.json").read_text())
+        change(doc)
+        (out / "deployment.json").write_text(json.dumps(doc))
+
+    assert refused(lambda: edit_start(lambda d: d.pop("start"))) == \
+        ["the session's start isn't certified (no start's certificate)"]
+    assert refused(lambda: edit_start(lambda d: d["start"].update(base_ms=PARAMS.window * PARAMS.bucket_ms))) == \
+        ["the session's start isn't certified (opening)"]
 
     problems = refused(flip_record)
     assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems
@@ -861,7 +876,8 @@ def test_the_client_connects_where_the_endpoints_file_says_and_names_its_upstrea
         server = await asyncio.start_server(take, "127.0.0.1", 0)
         ends = ws.endpoints_record(server.sockets[0].getsockname()[:2], ("127.0.0.1", 2))
         (tmp_path / ws.ENDPOINTS).write_text(json.dumps(ends))
-        (tmp_path / "deployment.json").write_text(json.dumps({"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0}))
+        (tmp_path / "deployment.json").write_text(json.dumps({"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0,
+                                                              "origin_raw": 0.0}))
         dep = json.loads((tmp_path / "deployment.json").read_text())
         async with server:
             return await ws.client(dep, ws.read_endpoints(tmp_path / "deployment.json"), [{"at": 0.0, "body": body}],
@@ -1065,13 +1081,16 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
         ws.rehearse(args)
     serve, kw = started.value.args
     assert kw["pass_fds"] == (args.listen_fd,)
+    key = tmp_path / "key"
+    ws.make_key(key, 4)
+    serve[serve.index("--key") + 1] = str(key)
 
-    public, got = ws.cs.signer(tmp_path / "key", 4).public_key(), []
+    public, got = ws.registered_key(key), []
 
     class Publisher:
-        """`PublisherProcess` with no process: the key's public half, and nothing published."""
+        """`PublisherProcess` with no process: the registered key, no start's certificate, and nothing published."""
 
-        usage = feeder = None
+        usage = feeder = start = None
         process = types.SimpleNamespace(pid=None)
 
         def __init__(self, *a, **kw) -> None:

@@ -10,6 +10,8 @@ public import NetworkCheck.RecordsBytes
 public import NetworkCheck.ScanOk
 public import NetworkCheck.Period
 public import NetworkCheck.TransferBlocks
+public import NetworkCheck.RowsAudit
+public import NetworkCheck.Span
 
 /-!
 # The network certificate's checks
@@ -28,7 +30,12 @@ as bytes, is v4's read as bits. `NetworkCheck.Period` is onsite's communication 
 with their clocks (the clock form) or the network certifier's own rows, registered under its one schedule and read by
 the scan (the rows form), beside its compute audits, and the bound `K` on what left the site, held to its Python mirror
 by `tests/test_network_period_protocol.py`. `NetworkCheck.ScanOk` is the rows form's constants: each scan member's ok
-bits' root, computed from the schedule's T, which the period check holds every scan's registration to. Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
+bits' root, computed from the schedule's T, which the period check holds every scan's registration to.
+`NetworkCheck.RowsAudit` audits a run of the active network certifier over
+the records it signed (`verity/network-rows/v1`, the `network-rows` executable): each record held to its certified
+head, then the certifier program's rows audit (`NetworkCertifier.Rows.audit`), which refuses cells cut, clocked or
+ordered otherwise than the schedule.
+Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
 `Flock.Canon`, `Flock.Public`'s frame-v3 hash and `Flock.RegKnown`'s leaves at known content), the core protocol
 interface, the certifier program and the LMS port.
 -/
@@ -39,4 +46,11 @@ interface, the certifier program and the LMS port.
 `NetworkCheck.TransferBlocks` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
+-/
+
+/-!
+`NetworkCheck.Span` is the count over a span between two marks the network certifier certified
+(`verity/certifier/span/v0`, the `network-span` executable): whether every execution phase of the span and of its tail
+is certified under the schedule, and the bits that can have left on the link over them, held to its Python mirror by
+`tests/test_network_span_protocol.py`. Beyond the above it imports the table of domain separators (`Identity.Domains`).
 -/
