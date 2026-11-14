@@ -169,7 +169,7 @@ def _at(doc: Any, path: str) -> Any:
     for k in [k for k in path.split("/") if k]:
         if isinstance(doc, dict):
             doc = doc.get(k, "<absent>")
-        elif isinstance(doc, list) and k.isdigit():
+        elif isinstance(doc, list) and k.isdecimal():
             doc = doc[int(k)] if int(k) < len(doc) else "<absent>"
         else:
             return doc
