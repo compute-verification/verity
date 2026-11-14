@@ -103,10 +103,14 @@
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
 # lint, whose docstrings and examples name the older name as the older name, files whose bytes a digest pins (`rename.py`
-# repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests and the Lean tools' fixtures.
+# repins a `TRUSTED.sha256` line itself, and the vLLM registry's three files whose function sources enter a manifest's
+# digest), lock files, move_check's own tests and the Lean tools' fixtures.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "tests/test_retired_terms.py", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
-           "**/uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py", "benchmarks/census/schemas/**"]
+           "**/uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py", "benchmarks/census/schemas/**",
+           "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+           "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+           "adapters/vllm/verity_vllm/definitions/registry/b1.py"]
 
 [keep]
 # The Glossary's row of the older name, which names it; the two-stage vectors' exporter's docstring, which keeps its text
