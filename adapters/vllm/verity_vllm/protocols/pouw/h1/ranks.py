@@ -40,11 +40,11 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.spot.device.challenger import LiveRecord
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks

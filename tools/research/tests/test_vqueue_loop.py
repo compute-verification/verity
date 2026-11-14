@@ -2187,7 +2187,7 @@ def test_the_failing_tests_graph2_s_verdict_names_count_beside_its_result_s_for_
 
 
 #: a lean-suites result's row of a suite that failed on one test and nothing more
-ROW = {"name": "verity-flock", "suite": "verity/protocols/flock/prover", "failed_tests": ["tests/test_d.py::test_draw"], "beyond_tests": False}
+ROW = {"name": "verity-flock", "suite": "verity/protocols/proofs/flock/prover", "failed_tests": ["tests/test_d.py::test_draw"], "beyond_tests": False}
 #: the test a fail for more than the tests it names adds, of the candidate's key alone
 BEYOND = "fault:suite {} failed beyond the tests it names, at sha512:t1"
 
@@ -2652,7 +2652,7 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
     its base lists may go.  A candidate whose base's check isn't listed waits for it."""
     env.gates = ["pytest", "lean-build", "lean-suites"]
-    lean, exe = "verity/protocols/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/flock/verifier/.lake/build/bin/v"}
+    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
     build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
@@ -4609,8 +4609,8 @@ def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_au
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") is None
 
 
-@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
-                                         ("verity/protocols/pouw/verifier/lean/models.json", True)])
+@pytest.mark.parametrize("path, takes", [("verity/protocols/accounting/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/accounting/pouw/verifier/lean/models.json", True)])
 def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits_itself_and_one_beside_it_does_not(
         env, monkeypatch, path, takes):
     """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
@@ -4619,7 +4619,7 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     file beside the package's directory takes its base's."""
     from research.landing import AFTER_LANDING
 
-    pkg = "verity/protocols/pouw/verifier/lean/check"
+    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
     env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
     env.put(2, {path: "{}\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
@@ -4631,8 +4631,8 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
 
 
-@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
-                                         ("verity/protocols/pouw/verifier/lean/check/README.md", True)])
+@pytest.mark.parametrize("path, takes", [("verity/protocols/accounting/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/accounting/pouw/verifier/lean/check/README.md", True)])
 def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits_itself(env, monkeypatch, path, takes):
     """The candidate's tree no longer lists a file its member deletes, and the audit's declaration says of a path what it
     says of a file there: the member's change is judged in that tree's files with the paths it changes, so the candidate on
@@ -4640,7 +4640,7 @@ def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits
     whose member only deletes the package's README takes its base's."""
     from research.landing import AFTER_LANDING
 
-    pkg = "verity/protocols/pouw/verifier/lean/check"
+    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
     _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
     env.put(1, {f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
     env.put(2, {path: None})
@@ -5034,9 +5034,9 @@ OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = 
                 ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"), ("flock-rust-tests", "proofs"))),
             Q.REGISTRY.as_posix(): json.dumps({"handles": [
                 *({"handle": h} for h in ("ci", "circuits", "vllm", "lane-1", "lane-2")),
-                {"handle": "heads", "owns": ["verity/protocols/certifier/"]},
+                {"handle": "heads", "owns": ["verity/protocols/accounting/certifier/"]},
                 {"handle": "artifacts", "owns": ["fixtures/"]}]}),
-            "verity/protocols/certifier/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
+            "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
             "fixtures/head.json": json.dumps({HEAD: "no pin"}) + "\n"}
 #: a change meeting circuit-check's inputs (`queue.forces_cold`), and one that doesn't
 CIRCUITS, OTHER = {"verity/circuits/rope.py": "# rope\n"}, {"a.txt": "1\n"}
@@ -5231,7 +5231,7 @@ def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_
     too); one no pins file pins, or only one the registry gives no owner, rings the lane of each member whose change meets
     circuit-check's inputs (#2's, not #1's), and the step's owner in ci.toml (circuits) where one such member has no lane in
     the registry (#3) or none meets them."""
-    second = {"own pins": {"verity/protocols/certifier/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
+    second = {"own pins": {"verity/protocols/accounting/certifier/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "unowned pins": {"verity/circuits/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "job": {"b.txt": "2\n"}}.get(who, CIRCUITS)
     prs = [OTHER, second, *([{"verity/circuits/x.py": "# x\n"}] * (who == "stranger"))]
