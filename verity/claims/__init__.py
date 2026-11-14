@@ -324,6 +324,26 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # the two halves of Pearl-C's TT_OUT at the H100 record, rev1 (security/Definitions/Pouw/Assumptions/PearlC/TTOutS8.lean),
+    # open premises of Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192 and SampledH100Rev1S8Llama32_1b: `W1CompleteH100`
+    # (falsified on the H200) and `TTOutTilePearlCH100Rev1S8`; benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py is the
+    # conjecture's falsification test
+    Entry("w1-complete-h100", "assumption",
+          "W1 is complete for the H100's credited work: every adversary of the cost model at an in-domain workload "
+          "within a cost and a query count has a W1 adversary on the H100 (or the H200) with INT8 within the same cost "
+          "and count whose good tiles at the H100 record per second at the tensor clock (rev1) exceed every credit at "
+          "least as often over the oracle and the salt; W1's prices are the data sheets' per-MAC tensor-core ratios with the "
+          "SM pipes priced per second at the 1830 MHz tensor clock beside the 1980 MHz SM clock (H100 whitepaper "
+          "Tables 1 and 3, H200 data sheet), with SHA-512 compressions and first fetches free; refuted by a program on "
+          "the card, within a cost and a query count, that earns more good-tile credit with higher probability than "
+          "every W1 program within them; falsified on the H200, where the timed loop of FP32 beside the tensor pipe "
+          "refutes both data-sheet readings of an FP32 instruction's price", "W1 complete (H100)",
+          "measured"),
+    Entry("tt-out-tile-pearl-c-h100-rev1", "assumption",
+          "Pearl-C's TT_OUT(1/400) per audit tile at the H100 record per second at the tensor clock, rev1, over W1 on "
+          "the H100 with INT8 at its best case for the adversary: no W1 program outputs a good tile's words, before the "
+          "salt is drawn, at a cost below (1 − g₀) of the tile's credit except with probability δ; refuted by such a "
+          "program for a tile in the domain", "TT_OUT tile (H100, rev1)", "conjectured"),
     # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
     # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
