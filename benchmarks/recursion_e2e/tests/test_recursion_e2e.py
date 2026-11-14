@@ -95,6 +95,7 @@ def test_wall_seconds_reads_both_forms() -> None:
 
 def test_stat_is_median_and_range() -> None:
     s = RP.Stat.of([3.0, None, 1.0, 2.0])
+    assert s is not None
     assert (s.median, s.min, s.max, s.values) == (2.0, 1.0, 3.0, (3.0, 1.0, 2.0))
     assert RP.Stat.of([None]) is None
 
