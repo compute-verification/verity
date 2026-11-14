@@ -60,7 +60,12 @@ sampled tiles over the inert-work bound, and the inert-work share ι's) and its 
 over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
 the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
 commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
-cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. Where the passes hold the LM head's
+cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. An answer held to its class's fixed
+load publishes its work in the grid form instead (``give_up`` among it: Pearl+'s `verify_run.grid_work`): its ``macs``
+are the passes' whole MACs, each call's real MACs less its side channels, and its ``credited`` the whole passes' credit
+less ``give_up``, the give-up padded up to H1's window grid. So there the split's whole MACs are the answer's ``macs``,
+its credit, floored, is at least the answer's ``credited`` and at most that plus ``give_up``, and what the padding
+takes off past the split's credit is the cause ``grid``. Where the passes hold the LM head's
 calls, the LM head is no cause of its own: its calls are calls like the linears', and what the head computes outside
 the passes is the cause ``lm_head_outside``, as the linears' is ``outside``. The ε deduction is the run's, at its
 sample: the verifier takes it off the records whose cells hold the most MACs a ticket, so the calls it lands on carry it
@@ -126,7 +131,7 @@ CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "lm_head_outside": 
           "excluded_b": "excluded B rows' column blocks", "voluntary": "voluntary rows' bands and blocks",
           "kept_width": "side channels (k beyond |K|)", "epsilon_macs": "ε's deduction",
           "over_bound_macs": "sampled tiles over the inert-work bound", "rho_macs": "ι, the inert-work share",
-          "floor": "the credit's floor"}
+          "floor": "the credit's floor", "grid": "the give-up padded up to the window grid"}
 #: a call's terms the split states, beside its MACs
 ROWS = ("excluded_a", "excluded_b", "voluntary", "kept_width")
 TERMS = ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")
@@ -393,8 +398,14 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
         raise Unreadable("the per-call split's passes' records are not the answer's")
     if stated != sums or totals.get("credited") != int(sums["credited_macs"]):
         raise Unreadable("the per-call split's totals are not its calls' sums")
-    if (sums["checked_macs"], int(sums["credited_macs"])) != (work["macs"], credited):
-        raise Unreadable(f"the per-call split's calls credit {int(sums['credited_macs']):,} of "
+    exact = int(sums["credited_macs"])
+    if "give_up" in work:
+        whole = sums["checked_macs"] + sum(sums[x] for x in ROWS[:3])
+        if whole != work["macs"] or not credited <= exact <= credited + work["give_up"]:
+            raise Unreadable(f"the per-call split's calls credit {exact:,} of {int(whole):,} whole MACs and the answer's "
+                             f"grid form {credited:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
+    elif (sums["checked_macs"], exact) != (work["macs"], credited):
+        raise Unreadable(f"the per-call split's calls credit {exact:,} of "
                          f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['macs']:,}")
     if sums["macs"] - in_head > macs["linears"]:
         raise Unreadable(f"the per-call split's calls hold {int(sums['macs'] - in_head):,} real MACs, more than the "
@@ -405,6 +416,8 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
     gave = {("lm_head_outside" if heads else "lm_head"): macs["lm_head"] - in_head, "attention": macs["attention"],
             "outside": macs["linears"] - (sums["macs"] - in_head),
             **{x: sums[x] for x in (*ROWS, *TERMS[:3])}, "floor": sums["credited_macs"] - credited}
+    if "give_up" in work:
+        gave |= {"floor": sums["credited_macs"] - exact, "grid": exact - credited}
     give_up = sum(macs.values()) - credited
     assert sum(gave.values()) == give_up, (gave, give_up)
 
