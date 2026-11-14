@@ -153,7 +153,7 @@ def test_the_spec_is_built_from_the_case_s_checkpoint_the_workload_and_the_optio
 
 
 @pytest.mark.parametrize("case, entries, picked", [
-    ("B1", [{"role": "B1-fp8", "repo": "x"}], {"role": "B1-fp8", "repo": "x"}),
+    ("B1", [{"role": "B1-fp8", "repo": "x", "revision": "r1"}], {"role": "B1-fp8", "repo": "x", "revision": "r1"}),
     ("B0", [{"role": "B0-fp8", "repo": "x"}], None),
     ("B0", [{"role": "B1", "repo": "y"}, {"role": "B0", "repo": "x"}], {"role": "B0", "repo": "x"}),
     ("B1", [{"repo": "x"}], None),
