@@ -1,7 +1,8 @@
 """Pearl+ for `verity bench overhead`: the PoUW harness's arm (`benchmarks/pouw/harness/arm.py`, v0.6) over the served
 Pearl-C call on an H100 or H200 (`verity_vllm.protocols.pouw.pearl_c` under `SERVED`, on this directory's kernels, the
 serial schedule), and its ε. The door registers both in `verity_bench.overhead.SCHEMES`; the three names it fixes are each
-one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the reference verifier's declaration) and `epsilon`.
+one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the verifier's declaration, whose verdict is the
+Lean's) and `epsilon`.
 
 - **The cubin** is the file `$VERITY_BENCH_CUBIN` names (the art the door sent), listed in the build record's ``binaries``
   so the SASS gate passes it before anything is timed. Without it the arm builds one into the run's directory
@@ -68,8 +69,11 @@ CUBIN_ENV = "VERITY_BENCH_CUBIN"
 #: the cubin of record (``cubin``: its art id, sha256 and size) and, once one is stated, the window of record `epsilon`
 #: reads (``window``)
 PINNED = HERE / "overhead_arm.json"
-#: the reference verifier, from the run's working directory (the source tree's root)
-VERIFY_RUN = "benchmarks/pouw/pearl_c_vllm/verify_run.py"
+#: Pearl+'s verdict steps, the Python twin's (``verify``) and the Lean's (``lean``), from the run's working directory (the
+#: source tree's root)
+SERVED_PASSES = "benchmarks/pouw/pearl_c_vllm/served_passes.py"
+#: the samples each shape's pass is verified at
+DRAWS = 3
 #: the call index of every call the arm makes: the served reference's, whose keys the launch reads
 INDEX = 0
 #: the challenger's epoch for the arm's coins
@@ -81,12 +85,22 @@ DELTA = Fraction(1, 100)
 
 
 def verifier() -> dict:
-    """The build record's ``verifier`` (`arm.check_verifier`): `verify_run.py` on each shape's retained pass, which names
-    the manifest's sha256 on its ACCEPT or REJECT line, under the coins `dump` writes beside it; the no-write control's at
-    the same path under ``negative/``, which it must reject."""
-    return {"name": "verify_run.py: the reference replay of a retained Pearl-C pass", "per": "shape",
+    """The build record's ``verifier`` (`arm.check_verifier`): Pearl+'s verdict on each shape's retained pass alone, the
+    Lean's. First the Python twin (`served_passes.py verify --manifest`) judges the pass under the coins `dump` writes
+    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record there; its
+    line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
+    unaccepted. Then the Lean step (`served_passes.py lean`, PouwCheck.PearlPlus's ``pouw-pearlplus`` built in the tree)
+    judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
+    ``REJECT`` and names the manifest's sha256, and where the Lean refuses or disagrees it names none. The no-write
+    control's at the same path under ``negative/``, which the Lean must reject."""
+    pass_ = ["--passes", "{dir}", "--manifest", "{transcript}"]
+    return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwCheck.PearlPlus) on a retained Pearl-C pass, "
+                    "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", VERIFY_RUN, "{transcript}", "--coins", "{dir}/coins.json", "--commit", "{commit}"]]}
+            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
+                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
+                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{dir}/pearlplus-verify.json",
+                          "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]]}
 
 
 def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:

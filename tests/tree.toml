@@ -189,6 +189,11 @@ means = "one proof system's verifier proved in another's proofs, and the ZK serv
 protocol = true
 
 [[tree]]
+path = "verity/protocols/proofs/spot_flock/"
+means = "SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's lists for the proofs, with the recursive audit"
+protocol = true
+
+[[tree]]
 path = "verity/protocols/accounting/pouw/"
 means = "proof of useful work"
 protocol = true
