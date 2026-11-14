@@ -2915,13 +2915,14 @@ class Loop:
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         steps.lap("mapped")
-        try:
-            for rec in self._prebuilds(t):
-                self.write(rec)
-                logged.append(rec)
-        except (QueueError, OSError, subprocess.SubprocessError, ValueError) as e:
-            self.out(f"research queue vqueue: tick {t.n}: the Lean prebuilds failed: {e}")
-        steps.lap("prebuild")
+        if self.prebuild is not None and not self.shadow:
+            try:
+                for rec in self._prebuilds(t):
+                    self.write(rec)
+                    logged.append(rec)
+            except (QueueError, OSError, subprocess.SubprocessError, ValueError) as e:
+                self.out(f"research queue vqueue: tick {t.n}: the Lean prebuilds failed: {e}")
+            steps.lap("prebuild")
         if not stopped and self.left_out is not None:       # last: a failure here skips none of the tick's bookkeeping
             for rec in self._leaves(t):
                 self.write(rec)
