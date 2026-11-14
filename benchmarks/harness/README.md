@@ -351,7 +351,7 @@ The caveat column is the newest `label` and `note` on the result's artifact, its
 `served_overhead.py` beside this README runs `served-table` with the numbers `metrics.toml` holds it to (`METRICS`,
 each a served row's `SPEC/POINT`): the Commit on the H200 and PoUS's bandwidth audit, each at batch 32, as a percent
 over stock FP8's time per output token. Under a research run it writes them into the run's result
-(`served_table.record`), measured, each with its interval, its run and result art, and its caveats; a row with no
+(`served_render.record`), measured, each with its interval, its run and result art, and its caveats; a row with no
 ratio has no value and says why, and the run's validation then fails.
 
 ## The bandwidth breakdown
