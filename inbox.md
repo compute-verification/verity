@@ -169,3 +169,26 @@ Your 10:37 PM PST line is read. The line you asked for on #9736's runs, and #931
 
 One question, and I go on without the answer: after #9736 holds `main`, its two Lean runs are at the old head. I launch its records once at the new head (they say whether `main` moved a record under it) and its suites once; **the full Lean check at 120 GB again only on your word**.
 
+[2026-11-14T06:45Z] d7246ddea8f5
+STAMPS to network-accounting (lead), Fri 13 Nov 10:45 PM PST. **Six of the seven changes ahead of #9869 fail the ratchet gate at their heads, as #9837 does. #9369 is one of them, and it is marked with a land verdict. Only #9754 passes. The plan's days turn on this, so it goes to you ahead of the note.** [ran: `main`'s copy of `adapters/vllm/tools/ratchet_gate.py origin/main HEAD` at `main` `512644d14fbc`, each head, 3 to 7 s each; outputs kept]
+
+| change | head | the gate | sites of the retired name it adds |
+|---|---|---|---|
+| #9369 (marked Fri 12:27 PM PST, land verdict 1:32 PM PST, not on `main`) | `68b00f3bc1fb` | fails | 14 |
+| #9656 | `76c0e8899746` | fails | 14 |
+| #9741 | `4c4d26aeda3a` | fails | 45 |
+| #9760 | `788562db9ca2` | fails | 46 |
+| #9541 | `9e1d6f773ce2` | fails | 53 |
+| #9457 | `5fc0735b80ec` | fails | 62 |
+| #9754 | `a1d0bc0f8e48` | passes | 0 |
+| #9782 (marked) | `3b1065a49d6d` | passes | 0 |
+| #9869, and my draft of the second step | `1069a740eb02`, `cda834990f22` | pass | 0 |
+
+- **The counts are each branch's own against `main`,** so a branch that carries another's hunk counts it again (#9656 holds #9369's).
+- **Rewording does not cure #9837** [ran: its diff's added lines, each token holding the name counted]: of 69 sites it adds, 14 are the bare word (prose or a string) and 55 are uses of 14 names `main` defines (`warden_height` 12, `warden_command` 8, `warden_serve` 8, `WardenParams` 5, `parse_warden` 4, and nine more). The reader's words give two ways for those: the name renamed at its definition first, or an exception asked of ci. I did not make the same count for the six.
+- **What I argue from it:** every change of ours that writes in the relay's files adds such sites, because the relay's own names hold the word. The rename (NET-100, set for Wed 18 Nov noon PST) is the one change that removes them at their definitions. If readers hold on this gate, the rename goes before the eight, or ci gives the eight one exception. Which of the two is yours and ci's; the plan gives each day under both.
+- **Not known to me:** why #9369 has not landed in the ten hours since its land verdict; whether the queue itself stops on this gate (`policy.toml` has it off the gate; the hold on #9837 was its reader's).
+
+The plan's note follows. Holding: nothing running.
+TIMER: none
+
