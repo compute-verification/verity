@@ -7,12 +7,14 @@ the verifier's own copy and its output row read. No host check reads the opening
 comparison to each verdict, which decides nothing.
 
     python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
-      [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K]
+      [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
 * **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
   ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
   certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
-  declared or charged), a certifier rehearsal's run refused by name.
+  declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
+  what the node sent, so a member's summary says only whether it refused any (``certifier_refused``), and the phases
+  go to ``--witness`` alone.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the network certifier's, its head failing its signed digest alone. The prover's references
@@ -516,11 +518,15 @@ def prove(a) -> int:
             raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
-            "issuer_refused": rd.issuer_refused}
+            "certifier_refused": bool(rd.issuer_refused)}
         log(f"{name}: {len(rd.windows)} link-windows, words {[x.word for x in rd.windows]}, expected verdicts "
             f"{[x.expect for x in rd.windows]}, failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
         if not expected(name, rd):
             raise SystemExit(f"{name}: the references are not the {name} round's")
+    if a.witness is not None:
+        a.witness.parent.mkdir(parents=True, exist_ok=True)
+        a.witness.write_text(json.dumps({name: {"issuer_refused": rd.issuer_refused} for name, rd in members.items()},
+                                        indent=1, sort_keys=True, default=str))
     if not summary["link"]["pinned"]:
         raise SystemExit(f"a gate names no pinned circuit digest: {summary['link']['gates']}")
     if a.dry:
@@ -606,6 +612,8 @@ def main(argv=None) -> int:
                         "window's root is committed, and only those proved (LinkWindows.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
+    p.add_argument("--witness", type=Path, help="where each member's execution phases its signer refused are written, "
+                                                "on the chain's private side")
     a = ap.parse_args(argv)
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
