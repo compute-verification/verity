@@ -34,7 +34,7 @@ path = "../../../accounting/pouw/verifier/lean/check"
 # The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).
 [[require]]
 name = "inference_only_check"
-path = "../../../policy/inference_only/verifier/inference_only/lean"
+path = "../../../policy/inference_only/verifier/lean"
 
 # Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).

@@ -1,5 +1,5 @@
 """`inference-only-record-check`, the record form (the Lean's `Record` and `RecordCount`) on one case, and
-`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/served_record_case.py`, which writes that case from a
+`verity/protocols/policy/inference_only/verifier/lean/scripts/served_record_case.py`, which writes that case from a
 served run's files with the reference's verdicts on it.
 
 A made run's files stand in for a served run's: the record difftest's vectors' served class's shape at two slots and
@@ -24,7 +24,7 @@ import pytest
 
 import verity.circuits.layout
 
-LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

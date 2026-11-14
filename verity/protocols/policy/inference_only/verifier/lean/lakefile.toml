@@ -18,16 +18,16 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "core_circuits"
-path = "../../../../../../circuits/lean"
+path = "../../../../../circuits/lean"
 
 [[require]]
 name = "core_protocol"
-path = "../../../../../interface"
+path = "../../../../interface"
 
 # SPOT's reader of an execution phase's circuit record (`Spot.Wires`), the one parse the record form reads it through.
 [[require]]
 name = "core_spot"
-path = "../../../../../proofs/spot/verifier/lean"
+path = "../../../../proofs/spot/verifier/lean"
 
 [[lean_lib]]
 name = "InferenceOnlyCheck"

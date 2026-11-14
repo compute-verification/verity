@@ -36,7 +36,7 @@ path = "../../verity/protocols/accounting/pouw/verifier/lean/pearlplus"
 
 [[require]]
 name = "inference_only_check"
-path = "../../verity/protocols/policy/inference_only/verifier/inference_only/lean"
+path = "../../verity/protocols/policy/inference_only/verifier/lean"
 
 [[require]]
 name = "certifier_device"
