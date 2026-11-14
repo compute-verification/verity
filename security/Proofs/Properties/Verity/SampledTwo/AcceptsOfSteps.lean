@@ -20,7 +20,7 @@ step before it returned, so no step holds the evidence to anything the listed on
   read, every session's verifier accepts, the verdicts are stamped, the interior's receipt names its place and each
   registration's record reads back (`readBack`), the boundary's with the commitment's digest.
 * `accepts_of_steps`: the check accepts where every second-stage session's statement is under `2^64` bytes
-  (`statementsFit`), `inputAt` returned, neither stage's bytes run past one coin's
+  (`stmtsBytesFit`), `inputAt` returned, neither stage's bytes run past one coin's
   (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
   are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
@@ -139,7 +139,7 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
 second stage's law and the run of record. -/
 theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run law : Json}
-    (hb : statementsFit p e bs = .ok ())
+    (hb : stmtsBytesFit p e bs = .ok ())
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
     (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
@@ -165,7 +165,7 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
 theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run law : Json}
     {pub : OneStage.Public} {prof : Core.Integrity}
-    (hb : statementsFit p e bs = .ok ())
+    (hb : stmtsBytesFit p e bs = .ok ())
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
     (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
@@ -194,7 +194,7 @@ its converse, the steps on the values the step before returned. -/
 theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} :
     checkBlobsAtWith true p c ξ e bs = .accept pub prof ↔
-      statementsFit p e bs = .ok () ∧
+      stmtsBytesFit p e bs = .ok () ∧
       ∃ c₂ ξ₂ r i run law, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ stagesFit ξ ξ₂ = .ok () ∧
         Spot.Run.run i true = .ok run ∧ sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
         stagesOrdered p e = .ok () ∧ firstTreeless p e = .ok () ∧ repStreamsOrdered p e = .ok () ∧

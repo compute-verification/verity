@@ -9,7 +9,7 @@ The two-stage form's check (`VStar.Recursive.SampledTwo.checkBlobsAtWith`) accep
 accepts at the switch `form` (`accepted_steps`):
 
 * the switch is on;
-* every second-stage session's statement is under `2^64` bytes (`statementsFit`, by `accepted_statementsFit`);
+* every second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, by `accepted_stmtsBytesFit`);
 * the run of record's input is `inputAt`'s (`inputAt_ok`): the interior registration's commitment is its record's, its
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`), each registration's record the one the
@@ -263,10 +263,10 @@ theorem accepted_repOrdered {form : Bool} {p : Params} {c : OneStage.Commitment}
     exact ho
 
 /-- **An accepted two-stage check found every second-stage session's statement under `2^64` bytes**
-(`statementsFit`). -/
-theorem accepted_statementsFit {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+(`stmtsBytesFit`). -/
+theorem accepted_stmtsBytesFit {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : statementsFit p e bs = .ok () := by
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stmtsBytesFit p e bs = .ok () := by
   unfold checkBlobsAtWith at h
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
