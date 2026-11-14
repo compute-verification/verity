@@ -13,8 +13,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-import slots as S
-import slots_gpu as G
+from conftest import BUILD
+
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.commit_slots import slots_gpu as G
 
 pytestmark = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 
@@ -86,10 +88,10 @@ def test_streamed_roots_are_the_leaf_matrix_s_and_the_reference_s(n: int) -> Non
     slots = 1 + n % 5
     out = S.random_outputs(layout, slots, np.random.default_rng(n))
     want = S.commit(CTX, layout, 2, KEY, out, slots)
-    plan = G.Plan(CTX, layout, "host")
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
     assert matrix_commit(plan, 2, KEY, out, slots) == want
     assert G.commit(plan, 2, KEY, out, slots) == want
-    one = G.Plan(CTX, layout, "host", temp_bytes=1)
+    one = G.Plan(CTX, layout, "host", temp_bytes=1, build=BUILD)
     assert all(one.per_pass(g.shape, slots) == 1 for g in one.groups)
     assert G.commit(one, 2, KEY, out, slots) == want
 
@@ -101,8 +103,8 @@ def test_larger_trees_match_the_leaf_matrix_in_passes(n: int, passes: int) -> No
     of 3."""
     layout = odd_layout(n, 7 * n)
     out = S.random_outputs(layout, 3, np.random.default_rng(n))
-    rows = max(g.shape.rows for g in G.Plan(CTX, layout, "host").groups)
-    plan = G.Plan(CTX, layout, "host", temp_bytes=G.TEMP_BUFFERS * 64 * rows * (1 if passes == 3 else 2))
+    rows = max(g.shape.rows for g in G.Plan(CTX, layout, "host", build=BUILD).groups)
+    plan = G.Plan(CTX, layout, "host", temp_bytes=G.TEMP_BUFFERS * 64 * rows * (1 if passes == 3 else 2), build=BUILD)
     assert plan.per_pass(max((g.shape for g in plan.groups), key=lambda s: s.rows), 3) == (1 if passes == 3 else 2)
     assert G.commit(plan, 5, KEY, out, 3) == matrix_commit(plan, 5, KEY, out, 3)
 
@@ -113,7 +115,7 @@ def test_the_fixture_streams_to_its_roots_in_one_slot_passes() -> None:
     out = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(d["slots"], n) for h, n in zip(t, g.sources, strict=True)]
            for t, g in zip(d["outputs"], layout.groups, strict=True)]
     for temp in (G.TEMP_BYTES, 1):
-        plan = G.Plan(bytes.fromhex(d["context"]), layout, "host", temp_bytes=temp)
+        plan = G.Plan(bytes.fromhex(d["context"]), layout, "host", temp_bytes=temp, build=BUILD)
         got = G.commit(plan, d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
         assert got == matrix_commit(plan, d["step"], bytes.fromhex(d["salt_key"]), out, d["slots"])
         assert got.root.hex() == d["root"]
@@ -123,9 +125,9 @@ def test_the_pads_alone_are_the_reference_s_above_a_chunk(monkeypatch: pytest.Mo
     """A subtree of pads wider than PAD_CHUNK is built from chunk roots: with the chunk at 2, the closing digests are the ones
     hashed in one go, and the roots the reference's."""
     layout = odd_layout(37, 3)
-    want = G.Plan(CTX, layout, "host")
+    want = G.Plan(CTX, layout, "host", build=BUILD)
     monkeypatch.setattr(G, "PAD_CHUNK", 2)
-    got = G.Plan(CTX, layout, "host")
+    got = G.Plan(CTX, layout, "host", build=BUILD)
     assert np.array_equal(want.pad0, got.pad0)
     assert [None if p is None else p.tolist() for p in want.pads_right] == [None if p is None else p.tolist() for p in got.pads_right]
     assert [k for k, p in enumerate(got.pads_right) if p is not None] == [1, 3, 4]   # 37 = 100101b: 8 and 16 pads in chunks of 4
@@ -150,7 +152,7 @@ SMALL = S.Group((8,), tuple((S.Row((S.Part(0, 2 * i, 2),)),) for i in range(4)))
 def _first_add(layout: S.CommitShape, slots: int) -> tuple[G.StepCommitter, int]:
     """A step of ``slots`` slots over ``layout`` (whose first group is SMALL) with that group added: the committer and the
     bytes it held at most."""
-    plan = G.Plan(CTX, layout, "host")
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
     out = S.random_outputs(layout, slots, np.random.default_rng(1), groups=[0])
 
     def run() -> G.StepCommitter:

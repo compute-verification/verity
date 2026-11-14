@@ -13,7 +13,7 @@ The outer ZK server releases only what each rep's Lean frame returns (`flock-zk-
 parses them into the rep's samples (`Flock.ZkServer.Frame.Draws.ofBytes`: the pads `h`, `μ`, the inner rows' padding, `τ`'s
 salt and the pads tree's salts) and commits them (`padsRoot`). `LeanRelease` is the ZK server whose release is that frame
 at the samples on the server's tape (`LeanRelease.draws`):
-* the round's rep's configuration (`LeanRelease.cfg`) is `Cfg.ofDraws` of its samples on the tape, the function
+* the round's rep's configuration (`LeanRelease.cfg`) is `Cfg.ofSamples` of its samples on the tape, the function
   `flock-zk-server frame` starts the rep with: the layout, the pads, the absorbed order, the root it computes and the mask
   slot (`cfg_pads`, `cfg_root`). The frame's steps take it and return only the rep's state (`Masker`), so none changes
   the pads or the root. Only that state comes from the transport (`LeanRelease.prog`, `LeanRelease.fresh`): where the
@@ -358,13 +358,13 @@ structure LeanRelease (W R : Type) where
 namespace LeanRelease
 
 /-- Rep `i`'s samples on the tape `ρ`: its frame's bytes, parsed as the frame parses them. -/
-def drawsAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (i : ℕ) : Draws :=
+def samplesAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (i : ℕ) : Draws :=
   Draws.ofBytes (L.lay x i) (L.draws ρ i)
 
-/-- **The round's rep's configuration**: `Cfg.ofDraws` of its samples on the tape, as `flock-zk-server frame` starts the
+/-- **The round's rep's configuration**: `Cfg.ofSamples` of its samples on the tape, as `flock-zk-server frame` starts the
 rep. -/
 def cfg {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Cfg :=
-  Cfg.ofDraws (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) (L.slot x (L.rep x h.length))
+  Cfg.ofSamples (L.lay x (L.rep x h.length)) (L.samplesAt x ρ (L.rep x h.length)) (L.slot x (L.rep x h.length))
 
 /-- The configuration's pads are the frame's samples on the tape. -/
 theorem cfg_pads {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
@@ -373,7 +373,7 @@ theorem cfg_pads {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
 
 /-- The pads' root the frame inserts is its own commitment to its samples on the tape. -/
 theorem cfg_root {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
-    (L.cfg x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) :=
+    (L.cfg x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.samplesAt x ρ (L.rep x h.length)) :=
   rfl
 
 /-- **Whether the transport's coin check passes the history `h`** at the tape `ρ`: the coin check at its reading of the
@@ -389,9 +389,9 @@ def opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) : List (Msg × M
   | (_, a) :: o :: ops => (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk
   | _ => true
 
-/-- Round `j`'s rep's configuration: `Cfg.ofDraws` of its samples on the tape. -/
+/-- Round `j`'s rep's configuration: `Cfg.ofSamples` of its samples on the tape. -/
 def cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (j : ℕ) : Cfg :=
-  Cfg.ofDraws (L.lay x (L.rep x j)) (L.drawsAt x ρ (L.rep x j)) (L.slot x (L.rep x j))
+  Cfg.ofSamples (L.lay x (L.rep x j)) (L.samplesAt x ρ (L.rep x j)) (L.slot x (L.rep x j))
 
 /-- The frame's stop at a mask slot short of full rank. -/
 def rankRefused : String :=

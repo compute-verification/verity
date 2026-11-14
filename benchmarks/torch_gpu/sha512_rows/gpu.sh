@@ -22,7 +22,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:
   > "$O/env.txt" 2>&1
 ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)
 case $ARCH in 90|100|120) ARCH=${ARCH}a ;; esac
-$PY -c "import engine as E; L = E.device_lib('$ARCH'); print(L.path); E.host_lib()" > "$O/build.txt" 2>&1
+$PY -c "import torch_engine as T; L = T.device_lib('$ARCH'); print(L.path); T.host_lib()" > "$O/build.txt" 2>&1
 echo "build rc $?" > "$O/rc.txt"
 LIB=$(head -1 "$O/build.txt")
 cp "${LIB%.so}.log" "$O/ptxas.txt" 2>/dev/null
@@ -35,7 +35,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
   for s in $STEPS; do
     case $s in
       tests) (cd "$V" && $PY -m pytest -q -p no:cacheprovider tests) > "$O/tests.txt" 2>&1 ;;
-      check) $PY "$V/check.py" --out "$O" > "$O/check.out" 2> "$O/check.err" ;;
+      check) $PY "$D/check_gpu.py" --out "$O" > "$O/check.out" 2> "$O/check.err" ;;
       bench) $PY "$D/bench.py" --out "$O" --check "$O/check.json" ${BENCH_ARGS:-} > "$O/bench.jsonl" 2> "$O/bench.err" ;;
     esac
     echo "$s rc $?" >> "$O/rc.txt"

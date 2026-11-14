@@ -193,7 +193,7 @@ same way, allowing only `config.point_identity`.
 `verity-bench run` queues each missing point, as below. `verity-bench run SPEC --direct NODE` launches each missing point
 on NODE itself instead, for a node whose launcher takes a run only through a slot. Each point is a recorded run on NODE with the queued point's tool, identity and environment, so `plan` and `check`
 find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
-through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
+through `tools/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
 GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
 share), before any run. A node joins the tuple once it has that slots file; a node in the tuple whose file is gone starts
@@ -317,8 +317,8 @@ Every environment variable the harness reads is declared once in `verity_bench.s
 how long things run) or `debug` (refused on a point, which is always a run of record). A point writes the value settings
 in force, with their SHA-512 digest, to `out/settings.json` beside its result. `verity-bench` refuses a `VERITY_BENCH_*`
 variable that nothing in the tree reads, naming it. A variable the vLLM integration declares is never declared here: the
-harness writes one through `verity_vllm.engine.env`, which it reaches through `verity_bench.adapter`, the one file of the
-benchmarks that imports the vLLM adapter past its public interface. `benchmarks/harness/tests/test_settings.py` holds the harness's
+harness writes one through `verity_vllm.engine.env`, part of the vLLM adapter's public interface.
+`benchmarks/harness/tests/test_settings.py` holds the harness's
 other direct uses of `os.environ` to a shrink-only baseline.
 
 ## The served table

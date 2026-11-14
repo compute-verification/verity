@@ -721,7 +721,7 @@ TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_
 job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
 - `seedB s W` is the query `seed_B` at salt `s` and B's committed words `W`, which `root_B` binds. It is injective in
   the salt, so a `B̃` keyed by another salt, or by none, is excluded.
-- `drawB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (SHA-512 under
+- `sampleB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (SHA-512 under
   `pearl-c4/v2/line` of `seed_B ‖ role ‖ ⌊index/4⌋`, line `index` its quarter `index mod 4`, `pearl_c4.line`). So `B̃` is a function of the salt and root_B alone, never of the
   activations, and never an input fixed before the salt.
 - The ticket, U and the debit read `unitForm`'s `B̃`, never a prover-supplied one, and `Correct` compares a unit's words
@@ -730,12 +730,12 @@ job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with
 
 A variant that fixes `B̃` before A's salt is outside D₄: it needs the per-salt split debit instead. -/
 def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
-  ∃ (seedB : S → Codes → Q) (drawB : (sh : Shape) → R →
+  ∃ (seedB : S → Codes → Q) (sampleB : (sh : Shape) → R →
       Matrix (Fin sh.n) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib),
     (∀ W : Codes, Function.Injective fun s : S => seedB s W) ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes),
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
-        drawB (U.layout.shape u) (H (seedB s (U.fixed (U.layout.fixedId u))))
+        sampleB (U.layout.shape u) (H (seedB s (U.fixed (U.layout.fixedId u))))
 
 /-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
 16 bits zero) and finite, every row passing `RowAdmit4`. -/

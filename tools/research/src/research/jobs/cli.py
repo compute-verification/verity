@@ -143,10 +143,10 @@ def needs_avx512(commit: str, base: str, cwd: Path | None = None) -> bool:
     if pin is None:
         return False
     flags = json.loads(pin)["upstream"].get("rustflags") or "target-cpu=native"
-    pattern = _literal(_show(commit, "tools/verity/check/preflight.py", cwd), "AVX512") or AVX512_BEFORE_PREFLIGHT
+    pattern = _literal(_show(commit, "tools/check/preflight.py", cwd), "AVX512") or AVX512_BEFORE_PREFLIGHT
     if not re.search(pattern, flags):
         return False
-    rule = (_literal(_show(commit, "tools/verity/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
+    rule = (_literal(_show(commit, "tools/check/tool.py", cwd), "merge_requires") or {}).get("lean-agreement")
     from ..merge import rule_touches
 
     changed = [p for p in _git("diff", "--no-renames", "--name-only", "-z", base, commit, cwd=cwd).split("\0") if p]   # a rename's source too

@@ -366,7 +366,7 @@ theorem roundPlace_scheduled_own
       real).scheduled x w ρ (e0 :: h1) vals = _ := scheduled_innerAt L₁ src real fin x w ρ e0 h1 hnone hin vals
   have hcfg : (ofLoop ZKMal.Masked.dataE (withFiles (withLink (withInner ZKMal.Masked.dataE L₁ real fin) src) src)
       real).cfg x ρ (e0 :: h1) = (withFrames ZKMal.Masked.dataE L₁ real).cfg x ρ (e0 :: h1) := by
-    unfold LeanRelease.cfg LeanRelease.drawsAt
+    unfold LeanRelease.cfg LeanRelease.samplesAt
     rfl
   rw [hpc, hsc, bytes_toList_toArray, hcq, hcfg, hnr, hidx]
   rw [hidx] at hbf

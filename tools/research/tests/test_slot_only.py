@@ -23,21 +23,21 @@ REPO = NEBIUS.parents[5]
 
 
 def test_only_a_command_that_runs_cmd_in_a_check_slot_counts():
-    assert S.through_slot(["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"])
-    assert S.through_slot(["python3", "tools/verity/check/slot.py", "--priority", "--by", "x", "--", "true"])
-    for c in (["python3", "tools/verity/check/slot.py", "--status"], ["python3", "tools/verity/check/slot.py", "--by", "x", "--"],
-              ["uv", "run", "circuit-check", "--all"], ["bash", "-c", "python3 tools/verity/check/slot.py -- true"],
-              ["python", "tools/verity/check/slot.py", "--", "true"], ["python3", "/elsewhere/slot.py", "--", "true"], None, "python3"):
+    assert S.through_slot(["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"])
+    assert S.through_slot(["python3", "tools/check/slot.py", "--priority", "--by", "x", "--", "true"])
+    for c in (["python3", "tools/check/slot.py", "--status"], ["python3", "tools/check/slot.py", "--by", "x", "--"],
+              ["uv", "run", "circuit-check", "--all"], ["bash", "-c", "python3 tools/check/slot.py -- true"],
+              ["python", "tools/check/slot.py", "--", "true"], ["python3", "/elsewhere/slot.py", "--", "true"], None, "python3"):
         assert not S.through_slot(c), c
 
 
 def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_else():
     pool = ["env", "CHECK_SLOTS=/workspace/research/locks/proofs/slots"]
-    assert S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--by", "proofs", "--", "nice", "-n", "19", "bash", "j.sh"])
+    assert S.through_slot([*pool, "python3", "tools/check/slot.py", "--by", "proofs", "--", "nice", "-n", "19", "bash", "j.sh"])
     for env in (["env", "CHECK_SLOTS=/tmp/slots"], ["env", "CHECK_SLOTS=/workspace/research/locks/../x/slots"],
                 ["env", "CHECK_SLOTS=/workspace/research/locks/proofs/slots", "X=1"], ["env", "LEASE_DIR=/x"]):
-        assert not S.through_slot([*env, "python3", "tools/verity/check/slot.py", "--", "true"]), env
-    assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
+        assert not S.through_slot([*env, "python3", "tools/check/slot.py", "--", "true"]), env
+    assert not S.through_slot([*pool, "python3", "tools/check/slot.py", "--status"])
 
 
 def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
@@ -51,7 +51,7 @@ def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
 def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
     """A lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
     c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])
-    assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by",
+    assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py", "--by",
                  "compute-accounting", "--", "nice", "-n", "19", "python3", "search.py", "--n", "4"]
     assert S.through_slot(c) and all(S.through_slot(S.in_pool(p, "x", ["true"])) for p in S.POOLS)
     leanrec = S.in_pool("leanrec", "lean", ["true"])
@@ -129,7 +129,7 @@ def test_a_command_that_names_a_pool_and_the_trees_slot_py_names_the_machines_ow
     assert S.through_slot(own) and S.node_copy(own) is None, "already the machine's"
     by_hand = ["env", f"CHECK_SLOTS={S.POOLS['proofs']}", "python3", S.SLOT_PATHS[0], "--wait-max", "60", "--", "sh", "-c", "x"]
     assert S.node_copy(by_hand)[3] == S.NODE_SLOT
-    for other in (["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/verity/check/check.py"],
+    for other in (["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/check/check.py"],
                   ["python3", S.SLOT_PATHS[0], "--priority", "--rank", "3", "--", "true"],
                   ["env", f"CHECK_SLOTS={S.POOLS['research']}", "python3", S.SLOT_PATHS[0], "--status"],
                   ["env", "CHECK_SLOTS=/tmp/slots", "python3", S.SLOT_PATHS[0], "--", "true"],
@@ -296,7 +296,7 @@ def test_a_pool_run_is_sent_by_the_machines_own_slot_py_where_it_has_one_and_say
     node.rules.unlink()
     node.marker.unlink()
 
-    check = ["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    check = ["python3", S.SLOT_PATHS[0], "--", "uv", "run", "python", "tools/check/check.py"]
     request, rec = _launch(tmp_path, monkeypatch, check, ssh=lambda *a, **kw: pytest.fail("a command that names no pool asks nothing"))
     assert request["command"] == check == rec["command"] and "slot_copy" not in rec and capsys.readouterr().err == ""
 
@@ -352,7 +352,7 @@ def _proc(proc, pid, pgid, run_dir=None):
 
 def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(tmp_path, monkeypatch, capsys):
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "runs-via-slot", tmp_path / "slot-only.jsonl"
-    slot = ["python3", "tools/verity/check/slot.py", "--", "true"]
+    slot = ["python3", "tools/check/slot.py", "--", "true"]
     gate = _run(runs, "r-gate", "running", slot, pgid=10, runner=9)
     off = _run(runs, "r-off", "running", ["uv", "run", "circuit-check", "--all"], pgid=20, runner=19)
     _run(runs, "r-done", "done", ["true"], pgid=30)
@@ -382,7 +382,7 @@ def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_ru
     """On node 1 lanes' direct runs must not take the cores the train checks need. `--renice 19` stops nothing: it renices every
     process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
-    gate = _run(runs, "r-gate", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=10, runner=9)
+    gate = _run(runs, "r-gate", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=10, runner=9)
     off = _run(runs, "r-off", "running", ["uv", "run", "pytest", "-x"], pgid=20, runner=19)
     for pid, run in ((10, gate), (19, off), (20, off), (21, off)):
         _proc(proc, pid, pid, run)
@@ -405,7 +405,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     is exactly a line of /etc/vy/auditor; slot.py's runs get no pass there."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "auditor", tmp_path / "auditor-only.jsonl"
     ok = _run(runs, "r-ok", "running", ["bash", "verity/protocols/compose/device/live_challenger/run.sh"], pgid=10, runner=9)
-    slot = _run(runs, "r-slot", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=20, runner=19)
+    slot = _run(runs, "r-slot", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=20, runner=19)
     extra = _run(runs, "r-extra", "running", ["bash", "verity/protocols/compose/device/live_challenger/run.sh", "x"], pgid=30, runner=29)
     for pid, run in ((10, ok), (20, slot), (30, extra)):
         _proc(proc, pid, pid, run)

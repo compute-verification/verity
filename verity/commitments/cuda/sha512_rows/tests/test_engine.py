@@ -8,12 +8,15 @@ from typing import Any
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(1, str(Path(__file__).resolve().parents[5] / "benchmarks" / "torch_gpu" / "sha512_rows"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "torch_gpu" / "sha512_rows"))
 
 import bench
-import check
-import engine as E
+
+from verity.commitments.cuda.sha512_rows import check
+from verity.commitments.cuda.sha512_rows import engine as E
+
+#: the engine's build cache for the tests, the one the benchmarks' settings default to
+BUILD = Path.home() / ".cache" / "verity" / "sha512_rows"
 
 
 def _cuda() -> bool:
@@ -24,12 +27,29 @@ def _cuda() -> bool:
     return torch.cuda.is_available()
 
 
+class TorchEngine(E.Engine):
+    """The engine on torch, which verity doesn't import."""
+
+    def runtime(self) -> Any:
+        import torch
+        return torch
+
+
+def _engine(device: str) -> E.Engine:
+    return (E.Engine if device == "host" else TorchEngine)(device, build=BUILD)
+
+
 ENGINES = ["host", pytest.param("cuda", marks=pytest.mark.skipif(not _cuda(), reason="no CUDA device"))]
 
 
 @pytest.fixture(scope="module", params=ENGINES)
 def engine(request: pytest.FixtureRequest) -> E.Engine:
-    return E.Engine(request.param)
+    return _engine(request.param)
+
+
+def test_a_cuda_device_needs_a_runtime_verity_does_not_import() -> None:
+    with pytest.raises(NotImplementedError, match="kernels/gpu-code-out-of-benchmarks"):
+        E.Engine("cuda", build=BUILD)
 
 
 def test_row_digests_match_the_reference_at_edge_sizes(engine: E.Engine) -> None:
@@ -50,7 +70,7 @@ def test_frame_leaves_levels_pads_and_roots_match_tree_levels(engine: E.Engine) 
 
 @pytest.mark.skipif(not _cuda(), reason="no CUDA device")
 def test_the_h200_layer_matches_on_sampled_slots() -> None:
-    r = check.check_layout(E.Engine("cuda"), 257, [0, 31, 32, 256])
+    r = check.check_layout(_engine("cuda"), 257, [0, 31, 32, 256])
     assert r["mismatches"] == {"x": 0, "leaves": 0}, r
 
 
@@ -74,7 +94,7 @@ def test_each_call_costs_its_compressions_on_the_host_twin() -> None:
     an hm96 leaf five (c two, h two of which the padding block's schedule is a constant, the frame leaf one from the row's
     midstate) and three ChaCha20 blocks, and fused with its unit's slot-tree leaf six; a unit's slot-tree leaf one from its
     frame table's midstate (two from rank 2^24), against frame_leaves' two from the IV; a node two."""
-    e = E.Engine("host")
+    e = E.Engine("host", build=BUILD)
     G, S = 6, 4
     t = (np.arange(S * 128) % 251).astype(np.uint8).reshape(S, 128)
     table = e.rows([[(0, 0, n)] for n in (0, 1, 16, 64, 100, 111)], [t])
@@ -112,7 +132,7 @@ def test_a_variant_name_is_four_modes_and_an_optional_straight_line_mark() -> No
 
 
 def test_a_row_outside_its_tensor_is_refused() -> None:
-    e = E.Engine("host")
+    e = E.Engine("host", build=BUILD)
     with pytest.raises(ValueError, match="outside"):
         e.rows([[(0, 8, 9)]], [np.zeros((2, 16), dtype=np.uint8)])
     with pytest.raises(ValueError, match="one or two parts"):

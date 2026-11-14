@@ -1,7 +1,7 @@
 """The CPU half of a load run's check, run on the node after the GPU is released:
 
 - **decode**: every encoded block of the layer, from the development store or an encoded store's segment files (as
-  `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_v1/store.py`'s `decode_block`, the spec's
+  `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_store/store.py`'s `decode_block`, the spec's
   `reference.decode` under `reference.keys_after` of the store's prefix, refusing rows not below p and non-codewords), each block's 2,054 bytes
   against the store's W (`layout.payloads`: the stream's bytes, from `W` or else the seeded generator, zero past each
   tensor's end), in a process pool;

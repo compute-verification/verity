@@ -142,7 +142,6 @@ verity_vllm/
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
-  properties/        property harnesses: admission difftests, the quarantine lint, the kernel allowlist
   records/           typed stage records, one for each kind one stage writes and another reads
   ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device
@@ -161,7 +160,7 @@ regression, skipped unless `VERITY_REGRESSION=1`.
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
 vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. Tests and tools read fixtures
 relative to this directory, so run them from here. The suite runs remotely like every suite
-(`tools/verity/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
+(`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
 
 ## Vocabulary
 

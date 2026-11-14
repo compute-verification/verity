@@ -15,7 +15,7 @@ from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _roun
 
 
 def _open(stream: S.Stream, n: int = 6) -> S.WindowCommitmentRecord:
-    """A registration the stream receives and leaves open."""
+    """A docket the stream receives and leaves open."""
     previous = R.digest(stream._entries[-1].registration.record) if stream._entries else None
     return stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
 
@@ -55,7 +55,7 @@ def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
 
 def test_a_budget_above_one_tolerates_one_failure_fewer():
     """b = 3: a stream's two failures, and another's one, halt nothing: both keep accepting. The halt comes at the third
-    failure of one stream, and ends the other's registration, not yet sampled, as `halted`."""
+    failure of one stream, and ends the other's docket, not yet sampled, as `halted`."""
     fleet, (a, b) = _fleet("o", "o", budget=3)
     assert not _round(a, accepted=False).accepted and not _round(a, accepted=False).accepted
     assert not _round(b, accepted=False).accepted
@@ -118,7 +118,7 @@ def test_a_stream_is_attached_once_before_its_first_registration():
 
 def test_a_fleet_rules_disagreement_stops_the_fleet(monkeypatch):
     """Where the Lean decides a fleet's op otherwise, the op is refused (`disagree`) and so is every op after it: the
-    stream's registration is refused with it, and nothing is registered."""
+    stream's docket is refused with it, and nothing is registered."""
     fleet, (a,) = _fleet("o")
     real = V.lean
     monkeypatch.setattr(V, "lean", lambda f, value: {**real(f, value), "decision": {"ok": 5}} if f == "fleet" else

@@ -1,10 +1,10 @@
 # core_protocol: the interface every core protocol implements
 
-This is a Lake package (`CoreProtocol`, namespace `Core`). It requires the base package (`core_base`) by path for
-canonical JSON, bytes and hashes, the commitments' package (`core_commitments`) for the sampling designs a profile
-records, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib and nothing of Flock's
-verifier. A protocol's port is its own package. It requires this one by path, defines one `Core.Protocol` value, and
-makes its executable `def main (args) := myProtocol.main args`.
+This is a Lake package (`CoreProtocol`, namespace `Core`). Its modules import the base package (`core_base`) for
+canonical JSON, bytes and hashes, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib,
+no draw and nothing of Flock's verifier. Its lakefile still requires the commitments' package (`core_commitments`),
+which no module here imports. A protocol's port is its own package. It requires this one by path, defines one
+`Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
 
 ## The interface (`CoreProtocol/Protocol.lean`)
 
@@ -130,6 +130,17 @@ hosts (`Site.hostsOf`) for compute, memory and reads, and an answer whose key no
 for nothing. `Account.rests` names the answers a protocol's own rest on, those its check read as given and did not
 verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an accepted
 answer `rows` is given.
+
+Memory's accounts state more, which `rows` does not read yet:
+- the key of the step at which a moment amount held (`Amount.held`);
+- memory held throughout a span whose steps the answer names (`Amount.FormedHeld`);
+- the tiers an answer names, by its protocol's labels mapped to the Site's tiers (`Amount.tiers`, `Amount.labels`,
+  `Amount.TiersNamed`);
+- the figures an answer was computed at, each covering the registration's (`Amount.params`, `Amount.Covers`);
+- groups of metrics that are alternative forms of one bound, never added (`Account.alternatives`,
+  `Account.AlternativesFormed`);
+- an accepted answer that stands for a line of record a verifier gives outside `Core.Protocol` (`Account.OfLine`);
+- errors stated exactly, as ratio text (`Account.ErrorsExact`).
 
 `Account.rows` reads a Site, the auditor, the period, the answers and their accounts into the accounting rows
 (`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). Which registration the Site is, and

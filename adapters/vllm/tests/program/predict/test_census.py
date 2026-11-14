@@ -51,7 +51,7 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
 C = model_shape(CFG)
 #: a token row's linear MACs: q/k/v, o, gate/up and down per layer, and the LM head
-LINEAR = C.NL * C.H * ((C.NH + 2 * C.KVH) * C.D + C.NH * C.D + 3 * C.I) + C.H * C.V
+LINEAR = C.NL * C.H * ((C.NH + 2 * C.KVH) * C.D + C.NH * C.D + 3 * C.INTER) + C.H * C.V
 #: one position's K and V over every layer, in bf16
 KV_BITS = C.NL * 2 * C.KVH * C.D * 16
 #: one position's row of the rotary cos/sin table, in bf16

@@ -8,7 +8,7 @@ import random
 import pytest
 
 from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as I
+from verity.commitments.periods import interface as I
 from verity.protocols.accounting.pous.prover import setup_circuit as SC
 from verity.protocols.accounting.pous.prover import setup_proof as SP
 from verity.protocols.accounting.pous.prover import window as WIN

@@ -1,5 +1,5 @@
 """PoUS's prover's statements, handed to the proof system as any integration hands a window over
-(`verity.commitments.windows.interface`): its circuit in proof blocks of PoUS's Definitions (`decode_circuit`,
+(`verity.commitments.periods.interface`): its circuit in proof blocks of PoUS's Definitions (`decode_circuit`,
 `answer_circuit`, `verdict_circuit`), its values recorded into a `Window`, and the window's four records written for the
 workers, which stage from them as they do from an adapter's.
 
@@ -18,7 +18,7 @@ import numpy as np
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as EB
-from verity.commitments.windows.interface import Circuit, Integration, Read, Registered, Window
+from verity.commitments.periods.interface import Circuit, Integration, Read, Registered, Window
 
 from . import answer_circuit, decode_circuit, verdict_circuit
 from . import setup_circuit as SP

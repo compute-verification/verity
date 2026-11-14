@@ -161,7 +161,7 @@ theorem seqErr_le {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ
   | m :: l, i, p, hp =>
     memberErrK_le (D i) (memberTabs S Rg m) (γ i) Γ hret Ks₀ (hγ i _) (γL i (memberPts m)) (hγL i _)
       (e := fun q => seqErr D γ γL S Rg (i + 1) l q)
-      (fun q hq => seqErr_le D γ γL S Rg Γ hret Ks₀ hγ hγL l (i + 1) q hq) m.N p hp (memberDrawn S m)
+      (fun q hq => seqErr_le D γ γL S Rg Γ hret Ks₀ hγ hγL l (i + 1) q hq) m.N p hp (memberSampled S m)
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 

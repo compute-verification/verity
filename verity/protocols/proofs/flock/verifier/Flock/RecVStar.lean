@@ -1767,9 +1767,9 @@ def checkLinkRounds (i : Inner) (lk : InnerLink) : V Unit := do
 
 /-- Table `j`'s sample among `count` tables of a session sampled by `d`, as `Stmt.setupTables` builds it: `d` at one table,
 else part `j` of `d`'s units, a subset sample of the population. -/
-def tableDraw (d : Json) (count j : Nat) : Json :=
+def tableSample (d : Json) (count j : Nat) : Json :=
   if count ≤ 1 then d else
-    match Draw.UnitDraw.ofJson d with
+    match Draw.UnitSample.ofJson d with
     | .ok u => Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson u.population),
         ("k", Lean.toJson (u.units.size / count)),
         ("units", Json.arr ((u.units.extract (j * (u.units.size / count))
@@ -1778,13 +1778,13 @@ def tableDraw (d : Json) (count j : Nat) : Json :=
 
 /-- Table `j`'s statement labels its instances with the units its sample `dj` proves. -/
 def checkLabel (dj : Json) (pub : Public) (j : Nat) : V Unit := do
-  let D ← Draw.UnitDraw.ofJson dj
+  let D ← Draw.UnitSample.ofJson dj
   let idx ← Registered.unitIndices pub
   if idx != D.proved then
     throw s!"rec-labels: table {j} labels its instances {idx}, not the units its draw proves {D.proved}"
 
 /-- **A sampled session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
-`units.indices`, exactly the units its sample proves (`tableDraw`). A registered read's position is read at an instance's
+`units.indices`, exactly the units its sample proves (`tableSample`). A registered read's position is read at an instance's
 label (`Registered.checkPort`), so the label must be the unit. V*'s populations are their units `0..n-1`, so an honest
 statement's labels (the population's labels of the sampled proof blocks) are those units; a population labelled from another
 start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a sample
@@ -1792,7 +1792,7 @@ passes. -/
 def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :=
   match draw with
   | none => pure ()
-  | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
+  | some d => (Array.range sts.size).forM fun j => checkLabel (tableSample d count j) sts[j]!.pub j
 
 /-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
 `--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads

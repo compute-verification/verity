@@ -221,10 +221,10 @@ theorem oneStarts_of_before {ℓ : String} {B log' : List Verity.Release} {after
 /-- **`SecondBytesOne`**, at a locator that puts only openings past the second stage's last round: each play's log
 before the statements' round shows every coin of the second stage's sample its log shows (`freshCoins_before`, by
 `sample_before_openings`), the two plays share those releases, and every coin of the second stage's family answers
-the play's one digest (`CoinMap.StageDraws`). -/
+the play's one digest (`CoinMap.StageSamples`). -/
 theorem secondBytesOne_of {A : Live₂} {C : CaseOf} {Good : Verity.Exchange → Prop} {L : CoinMap.Locate}
     {ℓ₂ : String} (hL : OpensFrom L (A.h.stage + 1)) (hShow : SecondShown C Good)
-    (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
+    (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
     (hRd : SessionCoins.InteriorReads C) (hlog : SessionCoins.InteriorLogged C Good) :
     SecondBytesOne A C Good L := by
   intro o o' k k' p e e' i i' it it' hA hG hA' hG' _ _ hb _ _ hi hit hi' hit'
@@ -259,11 +259,11 @@ def FirstShownEarly (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
 /-- **`FirstBytesOne`**, at a locator that puts only openings past the second stage's last round, from
 `FirstShownEarly`: an accepted play's first stage read all its bytes (`sourceRead_holds`), the releases before
 every opening start the log before the statements' round (`prefix_before_of_no_opening`), which the two plays
-share, and every coin of the first stage's family answers the play's one digest (`CoinMap.StageDraws`). A play
+share, and every coin of the first stage's family answers the play's one digest (`CoinMap.StageSamples`). A play
 whose first stage has no byte starts any other's. -/
 theorem firstBytesOne_of {A : Live₂} {C : CaseOf} {Good : Verity.Exchange → Prop} {L : CoinMap.Locate}
     {ℓ₁ : String} (hL : OpensFrom L (A.h.stage + 1)) (hShow : FirstShownEarly C Good)
-    (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁) :
+    (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁) :
     FirstBytesOne A C Good L := by
   intro o o' k k' p e e' i i' hA hG hA' hG' _ _ hb _ _ hi hi'
   have hb' : CoinMap.before L (A.h.stage + 1) [] o.log = CoinMap.before L (A.h.stage + 1) [] o'.log := hb
@@ -297,9 +297,9 @@ second stage's last round: `playCoinsOne_of_bytes` at `firstBytesOne_of` and `se
 theorem playCoinsOne_of_shown {A : Live₂} {C : CaseOf} {Good : Verity.Exchange → Prop} {L : CoinMap.Locate}
     {ℓ₁ ℓ₂ : String} (hL : OpensFrom L (A.h.stage + 1)) (hof : HeldOfAt A C) (hparts : PartsHeldAt A C)
     (hFirst : FirstShownEarly C Good)
-    (hDraw₁ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁)
+    (hDraw₁ : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁)
     (hSecond : SecondShown C Good)
-    (hDraw₂ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
+    (hDraw₂ : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
     (hlog : SessionCoins.InteriorLogged C Good) : PlayCoinsOne A C Good L :=
   playCoinsOne_of_bytes hof hparts (firstBytesOne_of hL hFirst hDraw₁)
     (secondBytesOne_of hL hSecond hDraw₂ (SessionCoins.interiorReads C fun _ _ _ hh => held_size hh) hlog)

@@ -7,7 +7,7 @@ that holds its payload, as one output bit.
 
 Every leaf is a `Value<1>`, byte strings and integers in `decode_circuit`'s orders: a byte string is bits in byte order,
 bit t being bit t mod 8 of byte ⌊t/8⌋, and the slot is an integer, least significant bit first.  The setup unit's ports
-are u16 words of those bits, a window's rows (`verity.commitments.windows.interface.layout`), so N is even, and its body
+are u16 words of those bits, a window's rows (`verity.commitments.periods.interface.layout`), so N is even, and its body
 hands the decode and the slot match the same bits flat.  P = (W − 16)/8 is the decode's payload bytes (2,054 at P2's
 point), n = ⌈N/P⌉ is the row's slots, at most 2^16, and S = max(1, ⌈log₂ n⌉) the slot's bits the selection reads.
 
