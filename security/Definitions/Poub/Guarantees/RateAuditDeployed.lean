@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Poub.RateAuditDeployed
-public import Definitions.Compose.Remote.Deployed
+public import Definitions.Poub.Remote.Deployed
 public import Definitions.Poub.Assumptions.RateAudit
 public import Definitions.Poub.Assumptions.RateAuditDeployed
 

@@ -94,16 +94,16 @@
   "Properties.Core.Site",
   "Properties.InferenceOnly.Opening",
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
-  "Properties.Compose.Remote",
-  "Properties.Compose.Remote.Coins",
-  "Properties.Compose.Remote.Shared",
-  "Properties.Compose.Remote.Pooled",
+  "Properties.Poub.Remote",
+  "Properties.Poub.Remote.Coins",
+  "Properties.Poub.Remote.Shared",
+  "Properties.Poub.Remote.Pooled",
   "Properties.Compose.Compose",
-  "Properties.Compose.Remote.Line",
-  "Properties.Compose.Remote.Schedule",
-  "Properties.Compose.Remote.Live",
-  "Properties.Compose.Remote.Subprotocol",
-  "Properties.Compose.Remote.SubprotocolDeployed",
+  "Properties.Poub.Remote.Line",
+  "Properties.Poub.Remote.Schedule",
+  "Properties.Poub.Remote.Live",
+  "Properties.Poub.Remote.Subprotocol",
+  "Properties.Poub.Remote.SubprotocolDeployed",
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
   "Properties.Certifier.JointBridge.ServiceSoundOfSessions"
@@ -1092,7 +1092,7 @@
   "Properties.Attest",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
-  "Properties.Compose.Remote",
+  "Properties.Poub.Remote",
   "Poub",
   "Properties.Accounting",
   "CircuitRequirement",
@@ -1129,7 +1129,7 @@
   "ZkServer"
  ],
  "claims": {
-  "modules": ["Properties.Compose.Remote.Subprotocol"],
+  "modules": ["Properties.Poub.Remote.Subprotocol"],
   "witnesses": {
    "Properties.Poub.Subprotocol.AcceptIsVerifiedFor": {
     "fails": "Properties.Poub.Subprotocol.acceptIsVerified_nontrivial",
@@ -2527,7 +2527,7 @@
    "why": "what a two-stage point's bits bound is stated against its own function and the factor bounds' covers, on the two-stage count's definitions: never a proof"
   },
   "Properties.Accounting.RegisteredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.Compose.Remote.Schedule"],
+   "imports": ["Definitions.Accounting", "Properties.Poub.Remote.Schedule"],
    "except": [],
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.RegisteredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.Poub.Schedule`), never a proof"
   },
@@ -2690,50 +2690,50 @@
    "except": [],
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
-  "Properties.Compose.Remote": {
-   "imports": ["Poub", "Properties.Compose.Remote"],
+  "Properties.Poub.Remote": {
+   "imports": ["Poub", "Properties.Poub.Remote"],
    "except": [
-    "Properties.Compose.Remote.Pooled",
-    "Properties.Compose.Remote.Line",
-    "Properties.Compose.Remote.Line.Premises",
-    "Properties.Compose.Remote.Line.Record",
-    "Properties.Compose.Remote.Schedule",
-    "Properties.Compose.Remote.Subprotocol",
-    "Properties.Compose.Remote.SubprotocolDeployed"
+    "Properties.Poub.Remote.Pooled",
+    "Properties.Poub.Remote.Line",
+    "Properties.Poub.Remote.Line.Premises",
+    "Properties.Poub.Remote.Line.Record",
+    "Properties.Poub.Remote.Schedule",
+    "Properties.Poub.Remote.Subprotocol",
+    "Properties.Poub.Remote.SubprotocolDeployed"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
   },
-  "Properties.Compose.Remote.Pooled": {
+  "Properties.Poub.Remote.Pooled": {
    "imports": ["Definitions.Accounting", "Poub"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Poub.Remote.Draw`), never a proof"
   },
-  "Properties.Compose.Remote.Line": {
+  "Properties.Poub.Remote.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
-    "Definitions.Compose.Remote",
+    "Definitions.Poub.Remote",
     "Definitions.Accounting.Assumptions",
     "Poub",
-    "Properties.Compose.Remote.Line"
+    "Properties.Poub.Remote.Line"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Compose.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Poub.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
-  "Properties.Compose.Remote.Schedule": {
-   "imports": ["Definitions.Accounting", "Poub", "Properties.Compose.Remote"],
+  "Properties.Poub.Remote.Schedule": {
+   "imports": ["Definitions.Accounting", "Poub", "Properties.Poub.Remote"],
    "except": [],
    "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
-  "Properties.Compose.Remote.Subprotocol": {
-   "imports": ["Poub", "Properties.Compose.Remote.Line"],
+  "Properties.Poub.Remote.Subprotocol": {
+   "imports": ["Poub", "Properties.Poub.Remote.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`Poub.Protocol`) and the memory line of record (`Properties.Poub.Line`), whose model vocabulary it reads through that module; never a proof"
   },
-  "Properties.Compose.Remote.SubprotocolDeployed": {
-   "imports": ["Properties.Compose.Remote.Subprotocol"],
+  "Properties.Poub.Remote.SubprotocolDeployed": {
+   "imports": ["Properties.Poub.Remote.Subprotocol"],
    "except": [],
-   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Compose.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
+   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Poub.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
   }
  },
  "reads_exempt": {
@@ -12651,8 +12651,8 @@
   "premises": [
    "Definitions.Certifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.Compose.Remote.Line.Premises",
-   "Properties.Compose.Remote.Schedule"
+   "Properties.Poub.Remote.Line.Premises",
+   "Properties.Poub.Remote.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
