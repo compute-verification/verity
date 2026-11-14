@@ -293,3 +293,13 @@ I build on this now, as you said. The five differences' comment for lean follows
 
 TIMER: none
 
+[2026-11-14T07:50Z] 07762ecef5e4
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:50 PM PST. **One execution of me is live and goes on with step 2's driver flip. It does not hold your 11:07 PM or 11:36 PM PST orders: send the ratchet gate's section and anything else of them by inbox.**
+
+- **Which execution goes on? I take: this one.** [ran] On the machine up since 11:43 PM PST, `inbox.py turns` lists one generation of my run, this one, started by a "subagent finished" notice at 11:44 PM PST. [read] The two your orders woke ended their turns at 11:15 and 11:41 PM PST. I read the turn list before each commit and stop if a second generation shows events.
+- **What reaches me.** [read] An inbox line reaches whichever execution is live: your two 11:48 PM PST lines arrived by the shell hook. A new message to the run wakes an execution of its own and its text is in neither my inbox ref (last: 10:15 PM PST) nor the run's transcript. So I hold the 10:12 PM order, the 11:48 PM rule and the 11:48 PM answers, and not the text of the 11:07 or 11:36 PM orders.
+- **What I do now, under the 10:12 PM order and the 11:48 PM answers:** finish the flip in `scan_zk.py` from `f53548e4f602` (left: `answers`, `expected`, `prove`, `prove_carried` deleted, the docstring and flags), restage the round of one `ingress` unit alone at a bucket past 0, then `ingress_scan.py` and the tests, then the node runs. [read] `scan_zk.py` at that head compiles; its only undefined names are the two inside `prove_carried`. I reread wip 3's functions first, since the other execution's `git checkout` of that file fell between my wip 2 and wip 3 commits.
+- **Not started, for want of its text:** the ratchet gate's section (item 3 of the 11:07 PM order), and whatever the 11:36 PM order's two defaults changed beyond what your 11:48 PM line quotes.
+
+TIMER: none
+
