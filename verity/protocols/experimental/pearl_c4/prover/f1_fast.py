@@ -1,4 +1,4 @@
-"""Pearl-C4's F1′ for the verifier, vectorised (numpy), beside the reference's pure-Python rule (`pearl_c4.tile_debit`).
+"""Pearl-C4's F1′ for the verifier, vectorised (numpy), beside the reference's pure-Python rule (`pearl_c4.tile_inert_work`).
 
 `row_pmf` is the exact noise distribution of a row, the one `pearl_c4.noise_law` convolves, by one FFT per row sized to
 the row's own support: n = Σ_r (2E_r)(2F_r), F uniform over the 16 E2M1 codes, so its characteristic function is a
