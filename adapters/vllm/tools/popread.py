@@ -776,7 +776,7 @@ def analyze_served(build: dict[str, Any], *, units: Units | bool = False, ignore
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.circuits.codec import encode_program
     from verity.circuits.program import Program
-    from verity.circuits.call_scope import specialization
+    from verity_vllm.query.program_view import specialization
 
     P = build["program"]
     width = {k: int(v["width"]) for k, v in P["values"].items()}

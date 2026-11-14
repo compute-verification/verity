@@ -10,8 +10,8 @@ import numpy as np
 
 from tests.check import test_sampled_replay as T
 from verity_vllm.check.replay import driver as DR
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay import replay_record as RR
+from verity_vllm.records import replay_codes as RC
 
 
 def _vu(stratum: str, family: str = "Gemm_v1") -> dict:

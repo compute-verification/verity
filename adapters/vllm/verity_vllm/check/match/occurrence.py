@@ -4,6 +4,8 @@ each request's instances with the shared ones of its engine steps merged in (`sh
 
 from __future__ import annotations
 
+from verity_vllm.program.compact import idx_values as _idx_values
+
 SHARED = "*weight-only*"   # owner sentinel of a weight-only instance; never a request id
 
 
@@ -11,8 +13,6 @@ def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact
     """True when every node operand of fold instance `r` is a shared weight or an earlier weight-only instance (node id
     in `shared_nodes`) and there is at least one: the instance carries no request's data (gemma2's RMSNorm scale `1 + w`).  The rule
     `decompose` and GM-01 (global_match.check, G2) apply after the meta channel and before the row-count rule -- one definition."""
-    if compact:
-        from verity_vllm.program.compact import idx_values as _idx_values
     reads = False
     for a in r["args"]:
         for run in a:   # record (space, idx, lo, hi) | compact (space, (idx0, lo, hi), (dI, dL, dH), count): space / idx only

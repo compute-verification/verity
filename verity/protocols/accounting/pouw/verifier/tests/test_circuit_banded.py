@@ -69,7 +69,7 @@ def test_rows_shared_along_a_band_and_fresh_across():
         for (I2, J2), (rows2, cols2, keys2) in tiles.items():
             if (I2, J2) == (I, J):
                 continue
-            assert (rows == rows2) == (I == I2 and J0 == BD.band_start(J2, g))
+            assert (rows == rows2) == (I == I2 and BD.band_start(J2, g) == J0)
             assert cols != cols2 and keys != keys2
     # the last band (column tile 4) is short and its own
     assert tiles[(0, 4)][0] != tiles[(0, 3)][0]
