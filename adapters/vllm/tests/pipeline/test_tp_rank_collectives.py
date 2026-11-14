@@ -27,7 +27,7 @@ from verity_vllm.acquire.sources import moe_align_source
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.observe import capture
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.pipeline import m1_capture
+from verity_vllm.pipeline import match_capture as m1_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
 from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 

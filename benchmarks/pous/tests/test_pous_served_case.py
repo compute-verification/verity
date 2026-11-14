@@ -1,7 +1,8 @@
 """`served_case.py`, PoUS's and the wipe's pieces for the composite, built from what a served window kept.
 
 PoUS's window is `served_piece.py`'s, run on the CPU over the tiny int8 checkpoint at the small point with the PoUS tests'
-signer (`test_pous_served_piece`'s fixture); the builder encodes ``C*`` again from the same snapshot on the CPU. The wipe's
+signer (`test_pous_served_piece`'s fixture, and its BF16 one); the builder encodes ``C*`` again from the same snapshot on
+the CPU. The wipe's
 is one wipe in this process at a small fill (`wipe_run.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
 ``answer.json`` with the run's placement in its profile, ``served.json`` and the leg's ``wipe.case.json``. Each piece is
 held to the composite's form (`benchmarks/one_stage/composite.py`'s ``piece``: a case of commitment, evidence and params,
@@ -39,7 +40,7 @@ def _load(name: str, path: Path):
 
 SPT = _load("pous_served_piece_tests", ROOT / "benchmarks" / "pous" / "tests" / "test_pous_served_piece.py")
 SC = _load("pous_served_case", ROOT / "benchmarks" / "pous" / "served_case.py")
-ts, served = SPT.ts, SPT.served
+ts, served, served_bf16 = SPT.ts, SPT.served, SPT.served_bf16
 WIPE_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL_WIPE = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
 
@@ -53,7 +54,9 @@ def _listing(d: Path) -> dict[str, bytes]:
 
 
 def _pous(s, **kw):
-    return SC.pous_piece(s.out, schemes=ts.SCHEMES, hf_home=s.hf, device="cpu", pins=s.pins, **kw)
+    """`pous_piece` over ``s``, asking `SPT.JUDGE`, the stand-in `SPT._run` serves, unless ``kw`` names an ``exe``."""
+    kw.setdefault("exe", SPT.JUDGE)
+    return SC.pous_piece(s.out, schemes=ts.SCHEMES, hf_home=s.hf, device="cpu", pins=[s.pins], **kw)
 
 
 def _edit(path: Path, change) -> None:
@@ -100,13 +103,28 @@ def test_pous_case_is_the_composites_piece_and_its_answer_the_runs(served, tmp_p
         assert secret not in "".join(p.decode() for p in public.values())
 
 
-def test_after_the_run_the_builder_writes_the_piece_the_run_wrote(served, tmp_path, monkeypatch):
+def test_a_run_with_no_lean_is_undecided_until_the_builders_lean_answers_its_case(served, tmp_path, monkeypatch):
+    """A run with no ``case_exe`` keeps the Python's accept as undecided (`period.NO_JUDGE`); the builder with no ``exe``
+    writes that again, and with a Lean (`SPT.JUDGE`, which answers as the Python) writes the Lean's accept."""
+    answer, _ = SPT._run(served, tmp_path, monkeypatch, case_exe=None)
+    assert answer["verdict"] == "undecided" and answer["reason"] == SC.period.NO_JUDGE
+    SPT._judge(monkeypatch, {})
+    _, got = _pous(served, exe=None)
+    assert got == json.loads((served.private / "run.json").read_text())["answer"] and got["verdict"] == "undecided"
+    _, got = _pous(served)
+    assert got["verdict"] == "accept" and got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
+    assert json.loads((served.private / "answer.json").read_text()) == got
+
+
+@pytest.mark.parametrize("form", ["served", "served_bf16"])
+def test_after_the_run_the_builder_writes_the_piece_the_run_wrote(form, request, tmp_path, monkeypatch):
     """The served piece writes its case through this builder; built again after the run, from the kept outputs and
-    ``C*`` encoded again, it is the same bytes."""
-    SPT._run(served, tmp_path, monkeypatch)
-    kept = {f: (served.private / f).read_bytes() for f in ("case.json", "answer.json")}
-    _pous(served)
-    assert {f: (served.private / f).read_bytes() for f in kept} == kept
+    ``C*`` encoded again, it is the same bytes, over the int8 checkpoint and over the BF16 one."""
+    s = request.getfixturevalue(form)
+    SPT._run(s, tmp_path, monkeypatch)
+    kept = {f: (s.private / f).read_bytes() for f in ("case.json", "answer.json")}
+    _pous(s)
+    assert {f: (s.private / f).read_bytes() for f in kept} == kept
 
 
 def test_a_tampered_pous_case_is_answered_otherwise(served, tmp_path, monkeypatch):
@@ -170,9 +188,9 @@ def test_weights_that_are_not_the_pins_make_no_pous_case(served, tmp_path, monke
 def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_path):
     SPT.SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=SPT.NODE, private=served.private,
                party=SPT.Side(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-               pins=served.pins, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
+               pins=[served.pins], schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
     with pytest.raises(SC.Refused, match="names no private directory: the run's session didn't complete"):
-        SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=served.pins)
+        SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=[served.pins])
 
 
 def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, wipe_run.Wipe]:

@@ -676,8 +676,8 @@ the one AuditRO's count and the receipts' binding term read too, whatever the se
 the verifier records it with δs (`sketch_failure`'s `queries_log2`) and the auditor's line reads it back
 (`verifier.sketch_at`, which reads a record written before as the \(F \cdot C\) it charged: \(C\) the node's
 compressions over the span and \(F\) an outside-compute factor). At 16 rows every session reads \(2^{-15.12}\), the
-guesses' \(Q \cdot 2^{-95.12}\), and it dominates the memory line's δ. 64 rows read \(2^{-97.00}\), the keys' 256-bit
-birthday, at τ 1.226 a pass on the reader; neither is under \(2^{-100}\) at the budget. The fused GEMM's cost at 64
+guesses' \(Q \cdot 2^{-95.12}\), and it dominates the memory line's δ. 64 rows, under 512-bit sign keys, read
+\(2^{-135.85}\), under \(2^{-100}\) at the budget, at τ 1.226 a pass on the reader. The fused GEMM's cost at 64
 rows isn't measured yet.
 
 A grinding try is not a pass's commitment. It reads no block: re-salting one receipt leaf changes the root without

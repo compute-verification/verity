@@ -90,10 +90,12 @@ MARK_BYTES = DIGEST_BYTES["sha512"]
 COMPLETE, LATE, WRONG = "complete", "late", "wrong"
 
 DEPLOYED_FILL_BYTES = 2_600_000_000_000
-"""The deployed fill: 2.6 TB, every tier of one server."""
+"""The reference fill: 2.6 TB, every tier of one server, the size `StreamedWipeMeets2600GB` is stated at.  A run's fill
+is its own `WipeParams`'."""
 DEPLOYED_LABELS = DEPLOYED_FILL_BYTES // LABEL_BYTES
 DEPLOYED_K = 74_000
-"""The deployed challenge count: retained prior content at most about 1.02 GB plus the egress, at δ = 2^-40."""
+"""The challenge count at the reference fill: retained prior content at most about 1.02 GB plus the egress, at
+δ = 2^-40."""
 
 
 def raw_clock_ns() -> int:

@@ -295,7 +295,7 @@ class TP2CaptureWorkerExtension:
         from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
         from verity_vllm.observe.events import RunHeader
-        from verity_vllm.pipeline.m1_capture import dump_cos_sin
+        from verity_vllm.pipeline.match_capture import dump_cos_sin
 
         facts = _tp_facts(self)
         rank, world = int(facts["tp"]["rank"]), int(facts["tp"]["world_size"])

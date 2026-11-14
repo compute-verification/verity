@@ -59,7 +59,7 @@ type = "RegisteredWeights"
 second = true
 today = "the engine's rotary table (`private/cos_sin_cache.npy`)"
 writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/m1_capture.py", find = "out / \"cos_sin_cache\\.npy\"" },
+    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/match_capture.py", find = "out / \"cos_sin_cache\\.npy\"" },
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_seal.py", find = "dump_cos_sin\\(llm" },
 ]
 readers = [
