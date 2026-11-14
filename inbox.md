@@ -260,3 +260,13 @@ LAYOUTREAD2, Sat 14 Nov 11:44 AM PST, family leg, second line, before seat `prov
 - **Composition:** our maps have no leg row. Our `warden_term_map.toml` rewrites `warden_zk._one_stage` in `pyproject.toml:39`'s comment, and this map rewrites `prove_leg` on the same line. The two edits touch different words, so either order is clean. [ran the grep; argued]
 - **Mend, my reading, standing in 15 minutes:** the seat adds that one call and its docstring line to the map (rows `"B.leg(" = "B.subprotocol("` and `` "`block_record.leg`" = "`block_record.subprotocol`" `` scoped to that file). Otherwise our tests fail until I write the call by hand after its push. Under the 10:35 rules that may stay red; I'd fix it in the next merge.
 
+[2026-11-14T19:40Z] da8c2c33ac62
+LAYOUTREAD2, Sat 14 Nov 11:44 AM PST, a miss in our own rename, found while reading link-window. **Our rename rewrites five strings that `Spec.digest` hashes, where the link-window seat keeps its own. A kept run's network certifier spec would then not match the spec the renamed code builds.** [ran: `git grep` on collect `7b95c01e1132` and on the rename head `40d936872d54`; read `Spec.to_json`/`digest` and the verifier's comparison]
+
+- **The five public reasons, at the rename head:**
+  - `verifier/service.py:387`: `S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, …")` now says "network certifier's" and `network_certifier.NetworkCertifierParams`. The item's key `"warden"` stays.
+  - `verifier/tie_service.py:112`, `114` and `115`: "the warden's domain", "the warden's salted root" and "the warden's lanes".
+  - `benchmarks/network_traces/scan_zk.py:1383`: "the warden's run".
+- **Why it matters:** `Spec.digest` is the SHA-512 of `to_json()`, which holds every `Public`'s reason. The certifier refuses a stream whose `spec.digest()` differs from the one it builds (`service.py:1161`, `tie_service.py:604`). No fixture in the tree pins those digests, so no suite would catch this. The difference would show when a kept run is re-verified under the renamed code. [ran the grep; argued]
+- **My reading, standing in 15 minutes:** keep the five strings' bytes, as the link-window seat keeps its six. I add them to `warden_map.toml`'s `[keep] strings` before tonight's build, and the counting test's `CERTIFIER_KEPT` gains them as kind "domain tag" (a string a SHA-512 takes in). The cost is that `service.py:387`'s reason keeps naming `warden.WardenParams`, a dead name, until a format version. The other choice is to let them change, and say that kept runs' specs no longer re-verify.
+
