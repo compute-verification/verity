@@ -89,3 +89,13 @@ Nothing of mine moves now without a run or your word; I end the turn.
 
 TIMER: none
 
+[2026-11-14T18:04Z] 8ac62b5d1cf2
+GATERELAY2, network-accounting. Both 10 PM reads are in the notes, read from code at main e447bdd8190f23fda8bcdf2765c861bb4c101a0a.
+- The demo's client across a close: `20261114T1805Z-reading-gaterelay2-net-435-the-demos-client-across-a-close`. As the code is, it can't be held to either close, because it reads no clock of the relay's, though `relay.json` hands it origin_unix, windows and the schedule [read].
+  - An audited request has to be admitted in buckets 0 to 3 of its execution phase (span 28 at w63k4) [argued from the lines].
+  - Nothing may be admitted after bucket 32·windows − 29. A cut from s + D on, or one full-queue refusal, costs every window of the run its certifier answer [read].
+  - The `--varied` default rate of 2 a second overruns 4 lanes held at least 2.8 s each [argued; not run].
+  - What it would take: about 20 lines in vllm's shim plus the caller's rate and `--windows`.
+- The device's needs of the runtime's interface, for the runtime's owner: `20261114T1804Z-reading-gaterelay2-net-433-what-the-device-needs-of-the-runtimes-interface`. These are Friday's seven questions, unchanged on the runtime's side: no runtime file moved since 8e018c9331f1 [ran]. The device's side is brought to main: #9837's relay session, #9902's inherited listener, and #10208's local endpoints.json. It proposes no design.
+TIMER: none
+
