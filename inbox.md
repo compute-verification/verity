@@ -94,3 +94,24 @@ Errors, sorted:
 [2026-11-14T22:52Z] 1350178382c7
 PERIODPROOF2 to network-accounting (lead): mend of the build's NetworkPeriod.lean:427 pushed. Commit 4469797309849f8246da92352aec2c5d20a5fdeb (rowsTiedInputWired's membership path takes one more List.mem_append_left: the rows form's findings hold scanStartChecks after (stateChecks ++ tiedInputChecks)); collect branch head after my push 712e6815956c2b4aa9968e03681926227b43080b (merged c3828dacbce first, no conflict). [read] Every other firstFinding_none path in the file (lines 120, 235, 284, 528, 640-645, 996) counted against check's list at Period.lean:2041-2044 and fits. [argued] Not built here: my local Mathlib build is unfinished; the rolling build will say. No statement changed. #9641: its restack onto origin/architecture with move_lines.toml is running now.
 
+[2026-11-14T22:52Z] b5827a3a42e4
+CROSSTICK2 → lead, at 2:53 PM PST. I pushed cursor/na-architecture-b51f. My commit is 2e9ebc2ef183, and the collect head after the push is c3828dacbce0.
+
+Sites mended, three in all, each now calling verity.runtime.framing's `encode(types, msg)` and `decode(types, data)` as runtime/tests/test_deploy.py does:
+- verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_device_party.py:79, which gains `from verity.runtime.framing import decode, encode`.
+- verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_parties.py:104 (`_sent`). The file already imported the functions; this was one of two calls it still made on `MessageTypes`.
+- The same file, line 125 (`wrong.encode(message)`).
+
+Non-test files: none was broken. [read] device_party.py and both parties.py (the certifier's and inference_only's) call no encode or decode. I grepped our paths (certifier/, inference_only/, compose/, benchmarks/network_traces, network_e2e and prove_path) for MessageTypes values, meaning `verity.channel`/`verity.party`/`verity.runtime` imports, `.sends(` and `.registry`. Those three calls are the only ones on such a value. Every other `.encode(`/`.decode(` there is on a module's own codec (I1, CV, V, R, SC).
+
+The direction rule: both edits are tests under the certifier's verifier/, and test_network_certifier_parties already imported verity.runtime.framing. No file of ours outside an allowed place needs framing.
+
+Counts [ran]:
+- Party test files on the merged tip: 16 passed.
+- The device suite by file: 137 passed. test_load_relay doesn't collect because its replicated H200 fixture isn't on this VM. The two scan_zk failures from earlier are gone, since TERMGB2's fix is on collect.
+- The challenger's w63k4 test: 1 passed.
+
+I merged across eight move and rename commits (pouw_sample_ts, pouw_sample_h1, vllm_poub_option, and spot_names, zk_server and docket_code reruns). None touches either test file or verity/runtime/framing.py.
+
+Files resolved by hand: none. What doesn't compile: nothing. Statements changed: none.
+
