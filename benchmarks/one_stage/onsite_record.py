@@ -457,8 +457,21 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
                 "not the frames view. Restated with a scope premise over the frames view, read again at that "
                 "statement (``takes``) and pinned, it leaves ``open``; until then only the tight form rests on it, and "
                 "the figure of record is the conservative one, which doesn't read it (`OPEN`)")
-#: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
+#: PeriodLeakRegistered, a property of the period check's acceptance still to be stated, by the name `LOCKS` would
+#: list it under
 PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
+#: why PeriodLeakRegistered is open whatever a lock states: no Lean states it, and a statement over an accepted period
+#: says what the accept establishes only where it ties the leak bound's quantities to that period
+RESTATE_PERIOD = ("to be stated: no Lean states it. It is to give MonitoringPeriodLeakAccepted's leak bound at the one "
+                  "execution phase of a period the rows-form check accepts, which it establishes only where it ties "
+                  "that bound's quantities to the accepted period, for each secret's period: the phase's statement "
+                  "and partition to the scan's registration and its one-stage answer, the bits of its incorrect sets "
+                  "to the scan's descriptor and the answer's bound, the network certifier's schedules and caps to the "
+                  "parameters' schedule and cells, its run and observations to the rows its listed key signed, its "
+                  "openings to the rows the registration holds, the registered inputs to the registration's entries, "
+                  "and the jitter bound to the parameters'. A statement that leaves them free holds or fails whatever "
+                  "the check accepted. The premises it takes (``takes``) are those of the statement it was first "
+                  "drafted as, some of which no Lean defines today")
 AUDITOR_RECORD, AUDITOR_LISTING, SCAN_STATE_PINNED = "auditor-record", "auditor-listing", "scan-state-pinned"
 #: why auditor-record doesn't hold where the period's parameters list no readable keys, or no first execution phase
 NO_KEYS = (f"the period's parameters ({CASE}'s params) state no LMS parameters, listed keys (each a key, a session and "
@@ -548,8 +561,8 @@ CHECKED = {
                         "missing included, neither the network certifier's verdict nor the composite of record's is "
                         "established, and there is no bound (`STATE_UNPINNED`)"),
 }
-#: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
-#: registration opens at its registered inputs, is K's; MonitoringPeriodLeakAccepted's is the same count at the trace's values
+#: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, once it is stated
+#: (`RESTATE_PERIOD`), at the values the registration opens at its registered inputs, is to be K's; MonitoringPeriodLeakAccepted's is the same count at the trace's values
 #: there; PeriodTiedCount's is to count a phase's tied audits with the scan as one Program, as ℓ_{a,j} does, once it is
 #: restated (`RESTATE_TIED`). The lock records a guarantee's named assumptions, never the antecedents its statement
 #: takes, so each gives ``statement``, the digest of its statement among the lock's reads (`statement`) at which it was
@@ -568,11 +581,12 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.CertifierRegisters": "certifiers-open"}},
     PERIOD_REGISTERED: {
-        "statement": "808274afd667f0e04b4758786bf29fedb31a024e4a2a92147a7003fa9cc4d59f",
+        "statement": None,
+        "restate": RESTATE_PERIOD,
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
-                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
+                  "NetTiming.ExecutionPhasesPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.CertifiersOpen": "certifiers-open",
                   "hA": AUDITOR_RECORD, "hr": AUDITOR_RECORD, "hkey": AUDITOR_RECORD}},
@@ -583,7 +597,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge", "NetTiming.RWired": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "NetTiming.RowsTiesOrdered": "rows-ties-ordered", "NetTiming.CircuitCounts": "free-count",
-                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
+                  "NetTiming.ExecutionPhasesPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
                   "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.PhaseParsed": "sampled-leg-bridge",
                   "NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
@@ -676,12 +690,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
                             "never the evidence's or the prover's copy. PeriodLeakRegistered states it (``stated_by``) as "
                             "its hA, hr and hkey, which the run checks of the auditor's inputs (``checked``, "
-                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-device, until the lock holds that "
-                            "guarantee at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
+                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-device, until that guarantee is "
+                            "stated, tying the accepted period to the leak bound's quantities (`RESTATE_PERIOD`), and a "
+                            "lock holds it at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
                             "holds (``unchecked``: why it doesn't); while it is open the network verdict is not "
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
-    "windows-placed": {"is": "WindowsPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
+    "windows-placed": {"is": "ExecutionPhasesPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
                              "the period read, and each of its faulty sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
@@ -736,10 +751,11 @@ PREMISES: dict[str, dict[str, Any]] = {
 UNCHARGED = ("certifier-key",)
 CERTIFIER_KEY = "certifier-key"
 NOT_ESTABLISHED = "not established"
-KEY_OPEN = (f"{CERTIFIER_KEY} is open: the lock doesn't hold PeriodLeakRegistered at the statement `RESTS_ON` pins, "
-            f"taking the auditor's record as {AUDITOR_RECORD} (hA, hr and hkey), or the run's check of it doesn't hold "
-            "(``checked``), so the Lean answer's accept (``answer``) establishes no network verdict, and the record "
-            "cites none with an open condition")
+KEY_OPEN = (f"{CERTIFIER_KEY} is open: no Lean statement ties the accepted period's commitment and evidence to the "
+            "leak bound's quantities (`RESTATE_PERIOD`), so no lock holds PeriodLeakRegistered at a statement "
+            f"`RESTS_ON` pins, taking the auditor's record as {AUDITOR_RECORD} (hA, hr and hkey); or the run's check "
+            "of that record doesn't hold (``checked``). So the Lean answer's accept (``answer``) establishes no "
+            "network verdict, and the record cites none with an open condition")
 LISTING_UNMET = (f"{AUDITOR_LISTING} doesn't hold (``checked``): a circuit file the period lists isn't, by SHA-512, one "
                  "the run published as the file its audit's sessions were verified against, so the Lean answer's "
                  "accept (``answer``) establishes no network verdict, and the record states no bound")

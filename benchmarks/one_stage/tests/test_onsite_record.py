@@ -232,6 +232,8 @@ UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 #: the guarantees of `RESTS_ON` as they are, and those no statement of which is pinned yet
 RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
 UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
+#: PeriodTiedCount, stated as it is to be restated (`OR.RESTATE_TIED`)
+TIED = "NetTiming.SecurityProofs.PeriodTiedCount"
 ACCEPTED = "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted"
 #: the theorem that discharges the free-input count's premise
 (COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
@@ -609,28 +611,26 @@ def held_both(out: Path) -> dict:
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
     """A lock listing the pinned guarantees the tight K rests on and none of the theorems that discharge its premises,
-    with PeriodTiedCount, not yet stated, unlisted, and the premises with no discharge named: every premise is open, by
+    with PeriodTiedCount, to be restated, unlisted, and the premises with no discharge named: every premise is open, by
     name, and so is PeriodTiedCount, so the figure of record charges ℓ_a + 1 for the tied audit, with no tight K beside
-    it. certifier-key alone closes, by PeriodLeakRegistered's pin taking the auditor's record and the run's check of
-    it, though PeriodLeakRegistered's other premises stay open: the network certifier's verdict is accepted, and the
-    figure and its cells are conditional on nothing."""
+    it. certifier-key alone closes, by PeriodLeakRegistered at the fixture's stand-in pin taking the auditor's record
+    and the run's check of it, though PeriodLeakRegistered's other premises stay open: the network certifier's verdict
+    is accepted, and the figure and its cells are conditional on nothing."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
-    for g in UNPINNED:
-        monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
-    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g not in UNPINNED})))
+    monkeypatch.setitem(OR.RESTS_ON, TIED, RESTS_ON[TIED])
+    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g != TIED})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"] and OR.CERTIFIER_KEY not in UNNAMED
+    assert TIED in UNPINNED and OR.CERTIFIER_KEY not in UNNAMED
     assert (of["held"], of["open"], of["K"]) == (
-        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
+        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), TIED], K + 2 ** 23 + 1)
     assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"])
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
-    assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
-                                                       "takes": RESTS_ON[UNPINNED[0]]["takes"],
-                                                       "restate": OR.RESTATE_TIED}
+    assert of["premises"]["rests_on"][TIED] == {"missing": "not in the lock", "takes": RESTS_ON[TIED]["takes"],
+                                                "restate": OR.RESTATE_TIED}
     assert "conditional_on" not in of and "conditional_on" not in rec["periods"] and of["tight"] == OR.TIGHT
     assert rec["verdicts"]["the network certifier"]["verdict"] == "accept"
     assert rec["checked"][OR.AUDITOR_RECORD]["holds"] is True
@@ -891,7 +891,7 @@ def test_a_guarantee_the_tight_K_rests_on_with_no_statement_pinned_is_open_even_
         tmp_path, lock, monkeypatch):
     """PeriodTiedCount, listed before what it takes was read at its statement: open by its name, whatever the lock
     states it as."""
-    (g,) = UNPINNED
+    g = TIED
     monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
     write_lock(lock, stated={g: "toy"})
     of = held_both(tmp_path)["bound"]["of_record"]
@@ -903,7 +903,7 @@ def test_period_tied_count_is_open_to_be_restated_at_any_statement_and_the_figur
     """PeriodTiedCount as stated (its tie half with no scope premise, its count half over the stripped view) discharges
     nothing: pinned at the very statement the lock lists, it stays open with why it is to be restated, and the figure
     of record is the conservative one, ℓ_a + 1 charged for the tied audit, as with it unlisted."""
-    (g,) = UNPINNED
+    g = TIED
     assert RESTS_ON[g]["restate"] == OR.RESTATE_TIED and "scope premise" in OR.RESTATE_TIED
     assert g not in {t for p in OR.PREMISES.values() for t in p["discharged_by"]}
     monkeypatch.setitem(OR.RESTS_ON, g, dict(RESTS_ON[g], statement="toy"))
@@ -943,14 +943,19 @@ def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_st
 
 def test_at_the_trees_lock_certifier_key_closes_where_the_runs_check_of_the_auditors_record_holds_and_only_there(
         monkeypatch):
-    """The tree's Properties lock holds PeriodLeakRegistered at the statement `RESTS_ON` pins, which takes hA, hr and
-    hkey, the auditor's record, as auditor-record: certifier-key closes where the run's check of it holds, and stays
+    """Once the tree's Properties lock holds PeriodLeakRegistered at the statement `RESTS_ON` pins, taking hA, hr and
+    hkey, the auditor's record, as auditor-record, certifier-key closes where the run's check of it holds, and stays
     open, with why, where it doesn't or no run's inputs were checked. sampled-leg-bridge and reg-opens-at, which that
     statement takes too, stay open on their own."""
     monkeypatch.undo()
     r = OR.RESTS_ON[OR.PERIOD_REGISTERED]
     assert {k for k, v in r["takes"].items() if v == OR.AUDITOR_RECORD} == {"hA", "hr", "hkey"}
     ok = OR.premises(OR.LOCKS, checked={OR.AUDITOR_RECORD: {"holds": True}})
+    got = ok["rests_on"][OR.PERIOD_REGISTERED]
+    assert "statement" in got and r["statement"] is not None, (
+        "waits on PeriodLeakRegistered: stated in Lean, tying the accepted period's commitment and evidence to the leak "
+        "bound's quantities (onsite_record.RESTATE_PERIOD), proved, held by the tree's Properties lock, and pinned in "
+        f"RESTS_ON at that statement with what it takes; the lock gives {got}")
     assert ok["unread"] == [] and ok["rests_on"][OR.PERIOD_REGISTERED]["statement"] == r["statement"]
     assert not {"missing", "restated", "restate"} & set(ok["rests_on"][OR.PERIOD_REGISTERED])
     assert OR.CERTIFIER_KEY not in ok["open"] and {"sampled-leg-bridge", "reg-opens-at"} <= set(ok["open"])
