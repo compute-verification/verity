@@ -2747,7 +2747,7 @@
     {"file": "benchmarks/harness/tests/test_overhead.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/overhead_node.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/overhead_records.py", "count": 1},
-    {"file": "benchmarks/harness/verity_bench/vllm/commit_arm.py", "count": 4},
+    {"file": "benchmarks/harness/verity_bench/vllm/commit_arm.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/vllm/runner.py", "count": 4},
     {"file": "benchmarks/hash/dither/dbw.py", "count": 3},
     {"file": "benchmarks/hash/dither/dither_a.py", "count": 12},
@@ -4541,7 +4541,6 @@
     {"file": "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py", "count": 3},
     {"file": "verity/protocols/accounting/pouw/verifier/window.py", "count": 58},
     {"file": "verity/protocols/proofs/spot/verifier/profile.py", "count": 90},
-    {"file": "verity/protocols/accounting/registration/verifier/registration.py", "count": 10},
     {"file": "verity/protocols/compose/verifier/remote/CoreRemote.lean", "count": 103},
     {"file": "verity/protocols/compose/verifier/remote/README.md", "count": 160},
     {"file": "verity/protocols/compose/verifier/remote/lakefile.toml", "count": 6},
@@ -5402,6 +5401,7 @@
     {"file": "benchmarks/serve_tax/cell_shim.py", "count": 1},
     {"file": "benchmarks/serve_tax/pyproject.toml", "count": 1},
     {"file": "benchmarks/serve_tax/tests/test_cell_shim.py", "count": 10},
-    {"file": "benchmarks/serve_tax/tests/test_certified.py", "count": 5}
+    {"file": "benchmarks/serve_tax/tests/test_certified.py", "count": 5},
+    {"file": "verity/protocols/accounting/registration/verifier/registration.py", "count": 10}
   ]
 }
