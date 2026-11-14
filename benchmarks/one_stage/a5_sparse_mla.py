@@ -26,7 +26,7 @@ rows' writers on 64 columns, and per head, five scores units, forty values units
 eight combines.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+      python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] [--units] --main FILE --out DIR
 """
 from __future__ import annotations

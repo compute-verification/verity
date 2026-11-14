@@ -927,12 +927,12 @@ def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_t
     (d / "a-small.txt").write_bytes(b"y" * 10)
     (d / "z-junk.bin").write_bytes(b"z" * 100)
     _declare(d, ["res/*"])
-    kept, trimmed = CU.select(d, cap=50)
+    kept, trimmed = CU.select(d, limit=50)
     assert {"stdout.log", "job.json", "res/result.json", "res/deep/big.bin", "a-small.txt"} <= set(kept)
     assert [t["path"] for t in trimmed] == ["z-junk.bin"] and trimmed[0]["bytes"] == 100 and len(trimmed[0]["sha256"]) == 64
-    assert [t["path"] for t in CU.select(d, cap=0)[1]] == ["a-small.txt", "z-junk.bin"], "cap 0: never upload undeclared"
+    assert [t["path"] for t in CU.select(d, limit=0)[1]] == ["a-small.txt", "z-junk.bin"], "cap 0: never upload undeclared"
     _declare(d, ["*"])
-    assert CU.select(d, cap=0)[1] == [], "`*` keeps everything"
+    assert CU.select(d, limit=0)[1] == [], "`*` keeps everything"
     w = CU.trim_warning(trimmed)
     assert "--declared-output" in w and "$OUT" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
 
@@ -945,11 +945,11 @@ def test_select_always_keeps_all_of_out_and_a_declared_glob_adds_to_it(tmp_path)
     (d / "res" / "r.json").write_text("{}")
     (d / "outside.bin").write_bytes(b"z" * 100)
     (d / "outx.bin").write_bytes(b"z" * 10)
-    kept, trimmed = CU.select(d, cap=0)
+    kept, trimmed = CU.select(d, limit=0)
     assert {"out/proof.bin", "out/verify.jsonl", "out/deep/big.bin"} <= set(kept), "out/ is kept in full with nothing declared"
     assert [t["path"] for t in trimmed] == ["outside.bin", "outx.bin", "res/r.json"], "only out/, not a name that starts with out"
     _declare(d, ["res/*"])
-    kept, trimmed = CU.select(d, cap=0)
+    kept, trimmed = CU.select(d, limit=0)
     assert {"out/deep/big.bin", "res/r.json"} <= set(kept) and [t["path"] for t in trimmed] == ["outside.bin", "outx.bin"]
 
 
@@ -958,7 +958,7 @@ def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_pa
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    monkeypatch.setattr(CU, "UNDECLARED_LIMIT_BYTES", 0)
     runs = tmp_path / "runs"
     d = _fixture_run(runs)
     (d / "res").mkdir()
@@ -985,7 +985,7 @@ def test_a_trimmed_listing_too_big_for_the_manifest_goes_in_the_record_and_custo
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    monkeypatch.setattr(CU, "UNDECLARED_LIMIT_BYTES", 0)
     runs = tmp_path / "runs"
     d = _fixture_run(runs)
     (d / "suites").mkdir()

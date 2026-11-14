@@ -295,12 +295,12 @@ theorem accE_cols {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover
     {r : Fin (VE.k x) → Coin} (h : (Claims.run H P VE x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols false (Claims.run H P VE x ω r).seen 0) q = some u) :
     ∃ spec st, (tables false x).head? = some (spec, st) ∧
-      u.length = 2 ^ (if false then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
+      u.length = 2 ^ (if false then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   obtain ⟨s, spec, sts, f, hs, hf, hx⟩ := accE_last h
   unfold cols at hu
   split at hu
   · rename_i rr hrr
-    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm⟩ := runOf_m hrr
+    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm, -⟩ := runOf_m hrr
     rw [hf] at hf'
     cases hf'
     rw [hx, hs] at hs'

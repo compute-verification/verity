@@ -347,10 +347,10 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "verity/circuits/ops/tc.py", "verity/circuits/cut.py", "AGENTS.md", "nowhere/x")
+                     "verity/circuits/ops/tc.py", "verity/protocols/proofs/flock/verifier/Flock.lean", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/circuits/cut.py"],
+        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/protocols/proofs/flock/verifier/Flock.lean"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
@@ -4043,7 +4043,7 @@ def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
     single = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(single)
     assert single.waitcap is not waitcap
-    assert (single.waitcap.WAIT_CAP_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_CAP_S, waitcap.STILL_GOING)
+    assert (single.waitcap.WAIT_LIMIT_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_LIMIT_S, waitcap.STILL_GOING)
 
 
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])

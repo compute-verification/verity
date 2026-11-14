@@ -86,7 +86,7 @@ namespace Accounting.TS.Checked
 open Flock.SoundAtBridge
 
 /-- **The checked unit's port conditions at `ok`**: the circuit has a port named `ok` that `own` registers a port of. `CheckedSessionSound` takes them of every session; `checkedOn_soundAt` only of a session
-that meets a setup predicate implying them, such as flock-verify's known-read check at known content naming `ok`. -/
+that meets a setup predicate implying them, such as verity-verify-proof's known-read check at known content naming `ok`. -/
 abbrev PortsOk (ok : String) (s : RowsSession) : Prop :=
   (∃ q : Fin s.c.ports.size, s.c.ports[q].name = ok) ∧ ∃ pt ∈ s.own, pt.name = ok
 
@@ -153,7 +153,7 @@ theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ 
     exact perm_onto_range π hπ u.val u.isLt
   · rfl
 
-/-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every sampled proof block is right at its owned reads,
+/-- **`ServedRootsLinked`'s event at a session**: verity-verify-proof accepts, every sampled proof block is right at its owned reads,
 and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s

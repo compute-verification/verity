@@ -134,7 +134,7 @@ open Classical in
 `SampledKSLivePub`'s setting, hypotheses and named assumptions, with two more hypotheses: the verifier's byte source
 holds the live sample's first read, `2 · k_d · width n + 64 ≤ Lb 0`, and `k_d · n · n_p ≤ 2^64`, `n_p` the rows of a
 proof block (`D.unroll.ports.size`). For every live prover,
-$$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
+$$\Pr[\text{verity-verify-proof accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \mathrm{deltaPub}(n, k_d, K_0, k, 2(t' + v), t' + v, t' + v, M, R_w, k_d\,n_p + 3, \rho):$$
 `SampledKSLivePub`'s error with `k_d · n_p + 3` commit strings in place of `Σ_u |io u|`. A sample of `k_d` proof blocks
 reads their rows, the zero's gate and the constant's (`k_d · n_p + 2`), and the samples that run out of bytes, of
@@ -220,7 +220,7 @@ open Classical in
 `sampledKSLivePub_rows` at `ρ = 1/2`, `k = kDep`, `M = R_w = 2^192`, a prover's per-run time `t' ≤ 2^80` and one
 opening's verification `v ≤ 2^80`, for a sample of `k_d` proof blocks of `n_p` rows with `k_d · n_p + 3 ≤ 2^40`, at any
 population `n` with `k_d · n · n_p ≤ 2^64`:
-$$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
+$$\Pr[\text{verity-verify-proof accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + 2^{-100}.$$ -/
 theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
     ∀ (n : ℕ) (Reg : Type)

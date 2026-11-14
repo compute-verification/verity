@@ -87,7 +87,7 @@ REGISTRY = Registry(
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "
-                                                  "is a live session's on the auditor host"),
+                                                  "is a live session's on the auditor device"),
     S("PEARLC_CHALLENGER_PEER", str, None, WHERE, "this node's name in the challenger host's peers"),
     S("PEARLC_CHALLENGER_LANE", str, "vllm", WHERE, "the lane the gate key is registered for"),
     S("PEARLC_GPU_UTIL", float, 0.55, VALUE, "vLLM's gpu_memory_utilization under the arm"),
@@ -120,7 +120,7 @@ REGISTRY = Registry(
                                             "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
                                             "kernels and hold them to the SASS gate"),
     S("POUW_SASS_GATE_CACHE", str, None, WHERE, "the SASS gate's cache; unset, ~/.cache/pouw-harness/sass-gate"),
-    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, native/build/libpouw_harness.so"),
+    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, verity/protocols/accounting/pouw/prover/kernels/harness/native/build/libpouw_harness.so"),
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),

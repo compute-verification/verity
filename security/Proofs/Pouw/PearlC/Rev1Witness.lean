@@ -8,6 +8,7 @@ import Proofs.Pouw.PearlC.DeviceGap
 import Proofs.Pouw.PearlC.DeviceRev1Gap
 import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # rev1's H100 rows are satisfiable
