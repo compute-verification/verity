@@ -299,7 +299,7 @@ theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.
 /-- **Under a sampling design object of kind `subset`, `sampledDesign` is a subset sampling design**: `deriveSamplingDesign` expands none
 (`deriveSamplingDesign_none`), so it is the one `flockSamplingDesign` parses from the object itself, which is neither stratified nor work, and
 `coveredDesign` refuses a Bernoulli one. -/
-theorem sampledLaw_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
+theorem sampledDesign_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
     (hs : SecurityProofs.kindOf lj = "subset") (h : sampledDesign desc q lj tb n = .ok samplingDesign) : ∃ k, samplingDesign = .subset k := by
   have hnb := notBernoulli_sampledDesign h
   obtain ⟨p, derived, parsed, -, hd, hpar, rfl⟩ := sampledDesign_ok h
@@ -313,13 +313,13 @@ theorem sampledLaw_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Le
     exact absurd hk (by decide)
 
 /-- **Under a sampling design object of kind `subset`, `designAt` is the subset sampling design of its own `samplingDesignK`**
-(`sampledLaw_subset`, and `subset 0` where `sampledDesign` refuses). -/
+(`sampledDesign_subset`, and `subset 0` where `sampledDesign` refuses). -/
 theorem designAt_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} (n : ℕ)
     (hs : SecurityProofs.kindOf lj = "subset") : designAt desc q lj tb n = .subset (samplingDesignK (designAt desc q lj tb n)) := by
   unfold designAt
   cases h : sampledDesign desc q lj tb n with
   | ok samplingDesign =>
-    obtain ⟨k, rfl⟩ := sampledLaw_subset hs h
+    obtain ⟨k, rfl⟩ := sampledDesign_subset hs h
     rfl
   | error _ => rfl
 

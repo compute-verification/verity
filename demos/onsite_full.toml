@@ -120,15 +120,14 @@ messages = ["SignedRun", "WipeReport"]
 after = ["End"]
 
 [[channel]]
-from = "prover"
-to = "bandwidth-verifier"
-messages = ["Register", "Root", "Openings"]
-
-[[channel]]
 from = "bandwidth-verifier"
 to = "prover"
-messages = ["Hold", "Run", "Open", "End"]
-after = ["Register"]
+messages = ["Hold", "Run", "Open", "End", "Case", "Answer"]
+
+[[channel]]
+from = "prover"
+to = "bandwidth-verifier"
+messages = ["Request", "Root", "Openings", "Malformed"]
 
 [[channel]]
 from = "bandwidth-verifier"
@@ -139,9 +138,9 @@ after = ["Openings"]
 [[channel]]
 from = "network-certifier"
 to = "workers"
-messages = ["out-opening"]
+messages = ["out-opening", "records", "cells-salts"]
 
 [[channel]]
 from = "network-certifier"
 to = "verifier"
-messages = ["out-record"]
+messages = ["out-record", "certificate", "registration", "load", "deployment", "groups"]

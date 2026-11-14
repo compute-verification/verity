@@ -316,7 +316,7 @@ def test_worst_case_is_the_convex_threshold_for_one_subset_level():
 
 def _exact_rhos(a: IntegrityProfile) -> list:
     """rho(0..n) in 60-digit Decimal, None for inf: -ln of `accept`'s exact ratio."""
-    _, n, p, k = a._law()
+    _, n, p, k = a._sampling_design()
     num, den, top = p.numerator, p.denominator, comb(n, k)
     with localcontext() as ctx:
         ctx.prec = 60
@@ -329,7 +329,7 @@ def _exact_lp(a: IntegrityProfile, utility, rhos=None) -> Decimal:
     """The relaxation's exact optimum, independently of the envelope: members times the best value, at mean risk at most
     t = ln(1/delta)/members, of a single point or of a chord between a point below t and one above (brute force), in
     60-digit Decimal."""
-    members, n, _, _ = a._law()
+    members, n, _, _ = a._sampling_design()
     rhos = _exact_rhos(a) if rhos is None else rhos
     with localcontext() as ctx:
         ctx.prec = 60
@@ -713,7 +713,7 @@ def test_stratified_queries_name_known_strata():
     assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
 
 
-def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
+def test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design():
     """A Stratified sample of the checked level: the profile's bound is the sampling design's exact count bound, its stratum bounds each
     stratum's own, and its weighted bound the sampling design's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
     for law in SMALL:

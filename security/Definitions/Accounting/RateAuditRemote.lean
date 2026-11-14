@@ -31,7 +31,7 @@ fixed: from there on the chip runs pass `j` from what it holds then, at most `S`
 every boundary), and device memory as laid out. So pass `j`'s device (its state, device memory, side sources and chip
 program) and the root it is seeded at are any function of the store and of the earlier passes' coins (their streams,
 their oracle families at every root and their samples), and of nothing of its own pass or later. `Chain.oracle` is pass
-`j`'s oracle at that root. Each pass draws its own sample of `s` words after its output.
+`j`'s oracle at that root. Each pass samples its own sample of `s` words after its output.
 
 **Grinding.** The seed is Fiat–Shamir (`fiat-shamir`), so a prover may hash candidate roots with pass `j`'s seed before
 it commits one, and keep the root whose oracle it likes. `GrindChain` gives it `G` candidates, fixed by the earlier

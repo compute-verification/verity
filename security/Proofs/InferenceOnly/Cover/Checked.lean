@@ -3,7 +3,7 @@ module
 public import Properties.InferenceOnly.Desc.Cover
 public import Proofs.Properties.InferenceOnly.Agrees
 public import Proofs.Properties.InferenceOnly.DescVerdict
-public import Proofs.InferenceOnly.Cover.Training
+public import Proofs.Slowdown.Cover.Training
 
 /-!
 # A verdict of compliance carries the cover theorem's factor

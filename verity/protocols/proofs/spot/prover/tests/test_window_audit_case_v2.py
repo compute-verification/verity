@@ -342,13 +342,13 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 
 
-def test_a5_records_a_law_none_of_whose_samples_ends(monkeypatch):
+def test_a5_records_a_sampling_design_none_of_whose_samples_ends(monkeypatch):
     """`a5.link_points` records the docket's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
-    which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
+    which `coins.sampling_design_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
-    monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
+    monkeypatch.setattr(a5.CC, "sampling_design_problem", lambda sampling_design, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
     assert a5.link_points({"k": 41, "law": "subset"}, 40, [m]) == {"members": 1, "error": LP.NEVER_ENDS}
 
@@ -357,9 +357,9 @@ def test_a5_records_whether_the_sample_ran_out_of_the_challengers_coins():
     """`a5.draw_ran_out`, which fails the window: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
     no word; a sampling design that doesn't apply records why."""
-    law = {"k": 9, "law": "subset"}
-    assert a5.draw_ran_out(law, 10, bytes(64)) is True
-    assert a5.draw_ran_out(law, 10, bytes(256)) is False
+    sampling_design = {"k": 9, "law": "subset"}
+    assert a5.draw_ran_out(sampling_design, 10, bytes(64)) is True
+    assert a5.draw_ran_out(sampling_design, 10, bytes(256)) is False
     assert a5.draw_ran_out({"k": 11, "law": "subset"}, 10, bytes(256)) == "a subset draw of 11 exceeds the population of 10"
 
 

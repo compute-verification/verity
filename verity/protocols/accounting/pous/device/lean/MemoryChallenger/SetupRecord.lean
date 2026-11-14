@@ -191,7 +191,7 @@ theorem SetupRecord.value_size {r : SetupRecord} {b : ByteArray} (h : r.value = 
     omega
 
 /-- PoUS's session record is a digest. -/
-theorem pous_record_size {c : SessionCommitment} {ended : String} {rounds : Array Round} {r : ByteArray}
+theorem pous_record_size {c : ChallengePhaseCommitment} {ended : String} {rounds : Array Round} {r : ByteArray}
     (h : message c ended rounds = .ok r) : r.size = 64 := by
   unfold message at h
   cases hr : recordsDigest rounds <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
@@ -217,7 +217,7 @@ theorem SetupRecord.value_ne_digest {r : SetupRecord} {b d : ByteArray} (h : r.v
   rw [e, hd, SETUP_RECORD_TAG_size] at this
   omega
 
-theorem SetupRecord.value_ne_pous {r : SetupRecord} {b : ByteArray} {c : SessionCommitment} {ended : String}
+theorem SetupRecord.value_ne_pous {r : SetupRecord} {b : ByteArray} {c : ChallengePhaseCommitment} {ended : String}
     {rounds : Array Round} {d : ByteArray} (h : r.value = .ok b)
     (hd : MemoryChallenger.message c ended rounds = .ok d) : b ≠ d :=
   SetupRecord.value_ne_digest h (pous_record_size hd)
@@ -257,7 +257,7 @@ theorem setupPreimage_ne_digest {I I' s s' b d : ByteArray} {r : SetupRecord} (h
     rolePreimage I s b ≠ rolePreimage I' s' d :=
   fun e => SetupRecord.value_ne_digest h hd (rolePreimage_inj hI hI' hs hs' e).2.2
 
-theorem setupPreimage_ne_pous {I I' s s' b d : ByteArray} {r : SetupRecord} {c : SessionCommitment}
+theorem setupPreimage_ne_pous {I I' s s' b d : ByteArray} {r : SetupRecord} {c : ChallengePhaseCommitment}
     {ended : String} {rounds : Array Round} (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64)
     (hs' : s'.size < 2 ^ 64) (h : r.value = .ok b) (hd : message c ended rounds = .ok d) :
     rolePreimage I s b ≠ rolePreimage I' s' d :=

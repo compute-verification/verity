@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "training/slowdown-onsite-h200"
-title = "The reference onsite H200 deployment: the slowdown's lower bound on hidden training over a year of the world's compute"
+title = "Slowdown of hidden training onsite"
 owner = "training"
-unit = "the slowdown's lower bound over a year of the world's compute: the adversary's GPU-hours to the target over the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1"
+unit = "GPU-hours a reference GPU-hour"
+axis = "The slowdown's lower bound at the reference onsite H200 deployment over a year of the world's compute: the adversary's GPU-hours to the target over the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1."
 better = "higher"
 command = "research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/slowdown/periods.py --out \"$OUT\"'"
 every = "7d"

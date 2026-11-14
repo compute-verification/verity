@@ -23,7 +23,7 @@ namespace Flock.Bridge.BlockSize
 open Claims.Sampling Properties.Spot Flock.Bridge.NeededBitsOf
 
 /-- A list of naturals without repeats, all in `[a, a + w)`, has at most `w` entries. -/
-theorem length_le_of_window {l : List ℕ} {a w : ℕ} (hnd : l.Nodup) (h : ∀ x ∈ l, a ≤ x ∧ x < a + w) :
+theorem length_le_of_executionPhase {l : List ℕ} {a w : ℕ} (hnd : l.Nodup) (h : ∀ x ∈ l, a ≤ x ∧ x < a + w) :
     l.length ≤ w := by
   have hs : l.toFinset ⊆ Finset.Ico a (a + w) := fun x hx => Finset.mem_Ico.2 (h x (List.mem_toFinset.1 hx))
   have hc := Finset.card_le_card hs
@@ -55,7 +55,7 @@ theorem length_unitGates_le (u : ℕ) :
     (Spot.Bits.unitGates (Spot.Bits.keyProg c n) u).length ≤ 3 * (bitsRows c).nComp := by
   unfold Spot.Bits.unitGates
   refine (length_flatMap_le _ (fun g => Spot.Bits.unitOf (Spot.Bits.keyProg c n) g == some u) 3 _
-    fun g _ => ?_).trans (Nat.mul_le_mul_left 3 (length_le_of_window
+    fun g _ => ?_).trans (Nat.mul_le_mul_left 3 (length_le_of_executionPhase
       (a := 2 + n * (bitsRows c).nIn + u * (bitsRows c).nComp) (List.nodup_range.filter _) fun g hg => ?_))
   · by_cases hg : Spot.Bits.unitOf (Spot.Bits.keyProg c n) g = some u
     · obtain ⟨a, b, hab⟩ := row?_of_unitOf hg
@@ -67,7 +67,7 @@ theorem length_unitGates_le (u : ℕ) :
 /-- **The inputs a unit owns** are among its `nIn` source gates `2 + u·B + b`. -/
 theorem length_insOf_le (u : ℕ) :
     (Spot.Bits.insOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u).length ≤ (bitsRows c).nIn := by
-  refine length_le_of_window (a := 2 + u * (bitsRows c).nIn) ?_ fun g hg => ?_
+  refine length_le_of_executionPhase (a := 2 + u * (bitsRows c).nIn) ?_ fun g hg => ?_
   · unfold Spot.Bits.insOf
     exact List.nodup_range.filter _
   · obtain ⟨hs, hr, hκ, ho⟩ := NeededBitsOf.mem_insOf.1 hg

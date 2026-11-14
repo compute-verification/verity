@@ -2,7 +2,7 @@
 
 A class is an `Argument` on the `bound` side. `allowance(profile)` is the most counted products one block can finish
 given its budget, or raises `Outside` when the algorithm isn't in the class (a premise fails, or a parameter the
-statement needs is unknown). A budget at which the statement's premises fail gets `math.inf` (no cap). Each class cites
+statement needs is unknown). A budget at which the statement's premises fail gets `math.inf` (no bound). Each class cites
 the Lean statement it instantiates first, then its named assumptions; `lean.weakest(cites)` is its status, and
 `premise_status(cites, k)` is where those assumptions stand at a block of `k` bits (`data/premises.toml`).
 
@@ -14,12 +14,12 @@ token) pair of the forward pass once, the cover and thread theorems count whatev
 covers, and the min-cut bound (`cut`, its arithmetic in `min_cut`) counts the profile's own, the trained weights'
 forward and input-gradient products. A count on a set `S` is `κ / κ_S` times as many of the
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
-be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
+be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no bound where it is 0. Both
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
 
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
-(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion bound's per-block cap
-`q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which the
+(`FlopBudget`), its count in counted products. `per_block` turns one into the slowdown lower bound's inference-block yield
+`q(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which the
 overhead is normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×`
 (`data/exclusion.toml`), with `s_×` and `Units.gates_per_flop` from one source (`Structure.check`).
 """
@@ -35,7 +35,7 @@ from slowdown import lean, min_cut
 from slowdown.hardware import Units
 from slowdown.params import Registry
 from slowdown.profile import Profile
-from slowdown.theorem import Cap
+from slowdown.theorem import Yield
 
 
 @dataclass(frozen=True)
@@ -47,13 +47,13 @@ class FlopBudget:
     cut: float = math.inf
 
 
-#: The most counted products one block with this budget finishes, in the FLOP model: a cap for a bound, a construction
-#: for an attack. `math.inf` is no cap (a bound whose premises fail at this budget).
+#: The most counted products one block with this budget finishes, in the FLOP model: an upper bound for a bound, a construction
+#: for an attack. `math.inf` is no bound (a bound whose premises fail at this budget).
 Allowance = Callable[[FlopBudget], float]
 
 
-def per_block(a: Allowance, units: Units) -> Cap:
-    """`q_T(c, k)`: allowance `a` on a block of `c` gates."""
+def per_block(a: Allowance, units: Units) -> Yield:
+    """`q(c, k)`: allowance `a` on a block of `c` gates."""
     return lambda b: a(FlopBudget(units.flops(b.gates), b.inputs, b.cut))
 
 
@@ -70,7 +70,7 @@ REFERENCE = "reference"
 
 @dataclass(frozen=True)
 class Structure:
-    """The elementary uncertified cap `q_U(U) = ω_max U / s_×`: what an uncertified or an unregistered gate holds under a bound
+    """The elementary free-compute yield `q_U(U) = ω_max U / s_×`: what an uncertified or an unregistered gate holds under a bound
     (`theorem`'s `u`), and the most any block holds, `u c`."""
 
     name: str
@@ -86,7 +86,7 @@ class Structure:
     #: the runs that measured `s_×` (`art:` ids), cited beside the straddling premise
     evidence: tuple[str, ...] = ()
 
-    #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
+    #: `U / s_×` counts the operations inside free compute only if none has gates on both sides; at `s_× = 1`
     #: each operation is charged to one gate, its output, and none can straddle
     STRADDLE = ("draft:no-straddle",)
 
@@ -113,14 +113,14 @@ class Structure:
 
     @property
     def per_bit(self) -> float:
-        """`ω_max μ`: the serving cut's boundary term per unregistered input bit (`theorem.Cut.boundary`)."""
+        """`ω_max μ`: the serving cut's boundary term per fresh input bit (`theorem.Cut.boundary`)."""
         return self.omega_max * self.mu
 
     def cites(self) -> tuple[str, ...]:
         return self.STRADDLE + self.evidence if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
 
     def elementary(self) -> Structure:
-        """One counted operation per gate, at most: the cap that needs no straddling premise."""
+        """One counted operation per gate, at most: the yield that needs no straddling premise."""
         return Structure("elementary", 1.0, self.omega_max, self.mu)
 
 
@@ -237,7 +237,7 @@ def threaded(k: float, b_a: float, b_w: float, d: float, e: float, c: float) -> 
 
 
 def threaded_checked(k: float, b_a: float, b_w: float, d: float, e: float, c: float, k_max: float) -> float:
-    """`threaded` where the `Threading` certificate holds (`ReferenceThreaded`: `S ≤ k_max`), no cap beyond."""
+    """`threaded` where the `Threading` certificate holds (`ReferenceThreaded`: `S ≤ k_max`), no bound beyond."""
     return threaded(k, b_a, b_w, d, e, c) if k <= k_max else math.inf
 
 
@@ -255,20 +255,20 @@ def fanout_split(k: float, aout: float, beta_x: float, gamma: float, price: floa
 
 def accumulator(k: float, h_eff: float, b_ps: float, step_tokens: float) -> float:
     """E1's Corollary 4a, under (R): `M ≤ n k² / (b_ps h_eff) + n_E k / h_eff` with `n_E = M / T_step` entries, so a block
-    finishes at most `k² / (b_ps h_eff) / (1 − k / (h_eff T_step))` weight-gradient products, no cap at `k ≥ h_eff T_step`."""
+    finishes at most `k² / (b_ps h_eff) / (1 − k / (h_eff T_step))` weight-gradient products, no bound at `k ≥ h_eff T_step`."""
     rest = 1 - k / (h_eff * step_tokens)
     return k * k / (b_ps * h_eff) / rest if rest > 0 else math.inf
 
 
 def output_cap(map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
-    """Proposition 6b's cap `k* = 4 d β_w (h_tok + F_in) / β_v^R`, with `h_tok + F_in = β_x d` (the replay-consistent
+    """Proposition 6b's threshold `k* = 4 d β_w (h_tok + F_in) / β_v^R`, with `h_tok + F_in = β_x d` (the replay-consistent
     rate) and `β_w = b`, at the narrowest map `d = d_in`."""
     return 4 * map_width_min ** 2 * b * beta_x / beta_v
 
 
 def output_premise(k: float, map_width: float, map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
     """E1's Proposition 6b: each output value a block produces costs `β_v^R` and carries `d` products, so a block
-    finishes at most `d k / β_v^R` while `k ≤ k*` (`output_cap`), no cap beyond."""
+    finishes at most `d k / β_v^R` while `k ≤ k*` (`output_cap`), no bound beyond."""
     return map_width * k / beta_v if k <= output_cap(map_width_min, b, beta_x, beta_v) else math.inf
 
 

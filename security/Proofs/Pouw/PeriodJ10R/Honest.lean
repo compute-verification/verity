@@ -43,8 +43,8 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 # An honest J10-R period meets `H1J10RCheckedCreditPeriod`'s premises
 
 The positive twin of `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, as `Proofs.Pouw.Period.Honest` is of
-`H1CheckedCreditPeriod`, conditional on `Credit.window`'s verdict on the windows' inputs. Over any sampling block's tile
-stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`, `1 ≤ k s_T`), take a period of `n ≥ 1` windows whose registration is a
+`H1CheckedCreditPeriod`, conditional on `Credit.window`'s verdict on the executionPhases' inputs. Over any sampling block's tile
+stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`, `1 ≤ k s_T`), take a period of `n ≥ 1` executionPhases whose registration is a
 function of the window's round coin (`regOf`) and the rest of whose inputs a function of its round and sampling coins
 (`evOf`). Given three facts of those inputs, the witness meets every premise of the statement (`j10r_meets`):
 
@@ -54,9 +54,9 @@ function of the window's round coin (`regOf`) and the rest of whose inputs a fun
 * the units `Credit.descriptorDrawn` samples are the tile coordinate's at the sampling coin (`hdraw`), `TileSampleIsCoin`'s
   body on every window.
 
-They are facts of the code on honest windows, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
+They are facts of the code on honest executionPhases, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
 Flock's proofs). The compiled verifier evidences them: PouwCheck's `test_difftest` has `pouw-check-difftest`'s
-`window` entry (`Credit.window`) credit honest J10-R windows (`window_instance`'s `j10r`) as the Python verifier does,
+`window` entry (`Credit.window`) credit honest J10-R executionPhases (`window_instance`'s `j10r`) as the Python verifier does,
 and its `window-drawn` entry sample the Python verifier's units on generated coins.
 
 * The circuit (`circuit N`): `N = N_p` committed words of no operands, one a unit, one live round, so every tile's late
@@ -68,7 +68,7 @@ and its `window-drawn` entry sample the Python verifier's units on generated coi
   binding holds at `δ_bind = 0` and the service's soundness at `δ_ks = 0`; the three lucks hold of the honest games
   (`SharedNoiseLucks`), and the play fixes and folds `N` words a window (`UnitFixed`).
 
-The conclusion then speaks of the whole period: its accepted prefix is all `n` windows (`prefixLen_all`) and its live
+The conclusion then speaks of the whole period: its accepted prefix is all `n` executionPhases (`prefixLen_all`) and its live
 words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound at `N·n` live words, not at none.
 -/
 
@@ -176,7 +176,7 @@ theorem scope (N : ℕ) {δs : ℝ} (hδs : 0 < δs) : Scope Honest.scheme (circ
   ⟨circuit_wf N, fun _ _ _ => rfl, hδs, fun _ => by norm_num [Honest.scheme, LuckForm.value],
     fun _ _ => Or.inl (Nat.zero_le _)⟩
 
-/-! ## The period, its windows and its proofs -/
+/-! ## The period, its executionPhases and its proofs -/
 
 /-- A window's honest stages: every tile paid, its words right and its checked values honest. -/
 def stages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
@@ -185,7 +185,7 @@ def stages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
 /-- A window's coins: its round's coin, the sample's permutation of the `N` tiles and the rest of the sample `B`. -/
 abbrev WCoin (N : ℕ) (B : Type) : Type := Paths Bool (circuit N).rounds × (Equiv.Perm (Fin N) × B)
 
-/-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
+/-- The honest period of `n` executionPhases: every tile live, each window's stages `stages`, whatever the past. -/
 def period (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (stages N) fun _ => period Ω N n
@@ -198,10 +198,10 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB)
 sample (none). -/
 abbrev Ω1 : Type := Coin Bool Unit (circuit (tileCount σ sT)).rounds σ sT
 
-/-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
+/-- The period's executionPhases as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and its sampling coin. -/
-def windows (regOf : Bool → PreDraw) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
-    (n : ℕ) : CreditWindows (Ω1 σ sT) n where
+def executionPhases (regOf : Bool → PreDraw) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
+    (n : ℕ) : CreditExecutionPhases (Ω1 σ sT) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩) (coinAt x w).2
 
@@ -225,13 +225,13 @@ noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit 
   accepts := fun _ => True
   run := fun _ => anatomy N
 
-/-! ## The windows' facts -/
+/-! ## The executionPhases' facts -/
 
 /-- **The registration is fixed before the sampling coin**: it reads only the round coin, which the splice at window `w`
 after its one round keeps. -/
 theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → PreDraw)
     (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (n : ℕ) :
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) := by
+    RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) := by
   intro x z w
   show regOf (coinAt (coinAt (spliceAt w.val (circuit (tileCount σ sT)).rounds x z) w).1 ⟨0, hr1 _⟩) =
     regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
@@ -302,21 +302,21 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **Every window credited**, its prefix every window. -/
-theorem prefixLen_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
-    (windows σ sT regOf evOf n).prefixLen x = n := by
+theorem prefixLen_all (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
+    (executionPhases σ sT regOf evOf n).prefixLen x = n := by
   classical
-  unfold CreditWindows.prefixLen
-  have h : ∀ w ∈ (Finset.univ : Finset (Fin n)), (windows σ sT regOf evOf n).AcceptedUpTo x w :=
+  unfold CreditExecutionPhases.prefixLen
+  have h : ∀ w ∈ (Finset.univ : Finset (Fin n)), (executionPhases σ sT regOf evOf n).AcceptedUpTo x w :=
     fun _ _ _ _ => hacc _ _
   rw [Finset.filter_true_of_mem h, Finset.card_univ, Fintype.card_fin]
 
 /-- **The accepted prefix's live words are `N·n`.** -/
-theorem creditLive_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
+theorem creditLive_all (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
     creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-      (windows σ sT regOf evOf n) x = tileCount σ sT * n := by
+      (executionPhases σ sT regOf evOf n) x = tileCount σ sT * n := by
   unfold creditLive
   calc _ = ∑ _w : Fin n, (tileCount σ sT : ℝ) := Finset.sum_congr rfl fun w _ => by
-          have hw : (windows σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
+          have hw : (executionPhases σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
           rw [if_pos hw, liveAt_period n x w]
           simp only [liveWords_true]
           exact sum_tileWords _
@@ -327,7 +327,7 @@ s_T|` one-word units, one round, `ρ = 1`, the twin's lucks, any `δ_s > 0`, `δ
 folded words a window, given that `Credit.window` credits every window (`hacc`), that the registered salt is the
 round coin's bytes (`hsalt`) and that `Credit.descriptorDrawn`'s units are the tile coordinate's at the sampling coin
 (`hdraw`); the accepted prefix is then the whole period and its live words are `N_p·n`. -/
-theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
@@ -347,29 +347,29 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
         (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     (period (Ω1 σ sT) (tileCount σ sT) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) ∧
-    PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-      (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
+    PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+      (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
       (play Unit (tileCount σ sT) (k sT) n).game ∧
-    (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n)
-      opened (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile)
+    (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n)
+      opened (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile)
       (j10rAtCoin (hr1 _) enc place tile)).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
-    TileServiceSound σ sT unitOf (windows σ sT regOf evOf n) opened
-      (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
-    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧
+    RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (executionPhases σ sT regOf evOf n) ∧
+    TileServiceSound σ sT unitOf (executionPhases σ sT regOf evOf n) opened
+      (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) 0 ∧
+    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
-      (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-        (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
+      (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+        (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
       (monitoringPeriodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-        (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-          (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
+        (tileRun σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+          (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
       (fun _ t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ))
       (fun _ => (tileCount σ sT : ℝ)) ∧
-    (∀ x w, WindowAccepts ((windows σ sT regOf evOf n).reg x w) ((windows σ sT regOf evOf n).ev x w)) ∧
-    (∀ x, (windows σ sT regOf evOf n).prefixLen x = n) ∧
+    (∀ x w, ExecutionPhaseAccepts ((executionPhases σ sT regOf evOf n).reg x w) ((executionPhases σ sT regOf evOf n).ev x w)) ∧
+    (∀ x, (executionPhases σ sT regOf evOf n).prefixLen x = n) ∧
     ∀ x, creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-      (windows σ sT regOf evOf n) x = tileCount σ sT * n := by
+      (executionPhases σ sT regOf evOf n) x = tileCount σ sT * n := by
   have hN : 0 < tileCount σ sT := Nat.lt_of_lt_of_le hKd (hk sT)
   refine ⟨le_rfl, rfl, scope _ hδs, fun t => ?_, fun j => ?_, fun t _ => ?_, rfl,
     period_every (Ω := Ω1 σ sT) (N := tileCount σ sT)
@@ -415,7 +415,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
 
 /-- **`H1J10RCheckedCreditPeriod`'s conclusion at the honest J10-R period**: `j10r_meets` gives the instance every
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `N_p·n` live words. -/
-theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
@@ -423,13 +423,13 @@ theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c)
     prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
       n * ((play Unit (tileCount σ sT) (k sT) n).run x).fixed <
         creditPrefix Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
-          ((windows σ sT regOf evOf n).prefixLen x)
+          ((executionPhases σ sT regOf evOf n).prefixLen x)
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (0 + 0) := by
+            (executionPhases σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, hUF, -, -, -⟩ :=
     j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn hδs
   exact h1J10RCheckedCreditPeriod σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
-    (windows σ sT regOf evOf n) opened enc place tile (period (Ω1 σ sT) (tileCount σ sT) n)
+    (executionPhases σ sT regOf evOf n) opened enc place tile (period (Ω1 σ sT) (tileCount σ sT) n)
     (play Unit (tileCount σ sT) (k sT) n) (fun _ => (tileCount σ sT : ℝ)) 1 δs 0 0 hS one_pos le_rfl hρN
     hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks hUF
 

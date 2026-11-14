@@ -165,19 +165,19 @@ and the position past the stop after its session's end, a session's verdict (`Se
 `m`'s (`StatesMember`), and its outcome's moves those the verdict's record decodes to with the verdict's proof files
 (`MemberMovesOf`). The acceptance of what the member's writer writes is `member_step_accepts`. -/
 theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
-    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
+    (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
       Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hstart : ∀ ω r, I ω r 0 (Pos.root (roundCuts V θ F c rd) (M.start ω)))
     (hstep : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Member W.nJ)
       (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
-      (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) (m.toV5 t))
+      (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) (m.toV5 t))
         (memberPts (m.toV5 t))),
       W.ms[i]? = some m → ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty →
       I ω r i p → p.Inv (roundCuts V θ F c rd) →
       StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
-      MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i (m.toV5 t) p q out →
+      MemberReach D M BL B ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) i (m.toV5 t) p q out →
       q.Past r → r.Inv (roundCuts V θ F c rd) →
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
         P (CoinTape.run (V.game θ F c) σ r.tape) →
@@ -185,7 +185,7 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
         (s : _root_.Spot.OneStageZk.RunFiles) (record : String) (spec : Flock.SessionSpec)
         (tabs : Array Flock.Setup) (rest : Json × Json) (proofs : Array ByteArray) (units : Array ℕ),
         StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
-          MemberMovesOf m t ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) record proofs out)
+          MemberMovesOf m t ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) record proofs out)
     (hskip : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Member W.nJ)
       (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
       W.ms[i]? = some m → ¬ ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty → I ω r i p →

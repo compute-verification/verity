@@ -35,6 +35,7 @@ from typing import Any
 import numpy as np
 from verity.device import load_card
 
+import adapter as A
 import policy as P
 
 # a served step's pricing, `block_work`'s
@@ -73,23 +74,19 @@ def registered(model: str = MODEL) -> Any:
     integration's default seed and execution."""
     from verity_vllm import TargetProfile
     from verity_vllm.engine.served_seed import DEFAULT_SEED
-    from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import Registered
 
     revision, config = P.pinned(model)
     target = TargetProfile.default().with_overrides(**H200).to_json()
-    phi = Phi(model={"repo": model, "revision": revision, "hf_config": json.loads(config.read_text())},
+    phi = A.Phi(model={"repo": model, "revision": revision, "hf_config": json.loads(config.read_text())},
               target=dict(target), execution="bi-eager")
-    return Registered.of(phi, DEFAULT_SEED)
+    return A.registered_of(phi, DEFAULT_SEED)
 
 
 def record(circuit: Any) -> tuple[dict[str, Any], dict[str, str]]:
     """A circuit's record, as its description and its blocks, and θ as the pins that hold every registered weight."""
-    from verity_vllm.check.weights_of_record import PARAM
-
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
-    return doc, {p: "00" for p in circuit.registered.params if p.split("/", 1)[0] == PARAM}
+    return doc, {p: "00" for p in circuit.registered.params if p.split("/", 1)[0] == A.PARAM}
 
 
 def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
@@ -115,11 +112,8 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     gate table and each template's gates a unit."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.circuits.ops.boolean.versions import gate_table
-    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
-
     fn, m, steps = BC.session(doc)
-    table, unpriced = gate_table([fn])
+    table, unpriced = A.gate_table([fn])
     memo: dict = {}
     c, missing = BC.gates(fn, table, memo)
     if unpriced or missing:
@@ -292,14 +286,11 @@ def build(model: str, cls: tuple[int, int, int], n: int, check: Callable[[Mappin
     """The built class's session policy, checked by ``check``, and its divisions. ``n`` is the blocks the policy
     declares, which nothing here derives. ``say`` gets a line as each step starts; ``circuit`` is the class's where the
     caller lowered it (default: `class_circuit` of what a serve of ``model`` registers)."""
-    from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import class_circuit
-
     work = block_work(cls, model)
     say(f"lowering class {','.join(map(str, cls))} of {model}")
     try:
-        circuit = class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit
-    except Unexpressible as e:
+        circuit = A.class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit
+    except A.Unexpressible as e:
         raise Refused(f"the integration lowers no circuit of class {','.join(map(str, cls))} of {model}, so there is "
                       f"nothing to count: {e}") from e
     doc, pins = record(circuit)

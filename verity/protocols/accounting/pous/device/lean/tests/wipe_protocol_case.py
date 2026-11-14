@@ -45,6 +45,7 @@ from verity_difftest import protocol as P
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WCH
 from verity.protocols.accounting.pous.verifier import wipe_period as WP
 
 ID = WP.PROTOCOL
@@ -144,7 +145,7 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
     """One wipe of `WipeMemoryChallenger` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
     and with `stop_after` the prover leaves after that many reads, so the session is never signed."""
     clock = M.Clock(start)
-    c = sw.WipeMemoryChallenger(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+    c = WCH.WipeMemoryChallenger(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
                                 coin_secret=coins)
     p = prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):

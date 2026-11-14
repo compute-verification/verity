@@ -137,7 +137,7 @@ theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = pro
   unfold Claims.Pr prob Claims.prUniform
   congr
 
-/-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
+/-- A window opens at most `s_t` receipts: its samples, `min(s_t, U_t)`. -/
 theorem card_opened_le (D : Remote.Draw.Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
   unfold Run.opened openings

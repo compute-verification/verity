@@ -105,7 +105,7 @@ sys.path.insert(0, str(HERE))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import prove_leg as PL  # noqa: E402
-from verity.protocols.proofs.spot.device import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import two_stage as TS  # noqa: E402
 import verity_vllm.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
@@ -323,7 +323,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     if stream.spec.digest() != s["spec"]:
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(handoff["commit"], check, stop, boundary)
-    want = BS.stop_record(handoff["commit"], check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
+    want = BS.stop_record(handoff["commit"], check, stop, S.selection_sampling_design(stream.spec.selection, layout.spans), boundary)
     if R.digest(want) != R.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,

@@ -180,7 +180,7 @@ def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> 
 
 def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Registered], tree: G.Registered,
                    produced: dict[str, str], draw_root: str) -> tuple[dict, dict, dict, dict]:
-    """Sampled leaf u's statement `st` as `FileStager.stage` takes it, on credit's own ``--registered`` file
+    """Sampled leaf u's statement `st` as a stager's `stage` takes it (`drawn.Stager`), on credit's own ``--registered`` file
     (`credit.leaf_registered_file`): each port's one row, salt and registered read (value, position, path), from the
     window's rebuilt values ``trees`` (each held to the file's root and domain), the leaf's partials ``tree`` (at the
     produced record's root ``produced``) or the known row (`leaf_lanes.known_rows`, committed under
