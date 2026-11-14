@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from research import secret_hint
+from research import secret_hint, settings
 from research.pods import runpod
 from research.store.cli import main
 from research.store.local import LocalStore, StoreError
@@ -35,7 +35,7 @@ def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(t
                                '  RUNPOD_SSH_KEY_B64) echo -RUNPOD_SSH_KEY_B64 ;;\n'
                                '  *) echo "unknown variable: $3" >&2; exit 1 ;;\nesac\n')
     (bin_ / "tmux").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{settings.need('PATH')}")
     for n in INJECTED.split(","):
         monkeypatch.setenv(n, "")
     assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # no injected list: tmux is never asked
@@ -44,8 +44,8 @@ def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(t
     assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # under a test: what it unset stays unset
     monkeypatch.delenv("PYTEST_CURRENT_TEST")
     assert secret_hint.recover() == ["R2_BUCKET", "NEBIUS_SA_ID"]
-    assert os.environ["R2_BUCKET"] == "bucket" and os.environ["NEBIUS_SA_ID"] == "line one\nline two"
-    assert os.environ["R2_ENDPOINT"] == "https://r2.invalid" and os.environ["RUNPOD_SSH_KEY_B64"] == ""     # set here; removed in tmux
+    assert settings.need("R2_BUCKET") == "bucket" and settings.need("NEBIUS_SA_ID") == "line one\nline two"
+    assert settings.need("R2_ENDPOINT") == "https://r2.invalid" and settings.need("RUNPOD_SSH_KEY_B64") == ""     # set here; removed in tmux
     assert "R2_ENDPOINT" not in (bin_ / "tmux.calls").read_text()
     assert secret_hint.lost("R2_BUCKET", "RUNPOD_SSH_KEY_B64") == f"RUNPOD_SSH_KEY_B64 not in this shell though this VM injects it: {HINT}"
     monkeypatch.setenv("PATH", str(tmp_path / "no-tmux"))
@@ -146,7 +146,7 @@ def test_node_ssh_in_a_shell_that_lost_the_key_fails_with_the_hint(tmp_path, mon
 
 def test_nebius_auth_in_a_shell_that_lost_its_key_says_so():
     common = Path(runpod.__file__).parent / "nebius" / "common.sh"
-    env = {"PATH": os.environ["PATH"], "NEBIUS_BIN": "/bin/true"}
+    env = {"PATH": settings.need("PATH"), "NEBIUS_BIN": "/bin/true"}
     r = subprocess.run(["bash", "-c", f'. "{common}"; nebius_auth'], env=env, capture_output=True, text=True, check=False)
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set (a Cursor secret" in r.stderr
     env["CLOUD_AGENT_INJECTED_SECRET_NAMES"] = INJECTED

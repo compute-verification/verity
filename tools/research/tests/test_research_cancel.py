@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from research import cli, remote
+from research import cli, remote, settings
 from research.telemetry.procs import stat_fields
 
 TOOL = Path(remote.__file__).resolve().parents[1]
@@ -159,7 +159,7 @@ def test_a_cancel_is_reported_delivered_when_the_runner_records_the_exit_right_a
     (bin_ / "python3").write_text(f'#!/bin/sh\n"{sys.executable}" "$@"; rc=$?\n'
                                   f"echo '{json.dumps({'kind': 'proc_end', 'rc': 143})}' >> {d}/events.jsonl\nexit $rc\n")
     (bin_ / "python3").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{settings.need('PATH')}")
     try:
         assert cli.main(["cancel", str(local), "--reason", "x", "--by", "lander", "--runs-dir", str(local.parent)]) == 0
         assert workload.wait() == -signal.SIGTERM and runner.poll() is None
