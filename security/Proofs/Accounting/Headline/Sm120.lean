@@ -92,8 +92,7 @@ theorem sm120_qT : Sm120.model.qT = 1 / 2 := by
 theorem sm120_wf : Sm120.model.Wf Sm120.flat := by
   refine ⟨sm120_a_nonneg, ?_, ?_, ?_, fun t => ?_, ?_, ?_, le_rfl, fun u => u.elim, fun φ r => ?_, fun _ _ => le_rfl,
     le_rfl, ?_, le_rfl, ?_⟩
-  · show (0 : ℝ) < ((2430 : ℕ) : ℝ)
-    norm_num
+  · exact Nat.cast_pos.mpr (by decide)
   · rw [sm120_Nw]
     norm_num
   · rw [sm120_bnd]

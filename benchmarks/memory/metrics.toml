@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "memory-accounting/node-read-rate-uncertified"
-title = "Llama 3.2 1B served on one node: the share of the node's memory read rate one session leaves uncertified, at the data sheet's read bandwidth"
+title = "Uncertified memory reads"
 owner = "memory-accounting"
-unit = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
+unit = "share"
+axis = "Share of a node's memory read rate that one session leaves uncertified, serving Llama 3.2 1B."
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/memory/run.py --from FIRE_RUN"
 every = "7d"

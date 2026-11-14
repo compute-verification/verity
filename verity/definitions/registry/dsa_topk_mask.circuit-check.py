@@ -11,7 +11,7 @@ from typing import Any, Callable
 #: Definitions: their Boolean Definitions' word views compare them, at the same spots (`boolean_dsa_topk_mask`'s sidecar).  The
 #: rows' read spans the row width too: at every W it is one network (`dsa_topk_mask.rows`, by N and K) of
 #: `DsaWaksmanSwap_v1{W,E}` and `DsaWaksmanPick_v1{W,E}`, so the spots check it at the latent rows' 576 words to 67,584 keys,
-#: past 6,144 of them read lazily (`circuit_check.targets.LAZY_OPERANDS`), and at one word to 131,072, since the network
+#: past 6,144 of them read lazily (`circuit_check.targets.lazy_operands`), and at one word to 131,072, since the network
 #: doesn't depend on W
 RANGES = {
     "DsaTopKMask_v1{N=4096..131072 step 2048,TOPK=2048}": (
@@ -44,7 +44,7 @@ RANGES = {
     # the next multiple of K, so N is one of the 63 classes 4,096..131,072 and T one of the N - 2,047..N - 1 keys below it (at T = N
     # the row is `DsaButterflyRows`).  A rule spans each static alone, so its T range is every class's together.  The spots are rows
     # vLLM serves: the first class's shortest (T = K + 1, the most pad) at the latent rows' 576 words, its rows and pad read lazily
-    # (`circuit_check.targets.LAZY_OPERANDS`), and at one word its longest (one pad row) and the top class's longest.  At every W it
+    # (`circuit_check.targets.lazy_operands`), and at one word its longest (one pad row) and the top class's longest.  At every W it
     # is `DsaButterflyRows{N}`'s one network over the rows and then the pad (``circuit-check --as-call --ranges
     # DsaButterflyRowsPad_v1``)
     "DsaButterflyRowsPad_v1{T=2049..131071,N=4096..131072 step 2048,K=2048,W=1..576,E=16}": (
