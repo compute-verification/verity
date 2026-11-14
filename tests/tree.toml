@@ -213,8 +213,6 @@ protocol = true
 path = "verity/protocols/proofs/spot_flock_recursion/"
 means = "SPOT[Flock] composed with recursion: the recursive audit, on spot_flock and recursion; nothing below uses it"
 protocol = true
-owner = "proofs"
-day = "2026-11-15"
 
 [[tree]]
 path = "verity/protocols/accounting/pouw/"
