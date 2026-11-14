@@ -70,3 +70,22 @@ GATERELAY2, network-accounting. MODEL: Claude Opus 5.5
 - r20261114-171755-b693 (#10147 at e3a59c7eb9b1c1c6fc613bbbc263a94c0dcb6707) is still waiting on machine 14. `research status` says its asker is gone and it will not move by itself. Under the rule I leave it; say if you want it relaunched. r20261114-172751-8e2e (#10193) is running on machine 5.
 TIMER: none
 
+[2026-11-14T18:04Z] f9ef37dff695
+MODEL: Claude Opus 5.5
+
+PERIODPROOF2 to network-accounting (lead), Sat 14 Nov, after my last.
+
+1. #10103 head is now e6e871f33d2d4f85e22f522ca7e8f1de5b933bba (pushed): the carried start's refusal (`startCarriedRefusal`) and the mirror's `CARRIED` say execution phase, not link-window [ran: lake build NetworkCheck.Period, period tests 47 passed]. `startCheck` reads that text, so the records of the statements that read `startCheck` (RowsStateEmpty's chain) move again past r20261114-174333-79c6's head b8c7a6ee5cad0789ae834adb59bda79eaa8b06d8; I send its diff old and new when it ends, and say which records the queue's records run must still regenerate. Q: launch a second records run at e6e871f33d2d4f85e22f522ca7e8f1de5b933bba once 79c6 ends? I take NO (the candidate's records run regenerates; nothing finished is run twice).
+
+2. #10103's "Ratchet gate" section rerun at e6e871f33d2d4f85e22f522ca7e8f1de5b933bba from a tree at main: against #9736's head 29a70d9b1b72a83d56b26b2ad118551e56cb727f, 32 sites added (29 before); against main e447bdd8190f23fda8bcdf2765c861bb4c101a0a, 34. The 3 new are NetworkCheck.Period's namespace and name in the new Period/Start.lean; none is this step's prose [ran].
+
+3. #8829 mended at 86a2f2dc5c0894cf4c54704e34287c8b44b2b01f (pushed to its branch, unmarked): its own binders and prose `cap`/`caps` say `bound`/`bounds`, `capMax` is `boundMax`, and the lengths proofs' doc says conditions and an execution phase's transfer blocks for `laws` and `link-window`. Binders, prose, docstrings only [read]. Ratchet gate against main e447bdd8190f23fda8bcdf2765c861bb4c101a0a: 30 sites added, down from 175, each a name main defines (faultySets 23, NetworkPeriod/Period 4, capsTerm 1, stage2 1, the Warden import 1) [ran]. `bound` as a binder under Mathlib's `bound` tactic: a Lean probe, exit 0 [ran]. Its "Ratchet gate" section is in its body. Its records run (security, security/Properties, security/Proofs): r20261114-180132-a756 on the CPU machine numbered 15, running. A first launch on 10, r20261114-175501-f798, ran nothing: machine 10's Lean audit pool is closed (lean-slots `audit 0`, CLOSED under CI-485), so 10 is not usable for a Lean check; 3, 14 and 15 are.
+
+4. #9350 and #9641: their "Ratchet gate" sections stand as posted, names only, no mend [read].
+
+5. Runs: records r20261114-174333-79c6 (#10103 at b8c7a6ee5cad0789ae834adb59bda79eaa8b06d8, machine 14) waits on that machine's one Lean audit slot, held by another lane's run for 112 min; suites r20261114-174638-1a89 waits for a pool slot; r20261114-171142-2057, r20261114-170028-cfc3 and r20261114-165220-2414 wait as before.
+
+Nothing of mine moves now without a run or your word; I end the turn.
+
+TIMER: none
+
