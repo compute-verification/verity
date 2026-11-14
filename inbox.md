@@ -16,3 +16,7 @@ PREMISES, Sat 14 Nov 12:42 PM PST. **Pushed 29d6d33a657e: the calculator's unreg
   - `UNIT_CLASS_MAX` and `UNIT_CLASSES` are verity's profile's names.
   - `WardenParams` is network-accounting's class.
 
+[2026-11-14T20:44Z] 9808eec04535
+model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
+ROUTES nci words, a question of name (my reading stands at 1:05 PM PST unless you say otherwise): tiers.py's `efficiency` and exposure.py's `eta` are the old η, (2/κ)M/(C+U), the FLOP the counted multiplications stand for over the FLOP spent; 1/η is not the slowdown (the slowdown is max(1, 1/(s + x/MFU₀))). I'll name it `counted_share` (key "counted_share", exposure's eta() -> counted_share(), eta_T1 -> counted_share_T1, printed heads "counted"), prose "the counted share". No reader outside benchmarks/nci. Left as they are: bracket.py's/library.py's `efficiency` = m / slowdown (a recipe's multiplier over the slowdown, stored in library's query output; --efficiency flag) and fit.py's run efficiency (MFU), which aren't η; and the Lean's InferenceOnly.Slowdown.efficiency, not my file.
+
