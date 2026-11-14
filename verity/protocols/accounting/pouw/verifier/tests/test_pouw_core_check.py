@@ -174,7 +174,7 @@ def _instance(seed: int, name: str = "honest") -> dict:
 
 
 def _answer(case) -> dict:
-    return json.loads(CC.line(CC.case(case)))
+    return json.loads(CC.line(CC.case_twin(case)))
 
 
 def test_every_mutation_hits_its_refusal():

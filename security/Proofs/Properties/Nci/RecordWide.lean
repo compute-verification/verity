@@ -17,9 +17,9 @@ public import Proofs.Properties.Nci.RecordWire
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope)
+open Flock.Program (Prog Scope fieldsOf)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row fieldsOf outerOf)
+open NciCheck.RecordText (Row outerOf)
 open NciCheck.Record.SecurityProofs (mem_of_lookup)
 open Spot.Bits (bitsOf)
 
