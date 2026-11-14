@@ -36,7 +36,7 @@
     {"file": "benchmarks/network_e2e/traces/host_sample.py", "count": 4},
     {"file": "benchmarks/network_e2e/traces/vllm_accept_stamp.py", "count": 2},
     {"file": "benchmarks/network_sim/workload/lab_run.py", "count": 1},
-    {"file": "benchmarks/network_traces/active_replay.py", "count": 4},
+    {"file": "benchmarks/network_traces/active_replay.py", "count": 3},
     {"file": "benchmarks/network_traces/certifier_serve.py", "count": 2},
     {"file": "benchmarks/network_traces/demo_endpoint.py", "count": 1},
     {"file": "benchmarks/network_traces/demo_stub.py", "count": 2},
