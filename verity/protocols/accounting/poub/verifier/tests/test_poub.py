@@ -477,7 +477,7 @@ def test_the_codecs_are_named_and_each_decodes_its_own_blocks() -> None:
         codec.Codec(codec.Field("p1024", 1024, 107), 3, True)
 
 
-def test_the_codec_seed_is_drawn_after_and_bound_to_the_payload_root() -> None:
+def test_the_codec_seed_is_sampled_after_and_bound_to_the_payload_root() -> None:
     root = hashlib.sha512(b"payloads").digest()
     a = audit.register(SOURCE, NODE, N, root, nonce=bytes(32))
     assert a == audit.register(SOURCE, NODE, N, root, nonce=bytes(32)) and a.codec == codec.DEFAULT
@@ -863,7 +863,7 @@ def test_a_window_of_too_few_passes_is_rejected(store) -> None:
     assert finish(s, prover, passes, clock) == [audit.Verdict(0, True), audit.Verdict(1, False, "few")]
 
 
-def test_draws_wait_for_the_windows_roots(store) -> None:
+def test_samples_wait_for_the_windows_roots(store) -> None:
     clock = Clock()
     s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
@@ -980,7 +980,7 @@ def test_a_session_that_binds_z_recomputes_each_tile(stores, kind) -> None:
     assert finish(s, prover, passes, clock)[0].failure == "receipt"
 
 
-def test_openings_are_drawn_from_the_windows_live_coin(store) -> None:
+def test_openings_are_sampled_from_the_windows_live_coin(store) -> None:
     def sampled(label: bytes):
         s, _, _, clock = drive(store, params(), SCHEDULE, label=label)
         clock.now = s.deadline(2) + 1

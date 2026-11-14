@@ -29,7 +29,7 @@ keys       fresh per block j of segment s, sampled after W through the salt, and
 64-byte chunk is one compression (the base's last 16 bytes, P and the counter are 21 bytes).  Given the same prefix,
 v4's keys are the spec's byte for byte (`verifier/tests/fixtures/p2-v4-keys.json`, from `verity/protocols/accounting/pous/verifier/p2_v1/vectors.json`).
 The prefix differs from the spec's in one place: where the spec frames the model commitment and its 32-byte setup salt,
-v4 frames the protocol's 24-byte salt, which `setup.draw_salt` derives from the commitment to W.  So the salt still
+v4 frames the protocol's 24-byte salt, which `setup.sample_salt` derives from the commitment to W.  So the salt still
 binds the model, but the bytes are not the spec's vectors'; that goes with the rest of the spec's setup framing (its
 leaves and challenge derivation), not with the expander.
 
