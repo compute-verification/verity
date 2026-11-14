@@ -62,8 +62,6 @@
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
   "Properties.Pous.Component",
-  "Properties.Pous.InProofs",
-  "Properties.Pous.SetupInProofs",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -80,7 +78,6 @@
   "Properties.Accounting.Remote.Live",
   "Properties.Accounting.Remote.Subprotocol",
   "Properties.Accounting.Remote.SubprotocolDeployed",
-  "Properties.Accounting.Remote.InProofs",
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Nci.Record",
@@ -1429,14 +1426,6 @@
   "Pous.Component.SecurityProofs.wipeAccepts_complete": {
    "honest": ["Pous.Component.SecurityProofs.wipeAccepts_honest"],
    "nontrivial": "Pous.Component.SecurityProofs.wipeAccepts_complete_nontrivial"
-  },
-  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives": {
-   "honest": ["Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_honest"],
-   "nontrivial": "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_nontrivial"
-  },
-  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
-   "honest": ["MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_honest"],
-   "nontrivial": "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3038,24 +3027,6 @@
    },
    "type_hash": "18e0948e93d4aeb7c724cb5e480d3ee21588058eecdfa3567bfd45c38abb31b9",
    "unfolded_hash": "93865bc6e7e1ef213588c366e4da2db87035635ddd0ec59e767ecef643cc119b"
-  },
-  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives": {
-   "owner": "@memory-accounting"
-  },
-  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
-   "owner": "@memory-accounting"
-  },
-  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_honest": {
-   "owner": "@memory-accounting"
-  },
-  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_nontrivial": {
-   "owner": "@memory-accounting"
-  },
-  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_honest": {
-   "owner": "@memory-accounting"
-  },
-  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_nontrivial": {
-   "owner": "@memory-accounting"
   },
   "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
    "owner": "@memory-accounting",
@@ -13307,14 +13278,6 @@
    },
    "Properties.Challenger.Drawn.familyOneCommitmentRead": {
     "function": "Spot.Challenger.coinsReason",
-    "outcome": "accept"
-   },
-   "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives": {
-    "function": "RemoteAudit.checkWindow",
-    "outcome": "accept"
-   },
-   "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
-    "function": "MemoryChallenger.verdict",
     "outcome": "accept"
    }
   },
