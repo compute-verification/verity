@@ -65,16 +65,20 @@ class Audit:
     its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
     the per-member parameters and evidence, and the files. Only
     the members of `closed` have their tree's closing round opened, and with `together` those rounds are opened after
-    every tree's other rounds."""
+    every tree's other rounds. The sample holds a unit of exactly the members of `sampled`: the challenger session is
+    one whose coins give such a sample."""
 
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
-                 closed: tuple[str, ...] = (A, B), together: bool = False):
+                 closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B)):
         rng = random.Random(seed)
         s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
-        ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+        held = None
+        while held != set(sampled):
+            ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+            held = {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])}
         self.files: dict[str, bytes] = {}
         sessions = {}
 
