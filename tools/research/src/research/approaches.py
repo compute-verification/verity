@@ -319,7 +319,7 @@ def pending_claim(root: Path, name: str, lane: str, fields: dict[str, object], w
     bad = [c for c in fields.get("cites") or [] if not EVIDENCE_RE.match(str(c))]
     if bad:
         raise Refused(f"evidence {bad[0]!r} is of no known form")
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     d = root / "lanes" / lane
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{now:%Y%m%dT%H%M%SZ}-claim-{name.replace('/', '--')}.md"

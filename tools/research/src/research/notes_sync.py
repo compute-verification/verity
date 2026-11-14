@@ -401,7 +401,7 @@ def _changed(root: Path, paths: list[str] | None, max_bytes: int) -> tuple[list[
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def created_at(text: str) -> tuple[str, dt.datetime] | None:
@@ -414,7 +414,7 @@ def created_at(text: str) -> tuple[str, dt.datetime] | None:
         t = dt.datetime.fromisoformat(f"{m[2]}T{m[3]}{m[4] if m[4] and m[4].upper() != 'Z' else ''}")
     except ValueError:
         return None
-    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+    return m[1], t if t.tzinfo else t.replace(tzinfo=dt.UTC)
 
 
 def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, str]:
@@ -433,7 +433,7 @@ def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, s
         found = []
         if old is None and (m := STAMP_RE.match(p.name)):
             try:
-                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc), "%Y%m%dT%H%MZ"))
+                found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC), "%Y%m%dT%H%MZ"))
             except ValueError:
                 pass
         c, prev = created_at(text), created_at(old) if old is not None else None
@@ -464,7 +464,7 @@ def header_issues(path: str, text: str, now: dt.datetime) -> tuple[list[str], li
         warn.append(f"lane: {m[1]} but the note is in lanes/{parts[1]}/" + (" (a handoff's lane is its recipient)" if MAIL_RE.search(parts[-1]) else ""))
     if c and (s := STAMP_RE.match(parts[-1])):
         try:
-            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc)
+            off = c[1] - dt.datetime.strptime(s[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.UTC)
         except ValueError:
             off = dt.timedelta(0)
         if abs(off) > CREATED_STAMP_SLACK:

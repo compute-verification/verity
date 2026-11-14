@@ -16,7 +16,7 @@ import json
 import re
 import statistics
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -35,7 +35,7 @@ def ts(s: str) -> datetime:
 
 
 def rid_time(rid: str) -> datetime:
-    return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=UTC)
 
 
 @dataclass
@@ -170,7 +170,7 @@ def render(s: dict, start: datetime, end: datetime) -> str:
 
 def main(log: Path, hours: float, until: str | None, marked: Callable[[int], datetime | None], run_dir: Callable[[str], Path],
          as_json: bool) -> int:
-    end = ts(until) if until else datetime.now(timezone.utc)
+    end = ts(until) if until else datetime.now(UTC)
     start = end - timedelta(hours=hours)
     launches, landings = parse(log.read_text(errors="replace"))
     rs = rows(launches, landings, start, end, marked, run_dir)

@@ -35,7 +35,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Protocol, runtime_checkable
 
@@ -150,7 +150,7 @@ class FsRemote:
 
     def list_times(self, prefix: str, start_after: str | None = None) -> list[tuple[str, str]]:
         """`[(key, last modified as ISO UTC)]` under `prefix`, after `start_after` when given (the S3 listing's `start-after`)."""
-        return [(k, datetime.fromtimestamp(self._p(k).stat().st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        return [(k, datetime.fromtimestamp(self._p(k).stat().st_mtime, UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
                 for k in self.list(prefix) if start_after is None or k > start_after]
 
     def list(self, prefix: str) -> list[str]:

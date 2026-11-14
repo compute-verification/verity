@@ -38,7 +38,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -103,7 +103,7 @@ def save(path: Path, s: dict) -> None:
 
 
 def hhmm(ts: str | float) -> str:
-    return datetime.fromtimestamp(float(ts), timezone.utc).strftime("%d %H:%MZ")
+    return datetime.fromtimestamp(float(ts), UTC).strftime("%d %H:%MZ")
 
 
 def plain(text: str | None, n: int = 420) -> str:
@@ -157,7 +157,7 @@ def parse_inbox(text: str) -> list[dict]:
     out = []
     for line in text.splitlines():
         if m := INBOX_LINE.match(line):
-            since = datetime.strptime(m[3], "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp() if m[3] else None
+            since = datetime.strptime(m[3], "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC).timestamp() if m[3] else None
             out.append({"agent": m[1], "bytes": int(m[2]), "since": since})
     return out
 
@@ -390,7 +390,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
 def digest(lane: str, s: dict, src: Sources, roster: list[tuple[str, str, str]] | None = None) -> tuple[list[str], list[str]]:
     """The digest's lines and the sources' errors; `s` advances past everything shown. A failing source is reported and
     leaves its cursor where it was, so its news shows next time; a failing health check is reported in its place."""
-    out = [f"# research digest @{lane} {datetime.fromtimestamp(src.now(), timezone.utc):%d %H:%MZ}"]
+    out = [f"# research digest @{lane} {datetime.fromtimestamp(src.now(), UTC):%d %H:%MZ}"]
     errors: list[str] = []
 
     def guard(name: str, f: Callable[[], object], default: object = None) -> object:
@@ -436,7 +436,7 @@ def real_sources(lane: str, repo: Path, notes_root: Path) -> Sources:
         return tip, _git(repo, "log", "--first-parent", "--reverse", "--format=%s", f"{last}..{tip}").splitlines()
 
     def landed_since(t: float) -> int:
-        since = datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         log = _git(repo, "log", "--first-parent", f"--since={since}", "--format=%s", "origin/main").splitlines()
         return sum(1 for x in log if QUEUE_SUBJECT.match(x))
 

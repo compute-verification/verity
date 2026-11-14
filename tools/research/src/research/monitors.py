@@ -64,7 +64,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -299,7 +299,7 @@ def booked(text: str) -> list[list]:
         f = body.split()
         try:
             s = datetime.fromisoformat(f[0])
-            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
             out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
         except (IndexError, ValueError):
             continue

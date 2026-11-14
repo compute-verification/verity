@@ -38,7 +38,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -69,7 +69,7 @@ class GcError(Exception):
 
 
 def _epoch(iso: str) -> float:
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(UTC).timestamp()
 
 
 def named(text: str) -> tuple[set[str], set[str]]:

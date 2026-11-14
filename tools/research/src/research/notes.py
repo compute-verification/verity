@@ -147,11 +147,11 @@ def default_root() -> Path:
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _ts(t: float) -> dt.datetime:
-    return dt.datetime.fromtimestamp(t, dt.timezone.utc)
+    return dt.datetime.fromtimestamp(t, dt.UTC)
 
 
 _TIMES: dict[str, object] = {}
@@ -632,7 +632,7 @@ def load_fleet(root: Path, probe: bool = True, pods: Callable[[], list[dict]] = 
 
 def _started(p: dict) -> dt.datetime | None:
     try:
-        return dt.datetime.strptime(str(p.get("lastStartedAt") or "")[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.timezone.utc)
+        return dt.datetime.strptime(str(p.get("lastStartedAt") or "")[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.UTC)
     except ValueError:
         return None
 
@@ -1059,9 +1059,9 @@ def reap_lines(root: Path, rows: list[dict], now: dt.datetime, grace_min: float,
             started = p.get("started_ts")
             if started is None or started > r["done_ts"]:
                 if f"resumed:{p['id']}" not in noted:
-                    at = f"{dt.datetime.fromtimestamp(started, dt.timezone.utc):%H:%MZ}" if started is not None else "unknown"
+                    at = f"{dt.datetime.fromtimestamp(started, dt.UTC):%H:%MZ}" if started is not None else "unknown"
                     lines.append(f"{now:%H:%MZ} RESUMED-POD {r['lane']} {p['name']} {p['id']} (created {at}, after FINAL "
-                                 f"{dt.datetime.fromtimestamp(r['done_ts'], dt.timezone.utc):%H:%MZ}): not reaped")
+                                 f"{dt.datetime.fromtimestamp(r['done_ts'], dt.UTC):%H:%MZ}): not reaped")
                     noted.add(f"resumed:{p['id']}")
                 continue
             what = f"{r['lane']} {p['name']} {p['id']} ${p['usd_h']:.2f}/h (final {(t - r['done_ts']) / 60:.0f}m ago)"

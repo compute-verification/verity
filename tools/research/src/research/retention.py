@@ -132,7 +132,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
@@ -214,7 +214,7 @@ class RecordError(ValueError):
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_utc(s: Any) -> datetime:
@@ -224,11 +224,11 @@ def parse_utc(s: Any) -> datetime:
     t = datetime.fromisoformat(s.strip().replace("Z", "+00:00"))
     if t.tzinfo is None or t.utcoffset() != timedelta(0):
         raise ValueError(f"{s!r} is not in UTC (write it as YYYY-MM-DDTHH:MM:SSZ)")
-    return t.astimezone(timezone.utc)
+    return t.astimezone(UTC)
 
 
 def fmt_utc(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime(TS)
+    return t.astimezone(UTC).strftime(TS)
 
 
 def parse_expires(s: str, now: datetime) -> str | None:
@@ -241,7 +241,7 @@ def parse_expires(s: str, now: datetime) -> str | None:
         return fmt_utc(now + timedelta(**{"days" if m[2] == "d" else "hours": int(m[1])}))
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc))
+            return fmt_utc(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC))
         return fmt_utc(parse_utc(s))
     except ValueError:
         raise RecordError(f"--expires {s!r}: give never, now, a date (2026-10-08), a UTC time (2026-10-08T12:00:00Z) or an offset (7d, 36h)") from None

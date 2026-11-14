@@ -72,7 +72,7 @@ def record(binary: Path, source: Path | None = None) -> dict[str, Any]:
     """Write `<binary>.provenance.json` (atomically) and return it."""
     binary = Path(binary)
     doc = {"schema": SCHEMA, "path": str(binary.resolve()), "sha256": sha256_file(binary), "bytes": binary.stat().st_size,
-           "source": source_identity(source), "built_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "source": source_identity(source), "built_utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "host": socket.gethostname()}
     out = binary.with_name(binary.name + SUFFIX)
     tmp = out.with_name(f".{out.name}.tmp-{os.getpid()}")

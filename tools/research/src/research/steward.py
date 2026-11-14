@@ -290,7 +290,7 @@ def holder(doc: dict | None, now: float | None = None) -> str:
     """`<owner> (host H, pid P) until HH:MMZ` for a lease document."""
     if not doc:
         return "nobody (no lease document)"
-    until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.timezone.utc)
+    until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.UTC)
     left = (float(doc.get("expires_at") or 0) - (now or time.time())) / 60
     return f"{doc.get('owner')} (host {doc.get('host')}, pid {doc.get('pid')}) until {until:%H:%MZ} ({left:.0f} min)"
 

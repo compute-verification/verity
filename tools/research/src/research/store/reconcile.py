@@ -107,7 +107,7 @@ def apply(st: LocalStore, found: list[dict]) -> list[dict]:
             p.unlink()
         write_once(p, f["_remote"])
         st.index.index_attempt(json.loads(f["_remote"]))
-        entry = {"utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "host": socket.gethostname(),
+        entry = {"utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "host": socket.gethostname(),
                  "user": getpass.getuser(), "action": "superseded-by-remote", "reason": REASON,
                  **{k: v for k, v in f.items() if not k.startswith("_")}, "superseded_path": str(aside.relative_to(st.root))}
         with log.open("a") as fh:

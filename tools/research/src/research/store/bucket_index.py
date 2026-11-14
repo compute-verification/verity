@@ -35,7 +35,7 @@ import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -90,7 +90,7 @@ def iso(text: Any) -> str | None:
         t = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (t if t.tzinfo else t.replace(tzinfo=UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass(frozen=True)
@@ -468,7 +468,7 @@ class PostgresIndex:
 
 
 def _now(now: datetime | None) -> datetime:
-    return (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return (now or datetime.now(UTC)).astimezone(UTC)
 
 
 def _stamp(t: datetime) -> str:
