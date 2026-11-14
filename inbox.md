@@ -81,3 +81,31 @@ I wait for your resume: #9687 when #9664 and #8708 are on `main`, or #9369 if th
 
 TIMER: none
 
+[2026-11-14T00:50Z] e6aa7643f61a
+ONSITEMAIN, Fri 13 Nov 4:50 PM PST.
+
+**#9826's records run `r20261113-234141-db06` is still running after 70 minutes; nothing else is waiting on me. Below: your three follow-ons, each answered, and one thing I am holding back for your word.**
+
+**1. The preflight for `V3C_LEAN_WORKERS`: it waits for #9319 to land.** The variable, and the negatives' preflight it sits beside, are #9319's and not on `main` [ran: a search of `main`'s driver at `f54194bbb196`]. It is built, one commit on #9319's head, on `cursor/na-lean-workers-preflight-84f9` at `32a00d5a9b7d`; no pull request is open. I open it off `main` once #9319 is there, or now stacked on #9319 if you say so.
+- [read] A `V3C_LEAN_WORKERS` that is not a positive integer is refused in the preflight, exit 3, with the line's own words, before anything runs.
+- [ran] Ten cases (five values, on the node that served and on a follow-on): 10 passed; with the driver's change taken out, 10 failed.
+
+**3. The archive race: the test shows it can happen at #9319's head, so the fix goes with it.** Built, one commit on #9319's head, on `cursor/na-registered-cases-put-first-84f9` at `a7adefcd7822`; no pull request is open. It too needs #9319: the cases run at once only there.
+- **Where it is** [read: `a5.registered_negatives`, `a0.archive_put`, Lean's `archivePutCmd`]: the registered reads' cases, which with more than one negatives' worker verify at once on a `LeanPool`, each after its own put into one archive. Lean's put writes an object again in place. `main`'s put skips a file already held, but by the file's identity, not its bytes.
+- **How it happens** [ran]: two cases can register the same reads in two files. For a member whose last port is the one the window's record declares registered, "leaving a port committed afresh" and "declared port left out" both leave that port out: the same bytes, one key. One's put then writes the object the other's verify is reading.
+- **The test** [ran]: Lean's put and verify stood in; every verify held open on a condition until all run; a put made inside a verify's call held until the verifies before it read. At #9319's head it fails 25 times of 25 with that one pair. No sleep and no clock read.
+- **The fix** [read]: with more than one worker, every case's files are put first, one after another, then the cases are verified at once; each verify's own put finds its files held and writes nothing. One worker runs as before. It is the onsite line's fix in `main`'s form.
+- [ran] With the fix: the two test files, 53 passed, six times of six.
+- **Not shown:** that it has happened on a served window. The onsite line's race was wider (its put had no held files); at `main`'s put it needs the two equal files.
+
+**2. The `lean_need` table: built, and held back for your word.** The kept run holds what it needs [ran]: one member, twelve tasks, and for each the circuit file's bytes, the program file's bytes and the Lean verifier process's peak.
+- **Why held:** your standing rule keeps the kept case's circuit file sizes out of every message, and this mailbox is public. A ratio would give the size too, by one division against the peak #9319's body already states.
+- **Where it is:** in the run's kept `out/rehearsal.json`: `members[0].circuit_bytes`, `members[0].program_bytes`, and `negative_workers.negatives.<task>.lean.peak`; today's factor is `a5.LEAN_BYTES_PER_CIRCUIT_BYTE`, 5. The built table is a file on my VM and in my store.
+- **Read it before proofs' noon if you can:** it bears on whether `lean_need` is an upper estimate. Say where the table goes, or that it goes here as it is.
+
+**Your 4:08 and 4:21 PM lines** [ran: a search of my eight bodies and of the lines my cuts add]. No body or tracked file of mine quotes a number for `K` or the leak. Three name `K` with no number: #9736's body, in the words you ordered ("the period check adds it to K"); a docstring in `benchmarks/network_traces/certifier_piece.py`; a docstring in `benchmarks/network_traces/tests/test_chain_record.py`. I wrote the first wording nowhere. The sentence goes beside #9736's line at that body's next edit.
+
+**One slip, the same kind as before:** two reads printed names into my own tool output that I should have cut: two Definition names from the kept record's keys, and a test file's fixture strings. Nothing written, posted or pushed holds them.
+
+**Least sure of:** the race's test stands Lean in, so it shows the order of puts and reads and not Lean's own refusal of a truncated object. And the new worktree has no built Lean verifier, so I ran the files with the change applied in #9319's built tree and restored it [ran: clean, same head].
+
