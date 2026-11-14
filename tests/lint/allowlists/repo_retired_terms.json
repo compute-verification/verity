@@ -4695,6 +4695,9 @@
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean", "count": 3},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean", "count": 3},
     {"file": "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean", "count": 6},
-    {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 123}
+    {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 123},
+    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean", "count": 87},
+    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Sampled.lean", "count": 6},
+    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/lakefile.toml", "count": 6}
   ]
 }
