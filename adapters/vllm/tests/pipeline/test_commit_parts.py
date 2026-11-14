@@ -2,10 +2,11 @@
 (`git_head`), the device's memory in use (`nvidia_smi_used_mib`), an engine row's request (`_rid_of`) and the staging's
 environment (`staging_environ`) where it refuses, excludes families, traces the footprint or drops a flush point; the Programs'
 forecast (`c2_programs_forecast`) where an instance file can't be read; the serving loop (`run_workload`) where a request
-arrives late, the engine has nothing to serve or a request is let go unfinished, over `test_commit_main`'s stand-in engine; the check that the engine is left as it was
-(`assert_pristine`) where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook; and the
-kept bytes' digests (`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later pair's differences and the step
-dumped.  The two commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
+arrives late, the engine has nothing to serve or a request is let go unfinished, over `test_commit_main`'s stand-in engine;
+the hooks-only ablation (`make_committer`'s ``hooks_only``); the check that the engine is left as it was (`assert_pristine`)
+where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook; and the kept bytes' digests
+(`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later pair's differences and the step dumped.  The two
+commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
 from __future__ import annotations
 
 import dataclasses
@@ -16,7 +17,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import torch
@@ -24,6 +25,7 @@ import torch
 from tests.pipeline.test_commit_main import TOKENS, WORKLOAD, Clock
 from tests.pipeline.test_commit_main import engine as served
 from verity_vllm import settings
+from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.commit.committer import native_collect as NC
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli, commit
@@ -177,6 +179,31 @@ def test_a_request_joins_at_its_arrival_step_or_at_once_when_the_engine_has_noth
 def test_a_request_the_engine_lets_go_unfinished_is_refused_by_the_count_of_such(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(RuntimeError, match=r"^1 requests did not finish$"):
         serve(monkeypatch, WORKLOAD["requests"], finishing={"a"})
+
+
+def test_the_hooks_only_ablation_counts_the_device_tensors_its_hooks_see_and_commits_nothing(
+        monkeypatch: pytest.MonkeyPatch, environ: Callable[[], dict[str, str | None]]) -> None:
+    """``hooks_only``, an ablation and no commitment, staged directly: its hooks count each device tensor that holds anything
+    and copy nothing, and a step waits for its event and records zero roots, no leaves, no bytes and no layout."""
+    clock = Clock()
+    clock.take(100.0)
+    monkeypatch.setattr(commit, "time", clock)
+    com = commit.make_committer("hooks_only", None, cast(Any, SimpleNamespace(hash_threads=1, chunk=3072)), "r0")
+
+    def tensor(device: str, n: int) -> SimpleNamespace:
+        return SimpleNamespace(device=SimpleNamespace(type=device), numel=lambda: (clock.take(0.25), n)[1])
+
+    waited: list[float] = []
+    job = SimpleNamespace(step=3, metas=[], event=SimpleNamespace(synchronize=lambda: waited.append(clock.now)), t_step_end=99.0,
+                          backlog=2)
+    for name, device, n in [("a", "cuda", 4), ("b", "cuda", 0), ("c", "cpu", 4), ("d", "cuda", 1)]:
+        com._acquire(name, tensor(device, n), job)
+    com._commit_step(job)
+    zero = b"\0" * commit.SR.ROOT_BYTES
+    assert (com.name, com.chunk) == ("hooks_only_direct+rows-sha512+retain_host", 3072)
+    assert (job.metas, waited, com._layouts) == ([None, None], [100.75], {3: []})
+    assert com._done == {3: StepCommitment(3, zero, zero, 0, 0, 2, b"\0" * 32, 99.0, 100.75, 2)}
+    assert (com.spans.total["acquisition"], com.spans.per_step[3]["acquisition"]) == (0.75, 0.75)
 
 
 def engine(**runner: Any) -> Any:
