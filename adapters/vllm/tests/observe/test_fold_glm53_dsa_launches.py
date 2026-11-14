@@ -191,6 +191,8 @@ NORM_PINS = {"Q_DIM": 2048, "Q_BLOCK_SIZE": 2048, "KV_DIM": 512, "KPE_HALF_ROT_D
              "MLA_CACHE_FP8": False, "MLA_CACHE_DS_MLA": False, "MLA_NUM_TILES": 1, "MLA_TILE_DIM": 1, "TOPK": 2048,
              "TOPK_BLOCK_SIZE": 1024, "INDEX_ROPE_INTERLEAVE": True}
 NORM_OFF_PIN = "fused norm/RoPE source or launch geometry differs from the recorded GLM-5.3 pin"
+NORM_OFF_ROWS, NORM_OFF_SHAPE = "fused norm/RoPE rows or GLM-5.3 dimensions differ", "norm weights or GPT-J rotary table have the wrong shape"
+INDEX_OFF_PIN, INDEX_OFF_SHAPE = "index-K dimensions differ from the recorded GLM-5.3 pin", "index-K inputs have the wrong shape"
 CS, TWO = view(76, (4096, 64), "bfloat16"), [("a", [5]), ("b", [9])]
 
 
@@ -243,6 +245,8 @@ def test_a_fused_norm_rope_of_an_indexer_layer_is_two_norms_the_k_rotation_and_o
     assert (state["latent"], state["kv"], state["kpe"]) == (view(77, (128, 576), "bfloat16"), kv_cache, kpe_cache)
     assert (state["slots"], state["index_cache"]) == ((5, 70), ix)
     assert D._state(ctx)["topk"] == (TOPK_ALLOC, 0, 2048, (2048, 1))
+    first = D.DsaNormRope().match(_norm(rows=1), _ctx([("a", [0])]))
+    assert isinstance(first, Group) and first.parts[2].operands[1] == Gather(CS, (0,)), "position 0 is the rotary table's first row"
 
 
 def test_a_fused_norm_rope_of_an_index_share_layer_is_the_two_norms_and_the_k_rotation_alone():
@@ -268,11 +272,19 @@ OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 
      {"mismatches": {"MLA_CACHE_FP8": (True, False)}}),
     ({"kv_ptr": None}, (5, 70), "fused norm/RoPE pointer arguments are not bound", {}),
     ({"pos_ptr": 3}, (5, 70), "positions argument is not a tensor view", {"positions": "3"}),
-    ({"kv_ptr": view(73, (2, 256), "bfloat16")}, (5, 70), "fused norm/RoPE rows or GLM-5.3 dimensions differ",
-     {"kv": repr(view(73, (2, 256), "bfloat16")), "step_rows": 2}),
+    ({"rows": 1}, (5, 70), NORM_OFF_ROWS, {"q": repr(view(70, (1, 2048), "bfloat16")), "step_rows": 2}),
+    ({"q_c_ptr": view(70, (2, 1024), "bfloat16")}, (5, 70), NORM_OFF_ROWS, {"q": repr(view(70, (2, 1024), "bfloat16"))}),
+    ({"q_c_out_ptr": view(71, (2, 1024), "bfloat16")}, (5, 70), NORM_OFF_ROWS, {"q_out": repr(view(71, (2, 1024), "bfloat16"))}),
+    ({"kv_ptr": view(73, (2, 256), "bfloat16")}, (5, 70), NORM_OFF_ROWS, {"kv": repr(view(73, (2, 256), "bfloat16")), "step_rows": 2}),
     ({"kpe_ptr": view(75, (2, 64))}, (5, 70), "fused norm/RoPE is not entirely bf16", {}),
-    ({"q_rms_norm_w_ptr": view(72, (1024,), "bfloat16")}, (5, 70), "norm weights or GPT-J rotary table have the wrong shape",
-     {"qw": repr(view(72, (1024,), "bfloat16"))}),
+    ({"q_rms_norm_w_ptr": view(72, (1024,), "bfloat16")}, (5, 70), NORM_OFF_SHAPE, {"qw": repr(view(72, (1024,), "bfloat16"))}),
+    ({"kv_rms_norm_w_ptr": view(74, (256,), "bfloat16")}, (5, 70), NORM_OFF_SHAPE, {"kvw": repr(view(74, (256,), "bfloat16"))}),
+    ({"kpe_rope_cos_sin_cache_ptr": view(76, (4096, 64, 1), "bfloat16")}, (5, 70), NORM_OFF_SHAPE,
+     {"cs": repr(view(76, (4096, 64, 1), "bfloat16"))}),
+    ({"kpe_rope_cos_sin_cache_ptr": view(76, (4096, 32), "bfloat16")}, (5, 70), NORM_OFF_SHAPE,
+     {"cs": repr(view(76, (4096, 32), "bfloat16"))}),
+    ({"kpe_rope_cos_sin_cache_ptr": view(76, (4096, 64), "bfloat16", strides=(128, 1))}, (5, 70), NORM_OFF_SHAPE,
+     {"cs": repr(view(76, (4096, 64), "bfloat16", strides=(128, 1)))}),
     ({"kpe_rope_cos_sin_cache_ptr": view(76, (8, 64), "bfloat16")}, (5, 70), "a position is outside the GPT-J rotary table",
      {"positions": (5, 9), "table_rows": 8}),
     ({"mla_cache_ptr": NARROW_LATENT}, (5, 70), f"cache is not [blocks, block, physical-width] row-major: {NARROW_LATENT!r}", {}),
@@ -281,8 +293,16 @@ OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 
     ({"q_rms_eps": None}, (5, 70), "norm epsilons are not static floats", {"q_eps": "None", "kv_eps": "1e-05"}),
     ({"kv_rms_eps": "small"}, (5, 70), "norm epsilons are not static floats", {"q_eps": "1e-06", "kv_eps": "'small'"}),
     ({"index_k_layer_norm_bias_ptr": None}, (5, 70), "indexer-layer norm/RoPE pointers are not bound", {}),
-    ({"consts": {"INDEX_K_DIM": 64}}, (5, 70), "index-K dimensions differ from the recorded GLM-5.3 pin", {}),
-    ({"index_k_layer_norm_bias_ptr": view(80, (64,))}, (5, 70), "index-K inputs have the wrong shape", {"bias": repr(view(80, (64,)))}),
+    ({"consts": {"INDEX_K_DIM": 64}}, (5, 70), INDEX_OFF_PIN, {}),
+    ({"consts": {"INDEX_K_BLOCK_SIZE": 64}}, (5, 70), INDEX_OFF_PIN, {}),
+    ({"consts": {"INDEX_K_HALF_ROT_DIM": 16}}, (5, 70), INDEX_OFF_PIN, {}),
+    ({"index_k_ptr": view(78, (2, 64), "bfloat16")}, (5, 70), INDEX_OFF_SHAPE, {"index_k": repr(view(78, (2, 64), "bfloat16"))}),
+    ({"index_k_layer_norm_w_ptr": view(79, (64,))}, (5, 70), INDEX_OFF_SHAPE, {"weight": repr(view(79, (64,)))}),
+    ({"index_k_layer_norm_bias_ptr": view(80, (64,))}, (5, 70), INDEX_OFF_SHAPE, {"bias": repr(view(80, (64,)))}),
+    ({"index_k_rope_cos_sin_cache_ptr": view(76, (4096, 64, 1), "bfloat16")}, (5, 70), INDEX_OFF_SHAPE,
+     {"cs": repr(view(76, (4096, 64, 1), "bfloat16"))}),
+    ({"index_k_rope_cos_sin_cache_ptr": view(76, (4096, 32), "bfloat16")}, (5, 70), INDEX_OFF_SHAPE,
+     {"cs": repr(view(76, (4096, 32), "bfloat16"))}),
     ({"indexer_cache_stride": 136}, (5, 70), OFF_STRIDE, {}),
     ({"indexer_cache_ptr": SHORT_INDEX, "indexer_cache_scale_ptr": view(81, (1, 64, 33))}, (5, 70),
      "a current-token slot is outside the index-K cache", {"slots": (5, 70), "cache_slots": 64}),
@@ -290,13 +310,28 @@ OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 
      {"topk": repr(view(TOPK_ALLOC, (16, 1024), "int32"))}),
     ({"topk_indices_ptr": view(99, (16, 2048), "int32")}, (5, 70), "IndexShare layer does not use the indexer layers' top-k allocation",
      {"observed": (99, 0, 2048, (2048, 1)), "established": (TOPK_ALLOC, 0, 2048, (2048, 1))}),
-], ids=["warps", "constexpr", "pointer", "positions", "dimensions", "dtype", "weight-shape", "position-range", "latent-cache", "slots-short",
-        "slot-range", "eps-absent", "eps-text", "index-pointer", "index-dims", "index-shapes", "index-cache", "index-slot", "topk-layout",
-        "topk-allocation"])
+], ids=["warps", "constexpr", "pointer", "positions", "rows", "q-width", "q-out-width", "kv-width", "dtype", "q-weight", "kv-weight",
+        "table-rank", "table-width", "table-strides", "position-range", "latent-cache", "slots-short", "slot-range", "eps-absent", "eps-text",
+        "index-pointer", "index-dim", "index-block", "index-rot", "index-k-width", "index-weight", "index-bias", "index-table-rank",
+        "index-table-width", "index-cache", "index-slot", "topk-layout", "topk-allocation"])
 def test_a_fused_norm_rope_off_its_pins_its_views_or_the_step_is_refused_with_what_differs(kw, slots, reason, detail):
     off = D.DsaNormRope().match(_norm(**kw), _ctx(TWO, slots=slots))
     assert isinstance(off, Unsupported) and off.reason == reason and off.consumed == (31,)
     assert {k: off.detail[k] for k in detail} == detail
+
+
+def test_a_fused_norm_rope_s_refusal_names_its_pointer_arguments_and_the_first_eight_positions_or_slots():
+    unbound = D.DsaNormRope().match(_norm(kv_ptr=None), _ctx(TWO, slots=[5, 70]))
+    assert isinstance(unbound, Unsupported) and len(unbound.detail["args"]) == 16 and all(k.endswith("_ptr") for k in unbound.detail["args"])
+    assert (unbound.detail["args"]["kv_ptr"], unbound.detail["args"]["q_c_ptr"]) == ("None", repr(view(70, (2, 2048), "bfloat16")))
+    nine = [("a", range(9))]
+    table = D.DsaNormRope().match(_norm(rows=9, kpe_rope_cos_sin_cache_ptr=view(76, (4, 64), "bfloat16")), _ctx(nine))
+    assert isinstance(table, Unsupported) and (table.detail["positions"], table.detail["table_rows"]) == (tuple(range(8)), 4)
+    latent = D.DsaNormRope().match(_norm(rows=9), _ctx(nine, slots=range(128, 137)))
+    assert isinstance(latent, Unsupported) and (latent.detail["slots"], latent.detail["cache_slots"]) == (tuple(range(128, 136)), 128)
+    short = {"indexer_cache_ptr": SHORT_INDEX, "indexer_cache_scale_ptr": view(81, (1, 64, 33))}
+    index = D.DsaNormRope().match(_norm(rows=9, **short), _ctx(nine, slots=range(64, 73)))
+    assert isinstance(index, Unsupported) and (index.detail["slots"], index.detail["cache_slots"]) == (tuple(range(64, 72)), 64)
 
 
 Q_PINS = {"NUM_Q_HEADS": 8, "Q_PE_HALF_ROT_DIM": 32, "QL_NOPE_DIM": 512, "QL_NOPE_BLOCK": 512, "INDEX_ROPE_INTERLEAVE": True,
