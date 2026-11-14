@@ -438,7 +438,7 @@ def page() -> str:
     L = [f"# vy-nebius-2 at {iso(t)}", "",
          (f"Stops itself at {stop:%Y-%m-%dT%H:%MZ} (lease and deadline): {left:.1f} h, {8 * left:.0f} GPU-h left. " if stop else
           "Stop time unknown: the lease and deadline files are unreadable. ") +
-         f"Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
+         "Clocks locked at 2,100 MHz. Refreshed every minute by node_ops.py; `cat /workspace/pouw/infra/status.md`.", ""]
     alerts = [json.loads(l) for l in (OUT / "alerts.jsonl").read_text().splitlines()[-20:]] if (OUT / "alerts.jsonl").exists() else []
     recent = [a for a in alerts if (t - datetime.strptime(a["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)).total_seconds() < 7200]
     paused = [f"- pgid {k} for {int((time.monotonic() - v['t0']) / 60)} min: `{v['cmd'][:120]}`" for k, v in (QUIET.paused.items() if QUIET else [])]

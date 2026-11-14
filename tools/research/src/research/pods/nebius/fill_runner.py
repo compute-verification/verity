@@ -961,7 +961,6 @@ def tick(n: int) -> str:
                 queued.append((p, h, p.stat().st_mtime))
             except OSError:
                 pass
-    started = False
     # a window blocked by another lease: fill backfills, admitted by gpu-lease --max-min only if it ends before the window can start
     backfill = window and blockers > 0
     if not timed and (not want or backfill) and time.monotonic() >= backoff_until:
@@ -1008,7 +1007,6 @@ def tick(n: int) -> str:
             start(p, {**h, "on": ",".join(map(str, got))}, backfill=backfill)
             counts[h["owner"]] += 1
             slots -= h["gpus"]
-            started = True
         if not window:
             # Commits that found too few free GPUs take the newest proofs (then pous) fills' GPUs, counting GPUs already freeing
             waiting = sum(h["gpus"] for p, h, _ in queued if h["gpus"] and rank(p.name, h) == 0 and p.exists() and clears(h, booked, t_now))

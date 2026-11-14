@@ -1267,7 +1267,7 @@ def test_a_held_entry_is_reported_and_skipped_and_refused_when_named(world, caps
                        repo=repo) == 3
     assert "A PR that drops its `hold` comes first" in capsys.readouterr().err and not (node / "bin" / "h.py").exists()
 
-    manifest.write_text(f'[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nby = "s"\nnodes = ["n"]\nhold = "x"\n')
+    manifest.write_text('[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nby = "s"\nnodes = ["n"]\nhold = "x"\n')
     with pytest.raises(ValueError, match="is held, which only an entry install copies"):
         deploy.load(manifest)
 
