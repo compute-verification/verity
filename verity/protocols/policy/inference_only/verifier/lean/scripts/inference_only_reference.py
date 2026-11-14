@@ -62,7 +62,7 @@ def _nat(x) -> bool:
 
 
 def _unevaluated(*_a):
-    raise NotImplementedError("the NCI check evaluates no gate")
+    raise NotImplementedError("the inference-only check evaluates no gate")
 
 
 def declared(desc: dict) -> DefinitionTable:
