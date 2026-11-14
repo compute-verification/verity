@@ -1,9 +1,10 @@
 """Values the pouw protocols' own lines never hand these functions, and what each function does with one: it checks nothing
 of its own, so the value goes on as it is and the line that reads it decides.  A pass before its first call has no base, a
 run without graphs has no driver, a kernel file is a Python file, a manifest's schema is a string, a whole step's sets are
-keyed by a pass kind's key and a committed linear's weight has two dimensions; a retained call's pass has a directory, a
-retained capture has its stages, a capture holds its calls and its side steps not yet joined, and a replayed forward has
-the slots its replay uploaded; each test hands the other value."""
+keyed by a pass kind's key and a committed linear's weight has two dimensions; a call with side steps took a side lane, and
+one whose A tree is aside a tree lane; a retained call's pass has a directory, a retained capture has its stages, a capture
+holds its calls and its side steps not yet joined, and a replayed forward has the slots its replay uploaded; each test
+hands the other value."""
 from __future__ import annotations
 
 import contextlib
@@ -13,6 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.pouw import pearl_c as PPD
@@ -133,6 +135,74 @@ def test_forked_steps_without_a_driver_are_built_and_fail_when_the_first_runs(mo
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'record'"):
         out[0]()
     assert ran == [] and run.kernel.dev.stream == 5
+
+
+def test_a_calls_side_steps_run_on_the_side_lane_it_took_and_fail_at_its_handle_where_the_run_holds_none():
+    """`_lanes` hands the side lane it took for the call on unchecked.  Off the GPU the call's own steps run on the
+    caller's handle and its side steps on the lane's.  With None in the run's ``sides`` the own steps still run, no side
+    step does, and the lane's handle is where it fails; the device's stream and the launching lane are unset after both."""
+    pytest.importorskip("torch")
+    ran: list = []
+    buf = SimpleNamespace(data_ptr=lambda: 64)
+    rotated = dict.fromkeys(("c", "segdig_t", "u"), buf)
+    kernel = SimpleNamespace(dev=SimpleNamespace(stream=5))
+    steps, side = [lambda: ran.append(("own", kernel.dev.stream))], [lambda: ran.append(("side", kernel.dev.stream))]
+
+    def launched(lane):
+        sh = SimpleNamespace(turn=0, sets=[rotated], m16=16, done=[None], buf=lambda name: buf)
+        run = SimpleNamespace(device=SimpleNamespace(type="cpu"), schedule=SCHEDULES["deferred-caller"], main=None,
+                              sides=[lane], _side_turn=0, hashing=False, nb=64, kernel=kernel, _launching="a lane")
+        pipe = SimpleNamespace(b={}, keys={})
+        try:
+            return L.LaneCalls._lanes(run, 7, sh, pipe, steps, side, 3, "the caller's stream", 0, False)
+        finally:
+            assert (sh.turn, run._side_turn, sh.done) == (1, 1, [None]) and pipe.keys == {"dom_a": 64, "unit": 128}
+            assert pipe.b == dict.fromkeys(rotated, 64) and kernel.dev.stream is None and run._launching is None
+
+    assert launched(SimpleNamespace(raw=11, stream=None, event=None, tree_event=None)) == (None, False)
+    assert ran == [("own", 3), ("side", 11)]
+    ran.clear()
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'raw'"):
+        launched(None)
+    assert ran == [("own", 3)]
+
+
+def test_a_call_whose_a_tree_is_aside_fails_at_the_event_of_a_lane_it_did_not_take(monkeypatch):
+    """On the card (a stand-in device) `_lanes` hands on unchecked the tree lane and, for a tree that ran apart, the
+    call's side lane.  A call whose A tree is aside has side steps, the tree among them, so it took a tree lane: with no
+    side step its own steps run up to the cut, and the tree lane's event is where it fails.  From `TREE_APART_ROWS` rows
+    the tree runs on the side lane after the call's: with None for the call's in the run's ``sides`` the tree runs, A's
+    root is copied to the pass, and the call's lane's tree event is where it fails, before the rest of the side steps."""
+    torch = pytest.importorskip("torch")
+    monkeypatch.setattr(torch.cuda, "stream", lambda stream: contextlib.nullcontext())
+    ran: list = []
+    tree, roots = torch.arange(128, dtype=torch.uint8), torch.zeros(64, dtype=torch.uint8)
+    kernel = SimpleNamespace(dev=SimpleNamespace(stream=5))
+    after = SimpleNamespace(raw=13, stream=SimpleNamespace(wait_event=lambda event: ran.append("the tree lane waits")),
+                            event=SimpleNamespace(record=lambda stream: ran.append(f"the cut on {stream}")), tree_event=None)
+    steps, side = ([lambda x=x: ran.append((x, kernel.dev.stream)) for x in names]
+                   for names in (("keying", "rest"), ("tree", "hashing")))
+
+    def launched(side_steps):
+        sh = SimpleNamespace(turn=0, sets=[dict.fromkeys(("c", "segdig_t", "u"), tree)], m16=L.TREE_APART_ROWS,
+                             done=[None], buf=lambda name: tree)
+        run = SimpleNamespace(device=SimpleNamespace(type="cuda"), schedule=SCHEDULES["deferred-caller"], main=None,
+                              sides=[None, after], _side_turn=0, hashing=False, nb=64, kernel=kernel, _launching="a lane",
+                              roots_buf=roots, cur=SimpleNamespace(first=0))
+        pipe = SimpleNamespace(b={}, keys={}, lane_cuts=(1, 1), size={"tree_a": 128})
+        try:
+            return L.LaneCalls._lanes(run, 7, sh, pipe, steps, side_steps, 3, "the caller's stream", 0, True)
+        finally:
+            assert kernel.dev.stream is None and run._launching is None
+
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'event'"):
+        launched([])
+    assert ran == [("keying", 3)] and not roots.any()
+    ran.clear()
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'tree_event'"):
+        launched(side)
+    assert ran == [("keying", 3), "the cut on the caller's stream", ("rest", 3), "the tree lane waits", ("tree", 13)]
+    assert roots.tolist() == tree[64:].tolist()
 
 
 NO_BASE_YET = r"unsupported operand type\(s\) for \+: 'NoneType' and 'int'"

@@ -15,8 +15,9 @@ committed words as an `opening.CommittedStore`, and `request_replay.Replay` answ
 replayed on the CPU from its Program. `evaluate` evaluates one row, `population` gives a request's population and its
 split at the executed prefix, `checks.check_rows` names the rows that compute a Program's checks,
 `coverage.form_b_families` names the families the Commit value-checks by form (B) only, `cached_prefix.layout_of`
-reads a warm Program's prefix layout, and `replay_codes` holds the codes of the replay's record that a Commit's
-verdict reads. `linkage.LINKAGE_SCHEMA` is the id of the boundary linkage's record. Beside the replay of rows,
+reads a warm Program's prefix layout, and `replay_codes` hands on the names of `verity_vllm.records.replay_codes`,
+the codes of the replay's record that a Commit's verdict reads, until every reader reads them there.
+`linkage.LINKAGE_SCHEMA` is the id of the boundary linkage's record. Beside the replay of rows,
 `served_check` checks a served-compiled row, `pouw_circuit` replays PoUW's `ncp-v2`, and `stoch_recompute` is the
 value check of a stochastic row's record: the `stoch-recompute` command (`Options`, `main`) and the `recompute_run`
 it runs. `fork` gives a worker pool that dies with its parent.

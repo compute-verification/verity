@@ -18,7 +18,10 @@ to the run root the run published (``--run``) and, for a compiled circuit, to th
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
-registered (``--circuit``). Then `a5.audit`, its stream's rule the rate of the window's design in its population (`rule_of`):
+registered (``--circuit``). Then `a5.audit`, its stream's rule the rate its caller states (``--law``: ``rate:NUM/DEN``,
+``stratified-rate:NUM/DEN`` or ``work-rate:NUM/DEN``; a fixed count ``subset:K``, ``stratified:K`` or ``work:K`` is refused
+by name, `service.Law`) and the window's sampling design the one that rate names over the window's own proof blocks
+(`verifier_window`), which the stream holds the registration to:
 the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
@@ -66,9 +69,9 @@ registration, chained right after W, registers each as
 W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
 roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
-sampled like any other proof block (under ``stratified:K``, a stratum a table), never proved whole as an output class. The
-summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict, the
-prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
+sampled like any other proof block (under a stratified rate, a stratum a table), never proved whole as an output class.
+The summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict,
+the prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
 ``OUT/tie.json`` name W too, with the registration's ``previous`` and whether it is W's digest (``chained``), so an
 audit stopped before its proofs end still says what it was tied to.
 
@@ -179,7 +182,8 @@ from verity import device as ST  # noqa: E402
 from verity.hardware import registration as G  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as R  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
 
@@ -799,17 +803,24 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
 
 
-def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
+def verifier_window(window_dir: Path, law: Mapping[str, Any] | str, template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). A window
-    with row tables is refused: a5 checks their segment roots against the ones recorded before each coin (``step_roots``),
-    which the records don't carry yet."""
+    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). ``law`` is
+    the window's sampling design, or as text the rate a stream states as its rule (`service.Law`, which refuses a fixed
+    count by name): the window's sampling design and work table are then the ones that rate names over the window's own proof
+    blocks (`a5.rated`), as the stream derives them. A window with row tables is refused: a5 checks their segment roots
+    against the ones recorded before each coin (``step_roots``), which the records don't carry yet."""
     import a5 as A5
 
     own = A5.template_sets(template_sets) if template_sets else {}
     resolve = lambda t: own[t][1] if t in own else catalog_resolve(t)  # noqa: E731
-    mine, doc = IF.of_records(window_dir, law, resolve)
+    if isinstance(law, str):
+        S.Law(law)
+        mine, doc = IF.of_records(window_dir, {}, resolve)
+        mine = A5.rated(mine, law)
+    else:
+        mine, doc = IF.of_records(window_dir, law, resolve)
     if mine.row_tables:
         raise ValueError(f"the window has {len(mine.row_tables)} row tables, and its records don't carry the segment roots "
                          "recorded before each segment's coin, so the audit can't check the tables against them: refused "
@@ -889,19 +900,6 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
-def rule_of(law: Mapping[str, Any], population: int) -> str:
-    """The rule the audit's stream states for a window registered under the fixed design ``law`` over ``population`` proof
-    blocks. A selection rule's law is a rate (`service.Law` refuses a fixed count), so the rule is the rate of the
-    design's K in the window's N: ``rate:K/N`` for a subset design, ``stratified-rate:K/N`` for a stratified one (at K = 1,
-    one proof block a stratum) and ``work-rate:K/N`` for a work one. The stream holds the registration to the design its
-    rule names over the window (R1), so a design its rate doesn't reproduce is refused there, by name; a Bernoulli design
-    states its own text."""
-    kind = {"subset": "rate", "stratified": "stratified-rate", "work": "work-rate"}.get(law.get("law"))
-    if kind is None:
-        return f"bernoulli:{law.get('p')}"
-    return f"{kind}:{min(law['k'], population)}/{population}"
-
-
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -910,9 +908,8 @@ def audit(a: argparse.Namespace) -> int:
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    law = D.parse_design(a.law)
     try:
-        mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
+        mine, doc, sets = verifier_window(wdir, a.law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
@@ -965,7 +962,7 @@ def audit(a: argparse.Namespace) -> int:
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
-    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, rule_of(mine.law, mine.population)
+    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie, a.declared = tied, day
@@ -988,7 +985,7 @@ def audit(a: argparse.Namespace) -> int:
         published = a.coins.evidence()
         manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
-           "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
+           "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": a.law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
                                     "timing", "outputs")}}
@@ -1056,7 +1053,7 @@ def warm(a: argparse.Namespace) -> int:
     import a5 as A5
 
     t0 = time.time()
-    mine, _doc, sets = verifier_window(Path(a.window), D.parse_design(a.law), Path(a.template_sets) if a.template_sets else None)
+    mine, _doc, sets = verifier_window(Path(a.window), a.law, Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
     got = A5.warm(a, sets, mine, a.jobs)
     for g in got:
@@ -1073,7 +1070,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
     p.add_argument("--window", required=True, help="the window's directory: circuit.json, registration.json, the value files")
-    p.add_argument("--law", required=True, help="the proof system's law of the window (subset:K, stratified:K, work:K)")
+    p.add_argument("--law", required=True, help="the rate the audit's stream states as its rule (rate:NUM/DEN, "
+                   "stratified-rate:NUM/DEN or work-rate:NUM/DEN), whose sampling design over the window's proof blocks the "
+                   "registration is held to; a fixed count (subset:K, stratified:K, work:K) is refused")
     p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")
@@ -1133,7 +1132,7 @@ def main(argv: list[str] | None = None) -> int:
                    "staging links each kept circuit and composes none (default none: every template composed here)")
     p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
     p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
-    p.add_argument("--law", required=True, help="the window's law, as its audit takes it")
+    p.add_argument("--law", required=True, help="the window's rule, as its audit takes it")
     p.add_argument("--template-sets", help="the verifier's own input sets, as its audit takes them")
     p.add_argument("--compose-cache", required=True, help="the cache the audit's --compose-cache names")
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "

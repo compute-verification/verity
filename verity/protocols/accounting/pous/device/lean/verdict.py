@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import verity_difftest as D
+
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 PACKAGE = Path(__file__).resolve().parent
@@ -52,3 +53,6 @@ def verdict(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings
         raise ValueError(f"the Lean verdict refuses the record: {body}")
     out = json.loads(body)
     return mc.Verdict(out["accepted"], tuple(out["reasons"]), out["late"], out["wrong"])
+
+
+__all__ = ["EXE", "record", "server", "verdict"]

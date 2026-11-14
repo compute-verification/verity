@@ -57,11 +57,12 @@ from verity.circuits.types import Tuple as TupleT
 
 from verity_vllm.program.sampling_event import is_sampling_event
 from verity_vllm.program.shared_definitions import canonicalize
+from verity_vllm.records.schema_ids import WORKLOAD_PROGRAM_SCHEMA
 
 __all__ = ["Edge", "LAG_VALUES", "RequestComponent", "SCHEMA", "WorkloadProgram", "WorkloadRequest", "edge_ports",
            "eos_lag_rows_declared", "program_component", "request_component"]
 
-SCHEMA = "verity/workload-program/v1"
+SCHEMA = WORKLOAD_PROGRAM_SCHEMA
 
 
 def _is_input_node(n: BodyNode) -> bool:
