@@ -7,7 +7,7 @@ One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, 
 inputs.  `Pc4Check{M,K,N,TM,TN}` is both in one root: the whole check of an M × N block, recompute-free.  Each root body
 holds only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`), and every
 value is computed in exactly one of them.  ``Shape.row_k`` cuts each row unit along k into a head, a form per segment of
-row_k positions and a tail (`rowk`), so that a row unit fits Flock's block at every served k; off, nothing here changes.
+row_k positions and a tail (`pc4_rowk`), so that a row unit fits Flock's block at every served k; off, nothing here changes.
 
     template          one instance per        reads                                    computes and returns
     Pc4RowB{K}        row j of B              B_j, E_B,j, F_B, F_A, G                   B̃_j's codes and scale bytes, P_B,j, ok
@@ -49,25 +49,20 @@ from its own `--public-inputs` file (`TileAnchors.regions`).
 """
 from __future__ import annotations
 
-import bisect
-import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, ClassVar
 
 from verity.commitments import domains
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.circuits import partition_object as PO
-from verity.circuits.codec import descriptor_id
-from verity.circuits.cut import CallGraph, check_cut
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.circuits.partition import CutVerdict
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
 from verity.circuits.ops.prims import (BlackwellNvf4OmmaDot64, Bf16ToF32, E4m3ToF32, F2fpBf16, F32ToE2m1Sat, F32ToE4m3Sat,
-                             HopperBF16WgmmaDot16, const)
-from verity.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectBf16, SelectI32
+                             HopperBF16WgmmaDot16)
+from verity.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from ..schemes import pearl_c as C
@@ -76,6 +71,8 @@ from . import anchors as A
 from . import boolean as _boolean  # noqa: F401  registers the _v2 Definitions Flock's lowering falls back to
 from . import leaves as L
 from . import words as W
+from .tile_units import DIGESTS, GRID_ROLES, ROLES, ProofBlock, RowK, _Emit, _f32, ok_word
+from . import tile_units as U
 
 F32, BF16, E2M1, U8, OK = W.F32, W.BF16, W.E2M1, W.U8, L.OK
 R, ATOM, BLOCK, PEEL = S.R, S.ATOM, S.NVFP4.block, S.PEEL_K
@@ -92,35 +89,12 @@ CODES = lambda n, k: Array(n, Array(k, E2M1))                                   
 SCALES = lambda n, k: Array(n, Array(k // BLOCK, U8))                               # noqa: E731
 
 
-def _f32(x: float) -> int:
-    return struct.unpack("<I", struct.pack("<f", x))[0]
-
-
-class _Emit:
-    """A body under construction: integer operands are constants of the parameter's width, one node per value and body, and
-    an operation on constants alone is evaluated, not emitted."""
-
-    def __init__(self, B) -> None:
-        self.B = B
-        self._consts: dict[tuple[int, int], Any] = {}
-
-    def c(self, w: int, v: int):
-        got = self._consts.get((w, v))
-        if got is None:
-            got = self._consts[(w, v)] = self.B.call(const(w, v))
-        return got
-
-    def call(self, fn, *args):
-        if all(isinstance(a, int) for a in args):
-            return fn.evaluate(*args)
-        return self.B.call(fn, *(self.c(t.w, a) if isinstance(a, int) else a for a, (_n, t) in zip(args, fn.params)))
-
 
 # ---- the pieces of a unit ------------------------------------------------------------------------------------------------
 
 def _chain(e: _Emit, a, b, sa, sb, k: int, acc=0):
     """The NVF4 atom chained from +0 over k, no promotion (`pearl_c4.chain`): k/64 steps in ascending k.  ``acc`` is the
-    accumulator it starts from: +0, or the carry of the k positions before ``a`` and ``b`` (`rowk`)."""
+    accumulator it starts from: +0, or the carry of the k positions before ``a`` and ``b`` (`pc4_rowk`)."""
     for s in range(k // ATOM):
         acc = e.call(BlackwellNvf4OmmaDot64, acc, a[ATOM * s:ATOM * (s + 1)], b[ATOM * s:ATOM * (s + 1)],
                      sa[4 * s:4 * (s + 1)], sb[4 * s:4 * (s + 1)])
@@ -156,12 +130,6 @@ def _stats(e: _Emit, x, k: int):
     dnf = e.call(BitAnd, e.call(I32Le, DNF_LOW, beta), e.call(I32Le, beta, F32_MAX))
     ok = e.call(BitAnd, e.call(I32Le, s, F32_MAX), dnf)
     return w, alpha, ae, ok
-
-
-def ok_word(e: _Emit, ok):
-    """The ok row's word of the admission bit ``ok`` (`leaves.OK`): a select between the constants 1 and 0, so bit 0 is
-    ``ok`` and bits 1-15 are zero in gates, never free bits of the committed row."""
-    return e.call(SelectBf16, ok, 1, 0)
 
 
 def _form(e: _Emit, w, alpha, ae, line, basis, k: int):
@@ -354,25 +322,20 @@ def templates(k: int, tile: tuple[int, int] = TILE, hidden: bool = False) -> dic
 
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
-class RowK:
-    """A tile check's `Shape` attribute (``ports``, ``derivations``) that is ``today`` on the class and on a shape without
-    ``row_k``, and with ``row_k`` set `rowk`'s attribute ``name``: the cut's roles and anchors.  So the class and every
-    shape without the cut read today's dicts, which `rowk` leaves alone."""
-
-    def __init__(self, today: dict, name: str) -> None:
-        self.today, self.name = today, name
+class _RowK4(RowK):
+    """`tile_units.RowK` with ``row_k`` set reading Pearl-C4's cut (`pc4_rowk`)."""
 
     def __get__(self, shape, cls=None) -> dict:
         if shape is None or shape.row_k is None:
             return self.today
-        from . import rowk
-        return getattr(rowk, self.name)
+        from . import pc4_rowk
+        return getattr(pc4_rowk, self.name)
 
 
 @dataclass(frozen=True)
 class Shape:
     """    M rows of A and N rows of B at depth k, cut into tiles of ``tile`` (rows of A, rows of B; the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs; ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's
+    ``hidden``, the hiding Programs; ``row_k``, each row unit cut into k / row_k segments (`pc4_rowk`; None, today's
     Programs).  `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
@@ -381,8 +344,8 @@ class Shape:
     tile: tuple[int, int] = TILE
     hidden: bool = False
     row_k: int | None = None
-    ports = RowK(PORTS, "PORTS4")
-    derivations = RowK(DERIVATIONS, "DERIVATIONS4")
+    ports = _RowK4(PORTS, "PORTS4")
+    derivations = _RowK4(DERIVATIONS, "DERIVATIONS4")
     seeds: ClassVar[dict] = SEEDS
 
     def check(self) -> None:
@@ -390,14 +353,14 @@ class Shape:
         if self.k % ATOM or min(self.m, self.k, self.n, tm, tn) <= 0 or self.m % tm or self.n % tn:
             raise DomainError(f"Pearl-C4's circuit needs 64 | k and whole tiles on each side: {self}")
         if self.row_k is not None:
-            from . import rowk
-            rowk.check4(self)
+            from . import pc4_rowk
+            pc4_rowk.check4(self)
 
 
 def _weight_units(B, k: int, b, eb, fa, fb, g, row_k: int | None = None):
     if row_k is not None:
-        from . import rowk
-        return rowk.rows4(B, k, row_k, "b", b, eb, fb, fa, g)
+        from . import pc4_rowk
+        return pc4_rowk.rows4(B, k, row_k, "b", b, eb, fb, fa, g)
     rows = B.batch(templates(k)["row_b"], b, eb, fb, fa, g, axes=(0, 0, None, None, None))
     n = len(b)
     return [array_of([rows[j][f] for j in range(n)]) for f in range(4)]
@@ -406,7 +369,7 @@ def _weight_units(B, k: int, b, eb, fa, fb, g, row_k: int | None = None):
 def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hidden: bool = False,
                 row_k: int | None = None):
     """The call's units: (C̃, U, ok), or under hiding (the tile digests by tile row and column, ok); with ``row_k``, each
-    A row's unit cut into `rowk`'s pieces."""
+    A row's unit cut into `pc4_rowk`'s pieces."""
     tm, tn = tile
     tp = templates(k, tile, hidden)
     m, n = len(a), len(bc)
@@ -414,8 +377,8 @@ def _call_units(B, k: int, tile: tuple[int, int], a, ea, fa, fb, bc, bs, pb, hid
         rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
         ac, as_, pa, ok = (array_of([rows[i][f] for i in range(m)]) for f in range(4))
     else:
-        from . import rowk
-        ac, as_, pa, ok = rowk.rows4(B, k, row_k, "a", a, ea, fa, fb)
+        from . import pc4_rowk
+        ac, as_, pa, ok = pc4_rowk.rows4(B, k, row_k, "a", a, ea, fa, fb)
     ms, ns = m // tm, n // tn
     blocks = lambda x, h, t: x.reshape(Array(h, Array(t, x.type.elem)))            # noqa: E731
     acs, ass, pas = blocks(ac, ms, tm), blocks(as_, ms, tm), blocks(pa, ms, tm)
@@ -477,8 +440,6 @@ Pc4CheckDef = CompositeDefinition(
 
 # ---- the hiding Programs: a tile's C̃ and U only as its tile digest --------------------------------------------------------
 
-DIGESTS = lambda S_: Array(S_.M // S_.TM, Array(S_.N // S_.TN, L.DIGEST))          # noqa: E731
-
 
 def _check_hidden_body(B, S_, a, ea, b, eb, fa, fb, g):
     bc, bs, pb, ok_b = _weight_units(B, S_.K, b, eb, fa, fb, g)
@@ -502,16 +463,16 @@ Pc4CheckHiddenDef = CompositeDefinition(
 def weight(shape: Shape) -> SpecializedDefinition:
     shape.check()
     if shape.row_k is not None:
-        from . import rowk
-        return rowk.root4(shape, "weight")
+        from . import pc4_rowk
+        return pc4_rowk.root4(shape, "weight")
     return bind(Pc4WeightDef, K=shape.k, N=shape.n)
 
 
 def call(shape: Shape) -> SpecializedDefinition:
     shape.check()
     if shape.row_k is not None:
-        from . import rowk
-        return rowk.root4(shape, "call")
+        from . import pc4_rowk
+        return pc4_rowk.root4(shape, "call")
     return bind(Pc4CallHiddenDef if shape.hidden else Pc4CallDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1])
 
@@ -519,83 +480,41 @@ def call(shape: Shape) -> SpecializedDefinition:
 def check(shape: Shape) -> SpecializedDefinition:
     shape.check()
     if shape.row_k is not None:
-        from . import rowk
-        return rowk.root4(shape, "check")
+        from . import pc4_rowk
+        return pc4_rowk.root4(shape, "check")
     return bind(Pc4CheckHiddenDef if shape.hidden else Pc4CheckDef, M=shape.m, K=shape.k, N=shape.n, TM=shape.tile[0],
                 TN=shape.tile[1])
 
 
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
-ROLES = {"weight": ("row_b",), "call": ("row_a", "tile"), "check": ("row_b", "row_a", "tile")}
 _ROLE_OF = {id(Pc4RowBDef): "row_b", id(Pc4RowADef): "row_a", id(Pc4TileDef): "tile", id(Pc4TileHiddenDef): "tile"}
 
 
 def _role_of() -> dict[int, str]:
-    from . import rowk
-    return _ROLE_OF | rowk.ROLE_OF
+    from . import pc4_rowk
+    return _ROLE_OF | pc4_rowk.ROLE_OF
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
     """`Q_template_instances` over the side's unit templates (`ROLES`, or with ``row_k`` `rowk.ROLES`), in the order its
     root body first uses them."""
     if shape.row_k is not None:
-        from . import rowk
-        return PO.template_instances_query(rowk.unit_templates4(shape, side))
+        from . import pc4_rowk
+        return PO.template_instances_query(pc4_rowk.unit_templates4(shape, side))
     tp = templates(shape.k, shape.tile, shape.hidden)
     return PO.template_instances_query([tp[r] for r in ROLES[side]])
 
 
-@dataclass(frozen=True)
-class ProofBlock:
-    index: int
-    role: str                   # a key of `templates`, or of `rowk.ROLES`
-    node: int                   # its root-body node
-    member: int                 # its member of that batch node
-    template: str = ""          # its template's descriptor id (`plan.template_strata`'s stratum)
-    where: tuple[int, ...] = field(default=())    # a row unit's row; a tile or tally unit's (tile row, tile column); a
-                                                  # word unit's (row, column); a `rowk` form's (row, segment)
-
-#: the roles whose units sit on a grid, one batch node per grid row (`cap`'s word, row and tally units beside the tile)
-GRID_ROLES = ("tile", "word", "row_digest", "row_tally", "tally")
-
-
 def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[ProofBlock, ...]:
-    """Every unit of a Program built from the unit templates, in the partition's numbering (node order, then member);
-    ``role_of`` maps each template's Definition (by id) to its role, Pearl-C4's by default."""
-    from . import rowk
-
-    role_of = _role_of() if role_of is None else role_of
-    out: list[ProofBlock] = []
-    grid_rows = dict.fromkeys(GRID_ROLES, 0)
-    for j, nd in enumerate(fn.body.nodes):
-        role, tid = role_of[id(nd.fn.defn)], descriptor_id(nd.fn)
-        for m in range(nd.n if nd.form == "batch" else 1):
-            where = (grid_rows[role], m) if role in grid_rows else (m, rowk.segment(nd.fn)) if role in rowk.FORMS else (m,)
-            out.append(ProofBlock(len(out), role, j, m, tid, where))
-        if role in grid_rows:
-            grid_rows[role] += 1
-    return tuple(out)
+    """Every unit of a Program built from the unit templates (`tile_units.units`); ``role_of`` maps each template's
+    Definition (by id) to its role, Pearl-C4's by default."""
+    return U.units(fn, _role_of() if role_of is None else role_of)
 
 
-def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[CallGraph, list[int], CutVerdict]:
-    """The whole Program's cut with each computing gate owned by its root node's member, checked by `cut.check_cut`
-    (every gate certified once, reads across units only through committed values, no value computed in two units), with no
-    width rule: no unit here reaches a served output."""
-    body, us = fn.body, units(fn, role_of)
-    first, at = [], 0
-    for nd in body.nodes:
-        first.append(at)
-        at += nd.n if nd.form == "batch" else 1
-    g = CallGraph(fn)
-    owner = []
-    for c in range(g.n):
-        j = g.keep[c]
-        node = bisect.bisect_right(body.offsets, j) - 1
-        nd = body.nodes[node]
-        owner.append(first[node] + ((j - body.offsets[node]) // nd.fn.gates if nd.form == "batch" else 0))
-    assert len(us) == at
-    return g, owner, check_cut(g, owner, limits=None)
+def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None):
+    """The whole Program's cut, checked by `cut.check_cut` (`tile_units.unit_cut`), Pearl-C4's roles by default."""
+    return U.unit_cut(fn, _role_of() if role_of is None else role_of)
 
 
 __all__ = ["ATOM", "BASIS", "BLOCK", "DERIVATIONS", "DIGESTS", "DNF_LOW", "F32_MAX", "GRAM", "GRID_ROLES", "LINE",
