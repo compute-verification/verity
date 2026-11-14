@@ -453,7 +453,7 @@ def main(argv=None) -> int:
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
     ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's or "
                                                    "network_certifier_serve.py's default if not given; 0: the proxy writes each "
-                                                   "bucket on its loop, and the warden, which always paces, refuses "
+                                                   "bucket on its loop, and the network certifier, which always paces, refuses "
                                                    "it)")
     ap.add_argument("--warden", action="store_true",
                     help="rehearse the network certifier (network_certifier_serve.py rehearse) instead of the proxy: --requests at --rate a "
@@ -463,11 +463,11 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
-    bits = SecretBits(a.out / "rehearsal", os.urandom(64), network_certifier=a.warden) if a.secret_bit else None
+    bits = SecretBits(a.out / "rehearsal", os.urandom(64), network_certifier=a.network_certifier) if a.secret_bit else None
     port = serve_endpoint(a.token_ms / 1000, bits)
     cpu_list = ",".join(map(str, cpus))
     paced = [] if a.paced_ms is None else ["--paced-ms", str(a.paced_ms)]
-    if a.warden:
+    if a.network_certifier:
         command = [sys.executable, str(ROOT / "benchmarks/network_traces/network_certifier_serve.py"), "rehearse",
                    "--upstream", f"127.0.0.1:{port}",
                    "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
@@ -490,9 +490,9 @@ def main(argv=None) -> int:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden}
-    run = a.out / "rehearsal" if a.warden else a.out / "rehearsal" / "honest"
-    if a.warden and (run / "warden.json").exists():
+           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.network_certifier}
+    run = a.out / "rehearsal" if a.network_certifier else a.out / "rehearsal" / "honest"
+    if a.network_certifier and (run / "warden.json").exists():
         doc |= {"rate": a.rate, "window": a.window} | network_certifier_summary(run)
     elif (run / "proxy.json.gz").exists():
         doc |= summary(run)
@@ -500,7 +500,7 @@ def main(argv=None) -> int:
     print(json.dumps({k: doc.get(k) for k in ("verdict", "refused_windows")} |
                      {g: {k: doc[g][k] for k in ("ticks", "p999_ms", "max_ms")} | {"past_slack": len(doc[g]["past_slack"])}
                       for g in ("egress", "ingress") if g in doc}), flush=True)
-    if bits is not None and a.warden and (run / "client.json").exists() and (run / "warden.json").exists():
+    if bits is not None and a.network_certifier and (run / "client.json").exists() and (run / "warden.json").exists():
         j = network_certifier_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
     elif bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
         j = jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}

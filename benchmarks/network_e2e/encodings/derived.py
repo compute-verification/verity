@@ -522,7 +522,7 @@ FIELDS = [
      "cost": "0: the tie addresses the certified request by index, with no id to compare"},
     {"field": "order (new)", "verdict": "derived; a step's sent sparse where the prediction misses",
      "bits": "0 / a count, and w_step + w_req a new request of each step sent (v0: none, the id says it)",
-     "from": "the certified admission order (the warden's public schedule), rows, n",
+     "from": "the certified admission order (the network certifier's public schedule), rows, n",
      "derivation": "FCFS admits a step's new requests from the waiting queue's head: the lowest ingress indices not yet "
      "admitted, in arrival order. I1 numbers them by first row: in scheduling order, arrival order; in batch order, Model "
      "Runner V2's stable sort of the step by scheduled tokens, so by n and, at equal n, by arrival",

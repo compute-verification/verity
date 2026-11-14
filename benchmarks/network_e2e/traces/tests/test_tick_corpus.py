@@ -270,11 +270,11 @@ def test_summary_keeps_a_tick_traces_releases_pool_and_gate(tmp_path, mod):
 def test_the_tick_takes_the_network_certifier_traces_but_not_the_hostile_ones_nor_a_network_certifier_bucket_off_tau(monkeypatch, mod):
     corpus = mod("corpus")
     tick = corpus.tick_for(["heavy", "warden-heavy", "warden-smallkv"], None, "2,3")
-    assert tick == corpus.tick_args(None, "2,3") and tick["bucket_us"] == corpus.WARDEN_SCHEDULE["bucket_ms"] * 1000
+    assert tick == corpus.tick_args(None, "2,3") and tick["bucket_us"] == corpus.NETWORK_CERTIFIER_SCHEDULE["bucket_ms"] * 1000
     for hostile in ("honest", "refuse-1"):
         with pytest.raises(SystemExit, match="hostile"):
             corpus.tick_for(["warden-heavy", hostile], None, "2,3")
-    monkeypatch.setitem(corpus.WARDEN_SCHEDULE, "bucket_ms", 50)
+    monkeypatch.setitem(corpus.NETWORK_CERTIFIER_SCHEDULE, "bucket_ms", 50)
     with pytest.raises(SystemExit, match=r"50 ms .* isn't τ_b, 100000 µs, so \['warden-smallkv'\]"):
         corpus.tick_for(["heavy", "warden-smallkv"], None, "2,3")
     assert corpus.tick_for(["heavy"], None, "2,3") == tick
@@ -309,7 +309,7 @@ def asgi(head: bytes) -> dict:
             "headers": [(k.strip().lower(), v.strip()) for k, _, v in (f.partition(b":") for f in fields)]}
 
 
-def test_the_servers_feed_reads_the_wardens_releases_and_watermark(tmp_path, monkeypatch, mod):
+def test_the_servers_feed_reads_the_network_certifiers_releases_and_watermark(tmp_path, monkeypatch, mod):
     corpus = mod("corpus")
     _, tp = corpus.tick_modules()
     monkeypatch.syspath_prepend(str(corpus.ROOT))
@@ -356,7 +356,7 @@ def network_certifier_trace(root, released: dict[int, tuple[int, int]], schedule
 
 def test_summary_takes_a_network_certifier_traces_releases_from_the_server_where_the_network_certifier_agrees(tmp_path, mod):
     summary = mod("summary")
-    network_certifier_trace(tmp_path, {1: (0, 0), 2: (1, 1)}, mod("corpus").WARDEN_SCHEDULE)
+    network_certifier_trace(tmp_path, {1: (0, 0), 2: (1, 1)}, mod("corpus").NETWORK_CERTIFIER_SCHEDULE)
     t = summary.summarize(tmp_path)["traces"]["warden-heavy"]
     assert t["tick"]["releases"] == {"from": "the server's feed (raw/tick-feed.jsonl)", "run": RUN, "released": 2,
                                      "agree": 2, "unlogged": 0, "disagree": 0, "disagreeing": []}
@@ -369,7 +369,7 @@ def test_summary_takes_a_network_certifier_traces_releases_from_the_server_where
 
 
 def test_summary_leaves_out_a_release_the_network_certifier_didnt_make(tmp_path, mod):
-    summary, schedule = mod("summary"), mod("corpus").WARDEN_SCHEDULE
+    summary, schedule = mod("summary"), mod("corpus").NETWORK_CERTIFIER_SCHEDULE
     d = network_certifier_trace(tmp_path, {1: (0, 0), 2: (1, 2)}, schedule)
     r = summary.summarize(tmp_path)["traces"]["warden-heavy"]["tick"]["releases"]
     assert (r["agree"], r["disagree"], r["disagreeing"]) == (1, 1, [{"id": "b", "server": [RUN, 1, 1], "warden": [RUN, 1, 2]}])

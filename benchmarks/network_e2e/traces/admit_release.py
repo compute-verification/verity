@@ -272,11 +272,11 @@ def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
     if w:
         tau, o, D = w["params"]["bucket_ms"] / 1000, float(w["origin_unix"]), int(w["params"]["delay"])
         if not str(w.get("egress_base", "")).startswith("release"):
-            raise ValueError(f"{d}: the warden's egress counts from {w.get('egress_base')!r}, not the release")
+            raise ValueError(f"{d}: the network certifier's egress counts from {w.get('egress_base')!r}, not the release")
         a = [int(reqs[i]["warden"]["released"]) for i in ids]
         return Release(o, tau, a, [int(reqs[i]["warden"]["ordinal"]) for i in ids],
                        [float(reqs[i]["engine_add_unix"]) for i in ids],
-                       f"the warden's release bucket and ordinal ({w['egress_base']}); ready = the engine's add",
+                       f"the network certifier's release bucket and ordinal ({w['egress_base']}); ready = the engine's add",
                        [o + (b + D) * tau for b in a])
     tau = 0.1
     sends = {i: float(reqs[i]["send_unix"]) for i in ids}
@@ -284,7 +284,7 @@ def release_of(d: Path, ids: list[str], add_lag_s: float) -> Release:
     rank = {i: k for k, i in enumerate(sorted(ids, key=lambda i: (sends[i], i)))}
     return Release(g0, tau, [math.floor((sends[i] - g0) / tau + 1e-9) for i in ids], [rank[i] for i in ids],
                    [float(reqs[i]["arrival"]) + add_lag_s for i in ids],
-                   f"no warden: the client's send bucket and send order; ready = the frontend's arrival + {add_lag_s * 1000:g} ms, "
+                   f"no network certifier: the client's send bucket and send order; ready = the frontend's arrival + {add_lag_s * 1000:g} ms, "
                    "kept after the last open step that passed it over and before its first scheduling")
 
 
@@ -458,12 +458,12 @@ def markdown(results: list[dict[str, Any]]) -> str:
                        f"{fmt(t['p50'])} / {fmt(t['p95'])} / {fmt(t['p99'])} / {fmt(t['max'])} | {fmt(w['tok_per_s_base'], 0)} -> "
                        f"{fmt(w['tok_per_s_cf'], 0)} | {fmt(w['tok_per_s_change_pct'], 2)}% |")
     out += ["", ("| trace | TTFT from the engine's add, base p50 / p95 / max (ms) | frontend not ready at the boundary "
-            "| held behind an earlier release (hold) | first token to the warden's first egress cell, min base -> hold "
+            "| held behind an earlier release (hold) | first token to the network certifier's first egress cell, min base -> hold "
             "-> aligned (ms) |"), "|---|---|---|---|---|"]
     for r in results:
         b, h, al = r["base"], r["variants"]["hold"], r["variants"]["aligned"]
         t = b["ttft_from_add_ms"]
-        margin = "- (no warden)" if b["egress_margin_ms"] is None else (
+        margin = "- (no network certifier)" if b["egress_margin_ms"] is None else (
             f"{fmt(b['egress_margin_ms']['min'])} -> {fmt(h['egress_margin_ms']['min'])} -> {fmt(al['egress_margin_ms']['min'])}")
         out.append(f"| {r['trace']} | {fmt(t['p50'])} / {fmt(t['p95'])} / {fmt(t['max'])} | {h['frontend_late_for_boundary']} "
                    f"| {h['held_behind_earlier_release']} | {margin} |")
@@ -492,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("traces", nargs="+", help="NAME=TRACE_DIR[:ORDER_DIR]")
     ap.add_argument("--replay", type=Path, default=REPLAY, help="the scheduler replay, replay.py")
-    ap.add_argument("--add-lag-ms", action="append", default=[], help="NAME=MS: a trace without a warden's frontend-to-engine lag")
+    ap.add_argument("--add-lag-ms", action="append", default=[], help="NAME=MS: a trace without a network certifier's frontend-to-engine lag")
     ap.add_argument("--residual", action="store_true",
                     help="also the replay's order bits and residual advice on each simulated run (`replay.table`)")
     ap.add_argument("--out", type=Path, required=True)

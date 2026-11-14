@@ -77,7 +77,7 @@ def statement(m: dict, tmp: Path, *, ports: dict | None = None, header: tuple[st
 
 @pytest.fixture(scope="module")
 def at(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("warden-zk")
+    tmp = tmp_path_factory.mktemp("network-certifier-zk")
     out, key = tmp / "run", tmp / "key"
     out.mkdir()
     requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
@@ -174,7 +174,7 @@ def reads_of(m: dict) -> dict:
 def staged(at, tmp_path_factory):
     """The sender's, receiver's and altered's statements, staged as `network_certifier_zk.prove` stages them."""
     M = wz._statement()
-    sg = wz.stager(M, WR.row_bytes(tws.PARAMS), UNITS, tmp_path_factory.mktemp("warden-zk-stager"))
+    sg = wz.stager(M, WR.row_bytes(tws.PARAMS), UNITS, tmp_path_factory.mktemp("network-certifier-zk-stager"))
     return sg, {name: wz.stage(M, sg, at, name) for name in ("sender", "receiver", "altered")}
 
 

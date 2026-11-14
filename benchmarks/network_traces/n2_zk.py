@@ -603,8 +603,8 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    network_certifier = a.warden_run is not None
-    run = Path(a.warden_run if network_certifier else a.run)
+    network_certifier = a.network_certifier_run is not None
+    run = Path(a.network_certifier_run if network_certifier else a.run)
     summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
                      "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
@@ -623,9 +623,9 @@ def prove(a) -> int:
                   "the auditor's challenger's"}})
     if network_certifier:
         summary["warden_run"] = members["honest"].plan["warden_run"]
-        summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
+        summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the "
                                       "link's charge is 0",
-                             "counts": "the warden's schedule's (service.NetworkCertifierProfile), not a profile's"}
+                             "counts": "the network certifier's schedule's (service.NetworkCertifierProfile), not a profile's"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
@@ -746,8 +746,8 @@ def main(argv=None) -> int:
         return 0
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
-    if a.warden_run is not None and (a.extra or a.late):
-        raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
+    if a.network_certifier_run is not None and (a.extra or a.late):
+        raise SystemExit("--extra and --late are certifier-serve's runs: a network certifier run's members are honest and "
                          "tampered")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")

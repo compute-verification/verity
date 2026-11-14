@@ -25,7 +25,7 @@
 # releases the rest (exit 3 when it found one). A signal, a guard past its budget or one that fails releases nothing:
 # the outputs stay in the hold, out of the record, and the job fails. PY is the guard's interpreter (python3).
 #
-# 1700 requests, the gate's most (`auditor.WARDEN_REQUESTS`), on the gate's most prompts, 400 (`WARDEN_PROMPTS`; request
+# 1700 requests, the gate's most (`auditor.NETWORK_CERTIFIER_REQUESTS`), on the gate's most prompts, 400 (`NETWORK_CERTIFIER_PROMPTS`; request
 # j sends the (j mod n)-th), are 1064 execution phases at its fixed seed (`network_certifier_serve.prompt_traffic`): 3404.8 s from
 # the session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures an execution
 # phase they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700

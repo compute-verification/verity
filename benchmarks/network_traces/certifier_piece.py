@@ -506,8 +506,8 @@ class Rejected(Exception):
 def kept_run(serve_dir: Path) -> str:
     runs = sorted(p.parent.name for p in (serve_dir / PRIVATE).glob("*/fetch.tar.gz"))
     if len(runs) != 1:
-        raise NotRun(f"{len(runs)} warden runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
-                        "load goes through the warden only with CERTIFIER_FRONT")
+        raise NotRun(f"{len(runs)} network certifier runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
+                        "load goes through the network certifier only with CERTIFIER_FRONT")
     return runs[0]
 
 
@@ -533,7 +533,7 @@ def placement(serve_dir: Path, run: str) -> dict:
                       f"prover's {node}, but the chain's checks and draws, the period check and their proofs' coins "
                       f"ran on {node}, and no device of the auditor's is on {node}'s links"),
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                       "via": "the warden's tunnel to the endpoint's port"},
+                       "via": "the network certifier's tunnel to the endpoint's port"},
                       {"name": "gate", "from": node, "to": host, "counted": False,
                        "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
             "uncounted": f"every link of {node}'s but the certified one"}
@@ -559,7 +559,7 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
                None)
     if run is None:
         rm(d)
-        raise NotRun(f"{fetch}: no warden run (a certified.jsonl) in the fetch")
+        raise NotRun(f"{fetch}: no network certifier run (a certified.jsonl) in the fetch")
     return d, run
 
 
@@ -580,13 +580,13 @@ def rehearsed(run: Path) -> None:
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
     """Each window request's certified record by its user; Rejected when one isn't the network certifier's."""
     if not io["accepted"]:
-        raise Rejected(f"the warden's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Rejected(f"the network certifier's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}
     for r in reqs:
         c = by.get(r.get("user"))
         if c is None:
             raise Rejected(f"window request {r.get('engine_id')}'s user {r.get('user')!r} is no certified request: "
-                           "the window served traffic the warden didn't see")
+                           "the window served traffic the network certifier didn't see")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
                 raise Rejected(f"window request {r.get('engine_id')}'s {key} aren't the certified {theirs}")
@@ -784,7 +784,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             io = WC.io(network_certifier)
             dep, params = WC.deployment(network_certifier)
         except SystemExit as e:
-            raise Rejected(f"the kept warden run: {e}") from None
+            raise Rejected(f"the kept network certifier run: {e}") from None
         T = params.window
         certified = bind(reqs, io)
         out = keep / run / "chain" / "out"
@@ -950,7 +950,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         case.unlink(missing_ok=True)
         close_open(serve_dir)
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
-            raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
+            raise NotRun(f"no network certifier run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
         (serve_dir / PRIVATE / "held").mkdir(mode=0o700, exist_ok=True)
         hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{window}-"))

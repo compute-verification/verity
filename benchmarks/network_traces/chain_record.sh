@@ -24,7 +24,7 @@
 # CR_PATH=warden is the network certifier path: every step reads the active network certifier's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
 # --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the network certifier's
-# cells), n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
+# cells), n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.NETWORK_CERTIFIER).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
@@ -138,20 +138,20 @@ for g in ${CR_GATES:?CR_GATES: the gate tarballs, art: ids or directories}; do
 done
 if [ "${CR_PATH:-}" = warden ]; then
   PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
-  [ -z "$PROXY" ] || { log "chain: the warden path reads no certifier rehearsal's run (its records through" \
+  [ -z "$PROXY" ] || { log "chain: the network certifier path reads no certifier rehearsal's run (its records through" \
     "active.Proxy), and ${PROXY#$G/} is one's"; exit 3; }
-  if [ -n "${CR_WARDEN_RUN:-}" ]; then WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
-  else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
-  [ -n "$WARDEN" ] || { log "chain: the warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
+  if [ -n "${CR_WARDEN_RUN:-}" ]; then NETWORK_CERTIFIER=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
+  else NETWORK_CERTIFIER=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); NETWORK_CERTIFIER=${NETWORK_CERTIFIER%/witness}; fi
+  [ -n "$NETWORK_CERTIFIER" ] || { log "chain: the network certifier path: no network certifier run (a certified.jsonl) in $CR_GATES"; exit 3; }
   HONEST= CLIENT= PROFILE=
-  log "chain: the warden path, warden run ${WARDEN#$G/}"
+  log "chain: the network certifier path, network certifier run ${NETWORK_CERTIFIER#$G/}"
 else
   HONEST=$(find "$G" -path '*/out/honest/plan.json' -print -quit); HONEST=${HONEST%/plan.json}
   [ -n "$HONEST" ] || { log "chain: no certifier rehearsal (out/honest/plan.json) in $CR_GATES"; exit 3; }
   if [ -n "${CR_CLIENT:-}" ]; then CLIENT=$(find "$G" -path "*$CR_CLIENT" -print -quit)
   else CLIENT=$HONEST/client; [ -d "$CLIENT" ] || CLIENT=$HONEST; fi
-  WARDEN=; [ -z "${CR_WARDEN_RUN:-}" ] || WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
-  log "chain: certifier run ${HONEST#$G/}, client ${CLIENT#$G/}, warden run ${WARDEN:-none}"
+  NETWORK_CERTIFIER=; [ -z "${CR_WARDEN_RUN:-}" ] || NETWORK_CERTIFIER=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
+  log "chain: certifier run ${HONEST#$G/}, client ${CLIENT#$G/}, network certifier run ${NETWORK_CERTIFIER:-none}"
 fi
 mkdir -p "$OUT/gates"
 (cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
@@ -164,7 +164,7 @@ export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/ver
 [ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-period
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 if [ "${CR_PATH:-}" = warden ]; then
-  "$PY" "$CR" certs --warden-run "$WARDEN" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
+  "$PY" "$CR" certs --warden-run "$NETWORK_CERTIFIER" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
     | tee -a "$OUT/job.log" | cut -c1-2000
 else
   "$PY" "$CR" certs --run "$HONEST" --client "$CLIENT" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
@@ -182,10 +182,10 @@ if [ -n "${CR_ENDPOINT:-}" ] && [ "${CR_PATH:-}" = warden ]; then
     log "chain: endpoint report ${REP#$W/endpoint/} ($CR_ENDPOINT), the served node's (served_session.py endpoint)"
     cp "$REP" "$OUT/endpoint/report.json"
   else
-    [ -n "${CR_EOS_IDS:-}" ] || { log "chain: the warden path's endpoint step needs CR_EOS_IDS, the model's EOS" \
+    [ -n "${CR_EOS_IDS:-}" ] || { log "chain: the network certifier path's endpoint step needs CR_EOS_IDS, the model's EOS" \
       "token ids (128001 for Llama-3.2-1B)"; exit 3; }
-    log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to the certified I/O off ${WARDEN#$G/}'s cells"
-    "$PY" "$CR" endpoint --warden-run "$WARDEN" --endpoint "${EP:-$W/endpoint}" --eos "$CR_EOS_IDS" \
+    log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to the certified I/O off ${NETWORK_CERTIFIER#$G/}'s cells"
+    "$PY" "$CR" endpoint --warden-run "$NETWORK_CERTIFIER" --endpoint "${EP:-$W/endpoint}" --eos "$CR_EOS_IDS" \
       --out "$OUT/endpoint/report.json" > "$OUT/endpoint.log" 2>&1
     log "chain: endpoint done, rc $?"
     cp "${EP:-$W/endpoint}/advice.log" "$OUT/endpoint/" 2>/dev/null
@@ -216,7 +216,7 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
-  elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $WARDEN \
+  elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $NETWORK_CERTIFIER \
     --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
     --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
@@ -230,29 +230,29 @@ n2() {
   [ "$(cat "$W/n2.rc")" = 0 ] || tail -n 1 "$OUT/n2.log" | cut -c1-600 > "$W/n2.why"
 }
 scan() {
-  export WARDEN BIN LEAN SCANOUT=$W/scan
+  export NETWORK_CERTIFIER BIN LEAN SCANOUT=$W/scan
   if [ "${CR_PATH:-}" = certifier-only ]; then
-    echo "the certifier-only path: no warden rows to scan, so no scan" > "$W/scan.why"; echo 2 > "$W/scan.rc"
+    echo "the certifier-only path: no network certifier rows to scan, so no scan" > "$W/scan.why"; echo 2 > "$W/scan.rc"
     log "chain: scan not run (CR_PATH=certifier-only)"; return
   fi
   local wr=
-  if [ -n "$WARDEN" ]; then
-    if "$PY" benchmarks/network_traces/scan_zk.py prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
+  if [ -n "$NETWORK_CERTIFIER" ]; then
+    if "$PY" benchmarks/network_traces/scan_zk.py prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $NETWORK_CERTIFIER"
     else log "chain: scan_zk takes no --warden-run in this tree, so the scan proves its own run"; fi
   fi
-  log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
+  log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic network certifier run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
   else "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
-  [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.network_certifier"
+  [ -n "$wr" ] && echo "$NETWORK_CERTIFIER" > "$W/scan.network_certifier"
 }
 tie() {
   [ "${CR_PATH:-}" = warden ] || return 0
   local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
-    "$(find "$WARDEN" -name deployment.json -print -quit)")}
-  local cmd="$PY benchmarks/network_traces/n2_tie_zk.py prove --class warden --warden-run $WARDEN --windows $k \
+    "$(find "$NETWORK_CERTIFIER" -name deployment.json -print -quit)")}
+  local cmd="$PY benchmarks/network_traces/n2_tie_zk.py prove --class warden --warden-run $NETWORK_CERTIFIER --windows $k \
     --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1

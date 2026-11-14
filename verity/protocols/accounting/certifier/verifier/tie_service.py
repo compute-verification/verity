@@ -109,14 +109,14 @@ PUBLIC = (
     S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
     S.Public("window", "structure", "provenance: the ingress link-window's index, held to the registration's order"),
     S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L·R cells each"),
-    S.Public(f"domain:{VALUE}", "structure", "the warden's domain (`network_certifier_rows.domain`), which binds the session, the "
+    S.Public(f"domain:{VALUE}", "structure", "the network certifier's domain (`network_certifier_rows.domain`), which binds the session, the "
              "link, ingress and the window"),
-    S.Public(VALUE, "commitment", "the warden's salted root over the window's bucket rows, its signed head's"),
-    S.Public("shape", "structure", "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a "
+    S.Public(VALUE, "commitment", "the network certifier's salted root over the window's bucket rows, its signed head's"),
+    S.Public("shape", "structure", "B, L, R and T: the cells' bytes, the network certifier's lanes, its r and its buckets a "
              "window, fixed before the run"),
     S.Public("verdict", "output", "the window's IoTieRequest verdict, every bucket row's, accept or reject"),
     S.Public("advice", "output", "the advice the window's statement is computed from (`digest`): its v0 "
-             "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public "
+             "prompt lengths and the network certifier's release give each bucket's lanes (`io_request.lanes`), a unit's public "
              "row in the named gap; `IngressTie.tie` holds every window to one advice"),
 )
 
@@ -143,8 +143,8 @@ def _unit(check) -> CompositeDefinition:
 
     return CompositeDefinition(
         "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
-        doc="the proof block of the ingress tie: one bucket row of the warden's ingress link-window, its "
-            "`io_request.IoTieRequest` on the row the registered read holds to the warden's root and the verifier's "
+        doc="the proof block of the ingress tie: one bucket row of the network certifier's ingress link-window, its "
+            "`io_request.IoTieRequest` on the row the registered read holds to the network certifier's root and the verifier's "
             "lanes")
 
 
@@ -315,7 +315,7 @@ class IngressTie:
     def __post_init__(self) -> None:
         if type(self.params) is not NetworkCertifierParams or not (isinstance(self.link, str) and self.link) or \
                 type(self.session) is not bytes:
-            raise ValueError("an ingress tie is on a named link, of a warden.NetworkCertifierParams and a session")
+            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkCertifierParams and a session")
         Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
 
     @property
@@ -391,7 +391,7 @@ class IngressTie:
                 (head.parameters, head.cell_bytes, head.slots, head.rows) != \
                 (p.digest, p.cell_bytes, p.grid.allocation, self.T) or \
                 head.domain != self.domain(head.window).domain_id:
-            raise ValueError("the head isn't the warden's of this link's ingress rows under this schedule and session")
+            raise ValueError("the head isn't the network certifier's of this link's ingress rows under this schedule and session")
 
     # the challenger
 
