@@ -97,6 +97,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`sample_link_first`).
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
+* `period_windows`: a lane's sessions of a monitoring period as the auditor's ledger opens them, and which of them
+  are sampled proofs' windows (`Period.read`, `Period.windowsIn`).
+* `period_asked`, `period_check`, `period_check_stub`: what the period's check asks one-stage v2 at a case
+  (`Period.paramsAt`, `Period.evidenceAt`), the period's check's answer on a ledger and its evidence
+  (`Period.checkBlobs`), and that answer with a stand-in for one-stage v2 that accepts when told to
+  (`Period.checkWith`, `Period.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
@@ -135,6 +141,8 @@ public import Spot.ChallengerSession
 public import Spot.ChallengerCoins
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
+public import Spot.Period
+public import Spot.PeriodAudit
 public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
@@ -1012,7 +1020,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
-   ("challenger_inner_trees", Challenger.innerTreesPiece),
+   ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", Period.windowsPiece),
+   ("period_asked", Period.askedPiece), ("period_check", Period.checkPiece),
+   ("period_check_stub", Period.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
    ("public_units", PublicUnits.piece),

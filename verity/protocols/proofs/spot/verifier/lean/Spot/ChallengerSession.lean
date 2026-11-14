@@ -715,7 +715,11 @@ structure Audited where
 /-- `audited_session` (module docstring): the one challenger session the auditor's ledger `ledger` (its lines, `null`
 when the verifier has none) opens under v2 for `window` (`{root}`) under the window's pinned key `key`, and ends closed,
 its end naming its record's leaf, its commitment and its refused hellos and sealing `SEALED_FILES`, in a period, if any,
-that committed its cap and circuit; and the body of the window's open (`_audited`). -/
+that committed its cap and circuit; and the body of the window's open (`_audited`).
+
+`auditedIn` holds the lines after the ledger's check a second time, for a check that reads many windows of one ledger.
+Statements read this definition and their records hold its term, so it is not restated through `auditedIn`:
+`auditedOpen_eq_auditedIn` holds the two to each other, and stops building when one is edited alone. -/
 def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Json) := do
   unless isRun window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
   let (wins, periods) ← checked ledger key
@@ -743,6 +747,47 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
             commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
             period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
             circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+
+/-- `auditedOpen` on a ledger already checked: the one session among its windows `wins` that opens `window` (`{root}`)
+under v2 and ends closed, its end naming its record's leaf, its commitment and its refused hellos and sealing
+`SEALED_FILES`, in a period of `periods`, if any, that committed its cap and circuit; and the body of the window's
+open. A check of many windows of one ledger checks the ledger once (`checked`) and reads each window here.
+
+These are `auditedOpen`'s lines after its ledger's check, written a second time: `auditedOpen` is left the term the
+statements that read it record, and `auditedOpen_eq_auditedIn` holds the two to each other. -/
+def auditedIn (wins : Array Win) (periods : Array MonitoringPeriod) (window : Json) : V (Audited × Json) := do
+  let root := strOf (getD window "root")
+  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
+  let o := w.opened
+  let s := o.session
+  unless o.schema == LEDGER_SCHEMA do
+    throw s!"the auditor's ledger opens this window's session {s} under {o.schema}, which names no prover and seals no refused hellos"
+  let some e := w.ended
+    | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
+  let b := e.body
+  unless jsonTrue (getD b "closed") do
+    throw s!"the auditor's ledger ends session {s} unclosed: its client didn't close it"
+  let files := getD b "files"
+  let malformed := s!"the auditor's ledger's end of session {s} is malformed: {END_FORM}"
+  let some recordLeaf := nat? (getD b "record_leaf") | throw malformed
+  let some refusedHellos := nat? (getD b "refused_hellos") | throw malformed
+  unless isDigest (getD b "commitment") && SEALED_FILES.all (fun f => (field? files f).isSome) do throw malformed
+  let p := periods.find? (·.windows.contains s)
+  if let some p := p then
+    if p.cap == Json.null || p.circuit == Json.null then
+      throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
+  return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
+            commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
+            period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
+            circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+
+/-- `auditedOpen` is the ledger's check, then `auditedIn` on what it returns. The two definitions hold the same lines,
+and this stops building when one of them is edited alone. -/
+theorem auditedOpen_eq_auditedIn (ledger window : Json) (key : ChallengerKey) :
+    auditedOpen ledger window key = (do
+      unless isRun window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
+      let (wins, periods) ← checked ledger key
+      auditedIn wins periods window) := rfl
 
 /-- `audited_session` (module docstring): `auditedOpen`'s session. -/
 def auditedChallengePhase (ledger window : Json) (key : ChallengerKey) : V Audited :=

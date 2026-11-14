@@ -197,7 +197,15 @@ $$\Pr[\exists t,\ \text{sampling block } t \text{ accepted} \wedge K_{0,t} \le \
   \sum_t \left(\frac{\binom{n_t-K_{0,t}}{kd_t}}{\binom{n_t}{kd_t}} + \varepsilon_{ks,t} + \delta_{link,t}\right).$$
 Its named assumptions, at every sampling block: A3 (`Assumptions.UniformRandomBytes`) for the sampling block's sample
 bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`),
-`EndToEndHidden`'s hypotheses, at every strategy a sampling block is played with on some run (`Period.Plays`). -/
+`EndToEndHidden`'s hypotheses, at every strategy a sampling block is played with on some run (`Period.Plays`).
+
+**Every committed window is presented.** The statement, like the two below it, is of every sampling block of the
+period's run, so a record is held to it only where the record presents every one. That each root a lane committed
+in a monitoring period under this registration is presented, once, with its one accepted audit, is stated of the
+accept of SPOT's period check, over the auditor's ledger (`Properties.Spot.Period.CommittedOnce`, with
+`Properties.Spot.Period.AcceptMeans` for the audit); a root the lane committed under another circuit is published
+by that circuit and not audited (`Properties.Spot.Period.OthersElsewhere`). No statement here reads them, and a
+reader who holds a record to this one takes them beside it. -/
 def IntegrityPeriod : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
