@@ -47,6 +47,6 @@ inputs = [
     "verity/protocol.py",
     "verity/protocols/accounting/certifier",
     "verity/protocols/proofs/spot",
-    "benchmarks/rho/data/reference.toml",
-    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/slowdown/data/reference.toml",
+    "benchmarks/slowdown/data/hardware.toml",
 ]

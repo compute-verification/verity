@@ -23,8 +23,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/commitments/windows",  # inputs.cap reads C-Flock's composer's sizes (verity.commitments.windows.interface)
           # recursion.py's and served_window.py's datacenter (the census) and world fleet (rho's reference, its
           # locations' GPUs), and served_window.py's output cap (rho's reference)
-          "benchmarks/census/deployments.json", "benchmarks/rho/data/reference.toml",
-          "benchmarks/rho/data/hardware.toml",
+          "benchmarks/census/deployments.json", "benchmarks/slowdown/data/reference.toml",
+          "benchmarks/slowdown/data/hardware.toml",
           # glm53.py's stop class reads its two blocks' Definitions and their pins: the stop rule's Boolean lowering
           # (verity.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
           # (verity.protocols.accounting.certifier.prover, which loads the certifier's verifier)
