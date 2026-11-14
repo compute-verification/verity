@@ -2455,6 +2455,14 @@
     },
     {
       "paths": {
+        "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
+        "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
+        "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
+        "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/torch_gpu/sha512_rows/engine.py": "verity/commitments/cuda/sha512_rows/engine.py",
         "benchmarks/torch_gpu/sha512_rows/rows.cu": "verity/commitments/cuda/sha512_rows/rows.cu",
         "benchmarks/torch_gpu/sha512_rows/rows.cuh": "verity/commitments/cuda/sha512_rows/rows.cuh",

@@ -1,4 +1,4 @@
-# H1's QK^T with S never stored, a MMA as measured: hm_l7qs (benchmarks/pouw/edited_gemm/fattn.cu), h_l7qs's mainloop,
+# H1's QK^T with S never stored, a MMA as measured: hm_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn.cu), h_l7qs's mainloop,
 # cohalf tail and duo receipts op for op (gated equal to h_l7qs's receipts on every tile) on the causal tiles of
 # Llama-3.1-8B's attention at 2,048 tokens (32 query heads, 8 KV heads), with each query column's max over its keys
 # (3 shuffles and an atomicMax a column) in place of O's store. Counts are the kernel's executed mix (ncu) a MMA, 6 MMAs
@@ -6,7 +6,7 @@
 # bound (eps_sched 0.44, h_l7qs's 0.78): 0.1090 ms here, and 1.4792 ms at 8,192 tokens at 45.3714 cycles a MMA.
 name = "fattn-hm-l7qs"
 status = "measured"
-source = "BC-KERNEL's hm_l7qs (benchmarks/pouw/edited_gemm/fattn.cu) at s = 2048, H = 32, rep = 4, causal, `eps_profile.py OUT --toml`, census VF3n-16's classes (receipts equal to h_l7qs's, P_prob, s_q, z_q, apv_fu's f and receipts equal to the unfused composition's, fattn_ref.py on the CPU)"
+source = "BC-KERNEL's hm_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn.cu) at s = 2048, H = 32, rep = 4, causal, `eps_profile.py OUT --toml`, census VF3n-16's classes (receipts equal to h_l7qs's, P_prob, s_q, z_q, apv_fu's f and receipts equal to the unfused composition's, fattn_ref.py on the CPU)"
 L = 32
 
 [mma]
