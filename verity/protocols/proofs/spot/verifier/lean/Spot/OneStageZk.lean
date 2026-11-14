@@ -58,7 +58,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
   accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
-  statement's check does (`checkMembersAt_accept`). `protocol` reads either form (`paramsEitherOfJson`,
+  statement's check does (`checkMembersAt_accept`). v1's check reads the members there
+  (`membersParamsOfJson_linked`), so its registration check refuses a registration under which a member's sampled
+  proof blocks give two counts of link points (`link-points`). `protocol` reads either form (`paramsEitherOfJson`,
   `evidenceEitherOf`): `proofs` of the one statement's keys is read by `paramsOfJson` and `evidenceOf`, whose
   parameters name no members (`paramsOfJson_members`) and whose evidence names no statements
   (`evidenceOf_statements`), and `proofs` of the form's keys by the form's own parsers (`membersParamsOfJson`,
@@ -654,9 +656,12 @@ theorem evidenceOf_statements {b : ByteArray} {e : Evidence} (h : evidenceOf b =
   subst h
   rfl
 
-/-- **The per-member form's parameters name members**: whatever `membersParamsOfJson` returns names some. -/
-theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOfJson j = .ok p) :
-    ∃ ms, p.members = some ms := by
+/-- **The per-member form's parameters name members and hand them to the registration's check**: whatever
+`membersParamsOfJson` returns names some, and the members its v1 part's verifier holds
+(`Registration.Verifier.members`, which `link-points` reads) are those, each its units and its circuit's units a proof
+block. -/
+theorem membersParamsOfJson_linked {j : Json} {p : Params} (h : membersParamsOfJson j = .ok p) :
+    ∃ ms : Array Member, p.members = some ms ∧ p.base.verifier.members = ms.map fun m => (m.units, m.g) := by
   unfold membersParamsOfJson at h
   split at h
   · obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
@@ -665,14 +670,22 @@ theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOf
     try dsimp only at h
     obtain ⟨ms, -, h⟩ := Flock.HmNets.bind_ok h
     cases h
-    exact ⟨ms, rfl⟩
+    exact ⟨ms, rfl, rfl⟩
   · cases h
+
+/-- **The per-member form's parameters name members**: whatever `membersParamsOfJson` returns names some. -/
+theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOfJson j = .ok p) :
+    ∃ ms, p.members = some ms :=
+  let ⟨ms, hm, _⟩ := membersParamsOfJson_linked h
+  ⟨ms, hm⟩
 
 /-- **Parameters of either form are parsed parameters but for the files and the members**: their v1 part is that of
 parameters `paramsParsed` returned, the one statement's own (`paramsOfJson_parsed`) or the per-member form's, read at
-`proofs` of no file. -/
+`proofs` of no file, but for the members its registration's check reads (`Registration.Verifier.members`), which the
+per-member form's parse hands it (`membersParamsOfJson_linked`). -/
 theorem paramsEitherOfJson_base {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) :
-    ∃ j' p', paramsParsed j' = .ok p' ∧ p.base = p'.base := by
+    ∃ j' p' ms, paramsParsed j' = .ok p' ∧
+      p.base = { p'.base with verifier := { p'.base.verifier with members := ms } } := by
   unfold paramsEitherOfJson at h
   split at h
   · unfold membersParamsOfJson at h
@@ -683,9 +696,9 @@ theorem paramsEitherOfJson_base {j : Json} {p : Params} (h : paramsEitherOfJson 
       try dsimp only at h
       obtain ⟨ms, -, h⟩ := Flock.HmNets.bind_ok h
       cases h
-      exact ⟨_, p0, hp0, rfl⟩
+      exact ⟨_, p0, _, hp0, rfl⟩
     · cases h
-  · exact ⟨j, p, paramsOfJson_parsed h, rfl⟩
+  · exact ⟨j, p, p.base.verifier.members, paramsOfJson_parsed h, rfl⟩
 
 /-- **Parameters of either form that name no members are the one statement's**: `paramsOfJson` returned them. -/
 theorem paramsEitherOfJson_one {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) (hm : p.members = none) :

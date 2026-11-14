@@ -751,14 +751,18 @@ private def NO_FILE : String := "".pushn '0' 128
 /-- **The per-member form's parameters**: `proofs` exactly `{"members"}` (`membersOf`, on the program and the
 partition every member's statement reads), and everything else as the one statement's parameters hold it
 (`paramsParsed`, read at `proofs` of no file, so under any sampling design v1 parses and not the one statement's `subset` alone):
-`own` is that program and partition, with no file. -/
+`own` is that program and partition, with no file. The registration's check reads the members, each its units and its
+circuit's units a proof block (`Registration.Verifier.members`), so v1's check refuses a registration under which a
+member's sampled proof blocks give two counts of link points (`link-points`, `Registration.linkRefused`). -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
   exactly pr #["members"] "proofs"
   let one := Json.mkObj [("circuit", Json.str NO_FILE), ("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with circuit := "", pub := "" }
-  pure { p with own, members := some (← membersOf own (getD pr "members")) }
+  let ms ← membersOf own (getD pr "members")
+  pure { p with base := { p.base with verifier := { p.base.verifier with members := ms.map fun m => (m.units, m.g) } },
+                own, members := some ms }
 
 /-- **The parameters in either form**: the per-member form's where `proofs` is exactly `{"members"}`, else the one
 statement's. `protocol` reads its parameters by it. -/
