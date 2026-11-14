@@ -31,20 +31,19 @@ PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
 #: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
 NAMED = SECURITY[1:]
-#: lean-suites' parts: its suites, the composition and PoUW benchmark suites and vLLM's each in the three parts by test id its
-#: pyproject declares
+#: lean-suites' parts: its suites, the composition and PoUW benchmark suites, the certifier verifier's and vLLM's each in the
+#: three parts by test id its pyproject declares
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
 POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
+CERTIFIER = tuple(f"lean-suites:verity/protocols/accounting/certifier/verifier:{k}/3" for k in (1, 2, 3))
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
 BESIDE_AUDIT = (VLLM[0], *(f"lean-suites:{s}" for s in ("verity/protocols/proofs/recursion/verifier/vstar_cli",
-                                                        "verity-core-evaluate", "pous-check",
-                                                        "verity/protocols/accounting/certifier/verifier",
-                                                        "verity-pouw-check-difftest")),
-                COMPOSITION[2], POUW[2])
-BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
-WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], "lean-suites:*")
+                                                        "verity-core-evaluate", "pous-check")),
+                CERTIFIER[2], "lean-suites:verity-pouw-check-difftest", COMPOSITION[2], POUW[2])
+BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1], CERTIFIER[0])
+WITH_RUST = (COMPOSITION[1], POUW[0], CERTIFIER[1], *VLLM[1:], "lean-suites:*")
 
 
 @pytest.fixture(autouse=True)
@@ -113,11 +112,13 @@ def test_the_5_pod_plan_runs_pytest_in_two_shards_by_suite_and_the_others_run_it
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
-    """verity-core-composition, verity-pouw-benchmarks and verity-vllm declare three parts by test id: lean-suites' parts are
-    its suites with each of those as its three, and every plan's shards, gated and after landing, hold each part once and no
-    shard all three of a suite, so no shard runs one whole: the composition and PoUW suites one part on each of three shards,
-    vLLM's one beside the security analysis's audit and two beside the Rust build."""
-    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM}
+    """verity-core-composition, verity-pouw-benchmarks, the certifier verifier's suite and verity-vllm declare three parts by
+    test id: lean-suites' parts are its suites with each of those as its three, and every plan's shards, gated and after
+    landing, hold each part once and no shard all three of a suite, so no shard runs one whole: the composition, PoUW and
+    certifier suites one part on each of three shards (two parts of one suite on a shard run in one process), vLLM's one beside
+    the security analysis's audit and two beside the Rust build."""
+    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW,
+             "verity/protocols/accounting/certifier/verifier": CERTIFIER, "verity-vllm": VLLM}
     assert CHECK.suite_parts() == {s: len(parts) for s, parts in split.items()}
     assert SUITES == [x for s in CHECK.AFTER_LEAN
                       for x in ([p.removeprefix("lean-suites:") for p in split[s]] if s in split else [s])]
