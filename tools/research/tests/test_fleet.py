@@ -303,10 +303,15 @@ def test_each_days_samples_are_put_in_the_store_once_the_day_is_over(tmp_path, m
 def test_a_panel_goes_only_to_an_https_site(monkeypatch):
     """The panels key is sent only over https: with $FLEET_PANELS_URL unset or not https, put_panel sends nothing and says why."""
     panel = {"id": "compute/online", "rows": []}
-    monkeypatch.setattr(F.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("nothing is sent")))
+    sent = []
+    monkeypatch.setattr(F.metrics, "send_json", lambda *a: sent.append(a))
     for url in (None, "http://site.invalid", "file:///etc/passwd"):
         monkeypatch.setattr(F, "PANELS_URL", url)
         assert F.put_panel(panel, "k") == f"compute/online: $FLEET_PANELS_URL is {url!r}, not an https URL: nothing sent"
+    assert not sent
+    monkeypatch.setattr(F, "PANELS_URL", "https://site.invalid")
+    assert F.put_panel(panel, "k") is None
+    assert sent == [("PUT", "https://site.invalid/api/panels/compute/online", panel, "k", "compute/online")]
 
 
 def test_an_unreadable_archive_state_is_the_passes_error_and_nothing_is_put(tmp_path, monkeypatch):

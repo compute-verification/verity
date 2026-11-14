@@ -1,6 +1,8 @@
 """`research metrics show` against a fake route: each declared metric's line, one no run has recorded, a refused row and
 why the site couldn't read something; filtering by id and owner; an undeclared id or a refusal as one line; which
-credential goes where: a site key only to the console's route, an older token never, the identity otherwise."""
+credential goes where: a site key only to the console's route, an older token never, the identity otherwise. And `research
+metrics send`, with a stand-in for the site: a reading's shape, the panels key read from its file and left out of a dry run,
+https only, a reading the door would refuse sent not at all, and the deployed copy's commit."""
 from __future__ import annotations
 
 import io
@@ -116,3 +118,101 @@ def test_a_refused_key_is_named_as_the_key_and_the_url_as_the_one_called(monkeyp
     monkeypatch.setattr(metrics, "_Identity", _Identity)
     with pytest.raises(RouteError, match=r"^GET http://example.invalid/collect: the route rejected this agent's Cursor identity"):
         metrics.Route("http://example.invalid/collect").call()
+
+
+T = "2026-11-14T05:00:00Z"
+
+
+def test_a_reading_goes_as_one_post_naming_its_loop_and_commit_with_the_key_from_its_file(tmp_path):
+    key = tmp_path / "panels.key"
+    key.write_text("k-not-a-real-key\n")
+    sent = []
+    r = metrics.reading("infra/x", 133.56, time=T, target=150, member=None)
+    assert r == {"metric": "infra/x", "value": 133.56, "mark": "measured", "time": T, "target": 150}
+    assert metrics.send([r], loop="fleet", commit="c" * 40, key=key, post=lambda *a: sent.append(a)) is None
+    assert sent == [("POST", metrics.METRICS, {"readings": [{**r, "loop": "fleet", "commit": "c" * 40}]},
+                     "k-not-a-real-key", f"POST {metrics.METRICS}")]
+    assert metrics.send([r], loop="fleet", commit=None, key=key, post=lambda *a: "POST x: HTTP 401 invalid_key") == (
+        "POST x: HTTP 401 invalid_key")
+
+
+def test_a_reading_the_door_would_refuse_and_a_missing_key_or_plain_http_send_nothing(tmp_path):
+    def post(*a):
+        raise AssertionError("nothing is sent")
+    key, what = tmp_path / "panels.key", f"POST {metrics.METRICS}"
+    ok = metrics.reading("infra/x", 1, time=T)
+    assert metrics.send([ok], loop="l", commit=None, key=key, post=post) == (
+        f"{what}: no panels key at {key} (FileNotFoundError): nothing sent")
+    key.write_text("k")
+    assert metrics.send([], loop="l", commit=None, key=key, post=post) == f"{what}: no reading to send"
+    assert metrics.send([ok], loop="l", commit=None, url="http://site.invalid/api/metrics", key=key, post=post) == (
+        "POST http://site.invalid/api/metrics: not an https URL: nothing sent")
+    bad = [{**ok, "value": None}, {**ok, "mark": "guessed"}, {**ok, "value": "3"}, {**ok, "time": ""}, {**ok, "colour": 1}]
+    assert metrics.send(bad, loop="l", commit=None, key=key, post=post) == (
+        f"{what}: nothing sent: infra/x: a null value needs its why; infra/x: mark is 'guessed', not one of measured, "
+        "modeled, partial; infra/x: value is '3', not a number or null; infra/x: a reading needs its metric and the time its "
+        "number was read; infra/x: unknown field colour")
+
+
+def test_the_dry_run_prints_the_request_without_the_key_and_sends_nothing(tmp_path, capsys):
+    key = tmp_path / "panels.key"
+    key.write_text("k-not-a-real-key\n")
+    r = metrics.reading("infra/x", None, why="the guard's poll is 12 min old", time=T, target=150)
+    assert metrics.send([r], loop="fleet", commit="c1", key=key, dry_run=True,
+                        post=lambda *a: (_ for _ in ()).throw(AssertionError("a dry run sends nothing"))) is None
+    out = capsys.readouterr().out
+    assert "k-not-a-real-key" not in out
+    head, body = out.split("\n\n", 1)
+    assert head.splitlines() == [f"POST {metrics.METRICS}", f"Authorization: Bearer <the panels key in {key}>",
+                                 "Content-Type: application/json"]
+    assert json.loads(body) == {"readings": [{**r, "loop": "fleet", "commit": "c1"}]}
+
+
+def test_the_command_sends_one_reading_from_its_arguments_or_the_readings_on_stdin(tmp_path, monkeypatch, capsys):
+    key = tmp_path / "panels.key"
+    key.write_text("k")
+    monkeypatch.setattr(metrics, "PANELS_KEY", key)
+    sent = []
+    monkeypatch.setattr(metrics, "send_json", lambda method, url, body, k, what: sent.append(body) and None)
+    assert metrics.main(["send", "--loop", "store-index", "--commit", "c1", "--metric", "infra/s", "--value", "365",
+                         "--time", T]) == 0
+    assert capsys.readouterr().out == f"research metrics: sent 1 reading(s) to {metrics.METRICS}\n"
+    assert sent.pop() == {"readings": [{"metric": "infra/s", "value": 365.0, "mark": "measured", "time": T,
+                                        "loop": "store-index", "commit": "c1"}]}
+    two = [{"metric": "infra/a", "value": 1, "mark": "measured", "time": T},
+           {"metric": "infra/b", "value": None, "why": "failed", "mark": "measured", "time": T}]
+    assert metrics.main(["send", "--loop", "l"], stdin=io.StringIO(json.dumps(two))) == 0
+    assert sent.pop() == {"readings": [{**r, "loop": "l"} for r in two]}
+    capsys.readouterr()
+    assert metrics.main(["send", "--loop", "l", "--metric", "infra/s", "--time", T]) == 1
+    assert capsys.readouterr().out == f"research metrics: POST {metrics.METRICS}: nothing sent: infra/s: a null value needs its why\n"
+    assert metrics.main(["send", "--loop", "l"], stdin=io.StringIO("{nope")) == 1
+    assert capsys.readouterr().out.startswith("research metrics: stdin is not JSON (")
+    assert not sent
+
+
+def test_a_deployed_copys_commit_is_the_commit_file_at_its_trees_root(tmp_path):
+    (tmp_path / "src" / "infra" / "control").mkdir(parents=True)
+    assert metrics.deployed_commit(tmp_path / "src" / "infra" / "control") is None
+    (tmp_path / "src" / "COMMIT").write_text("c" * 40 + "\n")
+    assert metrics.deployed_commit(tmp_path / "src" / "infra" / "control") == "c" * 40
+
+
+def test_the_site_client_sends_its_key_only_to_an_https_url_and_never_after_a_redirect(monkeypatch):
+    monkeypatch.setattr(metrics.urllib.request, "build_opener",
+                        lambda *h: (_ for _ in ()).throw(AssertionError("nothing is sent")))
+    assert metrics.send_json("POST", "http://site.invalid/api/metrics", {}, "k", "w") == (
+        "w: 'http://site.invalid/api/metrics' is not an https URL: nothing sent")
+    opened = []
+
+    class Opener:
+        def __init__(self, *handlers):
+            opened.append(handlers)
+
+        def open(self, req, timeout):
+            assert req.get_header("Authorization") == "Bearer k" and req.get_method() == "PUT" and timeout == 30
+            raise metrics.urllib.error.URLError("redirected; refusing to forward the bearer token")
+    monkeypatch.setattr(metrics.urllib.request, "build_opener", Opener)
+    assert metrics.send_json("PUT", "https://site.invalid/api/panels/x", {}, "k", "x") == (
+        "x: <urlopen error redirected; refusing to forward the bearer token>")
+    assert opened == [(metrics._NoRedirect,)]

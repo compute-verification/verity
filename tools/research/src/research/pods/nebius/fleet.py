@@ -43,8 +43,6 @@ import subprocess
 import sys
 import time
 import tomllib
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
@@ -55,6 +53,7 @@ try:
 except ModuleNotFoundError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command): this file's own tree
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     from research.pods.nebius import settings
+from research import metrics  # noqa: E402 (after the tree is importable)
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
@@ -506,16 +505,7 @@ def put_panel(panel: dict, key: str) -> str | None:
     """PUT one panel; None when the site took it, else why not. Only an https site is sent the key."""
     if not (PANELS_URL or "").startswith("https://"):
         return f"{panel['id']}: $FLEET_PANELS_URL is {PANELS_URL!r}, not an https URL: nothing sent"
-    url = f"{PANELS_URL}/api/panels/{panel['id']}"
-    req = urllib.request.Request(url, data=json.dumps(panel).encode(), method="PUT",  # noqa: S310 (https, checked above)
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=30):  # noqa: S310 (https, checked above)
-            return None
-    except urllib.error.HTTPError as e:
-        return f"{panel['id']}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}"
-    except (urllib.error.URLError, OSError) as e:
-        return f"{panel['id']}: {e}"
+    return metrics.send_json("PUT", f"{PANELS_URL}/api/panels/{panel['id']}", panel, key, panel["id"])
 
 
 def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None] = put_panel) -> list[str]:
