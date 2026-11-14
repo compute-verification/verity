@@ -3,6 +3,8 @@
 # period (`Spot.Challenger.PeriodRecord`, which keeps its name here); it also moved the file and renamed its namespace,
 # which the module's importers and `MonitoringPeriodAudit.lean`, in the same namespace, don't follow.
 
+[words]
+
 [[words_in]]
 files = ["verity/protocols/proofs/spot/verifier/lean/Spot/PeriodRecord.lean"]
 words = { "PeriodRecord" = "MonitoringPeriod" }
