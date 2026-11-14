@@ -154,7 +154,8 @@ WARDEN_SERVED_STUBBED = (
     "Commit's port isn't proved", WARDEN_STUBBED[1])
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
-#: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
+#: the scan's kinds of round whose window is accepted (scan_zk.ROUNDS), one a round an execution phase: the toy
+#: block's is proved like the honest one's
 SCAN_ACCEPTS = ("honest", "block")
 #: a proof block's outputs, at most 16 bits: an incorrect proof block's leak
 OUT_BITS = 16
@@ -527,10 +528,11 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
 
 
 def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
-    """`scan_zk.py prove`'s summary: accepted when the honest and block rounds' windows are accepted (`SCAN_ACCEPTS`),
-    every other round's (chain, forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok``
-    holds; `RESTS` in place of accepted when the honest round's registration verdict let tied values through
-    (``rests_on_period_check``, which the step carries)."""
+    """`scan_zk.py prove`'s summary: accepted when every honest and block round's window is accepted (`SCAN_ACCEPTS`,
+    a round's kind `scan_zk.kind_of`'s), every other round's (chain, tampered, unread, stale) refused, no witness piece
+    was found at the verifier, and scan_zk's own ``ok`` holds; `RESTS` in place of accepted when an honest round's
+    registration verdict let tied values through (``rests_on_period_check``, which the step carries)."""
+    from scan_zk import kind_of
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -543,20 +545,20 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
                         "wrong_units": (a.get("audit") or {}).get("wrong_units"), "ok": r.get("ok"),
                         "leaked": (a.get("received") or {}).get("verifier_found") or [],
                         "rests_on_period_check": a.get("rests_on_period_check") or []}
-    honest = rounds.get("honest") or {}
+    honest = [v for n, v in rounds.items() if kind_of(n) == "honest"]
     wrong = ([f"{n}: window {'accepted' if v.get('window_accepted') else 'refused'}" for n, v in rounds.items()
-              if bool(v.get("window_accepted")) != (n in SCAN_ACCEPTS)]
+              if bool(v.get("window_accepted")) != (kind_of(n) in SCAN_ACCEPTS)]
              + [f"{n}: witness pieces found at the verifier: {v['leaked']}" for n, v in rounds.items() if v["leaked"]]
              + ["scan_zk's ok is not true"] * (s.get("ok") is not True))
-    units = 2 * int(s.get("T") or 0)
+    units = 2 * int(s.get("T") or 0) + 1
     k = (s.get("draw") or {}).get("honest") if isinstance(s.get("draw"), dict) else None
-    tied = honest.get("rests_on_period_check") or []
-    verdict = ("dry" if not rounds else "refused" if not honest.get("window_accepted")
+    tied = sorted({x for v in honest for x in v.get("rests_on_period_check") or []})
+    verdict = ("dry" if not rounds else "refused" if not honest or not all(v.get("window_accepted") for v in honest)
                else "failed" if wrong else RESTS if tied else "accepted")
     return {"verdict": verdict, "rests_on_period_check": tied,
             "why": "; ".join(wrong) or (RESTS_WHY.format(tied=tied) if verdict == RESTS else
                                         (job.get("why") or {}).get("scan")), "ok": s.get("ok"), "rounds": rounds,
-            "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k not in SCAN_ACCEPTS},
+            "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if kind_of(k) not in SCAN_ACCEPTS},
             "stand_in": None if warden_run else "scan_zk's own synthetic warden run (scan_traffic), not the gate's "
                                                 "rows: its --warden-run takes those",
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
@@ -824,7 +826,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
         raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
     params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
-    T, units = params.window, 2 * params.window
+    T, units = params.window, 2 * params.window + 1
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
     if drawn != units:
         raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "

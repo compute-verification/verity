@@ -68,7 +68,7 @@ def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
-    doc = cr.leak(run, {"draw": {"honest": 64}})
+    doc = cr.leak(run, {"draw": {"honest": 65}})
     at = {"T": 32, "tau": Fraction(1, 10), "egress_cells": 65}
     per_s = Fraction(100, 75) / Fraction(32, 10)
     link = LB.link(sz.CLASS, per_s, **at)
@@ -190,7 +190,7 @@ def test_eps_is_the_scans_delta_summed():
 def test_the_pooled_datacenter_pays_its_incorrect_blocks_whatever_it_serves():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
-    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
+    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 65 + 1))
     jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
     assert LB.fmax(one / n) == 15 and floor.share == floor.bits / LB.WEIGHTS.bits
     assert floor.bits == pytest.approx(faulty + jitter)

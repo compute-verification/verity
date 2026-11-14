@@ -9,13 +9,13 @@ DOC and CANDIDATE are a `scan_cost.json`, a directory that holds one (or `out/sc
 document is fetched from the evidence store (`research data show`, `research data fetch`).
 
 **What is read.** Everything is the scan's own (`benchmarks/network_traces/scan_zk.sh`), under RUN_DIR/out:
-`sczk/summary.json` (the class, the execution phases in the registration, T and the tick, and for each session of the
-honest round its prover's seconds, its staging and the Lean verifier's wall), each of those sessions' `prove.log`
+`sczk/summary.json` (the class, the execution phases, T and the tick, and for each session of each honest round its
+prover's seconds, its staging and the Lean verifier's wall), each of those sessions' `prove.log`
 and `lean-verify.log` (the stages), `sczk/answers.json` (the guard), `host.txt` (the cores the job had) and
 `lean.jsonl` (each Lean verifier process's core and CPU seconds, `SC_LEAN_ONE`).
 
-**The numbers.** A round is the honest round: every block of the group's G execution phases proved, a session a
-member. With `phase_s` = G · T · tick:
+**The numbers.** The round is the group's honest rounds, one an execution phase, each a registration of its own:
+every block of the group's G execution phases proved, a session a member of a round. With `phase_s` = G · T · tick:
 
 - proving seconds for each second of execution phase: (the sessions' seconds + staging) / `phase_s`. A session's
   seconds are its prover process's, from its start to its exit, the ZK server's inside them and the live verifier's
@@ -38,7 +38,7 @@ round's units its answers say were proved), T and the tick, the traffic, the cor
 verifier's. The group is a setting, beside the identity: the numbers are for a second of execution phase at any group.
 
 **The guard**: the scan exited 0, and each execution phase's answer accepts with the public part `public.json` pins
-for the class (the bound 0, every block sampled and proved; over a group, G times the blocks). Where it does not hold,
+for the class (the bound 0, every block of the execution phase sampled and proved). Where it does not hold,
 no measurement is written: the document says why and the run's validation fails.
 """
 from __future__ import annotations
@@ -65,7 +65,8 @@ PROVING, VERIFIER = "network-accounting/scan-proving-cost", "network-accounting/
 #: a session's stages, in order, and the Lean verifier's
 STAGES = ("to_register_s", "register_to_reps_s", "level0_s", "reps_s", "tail_s")
 LEAN_STAGES = ("inputs_s", "setup_s", "check_s")
-ROUND = "honest"
+#: the honest round of the run's first execution phase (`scan_zk.round_name`), a group of one's only one
+ROUND = "honest-0"
 #: the round's seconds, each a measurement: its name and its key in a document's `round`
 PARTS = (("sessions", "sessions_s"), ("staging", "staging_s"), ("to Register", "to_register_s"),
          ("Register to the repetitions", "register_to_reps_s"), ("level 0", "level0_s"), ("the repetitions", "reps_s"),
@@ -161,39 +162,47 @@ def _peak_gb(out: Path) -> float | None:
     return max((r["peak_gb"] for r in _lines(out / "rss.jsonl") if r.get("peak_gb") is not None), default=None)
 
 
+def honest(summary: dict) -> list[str]:
+    """The group's honest rounds, one an execution phase in order, each a registration of its own."""
+    return [f"honest-{w}" for w in summary.get("windows") or [0]]
+
+
 def sessions(out: Path, summary: dict, verified: dict) -> list[dict]:
-    """The honest round's sessions in its members' order, each with its summary's figures, its logs' stages and its
-    Lean verifier process's CPU seconds (`verified`, `_verifier`'s lines by archive)."""
-    rnd, members = summary["rounds"][ROUND], summary["members"][ROUND]
-    blocks = {m["name"]: m["n"] for m in members}
-    rows = []
-    for name, t in rnd["audit"]["timing"].items():
-        logs = out / "sczk" / ROUND / f"session-{name}"
-        text = {f: (logs / f).read_text(encoding="utf-8", errors="replace") if (logs / f).is_file() else ""
-                for f in ("prove.log", "lean-verify.log")}
-        live = t.get("timing") or {}
-        rows.append({"member": name, "blocks": blocks.get(name), "k_log": live.get("k_log"), "dense_m": live.get("dense_m"),
-                     "session_s": t["session_s"], "stage_s": (rnd.get(name) or {}).get("stage_s"),
-                     "lean_verify_s": t.get("lean_verify_s"),
-                     "lean_cpu_s": (verified.get(f"sczk/{ROUND}/session-{name}/archive") or {}).get("cpu_s"),
-                     "prover": prover(text["prove.log"]), "lean": lean(text["lean-verify.log"])})
-    order = {m["name"]: i for i, m in enumerate(members)}
-    return sorted(rows, key=lambda r: order.get(r["member"], len(order)))
+    """The honest rounds' sessions, round by round in their members' order, each with its summary's figures, its logs'
+    stages and its Lean verifier process's CPU seconds (`verified`, `_verifier`'s lines by archive); a session of a
+    group of more than one is named ``<round>/<member>``."""
+    rounds, rows = honest(summary), []
+    for rname in rounds:
+        rnd, members = summary["rounds"][rname], summary["members"][rname]
+        blocks, part = {m["name"]: m["n"] for m in members}, []
+        for name, t in rnd["audit"]["timing"].items():
+            logs = out / "sczk" / rname / f"session-{name}"
+            text = {f: (logs / f).read_text(encoding="utf-8", errors="replace") if (logs / f).is_file() else ""
+                    for f in ("prove.log", "lean-verify.log")}
+            live = t.get("timing") or {}
+            part.append({"member": name if len(rounds) == 1 else f"{rname}/{name}", "blocks": blocks.get(name),
+                         "k_log": live.get("k_log"), "dense_m": live.get("dense_m"),
+                         "session_s": t["session_s"], "stage_s": (rnd.get(name) or {}).get("stage_s"),
+                         "lean_verify_s": t.get("lean_verify_s"),
+                         "lean_cpu_s": (verified.get(f"sczk/{rname}/session-{name}/archive") or {}).get("cpu_s"),
+                         "prover": prover(text["prove.log"]), "lean": lean(text["lean-verify.log"]), "_at": name})
+        order = {m["name"]: i for i, m in enumerate(members)}
+        rows += [{k: v for k, v in r.items() if k != "_at"}
+                 for r in sorted(part, key=lambda r: order.get(r["_at"], len(order)))]
+    return rows
 
 
 # ---- the guard ---------------------------------------------------------------------------------------------------------------
 
 
-def pinned(cls: str, group: int, pins: dict | None = None) -> dict:
-    """The public part every execution phase's answer must have for a scan of `cls` at a group of `group`:
-    `public.json`'s copy for the class, each of its lists of an execution phase's blocks (0 to n − 1) over `group`
-    times the blocks (a group's answer is one answer over all its blocks)."""
+def pinned(cls: str, pins: dict | None = None) -> dict:
+    """The public part every execution phase's answer must have for a scan of `cls`: `public.json`'s copy for the
+    class (an execution phase's answer is its own registration's, over its own 2T + 1 blocks, at any group)."""
     pins = _json(PUBLIC) if pins is None else pins
     if cls not in pins:
         raise Refused(f"{PUBLIC.name} pins no public part for the class {cls} (it has {', '.join(sorted(pins))}): add "
                       "the class's, from an answer checked by hand")
-    return {k: list(range(group * len(v))) if isinstance(v, list) and v == list(range(len(v))) else v
-            for k, v in pins[cls].items()}
+    return pins[cls]
 
 
 def _phases(out: Path) -> list[dict]:
@@ -204,7 +213,7 @@ def _phases(out: Path) -> list[dict]:
 def sample(summary: dict, phases: list[dict]) -> str | None:
     """How much of the round its answers say was proved: every unit, or how many of the round's; None with no
     answer to read it from."""
-    units = sum(m["n"] for m in summary["members"][ROUND])
+    units = sum(m["n"] for m in summary["members"][honest(summary)[0]])
     proved = {len(((w.get("answer") or {}).get("public") or {}).get("proved") or []) for w in phases}
     if not proved:
         return None
@@ -216,7 +225,7 @@ def guard(out: Path, summary: dict, scan_exit: int, pins: dict | None = None) ->
     why = [] if scan_exit == 0 else [f"the scan exited {scan_exit}"]
     group = summary["group"]
     try:
-        want = pinned(summary["setup"], group, pins)
+        want = pinned(summary["setup"], pins)
         phases = _phases(out)
     except Refused as e:
         return {"holds": False, "scan_exit": scan_exit, "why": [*why, str(e)]}
@@ -250,13 +259,15 @@ def document(out: Path, scan_exit: int, run: str | None = None, commit: str | No
     """A scan's kept files under `out` as the benchmark's document: its identity and settings, the guard, each
     session with its stages, the round's sums, and the numbers (None where the round does not give one)."""
     summary = _json(out / "sczk" / "summary.json")
-    if not isinstance((summary.get("rounds") or {}).get(ROUND), dict) or "audit" not in summary["rounds"][ROUND]:
-        raise Refused(f"{out / 'sczk' / 'summary.json'} holds no {ROUND} round with its audit: the scan did not reach it")
+    rounds = summary.get("rounds") or {}
+    for r in honest(summary):
+        if not isinstance(rounds.get(r), dict) or "audit" not in rounds[r]:
+            raise Refused(f"{out / 'sczk' / 'summary.json'} holds no {r} round with its audit: the scan did not reach it")
     try:
         return _document(out, summary, scan_exit, run, commit, pins)
     except (KeyError, TypeError, ValueError) as e:
-        raise Refused(f"{out}'s kept files lack what the {ROUND} round is read by ({type(e).__name__}: {e}): the scan "
-                      "did not finish the round") from None
+        raise Refused(f"{out}'s kept files lack what the honest rounds are read by ({type(e).__name__}: {e}): the scan "
+                      "did not finish them") from None
 
 
 def _document(out: Path, summary: dict, scan_exit: int, run: str | None, commit: str | None, pins: dict | None) -> dict:

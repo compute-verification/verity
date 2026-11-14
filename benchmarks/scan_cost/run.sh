@@ -5,7 +5,7 @@
 # the network pool, as a job of at most 180 minutes:
 #   research run --on NODE --project verity --source . --cwd clone --pool network --as LANE --mem-gb 128 \
 #     --timeout 10800 -- bash benchmarks/scan_cost/run.sh
-# env: SC_GROUP=G (scan_zk.sh's: G execution phases in one registration; a setting, in the result beside the identity)
+# env: SC_GROUP=G (scan_zk.sh's: G execution phases, each a registration; a setting, in the result beside the identity)
 #      SC_CORES=N (21, the least a slot of the network pool gives: the job is pinned to the first N cores it has, and
 #      a job with fewer is refused; another N is another identity, which compares with no result at 21)
 #      SC_CLASS (w63k4, the benchmark's; `test`, the certifier tests' class, rehearses this runner, and its result
