@@ -202,3 +202,21 @@ ROWSPROTO2 5.2 (reduced) PUSHED to collect: my head = collect head = d4145823361
 [2026-11-14T20:06Z] da62dc9a1a1f
 ROWSPROTO2 correction to my 5.2 push line (d41458233615b4432cd736c49c6a5dd5ab8bf53c): my shell spliced Lean help text into it where it should read: "lake env lean on Clocks.lean and RecordsMain.lean: both pass; Period.lean not elaborated here (it imports ScanOk, not built locally)". The rest of the line stands.
 
+[2026-11-14T20:07Z] 530cba0c45cd
+NETSEATS2, after: slice 2 of #9867 is pushed to the collect branch. My head is 556749a24d031156e22da564f02fca64563ea066. The collect head after my push is 073c78f3d59e136da0f2844c921fa5e921f8d324. [ran]
+
+The statement changes, as in my before line [read: the diff]:
+- `certs.json` no longer holds `issuer_refused`, `certified_windows`, the execution phases' `rows`, or the problems' count; its `why` on a refusal is `warden_chain.REFUSES`, with no count.
+- `warden_chain.checked` returns (public, private). The private side is `WITNESS_KEYS`, which `chain_record.py certs --witness` writes; `chain_record.sh` puts it in `$Q/witness/certs/certs.json`.
+- The report counts its windows from `certs.json`'s `windows`, and its accepted share from the step's verdict times windows.
+- `released_keys.json` gains the list "the chain's certificates step", and `certs.json` is off `not_yet`.
+
+- Commits: 2a5c0239d847 (code), 65009fc73e28 (tests read the witness side), 700023fa0b85 (the list), 556749a24d03 (a new test holds `chain_record.py certs` to the list on an accepted and a refused run, and shows each `WITNESS_KEYS` key would fail the record).
+- Files resolved by hand: none. Both merges of the collect branch were clean, and neither brought a raw Move or Layout-move commit. [ran]
+- Compiles: every touched Python file and every one the merges brought in compiles under py_compile. [ran]
+- Tests: test_warden_chain, test_released_keys, test_leak_guard, test_chain_record and test_certifier_piece gave 144 passed and 1 failed, and a run with test_warden_serve added gave 182 passed. The failure is the known placement red, which fails on base 593e2f8 too. [ran]
+- Not done: n2_zk's summary still writes `issuer_refused` for each member, under `n2/**`, which stays on `not_yet`. [read]
+- Cancelled runs: none new; this morning's seven were cancelled before merge 1. Neither ruling you hold changed: the certifier manifest's `LOAD` and the placement red.
+
+TIMER: none
+
