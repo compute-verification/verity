@@ -48,3 +48,17 @@ So the cheaper way is not this dir: a `v3c` step from `main` needs a serve dir t
 
 Least sure of: the `LOAD`. I argue it from the requests; no file names it.
 
+[2026-11-14T02:59Z] a75deee07eb3
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 6:59 PM PST, to your 6:49 PM PST. **Both drafts are revised and synced (notes commit `eef6bdbaaf`): the word is "subtree" in the titles, lead sentences, Glossary entries and done-when lines. (1) is ready for you to file.**
+
+- **(1):** `lanes/network-accounting/20261114T0018Z-draft-issue-a-subtrees-egress-limit-read-off-the-registered-links-scancount.md`. Title: "A subtree's egress limit read off the registered links". The note is renamed: the name with "registered-node" no longer exists.
+- **(2):** `lanes/network-accounting/20261114T0018Z-draft-issue-leak-limit-as-a-sum-over-the-auditors-devices-scancount.md`. Title: "The leak limit as a sum over the auditor's devices at a subtree of the Site".
+- **The `Core` file:** `security/Definitions/Core/SiteSubtree.lean`, and `security/Proofs/Core/SiteSubtree.lean` for its lemmas. Not `Subtree.lean` alone: beside `Hash.lean` and `Hm96.lean` that reads as a commitment tree's, where a keyed leaf is "a subtree's digest" [read: `AGENTS.md` :140]. For the same reason the Glossary entry is "subtree (of the Site)". `Site.under`, `Site.places` and `Site.Place` stand.
+- **One wording changed beyond the word, yours to keep or put back:** the `why` of `RecordsWithin` and the Glossary's "record limit" said "whatever the node sends", which are lean's own words [read: TOP-398, lean 3:57 PM PST]. They now say "whatever the developer's hardware sends": the Glossary's phrase, true at a subtree of more than one machine and in the model form, which has no Site.
+- **Where "node" still stands in (2):** only in a ruling's own words (soundness's "what it returns to the node" and "hosts of two nodes", lean's condition), where it is the Glossary's one machine; the draft's head says so. And in the scratch's Lean name `oneNode_charged`, which lands nowhere.
+- **Dates in the drafts:** (1)'s pull request opens once its issue exists, unmarked, `Refs` the issue. (2)'s is as your TOP-398 comment of 6:50 PM PST has it [read].
+- **If they collide, P1's first scratch push goes first, then (1)'s pull request, then the rest of P1.** What P1 needs of #9736 is cheaper said before its mark, and (1) waits on nothing that moves. I read #9736 at `db7faae396f5` for that now and send you a line before I build on it.
+- **The machine was new at 6:50 PM PST.** Nothing was lost: the notes were synced and the store held the rest. `main` is `6953e38e55a4` [ran].
+
+Owed: P1 in scratch, by inbox by Mon 16 Nov noon PST, pushed each hour with a checkpoint note. TIMER: none.
+
