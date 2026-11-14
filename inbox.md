@@ -42,3 +42,49 @@ Suites (`r20261114-174638-1a89`) and #8829's records (`r20261114-180132-a756`) h
 
 Question: should leak_bounds count each execution phase as its own period, with the start term, now rather than after NET-446? I take NO.
 
+[2026-11-14T18:17Z] 4e1be6929420
+MEND9319 to network-accounting (lead), Sat 14 Nov 10:17 AM PST. **#9319 at `a68dc6095ba9573c3e1010cc95dbfd1dda646ad1`. The head has not moved. Its run passed, the verdict is in the body, and it merges clean with `main` at `ddf9519e929e6ef1f48cd5389f816f4ff011a3fd`.**
+
+**The run, `r20261114-160714-3abc`** [read: its stdout]. Done, rc 0: 6 suites, 6 passed, 0 failed, 0 cached.
+
+- `benchmarks/one_stage`: 1,235 passed, none skipped.
+- Other suites: `verity-network-traces` 758, `repository` 312, `verity-graph` 220, `benchmarks/prove_path` 204 (10 skipped), `verity-cli` 148.
+- **Lean-built tests:** `test_a5_negative_workers.py` ran whole, so its three tests on the real Lean verifier ran and passed:
+  - `test_a_worker_asks_a_lean_process_of_its_own_and_the_audits_answers_after`
+  - `test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker`
+  - `test_the_negatives_file_is_byte_for_byte_the_same_with_one_worker_and_with_several`
+- **`test_audit_two_members` did not run.** It is marked slow, and its module was not among the six one-stage modules the run took whole.
+
+The body now carries this verdict; I read it back and it matches.
+
+**Merge with `main`** [ran: `git merge-tree`]. Clean at `ddf9519e929e`, which is after `e447bdd8190f`. No `Move:` or `Layout-move:` commit lies between. Since `a116c5614312`, `main` changed `a5.py`, `served_verdicts.sh` and `test_served_verdicts.py`, and all three merge without a conflict.
+
+**The hand resolution of `benchmarks/one_stage/a5.py`**, at the head [ran: `git show --remerge-diff`]. There are three regions; the first two were conflicts, the third a docstring the merge made false.
+
+1. **`a5.py:597-604`, `registered_negatives`.**
+   - Line 597, the signature, is `main`'s with this branch's `workers: int = 1` added.
+   - Lines 598-604, the docstring, are `main`'s whole. This branch's older docstring is dropped.
+2. **`a5.py:1257-1303`, the negatives decided by the verifier.**
+   - This branch's structure: each negative is a task of `workers`, and the results are gathered at 1302-1303.
+   - Each row takes `main`'s rule from #9452:
+     - 1260: `registration` returns `a0.negative(v)` (this branch had `not v.ok`). It covers R2, the declared day, R3 and R4.
+     - 1265: `history_root` returns `a0.history_negative(v)` (this branch had `v.codes == (R.HISTORY,)`).
+     - 1289-1290: `main`'s `outside_the_partition(...)`, with `a0.negative(v)`.
+     - 1294: `proved-set-short-of-the-draw`, `a0.negative(v)`.
+   - Every other line is this branch's: the calls that submit the tasks, the history bit-flip, `transfer_gate_negatives` and `a0.audit_negatives` as tasks.
+   - `main`'s in-line block of the same negatives is dropped, but its `transfer_gate_negatives` body (which already uses `a0.negative`) comes in from `main` without a conflict.
+3. **`a5.py:1950-1953`, `WorkerLean`'s docstring, written by hand.** It now says that `a0.negative` takes no `LeanError` as a refusal, and that `WorkerLean` ends the worker's task at that check, naming the process. `V._server = WorkerLean()` at `a5.py:1973` is unchanged.
+
+In the same merge commit, one test line of this branch changed: `test_a5_negative_workers.py:318` now records its row with `a0.history_negative`, as the task does.
+
+**The tests that fail without each mend.**
+
+- **Finding 1, `WorkerLean`:** `test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_refuses_no_negative`. With `V._Server()` back at `a5.py:1973` it fails "DID NOT RAISE NegativeFailed" [ran, at `73047948be6c` and again at `a68dc6095ba9`].
+- **Finding 3, the LeanPool hang:** `test_a_reading_that_raises_in_a_checks_gate_is_its_outcome_and_the_next_check_takes_its_turn`. Without the `try` in `LeanPool._run` it hangs; under a 20 s shell timeout it exited 124 [ran, at `9a449491fbcd`]. It fails by hanging because no test may read the clock.
+
+**The one ratchet site.** `benchmarks/one_stage/tests/test_a5_negative_workers.py:316`, the word `law`: an attribute read, `mine.law`, of `rows.Binding.law`, a field `main` defines and has no other name for.
+
+**lean's heads-up (#10128).** #9319 rewords no listed line. #10128's list at `4ab083c554c7` has no entry for `a5.py`. It has one for `records_audit.py`: `declared_day`, `got = G.check_log(p, (composite, entries))`. At this head that line stands at `records_audit.py:623`, with the entry's own symbol and digest (`b8588e9969631f3e`), so it neither fails nor warns [ran: #10128's `sites()` on the head's file].
+
+No audit of a window was run, per Daniel's ruling, and nothing else was launched. Least sure of: the Lean-built tests' pass is read from the suite's 0 failed and 0 skipped, not from per-test lines, which stay in the run's remote logs. I'm free for another piece. TIMER: none.
+
