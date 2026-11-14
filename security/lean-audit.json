@@ -1383,37 +1383,37 @@
   "Accounting.ServingBlocks.OperationBodies": {
    "owner": "@training",
    "digest": "81ff50582db4448d937985a633ac98188152d74a6357bb74a71ce5cdbff705e6",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.Overlap": {
    "owner": "@training",
    "digest": "39ca4a60bde57a084d35293484eafdb933d63532bca41e07fc5779e234c73dcb",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.PerBlockCap": {
    "owner": "@training",
    "digest": "cbfac196e5ea1c52199fd7e327994c1e310e7b73776b2377f193be4b69d9e30d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.ServingSizes": {
    "owner": "@training",
    "digest": "0bc5c1264f982a2a1ebb8a0aec6f85c37c14e060120967965bb2c362f6693cfb",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.UncertifiedCap": {
    "owner": "@training",
    "digest": "60d8c4b679a995ba4d2a6fcde0e0c8f8b429091b0f298ebc745f2186524375d1",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.WeightsAtMost": {
    "owner": "@training",
    "digest": "be8cdd72aa1fbaa879af6dd1d6c45d80e3961755905c109c9d89473025cf8dd8",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.SetupFixed": {
@@ -2169,7 +2169,7 @@
   "Nci.Assumptions.CheatingAtMost": {
    "owner": "@training",
    "digest": "89add569caacb16556501cbd98787134ad9098307d8b22fc10f53b164cd1ade2",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Coverage": {
@@ -2181,13 +2181,13 @@
   "Nci.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
    "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.DescriptionHard": {
    "owner": "@training",
    "digest": "acf4d99142d8d1f6398750eb5cf307f3047dbec15dd21f5bc86041b38b7ea321",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Fits": {
@@ -2205,13 +2205,13 @@
   "Nci.Assumptions.IdentitySchedule": {
    "owner": "@training",
    "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.MinEntropyHard": {
    "owner": "@training",
    "digest": "ac056d32cda0731b25c07ec1e66d1dff9f413d1672320b350a7002582c48cab7",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ParameterHard": {
@@ -2229,7 +2229,7 @@
   "Nci.Assumptions.PouwPerWindow": {
    "owner": "@training",
    "digest": "73c9272c6730698f6165c13cdc251d08c790d55adbdb9688fff024707355941a",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.PouwSound": {
@@ -2253,7 +2253,7 @@
   "Nci.Assumptions.Recovers": {
    "owner": "@training",
    "digest": "d9edc87f9d67a1e87668b32bf8eeaa3407c435c23af1795ffb1b1833af22309a",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ReferenceLayered": {
@@ -2277,19 +2277,19 @@
   "Nci.Assumptions.SampledPerWindow": {
    "owner": "@training",
    "digest": "77104bd85c50c8f0996b5b055c8263f036328b6ed9d9730b5ec70e223843542d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SourceHard": {
    "owner": "@training",
    "digest": "b4b411c3d977a74a745755ede9735c9bce7b83e332c5c971637bfbed2f748260",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SourcesCover": {
    "owner": "@training",
    "digest": "1b88f3a9f96ca3119443da4b877d624e82d0da310a960193c81efc048238d7bb",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.TerminalDetection": {
@@ -2307,7 +2307,7 @@
   "Nci.Assumptions.UnmonitoredAtMost": {
    "owner": "@training",
    "digest": "a2f3af521431f3a9eb4420c21e04149188f6bcfdb664984c54505a4d514502c2",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.WeightsIncompressible": {
@@ -2343,31 +2343,31 @@
   "Nci.Capability.Consumers.OverlapWeights": {
    "owner": "@training",
    "digest": "67fd0381a6d22e3df9462d31aee8c2fb53d78a03ef3ccf7262ac549c65f30313",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.RequiresState": {
    "owner": "@training",
    "digest": "b6284d74c738e31004e961b08225fefd8fb49030b47739e363c502344ad442e8",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.Upstream": {
    "owner": "@training",
    "digest": "eb8367f381166e28864222741be0201193858a4010150fa5bd0e23acab48c757",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.HeldPriceAtMost": {
    "owner": "@training",
    "digest": "5344e552ed3f9d96c26f35e4ea3f5a00f624b7c37bfcdec70e169545364b78bd",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Selects": {
    "owner": "@training",
    "digest": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.CompliesRate": {
@@ -2379,25 +2379,25 @@
   "Nci.Cover.Assumptions.BlockFits": {
    "owner": "@training",
    "digest": "6c8a39590d5ed889ee6d76adba07cee9e4ce74f76ad35fd00388552b0cf4a1fd",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Cover.Assumptions.CapBelowDepth": {
    "owner": "@training",
    "digest": "4a59a4806a27c95100ab3b95c905c33acb34c61829b50f990a197d9ea06dc17d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Covering.Covers": {
