@@ -3,7 +3,7 @@ module
 public import Definitions.InferenceOnly.Threads
 
 /-!
-# NCI over threads: keyed reference circuits
+# The inference-only policy over threads: keyed reference circuits
 
 A structural class of reference circuits whose `(d, e)`-threading (`Threading.Threaded`) follows from their wiring and
 widths alone (`InferenceOnly.Guarantees.ThreadedOfLayered`).

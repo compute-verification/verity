@@ -46,7 +46,7 @@ training FLOP that are counted multiplications at 2 FLOP each, so the compute ef
 * `s = U/(C + U)`, the unmonitored compute share (`unregisteredShare`);
 * `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
 * `ν = (1 − s) · 2/(κ ρ)`, the declared computation at `ρ` declared gates per counted multiplication (`declaredShare`);
-  at NCI's thread bound `ρ = ρ_T = b_a/(α Λ(K))` (`rhoT`), `Λ(K) = max(e, reuse · K/(4 d b_w))` (`Lambda`, which is
+  at the inference-only policy's thread bound `ρ = ρ_T = b_a/(α Λ(K))` (`rhoT`), `Λ(K) = max(e, reuse · K/(4 d b_w))` (`Lambda`, which is
   `InferenceOnly.Threading.bound`);
 * `μ = 2 reuse · R α/(κ d b_w b_a)`, the memory cap at wipe state `R` (`memoryCap`);
 * `χ`, the cheating share.
@@ -72,7 +72,7 @@ noncomputable def residualShare (W C : ℝ) : ℝ := 1 - W / C
 `InferenceOnly.Threading.bound` with real arguments: `T.bound K b_w d e = Lambda T.reuse e d b_w K`. -/
 noncomputable def Lambda (reuse e d b_w K : ℝ) : ℝ := max e (reuse * K / (4 * d * b_w))
 
-/-- **Declared gates per counted multiplication** at NCI's thread bound, `ρ_T = b_a/(α Λ)`:
+/-- **Declared gates per counted multiplication** at the inference-only policy's thread bound, `ρ_T = b_a/(α Λ)`:
 `InferenceOnly.Guarantees.ThreadedThrottled` gives `b_a |M| ≤ α Λ size(d)`, that is `|M| ≤ size(d)/ρ_T`. -/
 noncomputable def rhoT (α b_a Λ : ℝ) : ℝ := b_a / (α * Λ)
 
