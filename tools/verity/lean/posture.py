@@ -9,7 +9,11 @@ it rests on is marked against the trust list (`trust-list.json`):
 - `on`: the list holds it for this guarantee;
 - `gap`: off the list, and in the guarantee's `trust_gap` entry, the gap Daniel drives to zero;
 - `pending`: off the list, and in `trust-list.json`'s `pending` for this guarantee, waiting on a ruling;
-- `OFF`: off the list and in neither, which `tests/test_trust_list.py` fails on.
+- `OFF`: off the list and in neither, which `tests/test_trust_list.py` fails on;
+- `finder`: a finder its proof reads that the Lean check's list of finders still by choice holds (the lock's `FINDERS`,
+  {finder: {"owner", "issue", "due"}}; the finders a record reads are its `premises`' `FINDERS`). Until the entry leaves
+  that list, the guarantee doesn't rest on SHA-512's collision resistance alone: its collision step is open, and the
+  finder is shown among its open premises, with the entry's owner, issue and due.
 
 The trust list is `trust-list.json`'s `list`: {premise: {"reason": one line, "only": [deployed guarantee, ...]}}, `only`
 present where the list holds a premise for those guarantees alone. Lean's kernel is on it too, and is no premise. Every
@@ -27,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 TRUST_LIST = HERE / "trust-list.json"
 FIXTURES = "tools/verity/lean/tests/fixtures/"
+FINDERS = "finders"
 
 
 def _check():
@@ -59,22 +64,28 @@ def mark(lock: dict, trust: dict, premise: str, guarantee: str) -> str:
     return "OFF"
 
 
+def ticket(entry: dict | None) -> dict:
+    return {k: (entry or {}).get(k) for k in ("owner", "issue", "due")}
+
+
 def postures(locks: dict[str, dict], trust: dict, check) -> list[dict]:
     """One record per deployed guarantee: its `name`, `lock`, its `assumptions` and `open` premises ({premise: its mark},
-    an open one with its `owner`, `issue` and `due`) and what its `witnesses` take beyond them, each sorted by name."""
+    an open one with its `owner`, `issue` and `due`, a listed finder it reads among them) and what its `witnesses` take
+    beyond them, each sorted by name."""
     out = []
     for path, lock in locks.items():
-        named, opened = lock.get("assumptions") or {}, lock.get("open") or {}
+        named, opened, finders = lock.get("assumptions") or {}, lock.get("open") or {}, lock.get(FINDERS) or {}
         for g in check.name_list(lock.get("deployed")):
             rests = check.premise_closure(lock, g)
+            reads = check.premise_closure(lock, g, (FINDERS,)) & set(finders)
             w = (lock.get("witnesses") or {}).get(g) or {}
             theorems = [*check.name_list(w.get("honest")), *check.name_list([w.get("nontrivial")])]
             out.append({
                 "name": g, "lock": path,
                 "assumptions": {p: mark(lock, trust, p, g) for p in sorted(rests) if p in named},
-                "open": {p: {"mark": mark(lock, trust, p, g), **{k: (opened.get(p) or {}).get(k) for k in
-                                                                  ("owner", "issue", "due")}}
-                         for p in sorted(rests) if p not in named},
+                "open": dict(sorted({**{p: {"mark": mark(lock, trust, p, g), **ticket(opened.get(p))}
+                                        for p in rests if p not in named},
+                                     **{f: {"mark": "finder", **ticket(finders[f])} for f in reads}}.items())),
                 "witnesses": sorted(set().union(*(check.premise_closure(lock, t) for t in theorems)) - rests),
             })
     return out

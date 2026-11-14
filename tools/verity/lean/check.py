@@ -3268,9 +3268,9 @@ def name_list(v) -> list[str]:
     return v if isinstance(v, list) and all(isinstance(x, str) for x in v) else []
 
 
-def premise_closure(lock: dict, name: str) -> set[str]:
-    """The named assumptions and open premises guarantee ``name``'s record lists, and those of each listed guarantee whose
-    statement it takes as a domain hypothesis (the `domain` entry's `cites`), transitively."""
+def premise_closure(lock: dict, name: str, kinds: tuple[str, ...] = GAP_KINDS) -> set[str]:
+    """The named assumptions and open premises (``kinds`` of its `premises`) guarantee ``name``'s record lists, and those
+    of each listed guarantee whose statement it takes as a domain hypothesis (the `domain` entry's `cites`), transitively."""
     listed, domain = lock.get("guarantees") or {}, lock.get("domain") or {}
     out, seen, todo = set(), set(), [name]
     while todo:
@@ -3278,7 +3278,7 @@ def premise_closure(lock: dict, name: str) -> set[str]:
             continue
         seen.add(g)
         took = rec.get("premises") if isinstance(rec.get("premises"), dict) else {}
-        out |= {p for k in GAP_KINDS for p in name_list(took.get(k))}
+        out |= {p for k in kinds for p in name_list(took.get(k))}
         todo += [e["cites"] for d in name_list(took.get("domain"))
                  if isinstance(e := domain.get(d), dict) and isinstance(e.get("cites"), str)]
     return out
