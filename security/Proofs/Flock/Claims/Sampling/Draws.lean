@@ -43,7 +43,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The sample bounds, as the claims read probabilities
 
 The sampling compiler's knowledge error carries the sample's term: if at least `t` regions are wrong, the verifier's sample
-misses all of them with probability at most its sampling design's bound. Each registered law (`Flock.Draw.Law`: `subset`,
+misses all of them with probability at most its sampling design's bound. Each registered sampling design (`Flock.Draw.Law`: `subset`,
 `bernoulli`, `stratified`, `work`) has that bound proved already, in `ℝ≥0∞` over the audit layer's `prCoin`
 (`FlockSoundness.Audit.Law`). This file states each in `Claims.Pr`, the uniform average the claims use, through
 `Pr_eq_toReal_prCoin`:
@@ -58,7 +58,7 @@ misses all of them with probability at most its sampling design's bound. Each re
 * `work_miss_le`: the work sampling design misses units doing at least `T` of the work `W` with probability at most
   `((W − T)/W)^K` (`Law.work_escape_le`);
 * `miss_le_count`: any sampling design misses `B` with at most its count curve at `t ≤ |B|` (`Law.miss`), which
-  `Law.stratified_miss_eq_greedy` computes for the stratified and work laws.
+  `Law.stratified_miss_eq_greedy` computes for the stratified and work sampling designs.
 
 `miss_le_of` turns each into its form at `δ`: a bound of at most `δ` at `t` is a miss probability of at most `δ`.
 -/
@@ -202,9 +202,9 @@ theorem work_miss_le {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ) (f :
     (Law.work_escape_le_of_le σ w f K hf hW hT)).trans_eq ?_
   rw [ENNReal.toReal_pow, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
-/-! ## Any law: its count curve -/
+/-! ## Any sampling design: its count curve -/
 
-/-- **Any law misses `t` wrong regions** with probability at most its count curve at `t`, the largest escape of a set
+/-- **Any sampling design misses `t` wrong regions** with probability at most its count curve at `t`, the largest escape of a set
 of at least `t` units. -/
 theorem miss_le_count {n t : ℕ} (L : Law n) {B : Finset (Fin n)} (ht : t ≤ B.card) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) ≤ (L.miss t).toReal :=

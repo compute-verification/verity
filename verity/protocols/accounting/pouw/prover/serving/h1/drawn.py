@@ -97,7 +97,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity_vllm.errors import Refused
+from verity.errors import Refused
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
@@ -504,7 +504,7 @@ class FileStager:
 
 def bind_files(d: Path, program: bytes, partition: dict) -> None:
     """A statement's ``program.json`` and ``partition.json`` in `d`: the Program and partition object credit verifies it
-    under (`credit._asks`), which the ZK server's Lean ``Hello`` is set up on (``FC_FIREWALL_HELLO_ARGS``)."""
+    under (`credit._asks`), which the ZK server's Lean ``Hello`` is set up on (``FC_ZK_SERVER_HELLO_ARGS``)."""
     (d / "program.json").write_bytes(program)
     (d / "partition.json").write_text(json.dumps(partition))
 

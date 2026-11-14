@@ -11,7 +11,7 @@ nothing, and exits 1, naming the paths, when after the maps:
    innermost suite's, `conftest.py` included) keep their places relative to each other. A test file that lands in
    another suite's testpaths passes 1 and fails here: splitting a suite is its owner's change after the moves.
 3. **a suite's inputs no longer hold a file its tests import**: a module the suite's test files import, directly or
-   through the modules they import, that its inputs cover today (`tools/verity/check/suites.py`'s `inputs_of`: its
+   through the modules they import, that its inputs cover today (`tools/check/suites.py`'s `inputs_of`: its
    directory, its workspace dependencies' directories, the paths `[tool.verity.tests] inputs` declares) and that lands
    outside them. An input is read as `layout.py` rewrites it: a file's row, a directory's row or `[tokens]` row, else
    unchanged.

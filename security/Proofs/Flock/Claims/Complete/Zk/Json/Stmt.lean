@@ -53,7 +53,7 @@ object, printable with the prover's nonce put in: `StmtOkZk`, from the case's se
 `stmtOk` at the plain verifier.
 
 * `Σ`, the sample's instances and the session's sample are as in `stmtOk`, at the one table `readyZk` asks
-  (`CaseZk.one`). Under `--zk` the sample's law is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
+  (`CaseZk.one`). Under `--zk` the sample's sampling design is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
   plain verifier (`good_stratified`, `good_subset`).
 * The masked verifier's coins are the keyed coin tree (`Read.coins`), so the hello's `coins` is the tree's spec with an
   empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Flock.JsonParse.parse` reads back an alike object

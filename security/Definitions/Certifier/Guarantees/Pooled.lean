@@ -67,7 +67,11 @@ most `ε i`: for `0 ≤ q ≤ 1` with `q · n i ≤ k i` in every window,
 * every window's audit accepts and the monitoring period holds at least `F` incorrect blocks with probability at most
   `(1 - q)^F + Σ_i ε i`;
 * `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` incorrect blocks pass the whole monitoring period
-  except with probability `δ + Σ_i ε i`. -/
+  except with probability `δ + Σ_i ε i`.
+
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets `q · n i ≤ k i` at `q = NUM/DEN` over
+whatever `n i` a window registers (`NetTiming.pooledIncorrectBlocks_rate` is this statement at that rate), while under
+a fixed count the largest `q` that holds falls as the prover pads `n i`. -/
 def PooledIncorrectBlocksLe : Prop :=
   ∀ {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ) (draw : (i : Fin m) → Ω → Finset (Fin (n i)))
     (hcard : ∀ i x, (draw i x).card = k i)

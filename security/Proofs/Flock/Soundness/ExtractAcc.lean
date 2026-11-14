@@ -16,7 +16,7 @@ import Mathlib.Tactic.Positivity.Finset
 meta import Lean.Meta.Tactic.NormCast
 
 /-!
-# Extraction from accepted reruns: the expected-time extractor's law
+# Extraction from accepted reruns: the expected-time extractor's sampling design
 
 The expected-time extractor (DESIGN.md §3) runs the session once and, only if that run accepts,
 reruns until `k` reruns have accepted: `1 + k` runs in expectation, whatever the acceptance

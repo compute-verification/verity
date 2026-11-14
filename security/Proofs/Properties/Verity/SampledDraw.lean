@@ -246,8 +246,8 @@ def drawnUnits (draw : Lean.Json) : Array ℕ :=
   | _ => #[]
 
 /-- **The sampling design and population v2's sample runs under** at the parameters `p` and the commitment `c`
-(`OneStage.drawnFrom`'s): the verifier's law as `Draw.derive` expands it, the record's population `n`, and the sampling design `L`
-the sample reads its bytes under, the derived law where `Draw.deriveLaw` gives one and else the sampling design's own
+(`OneStage.drawnFrom`'s): the verifier's sampling design as `Draw.derive` expands it, the record's population `n`, and the sampling design `L`
+the sample reads its bytes under, the derived sampling design where `Draw.deriveLaw` gives one and else the sampling design's own
 (`Draw.flockLaw`). -/
 def LawOf (p : _root_.Spot.OneStageZk.Params) (c : _root_.Spot.OneStage.Commitment)
     (L : Flock.Draw.Law) (n : ℕ) : Prop :=
@@ -320,7 +320,7 @@ theorem coinsReason_none {v : _root_.Spot.Registration.Verifier} {law rec_ draw 
         cases j <;> rfl
       rw [hdf, hx]
 
-/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the verifier's law as
+/-- **v1's check at the coins `ξ` accepts only where `ξ` samples the evidence's units**: under the verifier's sampling design as
 derived and the record's population, `OneStage.drawnFrom` on `ξ` gives them. -/
 theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}

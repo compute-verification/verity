@@ -16,8 +16,15 @@ from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean,
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, hello as H, link_points as LP, partition as P,
-                                                            registration as R, verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    hello as H,
+    link_points as LP,
+    partition as P,
+    docket as R,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 
@@ -348,6 +355,15 @@ def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
         V.coins(8)
 
 
+def test_the_executable_answers_only_the_verifiers_pieces():
+    """The executable answers `Pieces.verifier`'s names, the challenger's ledger and session checks among them, and
+    refuses as unknown a piece the difftest executable serves beside them, which `lean` takes as a refusal."""
+    for fn in ("challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"):
+        assert "unknown fn" not in json.dumps(V.lean(fn, {})), fn
+    for fn in ("challenger_day", "challenger_read", "challenger_trusted", "decode", "wires"):
+        assert f'"unknown fn: {fn}"' in V.lean(fn, {})["refused"], fn
+
+
 def test_lean_that_cannot_run_fails_closed(monkeypatch):
     _, reg, draw = _drawn()
 
@@ -358,7 +374,7 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
     assert v.codes == (V.DISAGREE,) and v.verifiers["lean"] == {"refused": "lake is not on the PATH"}
     rec = V.audit_record(**_args(reg, draw))
     assert not rec["accepted"] and rec["verifiers"]["lean"] == {"refused": "lake is not on the PATH"}
-    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH"}
+    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH", "answered": False}
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():

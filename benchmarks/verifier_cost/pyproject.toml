@@ -1,7 +1,7 @@
 # The verifier-cost benchmarks' guard: each benchmark's Lean (`<name>/Main.lean`, which its script builds in a scratch Lake
 # package on a node) still elaborates against the checkout's verifier, and whole_run.py still writes a run its own check
 # accepts. Not a package: the benchmarks run on a node (README.md), and the suite only holds them to the verifiers they time
-# (`uv run tools/verity/check/suites.py benchmarks/verifier_cost`).
+# (`uv run tools/check/suites.py benchmarks/verifier_cost`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

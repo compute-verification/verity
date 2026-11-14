@@ -34,11 +34,18 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    docket as R,
+    served as SV,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
-import r2_population as R2
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -564,7 +571,8 @@ def lean_read_no_proof(v: dict) -> bool:
 def lean_answered(verifiers: dict | None) -> bool:
     """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
     writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
-    fails its check either way."""
+    fails its check either way. History tables the Lean itself refuses are its answer
+    (`verifier.check`'s `R.HISTORY`)."""
     return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
 
 
@@ -576,17 +584,6 @@ def negative(v: Verdict) -> dict:
     answered = lean_answered(v.verifiers)
     return {"refused": not v.ok and answered, "codes": list(v.codes),
             **({} if answered else {"lean": (v.verifiers or {}).get("lean")})}
-
-
-def history_negative(v: Verdict) -> dict:
-    """`negative` for a history table's registered root that is not the table's. The Python refuses it with a reason
-    and no code (`R.HistoryRefused`) and the Lean's own answer is a refusal too, so the verifier's verdict is `R.HISTORY`
-    alone for whatever stands in the Lean's place, a Lean that could not run included (`verifier.check`). Only the
-    Lean's own check of the root gives the Python's reason: refused only where the two reasons are one; else the row
-    carries both (``reasons``)."""
-    why = v.detail.get(R.HISTORY) or {}
-    refused = v.codes == (R.HISTORY,) and isinstance(why.get("lean"), str) and why["lean"] == why.get("python")
-    return {"refused": refused, "codes": list(v.codes), **({"reasons": dict(why)} if why and not refused else {})}
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
@@ -625,17 +622,17 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                           statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
 
 
-def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None, *,
-                    own_reads: bool = False) -> dict[str, dict]:
+def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict,
+                    served: list | None = None) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`, with its
-    ``own_reads`` where the real record was decided with it) and refused only where the Lean answered (`lean_answered`);
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
+    where the Lean answered (`lean_answered`);
     `agree` is whether the Lean and the Python decided it alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
-                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots, own_reads=own_reads)
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
     def decide(**change) -> dict:
         r = V.audit_record(**{**base, **change})
