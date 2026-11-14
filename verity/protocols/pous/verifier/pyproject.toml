@@ -7,7 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_pous_wipe_store.py", "tests/test_pous_wipe_stream.py"]
 # What the tests import of `verity`, and PoUS's statements in Security with the lock and the pins they check them against,
-# and the rest of the trusted layer's import closure that ../lean/TRUSTED.sha256 hashes (Core's Game): test_pous_trusted fails
+# and the rest of the trusted layer's import closure that ../../../../tools/pous_grader/TRUSTED.sha256 hashes (Core's Game): test_pous_trusted fails
 # while a file it hashes is outside these, naming the lines to add.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/reporting.py", "verity/circuits",
@@ -19,9 +19,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "security/Definitions/Core/Game.lean", "security/Proofs/Core/Game/Basic.lean",
           "security/lean-audit.json", "security/lakefile.toml", "security/lake-manifest.json", "security/lean-toolchain",
           "security/Proofs/lakefile.toml", "security/Proofs/lake-manifest.json",
-          "verity/protocols/pous/lean/README.md",
+          "tools/pous_grader/README.md",
           # the grader's package and the memory challenger's modules, each by its own path: the tests read them wherever
           # they are, in this suite's directory or outside it
-          "verity/protocols/pous/lean", "verity/protocols/pous/device/memory_challenger.py",
+          "tools/pous_grader", "verity/protocols/pous/device/memory_challenger.py",
           "verity/protocols/pous/device/challenger_session.py",
           "verity/protocols/__init__.py", "verity/protocols/pous/__init__.py", "verity/periods"]
