@@ -45,3 +45,46 @@ The draft body's line for this run is filled (notes, `tools/net310/body-second-s
 Running: `r20261114-020530-caa8`.
 TIMER: none
 
+[2026-11-14T02:09Z] 38aafef8fa01
+NETSEATS to network-accounting (lead), Fri 13 Nov 6:08 PM PST. **The chain record at #9867's head ended: exit 0 under both checks, 3 files checked by key, 714 not yet, the control failing with one key. On the gate's branch items 1 to 5 and 7 are pushed, each a commit with its tests; four of my choices in them differ from my 4:31 PM PST sizing and are yours to overrule. Your 5:45 PM PST rulings are read and saved.**
+
+**The record run** [ran] `r20261113-231206-3fbc`, at `da1f3ee64436dd920aad9707e25a0b09ed17fdfc` (its `launch.json`), state done, exit 0. It ran; no second launch.
+- `KEYS session exit 0`, `KEYS chain exit 0`, guard verdict clean, 1,281 files read, 0 found.
+- By key: 3 files checked, 0 with an undeclared key; 714 not yet checked (top level 4, endpoint 1, gates 3, n2 318, report 1, scan 172, session 2, tie 213); 553 with no keys.
+- Control: the same files held again exit 0; with one key added to one line of the gate's `certificates.jsonl` the guard exits 3, verdict refused, and the key's name is in the quarantine's report only.
+- [ran] For ruling 1: the gate run's three released line files hold 0 lines with the key `refused` (of 93, 62 and 62). So the commit that takes `refused/*` off the two lists would not change this run's result [argued].
+- The suites run `r20261113-231315-f4ad` is still running. #9867's body gets its "What ran" lines once, when it ends.
+
+**The gate's branch** [ran] `cursor/na-gate-end-fixed-words-4d2a`, head `9633059373b6f0bff9b0acdf72f8117522870a56`, each commit's author and committer my checkout's own. No pull request is open on it.
+
+| item | commit |
+|---|---|
+| 1 `verdict/failed` | `0650c9c2762e5c2bfe933bd26d9ea120a500905c` |
+| 2 `ended`, `load/refused` | `0665b145441e41c2c58a7d060ec8a294ebea6a51` |
+| 3 `load/streams` | `8851d2eba62140345299d0f5b1467e91d9ae2514` |
+| 4 witness sizes | `3e09adbbea30a90eb78fdac41f604178de84ca20` |
+| 5 wrong `--peer` | `4031351537195d424818490e6f7d041a35c1d0e1` |
+| 7 counts, times, the hold | `9633059373b6f0bff9b0acdf72f8117522870a56` |
+
+[ran] locally after item 7: the gate's three rehearsal test files 377 passed; the runner's chain, session, wipe gate and piece files 65 and 54 passed. The suites run whole before it opens.
+
+**Where I chose otherwise than the sizing** [argued, by your rule under all four]
+- **`ended` is six words and no number:** `ended`, `exited`, `stopped`, `tunnel`, `unruled`, `miscounted`. Which tunnel failed and when is the peer's, so both tunnel words became one. An unruled line's number and rule are in `witness/ended.txt`, not in the end.
+- **`load/refused` is ten words and the gate's `other`,** not 14: the sink's six ways to fail are one word, `sink`, since which one is the sink's choice. No byte count stands beside a word.
+- **The hold (ruling 2) is on accepted ends.** A check that accepted and counted another number of requests than the request's, or none, is `accepted: false` in the end, exit 2, `miscounted`. A check that refused is refused as it stands. `leak` then reads the request's number and stops unless the end is accepted; for a relay session it stops with the reason.
+- **`certifier_run` takes no clock.** With `ended_utc` gone its `now` had no use. Two callers of ours and 17 test calls lose the argument. A branch of another lane that calls it with `now=` breaks at its merge: the body will say so.
+
+**Two things I ask**
+1. **Where ruling 1's commit goes.** My default: on #9867's branch as soon as its suites run ends, so the head does not move under a run, then merged into the gate's branch. The record run above is then one commit behind the head, with the argument above for why its result stands. Say if you want it in the gate's pull request instead.
+2. **`verdict/signer_refused`** is still in the end after item 7, as sized. It lists the execution phases the signer refused, by link, direction and number: the same fact as `refused/*`. I leave it unless you say it goes; it is 1 line and 2 of tests.
+
+**Also in item 7, outside the gate** [read]: the demo's stand-in end (`demo_chain.sh`) wrote a time under `ended`; it now writes the gate's word. `served_verdicts.py`'s front line loses `ended_utc` from its list of one constant.
+
+**Next:** item 8 (the request less `peer` and `by`, with the remote demo's reader), 9, 10, 11, then 6. I tell you the hour for the pull request when 6 is in.
+
+**Least sure of:** that no reader outside the tree's tests takes the end's `problems` or `ended_utc` from a kept run. I searched `benchmarks/`, `tools/`, `adapters/` and `demos/` and read each hit.
+
+**Not looked at:** #9837's tests on the node; the store's kinds text, which names a challenger session's end and not this one.
+
+Running: `r20261113-231315-f4ad`. TIMER: none.
+
