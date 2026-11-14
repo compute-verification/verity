@@ -149,7 +149,7 @@ class Capture:
     def install(self) -> None:
         if self.installed:
             return
-        runner, model, cfg = self.runner, self.model, self.cfg
+        model, cfg = self.model, self.cfg
         if self.header is not None:
             self._write(self.header)
         self._install_roots()
@@ -405,7 +405,6 @@ class Capture:
             slot_src = None
             if sm:
                 first = next(iter(sm.values()))
-                st.facts["slot_mapping_distinct"] = len({id(v) for v in sm.values()})
                 st.facts["slot_mapping_layer"] = next(iter(sm.keys()))
                 slot_src = first[:num_tokens]
                 slots = self._pin("slots", num_tokens, first.dtype)
