@@ -213,8 +213,7 @@ def read(root: Path) -> dict[str, Any]:
             if (o / "inner" / sub).exists():
                 rows.append(prover_row(o / "inner" / sub, stage, "inner", what))
     rows += tool_rows(repeats(root, "icheck"), "icheck", {
-        "inner replay": ("icheck/time-replay-proxy.txt", "flock-circuit replay of the last inner run (upstream's verifier)"),
-        "rec_vstar": ("icheck/time-vstar.txt", "V*'s hashing reference over the inner run")},
+        "inner replay": ("icheck/time-replay-proxy.txt", "flock-circuit replay of the last inner run (upstream's verifier)")},
         verdict=lambda o, n: _upstream(o, "icheck/replay-proxy.txt") if n == "inner replay" else None)
     vs = repeats(root, "vstage")
     if vs:

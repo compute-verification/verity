@@ -2,9 +2,9 @@
 
 The checkpoint is a safetensors file of two decoder layers in the int8 pin's form (each linear int8 [N, K] beside its f32
 [N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; P2 runs at the small point's
-1,024-bit blocks, 8 a segment (`pous._base`), so the adapter encodes it in milliseconds. The memory challenger's side is
+1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
-over a socket pair, as `challenger_session.session` would across hosts. The answer is read back as the composed run reads it
+over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
 (`served_verdicts.piece_row`, `block_record.leg`).
 """
 from __future__ import annotations
@@ -30,9 +30,11 @@ from pathlib import Path
 import pytest
 
 from verity.runtime.stream import Side
+from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier.schemes.p2 import POINT, P2Params
 from verity.protocols.accounting.poub.verifier import ledger, p2_case, p2_lean
@@ -110,7 +112,7 @@ class Served:
 
 @pytest.fixture
 def served(tmp_path, monkeypatch) -> Served:
-    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     tensors = _tensors()
     snap = tmp_path / "hf" / "hub" / f"models--{REPO.replace('/', '--')}" / "snapshots" / REV
     snap.mkdir(parents=True)
@@ -126,8 +128,8 @@ def served(tmp_path, monkeypatch) -> Served:
 
 
 def _in_process_party(signer, log, keep=None, record=lambda request: request):
-    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
-    test signer, a counter clock) and the prover's over a socket pair (`challenger_session.answer`); with `keep`, the
+    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    test signer, a counter clock) and the prover's over a socket pair (`challenger_prover.answer`); with `keep`, the
     challenger's device, where it keeps `record` of each completed session's request as `challenger_party.main` does."""
     calls = []
 
@@ -143,7 +145,7 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
             served_side = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CS.answer(f, request["block_bytes"], respond)
+                    rounds = CR.answer(f, request["block_bytes"], respond)
             finally:
                 sid, signed = served_side.result()
         if keep is not None:
@@ -195,12 +197,18 @@ class Auditor:
         return report | {"session_id": sid.hex()}
 
 
+CONF = hashlib.sha512(b"a committed configuration").hexdigest()
+
+
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
-    monkeypatch.setattr(CS, "session", auditor.session)
+    monkeypatch.setattr(CR, "session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
-    kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
+    key = hashlib.sha512(auditor.signer.public_key).hexdigest()
+    kw.setdefault("trusted_sha512", key)
+    kw.setdefault("deployment", {"configuration": CONF, "committed": frozenset({CONF}), "pins": [
+        {"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]})
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                     party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
@@ -232,7 +240,9 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
         "blocks": 48, "checkpoint_bytes": 7776, "share": str(Fraction(w_bytes, 7776)), "held": None}
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
-    assert prof["placement"][CS.PREMISE].startswith(f"holds: the memory challenger ran on {AUDITOR}")
+    assert prof["placement"][CS.PREMISE] == (
+        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's pous sessions; "
+        f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
@@ -507,8 +517,8 @@ def registered(served, monkeypatch) -> Served:
     """`served` at PoUS's registered point, the one a P2 registration names (2,056-byte blocks, 4 a segment: the two
     layers' 8 linears in 2 segments, 2 units), with each segment's encode kept across the module's tests, so ``C*``,
     whose salt `_bandwidth`'s challenger samples from a fixed source, is encoded once."""
-    monkeypatch.setattr(pous, "_base", lambda scheme: REGISTERED)
-    S = pous._p2("store")
+    monkeypatch.setattr(ws, "geometry", lambda scheme: REGISTERED)
+    S = ws.p2_module("store")
     encode = S.CpuEncoder.encode
 
     def kept(self, s, w_seg):
@@ -521,7 +531,7 @@ def registered(served, monkeypatch) -> Served:
 
 
 def _bandwidth(tmp_path, record=lambda request: request, **kw):
-    """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
+    """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_parties --listen` from the tree with no
     site packages, its close signed by `p2_party_at_leaf`'s key on a session log in ``parties/p2-challenger``), its
     registration the challenger's record in ``parties/pous``, which the in-process challenger keeps as ``record`` has
     it, and a short session, which a toy party's flags hold it to."""
@@ -540,8 +550,8 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
 
 def test_the_held_sessions_request_is_the_auditors_session():
     """The held session requests, by default, the session the auditor's party holds every request to
-    (`p2_party.SESSION`), so V3's served run is never refused for its parameters."""
-    assert SP.HB.request(NODE.encode()) == SP.HB.p2_party.request_of(NODE.encode(), **SP.HB.p2_party.SESSION)
+    (`p2_parties.SESSION`), so V3's served run is never refused for its parameters."""
+    assert SP.HB.request(NODE.encode()) == SP.HB.p2_parties.request_of(NODE.encode(), **SP.HB.p2_parties.SESSION)
     assert (SP.HB.WINDOWS, SP.HB.PASSES, SP.HB.SAMPLES, SP.HB.WINDOW_S, SP.HB.DEADLINE_S) == (6, 4, 1024, 20.0, 1.0)
 
 
@@ -556,7 +566,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, the
     piece judging without `--bw-case-exe`); `remote-audit-p2-protocol` refuses it, a toy party's session, naming each
-    value off the auditor's (`p2_party.SESSION`). The public answer, which the composed run reads as the bandwidth
+    value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
     a P2 registration names."""
     s = registered
@@ -580,17 +590,17 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
         assert stat.S_IMODE((private / f).stat().st_mode) == 0o600
     pous_case = json.loads((s.private / "case.json").read_text())
     assert p2_case.same_store(case, pous_case) is None and p2_case.store_root(case).hex() == published["root"]
-    toy = SP.HB.p2_party.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
+    toy = SP.HB.p2_parties.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
                                     deadline_ns=10 ** 6)
     assert case["params"]["request"] == toy and own["verdict"] == "accept"
     lean, = p2_case.serve(case_exe, [case])
     why = "; ".join(f"the request's {k} is not the auditor's ({toy[k]}, not {v})"
-                    for k, v in SP.HB.p2_party.SESSION.items())
+                    for k, v in SP.HB.p2_parties.SESSION.items())
     assert lean == own | {"profile": None, "public": None, "reason": f"the request is refused: {why}", "verdict": "reject"}
     assert own["commitment"] == p2_case.digest(case).hex() and own["profile"]["units"] == 2
     kept = tmp_path / "parties" / "bw" / "private"
-    assert (kept / SP.HB.p2_party.CASE_DIGESTS).read_text().splitlines() == [SP.HB.p2_party.case_digest(case)]
-    assert sorted(p.name for p in kept.iterdir()) == [SP.HB.p2_party.CASE_DIGESTS]
+    assert (kept / SP.HB.p2_parties.CASE_DIGESTS).read_text().splitlines() == [SP.HB.p2_parties.case_digest(case)]
+    assert sorted(p.name for p in kept.iterdir()) == [SP.HB.p2_parties.CASE_DIGESTS]
     assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]

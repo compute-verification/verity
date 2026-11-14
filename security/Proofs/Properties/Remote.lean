@@ -585,9 +585,14 @@ theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (
     exact Or.inl ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
-  · obtain ⟨hcall, e₀, he₀⟩ := recursive_live
-      (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
-    exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀, hm _ _ hcall⟩
+  · rcases q with q | q <;> rcases e with e | e
+    · obtain ⟨hcall, e₀, he₀⟩ := recursive_live
+        (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
+      exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀, hm _ _ hcall⟩
+    · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
+    · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
+    · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
+        pub prof)
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
 records, which every Commit record the period's windows name has, the policy's case decoding to what the policy's

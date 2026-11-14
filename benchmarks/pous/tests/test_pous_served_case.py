@@ -2,7 +2,7 @@
 
 PoUS's window is `served_piece.py`'s, run on the CPU over the tiny int8 checkpoint at the small point with the PoUS tests'
 signer (`test_pous_served_piece`'s fixture); the builder encodes ``C*`` again from the same snapshot on the CPU. The wipe's
-is one wipe in this process at a small fill (`wipe_period.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
+is one wipe in this process at a small fill (`wipe_run.run`), laid out as `streamed_wipe/served_wipe.sh` leaves it:
 ``answer.json`` with the run's placement in its profile, ``served.json`` and the leg's ``wipe.case.json``. Each piece is
 held to the composite's form (`benchmarks/one_stage/composite.py`'s ``piece``: a case of commitment, evidence and params,
 an answer whose commitment is the digest of the case's commitment), and a kept output that was changed after the run is
@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
@@ -174,9 +175,9 @@ def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_pa
         SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=served.pins)
 
 
-def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, W.Wipe]:
+def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, wipe_run.Wipe]:
     """A served wipe's public directory as `served_wipe.sh` leaves it, and the serve dir its ``served.json`` names."""
-    w = W.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
+    w = wipe_run.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
               log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
               protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, coin_secret=b"coins",
               egress_mib=egress_mib)

@@ -17,13 +17,13 @@
 #                round, rec_live --coin-tree (from TREE_FROM) with the prover, its statement and its replay under INNER_COINS; Register
 #                answered with the verifier's full sample, rec_live.full_draw over the
 #                inner statement's program and partition, data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's
-#                replay of the last one and V*'s hashing
-#                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
-#                bit off, one salt one bit off), which it must refuse (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
-#                hm96 statement on loopback, M0 (FC_COINS=tree) and --zk, WARM + RUNS sessions each (today's numbers)
-#   STEP=icheck  (CPU) the replay and rec_vstar on the inner's last session, the schedule the sessions were held to against
-#                the statement's (derived again), each session's own schedule, how it ended and its message count, the coin
-#                server's record against the clear tops, and the tree-top controls rec_vstar must refuse by name
+#                replay of the last one (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
+#                hm96 statement on loopback, M0 (FC_COINS=tree) and --zk, WARM + RUNS sessions each (today's numbers).
+#                V*'s verdict on the inner session is Lean's, at STEP=lean: verify --zk --rec-part J on each V* part and
+#                rec-compose over them; its tree-top controls are vstage's FORGE=top and top-salt, which Lean must refuse
+#   STEP=icheck  (CPU) the replay on the inner's last session, the schedule the sessions were held to against
+#                the statement's (derived again), each session's own schedule, how it ended and its message count, and the
+#                coin server's record against the clear tops
 #   STEP=vstage  (CPU) V*'s statements over the inner's last proxied session (verity_flock.rec_vstage) into data/$TAG/v: the
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
@@ -469,17 +469,10 @@ elif step == "inner":
         if (d / f"replay-{name}.txt").exists():
             s[f"replay_{name}"] = {"verdict": replay(d / f"replay-{name}.txt"), "wall": tv(d / f"time-replay-{name}.txt", r"Elapsed \(wall clock\) time"),
                                    "peak_gb": gb(d / f"time-replay-{name}.txt")}
-    s["vstar"] = text(d / "vstar.json")[-3000:]
-    s["vstar_wall"] = tv(d / "time-vstar.txt", r"Elapsed \(wall clock\) time")
-    for f in ("node", "salt"):
-        s[f"vstar_forged_{f}"] = (text(d / f"vstar-forged-{f}.json") + text(d / f"vstar-forged-{f}.err"))[-1500:]
 elif step == "icheck":
     s["replay_proxy"] = {"verdict": replay(d / "replay-proxy.txt"), "wall": tv(d / "time-replay-proxy.txt", r"Elapsed \(wall clock\) time")}
-    s["vstar"] = text(d / "vstar.json")[-3000:]
-    s["vstar_wall"] = tv(d / "time-vstar.txt", r"Elapsed \(wall clock\) time")
     s["schedule"] = json.loads(text(d / "schedule.json") or "null")
     s["tops"] = text(d / "tops.txt")
-    s["controls"] = {f.stem[4:]: json.loads(text(f) or "null") for f in sorted(d.glob("neg-*.json"))}
 elif step == "oreplay":
     s["levels"] = {x.name: {"mode": text(x / "mode.txt").strip(), "replay": replay(x / "replay.txt"), "wall": tv(x / "time-replay.txt", r"Elapsed \(wall clock\) time"),
                             "peak_gb": gb(x / "time-replay.txt"), "sizes": text(x / "sizes.txt")} for x in sorted(p for p in d.iterdir() if p.is_dir())}
@@ -700,30 +693,11 @@ inner)
     python3 -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1]))["ok"] else 1)' $O/inner/tree-held.json \
       || { echo "REFUSED: the inner sessions' coins are not the challenger's (out/inner/tree-held.json)"; exit 1; }
   fi
-  # CHECKS=0: the replay and V*'s hashing reference wait for STEP=icheck (CPU), outside the GPU lease
+  # CHECKS=0: the replay waits for STEP=icheck (CPU), outside the GPU lease. The prover reports a stop (prover_stopped) and
+  # exits 0; a stopped session has no proofs for STEP=vstage to stage V*'s parts over, so STEP=lean refuses it
   if [ "${CHECKS:-1}" = 1 ]; then
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt env $INNER_COINS $B replay --instances $D/pub-$N.bin \
     --circuit $D/circuit.txt $(links_at $D) --sessions $SESS/session > $O/inner/replay-proxy.txt 2>&1
-  taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/inner/vstar.json 2> $O/inner/vstar.err
-  rc=$?; echo "vstar exit $rc"
-  # the prover reports a stop (prover_stopped) and exits 0; the honest session's V* is what refuses one without its proofs
-  [ $rc = 0 ] || { cat $O/inner/vstar.json; grep -h -m3 -e panicked -e prover_stopped $O/inner/proxy/prove.err $O/inner/proxy/prove.tsv
-    mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $O/inner/session/; exit 1; }
-  # the forged sessions V*'s reference must refuse: the session's private.json with the first salted top's first node (node)
-  # or its salt (salt) one bit off, the public record and the proofs as they are
-  for f in node salt; do
-    F=$DD/inner-forged-$f; rm -rf $F; mkdir -p $F; cp $SESS/public.json $F/; ln -s $SESS/session $F/session
-    python3 - $SESS/private.json $F/private.json $f <<'EOF'
-import json, sys
-p = json.load(open(sys.argv[1]))
-op = next(r for r in p["rounds"] if r.get("tops"))["tops"][0]
-key = {"node": "nodes", "salt": "salts"}[sys.argv[3]]
-op[key][0] = "%02x" % (int(op[key][0][:2], 16) ^ 1) + op[key][0][2:]
-json.dump(p, open(sys.argv[2], "w"))
-EOF
-    taskset -c $VCPU python3 -m verity_flock.rec_vstar $F > $O/inner/vstar-forged-$f.json 2> $O/inner/vstar-forged-$f.err
-    echo "vstar forged-$f exit $? (1: refused)"
-  done
   fi
   mkdir -p $O/inner/session && cp -r $SESS/session $SESS/public.json $DD/inner/schedule.json $O/inner/session/ && du -sb $SESS/* > $O/inner/session/sizes.txt
   fi
@@ -738,16 +712,13 @@ EOF
   fi
   ;;
 icheck)
-  # (CPU) the inner's last proxied session: upstream's replay, V*'s hashing reference over the salted tops (rec_vstar), that
-  # the challenger's record holds none of the clear tops, and the tree-top controls (rec_inner.py forge: a top that is not
-  # the committed one, a record of unsalted tops), each of which V*'s inputs must refuse by name
+  # (CPU) the inner's last proxied session: upstream's replay and that the challenger's record holds none of the clear tops
+  # (V*'s verdict and its tree-top controls are STEP=lean's)
   D=$DD/stage; SESS=${INNER:-$DD/inner/s$((NS - 1))}
   [ -f $SESS/session/session.json ] || { echo "run STEP=inner first"; exit 1; }
   mkdir -p $O/icheck
   /usr/bin/time -v -o $O/icheck/time-replay-proxy.txt env $INNER_COINS $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) \
     --sessions $SESS/session > $O/icheck/replay-proxy.txt 2>&1; echo "replay exit $?"
-  /usr/bin/time -v -o $O/icheck/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/icheck/vstar.json 2> $O/icheck/vstar.err
-  echo "vstar exit $?"
   # the schedule the sessions were held to against the statement's (derived again from the public file), each session's own
   # schedule against it, how each ended, and each finished one's messages (the stop bound's: Hello, Commit, Link, every
   # Open, Round and Proof, Finish)
@@ -784,11 +755,6 @@ print(json.dumps({"tops": pub.get("tops"), "clear_tops": len(opened), "clear_nod
                   "message_rows": pub["message_rows"], "rounds": len(pub["rounds"])}))
 EOF
   cat $O/icheck/tops.txt
-  for w in top unsalted; do
-    rm -rf $DD/neg-$w && mkdir -p $DD/neg-$w && cp -r $SESS/public.json $SESS/private.json $DD/neg-$w/ && ln -s $SESS/session $DD/neg-$w/session
-    python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py forge --what $w --inner $DD/neg-$w > $O/icheck/forge-$w.json
-    python3 -m verity_flock.rec_vstar $DD/neg-$w > $O/icheck/neg-$w.json 2> $O/icheck/neg-$w.err; echo "neg $w vstar exit $?"; cat $O/icheck/neg-$w.json
-  done
   ;;
 vstage)
   # V*'s statements over the inner's last proxied session: the verifier's fold points (from the coins), its extra claims and
@@ -1101,7 +1067,7 @@ EOF
   if [ $RELEASE = 1 ]; then
     cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
     python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py release-report --state $FWS --session $SID \
-      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-zk-server/prove.err; done) > $O/oprove/release.json
+      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-zk_server/prove.err; done) > $O/oprove/release.json
     rr=$?; cat $O/oprove/release.json; [ $rr = 0 ] || { echo "release: the recursive session $SID did not release every part at its time"; exit 1; }
   fi
   python3 - $O/oprove/exits.tsv "${STARTED[@]}" <<'EOF' || exit 1

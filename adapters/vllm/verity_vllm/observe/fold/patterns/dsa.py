@@ -15,11 +15,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import dsa
-from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.dsa_norm import DsaRMSNorm
-from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.definitions.registry.sparse_mla_split import (
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity_vllm.definitions.registry.dsa_norm import DsaRMSNorm
+from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.definitions.registry.sparse_mla_split import (
     SparseMlaSplit,
     launch_num_splits,
 )

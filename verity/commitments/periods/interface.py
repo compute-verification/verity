@@ -215,7 +215,7 @@ def _static(v: Any) -> Any:
 
 
 # A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/circuits/ops`)
-# and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
+# and not the registry, which is the vLLM adapter's (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:
@@ -775,7 +775,9 @@ class Registered:
     there are some. ``formats``: by parameter, the rows its reads read when they aren't 16-bit leaves in
     ``hm96-sha512/row/v2`` rows (`value_format`), ``{"row_schema", "word_bits"}``: Pearl+'s A rows and y are FP32 words in
     ``hm96-sha512/row-seg/v1`` rows, as its trees commit them; ``formats`` and ``histories`` recorded only when there are
-    some."""
+    some. ``supplied``: registered parameters whose rows the verifier makes itself, one row for each unit that reads it,
+    each a public function of the unit's sampled index (`Window.give`), committed under public salts as a table's
+    supplied values are (`supplied`); recorded only when there are some. Not written: a circuit with one is refused."""
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
@@ -784,8 +786,12 @@ class Registered:
     values: tuple[str, ...] = ()
     formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     histories: tuple[History, ...] = ()
+    supplied: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if self.supplied:
+            raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled unit "
+                                      f"(Registered.supplied {list(self.supplied)})")
         if not isinstance(self.formats, Mapping) or not all(isinstance(f, Mapping) for f in self.formats.values()):
             raise ValueError(f"formats {self.formats!r}: an object of a format by parameter")
         object.__setattr__(self, "formats", {str(v): dict(f) for v, f in self.formats.items()})
@@ -804,20 +810,21 @@ class Registered:
                 "reads": [r.doc() for r in self.reads], "roots": [r.doc() for r in self.roots],
                 "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {}),
                 **({"formats": dict(sorted(self.formats.items()))} if self.formats else {}),
-                **({"histories": [h.doc() for h in self.histories]} if self.histories else {})}
+                **({"histories": [h.doc() for h in self.histories]} if self.histories else {}),
+                **({"supplied": list(self.supplied)} if self.supplied else {})}
 
     @classmethod
     def of(cls, d: Any) -> Registered:
         try:
             if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
                                                                                     "openings", "values", "formats",
-                                                                                    "histories"}:
+                                                                                    "histories", "supplied"}:
                 raise ValueError(sorted(d))
             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
                        tuple(d.get("values", ())), d.get("formats", {}),
-                       tuple(History(**h) for h in d.get("histories", ())))
+                       tuple(History(**h) for h in d.get("histories", ())), tuple(d.get("supplied", ())))
         except (TypeError, ValueError, KeyError, AttributeError) as e:
             raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values, "
                              f"their formats and its histories: {e}") from e
@@ -2520,6 +2527,15 @@ class Window:
         tables = (self.circuit.registered or Registered({})).readable.values()
         entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in tables}}
         self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest, module=module)}
+
+    def give(self, param: str, rows: Sequence[bytes], module: Any) -> None:
+        """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``rows`` its bytes for each unit
+        that reads it in read order, as the verifier makes them from the unit's sampled index (its supplied value's
+        ``{"bytes": hex}`` sources, `one_stage.registered.supplied_rows`, which read them by the parameter's leaf width),
+        committed under the public salts ``module.supplied_salts`` gives at the period's partition digest, so `close`
+        leaves their salts out and the verifier's root of them is the record's. Not written."""
+        raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled unit "
+                                  "(Window.give)")
 
     def count(self, tid: str) -> int:
         """Template ``tid``'s units recorded so far."""
