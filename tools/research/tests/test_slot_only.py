@@ -104,7 +104,7 @@ def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monke
     seen = []
     monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r",
                                                                             "launch": {"runner_pid": 1}})
-    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--stay", "--project", "p", "--no-custody-r2", "--source", ".",
             "--pool", "research", "--as", "infra"]
     assert main([*argv, "--timeout", "40m", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
     timed, untimed = seen
