@@ -80,7 +80,8 @@ LIVE = {
     "instance": "Lean's `instance`, Python's `isinstance` and a template instance are live",
     "slack": "the table keeps its other senses, Slack among them",
     "tap": "vLLM's capture taps are live; the certifier's are retired as \"uplink tap\" and \"the auditor's tap\"",
-    "remote audit": "Lean's `RemoteAudit` is the remote composite's audit; PoUB's old name is \"remote bandwidth audit\"",
+    "remote audit": "PoUB's Lean package `RemoteAudit` keeps the words until renamed, and the remote configuration's audit "
+                    "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
     "M2": "a label the code uses for other things",
     "layer 1": "a model's layers", "layer 2": "a model's layers", "layer 3": "a model's layers",

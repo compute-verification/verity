@@ -157,6 +157,8 @@ DOC_TERMS = {
                                           "renamed)",
     "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
            "memory wipe's, or run",
+    "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
+        "PoUB (`RemoteAudit`, `remote_bandwidth` and the `verity/remote-bandwidth/` ids stay in backticks until renamed)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -194,6 +196,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|(?:isolation|certified|transformer){_SPACE}blocks?|audit{_SPACE}(?:phases?|rounds?)"
                        rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
                        rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
+                       rf"|remote{_SPACE}(?:bandwidth(?:{_SPACE}audits?)?|audits?)|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
@@ -613,6 +616,15 @@ def test_the_doc_scan_reads_the_protocol_terms():
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
         ("a.md", 4, "flock-verify"), ("verity/commitments/x/PROTOCOL.md", 1, "draw")]
+
+
+def test_the_doc_scan_reads_poub_s_older_names():
+    """PoUB's older names, on a toy file: its ids, its Lean package and the bandwidth audit over PoUS's store stay."""
+    docs = {"a.md": "The remote bandwidth audit, a remote-bandwidth session, the remote\naudit, the proof of useful bandwidth.\n"
+                    "`verity/remote-bandwidth/v0`, `RemoteAudit` and the bandwidth audit over PoUS's store stay.\n"}
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "remote bandwidth audit"), ("a.md", 1, "remote-bandwidth"), ("a.md", 1, "remote audit"),
+        ("a.md", 2, "proof of useful bandwidth")]
 
 
 def test_the_doc_scan_reads_the_network_and_process_terms():
