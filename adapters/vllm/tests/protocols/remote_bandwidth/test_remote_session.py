@@ -35,10 +35,10 @@ from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity.protocols.accounting.poub.prover.node_store import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth import remote
-from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
+from verity.protocols.accounting.poub.prover.node_store.interface import Append, PageLayout
+from verity.protocols.accounting.poub.prover.node_store.registry import ArrayBacking, NodeMemory
 
 from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT

@@ -338,9 +338,9 @@ KNOWN = frozenset({
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.host",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.screen",
-    "verity_vllm.protocols.remote_bandwidth.interface",
-    "verity_vllm.protocols.remote_bandwidth.memory_map",
-    "verity_vllm.protocols.remote_bandwidth.registry",
+    "verity.protocols.accounting.poub.prover.node_store.interface",
+    "verity.protocols.accounting.poub.prover.node_store.memory_map",
+    "verity.protocols.accounting.poub.prover.node_store.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
@@ -352,7 +352,7 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
+    ('verity.protocols.accounting.poub.prover.node_store.registry', '_page_blocks'),
 })
 
 

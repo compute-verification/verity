@@ -8,13 +8,13 @@ from collections.abc import Callable, Sequence
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF
 
-from verity_vllm.protocols.remote_bandwidth.interface import (
+from verity.protocols.accounting.poub.prover.node_store.interface import (
     BlockOpening,
     PassCommitment,
     Receipt,
     RegionInfo,
 )
-from verity_vllm.protocols.remote_bandwidth.registry import canonical, plan_of, runs_of
+from verity.protocols.accounting.poub.prover.node_store.registry import canonical, plan_of, runs_of
 
 
 def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o: BlockOpening, receipt: Receipt,

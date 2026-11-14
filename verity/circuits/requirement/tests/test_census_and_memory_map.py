@@ -1,4 +1,4 @@
-"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.memory_map.Lines`) held to
+"""`requirement.from_census` and memory-map/v1's builder (`verity.protocols.accounting.poub.prover.node_store.memory_map.Lines`) held to
 `core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
 agreeing with Lean on each.
 
@@ -46,9 +46,9 @@ from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_d
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
-from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
+from verity.protocols.accounting.poub.prover.node_store.interface import PageLayout
+from verity.protocols.accounting.poub.prover.node_store.memory_map import Lines
+from verity.protocols.accounting.poub.prover.node_store.registry import _page_blocks
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 from verity.circuits.program import REGISTRATION, Program, is_input

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.protocols.remote_bandwidth.interface import (
+from verity.protocols.accounting.poub.prover.node_store.interface import (
     IDENTITY,
     Append,
     Codec,
@@ -46,7 +46,7 @@ from verity_vllm.protocols.remote_bandwidth.interface import (
     Segment,
     WindowRecord,
 )
-from verity_vllm.protocols.remote_bandwidth.registry import (
+from verity.protocols.accounting.poub.prover.node_store.registry import (
     KindReceipt,
     NodeMemory,
     RemoteBandwidthReceipt,

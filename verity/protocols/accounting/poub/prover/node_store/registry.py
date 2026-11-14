@@ -51,8 +51,8 @@ from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF, Plan
 from verity.protocols.accounting.poub.verifier.store import store_salt
 
-from verity_vllm.protocols.remote_bandwidth import memory_map as mm
-from verity_vllm.protocols.remote_bandwidth.interface import (
+from verity.protocols.accounting.poub.prover.node_store import memory_map as mm
+from verity.protocols.accounting.poub.prover.node_store.interface import (
     KINDS,
     TIERS,
     Append,

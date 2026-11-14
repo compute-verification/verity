@@ -197,7 +197,7 @@ def main() -> int:
 
     from verity_vllm.protocols.remote_bandwidth import remote
     from verity_vllm.protocols.remote_bandwidth.binder import Binder
-    from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
+    from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
 
     store = NodeMemory()
     binder = Binder(store, passes=False).install()

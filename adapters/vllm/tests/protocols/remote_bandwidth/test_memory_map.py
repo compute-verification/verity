@@ -19,9 +19,9 @@ from verity.circuits import requirement
 from verity.protocols.accounting.poub.verifier import audit, codec, memory_map
 from verity.protocols.accounting.poub.verifier.memory_map import MemoryMapError, Replay
 
-from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME, Lines
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
+from verity.protocols.accounting.poub.prover.node_store.interface import Append, PageLayout
+from verity.protocols.accounting.poub.prover.node_store.memory_map import LIFETIME, Lines
+from verity.protocols.accounting.poub.prover.node_store.registry import ArrayBacking, NodeMemory
 
 from .test_registry import CODEC, RECEIPT
 

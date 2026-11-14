@@ -4,7 +4,7 @@ the same bytes.
 
 ~~~text
 segment     a device reader's part of a pass: count = 16 · 2^h chunks of one region, read in order from position
-            p = a multiple of count (`verity_vllm.protocols.remote_bandwidth.registry.aligned`); its root is the node (h + 4 levels above
+            p = a multiple of count (`verity.protocols.accounting.poub.prover.node_store.registry.aligned`); its root is the node (h + 4 levels above
             the chunks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
 salts       the store's PRF, `remote_bandwidth.store.store_salt(key, seed, leaf)` (`NodeMemory.salt`), so none is kept
 ~~~

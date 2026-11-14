@@ -93,7 +93,7 @@ residency, 2."""
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None,
            lifetime: int = LIFETIME, on_line: Callable[[Change], None] | None = None,
            on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
-    """Start ``store``'s memory map (`NodeMemory.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.NodeMemory`)."""
+    """Start ``store``'s memory map (`NodeMemory.record_memory_map`; ``store`` a `verity.protocols.accounting.poub.prover.node_store.registry.NodeMemory`)."""
     if registration is None:
         raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
                          "the one the session's first window chains from (NodeMemory.begin_window)")
