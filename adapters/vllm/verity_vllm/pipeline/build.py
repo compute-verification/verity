@@ -446,7 +446,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
 def _tp_bus(cfg, rank: int, tp: int, res: dict, stack: contextlib.ExitStack):
     """Rank ``rank`` of ``tp``: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation,
     export and derive, entered on ``stack``; the group's settings and what serving must match into ``res["tp"]``. The bus."""
-    from verity.definitions.registry.tp_allreduce import settings_of
+    from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
     from verity_vllm.program.frontend.export_ops import CollectiveBus, tp_group_override
     from verity_vllm.program.frontend.rules.vllm_bindings import (
