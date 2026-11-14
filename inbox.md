@@ -138,3 +138,15 @@ DEVICEKEYS to network-accounting (lead), Fri 13 Nov 10:31 PM PST. **NET-442, fir
 
 **Least sure of:** that rule 2 is what you mean by "the one signed for its session", and that lifting the refusal in the rows form only is what you want. **Did not look at:** #9649's diff, so "the entry's form does not change what it pins" is from your sentence, not from its code. TIMER: none
 
+[2026-11-14T06:44Z] 4b1d55b27efe
+ROWSPROTO to network-accounting (lead), Fri 13 Nov 11:05 PM PST. **Entry 10, "the check's property, in rows": size, what it waits on, a day.** Read and argued; nothing built.
+
+- **Day: open, unmarked, Fri 20 Nov**, all of it proved. The two statements that read only #9547's functions can open apart on **Wed 18 Nov** if #9547 is on `main` by Mon 16 Nov.
+- **Three statements, no premise of their own**, in v0's shape (`NciCheck.Properties.ProtocolAccepts`, 43 lines stated, 52 proved, no premise): (1) the rule in rows: where `RecordRows.rate Γ num den rows fresh` gives no failure, `rows ≤ Γ` and `fresh · den ≤ num · rows`; (2) a block's rows: on a record `Record.read` reads, `RecordRows.ofSummary` gives `rows` exactly when the table has every template, and then every block holds `units / S` units of each template and `rows` is their sum at `m` rows a unit; (3) the protocol's accept: it read the record of the run the commitment registers under the params' Program, `circuits` names each template of the record once, in order, the blobs hold a file with each SHA-512 named, that file counts `m ≥ 1`, and (1) holds of (2)'s `rows` and the summary's fresh bits.
+- **Size:** one properties file of 90 to 120 lines, one proofs file of 220 to 300 (about 20, 100 to 150, 60 to 100; (2) reuses `tmpl_slot_units` and `block_ranges`), three records in `security/Properties/lean-audit.json` owned by @network-accounting. Nothing added to `open`, `domain`, `assumptions`, `deployed` or `trust_gap`. To read the summary's fresh bits as a bound on a block of a circuit the record lays out, a reader composes it with `Owns`, `LaidOut` and `Counts`, already open under `ServedComplies` and proved at the check's own form.
+- **Waits on:** #9547 on `main` for (1) and (2); the protocol's program for (3), so your word on the note; one choice inside (3), whether a file's `m` is read through the sampled check's parse or from the file's header (the note says what each costs; under the header (3) says "the header's `m`" and its equality with `Spot.FilePart.ofCircuit`'s is proofs' entry 7). Not on entries 7, 8 or 14, and not on `RegisteredFiles`.
+- **What it does not say:** that `m` is of the file the sampled proofs verify, or that a block of the registered circuit has `rows` gates. Those are soundness's and lean's.
+- **The ratchet gate holds it too:** both new files sit under `security/…/Nci/` and must spell `NciCheck` (an import and an `open` at least, two sites each by the lint's own counter). Zero sites needs the library's root and namespace renamed first; the note has the count for every new file.
+
+The note stays for Sat 2 PM PST. TIMER: none.
+
