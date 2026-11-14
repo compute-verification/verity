@@ -1,12 +1,11 @@
-module
-
-public import Flock.With.Sim
-
-/-!
+/-
 `sim_walk`: walks two copies of one definition in step under a simulation (`Flock.With.Sim`). A macro is code run while
 compiling, so it is alone here, the module `compile_time` lists, apart from the proofs that use it (`Flock.With.SimVerify`,
 `Flock.With.SimZk`).
 -/
+module
+
+public import Flock.With.Sim
 
 @[expose] public section
 
