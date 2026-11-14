@@ -115,7 +115,7 @@ more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
-the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
+the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
 of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
@@ -243,18 +243,19 @@ ADVICE = ("not in this record: the realized advice length |a_j| is a value. The 
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.rowsCells`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
-             "run coincide; K is PeriodLeakAccepted's count as it states it")
+             "run coincide; K is MonitoringPeriodLeakAccepted's count as it states it")
 CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the period's check refuses any "
                "but its schedule's (`NetworkCheck.Period.Schedule.rowsCells`), egress_cells for each of the lanes · m · T "
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
 EPS = {"is": "δ_net's δ part alone: m · δ and each charged audit's δ",
        "source": "the network-period check's public eps (NetworkCheck.Period)"}
-#: δ_net's terms that eps doesn't count, each once an execution phase: `PeriodLeakAccepted` bounds each phase's audit's
+#: δ_net's terms that eps doesn't count, each once an execution phase: `MonitoringPeriodLeakAccepted` bounds each phase's audit's
 #: failure by δ + ε_ks + ε_bind + ε_tap
 ERRORS = {
     "ε_ks": {"is": "the knowledge error, κ(δ) − δ + √(γ·Pr[B])",
-             "source": "Claims.Sampling.KSBy at the deployment's wired check, PeriodLeakAccepted's hypothesis"},
+             "source": "Claims.SamplingGeneric.Compiled.KS at the compiled deployment, MonitoringPeriodLeakAccepted's "
+                       "hypothesis hks"},
     "ε_bind": {"is": "the binding error, Pr[B_ext]: an accepted extraction that disagrees with the committed trace",
                "source": "Claims.Sampling.Bext, a SHA-512 collision in the run (CommitmentScheme.Binds)"},
     "ε_tap": {"is": "Pr[B_tap]: the extracted trace's openings colliding with the network certifier's",
@@ -428,14 +429,14 @@ CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its perio
                f"{COINS_OPEN}, by its name (``open``), and the network certifier's bound and figures are conditional on "
                "the coins")
 NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's law"
-CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
+CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
            "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
            "performs both checks it rests on and none of its premises is open (`CHECKS`, `DISCHARGE`, `OPEN`)")
-SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
+SKIP = ("MonitoringPeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
         "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
         "``faulty_entries``, every slot-entry bit E_w of each audit tied to j's scan that is drawn in part (charged, "
         "NetworkCheck.Period's chargedOf) with a bound of at least one incorrect proof block. Drawn whole, a tied "
@@ -537,7 +538,7 @@ CHECKED = {
                         "established, and there is no bound (`STATE_UNPINNED`)"),
 }
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
-#: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
+#: registration opens at its registered inputs, is K's; MonitoringPeriodLeakAccepted's is the same count at the trace's values
 #: there; PeriodTiedCount's is to count a phase's tied audits with the scan as one Program, as ℓ_{a,j} does, once it is
 #: restated (`RESTATE_TIED`). The lock records a guarantee's named assumptions, never the antecedents its statement
 #: takes, so each gives ``statement``, the digest of its statement among the lock's reads (`statement`) at which it was
@@ -547,14 +548,14 @@ CHECKED = {
 #: ``restate`` where its statement is to be restated, why, which keeps it open at any statement. Parameters the record
 #: states (δ ≥ 0) aren't listed
 RESTS_ON: dict[str, dict[str, Any]] = {
-    "NetTiming.SecurityProofs.PeriodLeakAccepted": {
-        "statement": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17",
-        "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
+    "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
+        "statement": "41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772",
+        "takes": {"Claims.SamplingGeneric.Compiled.KS": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
-                  "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "certifiers-open"}},
+                  "NetTiming.ScopeAcc": "wires-fit", "NetTiming.CertifierRegisters": "certifiers-open"}},
     PERIOD_REGISTERED: {
         "statement": "808274afd667f0e04b4758786bf29fedb31a024e4a2a92147a7003fa9cc4d59f",
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
@@ -652,7 +653,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "pinned part by the sampled leg's bridge with a coverage Property of the registration check at "
                            "OneStageZk's record. Open until both are named",
                      "discharged_by": ()},
-    "certifiers-open": {"is": "CertifiersOpen, PeriodLeakRegistered's antecedent and PeriodLeakAccepted's TapOpens: at "
+    "certifiers-open": {"is": "CertifiersOpen, PeriodLeakRegistered's antecedent and MonitoringPeriodLeakAccepted's CertifierRegisters: at "
                               "every window's statement the network certifier's openings register its observations at "
                               "the window's operator. The period check's half: on an accepted rows-form execution phase "
                               "the scan's rows/<d> root and domain are those the network certifier signed for its "
@@ -669,7 +670,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "holds (``unchecked``: why it doesn't); while it is open the network verdict is not "
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
-    "windows-placed": {"is": "WindowsPlaced, PeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
+    "windows-placed": {"is": "WindowsPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
                              "the period read, and each of its faulty sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
@@ -690,12 +691,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
                            "bound reads",
                      "discharged_by": ("Claims.Sampling.Count.countBound_miss_design",)},
-    "schedules-held": {"is": "SchedulesHeld, PeriodLeakAccepted's hcap and hfit: each schedule the network certifier may "
+    "schedules-held": {"is": "SchedulesHeld, MonitoringPeriodLeakAccepted's hcap and hfit: each schedule the network certifier may "
                              "run gives each connection at most its cap of cells, and its record format holds it "
                              "(TapRecord.fits, the rows format's). Open until the theorem that gives it of the network "
                              "certifier's code is named",
                        "discharged_by": ()},
-    "schedules-covered": {"is": "SchedulesCovered, PeriodLeakAccepted's hs: each secret K counts runs on a schedule of "
+    "schedules-covered": {"is": "SchedulesCovered, MonitoringPeriodLeakAccepted's hs: each secret K counts runs on a schedule of "
                                 "Ss, whose number k_sched counts, so Ss must hold every schedule the network "
                                 "certifier's signed records can show, the union over their arrivals. A property of "
                                 "the compiled Lean audit the verification runs over those records, which trusted-host "
@@ -765,7 +766,7 @@ STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifi
 #: discharges, so none is open
 COUNTS = {"client-decodes": "the secrets a decoder recovers from the client's view, the frames the network certifier's "
                             "run sends across the wire to the client, padding included (NetTiming.laneWire): "
-                            "SenderDecodes, PeriodLeakAccepted's hdz"}
+                            "SenderDecodes, MonitoringPeriodLeakAccepted's hdz"}
 DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
              "is in `security/`'s lock at the statement `DISCHARGES` pins (``unpinned``, with the lock's digest, where it "
              "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "
@@ -799,7 +800,7 @@ TIGHT = ("how the figure tightens, each in place of the figure of record and nev
 CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
        "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
        "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
-       "or compiler (`records_audit.py period` refuses one that does). A cap, in no term of PeriodLeakAccepted's K: it "
+       "or compiler (`records_audit.py period` refuses one that does). A cap, in no term of MonitoringPeriodLeakAccepted's K: it "
        "enters the figure of record only while a check of `CHECKS` or a premise is open, as ℓ_a + 1 bits for each tied "
        "audit (`OPEN`)")
 NO_REGISTRATION = (f"the run published no advice registration ({REGISTRATION}), whose compiler's cap is the ℓ_a the "

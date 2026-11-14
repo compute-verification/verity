@@ -72,9 +72,10 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
 - `serve` runs on the host's raw clock and no other (the device's "The clock"), and refuses to start where the host
   has none. It holds the key's device state from before its first tick until its publisher has closed, so a second
   `serve` under the key is refused meanwhile, as is a session id the key has started. The device state gives the
-  session its base, the key's life before the run, and moves the life on by the run's whole span, `--windows`
-  execution phases of T ticks, before the base is signed: a run that ends early has used its whole span. The
-  publisher signs the start's certificate at that base (`certificate.CertifiedStart`) before the origin is set.
+  session its base, the key's life before the run, and its ordinal, the number of the key's sessions before it, and
+  moves the life on by the run's whole span, `--windows` execution phases of T ticks, before the base is signed: a run
+  that ends early has used its whole span. The publisher signs the start's certificate at that base and ordinal
+  (`certificate.CertifiedStart`) before the origin is set.
   `serve` then writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters
   and their digest, the start's certificate, the origin) and beside it `endpoints.json` (the listener and the
   endpoint, which a client reads and nothing publishes). The origin is there on the network certifier's clock
@@ -672,11 +673,11 @@ def registered_key(key: Path) -> LmsKey:
         raise StartRefused(f"{key}: no registered key ({type(e).__name__}); `keys --dir` makes one") from None
 
 
-def certify_start(issuer: Issuer, base_ms: int, params: WardenParams) -> CertifiedStart:
+def certify_start(issuer: Issuer, base_ms: int, ordinal: int, params: WardenParams) -> CertifiedStart:
     """The start's certificate of `issuer`'s session (`Issuer.certify_start`, under `LINK`): the session starts at
-    `base_ms` of its key's life, under `params`'s schedule. A signer that refuses raises `SignerRefused`, and the
-    network certifier does not start."""
-    start = issuer.certify_start(LINK, base_ms, params.digest)
+    `base_ms` of its key's life, is the key's session number `ordinal`, and runs under `params`'s schedule. A signer
+    that refuses raises `SignerRefused`, and the network certifier does not start."""
+    start = issuer.certify_start(LINK, base_ms, ordinal, params.digest)
     if start is None:
         raise SignerRefused(f"the signer refused the start of session {issuer.session.hex()}")
     return start
@@ -684,27 +685,28 @@ def certify_start(issuer: Issuer, base_ms: int, params: WardenParams) -> Certifi
 
 def start_json(start: CertifiedStart) -> dict:
     """A start's certificate as `deployment.json` carries it: all of it is public."""
-    return {"base_ms": start.base_ms, "schedule": start.schedule.hex(),
+    return {"base_ms": start.base_ms, "ordinal": start.ordinal, "schedule": start.schedule.hex(),
             "certificate": cs.certificate_json(start.certificate)}
 
 
 def start_from_json(doc: dict) -> CertifiedStart:
-    return CertifiedStart(doc["base_ms"], bytes.fromhex(doc["schedule"]), cs.certificate_from_json(doc["certificate"]))
+    return CertifiedStart(doc["base_ms"], doc["ordinal"], bytes.fromhex(doc["schedule"]),
+                          cs.certificate_from_json(doc["certificate"]))
 
 
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
-                    load_heads: Path | None, base_ms: int) -> None:
+                    load_heads: Path | None, base_ms: int, ordinal: int) -> None:
     """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs
     the load's heads first when there are any (`sign_load`), then the start's certificate of its session at `base_ms`
-    (`certify_start`), sends that and the public key, rebuilds each record from its released rows, keeps it as
-    `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end sends the
+    and `ordinal` (`certify_start`), sends that and the public key, rebuilds each record from its released rows, keeps
+    it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end sends the
     issuer's refusals and its own usage."""
     try:
         own = cs.signer(key)
         issuer = Issuer(own, session)
         if load_heads is not None:
             sign_load(issuer, own.public_key(), load_heads, out)
-        results.send(("start", start_json(certify_start(issuer, base_ms, params))))
+        results.send(("start", start_json(certify_start(issuer, base_ms, ordinal, params))))
         results.send(("key", own.public_key()))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
         keeper = crr.Keeper(out, issuer, params, LINK)
@@ -747,19 +749,20 @@ class PublisherProcess:
     is then the process's own. A process that exits early, killed or failed, raises at the next close or at `close`.
     `commit` stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything
     else (`sign_load`), so construction returns once ``load.json`` is written. It then signs the start's certificate
-    of its session at `base_ms`, the base the key's device state gave the session (`certify_start`): `start` is that
-    certificate as `deployment.json` carries it, there before construction returns, so before any origin is set, and
-    a signer that refuses it fails the construction. The queue's thread is started at
+    of its session at `base_ms` and `ordinal`, which the key's device state gave the session (`certify_start`):
+    `start` is that certificate as `deployment.json` carries it, there before construction returns, so before any
+    origin is set, and a signer that refuses it fails the construction. The queue's thread is started at
     construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
     the thread's buffers have grown to a row's; `feeder` is its thread id."""
 
     def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None,
-                 load_heads: Path | None = None, *, base_ms: int) -> None:
+                 load_heads: Path | None = None, *, base_ms: int, ordinal: int) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
         self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
-                                   args=(self.rows, results, out, key, session, params, commit, load_heads, base_ms))
+                                   args=(self.rows, results, out, key, session, params, commit, load_heads, base_ms,
+                                         ordinal))
         self.process.start()
         results.close()
         self.usage: dict | None = None
@@ -979,12 +982,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     clock()
     registered = registered_key(key)
     with DeviceState(key / DEVICE, registered.public) as device:
-        base_ms = device.start(session, windows * params.window * params.bucket_ms)
+        base_ms, ordinal = device.start(session, windows * params.window * params.bucket_ms)
         loop = asyncio.get_running_loop()
         errors: list[str] = []
         loop.set_exception_handler(lambda _, context: errors.append(f"{context.get('message')}: "
                                                                    f"{context.get('exception')!r}"))
-        publish = PublisherProcess(out, key, session, params, load_heads=load_heads, base_ms=base_ms)
+        publish = PublisherProcess(out, key, session, params, load_heads=load_heads, base_ms=base_ms, ordinal=ordinal)
         if publish.key != registered:
             publish.close()
             raise StartRefused(f"{key}: the signer's key isn't the registered key")
