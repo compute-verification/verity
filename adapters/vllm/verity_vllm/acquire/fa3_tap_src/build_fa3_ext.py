@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 from verity_vllm import settings
 from verity_vllm.config import option
-from verity_vllm.pipeline.cli import write
+from verity_vllm.log import write
 
 
 def sha256(path):

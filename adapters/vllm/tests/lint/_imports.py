@@ -235,7 +235,7 @@ SIDES: dict[str, bool] = {
     "verity.runtime": False,
     "verity.protocols.accounting.poub.device": False,
     "verity.protocols.accounting.poub.verifier.remote_session": False,
-    "verity.protocols.accounting.pouw.clear": False,
+    "verity.protocols.accounting.pouw.prover.clear": False,
     "verity.protocols.accounting.pouw.verifier.receipts": False,
     "verity.protocols.compose": False,
 }

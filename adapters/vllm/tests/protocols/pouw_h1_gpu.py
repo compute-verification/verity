@@ -1662,7 +1662,7 @@ def main(argv: list[str] | None = None, producer: Any = None) -> int:
                          "ROOTS1 steps (core_verdict)")
     ap.add_argument("--credit", action="store_true",
                     help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
-                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in for the verifier, _proved, "
                          "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
                          "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",

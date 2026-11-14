@@ -11,7 +11,7 @@ A session's openings certify its average, not each round's: over rounds whose go
 (`Definitions/Poub/RateAuditPooled.lean`), every opening passes while the rounds hold at most a `1 − d̄` share of
 good items, weighted by their sample counts, with probability at most `(1 − d̄)^(∑ s_i)`. One budget of openings, about
 `ln(1/ε)/d̄`, serves the whole session, however its rounds are cut. Proofs are in
-`Security/Proofs/Poub/RateAudit/Pooled.lean`. No named assumption: the samples are the verifier's uniform
+`security/Proofs/Poub/RateAudit/Pooled.lean`. No named assumption: the samples are the verifier's uniform
 coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 
 * `PooledSampling`: the bound for any causal family of rounds.

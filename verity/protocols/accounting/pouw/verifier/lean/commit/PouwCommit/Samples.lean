@@ -9,7 +9,7 @@ public import Identity.Domains.Pouw
 Python's are `verity.protocols.accounting.pouw.verifier.audit`'s, and the clear audit's samples are
 `verity.protocols.accounting.pouw.prover.clear`'s.
 
-Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under PoUW's domains:
+Each is `verity.commitments.randomness.derive` (`FlockSoundness.Randomness.derive`) under PoUW's domains:
 
     salt_of        derive(coin, "verity/pouw/epoch-salt/v1", {epoch, coins: root, weights: weights_root}).stream("salt", 32)
     unverified     derive(seed, "verity/pouw/salt/v1", {weights: weights_root}).stream("salt", 32)

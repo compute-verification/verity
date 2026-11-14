@@ -67,7 +67,7 @@ structure Protocol where
   publicJson : Public → Json
   profileJson : Profile → Json
 
-/-- The check accepts: the predicate a protocol's properties (`Security/Properties/<protocol>.lean`) are stated over. -/
+/-- The check accepts: the predicate a protocol's properties (`security/Properties/<protocol>.lean`) are stated over. -/
 def Protocol.Accepts (P : Protocol) (p : P.Params) (c : P.Commitment) (e : P.Evidence) : Prop :=
   ∃ pub prof, P.check p c e = .accept pub prof
 
@@ -86,7 +86,7 @@ ASCII, so a canonical text has no byte at or above `0x7f`, and one holding one i
 parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. The text is
 read by `Flock.JsonParse.parse`, a total function the kernel can unfold, so a proof can show that a text is canonical. It
 mirrors `Lean.Json.parse`, which this read before; that the two agree is held by tests, not by a proof: on the texts of
-`CoreProtocol.Cli`'s `#guard`s (`TEXTS`, `ADVERSARIAL`) and on every JSON text the verifiers' test fixtures hold
+`CoreProtocol.CanonicalJsonDifftest`'s `#guard`s (`TEXTS`, `ADVERSARIAL`) and on every JSON text the verifiers' test fixtures hold
 (`tools/difftest/tests/test_flock_json_port.py`, `test_verifier_fixture_texts`), they give the same `Json` and the same
 refusal, and this the same answer. -/
 def canonicalJson (b : ByteArray) : V Json := do

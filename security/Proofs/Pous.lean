@@ -62,14 +62,14 @@ public import Proofs.Pous.Obligation
 /-!
 # The proved guarantees
 
-`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Definitions/Pous/Guarantees.lean`,
-`Security/Definitions/Pous/Guarantees/P2.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
-`Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` (the frozen statements)
-and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
+`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `security/Definitions/Pous/Guarantees.lean`,
+`security/Definitions/Pous/Guarantees/P2.lean`,
+`security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
+`security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
+`security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
+`security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
+`security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean` (the frozen statements)
+and `security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
 change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
 `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
 
@@ -146,12 +146,12 @@ theorem StackedAuditSeq : Pous.Guarantees.StackedAuditSeq := @PousAudit.stacked_
 theorem StackedAuditOnePercent : Pous.Guarantees.StackedAuditOnePercent := @PousAudit.stacked_audit_one_percent
 theorem DenseMeets : Pous.Guarantees.DenseMeets := PousDense.dense_meets
 
-/-! ## The overwrite chain (`Security/Proofs/Pous/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
+/-! ## The overwrite chain (`security/Proofs/Pous/Chain/Flat.lean`, `Family.lean` for `BandMultiMeetsFamily`, and
 `FamilyRounds.lean` for the band at `D = 2`, `D = 1` and `D = 0`)
 
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder, each over the trusted copies
-(`Security/Definitions/Pous/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`,
-`Security/Definitions/Pous/Accounting/PubMeets.lean`). -/
+(`security/Definitions/Pous/Model/P3Chain.lean`, `BandChain.lean`, `PubEncoder.lean`,
+`security/Definitions/Pous/Accounting/PubMeets.lean`). -/
 
 theorem P3ConcreteMeets64 : Pous.Guarantees.P3ConcreteMeets64 :=
   PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional
@@ -299,7 +299,7 @@ theorem P2RingAuditSecureOfRoundSecure : Pous.Guarantees.P2RingAuditSecureOfRoun
   PousP2Rounds.auditSecure_of_roundSecure
 theorem P2RingGradedOfRoundSecure : Pous.Guarantees.P2RingGradedOfRoundSecure := PousP2Rounds.graded
 
-/-! ## Proved results cited outside the package (`Security/Definitions/Pous/Guarantees.lean`, `Statements.lean`) -/
+/-! ## Proved results cited outside the package (`security/Definitions/Pous/Guarantees.lean`, `Statements.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64

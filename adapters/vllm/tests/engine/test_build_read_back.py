@@ -3,8 +3,8 @@
 The effective-execution document whole, for an engine whose config holds every field, for one whose config holds none
 of the optional ones, and for an object that is no engine; the compilation facts where the config names its mode
 ``level`` and where the config cannot be read; the FlashAttention versions a model's layers carry; vLLM's FlashInfer
-verdict; the ``kernel_config`` of `engine_kwargs_for`, whatever the target's engine args hold under that key; and what a
-build in one process installs on its model and says of it.
+verdict; the ``kernel_config`` of `engine_kwargs_for`, whatever the target's engine args hold under that key; what a
+build in one process installs on its model and says of it; and the config an `Engine` offers its readers.
 """
 from __future__ import annotations
 
@@ -73,6 +73,12 @@ class _Model:
 def stand_in(monkeypatch: pytest.MonkeyPatch) -> fake_vllm.FakeVllm:
     monkeypatch.setattr(prof, "breakable_cudagraph", lambda: False)
     return fake_vllm.install(monkeypatch)
+
+
+def test_an_engine_offers_the_config_its_llm_was_built_with() -> None:
+    config = _full()
+    eng = build.Engine(llm=_engine(config), runner=None, model=None, cp={}, kwargs={}, env_flags={}, build_s=0.0)
+    assert eng.vllm_config is config
 
 
 def test_the_document_of_an_engine_whose_config_holds_every_field(stand_in: fake_vllm.FakeVllm) -> None:

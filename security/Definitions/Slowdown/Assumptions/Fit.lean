@@ -9,7 +9,7 @@ The fit bound rests on two empirical premises about the reference training circu
 measured rather than proved: `Reach`, the loss premise F3, and `Fits`, the capacity premise F1 with the boundary premise
 F4, at window scale. `ReachSlots` and `FitsSlots` are the same premises counted in parameter slots (`Threading.Slots`),
 so that a window spanning several optimizer steps is charged once per parameter, not once per version.
-`Security/lean-audit.json` lists this module under `shape.premises`: each is an assumption about the world. `Reach` and
+`security/lean-audit.json` lists this module under `shape.premises`: each is an assumption about the world. `Reach` and
 `ReachSlots` are predicates on the threading `T`, so its `shape.conjectures` lists them as open: false at token threads
 for a token-routed mixture of experts, the per-sequence form at sequence threads.
 -/
