@@ -8,6 +8,9 @@ from collections.abc import Iterable
 
 import numpy as np
 
+#: what `theory/checked_strip.py` and the tests read
+__all__ = ["from_matrix", "rank"]
+
 
 def rank(rows: Iterable[int]) -> int:
     """Rank over F_2 of int bitmask rows."""

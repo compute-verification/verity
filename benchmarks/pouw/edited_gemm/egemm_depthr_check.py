@@ -62,16 +62,24 @@ def perturbations(w: tuple[int, ...], n: int) -> np.ndarray:
     out = []
     for i in range(4):
         for j in range(n):
-            wp = list(w); wp[i] = w[i] ^ (1 << j); out.append(wp)
+            wp = list(w)
+            wp[i] = w[i] ^ (1 << j)
+            out.append(wp)
     for i in (1, 3):
-        wp = list(w); wp[i] = (w[i] + 1) & m; out.append(wp)
+        wp = list(w)
+        wp[i] = (w[i] + 1) & m
+        out.append(wp)
     for j in range(n):
-        wp = list(w); wp[0] = w[0] ^ (1 << j); wp[2] = w[2] ^ (1 << j); out.append(wp)
+        wp = list(w)
+        wp[0] = w[0] ^ (1 << j)
+        wp[2] = w[2] ^ (1 << j)
+        out.append(wp)
     seen, uniq = set(), []
     for wp in out:
         t = tuple(wp)
         if t != tuple(w) and t not in seen:
-            seen.add(t); uniq.append(wp)
+            seen.add(t)
+            uniq.append(wp)
     return np.array(uniq, dtype=np.uint64)
 
 

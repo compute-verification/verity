@@ -39,7 +39,7 @@ synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._
   a preempted or stopped request drops its own, since it resumes as an admitting row from the root. The step also
   says which candidates' lookups it read (`looked`): each waiting slot its loop reaches, the one whose allocation ends
   the loop included, and each arrival it checks for an ask. Past the pool bound each one's hit is the block pool's
-  (`CacheStep_v2`), and advice v1 sends none.
+  (`CacheStep_v3`), and advice v1 sends none.
 
 **Statics** (all public): the size class R running slots, W waiting slots and A arrivals looked ahead; the engine's
 max_num_seqs M, max_num_batched_tokens T, max_model_len L, block_size B (a power of 2), long_prefill_token_threshold
@@ -77,8 +77,8 @@ leaving requests leave it; and the next state.
 
 **Not modeled.** The prefix-hash state (which blocks hold which tokens, the free queue's order, eviction):
 the derived encoding's canonical source and hit rules carry it and supply h, the evictable count and the returns, which
-this circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
-`_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
+this circuit bounds but doesn't derive: `compile_slice_v4` derives them, in vLLM's order on CacheStep_v3's stream,
+through `_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
 and KV connectors. `statics` refuses an engine whose keys show one (a policy other than FCFS, a draft), and any key it
 does not read.
 
@@ -125,7 +125,7 @@ from verity.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, c
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Tuple
-from verity.protocols.certifier.verifier.head_check import BIT, _part, ands
+from verity.protocols.certifier.verifier.head_check import BIT, _part
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
 

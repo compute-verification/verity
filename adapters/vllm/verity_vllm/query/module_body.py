@@ -23,12 +23,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import numpy as np
-from verity_vllm.query.units import Boundary, Partition, ValueRef, boundary, partition_by
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query.units import (
+    Boundary,
+    Partition,
+    ValueRef,
+    boundary,
+    partition_by,
+)
+
 from .program_view import ProgramView
 
-__all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "Q_module_body_v1", "literal_calls", "without_literals", "boundary_without_literals",
+__all__ = ["Q_MODULE_BODY_ID", "Q_MODULE_BODY_TEXT", "module_body_partition", "literal_calls", "without_literals", "boundary_without_literals",
            "module_body_boundary"]
 
 Q_MODULE_BODY_ID = "Q_module_body_v1"
@@ -38,7 +45,7 @@ Q_MODULE_BODY_TEXT = ("Q_module_body_v1: unit = module body = the maximal set of
                       "the Program's literals (the Values of Calls that read no Value: written in the descriptor, never acquired)")
 
 
-def Q_module_body_v1(P: ProgramView, correspondence: Correspondence) -> Partition:
+def module_body_partition(P: ProgramView, correspondence: Correspondence) -> Partition:
     """The partition of `P`'s Calls by owning module path (unit id = the Program module path; "" for the root body)."""
     if correspondence.P is not P:
         raise ValueError("Q_module_body_v1: the correspondence was read off another Program")
@@ -72,7 +79,8 @@ class _ReadBy(Mapping):
     it, and under `Q_word` every Call is a unit, so a key that every later token's attention reads has a reader per token."""
 
     def __init__(self, P: ProgramView, Q: Partition, literals: frozenset[int]) -> None:
-        self._args, self._d = (P, Q, literals), None
+        self._args = (P, Q, literals)
+        self._d: Mapping | None = None
 
     def _get(self) -> Mapping:
         if self._d is None:
@@ -140,5 +148,5 @@ def boundary_without_literals(P: ProgramView, Q: Partition, literals: frozenset[
 
 
 def module_body_boundary(P: ProgramView, correspondence: Correspondence, literals: frozenset[int] | None = None) -> Boundary:
-    """The boundary of `Q_module_body_v1(P, correspondence)`: the crossing Values of the module-body partition minus the literals."""
-    return boundary_without_literals(P, Q_module_body_v1(P, correspondence), literal_calls(P) if literals is None else literals)
+    """The boundary of `module_body_partition(P, correspondence)`: the crossing Values of the module-body partition minus the literals."""
+    return boundary_without_literals(P, module_body_partition(P, correspondence), literal_calls(P) if literals is None else literals)
