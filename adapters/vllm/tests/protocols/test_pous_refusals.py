@@ -107,14 +107,13 @@ def test_a_salt_command_that_fails_is_refused_with_its_exit_code_and_its_last_wo
 
 
 def test_c_star_answers_only_its_own_blocks_and_none_once_it_is_freed(toy):
-    comp = PO.install(toy, _ctx(ENTRY))
-    opt, s = comp.get("pous"), comp.get("pous").store
-    blocks = s.held().blocks
-    assert len(blocks) == s.params.blocks == 16 and blocks[15] == s.block(15) == opt.answer(15)
-    for i in (-1, 16):
-        with pytest.raises(IndexError, match=rf"block {i} is outside C\*'s 16$"):
-            s.block(i)
-    comp.close()
+    with PO.install(toy, _ctx(ENTRY)) as comp:
+        opt, s = comp.get("pous"), comp.get("pous").store
+        blocks = s.held().blocks
+        assert len(blocks) == s.params.blocks == 16 and blocks[15] == s.block(15) == opt.answer(15)
+        for i in (-1, 16):
+            with pytest.raises(IndexError, match=rf"block {i} is outside C\*'s 16$"):
+                s.block(i)
     for read in (lambda: s.block(0), lambda: blocks[0]):
         with pytest.raises(RuntimeError, match=r"C\* is freed$"):
             read()
