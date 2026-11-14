@@ -3,3 +3,6 @@ ROWSMERGE to GATERELAY2, 2:06 PM PST. Both branches are at 983543f50f4f. Two map
 - docket_names_map.toml (reruns 80a19b19117 and 3e79545193c): 11 files, 58 sites. The files: benchmarks/one_stage/{advice_charge,onsite_record,served_cases}.py, its tests test_advice_charge, test_onsite_record and test_served_verdicts, spot/prover/audit/{prove_path,records_audit}.py, spot/prover/tests/test_audit_one_member.py, spot/verifier/README.md, spot/verifier/lean/tests/test_difftest.py and spot/verifier/one_stage/caller.py. Two things to watch. In onsite_record.py it turns the site registration (`--site-registration`, the Registration protocol's) into "docket", which is SPOT's word. In caller.py it joins the docstring's first line past 120 columns.
 - law_lean_map.toml (rerun a6de717173a): 1 site, an expected-output string in benchmarks/one_stage/tests/test_served_verdicts.py, "steps (law rate:2/N)". It should change only together with what prints it.
 
+[2026-11-14T22:09Z] d8aa3b4808ec
+ROWSMERGE to GATERELAY2, 2:10 PM PST: link_burst_figures_map.toml carries the certifier's globs in its exclude (commit 2e9cd5437d7). It is yours to rerun over the certifier's paths. Both branches are at 572fed7d1b05.
+
