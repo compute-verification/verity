@@ -39,7 +39,7 @@ path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
 # `RecursiveKSAt`'s event
 [[require]]
 name = "core_vstar_recursive"
-path = "../../verity/protocols/proofs/recursion/verifier/recursive"
+path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
 
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]
@@ -48,19 +48,19 @@ path = "../Properties"
 
 [[lean_lib]]
 name = "Proofs"
-roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier",
+roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Certifier",
   "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
   "Proofs.Properties.Pouw", "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit", "Proofs.Properties.Pouw.LiveSalt", "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Pouw.PearlPlus", "Proofs.Properties.Pouw.PearlPlus.Open",
   "Proofs.Properties.Pouw.PearlPlus.Verdict", "Proofs.Properties.Pouw.PearlPlus.Witnesses",
-  "Proofs.Properties.Pouw.PearlPlus.Draw",
-  "Proofs.Pouw.PearlPlus.Numerics", "Proofs.Properties.Nci", "Proofs.Properties.NetworkCertifier.Device",
+  "Proofs.Properties.Pouw.PearlPlus.Draw", "Proofs.Properties.Pouw.PearlPlus.Tie",
+  "Proofs.Pouw.PearlPlus.Numerics", "Proofs.Properties.Nci", "Proofs.Properties.Certifier.Device",
   "Proofs.Properties.Pous", "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.Run", "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt",
-  "Proofs.Properties.Pous.Component", "Proofs.Properties.NetworkCertifier.Check",
-  "Proofs.Properties.NetworkCertifier.DeviceOutput", "Proofs.Properties.NetworkCertifier.DeviceOutput.Runs",
+  "Proofs.Properties.Pous.Component", "Proofs.Properties.Certifier.Check",
+  "Proofs.Properties.Certifier.DeviceOutput", "Proofs.Properties.Certifier.DeviceOutput.Runs",
   "Proofs.Properties.Hash.Identity", "Proofs.Properties.Pous.Wipe", "Proofs.Properties.Nci.DescVerdict",
   "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk", "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.BodiesOk",
@@ -69,8 +69,9 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Spot", "Proofs.Properties.Spot.Halt", "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
   "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
-  "Proofs.Properties.NetworkCertifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
+  "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
+  "Proofs.Properties.Spot.MonitoringPeriod", "Proofs.Properties.Spot.MonitoringPeriodLedger", "Proofs.Properties.Spot.MonitoringPeriodSigned",
   "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement", "Proofs.Properties.NetworkScan",
   "Proofs.Properties.Accounting.Remote", "Proofs.Properties.Accounting.Remote.Coins",
   "Proofs.Properties.Accounting.Remote.Frozen", "Proofs.Properties.Accounting.Remote.Order",
@@ -83,9 +84,10 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
-  "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Coins", "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
-  "Proofs.Properties.Firewall", "Proofs.Properties.Flock.Nets", "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Lines", "Proofs.Properties.Challenger.Coins",
+  "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
+  "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.Firewall", "Proofs.Properties.Flock.Nets",
+  "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Nci.RecordRead", "Proofs.Properties.Nci.RecordForm",
   "Proofs.Properties.Nci.RecordCounts", "Proofs.Properties.Nci.DecodeKeys", "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Nci.Record", "Proofs.Properties.Verity.Sampled", "Proofs.Properties.Verity.Sampled.Unbound",
@@ -114,10 +116,9 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledDraw", "Proofs.Properties.Verity.SampledLog", "Proofs.Properties.Verity.SampledRead",
   "Proofs.Properties.Verity.Sampled.Record", "Proofs.Properties.Verity.Sampled.Record.Facts",
   "Proofs.Properties.Verity.Sampled.Record.Session", "Proofs.Properties.Verity.Sampled.Record.Accepts",
-  "Proofs.Properties.Verity.Sampled.Record.Pass", "Proofs.Properties.Verity.Sampled.Record.Law",
   "Proofs.Properties.Verity.Sampled.Record.Runs", "Proofs.Properties.Verity.Sampled.Record.Opens",
   "Proofs.Properties.Verity.Sampled.Record.Scope", "Proofs.Properties.Verity.Sampled.Record.Inner",
-  "Proofs.Properties.Verity.Sampled.Record.KS", "Proofs.Properties.Verity.Sampled.Record.Reg",
+  "Proofs.Properties.Verity.Sampled.Record.Reg", "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
   "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals",
@@ -125,4 +126,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Target", "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Place", "Proofs.Properties.Verity.Sampled.Instance",
   "Proofs.Properties.Verity.Sampled.SessionAt", "Proofs.Properties.Verity.Sampled.OpensRecorded",
-  "Proofs.Properties.Verity.Sampled.OpensAt"]
+  "Proofs.Properties.Verity.Sampled.OpensAt", "Proofs.Properties.Verity.InferenceOnly",
+  "Proofs.Properties.Challenger.Steps", "Proofs.Properties.Challenger.Plain", "Proofs.Properties.Challenger.Entry",
+  "Proofs.Properties.Challenger.Signer", "Proofs.Properties.Challenger.Built", "Proofs.Properties.Challenger.Files",
+  "Proofs.Properties.Challenger.Bodies", "Proofs.Properties.Challenger.Logs", "Proofs.Properties.Challenger.Messages",
+  "Proofs.Properties.Challenger.Ledger", "Proofs.Properties.Challenger.Withheld", "Proofs.Pouw.Credit.Withheld"]

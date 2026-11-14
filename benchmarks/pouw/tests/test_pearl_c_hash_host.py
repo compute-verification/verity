@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import importlib.util
 import re
 import shutil
 import subprocess
@@ -18,18 +17,17 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from conftest import load
+
+from verity.commitments.merkle import tree_levels
+from verity.protocols.accounting.pouw.verifier import audit
+from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 WIDE = HERE / "hash_wide.cuh"
-_spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", HERE.parent / "pearl_c_sm120" / "run.py")
-R = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(R)
-
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain  # noqa: E402
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
+R = load("pearl_c_sm120/run.py")
 
 
 class Host:
@@ -370,7 +368,7 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
 def y_trees(host, monkeypatch):
     """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt and salt key are fixed."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
     salt_key = bytes(range(100, 132))
     const = host.put(salt_key.ljust(256, b"\0") + audit.hm96_kernel_constants())
     run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",

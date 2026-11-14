@@ -4,8 +4,9 @@
 # it. `sampled-proofs-verifier` is the verifier of record the Python calls (`one_stage.verifier`). Code, not analysis: Lean
 # core, C-Flock and the interface.
 name = "core_spot"
-defaultTargets = ["Spot", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "sampled-proofs-difftest",
-  "sampled-proofs-verifier", "site-difftest", "sampled-proofs-plancheck"]
+defaultTargets = ["Spot", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "spot-monitoring-period",
+  "sampled-proofs-difftest", "sampled-proofs-verifier", "sampled-proofs-wired-key-dev", "site-difftest",
+  "sampled-proofs-plancheck"]
 
 [leanOptions]
 autoImplicit = false
@@ -40,6 +41,12 @@ root = "Spot.Main"
 name = "sampled-proofs-one-stage-zk"
 root = "Spot.ZkMain"
 
+# SPOT's period (`verity/sampled-proofs/period/v1`, `Spot.MonitoringPeriod.protocol`): every window of a lane's
+# monitoring period held to one accepting one-stage audit on its proofs.
+[[lean_exe]]
+name = "spot-monitoring-period"
+root = "Spot.MonitoringPeriodMain"
+
 [[lean_exe]]
 name = "sampled-proofs-difftest"
 root = "Spot.DifftestMain"
@@ -47,6 +54,12 @@ root = "Spot.DifftestMain"
 [[lean_exe]]
 name = "sampled-proofs-verifier"
 root = "Spot.VerifierMain"
+
+# Development plays only, never an accept of record: round 2 with the wired key's switch on, which the build of
+# record holds off (`Spot.SecondStage.WIRED_KEY`). Only its difftest runs it; no audit, script or benchmark does.
+[[lean_exe]]
+name = "sampled-proofs-wired-key-dev"
+root = "Spot.WiredKeyDevMain"
 
 # The planner's designs checked in exact arithmetic (`Spot.PlanCheck`), which
 # `verity/protocols/proofs/spot/plancheck.py` calls.

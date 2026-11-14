@@ -1,7 +1,7 @@
 """Linking (`HmOut`) on a small wired class statement: two layers of the universal unit, layer 1 reading layer 0's
 outputs, one `Q_template_instance` class staged with `class_statement.Wiring`. The honest staging's link rows have their
 writers' output rows' `b || c`; a prover that gives layer 1 a made-up input, and one that commits the right value under a salt
-of its own, stage the same circuit with link rows that differ. The Lean verifier (`flock-verify statement --program`, when a Lean
+of its own, stage the same circuit with link rows that differ. The Lean verifier (`verity-verify-proof statement --program`, when a Lean
 toolchain is present) accepts the honest statement and refuses both cheats and a linked statement without its program; a
 one-layer statement, with no cut wire, is accepted with its units derived when staged with `Wiring`, and as before when
 staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the
@@ -38,7 +38,7 @@ WIRED = ((("c", 0, N_IN),), (("c", N_IN, NC), ("u", 0, 0, N_OUT)))
 FLAT = ((("c", 0, N_IN),),)
 SPEC = "q-template-instance"
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 #: the stagings every test reads take about 20 s
 pytestmark = pytest.mark.slow
@@ -64,7 +64,7 @@ def _program(topo):
 def _lanes(units, cl, tp, inputs: list[int], made_up=None):
     """Every unit's lanes run in population order on the root's input gates ``inputs``, each reading earlier units' outputs
     as the program wires them (``made_up``: {unit: f(words) -> words}, the parameter leaves a cheating prover gives it); the row
-    identities as the bench's (`universal.lanes`): x one row per instance and layer, the netlist one row per layer."""
+    identities as the bench's (`universal.lanes`): x one row per instance and layer, the circuit description one row per layer."""
     act, uc = units.activation(cl.definition), cl.representative
     leaf_param = []
     for i, (_n, t) in enumerate(act.fn.signature()[0]):
@@ -203,7 +203,7 @@ def _lean(*args: str) -> tuple[dict | None, str]:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_program(staged):
     d, (_fn, _p, _q, tp, _st), flat, (_f2, _p2, _q2, tp2, _st2) = staged
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     n = tp.population
     bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc")]
     ok, out = _lean("--circuit", str(d / "honest" / "circuit.txt"), "--public", str(d / "honest" / f"pub-{n}.bin"), *bound)

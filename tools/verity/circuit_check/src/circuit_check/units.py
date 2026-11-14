@@ -25,8 +25,8 @@ the ones its name digests (a cache may hold records another run built, copied in
 binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families,
-`targets.CALLEE_CALLS`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
-holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
+`targets.callee_calls`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
+holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (``WidgetStep_v1`` with its DOT bound, from `boolean_version`, and
 unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
 binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
 lists, and its descriptor computed again: one that differs from its record's is `Stale`, and the run builds the whole
@@ -65,7 +65,8 @@ of the task list's reads.  This process builds no body.  A target that misses, t
 here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
 differs is its check's error.  A primitive its id makes, which has no body, is made here (`built_here`), and so is each
 Boolean Definition a binding's build registered (`made_words`, or its module imported): Flock lowers a word primitive by the
-first one registered of that word, so a check forked from here finds the one a full build's would.  A binding whose process
+one builder of that word's Boolean Definitions and refuses it for two, so a check forked from here holds every one a full
+build's would, and finds the builder or the refusal it finds.  A binding whose process
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
 where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
@@ -101,6 +102,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import traceback
 import types
 from collections import Counter, deque
 from contextlib import contextmanager, nullcontext
@@ -113,6 +115,9 @@ from . import targets as TG
 
 REQUEST = "catalog-unit"
 REGISTERED = ("<registered>",)
+#: the module whose registry `registered_entries` cuts into the ``<registered>`` bindings: their peaks are in its unkeyed
+#: file (`cli.heavy`)
+REGISTRY_MODULE = "verity.circuits.defs"
 #: the catalog's roots record (`store_roots`), beside the bindings'
 ROOTS = ("<roots>",)
 #: the version of what `write_slices` writes
@@ -367,7 +372,7 @@ def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_uni
 
 def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_unit: bool = True) -> set[str]:
     """The families of `targets.call_families` the suite's Definitions are of: the word Call families (`targets.
-    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.CALLEE_CALLS`, the Boolean version of each
+    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.callee_calls`, the Boolean version of each
     one made on demand (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one
     (`targets.boolean_family`) that are of a suite family: each from its object, made (`_materialize`) only where it could be of
     a suite family no other one gave (`targets.boolean_links`)."""
@@ -386,7 +391,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
             if fid not in objects and (n.get("di", fid) in keys or n.get("n") in names):
                 if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit, d.via.get(fid)))) is not None:
                     found.add(f)
-    return words | found | set(TG.CALLEE_CALLS)
+    return words | found | set(TG.callee_calls())
 
 
 def _sited(v: Any) -> Any:
@@ -511,7 +516,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
     """Do what ``effects`` (`_noting`'s) notes, under ``units`` as making their roots ran (`cache.producing`, so what it makes
     is theirs): import each module, then make each Definition not registered yet, in order, by its id
     (`codec.lookup_primitive`: an input, a family made on demand) or as the Boolean version made on demand of its word
-    (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+    (`targets.HOOKS`' ``made_on_demand``).  False where a module doesn't import, the next Definition is made by
     neither or making it raises: the roots are to be made then, and register the rest as they did."""
     import importlib
 
@@ -532,9 +537,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
                     lookup_primitive(REGISTRY, fid)
                 except KeyError:
                     if word is not None:
-                        from verity.definitions.boolean import made_on_demand
-
-                        made_on_demand(word)
+                        TG._handed("made_on_demand")(word)
                 if not dict.__contains__(REGISTRY.defs, fid):
                     return False
         except Exception:  # noqa: BLE001  (making the roots does it as a full plan does, or raises as one does)
@@ -639,7 +642,8 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
             over = sorted(((gb, n) for n, gb in grew.items() if gb > apart[2].get(n, APART_GB)), reverse=True)
             log(f"circuit-check: {len(kept)} of {len(todo)} bindings built apart, their results at most {scratch} bytes on "
                 "disk at once" + (
-                f"; {len(over)} grew past their heavy.json GiB: " + ", ".join(f"{n} {gb}" for gb, n in over) if over else ""))
+                f"; {len(over)} grew past the GiB their owner's unkeyed file lists: "
+                + ", ".join(f"{n} {gb} ({peak_file(n)})" for gb, n in over) if over else ""))
         gone = {id(e) for e in todo} - {id(e) for e in kept}
         effects["raised"].update((e.label, e.effects) for e in todo if id(e) in gone)
         entries = [e for e in entries if id(e) not in gone]
@@ -758,8 +762,8 @@ def made_words(plan: Plan, steps: Iterable[list] | None = None) -> int:
     """Made here: each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this process
     didn't build it (``words``: built apart, or its record's) and that this process doesn't hold, from the record that reaches
     it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  Flock lowers a
-    word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
-    ``_boolean_build``), so each check forked from here finds the build a full build's would.  ``steps``: those a full plan
+    word primitive by the one build of that word's Boolean Definitions, and refuses it for two (`verity_flock.ir_lower`'s
+    ``_boolean_build``), so each check forked from here finds the build, or the refusal, a full build's would.  ``steps``: those a full plan
     took (`slices`), else `_word_steps`; each one taken is in ``plan.words``, with whether an object built here already
     stood for its node (`make` then made nothing).  `Stale` for one neither registers; the count made."""
     import importlib
@@ -1167,19 +1171,9 @@ def _no_suite() -> dict:
 def _by_id(nodes: dict[str, dict], objs: dict[str, Any]) -> None:
     """Mark ``"i"`` on each node whose id `targets.definition` makes into the very object reached (`defs.bind` shares a
     specialization per binding record), so a process that builds no body makes it the same from its id (`make`)."""
-    real = TG.suite
-    TG.suite = _no_suite
-    try:
-        for fid, info in nodes.items():
-            if info["k"] == "R" or TG._RECORD.search(fid):
-                continue
-            try:
-                if TG.definition(fid) is objs[fid]:
-                    info["i"] = 1
-            except Exception:  # noqa: BLE001  (an id that doesn't make its object is made along its record's path)
-                continue
-    finally:
-        TG.suite = real
+    for fid, info in nodes.items():
+        if info["k"] != "R" and not TG._RECORD.search(fid) and _from_id(fid) is objs[fid]:
+            info["i"] = 1
 
 
 def _from_id(fid: str) -> Any | None:
@@ -1277,14 +1271,25 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
             got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
         _put(out, got)
     except BaseException:  # noqa: BLE001
+        traceback.print_exc()
         code = 1
     finally:
         os._exit(code)
 
 
-#: the GiB a binding's process is counted at in `built_apart` when `heavy.json` (`cache.HEAVY`) lists none for it: most bindings
-#: grow less than 1.5 GiB past the process they were forked from, and it lists those that grow past 3 GiB
+#: the GiB a binding's process is counted at in `built_apart` when no unkeyed file lists one for it (`cli.heavy`): most bindings
+#: grow less than 1.5 GiB past the process they were forked from, and those files list the ones that grow past 3 GiB
 APART_GB = 2.0
+
+
+def peak_file(name: str) -> str:
+    """Where the peak of binding ``name`` goes (`cli.heavy`): the unkeyed file of its first unit's module, or of
+    `REGISTRY_MODULE` for a ``<registered>`` binding, by its path."""
+    from . import sidecars as SC
+
+    head, sep, _unit = name.partition(SC.SUFFIX + "#")
+    p = SC.unkeyed_file(head if sep else REGISTRY_MODULE)
+    return SC.rel(p) if p is not None else f"the unkeyed file of {head if sep else REGISTRY_MODULE}"
 
 
 def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), weights: dict[str, float] | None = None, *,
@@ -1455,7 +1460,7 @@ def built_entries() -> list[Entry] | None:
     return entries
 
 
-__all__ = ["APART_GB", "REGISTERED_RECORDS", "REQUEST", "ROOTS", "SLICE", "Derived", "Entry", "Plan", "Stale", "built_apart",
+__all__ = ["APART_GB", "REGISTERED_RECORDS", "REGISTRY_MODULE", "REQUEST", "ROOTS", "SLICE", "Derived", "Entry", "Plan", "Stale", "built_apart",
            "built_entries", "built_here", "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest",
-           "merged", "plan", "planned", "read_slice", "registered_entries", "sliced", "slices", "store", "store_roots",
+           "merged", "peak_file", "plan", "planned", "read_slice", "registered_entries", "sliced", "slices", "store", "store_roots",
            "write_slices"]

@@ -5,7 +5,7 @@ GEMM is the layer's own `mlp.gate` Compute, one resolution per dispatcher root) 
   (1) value: `MoeFfnFixedL(x, Gemm(x, wg), w13, w2) == MoeFfnFixed(x, wg, w13, w2) == MOE-01` word for word on every admitted route;
   (2) lift of record: `lift_def(bind(MoeFfnFixedL))` IS `bind(LMoeFfnL)` (registry AND decoded path), never a replay; at enable 1 its
       payload equals the twin's; at enable 0 it is all bot; the unselected slots are DISABLED (bot z_e, a_e = Active(0)) as in `LMoeBlock`;
-  (3) the signed Stage 2 object is untouched: `LMoeBlock_v1`'s digest at (E=4, K=2, VPT=2, H=I=16) is the signed one
+  (3) the signed phase 2 object is untouched: `LMoeBlock_v1`'s digest at (E=4, K=2, VPT=2, H=I=16) is the signed one
       (1dd831feee7ac882..., moe_pad_stage2_routes_E4_K2.json) -- the shared `_lifted_core` emits the same nodes in the same order;
   (4) the frontend vocabulary binds the kind: `PROFILE_B1_EAGER_V3.kind("moe_ffn_fixed", ...)` is `bind(MoeFfnFixedL, ...)`.
 
@@ -31,6 +31,7 @@ from verity.definitions.registry.prims import BF16
 from tests.program.test_moe_pad_stage2 import (
     BOT16,
     BOT32,
+    INTER,
     OFF,
     ON,
     VPT,
@@ -39,7 +40,6 @@ from tests.program.test_moe_pad_stage2 import (
     X_T,
     E,
     H,
-    I,
     MoeIndexedReadRef,
     run,
     token_for_route,
@@ -49,7 +49,7 @@ from tests.program.test_moe_pad_stage2 import (
 
 LOGITS_T = Array(E, BF16)
 _HERE = os.path.dirname(os.path.abspath(__file__))
-STAGE2_EVIDENCE = os.path.join(_HERE, "..", "..", "out", "gen", "sweep", "evidence", "moe", "moe_pad_stage2", "moe_pad_stage2_routes_E4_K2.json")
+PHASE2_EVIDENCE = os.path.join(_HERE, "..", "..", "out", "gen", "sweep", "evidence", "moe", "moe_pad_stage2", "moe_pad_stage2_routes_E4_K2.json")
 
 
 def logits_of(x: list[int], w: dict) -> list[int]:
@@ -74,9 +74,9 @@ def CallsTheTwinL(B, S, x, logits, w13, w2):
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_1_the_logits_form_equals_the_router_owning_twin_and_moe01_on_every_admitted_route(TOPK, weights):
-    fixed_l = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
-    fixed = bind(MP.MoeFfnFixed, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
-    ref01 = bind(MoeIndexedReadRef, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    fixed_l = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
+    fixed = bind(MP.MoeFfnFixed, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
+    ref01 = bind(MoeIndexedReadRef, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     for route in MP.admitted_routes(E, TOPK):
         x = token_for_route(route, seed=hash(route) & 0xFFFF)
         _, _, y_l = run(fixed_l, inputs_l(x, weights))
@@ -90,8 +90,8 @@ def test_1_the_logits_form_equals_the_router_owning_twin_and_moe01_on_every_admi
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_2_the_lift_of_record_is_the_hand_authored_lmoeffnl_on_both_paths_disabled_slots_bot_disabled_block_all_bot(TOPK, weights):
-    fixed_l = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
-    padded_l = bind(MP.LMoeFfnL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    fixed_l = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
+    padded_l = bind(MP.LMoeFfnL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     # the hook: registry path
     assert MP.HAND_LIFT_L is MP.LMoeFfnL and L.hand_lift_of("MoeFfnFixedL_v1") is MP.LMoeFfnL
     lifted = L.lift_def(fixed_l)
@@ -100,14 +100,14 @@ def test_2_the_lift_of_record_is_the_hand_authored_lmoeffnl_on_both_paths_disabl
     assert program_digest(encode_program(Program(lifted))) == d_pad != program_digest(encode_program(Program(fixed_l)))
     assert L.has_enable(padded_l) and padded_l.signature()[0][-1][0] == L.ENABLE_PARAM       # the enable LAST (B7)
     # the decoded path (GP-01 request_component / codec.decode_program)
-    dec = decode_program(encode_program(Program(bind(CallsTheTwinL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I))), REGISTRY)
+    dec = decode_program(encode_program(Program(bind(CallsTheTwinL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER))), REGISTRY)
     node = next(n for n in dec.root.body.nodes if getattr(n.fn, "defn", None) is not None and n.fn.defn.id == "MoeFfnFixedL_v1")
     assert L._is_decoded(node.fn) and L.lift_def(node.fn).defn is MP.LMoeFfnL
     ldec = L.lift_def(dec.root)
     assert any(getattr(n.fn, "defn", None) is MP.LMoeFfnL for n in ldec.body.nodes)
     assert not any(n.fn.id.startswith("Lifted[MoeFfnFixed") for n in ldec.body.nodes)
     # value: enable 1 -> the twin's payload; the assignment record (LMoeBlockL) has the unselected slots DISABLED; enable 0 -> all bot
-    block_l = bind(MP.LMoeBlockL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    block_l = bind(MP.LMoeBlockL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     for route in MP.admitted_routes(E, TOPK):
         x = token_for_route(route, seed=hash(route) & 0xFFFF)
         _, _, y_fixed = run(fixed_l, inputs_l(x, weights))
@@ -132,31 +132,31 @@ def _no_ord(fid: str) -> str:
     return re.sub(r"\{ORD=[^}]*\}$", "", re.sub(r",ORD=[^,}]*", "", fid))
 
 
-def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
-    """`LMoeBlock_v1` (router-owning) emits through the shared `_lifted_core`: its digest at the Stage 2 envelope is the signed
+def test_3_the_signed_phase2_block_is_unchanged_by_the_factoring():
+    """`LMoeBlock_v1` (router-owning) emits through the shared `_lifted_core`: its digest at the phase 2 envelope is the signed
     one; `LMoeBlockL_v1` differs from it (no router GEMM node, `logits` an input) and from nothing else."""
-    sp = MP.block(E, 2, VPT, H, I)
+    sp = MP.block(E, 2, VPT, H, INTER)
     d = program_digest(encode_program(Program(sp)))
-    # The PIN is the digest of the Stage 2 block on the lifting stack of record; a pin is a pin, not a claim.  The digests it has had:
+    # The PIN is the digest of the phase 2 block on the lifting stack of record; a pin is a pin, not a claim.  The digests it has had:
     #   1dd831feee7ac882  the first lifting stack -- the signed digest;
-    #   de34ef2c82f65eb4  the ORDINARY class (ORD statics in the lifted ids) -- the same block, the same relation; the Stage 2
+    #   de34ef2c82f65eb4  the ORDINARY class (ORD statics in the lifted ids) -- the same block, the same relation; the phase 2
     #                     evidence JSON (dump_routes.py at v2) still carries the first digest and is compared only when it names the current stack.
     #   43bb1ede072b2031  the re-baseline re-key (the k16 step AmpereBF16TcDot16_v1 -> core's _v2; nothing else moved).
     #   52de640566245b7f  the same descriptor, digested with SHA-512 (the identity re-baseline).
     #   cb0b7ed7255cfe06  the router's scan step `ArgmaxStepF32_v1` in place of `RouterArgmaxStep_v1`, the same gates.
-    STAGE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)", "43bb1ede072b2031": "re-key (TcDot16 v2)",
+    PHASE2_DIGESTS = {"1dd831feee7ac882": "pad v0.7 (B7)", "de34ef2c82f65eb4": "pad G1 5261740d7 (ORD statics)", "43bb1ede072b2031": "re-key (TcDot16 v2)",
                       "52de640566245b7f": "SHA-512", "cb0b7ed7255cfe06": "router step ArgmaxStepF32"}
-    assert d[:16] in STAGE2_DIGESTS, d
-    if os.path.exists(STAGE2_EVIDENCE):
-        with open(STAGE2_EVIDENCE) as f:
+    assert d[:16] in PHASE2_DIGESTS, d
+    if os.path.exists(PHASE2_EVIDENCE):
+        with open(PHASE2_EVIDENCE) as f:
             ev = json.load(f)["program_digest"]
-        assert ev[:16] in STAGE2_DIGESTS and (ev == d or STAGE2_DIGESTS[ev[:16]] != STAGE2_DIGESTS[d[:16]])
-    dl = program_digest(encode_program(Program(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=I))))
+        assert ev[:16] in PHASE2_DIGESTS and (ev == d or PHASE2_DIGESTS[ev[:16]] != PHASE2_DIGESTS[d[:16]])
+    dl = program_digest(encode_program(Program(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=INTER))))
     assert dl != d
     # the node census: LMoeBlockL = LMoeBlock minus exactly the router GEMM call
     # (ids read without the ORD static -- `Lifted[Gemm_v1]_v2{K=16,N=4,ORD=0}` now, `{K=16,N=4}` on the first stack: the census is the same)
     names = lambda spec: sorted(_no_ord(n.fn.id) for n in Program(spec).root.body.nodes)  # noqa: E731
-    a, b = names(sp), names(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=I))
+    a, b = names(sp), names(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=INTER))
     extra = list(a)
     for n in b:
         extra.remove(n)

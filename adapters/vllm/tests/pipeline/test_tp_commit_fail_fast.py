@@ -4,18 +4,19 @@ runs every one.  CPU-only: `tp.commit.main` over a stand-in LLM of two ranks, th
 commitment missing from the vector fails every instrumented run closed)."""
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
+from tests import fake_vllm
 from tests.pipeline import served_ranks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import commit as TPCM
 
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
+WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {}, "sha256": "w",
             "execution": "bi-eager"}
 RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "step_tokens_out": [1, 1, 1, 1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}
 
@@ -50,9 +51,10 @@ def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], P
 
     events: list[str] = []
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
-    vllm = ModuleType("vllm")
-    vllm.__dict__["LLM"] = _LLM(events)
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    # The rank worker arms the serving switches when it is imported, once a process, on the vLLM modules `sys.modules` holds then: before
+    # the stand-in, whose sampler module holds no split for `engine.topp_pin` to pin.
+    importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
+    fake_vllm.install(monkeypatch).set("vllm:LLM", _LLM(events))
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
 
     def run(eng, requests, sampling):

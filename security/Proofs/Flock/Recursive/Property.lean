@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The recursive audit's property (trusted)
 
 One statement, `RecursiveAudit`, of the recursive audit as the verifier runs it: V*'s outer sessions verified
-by `flock-verify verify --zk --registered` (each session's verdict `Flock.Zk.verify` and the statement check
+by `verity-verify-proof verify --zk --registered` (each session's verdict `Flock.Zk.verify` and the statement check
 `Flock.ProvedScope.check`), the inner protocol Flock's compiled table (`flockInnerCL` at `execArith`), and the
 private circuit registered by hm96 leaves. It is a conjunction:
 
@@ -85,7 +85,7 @@ def VerifiesVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (zr : Reg�
   AcceptsVR zr o ∧ ∀ j, FailClosed.ScopeZR (zr o.1 j).I
 
 /-- **The verifier accepts every one of V*'s sessions as V*'s statement of its index**, as the prover
-supplies them: each session's proof and the check that it is V*'s statement `j` (`AcceptsVRV`: flock-verify with
+supplies them: each session's proof and the check that it is V*'s statement `j` (`AcceptsVRV`: verity-verify-proof with
 `--rec-inner` at `i`, `--rec-part j`, `--rec-bindings` at `bind j` and `--rec-rows` at `rows`, `RecVStar.checkStmt`),
 and its statement's form (`FailClosed.ScopeZR`), at the registration the outcome records. -/
 def VerifiesVStar {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)

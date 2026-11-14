@@ -6,16 +6,16 @@ public import Proofs.Flock.Recursive.Witness
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Lookups
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Spot.Tables
 
 /-!
-# Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files
+# Sampled proofs' acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
 
 The decoders' premise of the logged coupling (`Decodes`) asks that on the joint law's support, off the events at the
-stops it is held off, an accepted play is beside an outcome flock-verify `--zk` accepts (`LiveAcceptsZKP`), which
+stops it is held off, an accepted play is beside an outcome verity-verify-proof `--zk` accepts (`LiveAcceptsZKP`), which
 judges the writer's transcript with `AcceptsZKP`.
-v2 judges the session's files on the blobs sent with `flock-verify --zk` as `Spot.OneStageZk.run` runs it. They
+v2 judges the session's files on the blobs sent with `verity-verify-proof --zk` as `Spot.OneStageZk.run` runs it. They
 are one check on one pair of byte strings, and the writer carries the acceptance to what it writes:
 
 * **v2's session is `--zk`'s** (`buildSessionOf_ok`, `sessionAt_ok`, `setupAt_ok`, `setup_eq`, `setupAt_setupOfP`):
@@ -26,7 +26,7 @@ are one check on one pair of byte strings, and the writer carries the acceptance
 * **v2's files are `A`'s** (`FilesOn`, `zkInputs_toExec`): v2's circuit and public file, which it finds on the blobs
   by its parameters' digests, are `A`'s, and the lookup tables the blobs hold extend `A`'s (`TablesExtend`). `SetsUp`
   fixes the rest of v2's inputs, so v2's `--zk` inputs are `A`'s but for the tables.
-* **More lookup tables change nothing** (`setupOfP_back`, `acceptsZKP_back`): flock-verify reads a table only by
+* **More lookup tables change nothing** (`setupOfP_back`, `acceptsZKP_back`): verity-verify-proof reads a table only by
   `find?` at a name its circuit lists (`Refine.setupTables_back`), so where `A`'s circuit file parses with `A`'s tables,
   the session `--zk` sets up with tables that extend them is `A`'s, and so is what it accepts.
 * **v2's files are the vocabulary's** (`DigestsAt`, `get_named`, `tables_registered`, `filesOn_of`): the blobs sent
@@ -155,7 +155,7 @@ theorem zkVerify_decode {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {r
   obtain ⟨-, sess, -, hs, -⟩ := ZkExec.zk_verify_ok spec tabs record proofs h
   exact ⟨sess, hs⟩
 
-/-- **What v2's check verified is a transcript flock-verify `--zk` accepts** at v2's inputs: the record and the proof
+/-- **What v2's check verified is a transcript verity-verify-proof `--zk` accepts** at v2's inputs: the record and the proof
 files of `V2Verified`, at the statement's tags and the circuit and public files v2 found on the blobs (`inputsOf`),
 with no public inputs, at the session `Exec.setupOfP` sets up there. -/
 theorem v2Verified_accepts {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
@@ -203,7 +203,7 @@ theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext 
       (Exec.setupOfP (ZkExec.zkInputs I) own record) :=
   setupTables_back hext hcount ((ZkExec.zkTags_typed I).trans ht) hp _ _ _ _ _ _ _ _ _
 
-/-- **What flock-verify `--zk` accepts with more lookup tables it accepts with `I`'s**, under `setupOfP_back`'s
+/-- **What verity-verify-proof `--zk` accepts with more lookup tables it accepts with `I`'s**, under `setupOfP_back`'s
 premises. -/
 theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
     (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -284,7 +284,7 @@ theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Dig
     · rintro rfl
       rfl
     · intro e
-      exact (getD_inj h64 (Properties.NetworkCertifier.Bytes.hash_size f) e).symm
+      exact (getD_inj h64 (Properties.Certifier.Bytes.hash_size f) e).symm
   · obtain ⟨f, hf, hfh⟩ := hreg
     exact ⟨f, hf, decide_eq_true hfh⟩
 
@@ -295,7 +295,7 @@ theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {
     Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray o.sent.blobs) := by
   obtain ⟨_, _, _, p, _, _, _, _, hcase, hp, -, -, -, -, pub, prof, hck⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   cases params_of_case hv.2.1 hcase hp hθ
-  exact Properties.Spot.SecurityProofs.tablesRegistered.2 _ _ _ _ _ _ _ hck
+  exact Properties.Spot.SecurityProofs.tablesRegistered.2.1 _ _ _ _ _ _ _ hck
 
 /-- **The tables the blobs sent hold extend the ones a circuit file registers**, where the circuit file looks up
 exactly the pinned tables the blobs hold (`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its
@@ -364,7 +364,7 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
 
 /-! ## v2's verdict at `A` -/
 
-/-- **v2's verdict is flock-verify `--zk`'s at `A` on the session's files**: where `A` is the session v2 sets up on
+/-- **v2's verdict is verity-verify-proof `--zk`'s at `A` on the session's files**: where `A` is the session v2 sets up on
 the parameters and v2 reads `A`'s files on the blobs sent, the record and the proof files v2 reads in what the prover
 sent (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own` accepts, at the session `Exec.setupOfP` sets
 up at `A`'s inputs. -/
@@ -403,7 +403,7 @@ def MovesOf (A : Live) (s : Verity.Sent) (S : Finset (Fin A.n)) (R : A.Reg) (out
     Exec.recordDraw record = some (A.dj S) ∧ out.rootB = sess.rootB ∧ out.pts = ptsOf A.mP sess.points ∧
       (∀ j r, out.reps j r = repRounds spec sess j.val r.val) ∧ out.proofs = proofs
 
-/-- **v2's verdict is flock-verify `--zk`'s acceptance of what the writer writes**: where `A` is the session v2 sets up
+/-- **v2's verdict is verity-verify-proof `--zk`'s acceptance of what the writer writes**: where `A` is the session v2 sets up
 on the parameters, v2 reads `A`'s files on the blobs sent and the session's writer keeps an accepted transcript's view
 (`WritesView`), the sampled verdict implies `AcceptsZKP A.I A.own` of what the writer writes for moves v2's files
 decode to (`MovesOf`). -/
@@ -461,7 +461,7 @@ def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : Byte
 committed files, v2 reads `A`'s files on the blobs of each accepted play,
 the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint law's support off
 `BL` and `B` are the writer's at moves v2's files decode to (`MovesReach`), every accepted play there that misses
-nowhere and that `P` holds of is beside an outcome flock-verify `--zk` accepts at `A.own`. -/
+nowhere and that `P` holds of is beside an outcome verity-verify-proof `--zk` accepts at `A.own`. -/
 theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}

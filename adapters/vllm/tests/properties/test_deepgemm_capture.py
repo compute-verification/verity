@@ -23,7 +23,7 @@ from verity.definitions.registry import fp8 as F
 
 from tests import fake_vllm
 from tests.properties import deepgemm_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 K, N, GQ = 256, 200, X.GROUP
 NW = 300                                                                    # 3 x 2 weight blocks, the last one partial

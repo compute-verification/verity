@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.NetWitness
-public import Definitions.NetworkCertifier.Witness
+public import Definitions.Certifier.Witness
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -49,7 +49,7 @@ phases closed before it observed, and the network certifier's record of each pha
 puts on the link (`frameRecord`). The period run (`honestNet`) is idle, on the device with no capacity over the
 circuit with no gate, as `acceptAllNet` is; its network audit accepts when both phases' records meet the leak relation
 with no incorrect proof block, and its claim is the monitoring period's good event at that record. The network
-certifier sees no connection and its run is its code's (`honestFmt`), so `trusted-host` holds there by definition.
+certifier sees no connection and its run is its code's (`honestFmt`), so `trusted-device` holds there by definition.
 -/
 
 @[expose] public section

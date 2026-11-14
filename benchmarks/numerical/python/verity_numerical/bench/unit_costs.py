@@ -34,7 +34,7 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_counts`); the counts' recurrence is read off builds at every
+- ``scan fit`` (token-select): not affine in V (:func:`argmax_scan_counts`); the counts' recurrence is read off builds at every
   V in :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
 - ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_excess`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
@@ -65,13 +65,13 @@ import ast
 import json
 import math
 import multiprocessing
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any
 
-from . import census
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.cut import separable
 from verity.circuits.evaluation.reference import resolve, signature_of
@@ -80,6 +80,8 @@ from verity.definitions.registry import sampling_boolean as SB
 from verity.protocols.accounting.pouw.prover.circuit.plan import record_k
 from verity_flock import ir_lower, lowerings
 from verity_flock import subcircuit_templates as TM
+
+from . import census
 
 __all__ = [
     "METRICS",
@@ -96,6 +98,7 @@ __all__ = [
     "registered",
     "render",
     "retree",
+    "reuse",
     "sample_count",
     "sample_size",
     "work",
@@ -194,7 +197,7 @@ def registered(template: str, params: Mapping[str, Any], T: int | None = None) -
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
     mod = lowerings.registry("C-Flock").module(template)
     if mod is None:
-        return {"none": "no registered C-Flock lowering"}
+        return {"none": "no registered Flock lowering"}
     sub = TM.get(template).bind(**params)
     if template not in REGISTERED_FN and (why := mod.supports(sub, SCHEME)):
         return {"none": why}
@@ -636,8 +639,8 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             check = scan(SCAN_CHECK)
             agree = check == _plain(res[SCAN_CHECK])
             V = int(params["V"])
-            r.update(method="exact" if V in res else "scan law", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
-                     counts=scan(V), law=scan.constants, tables=res[SCAN_POINTS[-1]]["tables"],
+            r.update(method="exact" if V in res else "scan fit", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
+                     counts=scan(V), fit=scan.constants, tables=res[SCAN_POINTS[-1]]["tables"],
                      definition=res[SCAN_POINTS[-1]]["definition"],
                      exact_check={"V": SCAN_CHECK, "result": "agrees" if agree else {m: [check[m], res[SCAN_CHECK][m]] for m in METRICS}})
             if not agree:
@@ -749,7 +752,7 @@ def reuse(path: str) -> dict[tuple, dict[str, Any]]:
     """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and each attention head's cost past
     its first key block re-derived."""
     subs = {}
-    for s in json.loads(open(path).read())["subcircuits"]:
+    for s in json.loads(Path(path).read_text())["subcircuits"]:
         s = {k: v for k, v in s.items() if k not in ("per_extra_block", "block_curvature", "notes")}
         if s["template"] == "attention-head" and "fit" in s:
             s["method"] = "model"
@@ -778,6 +781,13 @@ def _registered_sub(reg: Mapping[str, Any], t: UnitType, T: float | None = None,
             "nnz_C": n * u["rows"], "nnz": nnz_AB + n * u["rows"]}
 
 
+def _fitted_sub(s: Mapping[str, Any], e: int, T: Fraction | int) -> dict[str, Fraction]:
+    """A fitted subcircuit's counts at T, ``e`` key blocks past its first: the first block's fit at T and each metric's
+    excess ``lin e + curv e (e − 1) / 2`` (:func:`block_excess`'s pair; zero where no later block was built)."""
+    lin, curv = s.get("_block") or ({m: 0 for m in METRICS}, {m: 0 for m in METRICS})
+    return {m: v + e * lin[m] + Fraction(e * (e - 1), 2) * curv[m] for m, v in at(s["_fit"], T).items()}
+
+
 def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jobs: int = 1,
               attention_t: Sequence[int] = ATTENTION_T, log: Callable[[str], None] = print,
               subs: dict[tuple, dict[str, Any]] | None = None, regs: dict[tuple, dict[str, Any]] | None = None,
@@ -803,12 +813,9 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
             per_sub: dict[str, Any] | None = None
             if "_fit" in s:
                 e = int(t.parameters["NB"]) - 1
-                lin, curv = s.get("_block") or ({m: 0 for m in METRICS}, {m: 0 for m in METRICS})
-
-                def head(T: Fraction | int) -> dict[str, Fraction]:
-                    return {m: v + e * lin[m] + Fraction(e * (e - 1), 2) * curv[m] for m, v in at(s["_fit"], T).items()}
-                per_sub = {m: float(v) for m, v in head(Fraction(t.T["mean"])).items()}
-                per_sub_range = {b: float(head(int(t.T[b]))["nnz_AB"] + head(int(t.T[b]))["ands"]) for b in ("min", "max")}
+                per_sub = {m: float(v) for m, v in _fitted_sub(s, e, Fraction(t.T["mean"])).items()}
+                ends = {b: _fitted_sub(s, e, int(t.T[b])) for b in ("min", "max")}
+                per_sub_range = {b: float(c["nnz_AB"] + c["ands"]) for b, c in ends.items()}
             elif "counts" in s:
                 per_sub = dict(s["counts"])
                 per_sub_range = None
@@ -855,7 +862,7 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
         s.pop("_fit", None)
         s.pop("_block", None)
     return {"format": "verity/f6-unit-costs/v2", "epsilon": str(EPSILON), "delta": "2^-40", "K": K,
-            "draw": "uniform K-subset of all units per workload and granularity (a hidden partition cannot stratify by type)",
+            "sample": "uniform K-subset of all units per workload and granularity (a hidden partition cannot stratify by type)",
             "quantile": "least k with P(X > k) <= 2^-40, hypergeometric", "exact_nnz": exact_nnz, "attention_t": list(attention_t),
             "nnz": "registered lowering's layout where one exists (nnz_a + nnz_b + rows, C = I over rows), else the generic "
                    "whole lowering (nnz_AB + ANDs); nnz_generic is the generic count",
@@ -876,27 +883,27 @@ def _si(v: float | None) -> str:
     return f"{v:.3g}"
 
 
-METHOD_MARK = {"exact": "E", "affine": "A", "scan law": "S", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
+METHOD_MARK = {"exact": "E", "affine": "A", "scan fit": "S", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
 SOURCE_MARK = {"registered": "R", "generic": "G", "tree": "T"}
 
 
 def render(inv: Mapping[str, Any]) -> str:
     lines = [f"# F6 unit costs: K = {inv['K']} sampled proof blocks (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
-             "Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
-             "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
-             "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
-             "a key block; past the first block, the metrics not affine in the block count are fitted with an unchecked "
-             "curvature), – missing, x excluded, nb not built.", "",
-             "src: R the template's registered Flock lowering (units x its flock-ir-unit/v2 layout; committed = rows, "
-             "nnz = nnz_a + nnz_b + rows, C = I over rows), G the generic whole lowering (no registered one; committed = "
-             "inputs + ANDs + output copies, nnz = nnz_AB + ANDs). nnz_generic is the generic count for every row. "
-             "q = the 1 − 2⁻⁴⁰ hypergeometric quantile of the sampled count. Ops and bytes are the census work model.", ""]
+             ("Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
+              "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
+              "fit (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
+              "a key block; past the first block, the metrics not affine in the block count are fitted with an unchecked "
+              "curvature), – missing, x excluded, nb not built."), "",
+             ("src: R the template's registered Flock lowering (units x its flock-ir-unit/v2 layout; committed = rows, "
+              "nnz = nnz_a + nnz_b + rows, C = I over rows), G the generic whole lowering (no registered one; committed = "
+              "inputs + ANDs + output copies, nnz = nnz_AB + ANDs). nnz_generic is the generic count for every row. "
+              "q = the 1 − 2⁻⁴⁰ hypergeometric quantile of the sampled count. Ops and bytes are the census work model."), ""]
     if inv.get("reconciliation"):
         lines += ["## Against circuits' F3 unit nonzeros", "",
-                  "circuits' figures are nnz_a + nnz_b of one registered unit (`benchmarks/private_circuit/nonzero_cost.py`, "
-                  "cursor/f3-nonzero-cost-f253 @76e405893).", "",
-                  "| unit | circuits | registered unit nnz_AB | units per subcircuit | subcircuit nnz_AB (registered) | "
-                  "subcircuit nnz_AB (generic) | generic / registered | unit |", "|" + "---|" * 8]
+                  ("circuits' figures are nnz_a + nnz_b of one registered unit (`benchmarks/private_circuit/nonzero_cost.py`, "
+                   "cursor/f3-nonzero-cost-f253 @76e405893)."), "",
+                  ("| unit | circuits | registered unit nnz_AB | units per subcircuit | subcircuit nnz_AB (registered) | "
+                   "subcircuit nnz_AB (generic) | generic / registered | unit |"), "|" + "---|" * 8]
         for r in inv["reconciliation"]:
             g, s = r.get("generic_subcircuit_nnz_AB"), r.get("subcircuit_nnz_AB")
             lines.append(f"| {r['unit']} | {r['circuits']:,} | {r.get('unit_nnz_AB', 0):,} | {r.get('units', '–')} | "
@@ -905,30 +912,30 @@ def render(inv: Mapping[str, Any]) -> str:
     trees = {(r["template"], r["subcircuit_parameters"]["V"]): r.get("tree") or r.get("select_tree") for r in inv["rows"]
              if r.get("tree") or r.get("select_tree")}
     if trees:
-        lines += ["token-select (src T) is priced at `TokenSelect_v2`'s argmax tree: every stage is separable, so it costs its "
-                  "members' layouts (`ArgmaxLeaf_v1`, `ArgmaxMerge_v1`) times their multiplicities. The generic scan count "
-                  "(quadratic in V) is superseded; nnz_generic still shows it. gumbel keeps its registered lane; its select's "
-                  "F32 tree is listed for comparison.", "",
+        lines += [("token-select (src T) is priced at `TokenSelect_v2`'s argmax tree: every stage is separable, so it costs its "
+                   "members' layouts (`ArgmaxLeaf_v1`, `ArgmaxMerge_v1`) times their multiplicities. The generic scan count "
+                   "(quadratic in V) is superseded; nnz_generic still shows it. gumbel keeps its registered lane; its select's "
+                   "F32 tree is listed for comparison."), "",
                   "| template | V | tree | members | rows | ANDs | nnz | nnz per logit |", "|---|---|---|---|---|---|---|---|"]
         for (tm, V), t in sorted(trees.items()):
             lines.append(f"| {tm} | {V:,} | {t['stage']} | {t['units']:,} | {_si(t['rows'])} | {_si(t['ands'])} | {_si(t['nnz'])} | "
                          f"{t['nnz_per_logit']:.1f} |")
         lines.append("")
     elif inv.get("argmax_step"):
-        lines += [f"token-select has no registered lowering: its rows use the generic count (quadratic in V; the running "
-                  f"best is never re-committed). A cut lowering's middle ArgmaxStep unit is {inv['argmax_step']}, so "
-                  f"about (V − 1) x {inv['argmax_step']['nnz_a'] + inv['argmax_step']['nnz_b'] + inv['argmax_step']['rows']:,} "
-                  "nonzeros (``nnz_step_model``).", ""]
+        lines += [(f"token-select has no registered lowering: its rows use the generic count (quadratic in V; the running "
+                   f"best is never re-committed). A cut lowering's middle ArgmaxStep unit is {inv['argmax_step']}, so "
+                   f"about (V − 1) x {inv['argmax_step']['nnz_a'] + inv['argmax_step']['nnz_b'] + inv['argmax_step']['rows']:,} "
+                   "nonzeros (``nnz_step_model``)."), ""]
     for gran in ("vu", "subcircuit"):
         lines += [f"## Unit = one {'VU' if gran == 'vu' else 'subcircuit'}", ""]
         for wid in dict.fromkeys(r["workload"] for r in inv["rows"]):
             rows = sorted((r for r in inv["rows"] if r["workload"] == wid), key=lambda r: -(r[gran].get("audit_nnz_mean") or 0))
             g0 = rows[0][gran]
             tot = sum(r[gran].get("audit_nnz_mean") or 0 for r in rows)
-            lines += [f"### {wid}", "", f"N = {g0['population']:,} units; sampled nonzeros per audit (mean, built types) "
-                      f"{_si(tot)}", "",
-                      "| unit type | m | src | units | share | ANDs | committed | lookups | nnz_AB | nnz | nnz_generic | "
-                      "sampled mean | q | audit nnz | ops | bytes |", "|" + "---|" * 16]
+            lines += [f"### {wid}", "", (f"N = {g0['population']:,} units; sampled nonzeros per audit (mean, built types) "
+                       f"{_si(tot)}"), "",
+                      ("| unit type | m | src | units | share | ANDs | committed | lookups | nnz_AB | nnz | nnz_generic | "
+                       "sampled mean | q | audit nnz | ops | bytes |"), "|" + "---|" * 16]
             for r in rows:
                 g = r[gran]
                 c = g.get("per_unit") or {}
@@ -953,8 +960,8 @@ def render(inv: Mapping[str, Any]) -> str:
         if s.get("tables"):
             detail += "; tables " + ", ".join(f"{k} x{v['reads']}" for k, v in s["tables"].items())
         lines.append(f"| {s['template']} | {json.dumps(s['params'], sort_keys=True)} | {s['method']} | {s.get('definition', '')} | {detail} |")
-    lines += ["", "## Registered lowerings", "", "| template | parameters | lowering | units | unit rows | unit ANDs | unit nnz_a | "
-              "unit nnz_b | none |", "|" + "---|" * 9]
+    lines += ["", "## Registered lowerings", "", ("| template | parameters | lowering | units | unit rows | unit ANDs | unit nnz_a | "
+               "unit nnz_b | none |"), "|" + "---|" * 9]
     for r in inv.get("registered", []):
         u = r.get("unit") or {}
         lines.append(f"| {r['template']} | {json.dumps(r['params'], sort_keys=True)} | {r.get('lowering', '–')} | {r.get('units', '–')} | "

@@ -9,7 +9,9 @@ class names the recorder hooks by, and the test sets the rank and `torch.cuda.sy
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -276,6 +278,41 @@ def test_an_moe_module_is_one_that_imports_and_holds_the_all_reduce(vllm):
     assert RW._moe_collective_modules() == [vllm[MOE_RUNNER]]                       # the other two are no modules of this vLLM
     delattr(vllm[MOE_RUNNER], ALL_REDUCE)
     assert RW._moe_collective_modules() == []
+
+
+def test_an_moe_module_that_does_not_import_is_named_in_the_rank_workers_log(vllm, caplog):
+    """The two modules of the table that this vLLM lacks are each one record of a call, with what the import raised.  A
+    module that imports and holds no all-reduce is no record: it has nothing to wrap, and nothing failed."""
+    caplog.set_level(logging.INFO, logger=RW.__name__)
+    absent = [name for name in RW.MOE_COLLECTIVE_MODULES if name != MOE_RUNNER]
+    assert len(absent) == 2 and RW._moe_collective_modules() == [vllm[MOE_RUNNER]]
+    assert [(r.name, r.levelname) for r in caplog.records] == [(RW.__name__, "INFO")] * 2
+    assert [r.getMessage() for r in caplog.records] == [
+        f"tp collective recorder: {name} does not import here (ModuleNotFoundError(\"No module named '{name}'\")): "
+        "its all-reduce is not wrapped" for name in absent]
+    caplog.clear()
+    delattr(vllm[MOE_RUNNER], ALL_REDUCE)
+    assert RW._moe_collective_modules() == [] and len(caplog.records) == 2 and MOE_RUNNER not in caplog.text
+
+
+def test_an_moe_module_whose_import_raises_anything_is_left_out_and_named(vllm, caplog, monkeypatch):
+    """Not only a module that is not there: one that raises at its import, whatever it raises, is skipped the same way and
+    the record says what it raised.  The modules after it are still read."""
+    caplog.set_level(logging.INFO, logger=RW.__name__)
+    first, second, third = RW.MOE_COLLECTIVE_MODULES
+    assert first == MOE_RUNNER
+    import_module = importlib.import_module
+
+    def raising(name: str, package: str | None = None) -> Any:
+        if name == first:
+            raise RuntimeError("no device for this module")
+        return vllm[MOE_RUNNER] if name == third else import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", raising)
+    assert RW._moe_collective_modules() == [vllm[MOE_RUNNER]]
+    assert [r.getMessage().split(" does not import here ")[0] for r in caplog.records] == [
+        f"tp collective recorder: {first}", f"tp collective recorder: {second}"]
+    assert "(RuntimeError('no device for this module'))" in caplog.records[0].getMessage()
 
 
 class _Recorder:

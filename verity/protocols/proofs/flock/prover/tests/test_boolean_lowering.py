@@ -123,7 +123,7 @@ def _lower_chain(n, reads=False):
     C = Circuit()
     _prog, call = IL.standalone(d)
     wires = {a: C.input(f"in{j}", 1) for j, a in enumerate(call.args)}
-    IL.lower_gates(C, call, wires, reads=call.gate_indices() if reads else ())
+    IL.lower_gates(C, call, wires, reads=call.gate_indices() if reads else None)
     C.output("out", [wires[r][0] for r in call.returns])
     return d, C
 

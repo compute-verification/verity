@@ -10,18 +10,22 @@ auditor registers before the run: the boundary registration's program, query, wo
 the templates' names, links, wires and descriptor, the boundary and interior registrations' ports (`held.json`), the
 templates' reference statements, made from the interior window with no run in it and admitted only after the script
 checks each is in Flock's masked scope (`zkOk`), and the templates' reference reads as the params name them
-(`ref-<t>.reads.json`, `Held.refReads`). Nothing in `h` reads the run's messages or coins. `two`'s conjuncts on the
-members' files (`twoFilesOk`: the layout fits them, and each reference statement reads as a member's) evaluate to true
-too. `runOkAt` refuses the altered run, and the honest run with one byte of a session statement's registered reads
+(`ref-<t>.reads.json`, `Held.refReads`). Nothing in `h` reads the run's messages or coins. Of `two`'s conjuncts on the
+members' files (`twoFilesOk`), the layout fits them and each reference statement reads as a member's (`filesFitOk`),
+and the registered wiring passes every clause of its check but one: FLIP_B writes its own port
+`o0`, which no link names and no wire reads, so `writtenRowsRead` refuses the toy's registration, and `twoFilesOk` and
+the design with it. `runOkAt` refuses the altered run,
+and the honest run with one byte of a session statement's registered reads
 flipped (`guard.flip_registered`). Its records check (`recordsOk`) refuses the honest run with FLIP_B's own port `o0`,
 which no link or wire names, dropped from round 1's record and registered as a value of its name (`guard.drop_port`),
 and with a value the registration registers registered twice (`guard.register`), where the same run with it registered
 once passes.
 
-What it doesn't show: that `stmtOk` accepts, so not that a guarantee over it (`SpotKSTwo`) is non-vacuous. `regOk` also
-asks for `partition`'s `membersPart` and `two`'s `scopeOk` over `bitsProgs`, which read only `h` and unroll the members'
-circuits; `regOk h = true` is a fact about the registration, to be proved rather than decided on a run, and this evaluates
-neither. The result lists each member's sizes.
+What it doesn't show: that `stmtOk` accepts, so not that a guarantee over it (`SpotKSTwo`) is non-vacuous: at the toy's
+registration it refuses, by the wiring's clause above. `regOk` also asks for `partition`'s `membersPart` and `two`'s
+`scopeOk` over `bitsProgs`, which read only `h` and unroll the members' circuits; `regOk h = true` is a fact about the
+registration, to be proved rather than decided on a run, and this evaluates neither. The result lists each member's
+sizes.
 Nor that each session accepts: `stmtOk` reads the session statements and their registered reads, never a session's
 transcript. Each session's acceptance is the Lean verifier's verdict in the run that made the fixture (`verdicts.json`,
 asserted here), whose statements these are byte for byte (`guard.session_statement` rebuilds each from its command line
@@ -100,10 +104,27 @@ def registered(run: Path, tmp_path: Path, times: int) -> dict:
     return check(variant(tmp_path, run, {"held.json": json.dumps(held).encode(), "m1.bin": m1}))
 
 
-def test_honest_run_passes(runs: Path):
+def flip_b(run: Path) -> str:
+    """`toy.FLIP_B`'s template among the registration's names."""
+    (name,) = [n for n in json.loads((run / "held.json").read_text())["names"] if n.startswith(f"{FLIP_B}_")]
+    return name
+
+
+@pytest.fixture(scope="module")
+def honest(runs: Path) -> dict:
+    return check(runs / "honest")
+
+
+def test_honest_run_passes(runs: Path, honest: dict):
     assert all(verdicts(runs / "honest"))
-    result = check(runs / "honest")
-    assert result["runOk"] and result["recordsOk"] and result["twoFilesOk"], result
+    assert honest["runOk"] and honest["recordsOk"] and honest["filesFitOk"], honest
+
+
+def test_the_wiring_refuses_the_port_no_link_names_and_no_wire_reads(runs: Path, honest: dict):
+    """The toy's registration fails one clause of the wiring, at one port: FLIP_B's own `o0`."""
+    assert [name for name, ok in honest["wiring"].items() if not ok] == ["writtenRowsRead"], honest
+    assert honest["unread"] == [[flip_b(runs / "honest"), "o0"]] and honest["unnamed"] == [], honest
+    assert not honest["twoFilesOk"], honest
 
 
 def test_altered_run_fails(runs: Path):
@@ -119,8 +140,7 @@ def test_one_registered_byte_flipped_fails(runs: Path, tmp_path: Path):
 
 def test_dropped_port_registered_as_a_value_fails(runs: Path, tmp_path: Path):
     honest = runs / "honest"
-    (flip_b,) = [n for n in json.loads((honest / "held.json").read_text())["names"] if n.startswith(f"{FLIP_B}_")]
-    port = f"{flip_b}/o0"
+    port = f"{flip_b(honest)}/o0"
     result = check(variant(tmp_path, honest, {"m1.bin": G.drop_port((honest / "m1.bin").read_bytes(), port)}))
     assert not result["recordsOk"] and not result["runOk"], result
 

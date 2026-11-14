@@ -2,7 +2,7 @@
 # The plain hidden-output fixture (tests/plain_hidden.py, tests/test_lean_plain_tree.py): a RoPE d64 statement with hidden
 # outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on the
 # keyed coin tree (FC_COINS=tree), which the auditor's challenger samples and opens (challenger.sh: serve --tree-from; its
-# release log holds the session's record, challenger/audit.json), then Lean's `flock-verify verify --coins tree` on it with
+# release log holds the session's record, challenger/audit.json), then Lean's `verity-verify-proof verify --coins tree` on it with
 # the verifier's own program and partition (`Flock.ProvedScope`: the plain claim at hidden outputs samples by the subset sampling design
 # at one table, FailClosed.SoundExecH at its subset sample design). The staged files, the session and its challenger's
 # challenger/ (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1
@@ -38,16 +38,16 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$PH_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, built once per source, while the prover builds
+# Lean's verity-verify-proof, built once per source, while the prover builds
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
+      && (cd $LEAN_SRC && lake build verity-verify-proof) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

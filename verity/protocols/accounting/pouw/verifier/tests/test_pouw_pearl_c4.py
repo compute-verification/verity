@@ -32,10 +32,10 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
-# the clear audit is a reference tool (verity/protocols/accounting/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-from clear_audit import Prover  # noqa: E402
-import clear_work as CW  # noqa: E402
+# the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
+from clear_audit import Prover
+import clear_work as CW
 
 K = 128
 FMTS = ("nvfp4", "mxfp4")
@@ -640,8 +640,8 @@ def test_f1_prime_puts_the_correction_inside_the_expectation():
 
 
 def test_f1_prime_reads_the_exact_noise_law():
-    """p_t under the exact law given E: the pmf of Σ (2E_r)(2F_r) has the
-    Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled
+    """p_t under the exact distribution given E: the pmf of Σ (2E_r)(2F_r) has the
+    Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point distribution scaled
     by 12."""
     e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
     lo, pmf = F.noise_law(e)
@@ -698,12 +698,12 @@ def test_the_modal_byte_is_the_realised_bytes_mode():
     x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
     _, _, alpha, _, ae = F.stats(f, x)
     e = tuple(F.line(b"mode" * 8, F.ROLE_EA, 0))
-    cdf, sigma = F._below_law(e, F._scale_value(F.NVFP4, ae) / 64), F.noise_sigma(e, ae)
+    cdf, sigma = F._below_law(e, F.scale_value(F.NVFP4, ae) / 64), F.noise_sigma(e, ae)
     for b0 in (0, 16 * 9):
         cs = [fp32.mul(alpha, w) for w in x[b0:b0 + 16]]
         seen = Counter(F.block_scale(f, max(F.noise_atom(c, e, ae, [rng.randrange(16) for _ in range(F.R)]) & 0x7FFFFFFF
                                             for c in cs))[0] for _ in range(600))
-        assert seen.most_common(1)[0][0] == F.modal_byte(f, [F.P.f32_of_bits(c) for c in cs], cdf, sigma)
+        assert seen.most_common(1)[0][0] == F.modal_byte(f, [P.f32_of_bits(c) for c in cs], cdf, sigma)
 
 
 def r1_tile():

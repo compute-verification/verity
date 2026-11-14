@@ -1,6 +1,7 @@
 module
 
 public import Properties.Verity.Game
+public import Proofs.Properties.Verity.Soundness.Composite
 public import Properties.Spot.Draw
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.CircuitOf
@@ -21,7 +22,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
 * **The session** (`Live`): V5's binders, each the value v2's check derives on the parameters and the committed files,
   with three of V5's hypotheses as fields (A3 at the device's bytes, `TagsOkZHJ`, and the registration's law on its
   layout's strata, `Flock.Bridge.LawOn`), and the bound's parameters. The circuit names no public input port: v2 hands
-  `flock-verify` no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the
+  `verity-verify-proof` no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the
   session's ports are `HmIn.parse`'s empty ones. What the period's registration fixes is the session's, not a field:
   the registration the prover sends before the sample is the registration record's digest, which the composite's
   commitment binds and the sample's coins are released after (`Live.Reg`); the record's sample file is the `.subset` print
@@ -47,15 +48,15 @@ files and at the strategy a strategy of the period's game projects to. This modu
   other families' coins, other trees' samples) widen the sample's sample (`Live.extend`), which the sample doesn't read: the
   sample's law, A3 and the leg's δ are the session's (`uniform_fst`, `Live.delta_extend`).
 * **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
-  game as flock-verify `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
+  game as verity-verify-proof `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the coin trees' hiding term at every leaf, the read finder's collision and the forger's forgery.
 * **The component** (`ReadsV2`): the composite's `.sampled` component is `VStar.Recursive.Sampled.protocol`, whose
-  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Both composites name it
-  (`composite_readsV2`). The parameters fix the form before any coin; this leg covers the one-stage form, and the
-  recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
+  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Every composite that lists SPOT
+  names it (`readsV2_of_component`). The parameters fix the form before any coin; this leg covers the one-stage
+  form, and the recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
 * **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's,
   the first under the sampled component's id, as v2's case finds them (`ParamsAt`, at most one), the session's inputs
-  as v2 hands them to flock-verify (the statement, one table, the verifier's partition object and program, no
+  as v2 hands them to verity-verify-proof (the statement, one table, the verifier's partition object and program, no
   recomputation of public input words), the committed circuit and public files and the vocabulary's reading of them,
   the sampling design the sample reads over the population (`lawAt`), the statement's descriptor and the registration's query the
   verifier's program and query, the sample's bytes the coins the coin commitment gives the parameters' challenger family,
@@ -272,7 +273,7 @@ opens; the device refuses every tree past its caps (`Verity.releases`), so every
 at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
-/-- **The session's sample file**: at each sample, the `.subset` print `flock-verify draw` gives of the session's `kd` units
+/-- **The session's sample file**: at each sample, the `.subset` print `verity-verify-proof draw` gives of the session's `kd` units
 (`printedDraw`), the member's share of the window's sample under the verifier's law `L`; `verify --zk` at the session
 admits only a subset sample (`recordDraw_subset`). The bound comes from v1's window check
 (`Spot.OneStage.checkAt`), which v2 runs at the window and which derives the sample under the verifier's own
@@ -377,7 +378,7 @@ noncomputable def vb :=
   (rsZHJP (Reg := A.Reg) A.dj A.y₀ A.ht A.hcS A.hscope A.hU A.hpi A.hpub).bindingZ
     (rsZHJP_computes (Reg := A.Reg) A.dj A.y₀ A.ht A.hcS A.hscope A.hU A.hpi A.hpub)
 
-/-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at flock-verify
+/-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at verity-verify-proof
 `--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the sample file's size give at the sample
 file's law, the subset sampling design of `kd` units. -/
 noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
@@ -607,7 +608,7 @@ structure FinderCR (V : Vocab d α) (K : Constructions V) (A : Live) (θ : ByteA
 
 /-- **The coupling, the projection's target at the session `A`**: the plays of the period's game whose sampled verdict
 accepts are at most as likely as the live audit's plays, at the session widened by the projection's coins and the
-strategy projected there, that flock-verify `--zk` accepts at `own` (`LiveAcceptsZKP`), plus the square root of each
+strategy projected there, that verity-verify-proof `--zk` accepts at `own` (`LiveAcceptsZKP`), plus the square root of each
 two-continuation finder's success (one per round the device opens after a digest of the prover's message, one for the
 record, and one for the digests the composition's commitment binds), the coin trees' hiding term (`Live.hidingTerm`,
 at every leaf the device's trees hold), the read finder's collision and the forger's forgery of the device's
@@ -634,9 +635,11 @@ verdict from the session's files; one-stage v1, whose verdicts are the prover's,
 def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
   Verity.component k .sampled = some VStar.Recursive.Sampled.protocol
 
-/-- Both composites read sampled proofs at v2. -/
-theorem composite_readsV2 (k : Verity.Registration.Composite) : ReadsV2 k := by
-  cases k <;> rfl
+/-- **Every composite with a sampled component reads SPOT at v2**: the component is SPOT's own
+compiled check, the same in every composite that lists it. -/
+theorem readsV2_of_component {k : Verity.Registration.Composite} {P : _root_.Core.BlobProtocol}
+    (h : Verity.component k .sampled = some P) : ReadsV2 k :=
+  h.trans (congrArg some (Verity.component_eq_some.1 h).2)
 
 /-- **v2's parameters in the composite's parameters `θ`**: the first component parameters the composition's format
 decodes under the sampled component's id, as `caseOf` finds them, read by its decoder in its one-stage form. The
@@ -667,7 +670,7 @@ def lawAt (v : _root_.Spot.Registration.Verifier) (n : ℕ) : Flock.V Flock.Draw
   pure (derived.getD (← _root_.Spot.Draw.flockLaw lawJ n))
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
-composite's (`ParamsAt`), with the verifier's partition object and program as flock-verify's inputs, the sampling design the sample
+composite's (`ParamsAt`), with the verifier's partition object and program as verity-verify-proof's inputs, the sampling design the sample
 reads over the population (`lawAt`), and the statement's descriptor and the registration's query the verifier's program
 (`Spot.Program.parse`) and query, so the registration's population is the verifier's, and the sample's bytes
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
@@ -811,7 +814,7 @@ theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.program
   tables F := by rw [hr, Vocab.circuitFile, hc]; rfl
 
 /-- **The deployed reading is the session's** (`SetsUp.read`) at a session whose inputs are the ones v2 hands
-`flock-verify` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
+`verity-verify-proof` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
 tables the circuit file registers. -/
 theorem readOf_eq (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}

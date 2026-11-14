@@ -40,7 +40,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
 # SBENCH_SHIP=TAR (such a tar, copied to the host) takes them in place of building, so a host that may not build builds
 # nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
-# sources here, verity/circuits/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# sources here, verity/commitments/cuda/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
 COINS_PKG=verity/protocols/accounting/pouw/verifier/lean/check
@@ -50,7 +50,9 @@ SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_K
 COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
   for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
 ship_key() {
-  git ls-tree -r HEAD -- benchmarks/hash/dither verity/circuits/kernels/sha512.cuh | grep -E '\.(cu|cuh)$'
+  git ls-tree -r HEAD -- verity/protocols/experimental/dither/prover/kernels/h1c.cu verity/protocols/experimental/dither/prover/kernels/h1f.cu verity/protocols/experimental/dither/prover/kernels/h1o.cu \
+    verity/protocols/experimental/dither/prover/kernels/h1r.cu verity/protocols/experimental/dither/prover/kernels/h1sha.cuh verity/protocols/experimental/dither/prover/kernels/h1u.cu \
+    verity/commitments/cuda/sha512.cuh
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
   echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
@@ -72,9 +74,10 @@ if [ -n "${SBENCH_SHIP:-}" ]; then
          exit 17; }
   echo "sbench: shipped ($(tail -1 "$S/key"))"
 else
-for lib in h1c h1f h1o; do
+for src in verity/protocols/experimental/dither/prover/kernels/h1c.cu verity/protocols/experimental/dither/prover/kernels/h1f.cu verity/protocols/experimental/dither/prover/kernels/h1o.cu; do
+  lib=$(basename "$src" .cu)
   nvcc -O3 -std=c++17 -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-    -o "$S/lib$lib.so" "benchmarks/hash/dither/$lib.cu" > "$OUT/build-$lib.log" 2>&1 \
+    -o "$S/lib$lib.so" "$src" > "$OUT/build-$lib.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL $lib"; grep -v "^ptxas info" "$OUT/build-$lib.log" | tail -30; exit 11; }
 done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
@@ -83,7 +86,7 @@ grep -B1 -A2 "h1c_a_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head -
 # dither-a-kh's side unit: h1u.cu's kh_unit_ws, built here (HB_H1U)
 case " $* " in *dither-a-kh*)
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-    -o "$S/h1u.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u.log" 2>&1 \
+    -o "$S/h1u.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u"; grep -v "^ptxas info" "$OUT/build-h1u.log" | tail -30; exit 11; }
   grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
   export HB_H1U=$S/h1u.so ;;
@@ -91,7 +94,7 @@ esac
 # dither-a-hbk's: the K split's kh_one (H1U_KSPLIT = 4, H1K_AUTO), as job.sh's ka variant (HB_H1U_KSPLIT)
 case " $* " in *dither-a-hbk*)
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -o "$S/h1u_ka.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_ka.log" 2>&1 \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -o "$S/h1u_ka.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u_ka.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u_ka"; grep -v "^ptxas info" "$OUT/build-h1u_ka.log" | tail -30; exit 11; }
   grep -B1 -A2 "h1k" "$OUT/build-h1u_ka.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KSPLIT=$S/h1u_ka.so ;;
@@ -99,7 +102,7 @@ esac
 # dither-a-hbr's: the same K split built receipts only (H1K_RONLY), as job.sh's kr variant (HB_H1U_KRONLY)
 case " $* " in *dither-a-hbr*)
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_kr.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kr.log" 2>&1 \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_kr.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u_kr.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u_kr"; grep -v "^ptxas info" "$OUT/build-h1u_kr.log" | tail -30; exit 11; }
   grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
@@ -110,7 +113,7 @@ esac
 case " $* " in *dither-a-hbc*)
   read -r -a kc <<< "${HB_KC_FLAGS:-}"
   nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_kc.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kc.log" 2>&1 \
+    -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_kc.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u_kc.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u_kc"; grep -v "^ptxas info" "$OUT/build-h1u_kc.log" | tail -30; exit 11; }
   echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
   grep -B1 -A2 "h1k\|h1u" "$OUT/build-h1u_kc.log" | grep -i "registers\|spill" | head -8
@@ -119,7 +122,7 @@ case " $* " in *dither-a-hbc*)
   read -r -a kcb <<< "${HB_KC_FLAGS_B:-}"
   if [ ${#kcb[@]} -gt 0 ]; then
     nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
-      -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" -o "$S/h1u_kcb.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kcb.log" 2>&1 \
+      -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" -o "$S/h1u_kcb.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-h1u_kcb.log" 2>&1 \
       || { echo "sbench: NVCC_FAIL h1u_kcb"; grep -v "^ptxas info" "$OUT/build-h1u_kcb.log" | tail -30; exit 11; }
     echo "sbench: h1u_kcb.so with ${HB_KC_FLAGS_B}" | tee -a "$OUT/kc-flags.txt"
     grep -B1 -A2 "h1um\|h1jr_rows" "$OUT/build-h1u_kcb.log" | grep -i "registers\|spill" | head -8
@@ -129,7 +132,7 @@ case " $* " in *dither-a-hbc*)
   read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
   if [ ${#kh[@]} -gt 0 ]; then
     nvcc -O3 -std=c++17 -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared "${kh[@]}" \
-      -o "$S/libh1c_kc.so" benchmarks/hash/dither/h1c.cu > "$OUT/build-h1c_kc.log" 2>&1 \
+      -o "$S/libh1c_kc.so" verity/protocols/experimental/dither/prover/kernels/h1c.cu > "$OUT/build-h1c_kc.log" 2>&1 \
       || { echo "sbench: NVCC_FAIL h1c_kc"; grep -v "^ptxas info" "$OUT/build-h1c_kc.log" | tail -30; exit 11; }
     echo "sbench: libh1c_kc.so with ${HB_KC_H1C_FLAGS}" | tee -a "$OUT/kc-flags.txt"
     export DITHER_H1C_KC=$S/libh1c_kc.so

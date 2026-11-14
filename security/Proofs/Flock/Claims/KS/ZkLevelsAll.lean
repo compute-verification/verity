@@ -594,7 +594,7 @@ and the ones after it are levels `1, …, R` in order, each at the positions of 
 theorem zk_rep_reqsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -611,7 +611,7 @@ theorem zk_rep_reqsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (
           (rounds[(st.m + (st.kLog - 6)) + (2 + extras.size + 1) + (sch.k0 + 8)]!).coins).toList ∧
         rest.length = sch.levels.size - 1 ∧
         LaterAt sch rounds ((st.m + (st.kLog - 6)) + (2 + extras.size + 1) + 2) rest := by
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
   unfold repProg at hrun

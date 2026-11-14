@@ -8,8 +8,8 @@ accepted audit leaves the certified traffic outside what that Program accepts, a
 of bits of such a sender's secrets a decoder recovers from the client's view.
 
 The guarantee is `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`), proved as
-`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/NetworkCertifier/MonitoringPeriod.lean`). Over a monitoring
+(`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`), proved as
+`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/Certifier/MonitoringPeriod.lean`). Over a monitoring
 period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
 
@@ -29,7 +29,7 @@ It bounds each execution phase's failure on its own: the union over the monitori
 and `ExecutionPhaseGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
-`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/Certifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
 (N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
@@ -44,7 +44,7 @@ assumptions: none. A premise that is part of what it says (`domain`):
 
 Open premises (`open`):
 
-- `Verity.Assumptions.TrustedHost` (`trusted-host`): the network certifier, the auditor's device on a host the developer
+- `Verity.Assumptions.TrustedDevice` (`trusted-device`): the network certifier, the auditor's device on a host the developer
   doesn't control, runs its stated code.
 - `Claims.SamplingGeneric.Compiled.KS`: the compiled sampled verifier is knowledge sound at its errors on the
   statements in scope.
@@ -52,7 +52,7 @@ Open premises (`open`):
 - `NetTiming.CertifierRegisters`: the network certifier's openings pass under the statement's roots, cover every
   egress and ingress gate, and hold its record's rows there; the antecedent of the period's count.
 
-`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedHost`.
+`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedDevice`.
 
 ## Interface
 
@@ -286,7 +286,8 @@ A spec-level reference for network accounting's timing channel:
   buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once
   each release of bucket t is written or lost. An engine that admits at a logical time in certifier buckets waits on
   that line and on each N < n it doesn't name. A client's request that opens as one to that path is refused
-  (`release.to_watermark`, read on its first cell and, whole, at its `END`), unreleased.
+  (`release.to_watermark`, read on its first cell and, whole, at its `END`), unreleased; so is one a server would
+  read a second request in, or read without the headers (`release.one_request`, read whole at its `END`).
   The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the
@@ -352,8 +353,7 @@ A spec-level reference for network accounting's timing channel:
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
-  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
-  policy's layout check, which is withheld. Programs start at
+  step from a period's records to the network bound, reads the inference-only policy's layout check. Programs start at
   fixed slots a network timestep: a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   execution phase, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
@@ -476,8 +476,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/TransferBlocks.lean`
-  (`Properties.NetworkCertifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
+- the Lean's verdict has its property in `security/Properties/Certifier/Check/TransferBlocks.lean`
+  (`Properties.Certifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
 

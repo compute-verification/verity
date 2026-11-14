@@ -3,10 +3,10 @@ W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) sta
 session proving k of them sampled by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
 
-    python benchmarks/one_stage/zk_cost.py stage  --lean flock-verify --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
+    python benchmarks/one_stage/zk_cost.py stage  --lean verity-verify-proof --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
     python benchmarks/one_stage/zk_cost.py stage  --out DIR --units "fp8-coord:K=6144 router-row" [--sizes half,full] [--draws c]
     python benchmarks/one_stage/zk_cost.py prove  --bin flock-circuit --out DIR [--arms fw,nofw] [--cold 2] [--runs 3] [--cpu]
-    python benchmarks/one_stage/zk_cost.py verify --lean flock-verify --out DIR
+    python benchmarks/one_stage/zk_cost.py verify --lean verity-verify-proof --out DIR
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
     python benchmarks/one_stage/zk_cost.py overhead --out DIR [--card rtx-pro-6000-server]
 
@@ -23,7 +23,7 @@ sessions.
   whatever its reason, is a failed check.
   A type staged as a templated statement (a table read: its stage's ``unit.tmpl``) is proved, served and verified at
   `TMPL_STATEMENT` on its unit rows, placed once by ``--tmpl-unit-bin`` (`flock-tmpl-unit`).
-* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
+* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `verity-verify-proof draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
   (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).

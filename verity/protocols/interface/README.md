@@ -83,7 +83,7 @@ kind under `schema` (the protocol's entry schema and version), `session` its ses
 SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
 sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
 signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.ledgerEntry?`, schemas
-`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/hardware/record.py` is its Python.
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/channel.py`'s `Record` is its Python.
 
 ## The profile (`CoreProtocol/Profile.lean`)
 
@@ -110,7 +110,7 @@ format:
 
 | format | what it registers |
 | --- | --- |
-| `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
+| `verity/registration/site/v2` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
@@ -130,8 +130,9 @@ registered compiler and the days' registered circuits, `View.declared?`, at the 
 `core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
-ASCII without DEL as `Core.canonicalJson` does. `verity.hardware.registration` is its Python, held to it by the
-composition suite's difftest (`../compose/verifier/lean/tests/test_registration_difftest.py`).
+ASCII without DEL as `Core.canonicalJson` does. `verity.protocols.accounting.registration.verifier.registration` is
+its Python, held to it by the composition suite's difftest
+(`../compose/verifier/lean/tests/test_registration_difftest.py`).
 
 ## What a protocol accounts for (`CoreProtocol/Account.lean`)
 

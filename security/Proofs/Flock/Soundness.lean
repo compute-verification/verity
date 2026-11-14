@@ -21,6 +21,7 @@ public import Proofs.Flock.Soundness.Rounds
 public import Proofs.Flock.Soundness.RepSound
 public import Proofs.Flock.Soundness.Soundness
 public import Proofs.Flock.Soundness.Merkle
+public import Proofs.Flock.Soundness.MerklePair
 public import Proofs.Flock.Soundness.Rewinding
 public import Proofs.Flock.Soundness.OpeningPhase
 public import Proofs.Flock.Soundness.ListSize
@@ -45,7 +46,6 @@ public import Proofs.Flock.Soundness.NovelBasis
 public import Proofs.Flock.Soundness.PadCode
 public import Definitions.Flock.Accounting.Padded
 public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
-public import Proofs.Flock.Soundness.Accounting.WideLeafChecks
 public import Definitions.Flock.LigeritoPad
 public import Proofs.Flock.Soundness.LigeritoPadLevel0
 public import Proofs.Flock.Soundness.LigeritoPadDecode

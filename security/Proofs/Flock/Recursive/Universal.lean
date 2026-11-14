@@ -88,7 +88,7 @@ theorem compiledForkSound_ofStmt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r 
     (Refine.schedOf s₀) h.symm fun _ => Refine.stmtOf_linkLayout st hwf hr
 
 /-- `Zk.schedule` accepts only an `m` of at least 13 (`HClass.hm`). -/
-theorem hm_of_schedule {st : Flock.Stmt} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule st.m = .ok p) :
+theorem hm_of_schedule {st : Flock.Stmt} {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule st.wideLeaf st.m = .ok p) :
     13 ≤ st.m := by
   have := (ZkHidden.schedule_range h).1
   omega
@@ -97,7 +97,7 @@ theorem hm_of_schedule {st : Flock.Stmt} {p : Flock.Schedule × ℕ} (h : Flock.
 `StmtWF` and `RegionsWF`, and `Zk.schedule` accepting its `m`. -/
 theorem compiledForkSound_ofSchedule {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hwf : Refine.StmtWF st) (hr : Refine.RegionsWF st)
-    {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule st.m = .ok p) (slotLog : ℕ) (units : Finset ℕ) (nnz : ℕ) :
+    {p : Flock.Schedule × ℕ} (h : Flock.Zk.schedule st.wideLeaf st.m = .ok p) (slotLog : ℕ) (units : Finset ℕ) (nnz : ℕ) :
     ∃ sch, Flock.Premises.CompiledForkSound T CT (HClass.ofStmt st hwf (hm_of_schedule h) slotLog units nnz)
       (Refine.regionsOf st) sch := by
   obtain ⟨s₀, hs₀⟩ := ZkHidden.fast100_of_schedule h

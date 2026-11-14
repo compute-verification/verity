@@ -9,8 +9,9 @@ debug setting on a run of record (one with ``RESEARCH_RUN_ID``); then writes the
 their digest, which ``params.txt`` (so the result's ``params``) carries as ``settings``.  ``run.py`` refuses the same before it
 launches.  85's other variables (``LEVELS``, ``PCPUS``, ...) pass through undeclared: 85 owns them.
 
-Stdlib only, as ``run.py`` is, and so are ``verity_config`` and ``verity_config.verity_settings``, which it imports from the tree:
-``job.sh`` runs it with the pod's python3.
+Stdlib only, as ``run.py`` is, and so are ``verity_config`` and ``verity_config.verity_settings``, which it imports as the
+workspace installs them; where ``job.sh`` runs it with the pod's python3, from the tree's ``tools/config``, which ``job.sh``
+puts on ``PYTHONPATH`` after the research run's own roots.
 """
 from __future__ import annotations
 
@@ -18,9 +19,6 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
-sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv
 
@@ -37,7 +35,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("MODES", csv, ("firewall",), VALUE, "oprove's prover sides; the last one's releases are the ones oreplay and lean read"),
     S("OPROVE_WARM", int, 0, VALUE, "warm releases per V* statement, untimed"),
     S("OPROVE_RUNS", int, 1, VALUE, "timed releases per V* statement"),
-    S("OPROVE_GPU", str, None, VALUE, "V*'s prover: 0 85's CPU prover, 1 the GPU one under a lease; unset, 0 under the firewall, "
+    S("OPROVE_GPU", str, None, VALUE, "V*'s prover: 0 85's CPU prover, 1 the GPU one under a lease; unset, 0 under the ZK server, "
       "else GPU"),
     S("NEG", str, "challenge,query", VALUE, "the inner coins of rep 0 the negative step flips (empty: none)"),
     S("FORGE", csv, (), VALUE, "85's forgeries, which vstage stages and oprove proves"),
@@ -58,7 +56,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("GPU_PREEMPTIBLE", str, "", WHERE, "85's leases are preemptible unless empty (the job's default): how a lease is held"),
     S("TREE_FROM", str, None, VALUE, "where the inner sessions' coin trees come from: the challenger's device, HOST:PORT (85's "
       "TREE_FROM); local, the challenger started beside the inner step, its release log audited against the session; unset, "
-      "this host's OS draws them (rec_live --tree-test-os), a test's coins"),
+      "this host's OS generates them (rec_live --tree-test-os), a test's coins"),
     S("RELEASE", int, 0, VALUE, "1: the recursive session through the ZK server's release side (85's RELEASE): the inner "
       "session opens it, oprove proves its parts in order through the Lean session loop, each held to its release window"),
     S("RELEASE_WINDOWS_S", str, None, VALUE, "each part's release window by class, seconds (85's RELEASE_WINDOWS_S); unset, 85's"),
@@ -75,6 +73,8 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run the job is, which makes it a run of record"),
     S("RESEARCH_SOURCE_SHA", str, None, VALUE, "the commit research run shipped, which params.txt names"),
     S("RESEARCH_RUNS_DIR", str, None, WHERE, "where `research fetch` puts a run's records; unset, ~/.research/runs (run.py's load)"),
+    S("PYTHONPATH", str, None, WHERE, "Python's import roots: the research run's, which job.sh extends by the tree's "
+                                      "tools/config and root for the pod's python3"),
     shared=False)
 del S
 

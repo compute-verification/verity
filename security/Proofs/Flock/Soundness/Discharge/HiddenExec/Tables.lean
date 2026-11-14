@@ -39,7 +39,7 @@ read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHid
 * `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH`: the sample's table, the one-table plan and its tables, as
   `Prog.flock_headline_live_on` takes them.
 
-`drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a sample flock-verify accepts under hidden
+`drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a sample verity-verify-proof accepts under hidden
 outputs, the table is `stmtOf` of the statement it accepted.
 -/
 
@@ -53,7 +53,7 @@ open FlockSoundness.Discharge.Integrate (DrawSetup)
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A sample flock-verify sets up under hidden outputs**: `Integrate.DrawSetup` with `Stmt.setupHidden` for
+/-- **A sample verity-verify-proof sets up under hidden outputs**: `Integrate.DrawSetup` with `Stmt.setupHidden` for
 `Stmt.setupH`. -/
 structure DrawSetupH (S : Finset (Fin n)) (d : Lean.Json) where
   st : Stmt
@@ -193,7 +193,7 @@ end DrawSetupH
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The table at sample `S`**: the sample's table (`DrawSetupH.table`) when flock-verify sets up the sample's JSON `dj S`
+/-- **The table at sample `S`**: the sample's table (`DrawSetupH.table`) when verity-verify-proof sets up the sample's JSON `dj S`
 under hidden outputs, and otherwise the reference setup `x₀`'s refused table. -/
 noncomputable def tableAtH (S : Finset (Fin n)) : TableH I mPts S :=
   if h : Nonempty (DrawSetupH I mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
