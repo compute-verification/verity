@@ -5,7 +5,7 @@ run recorded.
 
 * **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage docket or audit
   records): each run's art, the docket formats it holds and the Python verdicts it recorded.
-* **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
+* **Case.** For each recorded audit, the case `spot-one-stage serve` reads: the verifier's parameters as
   `OneStage.paramsOfJson` reads them (its own program descriptor, query, sampling design, scheme, ports, leaf layer, log, partition,
   delta), the docket as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
@@ -570,7 +570,7 @@ def public_outcome(v: dict) -> dict:
 
 
 def lean_public(c: Case) -> dict:
-    """The verifier's Lean (`sampled-proofs-verifier`) on a public-file case."""
+    """The verifier's Lean (`spot-verifier`) on a public-file case."""
     got = V.lean("matches_public", c.case()["input"])
     if "refused" in got:
         return {"verdict": "error", "reason": got["refused"]}
@@ -2259,8 +2259,8 @@ def main() -> int:
     ap.add_argument("--runs", required=True, help="the runs' files, one directory per run (the art's first 8 hex digits)")
     ap.add_argument("--fetch", action="store_true", help="fetch what --runs lacks from the store (`wanted` files, and each "
                                                          "distinct set.tar's manifests)")
-    ap.add_argument("--lean", required=True, help="sampled-proofs-one-stage (the record and the public file go through "
-                                                  "`one_stage.verifier`, which builds its own sampled-proofs-verifier)")
+    ap.add_argument("--lean", required=True, help="spot-one-stage (the record and the public file go through "
+                                                  "`one_stage.verifier`, which builds its own spot-verifier)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()

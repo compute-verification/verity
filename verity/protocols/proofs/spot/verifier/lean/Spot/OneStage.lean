@@ -613,7 +613,7 @@ def coinsReason (v : Docket.Verifier) (samplingDesign rec_ draw : Json) (src : B
 check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
 pool's marks and chain, and the verdicts); SPOT, its caller, gates it (`VStar.Recursive.Caller.gate`), and
-this package's executables that run it on their own (`sampled-proofs-one-stage` and `-zk`) do not. -/
+this package's executables that run it on their own (`spot-one-stage` and `-zk`) do not. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier
   let rec_ := c.record

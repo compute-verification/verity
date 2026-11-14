@@ -5,7 +5,7 @@ public import Definitions.Poub.Remote.Node
 public import Definitions.Poub.Remote.Held
 public import Definitions.Poub.Remote.Outside
 public import Definitions.Poub.Remote.Run
-public import Definitions.Poub.Remote.Draw
+public import Definitions.Poub.Remote.Sample
 public import Definitions.Poub.Remote.Fork
 public import Definitions.Poub.Remote.Sketch
 public import Definitions.Poub.Remote.SketchLine

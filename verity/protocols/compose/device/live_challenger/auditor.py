@@ -56,7 +56,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   open's answer also carries the session's coin commitment root (`commitment`, from the record serve.py signs before it
   listens; `status` gives it too), so the serving side checks the hello's commitment against it before its first coin.
   Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
-- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its sample reads only such a session's coins,
+- **A withheld session** (`reserve --withhold`, a SPOT window's: its sample reads only such a session's coins,
   `challenger.withheld_on`) keeps its coin commitment's root on this host until the prover's commitments are in. Its
   reserve and open bodies carry `withheld: true`, and serve.py serves it `--withhold`, so it answers the hello with the
   layout alone and releases the root, salts and paths only at the client's close. Until the session's `end` entry the

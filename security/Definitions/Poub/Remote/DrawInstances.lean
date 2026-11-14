@@ -2,7 +2,7 @@ module
 
 public import Definitions.Poub.Remote.Sample
 public import Definitions.Poub.Remote.Held
-public import Definitions.Poub.Remote.Draw
+public import Definitions.Poub.Remote.Sample
 
 /-!
 # PoUB's sample: the instances its witnesses are stated at
