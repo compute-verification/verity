@@ -72,8 +72,14 @@ def _h1unit(form: str):
     for p in (H1_PROVE, H1_PROVE.parent / "hidden_zk", VLLM):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    import h1unit
+    from verity.protocols.accounting.pouw.prover.lowering import h1unit
     return h1unit
+
+
+def _form() -> ModuleType:
+    """`h1_prove/h1form.py`: ``H1_TILE``'s tile and ``H1_TMPL``'s form, on ``sys.path`` once `_h1unit` has run."""
+    import h1form
+    return h1form
 
 
 def refusal(unit: str, k: int, r: int, c: int) -> str | None:
@@ -106,7 +112,7 @@ def leaf_statement(U: ModuleType, unit: str, k: int, r: int, c: int) -> tuple:
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
     from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
     from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
-    t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if U.tile() == "v3" else None)
+    t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if _form().tile() == "v3" else None)
     wp = 2 * LL.words(k)
     if unit == "lane":
         ab = 16 * (k // 2 + 2)
@@ -126,7 +132,7 @@ def window(U: ModuleType, k: int, r: int, c: int) -> Program:
     leaf Programs at K are this one's."""
     from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
-    h1 = H.PouwH1Tile3 if U.tile() == "v3" else None
+    h1 = H.PouwH1Tile3 if _form().tile() == "v3" else None
     return HW.program((("w", k, c),), (("w", 0),), r, (r, c), unit=lambda kk: HW.tile_unit(kk, (r, c), h1))
 
 
@@ -156,9 +162,10 @@ def stage(U: ModuleType, unit: str, k: int, r: int, c: int, path: Path, staging:
     combine to its leaf Program's binding (`leaf_bind`) or with ``bind`` ``zero`` to `ZERO_BIND`. Returns the binding and,
     for a leaf binding, the leaf Program's descriptor (``program``) and its unit's id."""
     if unit == "tile":
-        from tests.protocols import pouw_h1_circuits as PC
-        os.environ["HZ_STAGE"] = staging
-        PC._lower(k, r, c, ZERO_BIND, path)
+        if staging == "fast":
+            import fast_stage
+            fast_stage.install(path.parent / f".scratch-k{k}")
+        _form().shape(k, r, c).stager(NAMES["tile"], circuit=path, bind=ZERO_BIND, layout=_form().layout())
         return {"bind": ZERO_BIND}
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     d, rows = leaf_statement(U, unit, k, r, c)
@@ -171,7 +178,7 @@ def stage(U: ModuleType, unit: str, k: int, r: int, c: int, path: Path, staging:
     if staging == "fast":
         import fast_stage
         fast_stage.install(path.parent / f".scratch-k{k}")
-    U.stager(d, NAMES[unit], rows, [(V2, (0,))], U.layout(), circuit=path, bind=out["bind"])
+    U.stager(d, NAMES[unit], rows, [(V2, (0,))], _form().layout(), circuit=path, bind=out["bind"])
     return out
 
 
@@ -315,7 +322,7 @@ def lower(args: argparse.Namespace) -> int:
 
     bind = args.bind or ("zero" if args.unit == "tile" else "leaf")
     rec = {"k": args.k, "r": args.r, "c": args.c, "tile": [args.r, args.c], "unit": args.unit, "form": args.form,
-           "staging": args.staging, "layout": U.layout(), "bind_form": bind}
+           "staging": args.staging, "layout": _form().layout(), "bind_form": bind}
     why = refusal(args.unit, args.k, args.r, args.c)
     if why is None and args.unit == "tile" and bind == "leaf":
         why = "a tile has no leaf Program (its served binding is its window's Program and partition): --bind zero"
@@ -420,7 +427,7 @@ def _reference(U, shape, rows: dict, i: int, pub: tuple) -> tuple[np.ndarray, in
     b = [U.split_row(rows[f"b{x}"][i]) for x in range(shape.c)]
     salt, pos, roots = pub
     rc, ok = Z.reference([x for x, _s in a], [x for x, _s in b], [s for _x, s in a], [s for _x, s in b],
-                         U.split_record(rows["zy"][i], shape.r * shape.c), salt, pos, roots, stream=U.tile() == "v3")
+                         U.split_record(rows["zy"][i], shape.r * shape.c), salt, pos, roots, stream=_form().tile() == "v3")
     return U.receipt_words(rc), ok
 
 
@@ -428,17 +435,17 @@ def agree(args: argparse.Namespace) -> int:
     U = _h1unit("structural")
     if why := refusal("tile", args.k, args.r, args.c):
         raise SystemExit(why)
-    shape = U.Shape(args.k, args.r, args.c)
+    shape = _form().shape(args.k, args.r, args.c)
     name = NAMES["tile"]
     from verity_flock import class_statement as CS
-    rec = {"k": args.k, "r": args.r, "c": args.c, "layout": U.layout()}
+    rec = {"k": args.k, "r": args.r, "c": args.c, "layout": _form().layout()}
     got: dict = {}
     _keep_totals(CS, got)
     t = time.time()
-    flat = shape.stager(name, flat=True)
+    flat = shape.stager(name)
     rec |= {"flat_s": round(time.time() - t, 2), "flat": _counts(flat.low, commits=_flat_commits(flat.low.layout))}
     t = time.time()
-    tm = shape.stager(name)
+    tm = shape.stager(name, layout=_form().layout())
     rec |= {"structural_s": round(time.time() - t, 2), "structural": _counts(tm.low, got.get("struct")),
             "class_flat": flat.class_sha512,
             "class_structural": tm.class_sha512}

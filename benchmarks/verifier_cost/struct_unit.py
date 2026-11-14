@@ -33,9 +33,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
     sys.path[:0] = [str(H1), str(H1.parent / "hidden_zk")]
-    import h1unit as U
+    import h1form as F
 
-    shape = U.Shape(*a.shape)
+    shape = F.shape(*a.shape)
     t0 = time.time()
     if a.flat:
         out = SL.flat(shape.unit())

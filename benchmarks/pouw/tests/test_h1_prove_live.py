@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -29,7 +30,7 @@ SLOTS = [[1, 1, 2, 0], [1, 2, 0, 0]]
 
 
 def salts(n: int) -> list[bytes]:
-    return [os.urandom(LV.U.SALT_BYTES) for _ in range(n)]
+    return [os.urandom(U.SALT_BYTES) for _ in range(n)]
 
 
 def dump(out: Path, T: int = T, S: int = S, HEADERS: list = HEADERS, MAX_TOKENS: list = MAX_TOKENS,
