@@ -5,8 +5,8 @@ fields it sums, with its overcount as a note, the seconds it covers, the line th
 the connections its schedule's caps count (other caps are the connections' error); its run's own period proved, and
 each monitoring period's node proved where the run's period covers it and else scaled from the run, and the
 datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
-by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or in
-the clock form, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
+by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or not
+the rows form's, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
 its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
 the bound as that run's. The figure of record, every period's cells included, is that K only where the verdict held
 both checks the tight ℓ_{a,j} rests on and the lock (a toy one in `security/`'s lock's place) lists every premise's
@@ -69,7 +69,7 @@ import onsite_record as OR  # noqa: E402
 import served_cases as SC  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-import warden_chain as WC  # noqa: E402
+from benchmarks.network_traces import warden_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
 from verity.protocols.accounting.registration.verifier import registration as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402

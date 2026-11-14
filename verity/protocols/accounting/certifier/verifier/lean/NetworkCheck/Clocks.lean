@@ -10,8 +10,8 @@ clock certificates' openings, each sync and salt against the digest its certific
 `signedSyncs`). The certifier chain's record takes each window's sync from it, with `certificate.SignedClocks` beside
 it as the reference (`lean_audit.signed_clocks`).
 
-With them, the decoders and the clock digest they share with the period's check (`NetworkCheck.Period`), in its
-namespace: `exactly`, `hexAt`, `certificateOf` and `clockDigest`. Code: it imports only the certificate check
+With them, the clock digest (`clockDigest`) and the decoders they share with the period's check
+(`NetworkCheck.Period`), in its namespace: `keysOf`, `exactly`, `hexAt` and `certificateOf`. Code: it imports only the certificate check
 (`NetworkCheck.Check`) and what that imports, and nothing of the inference-only policy's.
 -/
 

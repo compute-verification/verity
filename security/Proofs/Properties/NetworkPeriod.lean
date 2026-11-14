@@ -10,10 +10,10 @@ import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
-# Each form's `K` bounds `MonitoringPeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
+# `K` bounds `MonitoringPeriodLeakAccepted`'s count: the proof of `RowsKBoundsCount`
 
 Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sums over the
-connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
+connections and the windows (the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
 
 `RowsProgWired`, `RowsStateTied` and `RowsTiedInputWired` read the check's refusals off its findings: on acceptance
@@ -28,7 +28,7 @@ sampling more than its level holds (`factsOf_sampled_le_units`). It also refuses
 sampling more than it holds, and one whose strata's sizes do not sum to the level's, so facts with `drawn = units` are
 of a profile whose every stratum is sampled whole (`factsOf_stratified_whole`, by `strata_whole`).
 
-`RowsCapPublished` reads the public off the acceptance, in each form.
+`RowsCapPublished` reads the public off the acceptance.
 -/
 
 @[expose] public section
@@ -69,27 +69,6 @@ theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n :
 theorem caps_le {m : ℕ} (caps : Fin m → ℕ) : ∏ j, (caps j + 1) ≤ 2 ^ ∑ j, clog2 (caps j + 1) := by
   rw [← Finset.prod_pow_eq_pow_sum]
   exact Finset.prod_le_prod fun j _ => le_two_pow_clog2 _
-
-theorem zip_ofFn {α β : Type} {n : ℕ} (f : Fin n → α) (g : Fin n → β) :
-    (Array.ofFn f).zip (Array.ofFn g) = Array.ofFn fun i => (f i, g i) := by
-  ext <;> simp
-
-theorem clockK_ofFn (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit)
-    (w : Fin n → Facts) :
-    (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K =
-      clog2 (syncs ^ windows) + (∑ j, clog2 (caps j + 1)) + ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
-  simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn]
-  rw [foldl_ofFn]
-  rfl
-
-theorem clockKBoundsCount : ClockKBoundsCount := by
-  intro jitter syncs windows m n caps a w
-  rw [clockK_ofFn, pow_add, pow_add, mul_assoc]
-  refine Nat.mul_le_mul (le_two_pow_clog2 _) (Nat.mul_le_mul (caps_le caps) ?_)
-  rw [← Finset.prod_pow_eq_pow_sum]
-  refine Finset.prod_le_prod fun i _ => ?_
-  simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
-  exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
 theorem rowsKBoundsCount : RowsKBoundsCount := by
   intro facts scan jitter windows m n caps w tied faulty charged
@@ -147,7 +126,7 @@ def tiedExecutionPhase : Lean.Json :=
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 2, `every` 2). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
+def slotAudit : Audit := ⟨0, 0, "", 1, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, none⟩
 
@@ -165,7 +144,7 @@ theorem rowsProgWired_honest :
 /-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
 digest `selectEntryPins`' first), and its registration, with that template's entries port at the root `r` and the
 domain `d`. -/
-def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)]⟩
+def selectAudit : Audit := ⟨0, 0, "", 1, #[("SelectEntry_v1{KO=1}", 1, selectEntryPins[0]!)]⟩
 
 def selectReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
@@ -193,7 +172,7 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
-def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
+def renamedAudit : Audit := ⟨0, 0, "", 1, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
@@ -447,7 +426,7 @@ theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows :=
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], .rows #[]⟩
+  let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], #[]⟩
   have hw : tiedInputWired slotSchedule (tiedAnswer #[.str "prog0", .str "state"]) = true :=
     (h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[x], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase x
       rfl rfl).1
@@ -634,19 +613,19 @@ theorem auditCheck_facts {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answe
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
     simp only [ha, bind, Except.bind] at h
-    by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+    by_cases c1 : NetworkCheck.ScanOk.named "program" a.program reg = true <;>
       simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : NetworkCheck.ScanOk.named "program" a.program reg = true <;>
         simp [c1, refuse] at h
     | ok g =>
       refine ⟨prof, pub, ha, ?_⟩
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : NetworkCheck.ScanOk.named "program" a.program reg = true <;>
         by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
 
 /-- The facts `factsOf` gives sample no more than their level holds: it refuses a profile that names more. -/

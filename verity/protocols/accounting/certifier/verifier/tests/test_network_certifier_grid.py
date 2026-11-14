@@ -1,8 +1,7 @@
-"""Proposition 2's statements on the grids and the certifier's semantics. By name, the tests mirror Proposition 2's
-statements on grids (`NetTiming.SecurityProofs.CardLeftPacked` and the rest, proved in
-`NetTiming.SecurityProofs.Occupancy`) and that module's three proved lemmas without a record, `occ_fill`,
-`leftPacked_occ_fill` and `leftPacked_fifoGrid`. The certifier tests
-check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""
+"""Proposition 2's lemmas on grids and the certifier's semantics. By name, the tests mirror lemmas of
+`NetTiming.SecurityProofs.Occupancy`, among them the three without a record, `occ_fill`, `leftPacked_occ_fill` and
+`leftPacked_fifoGrid`. The certifier tests check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing,
+W5's untimed status, W6 fail-closed)."""
 
 import itertools
 import random
