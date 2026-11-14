@@ -54,6 +54,8 @@ scope = "prose"
 # --- the word before the noun it modifies
 "warden link-windows" = "network certifier link-windows"
 "warden link-window" = "network certifier link-window"
+"warden execution phases" = "network certifier execution phases"
+"warden execution phase" = "network certifier execution phase"
 "warden rehearsal" = "network certifier rehearsal"
 "warden ordinal" = "network certifier ordinal"
 "warden profile" = "network certifier profile"

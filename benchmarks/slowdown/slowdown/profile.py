@@ -79,7 +79,7 @@ class Profile:
     beta_v: float | None = None
     #: `d`: an output map's width, the products one value read reaches (Proposition 6b)
     map_width: float | None = None
-    #: `d_in`: the narrowest output map's input width, which sets Proposition 6b's cap `k*`
+    #: `d_in`: the narrowest output map's input width, which sets Proposition 6b's threshold `k*`
     map_width_min: float | None = None
     #: `h_eff`: bits per accumulated partial sum a block must hold (Corollary 4a)
     h_eff: float | None = None

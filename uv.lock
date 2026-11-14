@@ -48,7 +48,6 @@ members = [
     "verity-machine-model",
     "verity-native-peak",
     "verity-network-e2e",
-    "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
     "verity-ops",
@@ -2612,17 +2611,6 @@ provides-extras = ["torch"]
 name = "verity-network-e2e"
 version = "0.0.0"
 source = { virtual = "benchmarks/network_e2e" }
-dependencies = [
-    { name = "verity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "verity", editable = "." }]
-
-[[package]]
-name = "verity-network-sim"
-version = "0.0.0"
-source = { virtual = "benchmarks/network_sim" }
 dependencies = [
     { name = "verity" },
 ]

@@ -278,7 +278,8 @@ def _stage(DR, d, tmp, weights_key=None, recompose=False):
     return DR.run("stage", SimpleNamespace(serve_dir=d, window=0, circuits=tmp / "circuits", work=tmp / "work", prover=None,
                                            k=_PeriodAuditor.K, weights_key=weights_key, gate=None, model=None,
                                            checkpoint=None, weights=tmp / "weights.npz", recompose=recompose,
-                                           checkpoint_weights=None))
+                                           checkpoint_weights=None, recomposed=PC.stagers().stager,
+                                           file_stager=PC.stagers().FileStager))
 
 
 def _check(DR, d, tmp, st, monkeypatch):
