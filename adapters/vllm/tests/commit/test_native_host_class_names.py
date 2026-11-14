@@ -73,3 +73,31 @@ def test_the_step_bound_and_the_declared_module_classes_are_pinned():
     blob = json.dumps({"bound": bound, "declared": declared, "offline": offline,
                        "family_of_module": NH.NativeHostCommitter.FAMILY_OF_MODULE}).encode()
     assert hashlib.sha256(blob).hexdigest() == "b2499ffd1f8c4111cb8e9db4127f597a479221dfa469660fca6502a9ce848600", (bound, declared)
+
+
+def test_a_module_s_width_counts_its_first_parameter_s_element_size_and_two_bytes_where_it_has_none():
+    """`verity_vllm.commit.committer.staging_bounds.step_bound_bytes` sizes a linear's, a norm's and an embedding's output by the
+    element size of the module's first parameter; a module with no parameter counts two bytes an element."""
+    def widths(m):
+        return NH.step_bound_bytes(MODEL, [("m", m)], {"batch": 1, "max_prompt": 4, "max_new": 1}, hidden_m1=False)["widths"]
+
+    def typed(m, **weights):
+        for name, dtype in weights.items():
+            setattr(m, name, torch.nn.Parameter(torch.zeros(8, dtype=dtype)))
+        return m
+
+    assert widths(_module("LinearBase", output_size_per_partition=64)) == {"LinearBase": 128}                 # no parameter
+    assert widths(_module("LinearBase", weight=8, output_size_per_partition=64)) == {"LinearBase": 128}       # bf16
+    assert widths(typed(_module("LinearBase", output_size_per_partition=64), weight=torch.float32)) == {"LinearBase": 256}
+    assert widths(typed(_module("LinearBase", output_size_per_partition=64), weight=torch.float64)) == {"LinearBase": 512}
+    # the first parameter in registration order decides, whatever the later ones are
+    assert widths(typed(_module("LinearBase", output_size_per_partition=64), bias=torch.float32, weight=torch.bfloat16)) == {"LinearBase": 256}
+    assert widths(typed(_module("LinearBase", output_size_per_partition=64), bias=torch.bfloat16, weight=torch.float32)) == {"LinearBase": 128}
+    # a buffer is no parameter
+    buffered = _module("LinearBase", output_size_per_partition=64)
+    buffered.register_buffer("scale", torch.zeros(8, dtype=torch.float32))
+    assert widths(buffered) == {"LinearBase": 128}
+    assert widths(typed(_module("RMSNorm"), weight=torch.float32)) == {"RMSNorm": 2 * 8 * 4}
+    assert widths(_module("RMSNorm")) == {"RMSNorm": 2 * 64 * 2}
+    assert widths(typed(_module("VocabParallelEmbedding", embedding_dim=64), weight=torch.float32)) == {"VocabParallelEmbedding": 64 * 4 + 4}
+    assert widths(_module("VocabParallelEmbedding", embedding_dim=64)) == {"VocabParallelEmbedding": 64 * 2 + 4}

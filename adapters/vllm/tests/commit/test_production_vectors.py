@@ -13,12 +13,12 @@ import hashlib
 import numpy as np
 import pytest
 
+from tests.commitments import vectors as V
 from verity_vllm.commit import hidden_stream as hs
 from verity_vllm.commit import scheme
 from verity_vllm.commitments import leaves as hashing
 from verity_vllm.commitments import vllm_v1 as ref
 from verity_vllm.commitments.leaves import fold_path, path_shape
-from verity_vllm.commitments.vllm_v1 import vectors as V
 
 VECTORS = V.load()
 

@@ -36,7 +36,7 @@ from typing import Callable, Iterable
 
 from . import carry, policy
 from .notes import ART_RE
-from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, unreviewed
+from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
 
 #: who hears what the queue can't settle
@@ -1262,7 +1262,8 @@ class Landing:
 
     def _stacked(self, state: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
-        contains that member's head (a PR stacked on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one
+        contains that member's head (a PR stacked on it) that its base landed and how to take `main` (`queue.merge_main`), once
+        per (PR, base) (`stacked:P<Q`): not one
         marked ready at its head, which lands as it is.  A PR based
         on another branch (a long-lived one, as the remote demo's) takes `main` through that branch, and isn't told."""
         from .stale import pull_refs
@@ -1293,7 +1294,8 @@ class Landing:
                 continue
             names = ", ".join(f"#{b}" for b in below)
             self.tell(state, [f"stacked:{n}<{b}" for b in below],
-                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}; merge main into #{n}",
+                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}: "
+                      f"{merge_main(f'#{n}', rest[n].branch)}",
                       self._handle(n))
 
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
