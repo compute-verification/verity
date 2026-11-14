@@ -17,7 +17,6 @@ from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import challenger_prover as CPR
 from verity.protocols.accounting.pous.prover import wipe_prover as WR
-from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WPS
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
@@ -36,9 +35,9 @@ REQUEST = {"node": "the prover's node"}
 
 @pytest.fixture
 def keyed(monkeypatch):
-    """`period.challenger` handing back a signer whose public key is set per test."""
+    """`onsite.device_key` handing back a signer whose public key is set per test."""
     signer = types.SimpleNamespace(public_key=POUS_KEY)
-    monkeypatch.setattr(period, "challenger", lambda state: signer)
+    monkeypatch.setattr(onsite, "device_key", lambda state: signer)
     return signer
 
 

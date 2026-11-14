@@ -36,6 +36,7 @@ from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.verifier import setup as pous_setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import POINT, P2Params
 from verity.protocols.accounting.poub.verifier import ledger, p2_case, p2_lean
 from verity.commitments import advice
@@ -270,7 +271,7 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
     bind = SP.binding(REPO, REV, 3, None)
     commitment, salt = bytes.fromhex(published["commitment"]), bytes.fromhex(published["salt"])
     assert len(auditor.sources) == 1 and auditor.salts.get(bind) == (commitment, salt)
-    assert salt == period.setup.draw_salt(auditor.sources[0], commitment)
+    assert salt == pous_setup.draw_salt(auditor.sources[0], commitment)
     sid = CS.session_id(bind, commitment, salt)
     assert run["session_id"] == sid.hex() == run["session"]["commitment"]["session"] and sid in auditor.log
     request = calls[0][1]
