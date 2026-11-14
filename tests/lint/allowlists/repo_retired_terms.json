@@ -1752,7 +1752,7 @@
     {"file": "security/Proofs/Properties/Accounting/Remote/Lifetime.lean", "count": 3},
     {"file": "security/Proofs/Properties/Accounting/Remote/Line.lean", "count": 48},
     {"file": "security/Proofs/Properties/Accounting/Remote/Live.lean", "count": 17},
-    {"file": "security/Proofs/Properties/Accounting/Remote/Order.lean", "count": 41},
+    {"file": "security/Proofs/Properties/Accounting/Remote/Order.lean", "count": 39},
     {"file": "security/Proofs/Properties/Accounting/Remote/Pooled.lean", "count": 6},
     {"file": "security/Proofs/Properties/Accounting/Remote/Released.lean", "count": 3},
     {"file": "security/Proofs/Properties/Accounting/Remote/Schedule.lean", "count": 18},

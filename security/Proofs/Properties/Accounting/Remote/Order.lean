@@ -12,8 +12,8 @@ public import Proofs.Properties.Accounting.Remote.Frozen
 (`sample_keeps`). After it, `RecordKeptAfterSample` keeps the record and the openable receipts on each side.
 
 The first event that samples window `t` on the first coins (`exists_first`) is the same on the second (`take_agree`, by
-induction with `ReleaseOrder`), and the second draws it there too: were it unsampled, `OpeningsUnreadUntilSampled` back
-from the second coins would leave it unsampled on the first. Nor does the second draw it earlier, by the same lemma
+induction with `ReleaseOrder`), and the second stage samples it there too: were it unsampled, `OpeningsUnreadUntilSampled` back
+from the second coins would leave it unsampled on the first. Nor does the second stage sample it earlier, by the same lemma
 from the first coins. Runs are taken over lists (`runL`), split by `runL_append`.
 -/
 
