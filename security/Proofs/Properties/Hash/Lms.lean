@@ -451,7 +451,7 @@ theorem verify_signAt {N W H : Nat} {toy : Bool} {p : Params} {I seed : ByteArra
 /-- **LMS signatures verify** (completeness, not a guarantee): for a key `Lms.key` derives under parameters
 `Lms.Params.make` admits, every signature `Lms.signAt` returns verifies under the key's public key (`Lms.verify`), and its
 encoding decodes back to it. It pairs with the LMS-forgery disjunct of
-`Properties.NetworkCertifier.AcceptedRowsAreProgramRows`. -/
+`Properties.Certifier.AcceptedRowsAreProgramRows`. -/
 def LmsCorrect : Prop :=
   ∀ (N W H : Nat) (toy : Bool) (p : Params) (I seed : ByteArray) (k : PrivateKey) (q : Nat) (message : ByteArray)
     (sig : Signature),

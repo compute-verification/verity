@@ -57,8 +57,8 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.records.property_record import REGISTRY, seal as seal_record
 
 SCHEMA = REGISTRY["glm53_mtp_eh_norm_capture"].schema
@@ -114,7 +114,7 @@ def model_r(x: np.ndarray, eps: float, regs: list[list[int]], warps: int = WARPS
     """Each row's f32 scale r with thread t's registers ``regs[t]`` (an element past N +0), squared and summed as one FMA chain or one
     per 8-element vector added in order (``chains`` "one" / "per_vector"), each warp's butterfly, the warp sums' halving tree, and
     rsqrt of the contracted `fma(scale_a(sum), rcp(N), eps)`."""
-    from verity.definitions.registry.prims import bits_of
+    from verity_vllm.definitions.registry.prims import bits_of
 
     R, N = x.shape
     g = np.pad(DR.bf16_to_f32_words(x), ((0, 0), (0, max(max(r) for r in regs) + 1 - N)))[:, np.asarray(regs)]
@@ -165,7 +165,7 @@ def alternatives() -> dict[str, Model]:
 
 
 def _layout() -> list[list[int]]:
-    from verity.definitions.registry import dsa_norm as DN
+    from verity_vllm.definitions.registry import dsa_norm as DN
 
     return DN.layout(BLOCK, 32 * WARPS)
 
@@ -331,8 +331,8 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa_norm as DN
-    from verity.definitions.registry import mtp_draft as MD
+    from verity_vllm.definitions.registry import dsa_norm as DN
+    from verity_vllm.definitions.registry import mtp_draft as MD
 
     out: dict[str, Any] = {}
 
@@ -353,7 +353,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     words counted where they differ from the kernel's, and the position alternatives on the e half."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import mtp_draft as MD
+    from verity_vllm.definitions.registry import mtp_draft as MD
 
     r0, r1 = job["span"]
     a = DS._load(job["paths"])

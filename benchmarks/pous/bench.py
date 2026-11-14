@@ -238,8 +238,10 @@ class Reference:
     def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int, keep: bool = False) -> dict[str, Any]:
         """`audits` in-process audits; with `keep`, their document as `timed_audit.audit` writes it (`record`), for the
         Lean's verdict."""
+        from verity.protocols.accounting.pous.prover.responder import responder
+
         results, records = [], []
-        respond = protocol.responder(scheme, block)
+        respond = responder(scheme, block)
         for j in range(audits):
             source = f"bench-audit/{j}".encode()
             v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(source, vk), rtt_allowance_ns=rtt_ns,

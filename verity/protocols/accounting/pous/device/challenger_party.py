@@ -43,8 +43,8 @@ side (`main`): it reads one JSON line on stdin, a salt request or the session's 
 `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log (`sessions`) and salt log
 (`salts`) are in `DIR`. Each session it completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the
 file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which
-PoUB's verifier on the same host builds its registration (`verity.protocols.accounting.poub.verifier.p2_party --pous-record`),
-never from a file the prover sends.
+PoUB's verifier on the same host builds its registration
+(`verity.protocols.accounting.poub.verifier.p2_parties --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
