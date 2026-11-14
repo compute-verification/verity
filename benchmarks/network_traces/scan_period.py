@@ -39,7 +39,11 @@ and its Lean.
   (``--circuit``, `circuit_of_record`): an execution phase whose audit's registration names another Program is refused
   by name, in Lean and in the mirror. The honest case is then accepted at any sample of V3c's (``subset:1``
   included): the period check is the consistency check, the committed I/O against the certificates, and what a
-  sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
+  sample of one or two proof blocks leaves unproved is covert capacity, which K charges. That is the case of an audit
+  whose registration states its `SCAN_STATE` among its ``roots`` or its ``registered``, the two places the check reads
+  an audit's state entry (`stateEntries`). A served window's registration, as ``prove_path.py window-commit`` writes
+  it, holds that state in its window's ``activations.values`` alone, so a served period's case is refused at the state
+  tie (`period_case.UNSTATED`), in Lean and in the mirror.
 """
 from __future__ import annotations
 
