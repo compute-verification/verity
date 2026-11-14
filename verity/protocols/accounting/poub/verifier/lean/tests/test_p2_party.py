@@ -1,5 +1,5 @@
-"""The P2 session's verifier as a party of its own (`p2_parties.py`), the Lean of record (`remote-audit-verifier`,
-`RemoteAudit.P2Session`) with the Python's books beside it, over a channel to a prover serving the 9-block P2 store of
+"""The P2 session's verifier as a party of its own (`p2_parties.py`), the Lean of record (`poub-verifier`,
+`Poub.P2Session`) with the Python's books beside it, over a channel to a prover serving the 9-block P2 store of
 `tests/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
 plan, one whose receipts skip a unit's reads, one whose openings are out of form and one that reads every unit when the
 plan is fewer rejected, and a request for another node, or off the auditor's session parameters in any of them, refused
@@ -143,8 +143,8 @@ class Prover:
         self.clock.now += STEP_NS
         return ps.root
 
-    def open(self, t, draws):
-        out = [self.held.open(self.passes[t, i], p) for i, p in draws]
+    def open(self, t, sampled):
+        out = [self.held.open(self.passes[t, i], p) for i, p in sampled]
         return [dataclasses.replace(o, leaf_salt=o.leaf_salt[:-1]) for o in out] if self.garble else out
 
     def end(self, commitment, openings) -> None:

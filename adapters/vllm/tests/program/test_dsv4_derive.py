@@ -65,7 +65,7 @@ from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
 from verity_vllm.program.frontend import targets as TG
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.export_compat import (
     InertEvent,

@@ -1,14 +1,14 @@
 """PoUB's period (`verity.protocols.accounting.poub.verifier.period`) from the prover's side: `Local`, the prover of a
 store in this process; `run`, which plays every party of the period in one process (the verifier's side,
 `period.session`, against `Local`); `prove` and `period_with`, the prover's end of one session with the verifier's
-side as a party of its own (`verifier_party`), over its JSON lines; and `leg`, bandwidth's leg of
+side as a party of its own (`verifier_party`), over its JSON lines; and `subprotocol`, bandwidth's subprotocol of
 `benchmarks/all_protocols` on a period's records.
 
-`leg`'s store is the period's records (`pous.period_prover.records`, every copy of the auditor's ledger in them cut to the
+`subprotocol`'s store is the period's records (`pous.period_prover.records`, every copy of the auditor's ledger in them cut to the
 entries their window cites). The verifier and its challenger are a party of their own (`verifier_party`) on
 `period.json`'s `challenger_host`, with coins fresh from that host's OS, and the prover runs on the node.
 `trusted-device`'s premise, that they run on a machine the developer doesn't control, holds only when the challenger
-host isn't the node, and the leg says which (`verifier_party.placement`). The prover reads a store in its process's
+host isn't the node, and the subprotocol says which (`verifier_party.placement`). The prover reads a store in its process's
 memory, not a remote node's.
 """
 
@@ -125,11 +125,11 @@ def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
     return P.Run(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
 
 
-def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) -> dict[str, Any]:
-    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`): the session
+def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) -> dict[str, Any]:
+    """Bandwidth's subprotocol of `benchmarks/all_protocols` (`subprotocol(period_dir, node, out, side_of=...) -> answer`): the session
     on the period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
     (`side_of(period, node, key, local)`, which the caller that starts the run hands in, the runtime's `Side.of`; on
-    this node by default, as a process of its own, with its own coins) and the prover here. With `remote-audit-protocol`
+    this node by default, as a process of its own, with its own coins) and the prover here. With `poub-protocol`
     among the period's tools the Lean verifier answers and must agree with the Python; it writes
     `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host ran each party, and whether
     `trusted-device`'s premise holds (`verifier_party.placement`), go in `bandwidth.json` and in an accepted answer's
@@ -145,10 +145,10 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) 
     seconds = round(time.monotonic() - t, 2)
     where = verifier_party.placement(node, party.host)
     answer_, lean = period.answer, None
-    if "remote-audit-protocol" in tools:
-        lean = P.serve(tools["remote-audit-protocol"], [period.case])[0]
+    if "poub-protocol" in tools:
+        lean = P.serve(tools["poub-protocol"], [period.case])[0]
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer_.items() if k != "reason"}:
-            raise RuntimeError(f"remote-audit-protocol answered {lean}, the Python {answer_}")
+            raise RuntimeError(f"poub-protocol answered {lean}, the Python {answer_}")
         answer_ = lean
     if answer_["profile"] is not None:
         answer_ = answer_ | {"profile": answer_["profile"] | {"placement": where}}
@@ -162,4 +162,4 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) 
     return answer_
 
 
-__all__ = ["Local", "Side", "leg", "period_with", "prove", "run"]
+__all__ = ["Local", "Side", "subprotocol", "period_with", "prove", "run"]

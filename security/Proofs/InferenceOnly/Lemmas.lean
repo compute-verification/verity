@@ -1,7 +1,7 @@
 module
 
 public import Definitions.InferenceOnly.Assumptions
-public import Definitions.InferenceOnly.Threads
+public import Definitions.Slowdown.Threads
 public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Partition
@@ -17,6 +17,8 @@ Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, prov
 -/
 
 @[expose] public section
+
+open Slowdown
 
 namespace InferenceOnly.Guarantees
 

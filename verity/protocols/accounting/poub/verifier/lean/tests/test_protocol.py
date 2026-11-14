@@ -1,13 +1,13 @@
-"""`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
+"""`poub-protocol serve` (`Poub.Protocol`, onsite Verity's bandwidth component) against the Python verifier
 of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.AuditRun` as
-`ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
+`ra_cases.session` replays them, and `poub.period.answer` of the session after them): every field of the
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
 window in flight, which no property of the Lean covers.
 
 The cases are a small period on one node (`period_prover.run` on a clock the test sets): honest, its prover reading a store
 that dropped every other chunk, and stopped before its last window is verified; every recorded scenario
 (`ra_cases.SCENARIOS`) as a case; sampled honest sessions of sampled shapes; and recorded ones with one or two edits
-(`test_drawn.edited`) or one edit of the case's framing."""
+(`test_sampled.edited`) or one edit of the case's framing."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import pytest
 import ra_cases as M
 import verity_difftest as D
 from hypothesis import strategies as st
-from test_drawn import BASES, edited, shaped
+from test_sampled import BASES, edited, shaped
 from verity_difftest import canonical
 from verity_difftest import protocol as P
 
@@ -30,7 +30,7 @@ from verity.protocols.accounting.poub.verifier import audit, period
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-EXE = "remote-audit-protocol"
+EXE = "poub-protocol"
 
 
 def _keys(j, want: list[str], ctx: str) -> None:
@@ -76,7 +76,7 @@ def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
 
 
 def protocol(case) -> dict:
-    """`RemoteAudit.Protocol.protocol.answer` in Python."""
+    """`Poub.Protocol.protocol.answer` in Python."""
     return P.answer(period.PROTOCOL, case, params=_params, commitment=_registration, evidence=_evidence, check=_check,
                     digest=lambda r: r.digest)
 
@@ -147,7 +147,7 @@ def test_a_small_periods_answers_agree(server) -> None:
 
 
 def _covered(kw: dict) -> bool:
-    """A scenario's session is one the check replays (`RemoteAudit.Protocol.sessionOf`): not paced at one window in
+    """A scenario's session is one the check replays (`Poub.Protocol.sessionOf`): not paced at one window in
     flight."""
     pace = kw.get("pace")
     return pace is None or pace.in_flight == 2
@@ -163,14 +163,14 @@ def test_a_recorded_scenario_agrees(server, name) -> None:
     assert json.loads(text)["verdict"] == want, (name, text)
 
 
-def test_drawn_honest_sessions_agree(server) -> None:
+def test_sampled_honest_sessions_agree(server) -> None:
     stats = D.run(D.ProtocolPort(EXE, protocol, shaped().map(case_of), package=M.PACKAGE, need_rejects=False),
                   examples=25, server=server)
     assert stats.counts.get("accept", 0) == 25, stats
 
 
 @pytest.mark.slow
-def test_drawn_edits_agree(server) -> None:
+def test_sampled_edits_agree(server) -> None:
     base = st.sampled_from(BASES).map(lambda name: M.recorded(name)[0])
     framed = st.builds(lambda c, m: m(c), base.map(case_of), st.sampled_from(FRAMING))
     stats = D.run(D.ProtocolPort(EXE, protocol, st.one_of(edited(base).map(case_of), framed), package=M.PACKAGE),

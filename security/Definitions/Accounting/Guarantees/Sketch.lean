@@ -2,12 +2,12 @@ module
 
 public import Mathlib.Probability.Distributions.Uniform
 public import Definitions.Core.Prob
-public import Definitions.Accounting.Tag.Sketch
+public import Definitions.Pous.Tag.Sketch
 
 /-!
 # Exact integer ±1 sketches: the statements (trusted)
 
-The down-projection tag (`Security/Definitions/Accounting/Tag/Sketch.lean`): `k` rows of uniform signs, each row's inner
+The down-projection tag (`Security/Definitions/Pous/Tag/Sketch.lean`): `k` rows of uniform signs, each row's inner
 product with a block's elements, computed exactly on the tensor cores.
 
 * `NonCollision`: two integer vectors fixed before the signs, if different, have the same sketch with probability at
@@ -24,7 +24,7 @@ product with a block's elements, computed exactly on the tensor cores.
 
 Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
 on the data and the chain's length are in their types. The theorems are in `security/Proofs/Accounting/Sketch.lean`, on
-the lemmas of `security/Proofs/Accounting/Tag/`.
+the lemmas of `security/Proofs/Pous/Tag/`.
 -/
 
 @[expose] public section

@@ -121,7 +121,7 @@ def test_supplied_rows_read_the_verifiers_bytes_as_the_words_the_units_ports_hol
     """SPOT reads a supplied row's bytes as the parameter's leaves of big-endian 32-bit halves (a 16-bit half for two
     bytes), least significant first (`one_stage.registered.supplied_rows`), at the unit's ports' leaf width, one bit;
     the unit's base port holds the base's bits in byte order, the little-endian 16-bit words its run recorded, and its
-    slot port the slot's bits. Over the verifier's hex, `supplied_rows` gives each sampled unit's base and slot as the
+    slot port the slot's bits. Over the verifier's hex, `supplied_rows` gives each sampled block's base and slot as the
     unit reads them, and packed into 16-bit words (`bit_words`) the words its port records."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 

@@ -37,7 +37,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open InferenceOnlyCheck.Record (Case Front read finish unwhole rolesOf sameSlot isTheta openingHeld)
 open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text)
-open InferenceOnlyCheck.RecordText (Row Tmpl Decl Fill Inputs inputsOf rowWords fillAt tmplIn rowIn rect widthOf)
+open Spot.RecordText (Row Tmpl Decl Fill Inputs inputsOf rowWords fillAt tmplIn rowIn rect widthOf)
 open Lean (Json)
 
 /-! ## What `inputsOf` returns -/
@@ -359,6 +359,6 @@ theorem held_unwired {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
       rfl
     unfold InferenceOnlyCheck.Record.Case.heldAt at hh
     rw [hfill] at hh
-    simp [InferenceOnlyCheck.RecordText.Inputs.declares] at hh
+    simp [Spot.RecordText.Inputs.declares] at hh
 
 end InferenceOnlyCheck.Properties.Record.SecurityProofs

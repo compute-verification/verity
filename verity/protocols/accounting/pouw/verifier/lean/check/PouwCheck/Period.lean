@@ -38,7 +38,7 @@ window's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, sess
 record, round log, sample, descriptor, registered entries, each sampled proof block's proof outcome and its live evidence).
 
 **The check** first refuses, by name (`form: why`, `form`), every window in a form the period's proved guarantee
-(`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
+(`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
 `Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`.
@@ -128,7 +128,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   pure { pins := get j "pins", windows := get j "windows" }
 
 /-- The guarantee a credited period is proved under. -/
-def GUARANTEE : String := "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
+def GUARANTEE : String := "Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod"
 /-- A Pearl-C pass's evidence (`credit.PEARL_C_KEYS`). -/
 def PASS_KEYS : List String := ["context", "descriptor", "manifest", "session"]
 def TILE_ID : String := "PouwH1Tile_v"
@@ -166,7 +166,7 @@ def manyStrata (nm : String) (i : Nat) (ks : List Nat) : String :=
 a circuit that is not an H1 window, a template over per-unit noise, a J10-R unit over a tile other than
 `COVERED_TILE`, or units at more than one K. `none` for a covered window, and for evidence too malformed to read,
 which `Credit.periodCredit` refuses. -/
-def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
+def executionPhaseForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
   if keys w == some PASS_KEYS then return some (passForm nm i)
   let some d := (match get w "descriptor" with
       | .str s => if Credit.isHexBytes s then hex? (.str s) else none
@@ -191,11 +191,11 @@ def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
   if 1 < ks.length then return some (manyStrata nm i ks)
   return none
 
-/-- The first window of `windows` in a form `GUARANTEE` doesn't cover (`windowForm`), else `none`. -/
+/-- The first window of `windows` in a form `GUARANTEE` doesn't cover (`executionPhaseForm`), else `none`. -/
 def form (nm : String) (windows : Json) : Option String := Id.run do
   let .arr ws := windows | return none
   for (w, i) in ws.toList.zipIdx do
-    if let some why := windowForm nm i w then return some why
+    if let some why := executionPhaseForm nm i w then return some why
   return none
 
 /-- The ledger's entries, each line read (`Spot.Challenger.ledgerEntry?`); `none` when a line isn't one. -/

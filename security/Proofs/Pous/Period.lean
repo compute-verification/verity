@@ -4,8 +4,8 @@ public import Properties.Pous.Period
 public import Proofs.Pous.EndToEnd
 public import Proofs.Properties.Pous.Run
 public import Proofs.Accounting.Prob
-public import Proofs.Accounting.Capacity
-public import Proofs.Accounting.PerRunJoint
+public import Proofs.Registration.Capacity
+public import Proofs.Pouw.PerRunJoint
 
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee
@@ -53,7 +53,7 @@ theorem onTime_of {ΩW ΩQ : Type} (P : Audits ΩW ΩQ)
     {ω : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
     (h : P.Certified ω) : P.OnTime ω := by
   obtain ⟨_, _, haud, _, _, run, hrun, hc, hot⟩ := h
-  have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.SessionCommitment.limitNs hc
+  have hl : run.limitNs = (P.session ω).commitment.limitNs := congrArg MemoryChallenger.ChallengePhaseCommitment.limitNs hc
   exact ⟨run, hrun, hc, hl.trans_le haud.2.2.2.2.1, hot⟩
 
 theorem δ_nonneg : (0 : ℝ) ≤ (Params.δ : ℝ) := by

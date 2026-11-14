@@ -1,11 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Select.SecondLaw
+public import Proofs.Flock.Claims.Sampling.Select.SecondSamplingDesign
 public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
 public import Proofs.Properties.Spot
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Record
-public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Proofs.Flock.Recursive.ZkServerObj
 import Spot.Draw
 import Spot.Json
@@ -68,7 +68,7 @@ theorem keys_mkObj_perm {L : List (String × Json)} {ks : List String} (hp : (L.
   have he := entries_mkObj_perm (hp.nodup_iff.2 hk)
   rw [FlockSoundness.Discharge.Recursion.ZkServerObj.mkObj_eq] at he ⊢
   show some (sortStrings ((⟨⟨Impl.Const.ofList L⟩⟩ : Std.TreeMap.Raw String Json compare).toArray.map (·.1))) = _
-  refine congrArg some (Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_eq_of_perm ?_))
+  refine congrArg some (Array.toList_inj.1 (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_eq_of_perm ?_))
   rw [Array.toList_map]
   exact he.trans hp
 
@@ -80,7 +80,7 @@ def secondObj (sample ns ks units : Array ℕ) : Json :=
   Json.mkObj ((entries (Select.secondSamplingDesign sample ns ks)).toList ++
     [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", natsJson units)])
 
-theorem getD_obj_law (sample ns ks units : Array ℕ) :
+theorem getD_obj_samplingDesign (sample ns ks units : Array ℕ) :
     getD (secondObj sample ns ks units) "law" = Json.str "work" := (rfl)
 
 theorem getD_obj_k (sample ns ks units : Array ℕ) :
@@ -129,11 +129,11 @@ theorem jeq_self {a : Json} {t : String} (h : Flock.canon a = .ok t) : jeq a a =
   simp
 
 /-- The sampling design the sample object names is `secondSamplingDesign`. -/
-theorem lawOf_secondObj (sample ns ks units : Array ℕ) :
+theorem samplingDesignOf_secondObj (sample ns ks units : Array ℕ) :
     Draw.samplingDesignOf (secondObj sample ns ks units) = Select.secondSamplingDesign sample ns ks := by
   unfold Draw.samplingDesignOf
   have hw : jeq (getD (secondObj sample ns ks units) "law") "work" = true := by
-    rw [getD_obj_law]
+    rw [getD_obj_samplingDesign]
     obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _ (Claims.Json.Good.str "work")
     exact jeq_self ht
   simp only [hw, Bool.or_true, ↓reduceIte]
@@ -143,7 +143,7 @@ theorem lawOf_secondObj (sample ns ks units : Array ℕ) :
 theorem strataMessage_secondObj (sample ns ks units : Array ℕ) (n : Int) :
     Draw.strataMessage (secondObj sample ns ks units) n = Draw.strataMessage (Select.secondSamplingDesign sample ns ks) n := by
   unfold Draw.strataMessage
-  simp only [getD_obj_law, getD_obj_strata, getD_obj_k, getD_secondSamplingDesign_samplingDesign, getD_secondSamplingDesign_k]
+  simp only [getD_obj_samplingDesign, getD_obj_strata, getD_obj_k, getD_secondSamplingDesign_samplingDesign, getD_secondSamplingDesign_k]
 
 /-! ## `Flock.canon` prints `secondSamplingDesign` -/
 
@@ -164,7 +164,7 @@ theorem good_cellObj (o n k i r t : ℕ) : Claims.Json.Good (Select.cellObj o n 
   · exact FlockComplete.JsonRT.good_toJson k
 
 /-- `secondSamplingDesign` is printable: distinct keys, and each of its cells is. -/
-theorem good_secondLaw (sample ns ks : Array ℕ) : Claims.Json.Good (Select.secondSamplingDesign sample ns ks) := by
+theorem good_secondSamplingDesign (sample ns ks : Array ℕ) : Claims.Json.Good (Select.secondSamplingDesign sample ns ks) := by
   unfold Select.secondSamplingDesign
   refine FlockComplete.JsonRT.good_mkObj (by simp) fun p hp => ?_
   simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
@@ -176,8 +176,8 @@ theorem good_secondLaw (sample ns ks : Array ℕ) : Claims.Json.Good (Select.sec
     obtain ⟨i, -, rfl⟩ := List.mem_map.1 hx
     exact good_cellObj _ _ _ _ _ _
 
-theorem canon_secondLaw (sample ns ks : Array ℕ) : ∃ s, Flock.canon (Select.secondSamplingDesign sample ns ks) = .ok s :=
-  FlockComplete.JsonRT.canon_ok_some _ (good_secondLaw sample ns ks)
+theorem canon_secondSamplingDesign (sample ns ks : Array ℕ) : ∃ s, Flock.canon (Select.secondSamplingDesign sample ns ks) = .ok s :=
+  FlockComplete.JsonRT.canon_ok_some _ (good_secondSamplingDesign sample ns ks)
 
 /-! ## The units, as `checkDraw` reads them -/
 
@@ -273,8 +273,8 @@ theorem drawn_secondObj {sample ns ks : Array ℕ} (hp : Select.secondProblem sa
   refine ⟨rfl, by decide, keys_secondObj sample ns ks units, ?_, ?_, units.map fun x => Lean.toJson x,
     units.map fun a : ℕ => (a : Int), getD_obj_units sample ns ks units, mapM_int_toJson units, ?_, ?_,
     fun h => absurd h (by decide), fun h => absurd h (by decide), fun _ => ?_, fun h => absurd h (by decide)⟩
-  · rw [lawOf_secondObj]
-    obtain ⟨t, ht⟩ := canon_secondLaw sample ns ks
+  · rw [samplingDesignOf_secondObj]
+    obtain ⟨t, ht⟩ := canon_secondSamplingDesign sample ns ks
     exact jeq_self ht
   · rw [getD_obj_population]
     obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some _
@@ -323,7 +323,7 @@ theorem selectSecond_of_units {sample ns ks : Array ℕ} (hp : Select.secondProb
     {src : ByteArray} {units : Array ℕ} {read : ℕ}
     (hu : Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read)) :
     Select.selectSecond sample ns ks src = .ok (secondObj sample ns ks units, read) := by
-  obtain ⟨ws, rfl, hws⟩ := flockLaw_second_strata sample ns ks _ parsed hl
+  obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks _ parsed hl
   have hmap : ws.toList.map (fun s => (s.units, s.k)) =
       (cellPairs sample.size ns.size).map (cellOf sample.size ns ks) := by
     rw [hws, List.map_map]

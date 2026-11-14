@@ -5,7 +5,7 @@
 # lowered) and the proof-block census over it (`block_census.py`, on stand-in sized units), R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.scan`), on toy
 # files, composite's onsite and remote cases from their subprotocols' cases (`composite.py`, on a stub executable),
 # a5_warden's transfer-gate window over a network certifier run's cells, and a5_tp_gates' two TP2 ranks' windows
-# over each other's registered partials, and the proof leg's served shapes (`prove_leg.served`), and served_verdicts'
+# over each other's registered partials, and the proof subprotocol's served shapes (`prove_subprotocol.served`), and served_verdicts'
 # window pick, missing pieces and block record on toy serve dirs, prove_bundle's hold of the H200 interfaces' bundle
 # fixture to its window's public part (nothing is lowered or proved), and a5_tp.sh's store of each session's circuits and
 # tables on a dry run's toy scratch (`test_a5_tp_store`, through `adapters/vllm/verity_vllm`'s `ops/store_trees.sh`),
@@ -52,7 +52,7 @@ worker_gb = 6
 # and templates: a8's scan tests import a8, which imports a0.
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
 # serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
-# verifier, `remote-audit-verifier`, which `p2_parties` has `lake` build in remote_bandwidth/lean, is under `verity`.
+# verifier, `poub-verifier`, which `p2_parties` has `lake` build in poub/lean, is under `verity`.
 # `benchmarks/pous/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
 # `adapters/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
@@ -72,6 +72,11 @@ worker_gb = 6
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
+# network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
+# `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
+# `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
+# and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
+# `DISCHARGES`), which the locks record by digest and no other way.
 inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover/clear", "verity/protocols/accounting/pouw/prover/kernels/pearl_c",
           "benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm",
           "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_pearl_c_hash_decode.py",
@@ -83,14 +88,16 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo",
-          "verity/protocols/proofs/spot/prover/audit/records_audit.py", "verity/commitments/cuda/commit_slots/slots.py",
-          "adapters/vllm/tools/served_run/serve_load.py", "adapters/vllm/tools/served_run/serve.sh",
+          "benchmarks/one_stage/interfaces/verity_e2e_demo", "verity/commitments/cuda/commit_slots/slots.py",
+          "verity/protocols/proofs/spot/prover/audit/records_audit.py", "adapters/vllm/tools/served_run/serve_load.py", "adapters/vllm/tools/served_run/serve.sh",
           "adapters/vllm/tools/served_run/commit.sh", "adapters/vllm/tools/served_run/published.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/census/deployments.json",
+          "benchmarks/census/adversary.json",
+          "security/lean-audit.json", "security/Properties/lean-audit.json",
+          "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
@@ -110,5 +117,5 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_prove_leg_served.py"]
+tests = ["tests/test_prove_subprotocol_served.py"]
 paths = ["verity/circuits/ops"]

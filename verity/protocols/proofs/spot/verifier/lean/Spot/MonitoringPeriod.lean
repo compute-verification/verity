@@ -22,7 +22,7 @@ order and whatever its layout, each with its root, the families its open carries
 its coin commitment, its place among the lane's reserves (`reservesOf`: a session counted where a period counts it,
 at its reserve, or at its open when it was opened in one step) and the period that lists it, if one does.
 
-**Windows** (`windowsOf`): the sessions whose layout holds the family `label` (`holds`). In order, and the first
+**Runs** (`runsOf`): the sessions whose layout holds the family `label` (`holds`). In order, and the first
 refusal is the answer: there is at least one (`missing`); each is in a period of the lane (`outside`); each such
 period is closed, and every session it lists that was opened is a window (`period`); no session it lists was left
 unopened, and each window has ended (`missing`). The lane's other sessions are returned beside the windows (`others`)
@@ -150,7 +150,7 @@ structure Session where
 and the lane's sessions of the monitoring period. -/
 structure Read where
   wins : Array Challenger.Win
-  periods : Array Challenger.MonitoringPeriod
+  periods : Array Challenger.PeriodRecord
   sessions : Array Session
 
 def early (stop : String) : String :=
@@ -196,26 +196,26 @@ def holds (label : String) (families : Json) : Bool :=
 
 /-- A window of the period's check: the ledger's period that lists it, its place among the check's windows in the
 ledger's order, its session and its root. -/
-structure Window where
+structure Run where
   period : String
   phase : Nat
   session : String
   root : String
 
 /-- The monitoring period's windows, and the lane's other sessions in it. -/
-structure Windows where
-  windows : Array Window
+structure Runs where
+  windows : Array Run
   others : Array Session
 
-/-- The windows among what `read` gave, and the lane's other sessions (module docstring, **Windows**), or the first
+/-- The windows among what `read` gave, and the lane's other sessions (module docstring, **Runs**), or the first
 refusal. -/
-def windowsIn (p : Params) (r : Read) : Except (Code × String) Windows := do
+def runsIn (p : Params) (r : Read) : Except (Code × String) Runs := do
   let (sampled, others) := r.sessions.partition fun s => holds p.label s.families
   if sampled.isEmpty then
     throw (Code.missing, s!"lane {p.lane} opens no session holding a {p.label} coin in the monitoring period")
   let windows ← sampled.zipIdx.mapM fun (s, i) =>
     match s.period with
-    | some name => pure ({ period := name, phase := i, session := s.session, root := s.root } : Window)
+    | some name => pure ({ period := name, phase := i, session := s.session, root := s.root } : Run)
     | none => throw (Code.outside, s!"session {s.session} is in no period of lane {p.lane}")
   let held := r.periods.filter fun mp => sampled.any (·.period == some mp.name)
   let opened := fun (ses : String) => r.wins.any (·.opened.session == ses)
@@ -232,10 +232,10 @@ def windowsIn (p : Params) (r : Read) : Except (Code × String) Windows := do
     throw (Code.missing, s!"session {s.session} has not ended")
   return { windows, others }
 
-/-- The monitoring period's windows and the lane's other sessions in it (module docstring, **Windows**), or the first
-refusal: the ledger read once (`read`), then its windows (`windowsIn`). -/
-def windowsOf (p : Params) (ledger : Json) : Except (Code × String) Windows := do
-  windowsIn p (← read p ledger)
+/-- The monitoring period's windows and the lane's other sessions in it (module docstring, **Runs**), or the first
+refusal: the ledger read once (`read`), then its windows (`runsIn`). -/
+def runsOf (p : Params) (ledger : Json) : Except (Code × String) Runs := do
+  runsIn p (← read p ledger)
 
 /-! The difftest's piece. -/
 
@@ -243,7 +243,7 @@ def Session.toJson (s : Session) : Json :=
   Json.mkObj [("families", s.families), ("period", s.period.elim Json.null Json.str), ("place", Lean.toJson s.place),
     ("root", Json.str s.root), ("session", Json.str s.session), ("withheld", Json.bool s.withheld)]
 
-def Window.toJson (w : Window) : Json :=
+def Run.toJson (w : Run) : Json :=
   Json.mkObj [("period", Json.str w.period), ("phase", Lean.toJson w.phase), ("root", Json.str w.root),
     ("session", Json.str w.session)]
 
@@ -252,9 +252,9 @@ def refusedJson (code : Code) (why : String) : List (String × Json) :=
   [("code", Json.str code.name), ("refused", Json.str why)]
 
 /-- `{"key", "label", "lane", "ledger", "start", "stop"}` to `{others, sessions, windows}`: `read`'s sessions and
-`windowsIn`'s windows and others; `{code, refused, sessions}` where `windowsIn` refuses and `{code, refused}` where
+`runsIn`'s windows and others; `{code, refused, sessions}` where `runsIn` refuses and `{code, refused}` where
 `read` does. Malformed parameters are the request's fault. -/
-def windowsPiece (j : Json) : V Json := do
+def runsPiece (j : Json) : V Json := do
   unless keys? j == some #["key", "label", "lane", "ledger", "start", "stop"] do
     throw "a request's keys are key, label, lane, ledger, start, stop"
   let p ← Params.of (getD j "key") (getD j "label") (getD j "lane") (getD j "start") (getD j "stop")
@@ -262,9 +262,9 @@ def windowsPiece (j : Json) : V Json := do
     | .error (code, why) => Json.mkObj (refusedJson code why)
     | .ok r =>
       let sessions := ("sessions", Json.arr (r.sessions.map Session.toJson))
-      match windowsIn p r with
+      match runsIn p r with
       | .ok ws => Json.mkObj [("others", Json.arr (ws.others.map Session.toJson)), sessions,
-          ("windows", Json.arr (ws.windows.map Window.toJson))]
+          ("windows", Json.arr (ws.windows.map Run.toJson))]
       | .error (code, why) => Json.mkObj (refusedJson code why ++ [sessions])
 
 end Spot.MonitoringPeriod

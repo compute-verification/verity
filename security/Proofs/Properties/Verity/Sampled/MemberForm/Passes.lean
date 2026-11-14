@@ -26,7 +26,7 @@ to the second, at the window's member that is the parameters' member on the regi
 * **The member's files pass** (`filesPass_of_held`): on blobs where v2 reads the member's files among the files
   the window's member is on (`ReadsFiles`) and each pinned table the blobs hold is its registered file
   (`TablesSent`), a member whose files the run held has `FilesPass` at the window's member; so has every member of
-  a window (`WindowOn.passes`).
+  a window (`ExecutionPhaseOn.passes`).
 * **Files that pass fix their roots' domains** (`FilesPass.rootsFix`, `FilesPass.checked_all`,
   `MembersSetUp.rootsFix`): the ports check refuses two ports of one root and different published domains, so a
   member whose files pass has `Member.RootsFix`, and is `Checked` as Flock's member at every cost.
@@ -149,9 +149,11 @@ theorem headerHeld_instances {rec hd : Json} (h : _root_.Spot.OneStageZk.headerH
   unfold _root_.Spot.OneStageZk.headerHeld at h
   dsimp only at h
   split at h
-  · rename_i he
-    exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
   · cases h
+  · split at h
+    · rename_i he
+      exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
+    · cases h
 
 /-- A member's slice of the registration names the member's units' count as its population. -/
 theorem slice_population (vm : _root_.Spot.OneStageZk.Member) (rec : Json)
@@ -221,8 +223,8 @@ theorem filesPass_of_held {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSe
 parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
 files, each pinned table the blobs hold is its registered file and the run held each member's files at its slice
 of the registration. -/
-theorem WindowOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) {s : Verity.Sent} (ht : TablesSent s)
+theorem ExecutionPhaseOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
+    (h : ExecutionPhaseOn V θ F W) {s : Verity.Sent} (ht : TablesSent s)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p)
     (hms : p.members = some ms)
     (hF : ∀ vm ∈ ms, ReadsFiles (V.registered θ) vm (_root_.Core.Blobs.ofArray s.blobs)) {rec : Json}
@@ -259,7 +261,7 @@ theorem FilesPass.checked_all {nJ : ℕ} {m : Member nJ} (h : FilesPass m) (t : 
 
 /-- **At a window the verifier sets up, every member's roots fix their domains**, the members the sample holds and
 those it misses. -/
-theorem MembersSetUp.rootsFix {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem MembersSetUp.rootsFix {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : MembersSetUp V θ F W) : W.RootsFix :=
   fun m hm => (h.passes m hm).rootsFix
 

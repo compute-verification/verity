@@ -1,21 +1,21 @@
 module
 
 public import Definitions.Accounting.Guarantees.RegisteredCircuit
-public import Properties.Accounting.Remote.Schedule
+public import Properties.Compose.Remote.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
 
 `Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
-layout (`Properties.RemoteAudit.sessionLayout`: each tile where `checkOpening` checks the block at its position of the
-pass's plan) with that premise replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`)
+layout (`Properties.Poub.runLayout`: each tile where `checkOpening` checks the block at its position of the
+pass's plan) with that premise replaced by what the verifier checks: the schedule check (`Poub.Schedule.check`)
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
 `audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
 which the spec doesn't; its theorem, `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
 `Security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
-layout steered there by `Properties.RemoteAudit.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
-layout, `Properties.RemoteAudit.scheduleLayoutGap_code`).
+layout steered there by `Properties.Poub.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
+layout, `Properties.Poub.scheduleLayoutGap_code`).
 -/
 
 @[expose] public section
@@ -33,11 +33,11 @@ the bound as it states them) at the verifier's layout, with its premise `Steered
 schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix `c` of
 the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
 blocks accepts some schedule for a session whose appends are `appended c y` and whose pass `idx c` sent the runs
-`sent c y`. The layout is the verifier's of those appends and runs (`Properties.RemoteAudit.sessionLayout`: tile `i` at
+`sent c y`. The layout is the verifier's of those appends and runs (`Properties.Poub.runLayout`: tile `i` at
 the position the verifier checks the plan's `i`-th block at), `dflt c` where they give no layout of `N` tiles in
 `Fin T × Fin M` (a plan of other than `N` blocks; `G`'s pass has `N` tiles). `cap` is the one cap the session committed
 before its first coin, over which the check refuses a schedule, so on the coins the check accepts the layout
-reads `y` only through the accepted schedule's `cap + 1` padded bits (`Properties.RemoteAudit.steered_of_checked`).
+reads `y` only through the accepted schedule's `cap + 1` padded bits (`Properties.Poub.steered_of_checked`).
 
 On a session the check refuses at some pass the ledger credits nothing after the seed, so no shortfall against its
 credit is counted there: the event, an accepted audit whose reads fall short of its credit, asks that the check accept
@@ -45,8 +45,8 @@ every pass of the session. The bound is `G`'s over the accepted sessions; a prov
 check refuses.
 
 The check's premise holds at the deployed session's shape at T = 1 s, at 792 bits
-(`Properties.RemoteAudit.steered_of_checked_honest`; `G`'s premises are `G`'s honest lemma's). Without it the steering fails: a layout that follows a three-way coin is
-the verifier's and is the slot of no one-bit summary (`Properties.RemoteAudit.steered_of_checked_nontrivial`).
+(`Properties.Poub.steered_of_checked_honest`; `G`'s premises are `G`'s honest lemma's). Without it the steering fails: a layout that follows a three-way coin is
+the verifier's and is the slot of no one-bit summary (`Properties.Poub.steered_of_checked_nontrivial`).
 
 The pass devices are told `steer c y`, any `a` bits, as in `G`. The layout's summary is the schedule's, which they are
 told only through `steer`, so the union in `G`'s query term runs over both summaries: `2^(a + (cap + 1))` in place of
@@ -54,7 +54,7 @@ told only through `steer`, so the union in `G`'s query term runs over both summa
 `a = cap + 1`; devices told the schedule are told its bits in `steer`, at `a = cap + 1`, and pay them twice.
 
 Frozen (no-function, hash): `G`'s game at the verifier's layout, its premises but `SteeredLayout`, and
-`RemoteAudit.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
+`Poub.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
 def ScheduledRequirement : Prop :=
   ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.IntDag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
@@ -74,7 +74,7 @@ def ScheduledRequirement : Prop :=
     (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)
     (plan : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → Finset ℕ)
     (addr : RateSketch.StackedCoins Ω Ca T n P N ρ G → ℕ → Fin T × Fin M),
-    let layout := Properties.RemoteAudit.sessionLayout blocks dflt appended sent
+    let layout := Properties.Poub.runLayout blocks dflt appended sent
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
@@ -113,7 +113,7 @@ def ScheduledRequirement : Prop :=
     let win := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) =>
       A.win w x.2 fun j => steer (RateSketch.SketchPrefix.of x.2 w j) x.1
     let accepted := fun (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) =>
-      ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
+      ∃ sc passes b, Poub.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
         (passes[idx c]?).map Prod.snd = some (sent c y)
     pr (fun x : RateSketch.StackedCoins Ω Ca T n P N ρ G =>
       (∀ w j, accepted (RateSketch.SketchPrefix.of x.2 w j) x.1) ∧

@@ -5,8 +5,8 @@ public import Proofs.Properties.Verity.Sampled.Window.UnboundMember
 /-!
 # The claim at a window: across its members
 
-`JointAuditV5.unboundWrong` proves the window's statement of `Proofs.Properties.Verity.Sampled.Window.Unbound`
-(`JointAuditV5.UnboundWrong`) for every window, and `Verity.Sampled.Window.unboundWrong` at every cost: where the
+`JointAuditV5.unboundIncorrect` proves the window's statement of `Proofs.Properties.Verity.Sampled.Window.Unbound`
+(`JointAuditV5.UnboundIncorrect`) for every window, and `Verity.Sampled.ExecutionPhase.unboundIncorrect` at every cost: where the
 window's members are laid out in order and the window's read, openings and trace are its members' side by side
 (`JointAuditV5.ReadsAt`), every unit the trace doesn't bind is one of the window's incorrect proof blocks.
 
@@ -15,8 +15,8 @@ circuits side by side that a trace doesn't bind are the first's, then the second
 first's are faulty at the first member (`MemberV5.unboundFaulty`), whose read has its population's units
 (`MemberV5.fileRead_units`), so the rest's start where the next member's proof blocks do (`MemberLayout.base_succ`).
 A member's incorrect proof block is one of its proof blocks (`MemberV5.lt_of_mem_faulty`) and incorrect
-(`MemberV5.faultyWrong`), and the window's incorrect proof blocks are its members' at their places
-(`JointAuditV5.Laid.mem_wrongSet`).
+(`MemberV5.faultyIncorrect`), and the window's incorrect proof blocks are its members' at their places
+(`JointAuditV5.Laid.mem_incorrectSet`).
 -/
 
 @[expose] public section
@@ -109,8 +109,8 @@ theorem faulty_of_readsWith (τ : Strategy w.game) :
       exact ⟨k, v, hc, hv, by omega⟩
 
 /-- **Across members, the units a window's trace doesn't bind are the window's incorrect proof blocks**
-(`JointAuditV5.UnboundWrong`). -/
-theorem unboundWrong : w.UnboundWrong := by
+(`JointAuditV5.UnboundIncorrect`). -/
+theorem unboundIncorrect : w.UnboundIncorrect := by
   intro hl R op tr τ hr x hx
   obtain ⟨u, hu, rfl⟩ := Finset.mem_image.1 hx
   obtain ⟨k, v, hc, hv, hbase⟩ := w.faulty_of_readsWith τ R.rest R.first op tr 0
@@ -126,10 +126,10 @@ theorem unboundWrong : w.UnboundWrong := by
   have hlt : u.val < w.nJ := by
     rw [hbase']
     exact lt_of_lt_of_le (Nat.add_lt_add_left hvn _) hle
-  have hw : (⟨v, hvn⟩ : Fin (w.ms.get k).n) ∈ w.memberWrong τ k := by
-    rw [w.memberWrong_eq τ k]
-    exact (w.ms.get k).faultyWrong hc _ _ ⟨v, hvn⟩ hv
-  exact Finset.mem_image.2 ⟨⟨u.val, hlt⟩, (hl.mem_wrongSet τ _).2 ⟨k, ⟨v, hvn⟩, hbase', hw⟩, rfl⟩
+  have hw : (⟨v, hvn⟩ : Fin (w.ms.get k).n) ∈ w.memberIncorrect τ k := by
+    rw [w.memberIncorrect_eq τ k]
+    exact (w.ms.get k).faultyIncorrect hc _ _ ⟨v, hvn⟩ hv
+  exact Finset.mem_image.2 ⟨⟨u.val, hlt⟩, (hl.mem_incorrectSet τ _).2 ⟨k, ⟨v, hvn⟩, hbase', hw⟩, rfl⟩
 
 end JointAuditV5
 
@@ -138,7 +138,7 @@ end Flock.Guarantees
 namespace Verity.Sampled
 
 /-- **Across a window's members, the units its trace doesn't bind are its incorrect proof blocks**, at every cost
-(`Window.UnboundWrong`). -/
-theorem Window.unboundWrong (W : Window) : W.UnboundWrong := fun t _ => (W.joint t).unboundWrong
+(`ExecutionPhase.UnboundIncorrect`). -/
+theorem ExecutionPhase.unboundIncorrect (W : ExecutionPhase) : W.UnboundIncorrect := fun t _ => (W.joint t).unboundIncorrect
 
 end Verity.Sampled

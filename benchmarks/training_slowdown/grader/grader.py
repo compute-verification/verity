@@ -680,7 +680,7 @@ def boolean_prices(prims: dict) -> dict[str, dict]:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.evaluation.bits import compile as compile_bits
     from verity.circuits.program import is_input
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     out = {}

@@ -56,6 +56,7 @@ public import Proofs.Pous.EndToEndAt
 public import Proofs.Pous.PeriodAt
 public import Proofs.Pous.PeriodDeployed
 public import Proofs.Pous.PeriodGame
+public import Proofs.Pous.PeriodWitnesses
 public import Proofs.Pous.Obligation
 
 /-!
@@ -107,14 +108,14 @@ theorem B1IndepSet : Pous.Guarantees.B1IndepSet := @PousPebbling.b1_indep_set
 theorem B2Stacking : Pous.Guarantees.B2Stacking := @PousB2.b2_stacking
 
 /-- `PousPebbling.chain` is `Pous.HashChain.chain`, the trusted chain of the guarantee. -/
-theorem chain_eq_pinned {m D : ℕ} (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) :
+theorem chain_eq_guarantee {m D : ℕ} (H : Fin (D + 1) × Fin m → Fin m) (x₀ : Fin m) :
     ∀ i, Pous.HashChain.chain H x₀ i = PousPebbling.chain H x₀ i
   | 0 => rfl
-  | i + 1 => by simp only [Pous.HashChain.chain, PousPebbling.chain, chain_eq_pinned H x₀ i]
+  | i + 1 => by simp only [Pous.HashChain.chain, PousPebbling.chain, chain_eq_guarantee H x₀ i]
 
 theorem B3Chain : Pous.Guarantees.B3Chain := by
   intro m D q _ x₀ P hP
-  simpa only [chain_eq_pinned] using PousPebbling.b3_chain m D q x₀ P hP
+  simpa only [chain_eq_guarantee] using PousPebbling.b3_chain m D q x₀ P hP
 
 theorem FischClaim13 : Pous.Guarantees.FischClaim13 := @PousFisch.claim13
 theorem FischClaim14 : Pous.Guarantees.FischClaim14 := @PousFisch.claim14
@@ -128,17 +129,17 @@ theorem N10Refuted : Pous.Guarantees.N10Refuted := PousP3Forward.not_invExPostFa
 theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sampled_audit_prod
 
 /-- `PousThm1.seqState` is `Pous.Sampled.seqState`, the trusted definition the guarantee reads. -/
-theorem seqState_eq_pinned {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
+theorem seqState_eq_guarantee {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
     (step : ℕ → Pous.Bits S → Fin B → Pous.OracleAlgorithm M (Pous.Bits ℓ × Pous.Bits S)) :
     ∀ (j : ℕ) (h : List (Fin B)) (σ : Pous.Bits S),
       Pous.Sampled.seqState f step j h σ = PousThm1.seqState f step j h σ
   | _, [], _ => rfl
   | j, i :: is, σ => by
-      simp only [Pous.Sampled.seqState, PousThm1.seqState, seqState_eq_pinned f step (j + 1) is]
+      simp only [Pous.Sampled.seqState, PousThm1.seqState, seqState_eq_guarantee f step (j + 1) is]
 
 theorem SampledAuditSeq : Pous.Guarantees.SampledAuditSeq := by
   intro M sch S D Q t k p W A₁ A₂ h
-  exact PousAudit.sampled_audit_seq sch S D Q t k p W A₁ A₂ (by simpa only [seqState_eq_pinned] using h)
+  exact PousAudit.sampled_audit_seq sch S D Q t k p W A₁ A₂ (by simpa only [seqState_eq_guarantee] using h)
 
 theorem SampledAuditSim : Pous.Guarantees.SampledAuditSim := @PousAudit.sampled_audit_sim
 theorem StackedAuditSeq : Pous.Guarantees.StackedAuditSeq := @PousAudit.stacked_audit_seq
@@ -187,6 +188,33 @@ theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousCon
 theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
   PousContinuous.band_family_continuous_time_average
 theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
+
+/-- **`StreamedWipe`'s honest lemma**: some prover, the honest server (`PousStreamedWipe.honest`, whose memory is the
+labels and which keeps nothing of its prior content), is accepted by the wipe's own acceptance (`StreamedWipe.Accepts`:
+every answer is its label) with probability 1, at one label of one bit, one challenge, one bit of prior content and
+labels sampled by the PRF that outputs its one-bit key. -/
+theorem StreamedWipe_honest :
+    ∃ (prf : Pous.Bits 1 → Fin 1 → Pous.Bits 1) (P : Pous.StreamedWipe.Prover 1 1 1 1 (1 * 1) 0),
+      Pous.pr (fun x : (Pous.Bits 1 × (Fin 1 → Fin 1)) × Pous.Bits 1 =>
+        Pous.StreamedWipe.Accepts P x.1.1 (prf x.2) x.1.2) = 1 :=
+  ⟨fun K _ => K, PousStreamedWipe.honest 1 1 1 1,
+    Pous.Claims.pr_of_forall fun _ => PousStreamedWipe.honest_accepts _ _ _⟩
+
+/-- **`StreamedWipe`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, at one label of one bit, one
+challenge, one bit of prior content and memory, no egress and `g = 0`, where the bound is `2^-1`, for some key-free PRF
+and a prover (`keepAll`) that keeps its prior content. -/
+theorem StreamedWipe_nontrivial :
+    ∃ (prf : Pous.Bits 0 → Fin 1 → Pous.Bits 1) (P : Pous.StreamedWipe.Prover 1 1 1 1 1 0),
+      ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll prf P ≤
+        Pous.StreamedWipe.bound 1 1 1 1 1 0 0 + Pous.StreamedWipe.prfAdvantage prf
+          (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) := by
+  refine ⟨fun _ _ _ => false, Pous.Claims.keepAll 1 1 1 1 1 0 le_rfl, ?_⟩
+  rw [Pous.Claims.winRealBy_acceptAll_keepAll Nat.one_pos le_rfl, Pous.Claims.keepAll_adv_zero Nat.one_pos le_rfl,
+    add_zero, not_le]
+  have hb : Pous.StreamedWipe.bound 1 1 1 1 1 0 0 = 2 / 4 := by
+    norm_num [Pous.StreamedWipe.bound]
+  rw [hb]
+  exact ENNReal.div_lt_of_lt_mul (by norm_num)
 theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
   PousStreamedWipe.streamed_wipe_meets_2600GB
 theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
@@ -194,6 +222,31 @@ theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
 theorem StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := PousStreamedWipe.streamed_wipe_meets_96GiB
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
+
+/-- **`StreamedWipeMeetsH200`'s honest lemma**: some prover, the honest server (`PousStreamedWipe.honest`, whose memory
+is the labels and which keeps nothing of its prior content), is accepted by the wipe's own acceptance
+(`StreamedWipe.Accepts`: every answer is its label) with probability 1, on the guarantee's H200 instance with no egress
+and no slack: `2,365,587,456` labels of 512 bits, 2906 challenges, `39,068,035,213` bits of prior content and memory
+`2,365,587,456 · 512`, with labels sampled by the PRF that outputs its 512-bit key. -/
+theorem StreamedWipeMeetsH200_honest :
+    ∃ (prf : Pous.Bits 512 → Fin 2365587456 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 2365587456 2906 512 39068035213 (2365587456 * 512) 0),
+      Pous.pr (fun x : (Pous.Bits 39068035213 × (Fin 2906 → Fin 2365587456)) × Pous.Bits 512 =>
+        Pous.StreamedWipe.Accepts P x.1.1 (prf x.2) x.1.2) = 1 :=
+  ⟨fun K _ => K, PousStreamedWipe.honest 2365587456 2906 512 39068035213,
+    Pous.Claims.pr_of_forall fun _ => PousStreamedWipe.honest_accepts _ _ _⟩
+
+/-- **`StreamedWipeMeetsH200`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, on the H200's
+instance with no egress, for some key-free PRF and a prover (`keepAll`) keeping the threshold's `39,068,035,213`
+bits. -/
+theorem StreamedWipeMeetsH200_nontrivial :
+    ∃ (prf : Pous.Bits 0 → Fin 2365587456 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 2365587456 2906 512 39068035213 (2365587456 * 512) 0),
+      ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll prf P ≤
+        (2⁻¹ : ENNReal) ^ 128 + Pous.StreamedWipe.prfAdvantage prf
+          (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) :=
+  ⟨Pous.Claims.noKey 2365587456, Pous.Claims.keepAll 2365587456 2906 512 39068035213 (2365587456 * 512) 0
+    (by norm_num), Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _⟩
 theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   PousStreamedWipe.streamed_wipe_meets_reads_tight
 theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server

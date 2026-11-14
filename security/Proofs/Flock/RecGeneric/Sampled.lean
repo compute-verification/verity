@@ -115,7 +115,7 @@ def GenericSampledKSClaims : Prop :=
     ∀ σ : Strategy (audit L Reg (proofSystemOf H V stmt).session),
       ((jointOf H V Rl E stmt B reads opens).toTrials L).CR (reg σ) (cont σ) M →
       prob (fun o => o.1 = true) (audit L Reg (proofSystemOf H V stmt).session) σ ≤
-        L.escape (incorrect B Correct (reg σ)
+        L.missProb (incorrect B Correct (reg σ)
             (((jointOf H V Rl E stmt B reads opens).toTrials L).plur (reg σ) (cont σ))) +
           avg (fun ω => ⨆ u ∈ L.draw ω,
             ENNReal.ofReal (err (stmt (L.draw ω) (reg σ)) (proverOf (x := stmt (L.draw ω) (reg σ)) (cont σ ω)))) +
@@ -140,7 +140,7 @@ def RecursiveSampledKS : Prop :=
     ∀ σ : Strategy (audit L Reg (proofSystemOf H K.V stmt).session),
       ((jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens).toTrials L).CR (reg σ) (cont σ) M →
       prob (fun o => o.1 = true) (audit L Reg (proofSystemOf H K.V stmt).session) σ ≤
-        L.escape (incorrect B Correct (reg σ)
+        L.missProb (incorrect B Correct (reg σ)
             (((jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens).toTrials L).plur (reg σ) (cont σ))) +
           avg (fun ω => ⨆ u ∈ L.draw ω,
             ENNReal.ofReal (K.err I Sv H (proverOf (x := stmt (L.draw ω) (reg σ)) (cont σ ω))

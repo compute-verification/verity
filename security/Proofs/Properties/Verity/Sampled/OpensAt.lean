@@ -367,7 +367,7 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
 
 /-- **The window's committed files' place for a gate is the session's at its claims position**, wherever v2 reads
 the session's files as a window of one member (`placeOfFiles`, there the member's `placeOfRead`). -/
-theorem placeOfFiles_eq {R : Verity.WindowFiles} (hr : R = Verity.WindowFiles.one A.fileRead)
+theorem placeOfFiles_eq {R : Verity.ExecutionPhaseFiles} (hr : R = Verity.ExecutionPhaseFiles.one A.fileRead)
     (hN : R.circuit.N = A.Cc.N) (g : Fin R.circuit.N) :
     placeOfFiles R g = A.placeAt (Flock.Bridge.posOf A.Cc (Fin.cast hN g)) := by
   subst hr
@@ -435,7 +435,7 @@ theorem opensAt_of (I : Instance d α)
   have hplace := h θ F A hs
   obtain ⟨p, hp, o, hacc, hrow⟩ := Live.opens_rowLeaf hready hop
   have hw : (I.base.read θ F).circuit.w g = 1 :=
-    w_ofAudit ((congrArg Verity.WindowFiles.circuit hsu.read).trans
+    w_ofAudit ((congrArg Verity.ExecutionPhaseFiles.circuit hsu.read).trans
       (A.circuit_eq.trans (Flock.Bridge.circuitOf_eq A.D A.hU A.n))) g
   unfold Vocab.Opens
   rw [hconst]
@@ -461,29 +461,34 @@ end Instance
 `Instance.registeredFiles`); its session premise `SessionAt` is `sessionAt_of_registered`'s from `SessionRegistered`,
 the ports and roots check being v2's own on the accepted play (`opensReady_of_accepted`), and `SessionRegistered` is
 `Instance.sessionRegistered`'s from the session's construction (`Instance.sessionOf`) and `FamiliesPinned`, which owes
-only that the coin commitment's families hold the family v2's parameters name; the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
-which refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
+only that the coin commitment's families hold the family v2's parameters name; the coupling's, the device's log opening
+only the record's rounds (`LogOpensRecorded`), is v2's record check's, which refuses a session whose coin tree opens a
+round its record doesn't give (`Instance.logOpensRecorded`). The two statements on the committed files
+(`Vocab.WiresSound` at the deployed vocabulary, `GateARow`) are taken as they stand: no clause of the conclusion reads
+either, and neither is proved. -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hFP : I.FamiliesPinned .remote)
-    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hW : I.base.PouwSound .remote)
+    (hWi : (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).WiresSound .remote)
+    (hG : Verity.GateARow) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest I.opensAt I.registeredFiles
-    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hW hI
+    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hW hWi hG
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
 reading (`Instance.Honest.inst`), whose coin commitment holds the family v2's parameters name
-(`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's PoUW and
-inference-only targets hold. -/
+(`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's PoUW target
+holds. It concludes neither statement on the committed files: the instance runs sessions, at which SPOT's error
+is finite, so the wires' statement bounds something there and holds only by its proof, and `GateARow` reads no
+deployment, so no instance concludes it. -/
 theorem remote_soundness_deployedReady_honest :
     (Instance.Honest.inst ⊤ Instance.Honest.bound).FamiliesPinned .remote ∧
-      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PouwSound .remote ∧
-      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.InferenceOnlySound .remote :=
-  ⟨Instance.Honest.familiesPinned ⊤ Instance.Honest.bound .remote,
-    Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PouwSound .remote :=
+  ⟨Instance.Honest.familiesPinned ⊤ Instance.Honest.bound .remote, Instance.Honest.target_top .remote .pouw⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
 fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/

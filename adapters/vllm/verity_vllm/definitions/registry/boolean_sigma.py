@@ -1,4 +1,4 @@
-"""Word composites as Boolean Definitions by σ (`verity_vllm.definitions.boolean.sigma_lift`): the next version of each, its word body
+"""Word composites as Boolean Definitions by σ (`verity.circuits.ops.boolean.versions.sigma_lift`): the next version of each, its word body
 at the same statics with each Call the Boolean version of its Definition, over the bits each word operand occupies, so its word
 view is that composite at the same bindings (a function-valued static, `DOT` or `INV`, binds a Boolean Definition and is read as
 its word).
@@ -28,7 +28,7 @@ word body and its callees' Boolean versions fix it; circuit-check pins each one'
 """
 from __future__ import annotations
 
-from verity_vllm.definitions.boolean import sigma_lift
+from verity.circuits.ops.boolean.versions import sigma_lift
 from verity_vllm.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_split as TS
 

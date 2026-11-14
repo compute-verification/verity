@@ -79,7 +79,8 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.accounting.certifier.verifier import head_check as HC
-from verity.protocols.accounting.certifier.verifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.id_form import EVENT_END, EVENT_HEAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -828,7 +829,7 @@ IoTieBucket = CompositeDefinition(
     doc="1 iff every cell of the bucket row (the warden's registered row, read by the proof system: bit 8k + i is bit i "
         "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
         "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
-        "one egress bucket row, every cell opened; a link-window's tie is its T rows'")
+        "one egress bucket row, every cell opened; an execution phase's tie is its T rows'")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------

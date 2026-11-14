@@ -16,7 +16,7 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.ops.boolean import cast as BC
 from verity.circuits.ops.boolean import elementwise as EW
 from verity_vllm.definitions.registry import boolean_dsa_norm as BN

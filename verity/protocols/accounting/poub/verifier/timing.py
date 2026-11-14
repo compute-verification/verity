@@ -6,7 +6,7 @@ at 0 and window t's boundary message at `(t + 1)·T`; each reaches the prover `d
 back to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU,
 which the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root
 reaches the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a
-fixed pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_remote_bandwidth.py`).
+fixed pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_poub.py`).
 
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
@@ -146,7 +146,7 @@ class Figures:
     host_spec_bytes_per_s: float
     host_chip_bytes: int
     disk_bytes_per_s: float
-    link_window_bytes: int
+    phase_bytes: int
 
     @property
     def read_bytes_per_s(self) -> float:
@@ -183,7 +183,7 @@ class Figures:
     @classmethod
     def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_chip_bytes: int = GPU_CHIP_BYTES,
                   gpu_sha512_per_s: float = GPU_SHA512_PER_S, gpu_squarings_per_s: Mapping[str, float] | None = None,
-                  link_window_bytes: int = LINK_WINDOW_BYTES) -> Figures:
+                  phase_bytes: int = LINK_WINDOW_BYTES) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
         and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth` and
         `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
@@ -202,7 +202,7 @@ class Figures:
                    float(value(gpu, "memory", "bandwidth")), gpu_chip_bytes, int(value(gpu, "store", "dram")),
                    gpu_sha512_per_s, dict(squarings), float(value(host, "memory", "read")),
                    float(value(host, "memory", "bandwidth")), int(value(host, "store", "chip")),
-                   float(value(host, "disk", "read")), link_window_bytes)
+                   float(value(host, "disk", "read")), phase_bytes)
 
 
 RTX_PRO_6000_NODE = Figures(GPUS, GPU_READ_BYTES_PER_S, GPU_SPEC_BYTES_PER_S, GPU_CHIP_BYTES, GPU_HBM_BYTES,

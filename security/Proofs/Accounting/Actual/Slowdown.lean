@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual.Slowdown
+public import Definitions.Slowdown.Guarantees.Actual.Slowdown
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,8 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Actual.Threaded
-import Proofs.InferenceOnly.Fit
-import Proofs.InferenceOnly.Threads
+import Proofs.Slowdown.Fit
+import Proofs.Slowdown.Threads
 
 /-!
 # The slowdown's windows from the memory cap over threads
@@ -47,7 +47,7 @@ import Proofs.InferenceOnly.Threads
 
 namespace Accounting.SecurityProofs.Actual
 
-open Verity InferenceOnly Finset InferenceOnly.Slowdown
+open Verity InferenceOnly Finset Slowdown.Slowdown
 
 /-- **The windows' count is the ceiling**: `⌈t/ω⌉₊ = (t + ω − 1)/ω` for a whole-tick window `ω > 0`. -/
 theorem ceil_div_eq_pred_div {t ω : ℕ} (hω : 0 < ω) : ⌈(t : ℝ) / ω⌉₊ = (t + ω - 1) / ω := by
@@ -80,8 +80,8 @@ theorem SlowdownServerBlocksCapSlots : Guarantees.Actual.SlowdownServerBlocksCap
 theorem SlowdownServerBlocksCap : Guarantees.Actual.SlowdownServerBlocksCap := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR
     hcont hT hW hM
-  exact SlowdownServerBlocksCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T)
+  exact SlowdownServerBlocksCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (Slowdown.SecurityProofs.Fit.idSlots T)
     d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT
-    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW) hM
+    (Slowdown.SecurityProofs.weightsIncompressibleSlots_of (Slowdown.SecurityProofs.Fit.idSlots T) hbw.le hW) hM
 
 end Accounting.SecurityProofs.Actual

@@ -35,7 +35,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Grid Tmpl gridsOf templatesOf slotIn)
+open Spot.RecordText (Grid Tmpl gridsOf templatesOf slotIn)
 open InferenceOnlyCheck.Record.SecurityProofs (form slotOf OneGrid slotOf_of_mem gridsOf_ok gridsOf_period gridsOf_covers
   tiles_ordered tiles_sum mem_of_lookup eq_of_nodup_map read_front finish_text front_text)
 open Lean (Json)

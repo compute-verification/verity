@@ -89,7 +89,7 @@ order (`LedgerInOrder`) and the ledger opens the first window for a run and the 
 before it reserves the second, those runs are the first setup's and the second's, and the log is the first
 `cut o.log` releases and the rest, each printed by its setup's run. `LedgerInOrder` is taken, not proved. -/
 theorem printsInOrder_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (o : Exchange) {w₁ w₂ : String}
-    (hw : windowsOf o.params = some (w₁, w₂)) (hL : w₁ ≠ w₂ → LedgerInOrder (S₁ o) (S₂ o)) :
+    (hw : executionPhasesOf o.params = some (w₁, w₂)) (hL : w₁ ≠ w₂ → LedgerInOrder (S₁ o) (S₂ o)) :
     PrintsInOrder (dev₂ S₁ S₂ cut o) w₁ w₂ o.log := by
   unfold PrintsInOrder
   by_cases hww : w₁ = w₂
@@ -100,7 +100,7 @@ theorem printsInOrder_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Rel
     exact h
   · rw [if_neg hww]
     intro pk a b ha hb hab
-    have h2 := oneWindow_false hw hww
+    have h2 := oneExecutionPhase_false hw hww
     obtain ⟨once, own, order⟩ := hL hww
     have hsub := ledger_two S₁ S₂ cut h2
     have ha' := ledgerOpens_mono ha (hsub pk)
@@ -148,7 +148,7 @@ theorem cutOrder_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P 
     (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ) (hF : FirstReads θ)
     (hO : OrderShown θ)
-    (hL : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+    (hL : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o))
     (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
     CutBound V k θ F c σ ReadIsDevice (terms V (devOf P fs₁ fs₂ cut) θ F c σ) :=

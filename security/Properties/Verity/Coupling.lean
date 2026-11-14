@@ -1,7 +1,7 @@
 module
 
 public import Properties.Verity.Subprotocols
-public import Definitions.Accounting.JointPeriod
+public import Definitions.Compose.JointPeriod
 
 /-!
 # The causal game's coins, flipped up front: each subprotocol's bound in the coins model carried to the play

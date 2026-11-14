@@ -65,9 +65,9 @@ COUNT_BITS = 130
 SEGMENT_BYTES = 1 << 25
 SEGMENT_LABELS = SEGMENT_BYTES // sw.LABEL_BYTES
 SEGMENTS = 1
-"""The leg's fill, in 32 MiB segments."""
+"""The subprotocol's fill, in 32 MiB segments."""
 LIMIT_NS = 20_000_000
-"""The leg's deadline a read: 20 ms, a socket round trip on one machine or a nearby one with room to spare."""
+"""The subprotocol's deadline a read: 20 ms, a socket round trip on one machine or a nearby one with room to spare."""
 TIER = "host-dram"
 EXPERIMENTAL = (
     "foreign_bits at eps = 2^-128 is Pous.Guarantees.StreamedWipeMeetsReads' threshold at the session's k and r = "
@@ -250,14 +250,17 @@ def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], c
                     signed: sw.SignedWipe | None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES, *,
                     egress_mib: int | None) -> tuple:
     """`MemoryChallenger.WipeProtocol.checkCounted`, the check with its count held by a composition: `outcome`'s
-    refusals, then a rejection of an evidence that gives no count (`NO_COUNT`) and of a session that names no start
-    mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with `counted_profile`. It holds the count
-    to nothing, as `outcome` does: only under a composition that ties `named` to the network certifier's count over
-    the span between the session's two marks is the count the certifier's."""
+    refusals, then a rejection where `named` refuses the session, of an evidence that gives no count (`NO_COUNT`) and
+    of a session that names no start mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with
+    `counted_profile`. It holds the count to nothing, as `outcome` does: only under a composition that ties `named` to
+    the network certifier's count over the span between the session's two marks is the count the certifier's."""
     out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib)
     if out[0] != "accept":
         return out
-    n = named(commitment, signed, egress_mib)
+    try:
+        n = named(commitment, signed, egress_mib)
+    except OverflowError as e:
+        return ("reject", str(e))
     if n is None:
         return ("reject", NO_COUNT)
     if len(n["start_mark"]) != sw.MARK_BYTES:
@@ -323,7 +326,7 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     if "prover_store" in where or "store_gaps" not in where:
         raise ValueError("the wipe's placement names the prover's store or has no store_gaps: it is of the format "
                          "before the placement named no device, so what the store leaves out isn't in it; run the "
-                         "leg again")
+                         "subprotocol again")
     out = [] if wipe_party.holds(where) else [f"key custody: {where[wipe_party.PREMISE]}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "

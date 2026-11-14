@@ -213,7 +213,7 @@ def test_the_training_routes_bind_the_opt_in_step_and_the_served_programs_keep_v
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.ops import prims as P
     from verity.circuits.ops.boolean import gemm as BG
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
 
     assert CB.TRAIN_DOT is BG.HopperBF16WgmmaDot16V3 and CB.TRAIN_DOT.opt_in
     assert word_of(CB.TRAIN_DOT) is word_of(BG.HopperBF16WgmmaDot16) is P.HopperBF16WgmmaDot16
@@ -282,7 +282,7 @@ def test_an_unsplit_route_pads_k_to_whole_k16_steps() -> None:
     """At a K that is not a multiple of 16 an unsplit route is `GemmPad_v2`: on bits, the route's model on x and W's rows padded
     with +0 words at the back to the next multiple of 16.  A split route there is refused."""
     from verity.circuits.boolean.trace import word_of
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
 
     target = CB.route_gemm({"kernel": "nosplit"}, 40, 3)
     assert target.id == f"GemmPad_v2{{T=40,K=48,N=3,{HOP}}}"

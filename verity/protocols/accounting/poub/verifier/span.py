@@ -1,17 +1,18 @@
 """What a window's span hands the verifier in place of its openings: the proof system's accepted runs of PoUB's opening unit
-(`BlockOpeningCheck_v2`, one unit a draw), which the Lean decides (`RemoteAudit.Span.checkSpan`, through
+(`BlockOpeningCheck_v2`, one unit a sample), which the Lean decides (`Poub.Span.checkSpan`, through
 `Session.verifySpan`). This module decides nothing: it computes no verdict and holds no row to a commitment.
 
 A span is one or more statements of the sampled proof system's one-stage audit (`verity/sampled-proofs/one-stage/v2`),
 every unit proved: each its public file's SHA-512, its docket and evidence, and per instance, in the
 public file's order, its verdict word and the salts of its ``pub``, ``signs`` and ``o0`` rows (`statement`); with the
-blobs its evidence names (`span`). The statements' instances in order are the window's draws in order, one each. The
+blobs its evidence names (`span`). The statements' instances in order are the window's samples in order, one each. The
 auditor's own side is the audit's parameters and the registered opening circuit's ports in order, each with its row's
 bits (`auditor`, `layout`).
 
-`public_rows` is the unit's two public rows for a draw as the verifier derives them (`block_check.opening_public_v2`'s,
-for a registered block of a pass whose plan is the identity), which the prover commits and the Lean derives again for
-itself (`RemoteAudit.Span.publicWords`, `signWords`); the difftest holds the two to each other."""
+`public_rows` is the unit's two public rows for a sample as the verifier derives them
+(`block_check.opening_public_v2`'s, for a registered block of a pass whose plan is the identity), which the prover
+commits and the Lean derives again for itself (`Poub.Span.publicWords`, `signWords`); the difftest holds the two to each
+other."""
 from __future__ import annotations
 
 import hashlib
@@ -29,7 +30,7 @@ OPENED = ("pub", "signs", "o0")
 
 
 def public_v2(d: audit.PositionSample, codec_seed: bytes, S) -> dict[str, list[int]]:
-    """Draw ``d``'s public parameters as u16 words at the unit's statics ``S`` (`BC.opening_public_v2`, its sign rows
+    """Sample ``d``'s public parameters as u16 words at the unit's statics ``S`` (`BC.opening_public_v2`, its sign rows
     among them): block j = p of a pass whose plan is the identity, registered (``coin`` None)."""
     if d.coin is not None or d.block != d.position:
         raise ValueError("a span's unit opens a registered block at its own position: the pass's plan is the identity")
@@ -41,7 +42,7 @@ def public_v2(d: audit.PositionSample, codec_seed: bytes, S) -> dict[str, list[i
 
 
 def public_rows(d: audit.PositionSample, codec_seed: bytes, S) -> dict[str, list[int]]:
-    """Draw ``d``'s ``pub`` and ``signs`` rows as u16 words at the unit's statics ``S`` (`public_v2`)."""
+    """Sample ``d``'s ``pub`` and ``signs`` rows as u16 words at the unit's statics ``S`` (`public_v2`)."""
     a = public_v2(d, codec_seed, S)
     pub = BC.opening_rows_v2(S)[0][2]
     return {"pub": [w for p in pub for w in a[p]], "signs": a["signs"]}
@@ -71,7 +72,7 @@ def statement(public: bytes, record: bytes, evidence: bytes, instances: Sequence
 
 
 def span(statements: Sequence[dict], blobs: Sequence[bytes]) -> dict:
-    """The span: its statements in draw order and the blobs their evidence names (their public files among them)."""
+    """The span: its statements in sample order and the blobs their evidence names (their public files among them)."""
     return {"blobs": [b.hex() for b in blobs], "statements": list(statements)}
 
 

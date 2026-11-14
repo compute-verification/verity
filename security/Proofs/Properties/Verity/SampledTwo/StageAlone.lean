@@ -250,7 +250,7 @@ theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C)
   intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
   obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondSamples_parts hd₂
   obtain ⟨hdig, hf⟩ := hM o ha p c e c₂ hcase hi₂
-  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_window hd₁
+  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_executionPhase hd₁
   have hbp : bp = p.boundary := by
     unfold boundaryOf at hb
     first

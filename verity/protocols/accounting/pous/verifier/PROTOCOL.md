@@ -172,7 +172,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 1. **Commit.** The server commits to `W` before any salt exists (`setup.commit`: tagged SHA-512 over the parameters and
    `W`, tag `verity-pous/w-commitment/v2`).
-2. **Salt.** The verifier samples the 24-byte salt after the commitment (`setup.draw_salt`, through `verity.commitments.randomness`
+2. **Salt.** The verifier samples the 24-byte salt after the commitment (`setup.sample_salt`, through `verity.commitments.randomness`
    from its own secret or a later beacon round).
 3. **Encode.** The server computes `C* = Enc(W, salt)` and sends it segment by segment. The verifier builds `vk` by
    `setup.verifier_setup`, one of two ways.
@@ -276,11 +276,13 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `p2-16448/v4` and `p2-16448/v2`, **experimental** (one module, two key expanders).
 - **`protocol.CapacityBound`** is what an audit at the scheme's parameters establishes, Lean's
   `Meets S .sequential D Q k ε`. It holds:
-  - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
+  - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`; where `claims` list `prf/sha-512`,
+    `2^eps_log2` is that claim's advantage, assumed at that figure (`Hash.Assumptions.Sha512Prf` takes it as a
+    parameter, which no model fixes), and `delta` is the theorem's whole bound;
   - `cliff`: the most rounds the structure tolerates at any `k`;
   - `segments`: how many segments of `W` the theorem is about;
   - `theorem`, and its open `hypotheses`;
-  - `claims`: ids in `verity.claims`' format.
+  - `claims`: claim ids (`verity.commitments.claim_ids`).
 
   Each `theorem` is the recorded proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
   the frozen point, the band's certificate is `Pous.SecurityProofs.BandMultiMeetsFamily`, with no hypothesis: k 111,
@@ -304,7 +306,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
       `verity.commitments.randomness.frame`), one for K and one for t's candidates, per `(segment, block)`, each 64-byte
       chunk one compression after the zero-padded prefix's midstate. This is the expander the spec's setup assumption
       P2-EXP-IO names (decision F4). The keys are the spec's vectors' given the spec's prefix; the prefix frames the
-      protocol's 24-byte salt (derived from the commitment to W by `setup.draw_salt`) where the spec frames the model
+      protocol's 24-byte salt (derived from the commitment to W by `setup.sample_salt`) where the spec frames the model
       commitment and a 32-byte setup salt. That goes with the rest of the spec's setup framing (its leaves and
       challenge derivation), which the generic protocol does not yet follow;
     - `p2-16448/v2`: ChaCha8 keyed by a 32-byte seed per segment (`SHAKE256("verity/pous/p2/seed/v1" ‖ tag_s)`), with
@@ -359,14 +361,15 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   `research=True` runs a refused audit anyway, except past the cliff, with the first certificate's refusals as gaps.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
-  `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
+  `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate, and its statement says
+  "assuming ε_prf ≤ 2^eps_log2 under prf/sha-512" where that term is the claim's assumed advantage. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
   other than the theorem's. The band's certificate covers every segment count from 1 to 2^64, and dense's one segment.
   `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
     either way;
-  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor` and `challenge_key` wrap the modules below; the honest
+  - `commit`, `sample_salt`, `encode`, `decode`, `decode_tensor` and `challenge_key` wrap the modules below; the honest
     responder is the prover's (`verity/protocols/accounting/pous/prover/responder.py`);
   - every coin comes from `verity.commitments.randomness` through `setup` and `audit`, and a scheme flips none.
 - **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
@@ -377,10 +380,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `segDom_inj` is the certificates' hypothesis.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
-- **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core
-  holds it: `ideal-permutation`, `perfect-isolation` (the help-accounted row: "The problem"), `sequential-step-floor`,
-  `feistel-indifferentiability` (refuted at the reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`,
-  `sms-m1-instantiation`, `seq-root`.
+- **Claims.** A certificate's claims are claim ids, which `CapacityBound` resolves in `verity.commitments.claim_ids`.
+  Those no lock carries are rows of the table with no Lean name: `ideal-permutation`, `perfect-isolation` (the
+  help-accounted row: "The problem"), `sequential-step-floor`, `feistel-indifferentiability` (refuted at the reference
+  `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
   only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
   by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
@@ -695,7 +698,7 @@ which was not measured. The node's load average was about 930 during the run, wh
   witness gives `(g/N)` a batch, `k/B` factors in place of `k`. Covering it needs a direct-product (multi-instance)
   compression bound. Until then the verdict accepts only the sequential wipe: 74,000 rounds took 2.6 s over loopback,
   against a fill of about a minute.
-- **The physical premises** are the game's shape, not yet tied to `Definitions.Accounting.Physical`, whose `Memory` and
+- **The physical premises** are the game's shape, not yet tied to `Definitions.Registration.Physical`, whose `Memory` and
   `Links` constraints are their form there.
 - **The inter-node stream** is not measured: between the nodes only TCP 22 passes. The fill time is the NIC's line rate
   (52 s) and its RDMA loopback (59 s), and the deadline needs the challenger's round trip to a server and the fastest
@@ -717,15 +720,15 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `dense` | `DenseParams(blocks_per_segment, m, segments)`, `POINT_64K`; `encode_segment` and `decode_segment` on bytes (reading each row's parents from the parameters, so the band shares them); `DENSE`, the two as a codec; `DenseChain` (the chain `H` of both), `reference`, `ideal`; the `*_prog` oracle programs |
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
 | `layout` | `TensorLayout.of(params, [(name, size)], align)`, `TensorLayout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
-| `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
+| `setup` | `commit` (streamed over segments), `sample_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `pous/device/wipe_challenger` | the streamed wipe's memory challenger: `WipeMemoryChallenger(secret, server, session, params, signer, log=, mark_source=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close()` (one signature, `SignedWipe`) and `coins()`; `serve`, one session over a socket, and `report`; the honest server is the prover's `wipe_store.Prover` |
-| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`, `SignedWipe` (which holds no egress count); `start_message(commitment)` and `end_message(signed)`, the two marks' messages, and `mark_of`, which reads a start mark's hex; `verdict` (its public output `Verdict.public`: the verdict alone), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; `egress_units`, the unit the wipe's check takes its egress in; the bound, `log2_error`, `retained_bits`, `challenges_for` |
+| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `sample_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`, `SignedWipe` (which holds no egress count); `start_message(commitment)` and `end_message(signed)`, the two marks' messages, and `mark_of`, which reads a start mark's hex; `verdict` (its public output `Verdict.public`: the verdict alone), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; `egress_units`, the unit the wipe's check takes its egress in; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `sample_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
@@ -791,7 +794,7 @@ A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` 
 `(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the fastest whole oracle call, the ideal-permutation model's unit
 and not an adversary's floor at the reference `Π₂` ("Main caveat"), and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
-`CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
+P3 is certified for 10 rounds per answer at the operating point, counted in `P` and `Π₂` calls:
 `Pous.SecurityProofs.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on
 `B(220, 16)`, both for Lean's `h_0`, not yet the code's ("P3 (research)"). The column-game certificate
 `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level (`Π₂` of the oldest
@@ -1100,9 +1103,9 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-device` (`verity.claims`): "the auditor's device runs its stated code, timing
-  included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
-  host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
+  `trusted-device` (Lean's `Verity.Assumptions.TrustedDevice` states its part about one run): "the auditor's device
+  runs its stated code, timing included, on a host the developer doesn't control, with its CPU isolated from other
+  tenants and a monotonic clock; the host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
   says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]`
   entries give the memory challenger (`memory_challenger.trusted_device`), never from the host names, which are the
   run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.

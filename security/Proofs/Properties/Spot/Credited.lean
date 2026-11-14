@@ -4,7 +4,7 @@ public import Proofs.Properties.Spot
 public import Proofs.Properties.Spot.Units
 public import Proofs.Core.QSort
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
-public import Proofs.Properties.Accounting.Remote.Sort
+public import Proofs.Properties.Compose.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.SpotFlock.SampleInts
@@ -55,7 +55,7 @@ theorem qsort_qsort (as : Array Nat) : (as.qsort (· < ·)).qsort (· < ·) = as
   have hs : ∀ bs : Array Nat, (bs.qsort (· < ·)).toList.Pairwise (· ≤ ·) := fun bs =>
     Verity.QSort.ByKey.qsort_sorted id bs
   exact Array.toList_inj.1 (List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => Nat.le_antisymm h1 h2) (hs _) (hs _)
-    (Properties.RemoteAudit.qsort_toList_perm _ _))
+    (Properties.Poub.qsort_toList_perm _ _))
 
 /-- Sorting naturals as integers is sorting them. -/
 theorem qsort_cast (as : Array Nat) :

@@ -12,7 +12,7 @@ import sys
 import threading
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.runtime.stream import Side
 from verity.protocols.accounting.poub.prover import audit_prover
@@ -145,5 +145,5 @@ def test_a_period_asks_its_caller_for_the_bandwidth_side(tmp_path) -> None:
         raise Handed
 
     with pytest.raises(Handed):
-        PP.leg(tmp_path, "n0", tmp_path / "out", side_of=side_of)
+        PP.subprotocol(tmp_path, "n0", tmp_path / "out", side_of=side_of)
     assert handed == [({}, "n0", "bandwidth", verifier_party.command(), None)]

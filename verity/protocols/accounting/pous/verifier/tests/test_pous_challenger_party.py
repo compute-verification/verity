@@ -311,7 +311,7 @@ def test_a_second_salt_for_an_audit_is_refused_and_the_first_kept(tmp_path) -> N
     first = CP.give_salt(salts, q)
     with pytest.raises(CP.Refusal, match="draws one salt an audit, and a retry never redraws it"):
         CP.give_salt(salts, q | {"commitment": (b"V" * 64).hex()})
-    assert salts.get(AUDIT) == (b"W" * 64, pous_setup.draw_salt(first, b"W" * 64))
+    assert salts.get(AUDIT) == (b"W" * 64, pous_setup.sample_salt(first, b"W" * 64))
 
 
 def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(tmp_path) -> None:
@@ -360,7 +360,7 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
     commitment = hashlib.sha512(b"W").digest()
     source = CS.salt(side, AUDIT, commitment)
     assert len(source) == CP.SOURCE_BYTES
-    assert mc.SaltLog(device / "salts").get(AUDIT) == (commitment, pous_setup.draw_salt(source, commitment))
+    assert mc.SaltLog(device / "salts").get(AUDIT) == (commitment, pous_setup.sample_salt(source, commitment))
     with pytest.raises(RuntimeError, match="the memory challenger on auditor-host drew no salt: the request's `audit` has its"):
         CS.salt(side, AUDIT, commitment)
     point = period.point_for(len(STORE), period.W, period.C0)
@@ -413,7 +413,7 @@ def test_a_period_asks_its_caller_for_the_pous_side(tmp_path) -> None:
         raise Handed
 
     with pytest.raises(Handed):
-        period_prover.leg(period_dir, "n0", tmp_path / "out", side_of=side_of, session=CR.session)
+        period_prover.subprotocol(period_dir, "n0", tmp_path / "out", side_of=side_of, session=CR.session)
     assert handed == [({}, "n0", "pous", CS.command(tmp_path / "periods" / "pous-challenger"), None)]
 
 
@@ -468,7 +468,7 @@ def _audit_request(salts: mc.SaltLog) -> dict:
     """A request naming `AUDIT`, whose salt the challenger logs in `salts`, that `designate` and `setup_of` admit."""
     _, point, published, _, _ = _in_process()
     source = CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()})
-    salt = pous_setup.draw_salt(source, published.commitment)
+    salt = pous_setup.sample_salt(source, published.commitment)
     logged = run.Setup(published.blocks, published.commitment, published.root, salt)
     return CS.request_of("n0", point, logged.root, audit=AUDIT, published=logged)
 

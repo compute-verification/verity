@@ -209,7 +209,7 @@ MEASURED: dict[str, str] = {
                 "planner's k",
     "POUW_COVERAGE": "the per-call noise run: the share of the block's static INT8 MACs its tiles cover (`range`)",
     "POUW_CERTIFIED_SHARE": "the per-call noise run: PoUW's certified share at POUW_RHO's ρ",
-    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditPeriod`",
+    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditMonitoringPeriod`",
     "PROVING_GPU_S": "the prove run: GPU-seconds of proving over every drawn unit's session",
     "BLOCK_GPU_S": "the block run: H200-seconds the block served",
     "PROVE_S_PER_AND": "the prove run, fitted by `spot.costfit`: GPU-seconds of proving per AND",
@@ -339,19 +339,19 @@ def _tiles(public: Mapping[str, Any] | None) -> str | None:
 def demo_a_verdict(record: Mapping[str, Any], failures: int = 0) -> str:
     """Demo A's composed verdict over `DEMO_A` on the record's block, counting its `failures` visible failures (module
     docstring)."""
-    legs, server = record["legs"], record["server"]
-    rejected = [p for p in DEMO_A if legs.get(p) and legs[p]["server"] == server
-                and legs[p]["answer"]["verdict"] in ("reject", "error")]
+    subprotocols, server = record["legs"], record["server"]
+    rejected = [p for p in DEMO_A if subprotocols.get(p) and subprotocols[p]["server"] == server
+                and subprotocols[p]["answer"]["verdict"] in ("reject", "error")]
     if rejected:
         return "reject (" + ", ".join(PROTOCOL_NAMES[p] for p in rejected) + ")"
     if failures:
         return f"fail ({failures:,} drawn unit{'s' * (failures != 1)} not proved: visible failures, no redraw)"
-    absent = [p for p in DEMO_A if not legs.get(p) or legs[p]["server"] != server]
+    absent = [p for p in DEMO_A if not subprotocols.get(p) or subprotocols[p]["server"] != server]
     if absent:
         return "pending: no " + ", no ".join(PROTOCOL_NAMES[p] for p in absent) + " on the block's server"
-    waiting = [p for p in DEMO_A if legs[p]["answer"]["verdict"] != "accept"]
+    waiting = [p for p in DEMO_A if subprotocols[p]["answer"]["verdict"] != "accept"]
     if waiting:
-        return "pending (" + ", ".join(f"{PROTOCOL_NAMES[p]}: {legs[p]['answer']['verdict']}" for p in waiting) + ")"
+        return "pending (" + ", ".join(f"{PROTOCOL_NAMES[p]}: {subprotocols[p]['answer']['verdict']}" for p in waiting) + ")"
     return "accept"
 
 
@@ -364,13 +364,13 @@ def from_record(record: Mapping[str, Any], label: str | None = None) -> dict[str
     def put(name: str, value: Any) -> None:
         out[name] = V(value, f"block record {record['run']} › {RECORD[name]}", label)
 
-    legs, server = record["legs"], record["server"]
+    subprotocols, server = record["legs"], record["server"]
     lo, hi = record["server_time"][0]["steps"]
     put("RECORD_RUN", record["run"])
     put("BLOCK_SERVER", server)
     put("BLOCK_STEPS", f"[{lo}, {hi})")
     put("DEMO_A_VERDICT", demo_a_verdict(record))
-    here = {p: legs[p] for p in DEMO_A if legs.get(p) and legs[p]["server"] == server}
+    here = {p: subprotocols[p] for p in DEMO_A if subprotocols.get(p) and subprotocols[p]["server"] == server}
     if i := here.get("integrity"):
         put("DRAWN_UNITS", i["quantity"]["drawn"])
         put("UNITS_TOTAL", i["quantity"]["of"])

@@ -1,11 +1,11 @@
 """The prover's side of one PoUS period on one node: the setup, the session with the memory challenger and the period's
-leg, each ending in the verifier's check (`verity.protocols.accounting.pous.verifier.period`).
+subprotocol, each ending in the verifier's check (`verity.protocols.accounting.pous.verifier.period`).
 
 `run(node, store, coins, signer=..., log=...)` plays every party in one process, in the protocol's order (`setup_store`
 is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and audited every period):
 
 1. the prover commits to `W`, the node's `store` padded with zeros to the point's payload (`setup.commit`);
-2. the verifier samples the salt after the commitment, from its live `coins` (`setup.draw_salt`);
+2. the verifier samples the salt after the commitment, from its live `coins` (`setup.sample_salt`);
 3. the prover encodes `C*` (`P2.encode_segment`), and the verifier decodes it and checks `Dec(C*)` against the commitment
    (`setup.verifier_key_from_encoding`, the public-encoder setup; in Lean `verity/pous/p2/v4/setup`), publishing its root;
 4. the memory challenger takes its table of `C*` (each block's `memory_challenger.block_digest`), samples its `k` indices
@@ -20,7 +20,7 @@ so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `enc
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
 a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
-`leg(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's
+`subprotocol(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' subprotocol for space: by default it sets the node's
 store up once at `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory
 challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
 at S1's deployed parameters (`memory_challenger.LMS`) that `onsite.device_key` makes once on that host; the
@@ -141,7 +141,7 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
         raise ValueError(f"the store is {len(store)} bytes, past the point's payload of {q.w_bytes}")
     w = bytes(store) + bytes(q.w_bytes - len(store))
     commitment = setup.commit(q, w)
-    salt = setup.draw_salt(coins, commitment)
+    salt = setup.sample_salt(coins, commitment)
     encoded = encode(q, salt, w, workers)
     root = setup.verifier_key_from_encoding(q, None, commitment, salt, encoded).root
     blocks = tuple(b for seg in encoded for b in seg)
@@ -242,10 +242,10 @@ def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
                 keep.add(i)
         elif e["session"] in sessions:
             keep.add(i)
-            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
-                if (o := current.get(b.get("for") or b.get("by"))) is not None:
-                    keep.add(o)
-                    held.add(o)
+            reserves = kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b)
+            if reserves and (o := current.get(b.get("for") or b.get("by"))) is not None:
+                keep.add(o)
+                held.add(o)
     opened = {e["session"] for e in entries if e["kind"] == "open"}
     if missing := sorted(set(sessions) - opened):
         raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "
@@ -325,9 +325,9 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
     return bytes(out)
 
 
-def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side],
+def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side],
         session: Session) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`). By default the
+    """Space's subprotocol of `benchmarks/all_protocols` (`subprotocol(period_dir, node, out, side_of=...) -> answer`). By default the
     node's store is set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records
     at its first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up
     to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh
@@ -390,5 +390,5 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "EncodedStore", "Prover", "Session", "audit", "cite", "cited", "encode", "honest", "leg",
+__all__ = ["LEDGER_SCHEMAS", "EncodedStore", "Prover", "Session", "audit", "cite", "cited", "encode", "honest", "subprotocol",
            "records", "run", "setup_store"]

@@ -12,19 +12,25 @@ the window's units, as `interface.Read`s, each in 16-bit leaves of the parameter
   (`written_once`). The return's row is O ids zero past the n served (`boundary_rows.egress_row`), and the combines'
   ids are it at every n: each step's select writes the next step's live bit, and the steps past n write zeros.
 
+A rank's window is built on them (`rank_window`, through `node_window_join.rank_window`'s ``reads``): the window declares
+no ingress, and the prompt's rows its read fills leave its free list.
+
 Each list is coalesced (`interface.coalesce`), so a read is a run of units, not a unit. Refused by name (`Unexpressible`):
 a window built without stand-ins, a prompt row that isn't one whole stand-in row of the prompt, and a token not one
 template's output field."""
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import numpy as np
 from verity.commitments.periods import interface as IF
 
+from . import node_window_join as NJ
 from .build import Unexpressible
+from .node_window import _GRAIN, STAND_IN, Lowering, NodeWindow, _Free
 from .node_window import PROMPT as PROGRAM_PROMPT
-from .node_window import STAND_IN, NodeWindow, _Free
+from .window_builder import Grain
 
 #: the class's Definition's parameter holding the prompt's ids and its return's field holding the served ids
 PROMPT, EGRESS = "b.prompt", "o0"
@@ -69,6 +75,11 @@ def boundary_reads(w: NodeWindow, rank: int) -> list[IF.Read]:
     return [*prompt_reads(w), *served_reads(w, rank)]
 
 
+def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN) -> NJ.Rank:
+    """Rank ``rank``'s window of Program ``fn`` built on its `boundary_reads` (`node_window_join.rank_window`'s ``reads``)."""
+    return NJ.rank_window(rank, fn, families, grain, reads=boundary_reads)
+
+
 def written_once(windows: Sequence[tuple[IF.Circuit, Sequence[IF.Read]]], leaves: int, param: str = EGRESS) -> None:
     """Refuse (ValueError) the windows' reads (each window's circuit and its reads) unless they write each of the
     return's ``leaves`` leaves of ``param`` exactly once: a read's row the words of its reader's output field from each
@@ -87,4 +98,4 @@ def written_once(windows: Sequence[tuple[IF.Circuit, Sequence[IF.Read]]], leaves
         raise ValueError(f"{param}: leaf {int(none[0])} written by none; each is written once")
 
 
-__all__ = ["EGRESS", "PROMPT", "boundary_reads", "prompt_reads", "served_reads", "written_once"]
+__all__ = ["EGRESS", "PROMPT", "boundary_reads", "prompt_reads", "rank_window", "served_reads", "written_once"]

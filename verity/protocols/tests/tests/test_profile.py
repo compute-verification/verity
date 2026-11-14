@@ -115,7 +115,7 @@ def test_the_bound_covers_every_admitted_integer_strategy(n_r, n_v, p, k, delta,
     assert bound <= n_r * max(utility(m) for m in range(1, n_v + 1)) + 1e-9
 
 
-def test_a_bernoulli_law_is_the_single_unit_case():
+def test_a_bernoulli_sampling_design_is_the_single_unit_case():
     rate = Fraction(1, 10)
     a = two_level(n_r=10_000, n_v=1, p=rate, k=1, delta=0.01)
     assert a.accept(1) == 1 - rate
@@ -129,14 +129,14 @@ def test_ill_formed_profiles_are_refused(kw):
         two_level(**{**dict(n_r=1, n_v=4, p=Fraction(1, 2), k=2, delta=0.01), **kw})
 
 
-def test_json_carries_the_law_and_the_exhaustive_facts():
+def test_json_carries_the_sampling_design_and_the_exhaustive_facts():
     assert TOY.to_json() == {"programs": [], "prescribed": [], "linked": False, "covered": [],
                              "levels": [{"name": "replay", "query": None, "size": 512, "draw": {"bernoulli": "1/2"}},
                                         {"name": "check", "query": None, "size": 4, "draw": {"subset": 2}}],
                              "delta": 0.01, "drawn": {}}
 
 
-def test_exhaustive_facts_travel_with_the_law():
+def test_exhaustive_facts_travel_with_the_sampling_design():
     p = two_level(8, 4, Fraction(1, 2), 2, 0.01, programs=["ab", "cd"], prescribed=["weights", "noise"], linked=True,
                   covered=["TcDot16_v1"], drawn={"replay": 3, "check": 6})
     assert p.programs == ("ab", "cd") and p.prescribed == {"weights", "noise"} and p.linked and p.covered == {"TcDot16_v1"}
@@ -264,7 +264,7 @@ def test_the_one_stage_audit_bounds(run):
 
 def _largest_admitted(n, k, delta) -> int:
     """The largest K with C(n - K, k)/C(n, k) >= delta, in exact rationals: `audit_count` (`Audit/OneStage.lean`)
-    bounds Pr[accept and at least K wrong] by that ratio (`Law.subset_miss`) plus the per-unit terms."""
+    bounds Pr[accept and at least K wrong] by that ratio (`SamplingDesign.subset_miss`) plus the per-unit terms."""
     d, top = Fraction(delta), comb(n, k)
     lo, hi = 0, n + 1
     while hi - lo > 1:
@@ -276,7 +276,7 @@ def _largest_admitted(n, k, delta) -> int:
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_the_count_bound_is_the_lean_curve(run):
     """For one level sampled Subset(k), `accept(K)` is the Lean count curve's sampling term C(n - K, k)/C(n, k)
-    (`Law.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
+    (`SamplingDesign.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
     n, k, delta, _, at_most = E2E[run]
     a = one_level(n, k, delta)
     top = comb(n, k)
@@ -316,7 +316,7 @@ def test_worst_case_is_the_convex_threshold_for_one_subset_level():
 
 def _exact_rhos(a: IntegrityProfile) -> list:
     """rho(0..n) in 60-digit Decimal, None for inf: -ln of `accept`'s exact ratio."""
-    _, n, p, k = a._law()
+    _, n, p, k = a._sampling_design()
     num, den, top = p.numerator, p.denominator, comb(n, k)
     with localcontext() as ctx:
         ctx.prec = 60
@@ -329,7 +329,7 @@ def _exact_lp(a: IntegrityProfile, utility, rhos=None) -> Decimal:
     """The relaxation's exact optimum, independently of the envelope: members times the best value, at mean risk at most
     t = ln(1/delta)/members, of a single point or of a chord between a point below t and one above (brute force), in
     60-digit Decimal."""
-    members, n, _, _ = a._law()
+    members, n, _, _ = a._sampling_design()
     rhos = _exact_rhos(a) if rhos is None else rhos
     with localcontext() as ctx:
         ctx.prec = 60
@@ -419,7 +419,7 @@ A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused
             "gemm8192": 587_776}
 
 
-def a4_law(ks: dict) -> Stratified:
+def a4_sampling_design(ks: dict) -> Stratified:
     return Stratified(tuple(Stratum(name, size, ks[name]) for name, size in A4_SIZES.items()))
 
 
@@ -488,7 +488,7 @@ def test_stratified_harm_bound_brackets_the_integer_optimum(law):
 
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_one_stratum_is_the_uniform_subset(run):
-    """One stratum sampled k of n is the one-stage audits' law: the same count bound as the profile and the Lean curve."""
+    """One stratum sampled k of n is the one-stage audits' sampling design: the same count bound as the profile and the Lean curve."""
     n, k, delta, _, at_most = E2E[run]
     law = Stratified.uniform(n, k)
     assert law.count_bound(delta) == at_most == _largest_admitted(n, k, delta)
@@ -496,7 +496,7 @@ def test_one_stratum_is_the_uniform_subset(run):
 
 
 def test_a4_uniform_leaves_the_norms_undrawn():
-    """A4 P6's law: at most 91,051 incorrect proof blocks at 2^-20 (the audit's own bound), but a template of 287 units that is
+    """A4 P6's sampling design: at most 91,051 incorrect proof blocks at 2^-20 (the audit's own bound), but a template of 287 units that is
     wrong in every unit escapes with probability 0.958."""
     law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     assert law.count_bound(2.0 ** -20) == 91_051
@@ -506,7 +506,7 @@ def test_a4_uniform_leaves_the_norms_undrawn():
 def test_a4_one_unit_floor_per_template():
     """Proportional allocation with one unit per template, at A4's proving cost: every template is exercised, a
     template wrong in every unit is always caught, and the count bound moves by 3%."""
-    law = a4_law({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    law = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
     assert law.k == 996 and law.count_bound(2.0 ** -20) == 93_892
     worst = law.worst_counts(93_892)
     assert worst["rms_triton"] == worst["rms_fused"] == worst["silu_mul"] == worst["rope"] == 0
@@ -517,12 +517,12 @@ def test_a4_one_unit_floor_per_template():
 
 def test_a4_proportional_to_output_bits():
     """Inclusion proportional to output bits at the same proving cost: the count bound rises to 11.4% of the units."""
-    law = a4_law({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
+    law = a4_sampling_design({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
     assert law.count_bound(2.0 ** -20) == 773_981
 
 
 def test_the_count_bound_is_the_unit_harm_bound_rounded_down():
-    law = a4_law({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    law = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
     for delta in (2.0 ** -10, 2.0 ** -20, 2.0 ** -40):
         K = law.count_bound(delta)
         assert K <= law.harm_bound({s.name: 1 for s in law.strata}, delta) < K + 1 + 1e-6 * K
@@ -689,7 +689,7 @@ def test_harm_bound_holds_where_the_search_cannot_close(rows, delta):
 
 
 @pytest.mark.parametrize("strata", [(), (Stratum("a", 3, 1), Stratum("a", 2, 1)), ("a",)])
-def test_ill_formed_stratified_laws_are_refused(strata):
+def test_ill_formed_stratified_sampling_designs_are_refused(strata):
     with pytest.raises(ValueError):
         Stratified(strata)
 
@@ -766,7 +766,7 @@ def test_ill_formed_stratified_profiles_are_refused(levels, sizes, draws):
         IntegrityProfile(levels, sizes, draws, 0.01)
 
 
-def test_stratified_json_is_the_profile_law():
+def test_stratified_json_is_the_profile_sampling_design():
     assert SMALL[0].to_json() == {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 2},
                                                                   {"name": "b", "size": 3, "k": 1},
                                                                   {"name": "c", "size": 3, "k": 0}]}

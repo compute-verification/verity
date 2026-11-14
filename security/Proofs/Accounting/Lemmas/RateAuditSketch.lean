@@ -1,14 +1,14 @@
 module
 
-public import Definitions.Accounting.Guarantees.RateAuditSketch
+public import Definitions.Poub.Guarantees.RateAuditSketch
 
 /-!
 # The sketch rate audit's honest device and its table: lemmas
 
-Statements beside `Definitions.Accounting.Guarantees.RateAuditSketch`'s guarantees that are none: devices accepted on
+Statements beside `Definitions.Poub.Guarantees.RateAuditSketch`'s guarantees that are none: devices accepted on
 every coin. The honest one shows `RateAuditSketch`'s event is not vacuous, and is no witness of it (a witness constructs
 its instance, and it quantifies over every digest and size). The table is a counterexample outside the verbatim class,
-which the claims registry cites for `rate-sketch-verbatim`, not a property of a function. Each is a `def G : Prop` under
+which the deployment premise `rate-sketch-verbatim` cites, not a property of a function. Each is a `def G : Prop` under
 the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and audited with the proofs: no
 record pins it.
 
@@ -40,7 +40,7 @@ def RateSketchHonest : Prop :=
 
 /-- **Outside the verbatim class the sketch rate audit charges a prover only for its digest: the table.** For every
 digest `dig σ` of a tile of `m` sectors that takes at most `2^d` values, there is a prover of `LayoutDevice`'s class
-(`Security/Definitions/Accounting/RateAuditSketchLayout.lean`: memory laid out before the signs as any function of
+(`Security/Definitions/Poub/RateAuditSketchLayout.lean`: memory laid out before the signs as any function of
 the store and read one bit at an address, nothing held on chip, a side link that carries the certified stream's `ρ`
 sectors and nothing else, nothing rebuilt) whose memory is `|Sig|·N·d` bits, the table `T[σ, t] = dig σ (tile t)` over
 every signs `σ` and tile `t`, and which, at every signs, oracle and data, commits every tile's right tag, so is

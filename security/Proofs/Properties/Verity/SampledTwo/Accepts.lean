@@ -34,7 +34,7 @@ public import Proofs.Core.Game.Tape
   * `CoinsCover`: every byte string of one coin's length, and of `stage` coins', is some coins' bytes, so the coins
     `coinOf` and `stageCoinsOf` choose are the run's bytes padded with zeros.
 
-Where the check accepts, the earlier-period signature hole of the leg stands: the device's history in the leg's game
+Where the check accepts, the earlier-period signature hole of the subprotocol stands: the device's history in the subprotocol's game
 holds one play's signatures, so these statements speak of an audit on a key and ledger made for it.
 -/
 

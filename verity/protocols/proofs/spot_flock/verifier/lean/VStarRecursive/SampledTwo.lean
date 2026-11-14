@@ -25,9 +25,9 @@ the form and runs this check. The package's root imports it, so the package's au
     members (one-stage v2's `proofs.members`, `OneStageZk.membersOf`), each member's circuit one a template names
     (`MEMBER_CIRCUIT`). The interior audit's parameters are the interior's with `proofs` its members
     (`OneStageZk.membersParamsOfJson`);
-  * the two stages are on two windows (`windowsApart`, `ONE_WINDOW`): the interior audit's window root is not the
+  * the two stages are on two windows (`executionPhasesApart`, `ONE_WINDOW`): the interior audit's window root is not the
     boundary registration's. Of the two windows the run of record lets an interior registration name
-    (`Run.interiorWindowOk`), the form reads only the one the verifier computes, a challenger session of the second
+    (`Run.interiorRunOk`), the form reads only the one the verifier computes, a challenger session of the second
     stage's own: on one window one session releases both stages' coins, and nothing the form checks holds the
     first stage's to be released before a coin tree's round is opened.
 * **commitment**: the boundary registration's record (`OneStage.commitmentOf`).
@@ -103,9 +103,17 @@ Its refusals carry `OneStage.check`'s step prefixes, so a reason names the same 
 -/
 module
 
-public import VStarRecursive.Protocol
+public import CoreProtocol.Blobs
+public import Spot.ChallengerInnerTrees
+public import Flock
+public import Flock.RecLinkPart
+public import Spot.OneStageZk
+public import VStarRecursive.Caller
 public import Spot.Run
-meta import VStarRecursive.Protocol
+meta import CoreProtocol.Blobs
+meta import Spot.ChallengerInnerTrees
+meta import Flock
+meta import Spot.OneStageZk
 meta import Spot.Run
 
 @[expose] public section
@@ -238,7 +246,7 @@ def paramsParsed (j : Json) : V Params := do
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
-/-- The refusal of an interior audit on the boundary registration's window (`windowsApart`). -/
+/-- The refusal of an interior audit on the boundary registration's window (`executionPhasesApart`). -/
 def ONE_WINDOW : String :=
   "the interior audit's window is the boundary registration's: the two-stage form reads a two-stage audit on two " ++
     "windows, each stage's coins a challenger session's of its own, and nothing it checks on one window holds the " ++
@@ -247,29 +255,29 @@ def ONE_WINDOW : String :=
 /-- **The two stages are on two windows** (`ONE_WINDOW`): the interior audit's window root `interior` is not the
 boundary registration's `boundary`. The run of record lets the interior registration's window be the boundary's or
 the one the verifier computes from the boundary registration's digest and its replay sample
-(`Run.interiorWindowOk`); the form refuses the first, and with it a boundary and an interior that name no window. -/
-def windowsApart (boundary interior : Option String) : V Unit :=
+(`Run.interiorRunOk`); the form refuses the first, and with it a boundary and an interior that name no window. -/
+def executionPhasesApart (boundary interior : Option String) : V Unit :=
   if boundary = interior then .error ONE_WINDOW else .ok ()
 
-#guard (windowsApart (some "aa") (some "bb")).toOption.isSome
-#guard (windowsApart (some "aa") none).toOption.isSome
-#guard (windowsApart none (some "bb")).toOption.isSome
-#guard (windowsApart (some "aa") (some "aa")).toOption.isNone
-#guard (windowsApart none none).toOption.isNone
+#guard (executionPhasesApart (some "aa") (some "bb")).toOption.isSome
+#guard (executionPhasesApart (some "aa") none).toOption.isSome
+#guard (executionPhasesApart none (some "bb")).toOption.isSome
+#guard (executionPhasesApart (some "aa") (some "aa")).toOption.isNone
+#guard (executionPhasesApart none none).toOption.isNone
 
 /-- The parameters (module docstring, **params**): `paramsParsed`'s, the boundary registration's window and the
-interior audit's held apart (`windowsApart`). -/
+interior audit's held apart (`executionPhasesApart`). -/
 def paramsOfJson (j : Json) : V Params :=
   match paramsParsed j with
   | .error err => .error err
   | .ok p =>
-    match windowsApart p.boundary.verifier.windowRoot p.audit.base.verifier.windowRoot with
+    match executionPhasesApart p.boundary.verifier.windowRoot p.audit.base.verifier.windowRoot with
     | .error err => .error err
     | .ok () => .ok p
 
-theorem windowsApart_ok {boundary interior : Option String} (h : windowsApart boundary interior = .ok ()) :
+theorem executionPhasesApart_ok {boundary interior : Option String} (h : executionPhasesApart boundary interior = .ok ()) :
     boundary ≠ interior := by
-  unfold windowsApart at h
+  unfold executionPhasesApart at h
   split at h
   · cases h
   · assumption
@@ -285,7 +293,7 @@ theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     · cases h
     · next hw =>
       cases h
-      exact ⟨hq, windowsApart_ok hw⟩
+      exact ⟨hq, executionPhasesApart_ok hw⟩
 
 def FIRST_COINS_NULL : String :=
   "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins"
@@ -470,7 +478,7 @@ theorem stmtsSessions_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmt
   · have h' := Flock.RecCompose.forM_ok h t (List.mem_range.2 ht)
     cases hc : stmtOwnAt p e bs t with
     | none => rw [hc] at h'; cases h'
-    | some j => exact ⟨j, hc⟩
+    | some j => exact ⟨j, rfl⟩
 
 #guard (jsonOfBytes "{\"a\":1}".toUTF8).isSome
 #guard (jsonOfBytes "{".toUTF8).isNone
@@ -743,7 +751,8 @@ def secondChecked (v : Docket.Verifier) (delta : Core.Ratio) (c : OneStage.Commi
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf m prof delta,
-        perTemplate := (Bound.strataOf m prof).map (·.map fun s => (s.name, Bound.stratumBound s delta)) }
+        perTemplate := (Bound.strataOf m prof).map (·.map fun s => (s.name, Bound.stratumBound s delta)),
+        complete := Record.allRan e.verdicts }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := m, draw := some prof }],
         delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -885,7 +894,7 @@ theorem prepare_sessions {form : Bool} {p : Params} {c : OneStage.Commitment} {�
   · cases h
   · split at h
     · cases h
-    · next hw _ => exact hw
+    · exact ‹stmtsSessions p e bs = .ok ()›
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/

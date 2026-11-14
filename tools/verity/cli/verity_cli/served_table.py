@@ -55,6 +55,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
@@ -85,7 +86,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 
 # --- what each component and the workload declare -------------------------------------------------------------------
 
-def _law(law: str, params: Mapping[str, Any]) -> None:
+def _design(law: str, params: Mapping[str, Any]) -> None:
     """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(law)
@@ -147,7 +148,7 @@ def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ..
 _P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
+              needs=frozenset({"windows"}), law=_design, default_sampling_design="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
@@ -406,13 +407,19 @@ POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS"
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"SERVE_ARGS": ID_FORM,
             "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -462,8 +469,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
-                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
                                  "warden in front of serve-openai before the requests"),
@@ -643,7 +651,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
-#: what an unwritten registration raises with: the goal that brings it
+#: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
+#: that brings it
 REGISTRATION_GOAL = "memory-accounting/architecture-on-branch"
 
 
@@ -652,15 +661,17 @@ def registration(cfg: Mapping[str, Any], state: Path) -> str:
     registers the configuration's hash (the item ``{"kind": "configuration", "digest": K.digest(cfg)}``), before any
     party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
     one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
-    another hash, or none, is refused (``registration``). The log's items are θ and the builder alone
-    (`verity.protocols.accounting.registration.verifier.registration.item_of`, `Core.Registration`): no item names a
-    configuration yet, so it raises `NotImplementedError` (`REGISTRATION_GOAL`), and the line's ``registration`` is
-    ``None``."""
+    another hash, or none, is refused (``registration``). The item is the registration log's own
+    (`verity.protocols.accounting.registration.verifier.registration.configuration`), whose writer raises
+    `NotImplementedError` (``proofs/architecture-on-branch``) while the log has no coin to order it before; once it
+    returns, the run's log holding it beside θ and the builder isn't written either (`REGISTRATION_GOAL`). Until then
+    the line's ``registration`` is ``None``."""
     f, digest = state / "run.json", K.digest(cfg)
     run = json.loads(f.read_text()) if f.is_file() else {}
     if run.get("configuration") != digest:
         raise Refused("registration", f"{f} names configuration {str(run.get('configuration'))[:16]}…, not this "
                                       f"configuration's {digest[:16]}…: the registration names the run's own hash")
+    RL.configuration(digest)
     raise NotImplementedError(REGISTRATION_GOAL)
 
 

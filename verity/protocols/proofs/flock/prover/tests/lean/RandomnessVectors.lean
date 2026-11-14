@@ -8,7 +8,7 @@ Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness 
   `streamWide`, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
-* `window`: `PlanDraw.executionPhase` on small windows: the draw of each, and a repeated call index refused.
+* `window`: `PlanDraw.executionPhase` on small execution phases: the draw of each, and a repeated call index refused.
 
 Regenerate with `tests/lean/generate.sh`.
 -/
@@ -146,13 +146,13 @@ def extra : Json := .arr <| keys.toArray.map fun (src, dom, ctx) =>
 def stratumJson (s : Stratum) : Json :=
   Json.mkObj [("name", .str s.name), ("units", .arr (s.units.toArray.map num)), ("k", num s.k)]
 
-/-- Small windows: two calls, and the same with a call index repeated. -/
-def windows : List (List Call) :=
+/-- Small execution phases: two calls, and the same with a call index repeated. -/
+def executionPhases : List (List Call) :=
   [[⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2, 3, 4, 5], 2⟩, ⟨"NcpDigest_v1", [6, 7], 1⟩]⟩,
     ⟨[.int 1, .int 5], [⟨"NcpTile_v1", [8, 9, 10, 11], 2⟩, ⟨"NcpDigest_v1", [12], 1⟩]⟩],
    [⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2], 1⟩]⟩, ⟨[.int 0, .int 5], [⟨"NcpTile_v1", [3, 4, 5], 1⟩]⟩]]
 
-def windowVectors : Json := .arr <| windows.toArray.map fun calls =>
+def executionPhaseVectors : Json := .arr <| executionPhases.toArray.map fun calls =>
   let (src, dom, ctx) := keys.head!
   Json.mkObj [("source", .str (hexOf src)), ("domain", .str dom),
     ("context", Json.mkObj (ctx.map fun (k, v) => (k, partToJson v))),
@@ -164,4 +164,4 @@ def windowVectors : Json := .arr <| windows.toArray.map fun calls =>
 def main (args : List String) : IO Unit := do
   let .ok j := Json.parse (← IO.FS.readFile args[0]!) | throw (IO.userError "vectors.json is not JSON")
   IO.println (Json.mkObj [("source", .str "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh"),
-    ("kat", kat j), ("extra", extra), ("window", windowVectors)]).compress
+    ("kat", kat j), ("extra", extra), ("window", executionPhaseVectors)]).compress

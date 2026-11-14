@@ -147,7 +147,7 @@ theorem member_step_accepts {nJ : ℕ} (m : Member nJ) (t : ℕ) {a : StepAt} (h
 /-! ## The members' steps -/
 
 /-- A member of Flock's window at `t` calls is a member of the window at that place, as Flock's (`Member.toV5`). -/
-theorem Window.joint_getElem? (W : Window) (t i : ℕ) {m : Flock.Guarantees.MemberV5 ByteArray W.nJ}
+theorem ExecutionPhase.joint_getElem? (W : ExecutionPhase) (t i : ℕ) {m : Flock.Guarantees.MemberV5 ByteArray W.nJ}
     (h : (W.joint t).ms[i]? = some m) : ∃ m' : Member W.nJ, W.ms[i]? = some m' ∧ m = m'.toV5 t := by
   have h' : (W.ms.map fun m => m.toV5 t)[i]? = some m := h
   rw [List.getElem?_map] at h'
@@ -164,20 +164,20 @@ of each member `m` with a proof block in the sample, under `MemberSteps.step`'s 
 and the position past the stop after its session's end, a session's verdict (`SessionVerdict`) at a statement that is
 `m`'s (`StatesMember`), and its outcome's moves those the verdict's record decodes to with the verdict's proof files
 (`MemberMovesOf`). The acceptance of what the member's writer writes is `member_step_accepts`. -/
-theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
-    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
+theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
+    (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
       Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hstart : ∀ ω r, I ω r 0 (Pos.root (roundCuts V θ F c rd) (M.start ω)))
     (hstep : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Member W.nJ)
       (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
-      (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) (m.toV5 t))
+      (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) (m.toV5 t))
         (memberPts (m.toV5 t))),
       W.ms[i]? = some m → ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty →
       I ω r i p → p.Inv (roundCuts V θ F c rd) →
       StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
-      MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i (m.toV5 t) p q out →
+      MemberReach D M BL B ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) i (m.toV5 t) p q out →
       q.Past r → r.Inv (roundCuts V θ F c rd) →
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
         P (CoinTape.run (V.game θ F c) σ r.tape) →
@@ -185,7 +185,7 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
         (s : _root_.Spot.OneStageZk.RunFiles) (record : String) (spec : Flock.SessionSpec)
         (tabs : Array Flock.Setup) (rest : Json × Json) (proofs : Array ByteArray) (units : Array ℕ),
         StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
-          MemberMovesOf m t ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) record proofs out)
+          MemberMovesOf m t ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) record proofs out)
     (hskip : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Member W.nJ)
       (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
       W.ms[i]? = some m → ¬ ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty → I ω r i p →
@@ -198,12 +198,12 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
     MemberSteps V θ F c k P W t rd σ D M BL B I where
   start := hstart
   step ω i mv p q r out hm hd hI hpi hS hmr hqr hri hacc := by
-    obtain ⟨m, hm', rfl⟩ := Window.joint_getElem? (W.extend M.widening) t i hm
+    obtain ⟨m, hm', rfl⟩ := ExecutionPhase.joint_getElem? (W.extend M.widening) t i hm
     obtain ⟨hI', a, bs, keys, s, record, spec, tabs, rest, proofs, units, hst, hv, hmo⟩ :=
       hstep ω i m p q r out hm' hd hI hpi hS hmr hqr hri hacc
     exact ⟨hI', member_step_accepts m t hst hv hmo⟩
   skip ω i mv p r hm hd hI := by
-    obtain ⟨m, hm', rfl⟩ := Window.joint_getElem? (W.extend M.widening) t i hm
+    obtain ⟨m, hm', rfl⟩ := ExecutionPhase.joint_getElem? (W.extend M.widening) t i hm
     exact hskip ω i m p r hm' hd hI
   ends := hends
 

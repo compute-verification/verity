@@ -71,7 +71,7 @@ same sessions, which no second session replaces. With neither, one process does 
    the prover. The session's case and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``,
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
-   piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``remote-audit-p2-protocol``) the Lean answers the
+   piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``poub-p2-protocol``) the Lean answers the
    case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
@@ -658,7 +658,8 @@ def _address(text: str) -> tuple[str, int]:
 
 
 def line(answer: Mapping[str, Any]) -> str:
-    pub = answer.get("public") or {}
+    # said of the certified bits until an answer names its tier and leaf
+    pub = f"{answer.get('public') or {}} through the device model, not the answer"
     w = (answer.get("profile") or {}).get("weights") or {}
     if answer["verdict"] == "accept":
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
@@ -703,7 +704,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-deadline-s", type=float, default=HB.DEADLINE_S)
     bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
-    bw.add_argument("--bw-case-exe", help="remote-audit-p2-protocol, which answers the case (else "
+    bw.add_argument("--bw-case-exe", help="poub-p2-protocol, which answers the case (else "
                                           "p2_case.answer's accept is undecided)")
     bw.add_argument("--no-bandwidth", action="store_true", help="no bandwidth session")
     a = ap.parse_args(argv)

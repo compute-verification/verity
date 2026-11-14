@@ -77,9 +77,9 @@ trace's step before pass n is recorded as step n − 1, so pass n reads the stor
                                                         serving up to 4 steps past the passes, each slot reused 5 steps
                                                         after its free
     python prover.py ... --cpu 1024 --model-dir DIR --engines 2 --arena-blocks 512
-                                                        the store a model in DIR lays out (`remote_bandwidth.store`)
+                                                        the store a model in DIR lays out (`poub.store`)
 
-The payload's salts are under the key the verifier sends first (`payload-key`, `remote_bandwidth.store`).
+The payload's salts are under the key the verifier sends first (`payload-key`, `poub.store`).
 """
 from __future__ import annotations
 
@@ -461,7 +461,7 @@ class CpuBackend:
     a block freed before its coin arrived (its pass dropped at a boundary) is never put over serving's later write.
     `misread(ticket)` is the pass's blocks whose slot held other bytes than the block when it read.
 
-    With `store` (a `remote_bandwidth.store.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
+    With `store` (a `poub.store.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
     the hello carries its layout. The payload salts are the verifier's key's (`set_payload_key`), or random ones sampled
     from `rng` until it is given one."""
 
@@ -622,7 +622,7 @@ class ProverSide:
             try:
                 # Opening work rereads the store and reconstructs receipt subtrees.  Keep it off the timed pass phase:
                 # the verifier may check after all roots are final, and this also makes the measured pass span contain
-                # passes alone rather than a prover-local choice of when to prepare the already-drawn openings.
+                # passes alone rather than a prover-local choice of when to prepare the already-sampled openings.
                 if self.defer_openings:
                     self.open_enabled.wait()
                 self._open_window(t, draws)
@@ -1062,7 +1062,7 @@ def main() -> int:
                          "device.py's options")
     ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
-                    help="with --cpu: the store is the checkpoint in DIR's (`remote_bandwidth.store.Store`): --engines arenas of "
+                    help="with --cpu: the store is the checkpoint in DIR's (`poub.store.Store`): --engines arenas of "
                          "--arena-blocks, then the rest of the BLOCKS zero host filler")
     ap.add_argument("--engines", type=int, default=1, help="with --model-dir: the store's arenas, an engine's each")
     ap.add_argument("--arena-blocks", type=int, help="with --model-dir: an arena's blocks (an engine's --arena-gib × "

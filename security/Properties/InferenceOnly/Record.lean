@@ -46,14 +46,14 @@ holds a reader row to its writer's words, an output row's bits rounded up, so a 
 not whole words has bits past its writer's and lays out no circuit.
 
 **The record's text.** A record lays out a circuit only where the check reads it as its text states it (`Served`),
-by the readers a check of a circuit record is built on (`InferenceOnlyCheck.RecordText`), so that the check and these
+by the readers a check of a circuit record is built on (`Spot.RecordText`), so that the check and these
 statements read one definition. The text parses, and the wiring's cuts and wires are its wiring's
-(`InferenceOnlyCheck.RecordText.wiring`, what `Spot.Wires.Wiring.ofJson` reads of its cuts and wires). The text states no
+(`Spot.RecordText.wiring`, what `Spot.Wires.Wiring.ofJson` reads of its cuts and wires). The text states no
 template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
 order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). The slots are the ones the
-text's inference blocks give each unit (`InferenceOnlyCheck.RecordText.slot`), and every row the check holds is one the text
+text's inference blocks give each unit (`Spot.RecordText.slot`), and every row the check holds is one the text
 declares, for the reason it declares: a registered read, a table read or an opening
-(`InferenceOnlyCheck.RecordText.declared`). Both readers take the Program beside the text. So the blocks are the text's, and
+(`Spot.RecordText.declared`). Both readers take the Program beside the text. So the blocks are the text's, and
 θ lies within what the text declares: the check holds no row the text does not declare. It may hold fewer, and then
 counts more bits as fresh.
 
@@ -82,7 +82,7 @@ that pin, and the reader has the reference's roles, up to such a collision. It f
 
 What these do not say: that every row the text declares is held; which leaves of its parameter a declared read
 takes; that the rows and outputs of the templates the text's readers lay the units out by
-(`InferenceOnlyCheck.RecordText.templatesOf`) are the wiring's (`Templates`), two definitions held to one Program with no lemma
+(`Spot.RecordText.templatesOf`) are the wiring's (`Templates`), two definitions held to one Program with no lemma
 between them, though the two number a template's units alike (`unitAt_iff`, `Proofs.Properties.InferenceOnly.Record`);
 anything of SPOT's audit, which reads neither reader; that a unit's verdict output is 1 (a statement about the
 committed values, the proof block's); that equal roots hold equal rows, or that the data the log's first record
@@ -97,7 +97,7 @@ open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node fieldsOf)
 open Flock.TemplateQuery (TRange)
 open InferenceOnlyCheck.Theta (getD strAt digest lastWith)
-open InferenceOnlyCheck.RecordText (Row Held outerOf)
+open Spot.RecordText (Row Held outerOf)
 open Spot.Bits (bitsOf)
 open InferenceOnlyCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
@@ -131,9 +131,10 @@ structure Summary where
 /-- The functions a check of a circuit record exports. `read j tr` reads the instance `j` and the trusted input `tr`
 (the registration log and the digest of the run's own record), or refuses. Of a record it has read: `inst` is the
 instance's fields, `wiring` the record's wires as `Spot.Wires.check` takes them, `slot tid u` the block of unit `u` of
-template `tid`, `held r` whether row `r` counts as θ and why, and `summarize` the summary. `rate Γ num den s` is the
-rate rule on a summary, `none` where it complies, and `layout d` the roles of a reader whose Definition is `d`, none
-where it has no reader's layout. -/
+template `tid`, `held r` whether row `r` counts as θ and why, `openedRow r` the output that returns the row opened
+where an opening fills row `r` and declares it (its role `row`), none otherwise, and `summarize` the summary.
+`rate Γ num den s` is the rate rule on a summary, `none` where it complies, and `layout d` the roles of a reader whose
+Definition is `d`, none where it has no reader's layout. -/
 structure Form where
   Case : Type
   read : Json → Json → Except String Case
@@ -141,6 +142,7 @@ structure Form where
   wiring : Case → Spot.Wires.Wiring
   slot : Case → String → ℕ → Option ℕ
   held : Case → Row → Option Held
+  openedRow : Case → Row → Option String
   summarize : Case → Summary
   rate : ℕ → ℕ → ℕ → Summary → Option String
   layout : Defn → Option Roles
@@ -192,7 +194,7 @@ def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l 
 `t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
 rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
 words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. It does not ask that a parameter or an
-output has a bit, which `InferenceOnlyCheck.RecordText.templatesOf` asks of every template it gives. -/
+output has a bit, which `Spot.RecordText.templatesOf` asks of every template it gives. -/
 def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
   (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
     (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
@@ -274,21 +276,21 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
 
 /-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes and the record's text parses. The
 check reads the record as the text states it: the wiring's cuts and wires are its wiring's
-(`InferenceOnlyCheck.RecordText.wiring`); the slots are the ones its inference blocks give each unit
-(`InferenceOnlyCheck.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
-(`InferenceOnlyCheck.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
+(`Spot.RecordText.wiring`); the slots are the ones its inference blocks give each unit
+(`Spot.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
+(`Spot.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
 are its own input gates, every wire lands whole, and every bit of a wired row is its writer's; no row the check
 holds has a writer; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
 
 No clause asks that the text names its Program: where a gate is computed or a row is held it does, since the gate's
 unit has a slot and the row a declaration and the text's readers give neither unless the text names the Program by
-its SHA-512 (`InferenceOnlyCheck.RecordText.templatesOf`), and where neither is, the circuit has nothing to count.
+its SHA-512 (`Spot.RecordText.templatesOf`), and where neither is, the circuit has nothing to count.
 
 Not tied to the text: that the check holds every row the text declares (one that holds fewer counts more bits as
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
 declared read takes; and that the rows and outputs of the templates the two readers lay the units out by
-(`InferenceOnlyCheck.RecordText.templatesOf`) are this wiring's (`Templates`), two definitions held to one Program with no
+(`Spot.RecordText.templatesOf`) are this wiring's (`Templates`), two definitions held to one Program with no
 lemma between them. The two number a template's units alike: where the text's reader gives its templates, a template
 has one root node, its units are that node's, and its unit `u` is the node's member `u` (`unitAt_iff`,
 `Proofs.Properties.InferenceOnly.Record`). SPOT's audit reads neither reader. -/
@@ -296,9 +298,9 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
   ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
       (at_ : Fin d.D.N → ℕ),
     Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
-    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ InferenceOnlyCheck.RecordText.wiring doc = .ok W ∧
-    (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ F.slot c = InferenceOnlyCheck.RecordText.slot P doc ∧
-    (∀ r h, F.held c r = some h → InferenceOnlyCheck.RecordText.declared P doc r = some h.declared) ∧
+    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.RecordText.wiring doc = .ok W ∧
+    (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ F.slot c = Spot.RecordText.slot P doc ∧
+    (∀ r h, F.held c r = some h → Spot.RecordText.declared P doc r = some h.declared) ∧
     Spot.Wires.check (F.wiring c) = .ok S ∧
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧

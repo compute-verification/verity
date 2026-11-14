@@ -55,7 +55,7 @@ def CarriedW {Ω : Type} (q : P2.Params) (W : ByteArray) (r : Run Ω q.blocks fu
 
 open Classical in
 /-- The blocks of `C*` the run holds that do not decode to their slice of `W`. -/
-noncomputable def wrong {Ω : Type} (q : P2.Params) (salt W : ByteArray)
+noncomputable def incorrect {Ω : Type} (q : P2.Params) (salt W : ByteArray)
     (r : Run Ω q.blocks fun _ => ByteArray × ByteArray) (ω : Ω) : Finset (Fin q.blocks) :=
   Finset.univ.filter fun u => ¬ BlockOk q salt u ((r.ports u ω).1, slice q W u.val)
 
@@ -73,7 +73,7 @@ def SetupGives : Prop :=
     Gives μ r right (q.blocks / 100 + 1) ε →
     right ≤ BlockOk q salt →
     CarriedW q W r →
-    prPMF μ (fun ω => r.accepts ω ∧ q.blocks / 100 + 1 ≤ (wrong q salt W r ω).card ∧
+    prPMF μ (fun ω => r.accepts ω ∧ q.blocks / 100 + 1 ≤ (incorrect q salt W r ω).card ∧
         ¬ Hash.CollisionIn Verity.sha512 (r.hashInputs ω)) ≤ ε
 
 /-- **`SetupGives`' conclusion fails without its hypotheses**: at the registered point, a run that always accepts, holds
@@ -83,7 +83,7 @@ def SetupGivesNontrivial : Prop :=
   ∃ (salt W : ByteArray) (v : Fin PousCheck.P2.Params.deployed.blocks → ByteArray × ByteArray),
     ¬ prPMF (PMF.pure ()) (fun ω => (MemoryChallenger.Properties.InProofs.constRun v).accepts ω ∧
         PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤
-          (wrong PousCheck.P2.Params.deployed salt W (MemoryChallenger.Properties.InProofs.constRun v) ω).card ∧
+          (incorrect PousCheck.P2.Params.deployed salt W (MemoryChallenger.Properties.InProofs.constRun v) ω).card ∧
         ¬ Hash.CollisionIn Verity.sha512 ((MemoryChallenger.Properties.InProofs.constRun v).hashInputs ω)) ≤ 0
 
 end PousCheck.Properties.InProofs
@@ -105,24 +105,24 @@ theorem setupGives : SetupGives := by
   refine le_trans (prPMF_mono μ fun ω hω => ⟨hω.1, ?_⟩) (Gives.mono h g)
   obtain ⟨ha, hk, hn⟩ := hω
   have hs := (hc ω ha).resolve_right hn
-  have hw : wrong q salt W r ω = r.failing (BlockOk q salt) ω := by
+  have hw : incorrect q salt W r ω = r.failing (BlockOk q salt) ω := by
     ext u
     have hp : r.ports u ω = ((r.ports u ω).1, slice q W u.val) := Prod.ext rfl (hs u)
-    simp only [wrong, Run.failing, Finset.mem_filter, Finset.mem_univ, true_and]
+    simp only [incorrect, Run.failing, Finset.mem_filter, Finset.mem_univ, true_and]
     rw [← hp]
   rw [← hw]
   exact hk
 
 theorem setupGives_nontrivial : SetupGivesNontrivial := by
   refine ⟨.empty, .empty, fun _ => (.empty, .empty), fun h => ?_⟩
-  have hw : wrong PousCheck.P2.Params.deployed .empty .empty
+  have hw : incorrect PousCheck.P2.Params.deployed .empty .empty
       (MemoryChallenger.Properties.InProofs.constRun fun _ => (.empty, .empty)) () = Finset.univ := by
     ext u
-    simp [wrong, BlockOk, BlockDecodes, MemoryChallenger.Properties.InProofs.constRun, PousCheck.P2.Params.blockBytes,
+    simp [incorrect, BlockOk, BlockDecodes, MemoryChallenger.Properties.InProofs.constRun, PousCheck.P2.Params.blockBytes,
       PousCheck.P2.Params.deployed, PousCheck.W_BITS]
   have hpos : 0 < PousCheck.P2.Params.deployed.blocks := by
     simp [PousCheck.P2.Params.blocks, PousCheck.P2.Params.deployed]
-  have hc : PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (wrong PousCheck.P2.Params.deployed .empty .empty
+  have hc : PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (incorrect PousCheck.P2.Params.deployed .empty .empty
       (MemoryChallenger.Properties.InProofs.constRun fun _ => (.empty, .empty)) ()).card := by
     rw [hw, Finset.card_univ, Fintype.card_fin]
     exact Nat.div_lt_self hpos (by norm_num)

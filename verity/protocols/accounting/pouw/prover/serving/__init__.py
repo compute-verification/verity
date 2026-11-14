@@ -11,8 +11,9 @@ A workload reaches it only through the names this module exports. Per call there
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
 
 ``site`` is the linear's ordinal in the forward pass (its weight id), the same at every forward. The buffers are the
-caller's own (torch tensors on its device), so this module loads no torch; every other name loads its module when first
-read. A run closes with ``finish()``; its ``commits`` and ``details`` are what it publishes.
+caller's own, on its device, and this package names no tensor library: the workload hands in how its buffers are read,
+written and allocated (`use_tensors`, `tensors.Tensors`) and H1's device half (`use_h1_device`, `tensors.H1Device`), and
+every other name loads its module when first read. A run closes with ``finish()``; its ``commits`` and ``details`` are what it publishes.
 
 To manage a window: `in_process_coins` (coins held in this process, which credit nothing), `reserve_salt` and `gate_of`
 (a salt session at infra's gate), `PearlCKernel` (Pearl-C's kernel, loaded), `ready_verifier` (the Lean verifier's
@@ -41,9 +42,11 @@ _LAZY = {
     "quantize": (f"{_SERVING}.operands", "quantize"),
     "host_array": (f"{_SERVING}.ncp", "host"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
+    "use_tensors": (f"{_SERVING}.tensors", "use"),
+    "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
     "LeadRun": (f"{_SERVING}.lead", "LeadRun"),
-    "PearlCDeviceRun": (f"{_SERVING}.pearl_c", "PearlCDeviceRun"),
+    "PearlCDeviceRun": (f"{_SERVING}.pearl_c.run_device", "PearlCDeviceRun"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
     "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
@@ -59,7 +62,7 @@ _LAZY = {
     "CoinCommitment": (f"{_POUW}.verifier.coins", "CoinCommitment"),
     "CoinWindow": (f"{_SERVING}.h1.window", "Window"),
     "CommitTap": (f"{_SERVING}.h1.commit", "CommitTap"),
-    "CreditTrace": (f"{_SERVING}.credit_gate", "Trace"),
+    "CreditTrace": (f"{_SERVING}.credit_gate", "trace"),
     "DomainError": (f"{_POUW}.verifier.protocol", "DomainError"),
     "Epoch": (f"{_POUW}.verifier.audit", "Epoch"),
     "H1Call": (f"{_SERVING}.h1", "Call"),
@@ -103,7 +106,7 @@ _LAZY = {
     "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "new_salt_key"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
     "pearl_c_scheme": (f"{_SERVING}.pearl_c", "scheme_of"),
-    "pearl_c_weight_roots": (f"{_SERVING}.pearl_c", "weight_roots"),
+    "pearl_c_weight_roots": (f"{_SERVING}.pearl_c.run_device", "weight_roots"),
     "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
     "period_setting": (f"{_SERVING}.h1.window", "period_setting"),
     "program_salt": (f"{_SERVING}.h1", "program_salt"),

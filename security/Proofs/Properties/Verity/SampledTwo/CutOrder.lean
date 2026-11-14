@@ -317,7 +317,7 @@ holds an open of the first window, an `end` of that open's session, an open of t
 that open's session, the end's `seq` below the reserve's. -/
 def OrderShown (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) →
-    ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+    ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       ∃ o₁ ∈ Properties.Pouw.LiveSalt.entries (Spot.getD e.interior.base.coins "ledger"),
       ∃ e₁ ∈ Properties.Pouw.LiveSalt.entries (Spot.getD e.interior.base.coins "ledger"),
       ∃ rv ∈ Properties.Pouw.LiveSalt.entries (Spot.getD e.interior.base.coins "ledger"),
@@ -380,8 +380,8 @@ theorem printsOn_nil (w : String) (log : List Release) : PrintsOn ⟨fun _ => []
     | exact absurd hr List.not_mem_nil
 
 theorem printsTwo_onlyAt {o : Exchange} {h : History} {θ : ByteArray}
-    (hP : ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo h w₁ w₂ o.log) :
-    ∀ o' : Exchange, o'.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) →
+    (hP : ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo h w₁ w₂ o.log) :
+    ∀ o' : Exchange, o'.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) →
       PrintsTwo (onlyAt o h o') w₁ w₂ o'.log := by
   intro o' _ w₁ w₂ hw
   by_cases ho : o' = o
@@ -404,7 +404,7 @@ play where the check read no log of both sessions, or read one that isn't the de
 two sessions' records, or an opening collision. `CutRead.reads_or_break` and `CutHeld.binds_of_accepts`, at the
 histories that are the device's at this play and hold nothing at every other (`onlyAt`). -/
 theorem binds_at (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads θ) {o : Exchange} (hθ : o.params = θ)
-    (ha : Accepts o.sent) (hP : ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
+    (ha : Accepts o.sent) (hP : ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     (hg : ¬ ReadIsDevice o) :
     (∃ x ∈ records o.sent, keyOf θ = some x.1.key ∧ Break (dev o) x.1.key x.1.label x.2) ∨
       ∃ l ∈ opensReads o.sent, ∃ u v, Verity.Sampled.Lines.openCollision l o.log = some (u, v) ∧ u ≠ v ∧
@@ -424,7 +424,7 @@ coin evidence carries (`OrderShown`) and the device's history at each play print
 order (`PrintsInOrder`), an accepted play where the check read no log of both sessions, or read one that isn't the
 device's, carries a break in one of the two sessions' records, or an opening collision. -/
 theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads θ) (hO : OrderShown θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) →
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) →
       PrintsInOrder (dev o) w₁ w₂ o.log)
     {o : Exchange} (hθ : o.params = θ) (ha : Accepts o.sent) (hg : ¬ ReadIsDevice o) :
     (∃ x ∈ records o.sent, keyOf θ = some x.1.key ∧ Break (dev o) x.1.key x.1.label x.2) ∨
@@ -454,7 +454,7 @@ theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstRea
     exact h
   have hk₂ : d₂.key = key := key_second h1 h2 h5 h6
   have hm₂ : (d₂, e.interior.base.coins) ∈ records o.sent := by rw [records_eq h1 h2, h3, h6]; simp
-  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact windowsOf_eq h1 h3 h5 h6
+  have hw : executionPhasesOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
   obtain ⟨raw, hraw, -⟩ := oneStageZk_reads p.audit c₂ d₂ hd₂ e.interior ξ₂ h7
   have hPT : PrintsTwo (dev o) d₁.window d₂.window o.log ∨
       Break (dev o) d₂.key d₂.label e.interior.base.coins := by
@@ -492,7 +492,7 @@ likely as the read finder's collision plus the forger's forgery (`terms`), over 
 theorem cutBound_order (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ) (hF : FirstReads θ) (hO : OrderShown θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) →
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) →
       PrintsInOrder (dev o) w₁ w₂ o.log)
     (hs : SignsPlay V dev θ F c) : CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ) :=
   cutBound_of V k dev θ F c σ ReadIsDevice hw (fun _ hθ ha hg => order_binds dev θ hF hO hP hθ ha hg) hs
