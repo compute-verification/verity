@@ -4,11 +4,11 @@ that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
-a kernel directory without one cubin, of a pass whose coins don't parse or are no object, of a live salt over other
-weights than its workload's, of a group of experts that repeat, are another group's, differ in shape or whose bytes
-are not the kernel's size for them, of a grouped call under a schedule with other side steps, and of B̃'s prefetch and
-the shared-memory split of pd_commit and pd_tree on a kernel without them, and the in-process certifier's of fewer coin
-bytes than it asks for."""
+a scheme its path doesn't run or that a test instance names otherwise, of a kernel directory without one cubin, of a
+pass whose coins don't parse or are no object, of a live salt over other weights than its workload's, of a group of
+experts that repeat, are another group's, differ in shape or whose bytes are not the kernel's size for them, of a
+grouped call under a schedule with other side steps, and of B̃'s prefetch and the shared-memory split of pd_commit and
+pd_tree on a kernel without them, and the in-process certifier's of fewer coin bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
 from verity.protocols.accounting.pouw.prover.circuit.ncp2 import Shape
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
@@ -31,7 +32,11 @@ from verity.protocols.accounting.pouw.verifier.audit import (
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul
 from verity.protocols.accounting.pouw.verifier.protocol import Shape as MatmulShape
-from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES, Schedule
+from verity.protocols.accounting.pouw.verifier.serving import (
+    SCHEDULES,
+    Schedule,
+    SchemeId,
+)
 from verity.protocols.proofs.spot.device import challenger as LC
 
 from verity_vllm.protocols import pouw as P
@@ -104,6 +109,24 @@ def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(m
         assert P.refusals(scheme, _serve(scheme, device="cuda", kernel="k", schedule="side-gemm")) == (said,)
     assert P.refusals("ncp-v1", _serve("ncp-v1", schedule="side-gemm")) == (
         "ncp-v1: the pouw setting 'schedule' is Pearl-C's; this executor runs serially",)
+
+
+def test_a_pearl_c_scheme_is_built_only_for_a_name_this_path_runs_and_only_under_that_name():
+    """A test instance takes `PearlC`'s keywords; one of another device's prices names itself with them, and is refused."""
+    with pytest.raises(KeyError) as e:
+        PPD.scheme_of("pearl-c-sm120-v1")
+    assert e.value.args == (f"'pearl-c-sm120-v1': this device path runs {', '.join(PPD.SCHEMES)}",)
+    for name in PPD.SCHEMES:
+        own = DEVICES[SchemeId.parse(name).device].prices
+        assert PPD.scheme_of(name).name == name
+        for device in DEVICES.values():
+            if device.prices == own:
+                assert PPD.scheme_of(name, prices=device.prices).name == name
+                continue
+            built = f"{name}@{device.prices.device}"
+            said = f"the scheme built for {name!r} names itself {built!r}"
+            with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+                PPD.scheme_of(name, prices=device.prices)
 
 
 class Linear:
