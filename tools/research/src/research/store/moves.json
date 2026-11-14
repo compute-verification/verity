@@ -2859,6 +2859,15 @@
         "verity/protocols/proofs/spot/verifier/lean/Spot/WiresDrawn.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/WiresSampled.lean",
         "verity/protocols/proofs/spot/verifier/one_stage/hidden_draw.py": "verity/protocols/proofs/spot/verifier/one_stage/hidden_sample.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/check_memo.py": "verity/protocols/proofs/spot/prover/audit/check_memo.py",
+        "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py": "verity/protocols/proofs/spot/prover/audit/records_audit.py",
+        "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py": "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
+        "verity/protocols/proofs/spot/verifier/tests/test_check_memo.py": "verity/protocols/proofs/spot/prover/tests/test_check_memo.py",
+        "verity/protocols/proofs/spot/verifier/tests/test_records_audit.py": "verity/protocols/proofs/spot/prover/tests/test_records_audit.py"
+      }
     }
   ]
 }

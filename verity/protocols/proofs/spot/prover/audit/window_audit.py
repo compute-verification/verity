@@ -212,7 +212,7 @@ sys.path.insert(0, str(HERE))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import check_memo as AM  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import check_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -663,7 +663,7 @@ def compose_key(compose: Callable, defn: object, template: str) -> str | None:
     inputs = getattr(compose, "inputs", None)
     if inputs is None:
         return None
-    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
+    from verity.protocols.proofs.spot.prover.audit import compose_circuit as CM
 
     return CM.cache_key(["a5/own", template, P.program_digest(Program(defn)), inputs],
                         files=(Path(CM.__file__), Path(inspect.getsourcefile(compose))))
@@ -675,7 +675,7 @@ def own_composed(a: argparse.Namespace, compose: Callable, defn: object, templat
     ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
     when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
     META, whether the cache held it already: None off the cache)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
+    from verity.protocols.proofs.spot.prover.audit import compose_circuit as CM
 
     cache = getattr(a, "compose_cache", None)
     key = compose_key(compose, defn, template) if cache else None
@@ -869,7 +869,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
-            compose = Path(__file__).resolve().parents[2] / "verifier" / "one_stage" / "compose_circuit.py"
+            compose = Path(__file__).resolve().parents[0] / "compose_circuit.py"
             p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
                        timeout=a.session_timeout)
