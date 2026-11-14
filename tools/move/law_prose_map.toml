@@ -7,14 +7,15 @@
 # Where a sentence says "law" for the distribution of a random variable (a joint law, the uniform law, equal in law), the
 # word is "distribution", as `terms_map.toml` gave the noise and coin laws, and so is a game's, a run's, a tape's, a
 # transcript's or a coin's law; the monad laws become the monad identities. Those phrases come first. A hyphenated name
-# (`R1-law`, the recorded case names such as "registration-law-another-k") is a recorded token and keeps its spelling
-# ([keep]). The map renames prose only (`scope = "prose"`), so it moves no path and renames no declaration.
+# (`R1-law`, the recorded case names such as "registration-law-another-k") is a recorded token and keeps its spelling,
+# and so does the record key `"law"` where a docstring shows a record ([keep]). The map renames prose only
+# (`scope = "prose"`), so it moves no path and renames no declaration.
 scope = "prose"
 
 [words]
 
 [keep]
-patterns = ['\w-[Ll]aws?\b', '\b[Ll]aws?-\w']
+patterns = ['\w-[Ll]aws?\b', '\b[Ll]aws?-\w', '''["']laws?["']''']
 
 [[words_in]]
 files = [
