@@ -1842,9 +1842,10 @@ def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and
     assert list(tmp_path.iterdir()) == []
 
 
-def test_a_statements_port_that_reads_no_row_at_a_sampled_unit_is_refused():
-    """`call_rows` takes each port's row at each sampled unit from credit's file. A port whose reads begin past a
-    sampled unit reads no row there: the call's rows are refused by the port and the call, before a value is read."""
+def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused():
+    """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
+    past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
+    value is read."""
     reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
     with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
         DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
