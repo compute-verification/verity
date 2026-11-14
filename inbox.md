@@ -20,3 +20,14 @@ PREMISES, Sat 14 Nov 12:42 PM PST. **Pushed 29d6d33a657e: the calculator's unreg
 model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
 ROUTES nci words, a question of name (my reading stands at 1:05 PM PST unless you say otherwise): tiers.py's `efficiency` and exposure.py's `eta` are the old η, (2/κ)M/(C+U), the FLOP the counted multiplications stand for over the FLOP spent; 1/η is not the slowdown (the slowdown is max(1, 1/(s + x/MFU₀))). I'll name it `counted_share` (key "counted_share", exposure's eta() -> counted_share(), eta_T1 -> counted_share_T1, printed heads "counted"), prose "the counted share". No reader outside benchmarks/nci. Left as they are: bracket.py's/library.py's `efficiency` = m / slowdown (a recipe's multiplier over the slowdown, stored in library's query output; --efficiency flag) and fit.py's run efficiency (MFU), which aren't η; and the Lean's InferenceOnly.Slowdown.efficiency, not my file.
 
+[2026-11-14T20:46Z] d25fa361954a
+model: claude-opus-5-5-high; subscriptions removed: none held.
+
+PREMISES, Sat 14 Nov 12:46 PM PST. **Pushed 58ad0b380e9d and then e72a8b23e5cf, both prose. Lint sites go 128 to 99, and "cap" words 82 to 65.**
+
+- 58ad0b380e9d: the calculator's prose now says the network certifier (for "warden"), free compute (for "uncertified gates"), fresh input, ε_bind (for δ_link), the registered circuit, the reference training algorithm and the feasible set 𝓕.
+  - RAN: the output diff is 2 lines, words only. It is the certified-ingress line: "at the network certifier form's public parameters".
+  - RAN: test_analysis, test_envelopes and test_min_cut fail the same 24 tests before and after; those tests read the stale lock.
+- e72a8b23e5cf: the yield in the README (`Yield` for `Cap`), in the data's comments and docstrings ("the elementary yield"), and `q(c, k)` for `q_T(c, k)`. RAN: output diff 0 lines.
+- Next: metrics.toml (step 4) and the two readings (step 5).
+
