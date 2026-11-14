@@ -141,7 +141,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/ver
           "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json",
           "verity/protocols/compose/device/live_challenger/models.py", "verity/protocols/accounting/pouw/prover/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
-          "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
+          "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
           "benchmarks/one_stage/glm53_prefill_tp8_step0.json", "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
           "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json", "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
@@ -344,7 +344,7 @@ paths = ["adapters/vllm/verity_vllm/definitions"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
-paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
          "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py"]
 
 [[tool.verity.tests.reads]]

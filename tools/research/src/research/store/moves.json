@@ -4471,6 +4471,11 @@
         "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py": "verity/protocols/proofs/spot/prover/tests/test_pearltie.py",
         "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py": "verity/protocols/proofs/spot/prover/tests/test_remotetie.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/prover/wipe_on_node.py": "benchmarks/pous/streamed_wipe/wipe_on_node.py"
+      }
     }
   ]
 }

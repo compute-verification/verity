@@ -454,19 +454,22 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
 #: rows the passes exclude and give up decide, which the published work replaces by its grid form (`verify_run.grid_work`).
 OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window",
                  "exact_work"})
-#: Fields that name a window or count its own where their value holds a number: the window's number, its steps (as
-#: ``window_steps`` too, a tied Pearl+ piece's ``load``), its requests' count, the windows refused. A window named
-#: ``all``, the bench Build's requests by name and a refusal's reason stay.
-NUMBERED = frozenset({"window", "steps", "window_steps", "requests", "refused"})
+#: Fields that name a window or count its own where their value holds a number: the window's number, its steps, its
+#: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
+#: stay.
+NUMBERED = frozenset({"window", "steps", "requests", "refused"})
 #: A load's own fields, held by path as (parent, key), the parent the nearest key above the field through lists: the
 #: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
 #: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
-#: written, and with it the policy digest its verdict cites.
+#: written, and with it the policy digest its verdict cites. And a tied Pearl+ piece's ``load.window_steps``, the
+#: picked window's steps under another name, held by its path so the caller's own setting, ``serving.window_steps``
+#: (`onsite_record.py --window-steps`), stays.
 #: And what Pearl+'s verdict's profile says of its exclusion tiles (`verify_run.verify_passes`): their count, and the
 #: tiles it replayed by id, the exclusion tiles among the sampled. Which rows a pass gives up, so which tiles are exclusion
 #: tiles, is the retained values' to decide: neither is an output, structure, a coin or a commitment. A sampled tile's id
 #: is the coin's through the passes' tickets, which the given-up rows weigh, so the list is held whole.
-OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s"), ("profile", "exclusion_tiles"), ("profile", "tiles")})
+OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s"), ("load", "window_steps"), ("profile", "exclusion_tiles"),
+                    ("profile", "tiles")})
 #: Fields held where their value is a document. ``give_up`` is Pearl+'s prover's give-up before the coin (`give_up`, in
 #: the piece's ``development.json`` and its line): the A and B rows it gave up, the tiles over a cap before it and left
 #: after, the tiles the card marks non-finite and those replayed on the CPU, the passes it finished and whether it left

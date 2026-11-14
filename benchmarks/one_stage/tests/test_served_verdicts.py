@@ -133,7 +133,7 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
 #: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
 #: holding a number, a list or a map of numbers, in text
 _OWN = "windows|users|engine_steps|every_slot|population|bits_by_window|advice_bits"
-_NUMBERED = "window|steps|window_steps|requests|refused"
+_NUMBERED = "window|steps|requests|refused"
 
 
 def _published(rule: str) -> str:
@@ -1940,6 +1940,22 @@ def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_window
     assert said["load"] == {} and said["tie"] == doc["tie"] and "window_steps" not in S.public_line(line)
     assert S.public_line('POUW-DEV {"load": {"window_steps": 3}, "passes": 3, "cred') == f"POUW-DEV {S.CUT}"
     assert S.publish(out, private) == []
+
+
+def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_serving_setting(tmp_path):
+    """`publish` holds ``window_steps`` by its path, ``load.window_steps``, and not as a bare key: the caller's own
+    serving setting, ``serving.window_steps`` (`onsite_record.py --window-steps`), is published as written, in a document
+    and in a line, at any depth, beside a tied Pearl+ piece's load, which is held."""
+    serving = {"serving": {"window_steps": 16, "max_tokens": 4}}
+    doc = {"run": {**serving, "load": {"window_steps": 3}}}
+    assert S.public_json(serving) == serving and S.public_json(doc) == {"run": {**serving, "load": {}}}
+    line = f"ONSITE {json.dumps(serving)}"
+    assert S.public_line(line) == line and S.public_doc(json.dumps(serving)) == json.dumps(serving)
+    said = json.loads(S.public_line(f"POUW-DEV {json.dumps(doc)}").removeprefix("POUW-DEV "))
+    assert said == {"run": {**serving, "load": {}}}
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "onsite.json").write_text(json.dumps(serving))
+    assert S.publish(tmp_path / "out", tmp_path / "private") == []
 
 
 @pytest.mark.parametrize("reserved, joined", [
@@ -4925,6 +4941,26 @@ def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve
     assert S.witness(listed) == []
     sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
     assert sums[first] == hashlib.sha256((d / first).read_bytes()).hexdigest()
+
+
+def test_a_hand_off_carries_every_windows_pearl_plus_record_and_audit_record_the_serve_dir_holds(tmp_path):
+    """The inference-only case's log is walked among the serve's docket records, so the hand-off lists and hashes
+    each one the serve dir holds: every window's Pearl+ record W (pearlplus/w<k>/registration.json, the audited window's
+    and each earlier one's) and every window's record R as its audit wrote it, of whatever class, beside the serve's
+    first. Each hides roots and names alone: `served_verdicts.py witness` refuses nothing of the list, and of Pearl+'s
+    directories it lists nothing else (no pass, no row)."""
+    records = ("deployment-registration.json", "pearlplus/w6/registration.json", "pearlplus/w7/registration.json",
+               f"v3c-w6-{VTAG}/audit/window/registration.json", f"v3c-w7-{VTAG}/audit/window/registration.json")
+    rows = ("pearlplus/w7/pass-0/rows.bin", "pearlplus/w7/registration.json.d/x", f"v3c-w6-{VTAG}/window/registration.json")
+    run = _handed(tmp_path, files={**{f: {"format": "verity/registration/v2", "previous": None} for f in records},
+                                   **{f: {} for f in rows}})
+    assert run.returncode == 0, run.stderr
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    listed = dc.joinpath("inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([*records, *HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
+    assert S.witness(listed) == []
+    sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
+    assert all(sums[f] == hashlib.sha256((d / f).read_bytes()).hexdigest() for f in records)
 
 
 def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):
