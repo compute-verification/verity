@@ -36,7 +36,7 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   exit $rc
 fi
 S=$J10R_GPU_S
-export PYTHONPATH="$ROOT:$ROOT/verity/configuration/config:$ROOT/adapters/vllm" HF_HOME=${HF_HOME:-/workspace/hf}
+export PYTHONPATH="$ROOT:$ROOT/tools/config:$ROOT/adapters/vllm" HF_HOME=${HF_HOME:-/workspace/hf}
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv | tee "$OUT/gpu.txt"
 case "${JOB:-tests}" in
   tests)

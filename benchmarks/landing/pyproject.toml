@@ -12,7 +12,7 @@ inputs = [
     "tools/research/src/research/__init__.py",
     "tools/research/src/research/auto.py",
     "tools/research/src/research/queue_table.py",
-    "verity/configuration/config/verity_config",
+    "tools/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
     "benchmarks/harness/verity_bench/__init__.py",
