@@ -29,7 +29,7 @@ variable {κ Cell Ob Srv Dev : Type}
 /-- The cells the trusted tap sends are the warden's code's. -/
 theorem certifier_cells (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
     (σ : Srv) : (run tap (s, σ)).1 = certifierCode s (arr σ) := by
   rw [htrust (s, σ)]
   rfl
@@ -38,7 +38,7 @@ theorem certifier_cells (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arri
 sends read back from the record its same run writes. -/
 theorem certifier_cells_read (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
     (hfit : f.fits s) (σ : Srv) : (run tap (s, σ)).1 = f.read s (run tap (s, σ)).2 := by
   rw [htrust (s, σ)]
   exact (f.read_record s hfit (arr σ)).symm
@@ -48,7 +48,7 @@ of connection `c`'s stream, when its lane has cell `j` and no fail cell at or be
 cell's data, in its bucket. -/
 theorem certifier_data_read (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
     (hfit : f.fits s) (σ : Srv) (c : κ) {j : ℕ} (hj : j < s.cells c) (hd : j < (arr σ c).stream.length)
     (hf : ∀ i, failCell s (arr σ) c = some i → j < i) :
     (f.read s (run tap (s, σ)).2 c)[j]? = some (s.bucket c j, .data (arr σ c).stream[j]) := by
