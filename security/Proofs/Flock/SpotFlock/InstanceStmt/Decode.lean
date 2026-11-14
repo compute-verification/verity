@@ -332,13 +332,19 @@ theorem canon_bareJ : canon bareJ = .ok bareText := by
   rw [canon_fuel 12]; kernel_rfl'
 theorem canon_bare (j : Json) (h : j = bareJ) : canon j = .ok bareText := by subst h; exact canon_bareJ
 
+/-- `paramsOf`'s duplicate-name check on no parameters finds none: the kernel doesn't reduce a `Std.HashSet`'s size, so
+the walk, whose two definitions have no parameters, takes this step as a rule. -/
+theorem dup_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → β → Std.HashSet α) :
+    ((Array.foldl f (∅ : Std.HashSet α) (#[] : Array β)).size != (#[] : Array β).size) = false := by
+  simp
+
 fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse_prog, domainError_fuel 12,
     hm_get_insert, hm_get_empty, hs_contains_insert, hs_contains_erase, hs_contains_empty, hm_get_foldl,
     hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,
     leaves_of_V, bodyBad_one, recordFunctionIds_plain, splitOn_of, all_of, toNat_of, st_bind, st_get, st_set,
     st_modify, st_pure, st_throw, st_ite, st_dite, st_forIn_empty, st_forIn_range1, prod_fst, prod_snd, ds_defs,
     ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12,
-    Fwd.foldl_size_bne_empty]
+    dup_empty]
   block [Std.HashMap.insert, Std.HashSet.insert, Std.HashSet.erase, Sha512.hash]
   shallow []
 
