@@ -44,7 +44,7 @@ published domain (`PortRoots.dupId`), no two ports' registered roots one root un
 (`PortRoots.rootsColl = none`), and the registration's population the game's `n` units in order
 (`Bridge.PopMatches`).
 The verifiers now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
-last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the sampled-proofs run
+last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the SPOT run
 refuses the registration (`Spot.Run.run`,
 `population-order`, `Spot.Slots.popOk`). So the guarantee reads them off acceptance.
 
@@ -105,7 +105,7 @@ def LiveAcceptsKS {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inpu
     (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsZK I o ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok ()
 
-/-- **The sampled-proofs run passes the registration's population** (`Spot.Run.run`, `population-order`):
+/-- **The SPOT run passes the registration's population** (`Spot.Run.run`, `population-order`):
 the descriptor `desc` parses and its population under the query `qr` is `n` units in order (`Slots.popOk`). -/
 def RunPopOk (desc : Claims.Msg) (qr : Lean.Json) (n : ℕ) : Prop :=
   ∃ p, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Slots.popOk p qr n = true
@@ -121,7 +121,7 @@ open Classical in
 `verify --zk` accepts the transcript and the files (`Bridge.LiveAcceptsKS`: their ports row/v1, row/v2 or row-seg/v1 rows
 of distinct published domains, and no two registered roots, each over its port's published domain at its schema, one
 root under different domains, at the public file's population), the
-sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
+SPOT run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order, in the strata `Bridge.nsOf desc qr` the statement's partition lays), and the claims
 relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupId = false`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).

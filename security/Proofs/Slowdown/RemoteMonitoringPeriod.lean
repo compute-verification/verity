@@ -156,7 +156,7 @@ theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤
           Finset.sum_congr rfl fun t ht => by simp only [hlt t (Finset.mem_filter.1 ht).2, ↓reduceIte]
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
 
-/-- **The escape tail, one identity.** Under `SlowdownRemoteMonitoringPeriod`'s sampled-proofs legs, the runs where no window
+/-- **The escape tail, one identity.** Under `SlowdownRemoteMonitoringPeriod`'s SPOT legs, the runs where no window
 samples a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
 before its first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows
 each miss all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the

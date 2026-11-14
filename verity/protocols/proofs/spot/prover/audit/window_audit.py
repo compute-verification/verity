@@ -1552,11 +1552,11 @@ def case_coins(case: dict, coins: dict, key: dict | None, label: str | None, win
 
 #: onsite's and remote's SPOT component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
 #: whichever form its params and evidence name; it refuses one-stage v1's
-SAMPLED_PROOFS = "verity/sampled-proofs/v1"
+SPOT = "verity/sampled-proofs/v1"
 
 
 def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SAMPLED_PROOFS`): its params and
+    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SPOT`): its params and
     its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
     RP = own_replay()
