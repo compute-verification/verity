@@ -1,0 +1,28 @@
+# The continuous audit's memory challenger leaves PoUS's verifier directory: what
+# `tools/move/layout.py --map tools/move/pous_continuous_map.toml` moves and rewrites.
+#
+# `continuous.py` (`ContinuousMemoryChallenger`, `run_continuous`) is the memory challenger's code, the auditor's device,
+# so it goes to `pous/device/`. No file outside tests imports it; its tests stay in `pous/verifier/tests/`, where the
+# device's other parties' tests are. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/accounting/pous/verifier/continuous.py" = "verity/protocols/accounting/pous/device/continuous.py"
+
+[retired]
+paths = ["verity/protocols/accounting/pous/verifier/continuous.py"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
+# archive, files whose bytes a digest pins, every Lean file, every kernel source, and the tree file.
+exclude = ["**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
+           "tools/move/**", "archive/**", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml", "**/*.lean", "**/*.cu", "**/*.cuh",
+           "**/*.cpp", "**/*.h"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+
+[modules]
+"verity.protocols.accounting.pous.verifier.continuous" = "verity.protocols.accounting.pous.device.continuous"
