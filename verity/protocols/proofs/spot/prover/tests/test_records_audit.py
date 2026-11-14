@@ -17,6 +17,8 @@
   states them; one whose program takes values only tied to the earlier docket that registered them first
   (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
   (`spot/verifier/tests/window_tie.py`) is that one on their toys;
+* the workload side's copy of the Lean verifier's ``--registered`` port (`spot/prover/registered_reads.py`) is the
+  verifier's own;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
@@ -45,7 +47,8 @@ import numpy as np
 import pytest
 import settings
 
-from verity.protocols.proofs.spot.verifier.one_stage import caller as C, draw as D, registered as REG, docket as R
+from verity.protocols.proofs.spot.prover import registered_reads as RR
+from verity.protocols.proofs.spot.verifier.one_stage import caller as C, draw as D, produced as PR, registered as REG, docket as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
@@ -727,6 +730,24 @@ assert ids and all(descriptor_id(WT.catalog_resolve(t)) == descriptor_id(RA.cata
 """
     p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
+
+
+def test_the_workload_sides_registered_port_is_the_verifiers():
+    """`registered_reads`, the port a served compiler writes for the Lean verifier's ``--registered``, is the verifier's
+    `produced.port`, key for key and in its order, on each row format (and the default), each leaf width, and rows a proof
+    block reads nothing at; a format the verifier's refuses it refuses; `READS_FROM`, `READS_V1` and the formats, their key and
+    the default width are the verifier's."""
+    assert ((RR.READS_FROM, RR.READS_V1, RR.SCHEMAS, RR.SCHEMA_KEY, RR.WORD_BITS)
+            == (REG.READS_FROM, REG.READS_V1, REG.SCHEMAS, REG.SCHEMA_KEY, REG.WORD_BITS))
+    e, root = {"leaves": 12, "words": 64, "domain": "ab" * 64}, "cd" * 64
+    for entry in (e, {**e, "word_bits": 32}):
+        for rows in ([0, None, 11], [None], []):
+            for schema in ((), *((s,) for s in REG.SCHEMAS)):
+                mine, theirs = RR.port("v", entry, root, rows, *schema), PR.port("v", entry, root, rows, *schema)
+                assert list(mine.items()) == list(theirs.items())
+    for port in (RR.port, PR.port):
+        with pytest.raises(ValueError, match="rows are"):
+            port("v", e, root, [0], "hm96-sha512/row/v9")
 
 
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():

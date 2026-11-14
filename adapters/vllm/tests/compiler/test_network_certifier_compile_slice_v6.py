@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.compiler import compile_slice as CS
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
+from verity_vllm.compiler import replay_chain as RC
 from verity.protocols.accounting.certifier.verifier.head_check import ands
 from verity.circuits import boolean as BL
 from verity.commitments import rowleaf as RL

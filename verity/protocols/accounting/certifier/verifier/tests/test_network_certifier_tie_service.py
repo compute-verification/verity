@@ -137,7 +137,7 @@ def test_an_honest_link_is_tied(tmp_path):
 
 
 def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_path):
-    """C-Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
+    """Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
     (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the warden's
     root and ``pub`` and ``o0`` at known content, its own lanes of each bucket and the output word 1 under public
     salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at

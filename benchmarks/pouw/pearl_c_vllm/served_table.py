@@ -1,6 +1,6 @@
 """The FP8 served table at a scheme's inert-work bound: per model, its served pass's per-input measurement
-(`served_debit.py --per-input`'s ``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s
-``verify.json``) where one was run, and the ε that `HonestTileCapRate`'s served citation takes: the largest of the
+(`served_inert_work.py --per-input`'s ``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s
+``verify.json``) where one was run, and the ε that `HonestTileInertBoundRate`'s served citation takes: the largest of the
 model's inputs' upper limits, each recomputed at
 δ = 0.05/m with m every input the table measures (all its models, and a model's fresh trials beside its pass-salt
 measurement), so the limits are 95% simultaneous over the whole table.
@@ -25,11 +25,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import served_debit as SD  # noqa: E402
+import served_inert_work as SD  # noqa: E402
 
 
 def _cite(rows: list[dict], m: int) -> tuple[list[tuple[float, str]], int]:
-    """Each row's upper limit at δ = 0.05/m (`served_debit.input_bound`) and the position of the largest."""
+    """Each row's upper limit at δ = 0.05/m (`served_inert_work.input_bound`) and the position of the largest."""
     bounds = [SD.input_bound(r, 0.05 / m) for r in rows]
     return bounds, max(range(len(rows)), key=lambda i: bounds[i][0])
 
@@ -106,7 +106,7 @@ def markdown(table: dict) -> str:
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
     lines += ["", (f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
-              f"measurements (served_debit.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
+              f"measurements (served_inert_work.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
               f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
               f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows). So ε is a rate "
               f"under Lean's draw, not under the deployed audit's, whose `tile_weight` counts credited cells only and so "
@@ -128,7 +128,7 @@ def markdown(table: dict) -> str:
         if "forming" in r:
             f = r["forming"]
             lines += ["", (f"{r['model']}: its tiles were recorded before the served replay charged Lean's forming term "
-                      f"fs·(|C|/n)·elems (`pearl_c_debit.forming_elements`). On its {f['tiles']} recorded tiles, at Prices.sm120Loop, a "
+                      f"fs·(|C|/n)·elems (`pearl_c_inert_work.inert_elements`). On its {f['tiles']} recorded tiles, at Prices.sm120Loop, a "
                       f"verdict flips only if at least {f['dead_to_flip_min']:.2%} of a tile's |R|·k elements are salt-dead "
                       f"(forming_headroom.py; the unneeded ones are bounded by the recorded atoms). Lean's ρ_D = 1/64 "
                       f"({1 / 64:.2%}) of a unit's elements (`FormingP.saltDeadP_card_le`, under its domain conditions) "

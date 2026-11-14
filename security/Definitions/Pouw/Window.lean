@@ -262,25 +262,25 @@ def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
     (g : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → ℝ≥0∞) : Prop :=
   ∀ S R (τ : Strategy (sess S R)) u, u ∈ S → A.ks S R τ u ≤ κ + g S R τ
 
-/-- **A call's binding error in the window** (premise `δlink_c`): for every window prover state `τ` after the registration
+/-- **A call's binding error in the window** (premise `εbind_c`): for every window prover state `τ` after the registration
 `R` and every rule that picks a sampled proof block before the sessions' first coin, the average over the sample of call `c`'s
 `link` at the picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`),
-against the window's committed transcript, is at most `δlink_c(R, τ)`, a function of the window's state as `BindSound`'s
-`δlink` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
+against the window's committed transcript, is at most `εbind_c(R, τ)`, a function of the window's state as `BindSound`'s
+`εbind` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
 transcript is a function of the prover's state at registration, so it is the same for every call and every sample. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
 its seed reads are the committed transcript's, fixed before the sample. -/
 def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → SamplingDesign (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
-    (c : Fin C) (δlink : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
+    (c : Fin C) (εbind : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont Lw (executionPhaseSession sess) R) (tgt : (Lw R).Ω → Option (WUnit n)),
     avg (fun ω => along (fun c' => sess c' (slice ((Lw R).draw ω) c') R)
       (fun c' τc => if c' = c then
           atTgt (slice ((Lw R).draw ω) c') (pick (tgt ω) c')
             fun u => (A c').link (slice ((Lw R).draw ω) c') R τc u (committed R τ)
         else 0)
-      (List.finRange C) (τ ω)) ≤ δlink R τ
+      (List.finRange C) (τ ω)) ≤ εbind R τ
 
 /-- **The window's collision term** at the registration `R` and the window's state `τ`: the calls' state terms
 `g c` (`CallAnalysis.KnowledgeSound`), each at the state the window's run brings to call `c`'s session, counted on the

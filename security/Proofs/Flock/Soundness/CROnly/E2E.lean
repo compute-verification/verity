@@ -55,7 +55,7 @@ theorem linkBoundE_at_cube {decode : DecoderB (C := C) (Reg := Reg) plan tab} {D
   rw [strictRunCost_at_cube k hq hcube]
 
 /-- **The end-to-end count curve (skeleton) under `cr/sha-512`**: `Partition.flock_e2e_count` with `LinkCRStrict` at
-budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE` at the per-run cost `strictRunCost t' q`. -/
+budget `q` (`hCRs`) for `LinkCR`, at `ε_bind = linkBoundE` at the per-run cost `strictRunCost t' q`. -/
 theorem flock_e2e_count
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -94,7 +94,7 @@ theorem flock_e2e_sampled
     (linkCR_of_strict P H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **The end-to-end count curve with the rows' value binding, under `cr/sha-512` alone**:
-`Binding.flock_e2e_count_hm96` with `LinkCRStrict` for `LinkCR`, so `ε_ks`, `δ_link` and `δ_tree` are all under
+`Binding.flock_e2e_count_hm96` with `LinkCRStrict` for `LinkCR`, so `ε_ks`, `ε_bind` and `δ_tree` are all under
 `SHA512CRStrict` (`hKS`, `hCRs`, `hT`). -/
 theorem flock_e2e_count_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -269,7 +269,7 @@ end Session
 sample.** `Prog.flock_headline` with `LinkCRStrict` for `LinkCR`: every cryptographic hypothesis is an instance of
 `SHA512CRStrict` (`cr/sha-512`), for finders built from the prover bounded: the link finders stopped at `q` (`hCRs`),
 the tables' knowledge finders (`hKS`) and the serving roots' rewinding finder (`hT`). The other hypotheses are the
-headline's, A3 (`hA3`) among them. The bound is `miss(K) + ε_ks + δ_link + δ_tree`, with `δ_link = linkBoundE` at the
+headline's, A3 (`hA3`) among them. The bound is `miss(K) + ε_ks + ε_bind + δ_tree`, with `ε_bind = linkBoundE` at the
 per-run cost `strictRunCost t' q`; at `q³ = t'·2^512` its hash part is `3(1 + k)·q²/2^512` (`linkBoundE_at_cube`). -/
 theorem flock_headline
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

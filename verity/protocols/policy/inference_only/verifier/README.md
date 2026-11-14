@@ -29,7 +29,7 @@ deployment configuration's table declares the policy's party from, with its test
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
 - **Scripts**: `lean/scripts/inference_only_reference.py`, the check's Python reference, loaded by path by the tests of
-  `adapters/vllm`, by `verity run`'s lifecycle workload (`tools/verity/cli/tests/lifecycle`) and by `benchmarks/verifier_cost`; and the difftests' generators,
+  `adapters/vllm` and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
   `verity/protocols/proofs/flock/prover` load `desc_difftest_vectors.py` by path. `lean/scripts/served_record_case.py`
   writes a served run's files as a case for `inference-only-record-check`, with the record reference's verdicts on it
@@ -151,7 +151,7 @@ A few older names stay here until a change of their own renames each (`GLOSSARY.
 a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
 refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
 (`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
-for the registered information, also the θ difftest's name in its printed messages; "IU" and "isolation unit" for
-an inference block, in the lock's reasons; "novel reads" for fresh input
+for the registered information, also the θ difftest's name in its printed messages; "IU" and "inference block" for
+an inference block, in the lock's reasons; "fresh input bits" for fresh input
 bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
 check's rate rule and of its Python reference, and a mode of the liveness difftest.

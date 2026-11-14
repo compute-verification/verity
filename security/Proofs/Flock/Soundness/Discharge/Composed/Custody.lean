@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Discharge.Composed.Sound
 `zk_session_sound_custody`: `zk_session_sound` with its two premises about the record, `hRec` (`RecordsLiveZK`) and
 `hDraw` (`SampleOkZK` at each of `SamplingDesign.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
 (`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points verity-verify-proof sets up at each of the sampling design's samples
-(`sampleOkZK_of_exec`). It rests on five: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and
+(`sampleOkZK_of_exec`). It rests on five: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `ε_bind`), A3 (`hA3`), A6 and
 `live-verifier` (`hCust`).
 -/
 

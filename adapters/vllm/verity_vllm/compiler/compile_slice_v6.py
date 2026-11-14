@@ -117,8 +117,8 @@ from verity.commitments import pool_row as PR
 from verity.commitments.gates import block_key as BK
 from verity.commitments.gates import rowleaf as RG
 from verity_vllm.compiler import cache_step as CST, compile_slice as CS
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC
-from verity.protocols.accounting.certifier.verifier import replay_step as RS
+from verity_vllm.compiler import replay_chain as RC
+from verity_vllm.compiler import replay_step as RS
 from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
 from verity_vllm.compiler import compile_slice_v5 as V5
 from verity.circuits.boolean import BIT

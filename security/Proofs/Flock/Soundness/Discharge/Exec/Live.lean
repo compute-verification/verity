@@ -234,7 +234,7 @@ as in `Prog.flock_headline_L` (the live stratified sample under A3), let each sa
 the live session be `liveTable` (the challenger, its coins uniform per round and sampled after the round's retained
 bytes), written out as a session directory by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K`
 incorrect proof blocks of the committed values of the simulated prover (`simAudit … τ`) with probability at most
-`miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`, so `Pr[bad] = 0`.
+`miss(K) + ε_ks + ε_bind`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`, so `Pr[bad] = 0`.
 Beyond `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
 `hCR`), it takes `hdec`: the decoder is right on the sessions verity-verify-proof accepts (the decoder premise). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live

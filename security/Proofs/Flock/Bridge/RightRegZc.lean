@@ -21,7 +21,7 @@ right and more are incorrect:
 * `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `incorrectRegZc`, under
   `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
-* `zk_flock_escapeC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks + δ_link`.
+* `zk_flock_escapeC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks + ε_bind`.
 -/
 
 @[expose] public section
@@ -182,7 +182,7 @@ theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown
     (zk_linkSoundC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht) K σ
 
 /-- **The compiled `--zk` missProb bound, "wrong" with canonical openings**: `zk_flock_countC_regC` at a set `W` of units
-in place of a count, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + δ_link(σ)`. -/
+in place of a count, `Pr[accept ∧ W ⊆ incorrect] ≤ missProb W + ε_ks(σ) + ε_bind(σ)`. -/
 theorem zk_flock_escapeC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)

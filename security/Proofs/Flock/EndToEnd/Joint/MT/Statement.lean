@@ -32,7 +32,7 @@ that the parts are proved and set up with the session's link points is verity-ve
   with one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`.
 
 `ε_ks` is the sampling block's knowledge term at the worst registration (`StratifiedBlockMT.epsKs`) and `ε_bind` its
-binding term `δ_link` (`StratifiedBlockMT.link`). The named assumptions are A3 (`uniform/io-getrandombytes`) for the
+binding term `ε_bind` (`StratifiedBlockMT.link`). The named assumptions are A3 (`uniform/io-getrandombytes`) for the
 sample's bytes, `live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and
 `ecr/sha-512` (`LinkCRZC`) at the strategy each sampling block is played with (in a period, at every strategy it is
 played with on some run, `StratifiedMT.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratifiedMT`
@@ -157,7 +157,7 @@ noncomputable def incorrectSet (τ : Strategy w.game) : Finset (Fin w.n) :=
 /-- The knowledge term `ε_ks`, `ksAvgStrictZ` at the worst registration. -/
 noncomputable def epsKs : ℝ≥0∞ := ⨆ R : w.Reg, ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R
 
-/-- The binding term `ε_bind`, `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEndHidden`. -/
+/-- The binding term `ε_bind`, `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEndHidden`. -/
 noncomputable def link : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ p : w.vb.Pos,
       (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L p) : ℝ) / Fintype.card w.L.Ω) *

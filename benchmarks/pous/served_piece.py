@@ -675,7 +675,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("window", type=int)
     ap.add_argument("out", type=Path)
     ap.add_argument("--hf-home", type=Path, required=True, help="the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="libp2v1.so's directory (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--node", help="the developer's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")

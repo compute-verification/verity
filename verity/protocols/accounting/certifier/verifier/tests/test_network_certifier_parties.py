@@ -101,7 +101,7 @@ def test_an_output_value_goes_as_its_two_messages(out) -> None:
 
 
 def _sent(channel, message: Message) -> Message:
-    return channel.decode(channel.encode(message))
+    return decode(channel, encode(channel, message))
 
 
 #: what the device's run hands out beside the output value, each with a stand-in body, by the channel that carries it
@@ -122,7 +122,7 @@ def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrat
             got = _sent(to, message)
             assert (got.type, got.fields, got.body) == (message.type, message.fields, message.body)
             with pytest.raises(Refused) as e:
-                wrong.encode(message)
+                encode(wrong, message)
             assert e.value.name == "unknown-type", message.type
     salts, wiring = WR.read_witness(RUN[NC.WORKERS][-1].body)
     assert (len(salts), len(wiring)) == (3, WR.WIRING_SALT_BYTES)

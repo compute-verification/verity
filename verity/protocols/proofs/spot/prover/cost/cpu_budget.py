@@ -54,7 +54,7 @@ def split(t: dict) -> tuple[int, int]:
     """(parts, k_log): the least number of parts ``t``'s unit proves in under 2^`K_MAX` bits, each its share of the ANDs
     and of every row's bytes, and a part's k_log."""
     if len(t["rows"]) > MAX_ROWS:
-        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a C-Flock block holds: cut its "
+        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a Flock block holds: cut its "
                          "unit into fewer rows")
     p = 1
     while (k := k_log([-(-b // p) for b in t["rows"]], -(-t["ands"] // p))) > K_MAX:

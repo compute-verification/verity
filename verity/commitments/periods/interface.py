@@ -381,13 +381,13 @@ def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
         f"{p} {len(bs)} rows of {bs[0]} B" if len(bs) > 1 else f"{p} {bs[0]} B" for p, bs in sizes.items())
     if len(rows) > MAX_ROWS:
         raise ValueError(f"{name}: {len(rows)} rows, past a proof block's {MAX_ROWS}, since their hm96 slots alone would fill "
-                         f"a C-Flock block of 2^{K_MAX} bits: cut its ports fewer ways, or bind the Definition smaller")
+                         f"a Flock block of 2^{K_MAX} bits: cut its ports fewer ways, or bind the Definition smaller")
     if all(b <= LAST_BLOCK_BYTES for _, b in rows):
         raise ValueError(f"{name}: no row past {LAST_BLOCK_BYTES} B, so none has a compression before its last SHA-512 block "
-                         "and C-Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
+                         "and Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
                          "the Definition larger")
     if (k := proof_block_k_log([b for _, b in ins], [b for _, b in outs])) > K_MAX:
-        raise ValueError(f"{name}: its rows alone need a C-Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
+        raise ValueError(f"{name}: its rows alone need a Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
                          "smaller, so that each unit reads and writes fewer row bytes")
     return k
 

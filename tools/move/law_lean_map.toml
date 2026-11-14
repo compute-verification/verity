@@ -314,7 +314,6 @@ strings = [
 "benchmarks/verifier_cost/*.py" = [".law"]
 "benchmarks/verifier_cost/*.sh" = [".law"]
 "verity/protocols/proofs/*.py" = [".law"]
-"verity/protocols/proofs/*.rs" = [".law"]
 "verity/protocols/proofs/*.sh" = [".law"]
 
 
