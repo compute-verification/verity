@@ -565,7 +565,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",

@@ -131,7 +131,9 @@ id may give a value for each period and scope it is computed at, each in its own
 three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
 of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
 benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
-the name, period and `over` reads the others.
+the name, period and `over` reads the others. A value for one member of a set (a deployed guarantee, a lead) names it
+as `member`, a non-empty string held only where given, and the writer keys on it too, so one id gives a value for each
+member (`lean/trust-gap`'s, one a deployed guarantee).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
@@ -287,6 +289,7 @@ How long the team's own changes take to reach `main`: measured on the verified q
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
+| `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
 
 ### Security
 
