@@ -2712,6 +2712,11 @@
         "benchmarks/hash/dither/h1r.py": "verity/protocols/experimental/dither/prover/h1r.py",
         "benchmarks/hash/dither/j10r_ws.py": "verity/protocols/experimental/dither/prover/j10r_ws.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/commit_gpu/": "verity/commitments/cuda/commit_gpu/"
+      }
     }
   ]
 }

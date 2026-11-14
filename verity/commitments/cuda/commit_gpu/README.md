@@ -27,7 +27,7 @@ On an RTX PRO 6000 node (MACHINE):
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash benchmarks/pouw/commit_gpu/gpu.sh
+  [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash verity/commitments/cuda/commit_gpu/gpu.sh
 ~~~
 
 `BUILDS` defaults to `a0r0l`, the fastest form; the other tags rebuild the forms the measurements below compare.

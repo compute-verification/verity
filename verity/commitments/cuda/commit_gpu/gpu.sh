@@ -11,7 +11,7 @@
 # stand-in producer kernel, the operand's last write. Clocks are read, never set.
 #
 #   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash benchmarks/pouw/commit_gpu/gpu.sh
+#     -- bash verity/commitments/cuda/commit_gpu/gpu.sh
 # CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask][merged][quad], l for
 # SHA_ROLL=1);
 # SWEEP and SEG_SWEEP (int8 values a leaf); TILE_M, TILE_R, TILESEG_R; GENCODE (default arch=compute_120a,code=sm_120a; H200:
@@ -20,7 +20,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-export D=benchmarks/pouw/commit_gpu PY=${PY:-python3} PYTHONPATH=. GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
+export D=verity/commitments/cuda/commit_gpu PY=${PY:-python3} PYTHONPATH=. GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
 W=$(mktemp -d /dev/shm/commit-gpu.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
