@@ -68,7 +68,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ..telemetry.procs import gone
 from . import ids, sealed
-from .local import LocalStore, manifest_key, object_key, sha256_file
+from .local import REPLICA_MAPS, LocalStore, manifest_key, object_key, sha256_file
 from .model import utc_now
 
 MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
@@ -796,9 +796,12 @@ _CLEAN_C = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c
 
 
 def _fixture_paths(tree: Path) -> list[str]:
-    """The paths `artifacts.json` registers (fetched fixtures are among them); [] when it is absent or unreadable."""
-    doc = _doc(_quiet((tree / "artifacts.json").read_text))
-    return [p.strip("/") for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
+    """The paths the tree's registry registers (fetched fixtures are among them), read at each place a tree may hold it
+    (`REPLICA_MAPS`); [] when it is absent or unreadable.  A tree holding it at both gives both's paths, where the store reads
+    the first: a research of either age may have fetched into the tree, each from the place it names, so a path either
+    registers is one whose bytes its id fetches again."""
+    docs = [_doc(_quiet((tree / place).read_text)) for place in REPLICA_MAPS]
+    return [p.strip("/") for doc in docs for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
 
 
 def _ignored_ok(tree: Path, path: str, fixtures: list[str]) -> bool:

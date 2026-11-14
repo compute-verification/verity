@@ -1293,6 +1293,36 @@ def test_a_window_registers_its_circuits_values_by_their_entries_chained_after_t
     assert not (tmp_path / "unheld").exists()
 
 
+def test_a_registration_names_the_values_its_window_outputs_after_its_ports(tmp_path):
+    """`rows.registration` names each value the window ``outputs`` for a later record among the record's roots, after the
+    window's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports'. An output named
+    like a port is refused, and `rows.write` hands its ``outputs`` to the record it writes."""
+    roots: list = []
+
+    def record(*x, **_k):
+        roots[:] = x[4]
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f1", "FORMAT_V2": "f2", "record": staticmethod(record),
+                         "digest": staticmethod(lambda rec: "d")})
+    win, _ = registered()
+    c = win.close(salt_key=bytes(32))
+    CS.registration(c, {"by": "test"}, registrar=reg)
+    ports = list(roots)
+    assert [r["port"] for r in ports] == list(c.roots) and ports
+    out = {"port": "edge.x", "root": "ab" * 64, "leaves": 3, "domain": "cd" * 32}
+    CS.registration(c, {"by": "test"}, registrar=reg, outputs=[{**out, "by": "its writer"}])
+    assert roots == [*ports, out]
+    taken = ports[0]["port"]
+    with pytest.raises(ValueError, match=re.escape(f"output values ['{taken}'] are named like the window's ports")):
+        CS.registration(c, {"by": "test"}, registrar=reg, outputs=[{**out, "port": taken}])
+    roots.clear()
+    win.write(c, tmp_path / "none", {"by": "test"}, registrar=reg)
+    assert roots == ports
+    CS.write(c, tmp_path / "one", {"by": "test"}, win.labels(), registered=win._entries, registrar=reg, outputs=[out])
+    assert roots == [*ports, out]
+
+
 def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
     read the weight's rows as tables and units 0 and 1 hold their own rows."""
