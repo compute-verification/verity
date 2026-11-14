@@ -307,7 +307,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     return _seed, _seed_src, _seed_form, _seed_chal
 
 
-def draw_of(args: Any) -> str:
+def sampling_design_of(args: Any) -> str:
     """The config run's sampling design (`driver.family_strata`): the record's `replay_draw`, `family` when it names none."""
     return getattr(args, "replay_draw", None) or "family"
 
@@ -483,7 +483,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     _kw = dict(arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                seed_challenge=_seed_chal,
                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
-               replay_draw=draw_of(args), workers=getattr(args, "replay_workers", None), retention=_retention,
+               replay_draw=sampling_design_of(args), workers=getattr(args, "replay_workers", None), retention=_retention,
                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                # Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),

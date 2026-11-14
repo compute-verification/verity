@@ -443,7 +443,7 @@ class SingleRow(Row):
         self.tl("stage.match", "start")
         if self.leased and cm.match_phase == "all":
             rcg = self.run_gpu("match.gpu", to, f"{d}/match_gpu.log", self.match_cmd("gpu"), lease_dir=f"{d}/match/lease",
-                               kept=GL.MATCH_LEG_KEPT)
+                               kept=GL.MATCH_STAGE_KEPT)
             rcm = self.run_tl("match.run_config", to, f"{d}/match.log", self.match_cmd("cpu")) or rcg
         else:
             rcm = self.run_tl("match.run_config", to, f"{d}/match.log", self.match_cmd())

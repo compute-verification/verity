@@ -556,7 +556,7 @@ def test_a_single_gpu_match_holds_its_lease_for_its_gpu_phase_only(tmp_path, lea
     rec = Path(t.d, "match", "lease", GL.RECORD)
     assert rec.exists() is leased
     if leased:
-        assert json.loads(rec.read_text())["kept"] == GL.MATCH_LEG_KEPT and released(tmp_path / "5.lock")
+        assert json.loads(rec.read_text())["kept"] == GL.MATCH_STAGE_KEPT and released(tmp_path / "5.lock")
 
 
 def test_the_match_takes_its_lease_in_a_gpu_phase_before_its_first_stage():

@@ -85,7 +85,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
             # the bounded tap's per-window telemetry + summary live in the attempt dir (fa2_tap_windows.jsonl / fa2_tap_bound.json)
             if args.out:
                 _hsrc.telemetry_path = str(Path(args.out) / "fa2_tap_windows.jsonl")
-            logger.info("[delta] fa2 tap bound: cap %s MiB (%s); telemetry %s", _hsrc.tap_cap_bytes >> 20,
+            logger.info("[delta] fa2 tap bound: %s MiB (%s); telemetry %s", _hsrc.tap_cap_bytes >> 20,
                         "ONE bounded device buffer; launches above it are split into sequence groups" if _hsrc.tap_cap_bytes
                         else "OFF: unbounded per-geometry buffers", _hsrc.telemetry_path)
     required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
