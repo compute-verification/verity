@@ -11,7 +11,8 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
-#                         its own PP_PARTITION: its window has no step 1); `serve` around a stand-in
+#                         its own PP_PARTITION: its window has no step 1); made-up settings, held only where HELD_ALPHA
+#                         and HELD_GAMMA are a pair in the form the limits-held step writes; `serve` around a stand-in
 #                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); a stand-in window of the class at
@@ -53,8 +54,8 @@
 #                         gate's `pubkey` held to PP_CHALLENGER_KEY's record. Exit 0 only where the lane has no open
 #                         period, the pin is a line of MAIN_FILE and the key is the record's.
 #   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`,
-#                         `serve-test DIR`, `link-test LEAN DIR` and `probe-test DIR` are `check`'s steps of those
-#                         names).
+#                         `settings-test DIR`, `serve-test DIR`, `link-test LEAN DIR` and `probe-test DIR` are `check`'s
+#                         steps of those names).
 #
 # A follow-on's settings come from the serve dir (deferred.env, compose.env), which carry no POUW: `audit` and `compose`
 # set POUW=pearlplus, the rehearsal's.
@@ -86,11 +87,20 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT DAY DAY_PROGRAM DAY_LOG DAY_PARAMS; do
       [ -n "${!v-}" ] || no "$v is unset"
     done
-    # the record form's pair of the class, which the limits file states before the first request
-    [ -n "${HELD_ALPHA-}" ] && [ -n "${HELD_GAMMA-}" ] \
-      || no "HELD_ALPHA is ${HELD_ALPHA:-unset} and HELD_GAMMA is ${HELD_GAMMA:-unset}: set both in $1, beside ALPHA and" \
+    # the record form's pair of the class, which the limits file states before the first request, in the form
+    # `check`'s limits-held step writes and reads
+    if [ -z "${HELD_ALPHA-}" ] || [ -z "${HELD_GAMMA-}" ]; then
+      no "HELD_ALPHA is ${HELD_ALPHA:-unset} and HELD_GAMMA is ${HELD_GAMMA:-unset}: set both in $1, beside ALPHA and" \
         "GAMMA, to the record form's pair of the class, the two lines \`rehearsal.sh check\` writes to its" \
         "record.env.add (limits.json's held)"
+    else
+      [[ $HELD_ALPHA =~ ^[1-9][0-9]*(/[1-9][0-9]*)?$ ]] \
+        || no "HELD_ALPHA is $HELD_ALPHA, and the record form's alpha is a positive number P/Q or P, each a whole number" \
+          "with no sign or leading zero, as \`rehearsal.sh check\` writes it to its record.env.add"
+      [[ $HELD_GAMMA =~ ^[1-9][0-9]*$ ]] \
+        || no "HELD_GAMMA is $HELD_GAMMA, and the record form's gamma is a positive whole number with no sign or" \
+          "leading zero, as \`rehearsal.sh check\` writes it to its record.env.add"
+    fi
     # the record states the class's own two numbers with what they prove
     [ -n "${LIMITS_PROVE-}" ] || no "LIMITS_PROVE is unset: the limits are the class's own two numbers, and the record" \
       "says in a sentence what they prove (the slowdown they prove is 1, that is none)"
@@ -269,6 +279,39 @@ EOF
   try "a copy that exits 5" 5 2 DEFERS=1 COPY_RC=5 COPY_TO=host:dir
   return "$ok"
 }
+settings_test() {  # DIR: `settings` on made-up settings that hold but for the record form's pair: held at a pair in the
+  # form the limits-held step writes, and each other pair refused by name, saying the form
+  local scr=$1 ok=0 rc out v a g
+  mkdir -p "$scr"
+  echo x > "$scr/nonempty"
+  try() {  # WHAT WANT_RC WANT_SAID LINE...: `settings` on the base settings plus LINEs, WANT_SAID a part of what it says
+    local what=$1 want=$2 said=$3
+    shift 3
+    {
+      printf '%s\n' POUW=pearlplus PEARLPLUS_TIE=1 PRODUCT=remote ROW=row PP_CHALLENGER=c PP_PEER=p ALPHA=1/2 GAMMA=100 \
+        LIMITS_UNIT=u LIMITS_PROVE=p DAY=1 DAY_PROGRAM=abab DAY_LOG=l V3C_CLASS=4,32,4 CLASSES=4,32,4 \
+        "MAIN_FILE=$scr/nonempty" "PP_CHALLENGER_KEY=$scr/nonempty" "DAY_PARAMS=$scr/nonempty"
+      printf '%s\n' "$@"
+    } > "$scr/settings.env"
+    out=$(env -u HELD_ALPHA -u HELD_GAMMA -u WANT_CLASS bash "$SELF" settings "$scr/settings.env" 2>&1)
+    rc=$?
+    echo "$what: settings exits $rc (want $want): ${out//$scr/DIR}"
+    [ "$rc" = "$want" ] && [[ $out == *"$said"* ]] || ok=1
+  }
+  try "the pair 3/4 and 25" 0 "the record form's pair 3/4 and 25" HELD_ALPHA=3/4 HELD_GAMMA=25
+  try "the pair 1 and 25" 0 "the record form's pair 1 and 25" HELD_ALPHA=1 HELD_GAMMA=25
+  try "no pair" 3 "HELD_ALPHA is unset and HELD_GAMMA is unset"
+  try "half a pair" 3 "HELD_ALPHA is 3/4 and HELD_GAMMA is unset" HELD_ALPHA=3/4
+  a="the record form's alpha is a positive number P/Q or P"
+  for v in abc 0 0/4 -3/4 3/0 03/4 0.75; do
+    try "HELD_ALPHA $v" 3 "HELD_ALPHA is $v, and $a" "HELD_ALPHA=$v" HELD_GAMMA=25
+  done
+  g="the record form's gamma is a positive whole number"
+  for v in xyz 0 -25 025 2.5 25/1; do
+    try "HELD_GAMMA $v" 3 "HELD_GAMMA is $v, and $g" HELD_ALPHA=3/4 "HELD_GAMMA=$v"
+  done
+  return "$ok"
+}
 
 link_test() {  # LEAN DIR: the real flock-verify at LEAN on a circuit file linked into its archive, in the tree
   "${PY:-$HERE/../../.venv/bin/python}" - "$1" "$2" "$HERE" <<'EOF'
@@ -385,6 +428,7 @@ check() {
   step filter 2m bash "$SELF" filter-test "$scratch/filter"
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
   step settings 1m env WANT_CLASS="$WANT_CLASS" bash "$SELF" settings "$SETTINGS"
+  step settings-pair 1m bash "$SELF" settings-test "$scratch/settings-pair"
   step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
   step gate-probe 2m env SETTINGS="$SETTINGS" PY="$PY" bash "$SELF" probe-test "$scratch/probe"
 
@@ -424,8 +468,14 @@ if h:
 open(add, "w").write("".join(f"{k}={v}\n" for k, v in want.items()))
 got = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n" "$ALPHA" "$GAMMA" "$DAY_PROGRAM" "${HELD_ALPHA-}" "${HELD_GAMMA-}"',
                       settings], capture_output=True, text=True, check=True).stdout.split("\n")[:5]
-bad = [f"{k} is {g or 'unset'}, and the class's own is {want[k]}" for k, g in zip(want, got)
-       if not g or (Fraction(g) != Fraction(want[k]) if k.endswith("ALPHA") else g != want[k])]
+def same(k, g):
+    if not k.endswith("ALPHA"):
+        return g == want[k]
+    try:
+        return Fraction(g) == Fraction(want[k])
+    except (ValueError, ZeroDivisionError):
+        return False
+bad = [f"{k} is {g or 'unset'}, and the class's own is {want[k]}" for k, g in zip(want, got) if not g or not same(k, g)]
 sh = said.get("held") or {}
 if not h:
     bad.append("limits.json states no held pair (the policy step wrote no policy file for it to read k from)")
@@ -521,6 +571,7 @@ case ${1:-} in
   filter-test) filter_test "${2:?a scratch directory}" ;;
   settings) settings_ok "${2:?a settings file}" ;;
   serve-test) serve_test "${2:?a scratch directory}" ;;
+  settings-test) settings_test "${2:?a scratch directory}" ;;
   probe) probe ;;
   probe-test) probe_test "${2:?a scratch directory}" ;;
   link-test) link_test "${2:?flock-verify}" "${3:?a scratch directory}" ;;
