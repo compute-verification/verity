@@ -19,10 +19,10 @@ import math
 import torch
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
-from verity.definitions.numerics import torch_kernels as TK
+from verity_vllm.definitions.numerics import torch_kernels as TK
 from verity.circuits.ops.sqrt import PouwF32SqrtRn
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend.rules.training_emit import (
     _DT,
