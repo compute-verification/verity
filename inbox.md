@@ -27,3 +27,59 @@ C (session 4d808059's report): its head is 7e94d534f322 (A's 1637d668 merged). I
 
 Events not addressed to WALKER: none this turn.
 
+[2026-11-14T08:39Z] 79e44adb8450
+READCALC, Sat 14 Nov, 12:39 AM PST. Training's lock entries against the policy's 91 files, on origin/main 7f8579ab056.
+
+**2 files: of the 86 the split gives to network-accounting, two declare an entry the lock names @training for.**
+
+How:
+- RAN: in the three locks I took every entry whose owner is `@training`, from `guarantees`, `assumptions`, `open` and `domain`. That is 134 entries with 132 distinct names: 99 in security/, 15 in Properties/ and none in Proofs/.
+- RAN: I mapped each name to its declaring file by its full Lean name, with a namespace-tracking parse of every .lean file under security/. Then I confirmed each one with `git grep` of the declaration in that file: 134 of 134 found, each in exactly one file.
+- READ: the 91 files are from #9989's body. RAN: all 91 are on main.
+
+Item 3 (the 86 network-accounting files):
+security/Properties/Nci/Record.lean 4 (Record.Counts, LaidOut, Owns, Rates) mixed with @lean 5
+security/Proofs/Properties/Nci/Agrees.lean 1 (DescAgrees)
+
+Item 4, the training side's files with no training declaration (RAN: no entry of the lock names a declaration in them):
+security/Properties/Nci/Threads.lean 0: the Throttles* proofs are in Proofs/Nci/Verdict.lean, owner @lean
+security/Properties/Nci/Desc/Cover.lean 0: CheckedCoverTraining is in Proofs/Nci/Cover/Checked.lean
+security/Properties/Nci/Desc/Verdict.lean 0: the DescThrottles* proofs are in Proofs/Nci/DescVerdict.lean
+(The fourth, Proofs/Properties/Nci/DescVerdict.lean, holds 2 of training's: DescReports and DescWitnesses, which the PR calls the policy's.)
+
+Item 4, files outside the 91 and outside training's ten rows that declare a training-owned entry (RAN):
+security/Definitions/Assumptions.lean 5
+security/Definitions/Nci.lean 1 mixed with @lean 1
+security/Definitions/Nci/Assumptions/Capability/Information.lean 4
+security/Definitions/Nci/Assumptions/Cover.lean 1
+security/Definitions/Nci/Assumptions/CoverTraining.lean 2
+security/Definitions/Nci/Assumptions/Dampener.lean 3 mixed with @lean 4
+security/Definitions/Nci/Assumptions/Remote.lean 3 mixed with @lean 3
+security/Definitions/Nci/Capability/Consumers.lean 3
+security/Definitions/Nci/Capability/Items.lean 2
+security/Definitions/Nci/Cover.lean 1
+security/Definitions/Nci/Cut.lean 5
+security/Definitions/Nci/Formalism/Inference.lean 7
+security/Definitions/Nci/Formalism/Runs.lean 4
+security/Definitions/Nci/Formalism/Training.lean 3
+security/Definitions/Nci/Threads.lean 1 mixed with @lean 2
+security/Proofs/Nci/Capability/Budgets.lean 3
+security/Proofs/Nci/Capability/Dependency.lean 3
+security/Proofs/Nci/Capability/Witnesses.lean 12
+security/Proofs/Nci/Cover/Checked.lean 1
+security/Proofs/Nci/Cover/Training.lean 1
+security/Proofs/Nci/Cut.lean 5
+security/Proofs/Nci/CutWitness.lean 7
+security/Proofs/Nci/DescVerdict.lean 4
+security/Proofs/Nci/Formalism/Fit.lean 3
+security/Proofs/Nci/Formalism/Slowdown.lean 5
+security/Proofs/Nci/Formalism/Witnesses.lean 12
+security/Proofs/Nci/RemotePeriod.lean 3
+security/Proofs/Nci/Witnesses.lean 2 mixed with @lean 19
+
+Notes:
+- 5 of training's ten rows hold training entries, and 36 files hold them in all.
+- 20 of the 134 are `domain` premises (security/ lock), counted because you asked for every premise, open or not. Without them, Definitions/Assumptions.lean and some Definitions/Nci files would drop from item 4's second list.
+- One lock entry resolves to no declaration: `Core.Protocol.Accepts` (@lean, Properties lock, domain).
+- Nothing written to the tree, no PR, nothing posted. No event meant for you reached me.
+
