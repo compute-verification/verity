@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Count
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Properties.Spot.Second
 import all Spot.Draw
 import all Lean.Data.Json.Basic
@@ -164,7 +164,7 @@ theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Dra
       exact forall₂_map_eq (fun _ _ hb => stratum_cell hb) hF
     · exact absurd h (throw_ne _ _)
 
-theorem getD_draw_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
+theorem getD_sample_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
     getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "units" = natsJson units := (rfl)
 
@@ -172,7 +172,7 @@ theorem getD_draw_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ)
 theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" = natsJson units)
     (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Draw.proved draw := by
   unfold Draw.proved
-  rw [FlockSoundness.Audit.DrawExec.mem_qsort]
+  rw [FlockSoundness.Audit.SampleExec.mem_qsort]
   refine Array.mem_append_left _ ?_
   dsimp only
   rw [hd]
@@ -185,7 +185,7 @@ theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Jso
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
       ∃ parsed units, Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
-        Draw.drawUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
+        Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
           ∀ u ∈ units, (u : Int) ∈ Draw.proved draw := by
   unfold Select.selectSecond at h
   cases hq : Select.secondProblem sample ns ks with
@@ -199,12 +199,12 @@ theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Jso
     · exact absurd h (throw_bind_ne _ _ _)
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    unfold Draw.drawFirstRead at hd
+    unfold Draw.sampleFirstRead at hd
     obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
     obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
     obtain ⟨rfl, rfl⟩ := hd
-    exact ⟨parsed, units, hp, hu, proved_units _ _ (getD_draw_units _ _ _ _ _)⟩
+    exact ⟨parsed, units, hp, hu, proved_units _ _ (getD_sample_units _ _ _ _ _)⟩
 
 /-- A second stage `secondProblem` passes has a nonempty, ascending replay sample. -/
 theorem secondProblem_sample {sample ns ks : Array ℕ} (h : Select.secondProblem sample ns ks = none) :
@@ -371,7 +371,7 @@ theorem secondMisses : SecondMisses := by
   · rw [Claims.Pr_congr fun src => iff_false_intro fun hs => hex ⟨src, hs⟩, Claims.Pr_false]
     exact hR0
   obtain ⟨src0, hs0⟩ := hex
-  obtain ⟨draw0, read0, h0, -⟩ := hev src0 hs0
+  obtain ⟨sample0, read0, h0, -⟩ := hev src0 hs0
   obtain ⟨-, parsed, -, hp, -, -⟩ := selectSecond_ok h0
   obtain ⟨ws, rfl, hmap⟩ := flockLaw_second _ _ _ _ _ hp
   refine le_trans (Claims.Pr_mono fun src hs => ?_)

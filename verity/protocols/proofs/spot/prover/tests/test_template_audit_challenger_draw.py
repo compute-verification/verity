@@ -1,6 +1,6 @@
-"""a0's Lean sample on a development challenger's coins (`a0.challenger_draw`): the verifier has no randomness of its
+"""a0's Lean sample on a development challenger's coins (`a0.challenger_sample`): the verifier has no randomness of its
 own, so `verity-verify-proof draw` of fewer than every unit reads `--stream-file F`, F holding a challenger's coins opened
-after the registration's digest. F holds exactly the bytes the sampling design reads in Lean's `Draw.drawOn` layout (no
+after the registration's digest. F holds exactly the bytes the sampling design reads in Lean's `Draw.sampleOn` layout (no
 extension), and the record beside it replays them from the challenger's commitment, under no other registration digest
 or challenger. `verity-verify-proof` is a stand-in that echoes its argv and F; the challenger's entropy is seeded."""
 from __future__ import annotations
@@ -50,7 +50,7 @@ def lean(tmp_path, monkeypatch):
 
 
 def exactly(stream: bytes):
-    """A source of `stream`'s bytes in order that refuses to read past them, as Lean's `drawOn` does."""
+    """A source of `stream`'s bytes in order that refuses to read past them, as Lean's `sampleOn` does."""
     at = [0]
 
     def read(n: int) -> bytes:
@@ -62,11 +62,11 @@ def exactly(stream: bytes):
 
 
 @pytest.mark.parametrize("name", sorted(LAWS))
-def test_the_draw_reads_a_challengers_coins_opened_after_the_registration(lean, tmp_path, name):
+def test_the_sample_reads_a_challengers_coins_opened_after_the_registration(lean, tmp_path, name):
     law, n = LAWS[name]
     after = hashlib.sha512(name.encode()).digest()
     args = ["--population", str(n), "--law", name]
-    p = a0.challenger_draw(lean, args, law, n, after.hex(), tmp_path / "draw.log")
+    p = a0.challenger_sample(lean, args, law, n, after.hex(), tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     out = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     stream_file = tmp_path / "draw.coins.bin"
@@ -88,7 +88,7 @@ def test_the_draw_reads_a_challengers_coins_opened_after_the_registration(lean, 
 def test_the_registration_digest_may_come_as_bytes(lean, tmp_path):
     law, n = LAWS["subset"]
     after = hashlib.sha512(b"bytes").digest()
-    p = a0.challenger_draw(lean, ["--population", str(n), "--k", "5"], law, n, after, tmp_path / "draw.log")
+    p = a0.challenger_sample(lean, ["--population", str(n), "--k", "5"], law, n, after, tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     assert json.loads((tmp_path / "draw.coins.json").read_text())["segment"]["after"] == after.hex()
 
@@ -100,7 +100,7 @@ def test_the_registration_digest_may_come_as_bytes(lean, tmp_path):
 def test_the_record_replays_under_no_other_registration_or_challenger(lean, tmp_path, other, why):
     law, n = LAWS["stratified"]
     after = hashlib.sha512(b"registration").digest()
-    p = a0.challenger_draw(lean, ["--population", str(n)], law, n, after, tmp_path / "draw.log")
+    p = a0.challenger_sample(lean, ["--population", str(n)], law, n, after, tmp_path / "draw.log")
     assert p.returncode == 0, p.stderr
     record = json.loads((tmp_path / "draw.coins.json").read_text())
     commitment = Ch.LiveCommitment.from_json(record["commitment"])

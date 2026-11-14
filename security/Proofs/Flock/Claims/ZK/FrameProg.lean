@@ -569,27 +569,27 @@ theorem ofBytes_h_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) : (Draws.
   dsimp only
   rw [Array.size_set!, Array.size_set!, words_size]
 
-section OfDraws
+section OfSamples
 variable (l : _root_.Flock.Zk.PadLayout) (d : Draws) (m : Option _root_.Flock.ZkServer.Frame.MaskSlot)
-theorem ofDraws_lay : (Cfg.ofDraws l d m).lay = l := rfl
-theorem ofDraws_order : (Cfg.ofDraws l d m).order = _root_.Flock.ZkServer.Frame.absorbed l := rfl
-theorem ofDraws_nPiop :
-    (Cfg.ofDraws l d m).nPiop = (_root_.Flock.ZkServer.Frame.absorbed l).size - _root_.Flock.ZkServer.Frame.nLig l := rfl
-theorem ofDraws_lig : (Cfg.ofDraws l d m).lig = decide (l.k0 > 0) := rfl
-theorem ofDraws_mask : (Cfg.ofDraws l d m).mask = m := rfl
-theorem ofDraws_h : (Cfg.ofDraws l d m).h = d.h := rfl
-end OfDraws
+theorem ofSamples_lay : (Cfg.ofSamples l d m).lay = l := rfl
+theorem ofSamples_order : (Cfg.ofSamples l d m).order = _root_.Flock.ZkServer.Frame.absorbed l := rfl
+theorem ofSamples_nPiop :
+    (Cfg.ofSamples l d m).nPiop = (_root_.Flock.ZkServer.Frame.absorbed l).size - _root_.Flock.ZkServer.Frame.nLig l := rfl
+theorem ofSamples_lig : (Cfg.ofSamples l d m).lig = decide (l.k0 > 0) := rfl
+theorem ofSamples_mask : (Cfg.ofSamples l d m).mask = m := rfl
+theorem ofSamples_h : (Cfg.ofSamples l d m).h = d.h := rfl
+end OfSamples
 
 /-- **A rep's configurations at two samples** of one layout and mask slot are alike. -/
 theorem cfgAlike_ofBytes (l : _root_.Flock.Zk.PadLayout) (b b' : ByteArray)
     (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
-    CfgAlike (Cfg.ofDraws l (Draws.ofBytes l b) m) (Cfg.ofDraws l (Draws.ofBytes l b') m) where
-  lay := (ofDraws_lay l _ m).trans (ofDraws_lay l _ m).symm
-  order := (ofDraws_order l _ m).trans (ofDraws_order l _ m).symm
-  nPiop := (ofDraws_nPiop l _ m).trans (ofDraws_nPiop l _ m).symm
-  lig := (ofDraws_lig l _ m).trans (ofDraws_lig l _ m).symm
-  mask := (ofDraws_mask l _ m).trans (ofDraws_mask l _ m).symm
-  size := by rw [ofDraws_h, ofDraws_h, ofBytes_h_size, ofBytes_h_size]
+    CfgAlike (Cfg.ofSamples l (Draws.ofBytes l b) m) (Cfg.ofSamples l (Draws.ofBytes l b') m) where
+  lay := (ofSamples_lay l _ m).trans (ofSamples_lay l _ m).symm
+  order := (ofSamples_order l _ m).trans (ofSamples_order l _ m).symm
+  nPiop := (ofSamples_nPiop l _ m).trans (ofSamples_nPiop l _ m).symm
+  lig := (ofSamples_lig l _ m).trans (ofSamples_lig l _ m).symm
+  mask := (ofSamples_mask l _ m).trans (ofSamples_mask l _ m).symm
+  size := by rw [ofSamples_h, ofSamples_h, ofBytes_h_size, ofBytes_h_size]
 
 theorem map_range_congr {β : Type} {f g : ℕ → β} {n : ℕ} (h : ∀ j, j < n → f j = g j) :
     (Array.range n).map f = (Array.range n).map g := by
@@ -916,7 +916,7 @@ theorem placeholder_ok {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} {link :
     {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     (h : placeholder spec sts k link = .ok (c', t, dom, xs, hi)) :
     ∃ lay mask, _root_.Flock.ZkServer.Drive.start sts[k / 2]! = .ok (lay, mask) ∧
-      c' = Cfg.ofDraws lay (Draws.ofBytes lay (zeros (_root_.Flock.ZkServer.Frame.drawBytes lay))) (some mask) ∧
+      c' = Cfg.ofSamples lay (Draws.ofBytes lay (zeros (_root_.Flock.ZkServer.Frame.sampleBytes lay))) (some mask) ∧
       dom = (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8 ∧
       xs = _root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! link) := by
   have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -1589,7 +1589,7 @@ theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     rw [hx]
     exact hst
   have hc : CfgAlike ((ofLoop T L₀ real).cfg x ρ h) c' := by
-    unfold cfg drawsAt
+    unfold cfg samplesAt
     rw [hrk, hc']
     have e1 : (ofLoop T L₀ real).lay x k = lay := by
       show ((startOf x k).toOption.map (·.1)).getD default = lay
@@ -1720,7 +1720,7 @@ theorem ofLoop_progChecks_sched0 (T : ZKMal.CoinLayer.TableData)
     rw [hx]
     exact hst
   have hc : CfgAlike ((ofLoop T L₀ real).cfg x ρ (e0 :: h1)) c' := by
-    unfold cfg drawsAt
+    unfold cfg samplesAt
     rw [hrk, hc']
     have e1 : (ofLoop T L₀ real).lay x k = lay := by
       show ((startOf x k).toOption.map (·.1)).getD default = lay

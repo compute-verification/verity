@@ -9,7 +9,7 @@ different counts, a member whose fewest is none, and a sampling design no sample
 `Registration.check`'s `link-points`). A member whose fewest is none is one some sample that ends misses: that sample
 gives it no statement (`OneStageZk.sampledHeld`), so the check sets up no session of its circuit.
 
-A sample that ends (`Draw.drawUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
+A sample that ends (`Draw.sampleUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
 population never ends); under `bernoulli a b`, none when `a = 0`, each unit when `a ≥ b > 0`, and any number of them
 otherwise (`b = 0 < a` never ends); and under `stratified` and `work`, `k_s` distinct units of each stratum `s` (a
 stratum with `k_s` above its size never ends). The fewest is what is left after the sample's units fill the rest of the
@@ -103,7 +103,7 @@ def refused (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat ×
     | some (lo, hi) => lo == 0 || nbl g lo != nbl g hi
     | none => false
 
-/-- The sampling design the sample runs on (`OneStage.drawnFrom`): the verifier's own expanded over its program and query
+/-- The sampling design the sample runs on (`OneStage.sampledFrom`): the verifier's own expanded over its program and query
 (`Draw.deriveLaw`), else its subset or Bernoulli sampling design as Flock reads it (`Draw.flockLaw`); with the population. -/
 def lawOf (p : Program) (query law : Json) (table : Option Json) : V (Flock.Draw.Law × Nat) := do
   let population ← Partition.units p query

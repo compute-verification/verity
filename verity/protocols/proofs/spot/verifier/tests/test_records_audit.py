@@ -1347,7 +1347,7 @@ def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
     assert e.value.code == 2 and "--run" in capsys.readouterr().err
 
 
-def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):
+def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it(written):
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
@@ -1403,7 +1403,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
                     "key_record": None, "deployed": True}
 
 
-def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_path, monkeypatch):
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""

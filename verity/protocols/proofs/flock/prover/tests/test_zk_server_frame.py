@@ -105,7 +105,7 @@ def slots(n_mlv: int, n_lc: int, n_ood0: int, k0: int) -> dict[str, int]:
 
 
 def draw_bytes(lay: dict) -> int:
-    """`Frame.drawBytes`: `h`, `μ` and the rows' padding (16 bytes a word), `τ`'s salt, a salt per leaf of the pads' code."""
+    """`Frame.sampleBytes`: `h`, `μ` and the rows' padding (16 bytes a word), `τ`'s salt, a salt per leaf of the pads' code."""
     n = slots(**lay)["len"]
     leaves = 1 << (n + K_PAD - 1).bit_length() << 3
     return 16 * (2 * n + 2 * K_PAD) + 192 + 192 * leaves
@@ -280,7 +280,7 @@ def released(f: Frame, rounds, fail_at: int | None = None) -> list:
     return out + [f.ask("finish")]
 
 
-def test_the_frame_draws_the_reps_randomness_sends_only_the_pads_root_and_refuses_a_start_that_brings_any():
+def test_the_frame_samples_the_reps_randomness_sends_only_the_pads_root_and_refuses_a_start_that_brings_any():
     f, g = Frame(os=True), Frame(os=True)
     for x in (f, g):
         assert x.start[0] == "ok 64", "the root alone: the draws never leave the frame"
@@ -294,7 +294,7 @@ def test_the_frame_draws_the_reps_randomness_sends_only_the_pads_root_and_refuse
     assert x.start == "err the rep's start: a mask slot of no words" and x.close() == 1
 
 
-def test_the_frame_commits_the_draws_it_read_and_sets_h_ab_and_w_itself():
+def test_the_frame_commits_the_samples_it_read_and_sets_h_ab_and_w_itself():
     """`Draws.ofBytes` and `padsRoot`, through `flock-frame-tape`: the same samples give the same root; the samples' words at
     `h_ab` and `w` are not read (the frame sets them to `h_a h_b` and `x y`), and the root commits `h`, `μ`, the rows'
     padding and the leaf salts; a read of any other size is refused."""

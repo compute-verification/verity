@@ -18,7 +18,7 @@ across strata, and the strata run over every table's units, so a table's subcirc
 `partS`); when the units are laid out table by table and every table's strata sample the same number of units, part `j` is
 table `j`'s own stratified sample. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified sampling design);
 that the parts are proved and set up with the session's link points is verity-verify-proof's own arithmetic
-(`ZkHidden.drawOkZKHJ_of_accepts_stratified`).
+(`ZkHidden.sampleOkZKHJ_of_accepts_stratified`).
 
 `StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its sampling design, as
 `Period`'s `SamplingBlock` is. Its incorrect proof blocks are `wrongRegZ` in the committed transcript fixed at registration
@@ -81,7 +81,7 @@ structure StratifiedBlockMT where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g ((∑ s, ks s) / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g ((∑ s, ks s) / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
     LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g ((∑ s, ks s) / nTab I)) →
       Discharge.Exec.Transcript
@@ -138,14 +138,14 @@ noncomputable def vb :=
   (rsZHJ_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg))
 
 /-- The model audit's strategy that a live strategy `τ` refines to: `EndToEndHidden`'s `σ`, with the sample at each
-accepted outcome from custody at the stratified sampling design (`drawOkZKHJ_of_accepts_stratified`). -/
+accepted outcome from custody at the stratified sampling design (`sampleOkZKHJ_of_accepts_stratified`). -/
 noncomputable def sim (τ : Strategy w.game) :=
   simZJ execArith hs512 (planZHJ w.dj w.y₀) w.I w.wr (opnAtZHJ (planZHJ w.dj w.y₀) w.I w.dj) w.dg
     (decAtZJ (planZHJ w.dj w.y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) w.N
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ w.I w.wr _ _ _ _ _
       (runsZCJH_liveA w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj
         w.y₀ w.wr w.L w.hTags w.hCust.1
-        fun ω R o hacc => drawOkZKHJ_of_accepts_stratified w.I w.ht (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks
+        fun ω R o hacc => sampleOkZKHJ_of_accepts_stratified w.I w.ht (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks
           w.St w.hS w.Kd w.pop w.Lb w.src w.dj w.hCust.2 w.hCust.1 ω R o hacc)) τ
 
 /-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
@@ -210,7 +210,7 @@ structure BlockRecMT (W : ℕ → StratifiedBlockMT) where
   idx : ℕ
   accepted : Prop
   wrong : Finset (Fin (W idx).n)
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace BlockRecMT
 

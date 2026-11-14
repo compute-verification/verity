@@ -151,7 +151,7 @@ def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
             stream(bad)
 
 
-def test_the_draw_is_the_challengers_coins_and_nothing_else():
+def test_the_sample_is_the_challengers_coins_and_nothing_else():
     def drawn(seed):
         stream = _stream(coins=FC.Challenger(seed))
         return stream.select(stream.register(_record(), _ports(6))).units
@@ -160,7 +160,7 @@ def test_the_draw_is_the_challengers_coins_and_nothing_else():
     assert len({tuple(drawn(str(b))) for b in range(16)}) > 1
 
 
-def test_a_stream_draws_no_coins_of_its_own():
+def test_a_stream_samples_no_coins_of_its_own():
     """A stream whose selection reads coins takes only the auditor's challenger's (`coins.ChallengerCoins`): asked for
     none, the operating system's bytes as the Lean reads them (`verifier.coins`), or any other source of bytes, it
     refuses (`NO_OWN_COINS`), and a salt from any coins but a challenger's is refused the same way before a byte is read.
@@ -664,7 +664,7 @@ def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
     return T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))
 
 
-def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_registration():
+def test_a_windows_seed_salt_is_sampled_once_before_it_serves_and_named_by_each_registration():
     """The stream samples the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
     the window's open root, logged on the challenger's clock, sampled once and before the window's first registration.
     Both verifiers hold each registration of the window to it: a window naming it runs round to an accepted outcome, and
@@ -709,7 +709,7 @@ def test_the_stream_stops_at_its_budgeth_failure():
     assert e.value.verdict.codes == ("stopped",) and len(stream.records) == 3
 
 
-def test_a_sampler_draws_instead_and_is_held_to_the_law():
+def test_a_sampler_samples_instead_and_is_held_to_the_law():
     stream = _stream(sampler=lambda law, n: [n - 1, 0])
     assert stream.select(stream.register(_record(), _ports(6))).units == [0, 5]
     for bad in ([0, 6], [1], [2, 2]):
@@ -757,7 +757,7 @@ def test_public_outputs_come_from_the_verifier_of_record():
     assert out.public == {"credited": 12} and stream.records[0]["public"] == {"credited": 12}
 
 
-def test_a_call_names_its_own_streams_registration_and_draw():
+def test_a_call_names_its_own_streams_registration_and_sample():
     stream, other = _stream(), _stream()
     reg = other.register(_record(row=5), _ports(6))
     with pytest.raises(S.Refused) as e:
@@ -804,7 +804,7 @@ def test_a_closure_map_is_refused_before_any_coin_is_read():
 
 
 @pytest.mark.parametrize("text", ["rate:1/3", "stratified-rate:1/3", "work-rate:1/3"])
-def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
+def test_the_default_sample_is_sample_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `verity-verify-proof draw` on the same bytes
     samples the same proof blocks."""
     table = WORK if text.startswith("work") else None

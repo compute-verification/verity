@@ -351,7 +351,7 @@ def tables_problem(law: Mapping[str, Any], tables: int) -> str | None:
 
 
 def proved(draw: Mapping[str, Any]) -> list[int]:
-    """The proof blocks a sample proves: the sampled proof blocks and a work sample's closure, ascending (Lean `UnitDraw.proved`)."""
+    """The proof blocks a sample proves: the sampled proof blocks and a work sample's closure, ascending (Lean `UnitSample.proved`)."""
     return sorted([*draw["units"], *draw.get("closure", ())])
 
 

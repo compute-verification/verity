@@ -2,11 +2,11 @@ module
 
 public import Proofs.Properties.Verity.Sampled.SessionAt
 public import Proofs.Properties.Verity.Sampled.ParamsProgram
-public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Flock.Bridge.SampledLaw
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
@@ -93,16 +93,16 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
 /-! ## The sampling design -/
 
 /-- **Where v2 samples, `lawAt` reads `designAt`'s design**: at a verifier whose program the descriptor `desc` parses
-to, under the sampling design object `Draw.derive` writes, a sample `drawnFrom` makes is under `drawnLaw`'s design
-(`drawsUnder_of_drawnFrom`), which is `designAt`'s there and the one `lawAt` reads: the design `deriveLaw` expands,
+to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledLaw`'s design
+(`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `lawAt` reads: the design `deriveLaw` expands,
 else the one `flockLaw` parses from the object. -/
 theorem lawAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Registration.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : _root_.Spot.Draw.derive v.program v.query v.law v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
-    {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.drawnFrom v lo n src = .ok r) :
+    {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.sampledFrom v lo n src = .ok r) :
     lawAt v n = .ok (Flock.Bridge.designAt desc v.query v.law v.workTable n) := by
-  obtain ⟨law, ⟨hl, -⟩, -⟩ := Flock.Bridge.drawsUnder_of_drawnFrom hp hlo h
-  obtain ⟨p', derived, parsed, hp', hd, hpar, rfl⟩ := Flock.Bridge.drawnLaw_ok hl
+  obtain ⟨law, ⟨hl, -⟩, -⟩ := Flock.Bridge.samplesUnder_of_sampledFrom hp hlo h
+  obtain ⟨p', derived, parsed, hp', hd, hpar, rfl⟩ := Flock.Bridge.sampledLaw_ok hl
   obtain rfl : p' = v.program := Except.ok.inj (hp'.symm.trans hp)
   have hdes : Flock.Bridge.designAt desc v.query v.law v.workTable n = derived.getD parsed := by
     unfold Flock.Bridge.designAt
@@ -378,18 +378,18 @@ theorem printed_units {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     exact ⟨fun ⟨i, hi, he⟩ => he ▸ hi, fun hx => ⟨⟨x, hlt x hx⟩, hx, rfl⟩⟩
   rw [himg, (List.toFinset_sort (· ≤ ·) (hp.imp ne_of_lt)).2 (hp.imp le_of_lt)]
 
-/-- **The record's subset print decodes to a sample proving its units**: the print is `printedDraw`'s of the sample
-of its units (`printed_units`), which decodes to that sample (`drawFileZK_printedDraw`), with no closure. -/
+/-- **The record's subset print decodes to a sample proving its units**: the print is `printedSample`'s of the sample
+of its units (`printed_units`), which decodes to that sample (`sampleFileZK_printedSample`), with no closure. -/
 theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
-    (h : recordDrawn (.subset m) n units record) {D : Flock.Draw.UnitDraw}
-    (hD : Flock.Draw.UnitDraw.ofJson (Flock.Draw.UnitDraw.toJson ⟨.subset m, n, units, #[]⟩) = .ok D) :
+    (h : recordSampled (.subset m) n units record) {D : Flock.Draw.UnitSample}
+    (hD : Flock.Draw.UnitSample.ofJson (Flock.Draw.UnitSample.toJson ⟨.subset m, n, units, #[]⟩) = .ok D) :
     D.proved = units := by
   obtain ⟨S, hS⟩ := printed_units h.1
-  have e : Flock.Draw.UnitDraw.toJson ⟨.subset m, n, units, #[]⟩ = printedDraw (n := n) (.subset m) S := by
-    unfold printedDraw FlockSoundness.Discharge.ZkLink.drawOf
+  have e : Flock.Draw.UnitSample.toJson ⟨.subset m, n, units, #[]⟩ = printedSample (n := n) (.subset m) S := by
+    unfold printedSample FlockSoundness.Discharge.ZkLink.drawOf
     rw [hS]
   rw [e] at hD
-  rw [drawFileZK_printedDraw m S D hD]
+  rw [sampleFileZK_printedSample m S D hD]
   show (if (#[] : Array ℕ).isEmpty then _ else _) = units
   simp only [Array.isEmpty_empty, ite_true]
   exact hS
@@ -401,28 +401,28 @@ theorem lawOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n 
     Flock.Bridge.LawOn (Flock.Bridge.designAt desc qr lj tb n) (Flock.Bridge.nsOf desc qr)
       (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) := by
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with h | h
-  · exact Flock.Bridge.lawOn_drawsUnder hpop h (Flock.Bridge.notBernoulli_drawsUnder h)
+  · exact Flock.Bridge.lawOn_samplesUnder hpop h (Flock.Bridge.notBernoulli_samplesUnder h)
   · rw [h]
     exact ⟨rfl, Nat.zero_le _⟩
 
 open FlockSoundness.Discharge.Composed (inputsJ nTab) in
 /-- **The session's reference setup**: at one table, the setup `verify --zk` makes at the record's subset print of
-`kd` units sets up a `--zk` table (`drawSetupHP_of_setupHiddenI`, `drawSetupZHJP_of`, at no sampled proof block) at
+`kd` units sets up a `--zk` table (`sampleSetupHP_of_setupHiddenI`, `sampleSetupZHJP_of`, at no sampled proof block) at
 `mPtsOf g kd` points, since the print decodes to a sample proving its `kd` units (`proved_of_recordDrawn`). -/
 theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {kd n' : ℕ} {recS : String}
     {units : Array ℕ} {st : Flock.Stmt} (hc1 : I.count = 1) (ht : I.tags.typed = false)
     (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
-    (hrd : recordDrawn (.subset units.size) n' units recS) (hsize : units.size = kd)
+    (hrd : recordSampled (.subset units.size) n' units recS) (hsize : units.size = kd)
     (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
       (inputsJ I 0).coins (inputsJ I 0).tables (FlockSoundness.Discharge.Exec.recordDraw recS)
       (inputsJ I 0).partition (inputsJ I 0).program none = .ok st)
     (hshape : Flock.Zk.shapeOk st = .ok ()) :
     ∃ (S₀ : Finset (Fin n)) (d₀ : Json),
-      Nonempty (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJP (inputsJ I 0) none
+      Nonempty (FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP (inputsJ I 0) none
         (FlockSoundness.Discharge.Exec.mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) := by
   have hdj : FlockSoundness.Discharge.Exec.recordDraw recS =
-      some (Flock.Draw.UnitDraw.toJson ⟨.subset units.size, n', units, #[]⟩) :=
-    (exec_recordDraw recS).trans hrd.2
+      some (Flock.Draw.UnitSample.toJson ⟨.subset units.size, n', units, #[]⟩) :=
+    (exec_recordSample recS).trans hrd.2
   rw [hdj] at hst
   have htJ : (inputsJ I 0).tags = FlockSoundness.Discharge.ZkExec.zkTags I := by
     show FlockSoundness.Discharge.Exec.tagsAt _ I.count 0 = _
@@ -439,13 +439,13 @@ theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : 
     rw [hn1, Nat.div_one, ← hsize]
     exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat hD)
       (fun D' hD' => by rw [proved_of_recordDrawn hrd hD']) hst'
-  obtain ⟨pi', pop, -, -, hdr⟩ := FlockSoundness.Discharge.Hidden.setupHidden_drawnP hst
-  obtain ⟨Dd, hDd, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec
+  obtain ⟨pi', pop, -, -, hdr⟩ := FlockSoundness.Discharge.Hidden.setupHidden_sampledP hst
+  obtain ⟨Dd, hDd, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec
     (c := { st.c with outPorts := if pi'.ports.isEmpty then #[] else #[("public inputs", pi'.words)] }) hdr
-  obtain ⟨xx, hxx⟩ := FlockSoundness.Discharge.HiddenExec.drawSetupHP_of_setupHiddenI (I := inputsJ I 0)
+  obtain ⟨xx, hxx⟩ := FlockSoundness.Discharge.HiddenExec.sampleSetupHP_of_setupHiddenI (I := inputsJ I 0)
     (own := none) (S := (∅ : Finset (Fin n))) (FlockSoundness.Discharge.Composed.typedJ ht 0) hst hf hDd
     (fun v hv => by simp at hv) hmPts
-  obtain ⟨y, -, -, -⟩ := FlockSoundness.Discharge.ZkHidden.drawSetupZHJP_of xx (by rw [hxx]; exact hshape)
+  obtain ⟨y, -, -, -⟩ := FlockSoundness.Discharge.ZkHidden.sampleSetupZHJP_of xx (by rw [hxx]; exact hshape)
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
 
@@ -507,7 +507,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
       ∃ reg, Flock.ProvedScope.check (Flock.Witness.zkTags (_root_.Spot.OneStageZk.inputsOf tags0 p.own
           (V.circuitFile θ F) pubB (_root_.Core.Blobs.ofArray o.sent.blobs))) true (V.circuitFile θ F) pubB
         (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs)) 1 false reg = .ok () ∧
-      ∃ recS units rd x, recordDrawn (.subset units.size) n units recS ∧
+      ∃ recS units rd x, recordSampled (.subset units.size) n units recS ∧
         units.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
           p.base.verifier.workTable n) ∧
         _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
@@ -560,20 +560,20 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
     unfold sentRecord
     rw [hcs]
     exact hsr2
-  obtain ⟨derived, fl, hder, hfl, hdu⟩ := drawnFrom_ok hdf
-  have hdrew : Drew k o.sent dr (derived.getD fl) n ξ (drawnUnits ev.base.draw) :=
+  obtain ⟨derived, fl, hder, hfl, hdu⟩ := sampledFrom_ok hdf
+  have hdrew : Drew k o.sent dr (derived.getD fl) n ξ (sampledBlocks ev.base.draw) :=
     ⟨a, b, e, p₀, cm, ev, hcase, hacc0, ⟨lo, derived, fl, hlo, hnn ▸ hn', hder, hfl, rfl⟩, rfl, read, hdu⟩
-  have hrd := drawHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
+  have hrd := sampleHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
   have hlawD := lawAt_designAt hdesc hlo hdf
   have hlawL : lawAt p₀.base.verifier n = .ok (derived.getD fl) := by
     simp only [lawAt, hlo, hder, hfl, ok_bind]
     rfl
   have hLd := Except.ok.inj (hlawL.symm.trans hlawD)
   rw [hLd] at hdu
-  have hsize := Flock.Bridge.drawUnits_size (lawOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
+  have hsize := Flock.Bridge.sampleUnits_size (lawOn_designAt (Flock.Bridge.popMatches_of_popOk hdesc hAc.pop)) hdu
   subst hcf
   exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc, hlawD, reg, hsc,
-    recS, drawnUnits ev.base.draw, rd, x, hrd, hsize, hsetup⟩
+    recS, sampledBlocks ev.base.draw, rd, x, hrd, hsize, hsetup⟩
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 /-- **The session's inputs, descriptor, public file and population on an accepted play** (`accepted_parts`): the inputs
@@ -601,7 +601,7 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
       Flock.Bridge.PopMatches desc p.base.verifier.query n ∧
       lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
         p.base.verifier.workTable n) ∧
-      ∃ recS units st, recordDrawn (.subset units.size) n units recS ∧
+      ∃ recS units st, recordSampled (.subset units.size) n units recS ∧
         units.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
           p.base.verifier.workTable n) ∧
         Flock.Stmt.setupHidden (FlockSoundness.Discharge.Composed.inputsJ I 0).tags
@@ -638,7 +638,7 @@ the reference setup's refused one, has a schedule `Zk.schedule` returned, whose 
 (`zkLogLenCap_23`), as `hr_planZHJ_23` for the plan without the verifier's own words. -/
 theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
-    (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}
+    (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}
     (hkρ : (2 : ℝ) ^ 23 ≤ ρ * (Real.exp 1 * k)) (S : Finset (Fin n)) (R : Reg)
     (j : Fin (planZHJP (Reg := Reg) dj y₀ S R).length) :
     rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ := by
@@ -699,7 +699,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
     rw [hθ, hFo] at h1
     exact h1
   have hst2 := hst
-  rw [(exec_recordDraw recS).trans hrd.2] at hst2
+  rw [(exec_recordSample recS).trans hrd.2] at hst2
   obtain ⟨hpiD, pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hst2 hpubO hnO hports
   obtain ⟨S₀, d₀, hy⟩ := y₀_of_setup n hcount htyp hDp hrd hsize hst hshape
   have hn1 : nTab I = 1 := by

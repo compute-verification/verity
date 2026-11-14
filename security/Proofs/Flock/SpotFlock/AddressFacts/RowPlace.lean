@@ -118,7 +118,7 @@ theorem arr_idxOf_getD {a : Array ℕ} (hnd : a.toList.Nodup) {i : ℕ} (hi : i 
   rw [hg]
   exact hnd.idxOf_getElem i hl
 
-/-- **A session's sampled proof blocks**, as `CheckedRun.drawn_of_ok` gives them: the second sample's units in the part `P`,
+/-- **A session's sampled proof blocks**, as `CheckedRun.sampled_of_ok` gives them: the second sample's units in the part `P`,
 each counted from the part's first slot. -/
 theorem mem_drawn {proved : Array ℤ} {P : Spot.SecondStage.Part} {q : ℕ} {A : Array ℕ}
     (hA : A = ((proved.map Int.toNat).filter (P.holds q)).map (· - P.lo)) {x : ℕ} :
@@ -253,8 +253,8 @@ variable {h : Held} {r : CheckedRun h.stage}
 
 /-- **The instance of an accepted run's checked inner block** is the first of its session's sampled proof blocks that the
 registration maps to the inner block, counted in the inner block's part of the run's sample. -/
-theorem n_eq_findIdx (hr : r.Ok h) {dj : Json} {D : _root_.Flock.Draw.UnitDraw} (hdj : r.ins.read.draw = some dj)
-    (hD : _root_.Flock.Draw.UnitDraw.ofJson dj = .ok D) :
+theorem n_eq_findIdx (hr : r.Ok h) {dj : Json} {D : _root_.Flock.Draw.UnitSample} (hdj : r.ins.read.draw = some dj)
+    (hD : _root_.Flock.Draw.UnitSample.ofJson dj = .ok D) :
     r.n h = D.proved.toList.findIdx fun p => h.reg.blockAt (sampleOf h r) ((partOf h r).lo + p) == r.u := by
   obtain ⟨st, rec, draw, hR⟩ := reads_of_ok hr
   have hbl := blocks_of_ok hr hR
@@ -279,14 +279,14 @@ theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false
     AddressRow.Sits h := by
   intro r hr
   have hlab := CheckedRun.labelled_of_ok hr
-  obtain ⟨dj, D, draw, hdj, hD, hdraw, hn, hprov, -⟩ := CheckedRun.drawn_of_ok hr
+  obtain ⟨dj, D, draw, hdj, hD, hdraw, hn, hprov, -⟩ := CheckedRun.sampled_of_ok hr
   obtain ⟨st, rec, draw', hR⟩ := CheckedRun.reads_of_ok hr
   have hbl := CheckedRun.blocks_of_ok hr hR
   have hrank := CheckedRun.n_eq_findIdx hr hdj hD
   have hunit : unitOf r.ins.read.draw (r.n h) = D.proved.getD (r.n h) 0 := by
     simp only [unitOf, hdj, hD]
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
-  obtain ⟨read, hsel0⟩ := AddressRow.select_of_secondDraw h hdraw
+  obtain ⟨read, hsel0⟩ := AddressRow.select_of_secondSample h hdraw
   have hsel : Spot.Select.selectSecond (sampleOf h r) h.reg.ns h.reg.ks (stageSrc r.c₁) = .ok (draw, read) :=
     hsel0
   obtain ⟨-, hnd⟩ := selectSecond_sample hsel

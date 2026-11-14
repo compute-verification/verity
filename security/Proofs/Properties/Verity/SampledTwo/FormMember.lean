@@ -222,7 +222,7 @@ theorem memberAtFixed_of_coins {A : Live₂} {C : CaseOf} {S : SessionReading} {
       SessionMsgs.formOf k = some (p, e) → SessionMsgs.memberAt p e t = some m →
       k.blobs.get m.own.pub "public file" = .ok pubB →
       FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) =
-        some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+        some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
           (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) →
       SpotFlock.stmtOk A.h x m₁ m₂ c₀ c₁ = true →
       m.indices.toList =

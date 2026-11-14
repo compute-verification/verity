@@ -32,7 +32,7 @@ game `game H s U (root U τ o) g`, ending in its verdict.
 is in the class the proof system's soundness speaks of, at query budget `q`. The class sees `τ` and `o` because the
 proof system's finders are built from the committed data. For Flock that class is query-bounded in its own sense:
 every collision finder its theorems build from `σ` (`TableCR`, `LinkCR`, and the tree and registered-path finders of
-`flock_e2e_drawn_hm96_reads`, the last from the registrant's rows, salts and paths, here `τ`'s under `o`) meets
+`flock_e2e_sampled_hm96_reads`, the last from the registrant's rows, salts and paths, here `τ`'s under `o`) meets
 `SHA512CRStrict` (`cr/sha-512`) or `SHA512CRExpected` (`ecr/sha-512`) at budget `q`. A bare count of SHA-512 evaluations
 would not do: some strategy has a SHA-512 collision built in and opens a commitment two ways after no evaluations, and
 no soundness bound holds for it (`SHA512CRExpected`'s docstring).

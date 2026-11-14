@@ -152,7 +152,7 @@ theorem loadPublic_unrolled {tags : Tags} {cf : ByteArray} {tables : List (Strin
 theorem tableH_bcSiteSt {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (hv1 : Hidden.Any.RowsFitS c)
     (hscope : Layout.scopeOkH c = true) (dj : Finset (Fin n) → Lean.Json) (hU : Built c.unit) {pub : Public}
-    (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S))
+    (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S))
     {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.accS ht hcS hv1) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : HmOut.unrolled x.st.c = c := x.table.unrolled_eq ht hcS
@@ -182,7 +182,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 section One
 
-variable {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
+variable {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false)
   {c : Flock.Circuit}
   (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hv1 : Hidden.Any.RowsFitS c)
   (hscope : Layout.scopeOkH c = true)
@@ -217,7 +217,7 @@ theorem sitesShHSt_bcSite :
   intro S R u h M hM
   show BcSiteH ((tableShH dj y₀ S).accS (zkTyped ht) hcS hv1) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
       unfold tableShH
       rw [dite_eq_left_of_eq_true (eq_true hS)]
@@ -296,7 +296,7 @@ end One
 
 section J
 
-variable {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+variable {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
   (ht : I.tags.typed = false) {c : Flock.Circuit}
 
 include ht in
@@ -305,7 +305,7 @@ theorem tableShHJ_parseStmt (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.ta
     (j : Fin (nTab I)) :
     HmOut.parseStmt (tableShHJ dj y₀ S j).1.tags (tableShHJ dj y₀ S j).1.circuitFile
       (tableShHJ dj y₀ S j).1.tables = .ok c := by
-  by_cases h : Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
+  by_cases h : Nonempty (SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJ_set dj y₀ h]
     exact (parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hcS
   · rw [tableShHJ_refused dj y₀ h]
@@ -347,7 +347,7 @@ include hscope hU hpub in
 /-- `BcSiteH` at a table set up at table `j`'s inputs, at the statement circuit (`tableShHJ_bcSite`). -/
 theorem tableShHJ_bcSiteSt {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parseStmt Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
-    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
+    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
     BcSiteH (Tb.2.accS p₁ p₂ hv1) pub (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
@@ -364,7 +364,7 @@ theorem sitesShHJSt_bcSite :
   intro S R u h M hM
   refine bcSiteH_recast _ (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm _ _ ?_
-  by_cases hS : Nonempty (DrawSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · exact tableShHJ_bcSiteSt hv1 hscope hU hpub _ _ _
       ⟨_, _, (Classical.choice hS).x, tableShHJ_set dj y₀ hS⟩ (mem_partS h)

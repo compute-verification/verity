@@ -149,7 +149,7 @@ def _registered(plan, cands) -> dict[str, int]:
     return {c.template: work_k(1, table[c.template][0], c.units, total, table[c.template][1]) for c in chosen}
 
 
-def test_work_law_draws_the_plan_sizes(achievability, batched):
+def test_work_law_samples_the_plan_sizes(achievability, batched):
     cands, _, plan = achievability
     assert _registered(plan, cands) == dict(plan.sizes)
     cands, _, _, plans = batched
@@ -183,7 +183,7 @@ def test_frontier_is_monotone_and_certified(batched):
     assert any("M" in p.full for p in plans)
 
 
-def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
+def test_statement_size_moves_to_the_cap_as_the_sample_densifies(batched):
     cands, costs, objective, plans = batched
     sparse = for_target(cands, costs, objective, 4e5, plans=plans)
     dense = for_target(cands, costs, objective, 2e5, plans=plans)
@@ -461,7 +461,7 @@ def _loc_exact(n: int, k: int) -> float:
     return log2(sum(comb(n, j) for j in range(k + 1)))
 
 
-def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one():
+def test_leak_count_is_certified_and_the_leak_law_samples_n_lambda_over_k_plus_one():
     """K is the most incorrect proof blocks the target allows under `loc_bits` (at least Lean's `locBits`, so b K +
     locBits n K <= ℓ holds for it), and the sampling design samples n Λ / (K + 1), at most n, none once every proof block may be
     incorrect."""
@@ -1178,7 +1178,7 @@ def test_miss_holds_its_digits_at_any_population():
                 assert Decimal(_miss(n, m, k)) == pytest.approx(exact.exp(), rel=Decimal("1e-9") + loose)
 
 
-def test_shared_statements_hold_only_the_drawn_units():
+def test_shared_statements_hold_only_the_sampled_units():
     """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
     sparse sample of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
@@ -1190,7 +1190,7 @@ def test_shared_statements_hold_only_the_drawn_units():
     assert template_cost(c, replace(costs, shared=True), 0)[0] == 0.0
 
 
-def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_blocks():
+def test_sparse_samples_on_huge_populations_still_touch_statements_and_replay_blocks():
     """At 10^17 proof blocks the miss probability of a single sample rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
     assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)

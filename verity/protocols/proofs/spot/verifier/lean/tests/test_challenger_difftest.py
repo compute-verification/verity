@@ -21,7 +21,7 @@ malformed, v1 or in a session, a day declared twice, an open on a day its lane h
 of a window no session opens, a v1 open's or a dayless one's. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
-none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `Spot.ChallengerCoins`) are
+none. A sample's coins (`READ`, `SAMPLE_COINS`: `read_reason` and `coins_reason`, `Spot.ChallengerCoins`) are
 a sample's coins from one family of a ledger session's challenger, opened after the prover's commitment between other
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
@@ -49,7 +49,7 @@ another, each its tree's own line, then its rounds, ended by its closing round, 
 line of the next member's tree before a member's closing round, the line that samples it too, a line of a member's
 tree after its own, a member's closing round dropped or turned into a round that closes nothing, the sessions' trees
 in another order or not the log's, each malformed request. The release logs of `RELEASED`,
-`READ` and `DRAW_COINS` hold tree lines among their roots and releases too, and `RELEASED` a root or a release
+`READ` and `SAMPLE_COINS` hold tree lines among their roots and releases too, and `RELEASED` a root or a release
 relabelled a tree's. Each piece answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared
 too.
 """
@@ -1827,7 +1827,7 @@ class Drawn:
 
 
 #: each a mutation of the sample's segment or bytes, which both pieces refuse
-DRAW_MUTATIONS = ["skipped", "wrong-opening", "before", "unread", "read-tampered", "other-after", "segment-form",
+SAMPLE_MUTATIONS = ["skipped", "wrong-opening", "before", "unread", "read-tampered", "other-after", "segment-form",
                   "opening-form"]
 #: the sample's own segment and bytes in a family that holds another root, before the sample's coins or after them:
 #: refused against the challenger's log for that alone (`coins.FAMILY_ROOT`)
@@ -1894,7 +1894,7 @@ def _mutated(rng: random.Random, d: Drawn, name: str) -> tuple[dict, bytes, byte
     return seg, read_, after
 
 
-READ_NAMES = ["honest"] + DRAW_MUTATIONS + FAMILY_ROOTS + ["commitment-form", "request"]
+READ_NAMES = ["honest"] + SAMPLE_MUTATIONS + FAMILY_ROOTS + ["commitment-form", "request"]
 
 
 def _seeded(rng: random.Random) -> random.Random:
@@ -1925,12 +1925,12 @@ def read_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + FAMILY_ROOTS + [
+SAMPLE_COINS_NAMES = ["honest"] + SAMPLE_MUTATIONS + FAMILY_ROOTS + [
     "other-family", "log-tampered", "other-window", "window-form", "key-form", "other-key", "off-main", "other-main",
     "main-form", "no-pins", "coins-form", "named", "unwithheld", "request"]
 
 
-def draw_coins_case(rng: random.Random, name: str) -> Any:
+def sample_coins_case(rng: random.Random, name: str) -> Any:
     """A sample's coins (`Drawn`) with their evidence, the challenger's key and main's history, which the reader takes
     from its caller, or mutation `name`: among them a malformed key, another key than the session's (`other-key`),
     a history without the session's pin on both sides (`off-main`), the caller's history or the evidence's another
@@ -2764,7 +2764,7 @@ CREDITED = D.Port(PIECES, "challenger_credited", credited, _cases(credited_case,
 PINNED = D.Port(PIECES, "challenger_pinned", pinned, _cases(pinned_case, PINNED_NAMES), package=PACKAGE,
                 need_rejects=False, of_record="lean")
 READ = D.Port(PIECES, "challenger_read", read, _cases(read_case, READ_NAMES), package=PACKAGE, of_record="lean")
-DRAW_COINS = D.Port(PIECES, "challenger_draw_coins", draw_coins, _cases(draw_coins_case, DRAW_COINS_NAMES),
+SAMPLE_COINS = D.Port(PIECES, "challenger_draw_coins", draw_coins, _cases(sample_coins_case, SAMPLE_COINS_NAMES),
                     package=PACKAGE, of_record="lean")
 SEED_SALT = D.Port(PIECES, "challenger_seed_salt", seed_salt, _cases(seed_salt_case, SEED_SALT_NAMES), package=PACKAGE,
                    of_record="lean")
@@ -2795,7 +2795,7 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (DAY, day_case, DAY_NAMES, 200), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
-        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (SEED_SALT, seed_salt_case, SEED_SALT_NAMES, 200),
+        (SAMPLE_COINS, sample_coins_case, SAMPLE_COINS_NAMES, 200), (SEED_SALT, seed_salt_case, SEED_SALT_NAMES, 200),
         (WITHIN, within_case, WITHIN_NAMES, 100),
         (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
         (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200),

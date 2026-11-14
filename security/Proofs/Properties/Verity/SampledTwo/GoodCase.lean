@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.SampledTwo.JoinElems
 
 Several of the stages' pieces are stated over every play the form accepts, with no word on the play's log:
 `CutReads` (the cut reads a log of every accepted play), `DevFirst` and `DevSecond` (the coin map's release starts with
-the stage's bytes), and through them `StageDraws` (the play's log shows a family's coins after one root). None of
+the stage's bytes), and through them `StageSamples` (the play's log shows a family's coins after one root). None of
 them is known of every accepted play: the cut reads no log where a session's record carries a break
 (`reads_or_break`), and the play's log shows one root for a family only where it is the log the check read. Each is
 wanted only where the play is good (the check read a log, and the log it read is the device's), and that is all the

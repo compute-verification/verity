@@ -78,13 +78,13 @@ def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 360
 DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 
-def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
+def challenger_sample(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
     """Lean's sample, ``verity-verify-proof draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
     none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
     committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
     registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
-    Lean's `Draw.drawOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
+    Lean's `Draw.sampleOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
     the segment, from which `coins.challenger_stream` replays F. Its samples show the path, not an auditor's coins: those
     are `a5_coins`' (`a5.py --challenger`)."""
     reads: list[int] = []
@@ -215,7 +215,7 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
 SERVING_POLL, SERVING_WAIT = 0.02, 900.0
 
 
-def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
+def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, sample_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
             tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -223,7 +223,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
     and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
     caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
-    `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
+    `sample_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
     both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
@@ -241,7 +241,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(["--draw-file", str(sample_file)] if sample_file else ["--draw", law]), "--sessions", "1",
                               *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
@@ -292,7 +292,7 @@ def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
     return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
 
 
-def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
+def lean_sample_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
     f = out / f"{name}.cases.json"
     f.write_text(json.dumps(cases))
     p = run([lean, "draw-test", str(f)], out / f"{name}.lean.log")
@@ -602,7 +602,7 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
     """Every check on one session, then the audit record."""
     draw = (record or {}).get("unit_draw")
     verifier = (record or {}).get("verdict") or {}
-    lean_u = lean_draw_test(lean, [{"record": draw, "statement": (live or {}).get("unit_draw"),
+    lean_u = lean_sample_test(lean, [{"record": draw, "statement": (live or {}).get("unit_draw"),
                                     "instances": (live or {}).get("instances", 0)}], out, "u1-u3") if draw else []
     statement = {"circuit_sha512": (live or {}).get("circuit_sha512"), "statement_digest": (live or {}).get("statement_digest"),
                  "public_sha512": (live or {}).get("public_sha512"), "sigma": (live or {}).get("sigma"),
@@ -801,7 +801,7 @@ def main() -> int:
         v = V.check_draw(bad, rec, law)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     altered = {**draw, "units": sorted(set(draw["units"][:-1]) | {next(u for u in range(n) if u not in draw["units"])})}
-    lean_alt = lean_draw_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
+    lean_alt = lean_sample_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
                                        {"record": draw, "statement": draw, "instances": len(draw["units"]) + 1},
                                        {"record": None, "statement": draw, "instances": len(draw["units"])}], out, "negatives")
     neg["draw-altered-after-session (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 0, "U1"), "lean": lean_alt[:1],
