@@ -73,6 +73,6 @@ def viewParsed (b : ByteArray) : Option (Except String (Array String) × Except 
 def classMeta : ByteArray := "flock-circuit/tmpl u\nMETA {\"definition\":\"d\",\"layout\":\"iv\"}\nTEMPLATE 0\n".toUTF8
 
 #guard HmOut.parseTmpl Tags.circuitTmpl classMeta matches
-  .error "META definition: a unit class has no templated statement"
+  .error "META definition: a proof-block class has no templated statement"
 
 end Flock.Test.TmplSection

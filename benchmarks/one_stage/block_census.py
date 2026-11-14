@@ -8,7 +8,7 @@ a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's 
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
 (`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
 writers, the way the served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
-(`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
+(`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.size_class`). The
 row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
 split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
 width of least leakage-weighted proving cost (`width_pick`, the row's own width among them). A row
@@ -31,7 +31,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from m1_families import K_MAX
-from verity.protocols.proofs.spot.prover.optimize import row_ands, unit_class
+from verity.protocols.proofs.spot.prover.optimize import row_ands, size_class
 from verity.circuits.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
@@ -60,7 +60,7 @@ def misfit(e: dict) -> str | None:
         return f"its rows alone need a 2^{b['rows_log']} block"
     if b["est_log"] > K_MAX:
         return f"a 2^{b['est_log']} block at {e['ands']:,} ANDs"
-    if unit_class(sum(b["out_bits"])) is None:
+    if size_class(sum(b["out_bits"])) is None:
         return f"{sum(b['out_bits']):,} output bits, past the widest size class"
     return None
 
@@ -96,7 +96,7 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
 def leak_cost(units: list[dict]) -> float:
     """What the SPOT planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
     grow with its blocks' outputs at their size class plus `LOCATION_BITS`, and each sample's proving with its block's rows."""
-    return sum(u["n"] * (unit_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
+    return sum(u["n"] * (size_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
 
 
 def widths(spec: str) -> bool:
@@ -144,7 +144,7 @@ def _per_unit(u: dict) -> dict:
     b = u["block"]
     out = sum(b["out_bits"])
     nbytes = [-(-x // 8) for x in b["in_bits"]] + [2 * -(-x // 16) for x in b["out_bits"]]
-    return {"out_bits": out, "class_bits": unit_class(out), "in_bits": sum(b["in_bits"]), "ands": u["ands"],
+    return {"out_bits": out, "class_bits": size_class(out), "in_bits": sum(b["in_bits"]), "ands": u["ands"],
             "macs": u.get("macs", 0), "reads": u.get("reads", 0), "asserts": u.get("asserts", 0), "rows": nbytes,
             "row_bytes": sum(nbytes), "open_ands": sum(row_ands(x) for x in nbytes), "k_log": b["est_log"],
             "rows_log": b["rows_log"]}

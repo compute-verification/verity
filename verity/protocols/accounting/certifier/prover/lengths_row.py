@@ -52,7 +52,7 @@ the gaps; a mux of `at` and `O`; and the verdict's comparison of `at` with `O`. 
         RB = `Shape.request_bits`: K·(1 + IW + 2·LW) rounded up to a multiple of 16
 
 Every array is of bits, least significant first. K is at least 1 and at most 2,730, so the outputs fit the widest
-public size class (32 + 96·K bits of at most `UNIT_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
+public size class (32 + 96·K bits of at most `SIZE_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
 schedule with lengths rows is held to when its parameters are built (`WardenParams.stride_releases`). B is a cell
 size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
 longest prompt's request below 2^32 bytes.

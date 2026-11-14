@@ -103,7 +103,7 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
 
 
 @pytest.mark.slow
-def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
+def test_each_blocks_computed_claim_rests_on_its_proof_blocks_under_the_registered_partition(setup):
     """SPOT samples proof blocks from the Program's partition, which one-stage registers with the Program (the
     record names the query's digest, the partition's and the population). A block's proof blocks are that partition's
     whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under

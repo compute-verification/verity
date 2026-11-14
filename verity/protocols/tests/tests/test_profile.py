@@ -76,7 +76,7 @@ def test_consumers_are_maximised_by_different_strategies():
     ratio = {m: m / a.rho(m) for m in range(1, 5)}
     touched = {m: 1 / a.rho(m) for m in range(1, 5)}
     assert max(ratio, key=ratio.get) == 4      # free compute concentrates into fully incorrect replay units
-    assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect verification unit per replay unit
+    assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect proof block per replay unit
     assert incorrect_units(a) == pytest.approx(ratio[4] * log(100))
     assert touched_units(a) == pytest.approx(touched[1] * log(100))
 
