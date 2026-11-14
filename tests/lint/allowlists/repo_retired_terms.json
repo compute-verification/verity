@@ -2006,7 +2006,7 @@
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py", "count": 127},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_coin_link.py", "count": 3},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_serve.py", "count": 2},
-    {"file": "verity/protocols/accounting/poub/device/live_verifier/host.py", "count": 15},
+    {"file": "verity/protocols/accounting/poub/device/live_verifier/host.py", "count": 14},
     {"file": "verity/protocols/accounting/poub/device/live_verifier/tests/test_host.py", "count": 5},
     {"file": "benchmarks/multi_unit/README.md", "count": 1},
     {"file": "benchmarks/multi_unit/job.sh", "count": 1},
