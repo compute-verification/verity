@@ -23,7 +23,7 @@ from verity.commitments.windows import interface as IF
 from verity.definitions.registry import io_shell as IO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
@@ -251,7 +251,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 
 
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
-    """Id requests (`active.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
+    """Id requests (`id_form.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
     answered ids 100 + i and 200 + i, through the network certifier at ``cls``'s scan schedule for 3 link-windows of its
     buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""

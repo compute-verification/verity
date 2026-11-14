@@ -121,7 +121,8 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (SALT_BYTES, Certificate, CertifiedStart, Direction,
                                                             LmsKey, certificate_digest, clock_digest, start_digest,
                                                             start_link)
-from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIGITS, MAX_TOKENS_AT
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, MAX_TOKENS_AT
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
@@ -1316,7 +1317,7 @@ def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
-    """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
+    """The rows form's certified records of a link-window (`relay_check.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 

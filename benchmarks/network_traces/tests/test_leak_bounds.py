@@ -32,6 +32,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
@@ -129,13 +130,13 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
         link = LB.link(W63, RATE, T=32, egress_cells=cells)
         assert link.cell == clog2(cells + 1) and link.cap == 2 * clog2(cells + 1)
     assert [LB.link(W63, RATE, T=32, egress_cells=c).cap for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
-    assert LB.JITTER_BOUND == 2
+    assert SA.JITTER_BOUND == 2
     steps = (16, 32, 48)
     assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
     tau = Fraction(4)
     four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
     schedules = cells = clog2(65 + 1) * 4
-    jitter = clog2(LB.JITTER_BOUND ** 32)
+    jitter = clog2(SA.JITTER_BOUND ** 32)
     assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 9_176
 
 
@@ -191,7 +192,7 @@ def test_the_pooled_datacenter_pays_its_incorrect_blocks_whatever_it_serves():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
     faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
-    jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
+    jitter = n * 189_000 * clog2(SA.JITTER_BOUND ** 32)
     assert LB.fmax(one / n) == 15 and floor.share == floor.bits / LB.WEIGHTS.bits
     assert floor.bits == pytest.approx(faulty + jitter)
     assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter
