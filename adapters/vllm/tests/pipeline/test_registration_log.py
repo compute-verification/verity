@@ -1,5 +1,5 @@
 """`registration_log.write` is a log nci-check's full check accepts: on a Program whose θ is registered, its record, provenance
-and trusted input pass `nci_reference.check_baseline` (`NciCheck.Theta`'s reference), each entry is the one one-stage's
+and trusted input pass `inference_only_reference.check_baseline` (`InferenceOnlyCheck.Theta`'s reference), each entry is the one one-stage's
 `Registered.commit` makes of the parameter's rows, and each break is refused with the code the check names."""
 import copy
 import importlib.util
@@ -18,7 +18,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity_vllm.pipeline import registration_log as RL
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[4] / "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[4] / "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py")
 assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)

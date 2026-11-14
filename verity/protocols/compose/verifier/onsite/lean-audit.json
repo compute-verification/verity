@@ -13,7 +13,7 @@
     "CoreComposition.Tie",
     "CoreRemote",
     "MemoryChallenger.WipeProtocol",
-    "NciCheck.Protocol",
+    "InferenceOnlyCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Period",

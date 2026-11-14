@@ -419,7 +419,7 @@ POLICY = {"policy": f"--policy {V0}", "alpha": "--alpha 3/1000", "gamma": "--gam
 
 
 def test_an_inference_only_periods_open_commits_its_policy_and_registration_as_given_and_another_open_none(host, signer):
-    """The inference-only check's params read α as ``[N, D]`` and Γ as a natural (`NciCheck.Protocol`), and θ's
+    """The inference-only check's params read α as ``[N, D]`` and Γ as a natural (`InferenceOnlyCheck.Protocol`), and θ's
     provenance cites the deployment's first registration record by its digest: an inference-only period's open signs
     them before window 0's first coin under the id of the protocol that reads them, as whoever opened it gave them
     (`by`), α never reduced and no natural rounded; an open with none of them signs no policy, and the ledger's check
