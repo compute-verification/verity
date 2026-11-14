@@ -137,19 +137,31 @@ theorem push_iff {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     | ok u =>
       cases u
       dsimp only at h
-      split at h
-      · cases h
-      · rename_i hne
-        obtain ⟨units, hus, h⟩ := ebind_ok h
-        obtain rfl := Except.ok.inj h
-        exact ⟨hall, rfl, by simpa using hne, units, hus, rfl⟩
+      cases programSha with
+      | none =>
+        dsimp only at h
+        rw [if_pos (by rfl)] at h
+        cases h
+      | some sha =>
+        dsimp only at h
+        by_cases hj : _root_.Spot.jsonStrIs want sha = true
+        · rw [if_neg (by simp [hj])] at h
+          obtain ⟨units, hus, h⟩ := ebind_ok h
+          obtain rfl := Except.ok.inj h
+          exact ⟨hall, rfl, hj, units, hus, rfl⟩
+        · rw [if_pos (by simpa using hj)] at h
+          cases h
   · rintro ⟨hr, hv, hp, units, hus, rfl⟩
     subst hv
     refine ⟨?_, hr⟩
     unfold _root_.Spot.OneStageZk.push
     dsimp only
-    rw [if_neg (by simp [hp])]
-    exact ok_bind_of hus rfl
+    cases programSha with
+    | none => exact Bool.noConfusion hp
+    | some sha =>
+      dsimp only at hp ⊢
+      rw [if_neg (by simp [hp])]
+      exact ok_bind_of hus rfl
 
 /-- **An `.ok` verdict held the session's coin-tree key fresh**: `verdictOf` checks the key against the earlier
 sessions' before it verifies. -/
