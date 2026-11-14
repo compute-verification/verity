@@ -1,15 +1,14 @@
 """network-e2e's steps after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
 `verity.protocols.accounting.certifier.verifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
-residual, `encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice
-(`benchmarks/prove_path`), and the negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what
-it stood on; `stubs` lists what is still a stand-in.
+residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
+(`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
 * **The advice** (`advice`, ``--advice FILE``): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
   advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
-* **Bits per link-window** (`bits`), T the honest run's egress window in buckets (`window_buckets`): v0's (I1's
+* **Bits per link-window** (`bits`), T the honest run's egress window in buckets: v0's (I1's
   `bits_by_window`) and, given the registered serving config (``--serving-config``: `derived.Config`'s fields, or a step
   trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
@@ -36,18 +35,6 @@ it stood on; `stubs` lists what is still a stand-in.
   of its window (`held_to`: its root registered under that Commit, its opening opening it to that advice, which the
   report's OK requires), and an honest arm's is one of the honest run's own Commit windows. When each was registered is
   read off the registration and the endpoint's trace (`closes`), never the job's.
-* **The negatives** (`negatives`): `negatives.suite` on the runs, handed the advice's v0 bytes for its advice negatives
-  and, given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (`io_tie`'s
-  reference on a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes
-  from the advice).
-* **The I/O tie on the runs** (`tie`, on the advice profile, where the negatives registry doesn't run):
-  `negatives.tie_run` on each run, `io_tie`'s reference in the clear on its stand-ins (each window's certified frames
-  held to their head, the sampled ids as the Commit's port), with each run's ids from the endpoint's records
-  (`served_ids`, the requests that arrived in its link-windows) or ``--ids``, which must give each run's certified
-  requests an id for each output they served (`uncovered`). Honest owes acceptance, and token, whose certified ids
-  aren't the endpoint's, a refusal by content at exactly the link-windows its changed ids fall in (`changed_windows`).
-  The tie is required on the advice profile (`tie_gate`): the report isn't OK when it didn't run, gave the honest run no
-  verdict or didn't accept it, or when a part it must establish there (`TIE_REQUIRED`) didn't hold.
 """
 from __future__ import annotations
 
@@ -55,22 +42,15 @@ import hashlib
 import importlib.util
 import json
 import math
-import struct
 import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
-import active_replay as ar  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.blob_files import read_blobs  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
-import negatives as NG  # noqa: E402
 import window_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import compact_record_data  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
@@ -117,11 +97,6 @@ def advice(path: Path):
     return adv, {"file": str(path), "form": form, "file_sha512": _sha512(data), "v0_sha512": _sha512(I1.encode(adv)),
                  "bits": I1.total_bits(adv), "requests": len(adv.requests), "steps": len(adv.steps),
                  "outputs": len(adv.release)}
-
-
-def window_buckets(run: Path) -> int:
-    """T, the buckets of the run's egress window, from its calibration report as certifier-serve reads it."""
-    return ar.Setup(json.loads((run / "calibration.json").read_text())).egress_params.buckets
 
 
 def holdings(adv, io: list[dict]):
@@ -618,186 +593,11 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
             and False not in given}
 
 
-# --- the negatives ----------------------------------------------------------------------------------------------------
-
-def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = None) -> dict:
-    """`negatives.suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids``
-    (each request's sampled ids, `negatives.read_ids`) the I/O tie's verdict on the negatives it reads. ``ok`` unless a
-    row that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not
-    a failure."""
-    path = None
-    if adv is not None:
-        work.mkdir(parents=True, exist_ok=True)
-        path = work / "advice.bin"
-        path.write_bytes(I1.encode(adv))
-    rows = NG.suite(runs, work / "negatives", advice=path, ids=ids, clock=clock)
-    return {"ran": True, "format": NG.FORMAT, "rows": rows,
-            "ok": all(r.get("ok") is not False for r in rows.values() if r.get("ran"))}
-
-
-# --- the I/O tie on the runs ------------------------------------------------------------------------------------------
-
-#: the live tampers only the I/O tie refuses, each owed a refusal by content at exactly the link-windows it changed
-TIE_OWED = ("token",)
-#: what the I/O tie must establish on the honest run beside its acceptance, for the report to be OK (`tie_gate`): each a
-#: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. The compact
-#: finish (each response's length and finish held to the advice, `active.compact_finish_violations`) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
-TIE_REQUIRED: dict[str, str] = {
-    "finish": "the I/O tie didn't establish the honest run's finish (`negatives.tie_run`'s finish: on a compact run "
-              "its records held to its sampled ids, `active.compact_finish_violations`)"}
-
-
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text())
     except (OSError, ValueError):
         return None
-
-
-def served_rows(ep: Path, deployment: dict) -> dict[str, dict]:
-    """Each ``requests.jsonl`` row by its ``user``, of the requests that reached the endpoint in a run's link-windows
-    (``deployment``'s origin and span, `SLACK_S`): its scheduler trace's ``arrive`` records by engine id, and the rows
-    by the same. Every strategy of a rehearsal sends the same users, so a run's rows are the ones that arrived in its
-    own span; a user arriving twice in it is refused."""
-    origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
-    arrived = {r["request"] for r in _jsonl(ep / "advice_trace.jsonl")
-               if r["kind"] == "arrive" and origin - SLACK_S <= r["t"] < origin + span}
-    out: dict[str, dict] = {}
-    for r in _jsonl(ep / "requests.jsonl"):
-        if r["engine_id"] in arrived and r.get("user"):
-            if r["user"] in out:
-                raise ValueError(f"{r['user']} reached the endpoint twice in the run's link-windows")
-            out[r["user"]] = r
-    return out
-
-
-def served_ids(ep: Path, deployment: dict) -> dict[str, list[int]]:
-    """Each request's sampled ids (``streamed_ids``) by its ``user``, of a run's `served_rows`."""
-    return {u: list(r["streamed_ids"]) for u, r in served_rows(ep, deployment).items()}
-
-
-def _output_stream(slot: bytes, compact: bool) -> int | None:
-    """The stream (request ordinal) of a certified egress frame that `negatives.tie_run` places as its stream's next
-    output: on a compact plan every frame, each a compact record (`active.compact_record_data`), else each id event;
-    None for another frame of a plan of id events. Raises ValueError for a frame neither reads: a compact plan's frame
-    that isn't a record, or one `decode_frame` can't parse."""
-    if compact:
-        got = compact_record_data(slot)
-        if got is None:
-            raise ValueError(f"a compact plan's egress frame that isn't a compact record ({slot[:16].hex()})")
-        return got[0]
-    try:
-        return NG.id_event_data(NG.decode_frame(slot)[2])[0] if NG._is_id_event(slot) else None
-    except struct.error as err:
-        raise ValueError(f"an egress frame that doesn't decode ({err}): {slot[:16].hex()}") from err
-
-
-def changed_windows(run: Path) -> list[int] | None:
-    """The link-windows a token run's changed ids fall in: each output its shim logged as changed (``server.json``'s
-    ``tampered``, (session, index)), placed as `negatives.tie_run` places the certified egress's id events, or on a
-    compact plan its compact records (`_output_stream`), each its stream's next output and the stream's user the
-    certified I/O's. None when the shim logged none. Raises ValueError for an egress frame it can't place."""
-    changed = (_read_json(run / "server.json") or {}).get("tampered")
-    if not changed:
-        return None
-    plan, report = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json"))
-    setup = ar.Setup(report)
-    e, i = setup.egress_params, setup.ingress_params
-    ins = [RF.unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
-    outs = [RF.unpack_record(b, e.frame_bytes) for b in read_blobs(run / "responses.records")]
-    users = {r["stream"]: r["user"] for r in NG.cs.certified_io(plan, setup, ins, outs)["records"]}
-    compact, at, nxt = bool(plan.get("compact")), {}, defaultdict(int)
-    for rec in sorted(outs, key=lambda r: r.window):
-        for q in (_output_stream(s, compact) for row in rec.grid for s in row if s is not None):
-            if q is not None:
-                at[users.get(q), nxt[q]] = rec.window
-                nxt[q] += 1
-    return sorted({at[u, k] for u, k in changed if (u, k) in at})
-
-
-def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
-    """Why ``ids`` don't cover the run's certified requests (its ``io.json``, which the rehearsal's check writes on the
-    advice profile: each request's user and served ``output``), or None when every one has a sampled id for each of
-    its served outputs. `negatives.tie_run` gives each sampled id one row of the Commit's port and has no backstop for
-    a served output with none (its unplaced count is committed outputs no cell carries), so ids that miss a request,
-    or name it with fewer ids than it served, leave those outputs untied."""
-    io = _read_json(run / "io.json")
-    if not isinstance(io, dict) or not isinstance(io.get("requests"), list):
-        return "no certified I/O (io.json) to hold the sampled ids to"
-    reqs = io["requests"]
-    if not reqs:
-        return "no certified request in its io.json to tie"
-    if not all(isinstance(r, dict) and isinstance(r.get("output"), list) for r in reqs):
-        return "a certified request in its io.json without its served outputs to hold the sampled ids to"
-    missing = sum(r.get("user") not in ids for r in reqs)
-    short = [(len(ids[r["user"]]), len(r["output"])) for r in reqs
-             if r.get("user") in ids and len(ids[r["user"]]) < len(r["output"])]
-    why = [f"no sampled ids for {missing}"] * bool(missing) + \
-        [f"fewer sampled ids than served outputs for {len(short)}"] * bool(short)
-    return None if not why else f"{' and '.join(why)} of its {len(reqs)} certified requests" + (
-        f" ({sum(n for n, _ in short)} sampled, {sum(m for _, m in short)} served)" if short else "")
-
-
-def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:
-    """The I/O tie's verdict on each run (`negatives.tie_run`: `io_tie`'s reference in the clear, on
-    `negatives.TIE_STAND_INS`), each run's sampled ids and client aborts ``ids``' (`negatives.read_ids` and
-    `negatives.read_aborted`, one map for every run) or else the endpoint's records' ``ep`` for its own link-windows
-    (`served_rows`, `negatives.commit_aborted`), and whether it is the verdict the run owes
-    (`negatives.tie_ok`): honest's accepted, a negative's it reads refused by its part, and token's (`TIE_OWED`) at
-    exactly the link-windows its changed ids fall in (`changed_windows`). A run has no verdict when its ids don't cover
-    its certified requests (`uncovered`), when it lacks what the tie opens, or when its tie raises; the row says why.
-    Not run without `io_tie` in the tree or without the ids (``why``: why the endpoint's records aren't here). On the
-    advice profile the tie is required: `tie_gate` says what keeps it from passing the report."""
-    if NG.io_tie_module() is None:
-        return {"ran": False, "why": NG.TIE_MISSING["io-tie"]}
-    if ids is None and ep is None:
-        return {"ran": False, "why": f"no sampled ids ({why or 'neither --endpoint-run nor --ids given'})"}
-    given, rows = None if ids is None else (NG.read_ids(ids), NG.read_aborted(ids)), {}
-    for name, d in runs.items():
-        row = {"verdict": NG.NOT_APPLICABLE, "ok": None, "codes": [], "failing": {}, "windows": [], "unplaced": None,
-               "changed": None, "requests": None, "outputs": None, "placed": None, "held": None, "missing": {},
-               "why": None}
-        try:
-            if given is not None:
-                got, gone = given
-            else:
-                served = served_rows(ep, json.loads((d / "deployment.json").read_text()))
-                got = {u: list(r["streamed_ids"]) for u, r in served.items()}
-                gone = {u for u, r in served.items() if NG.commit_aborted(r)}
-            lacking = uncovered(d, got)
-            if lacking:
-                rows[name] = row | {"requests": len(got), "why": lacking}
-                continue
-            t = NG.tie_run(d, got, aborted=gone)
-            changed = changed_windows(d) if name in TIE_OWED else None
-        except (OSError, KeyError, ValueError, struct.error) as err:
-            rows[name] = row | {"why": repr(err)}
-            continue
-        ok = NG.tie_ok(name, t)
-        if name in TIE_OWED and ok:
-            ok = changed is not None and sorted(t["failing"]) == changed
-        rows[name] = row | {k: t.get(k) for k in ("verdict", "codes", "failing", "unplaced", "held", "missing",
-                                                  "outputs", "placed", *TIE_REQUIRED)} | {
-            "ok": ok, "windows": sorted(w for w in t["failing"] if w >= 0), "changed": changed, "requests": len(got),
-            "why": "; ".join(t["missing"].values()) or None}
-    return {"ran": True, "why": None,
-            "from": "the endpoint's records (each run's requests by their arrival in its link-windows)" if given is None
-            else str(ids), "stand_ins": NG.TIE_STAND_INS, "runs": rows}
-
-
-def tie_gate(t: dict | None) -> list[str]:
-    """Why the I/O tie (`tie`'s result ``t``) keeps the report from being OK on the advice profile, where it is required;
-    empty when it passes. It fails when it didn't run (no `io_tie` in the tree, no sampled ids), gave the honest run no
-    verdict, didn't accept it, or when a part it must establish beside its verdict (`TIE_REQUIRED`) didn't hold on it.
-    The report reads the tie's pass here only: a required part the tie gains fails the report through this."""
-    if not t or not t.get("ran"):
-        return [f"the I/O tie didn't run, and the advice profile requires it: {(t or {}).get('why') or 'no tie stage'}"]
-    honest = t["runs"].get("honest")
-    if honest is None or honest["verdict"] not in ("accepted", "refused"):
-        return [f"the I/O tie gave no verdict on the honest run: {(honest or {}).get('why') or 'no honest run'}"]
-    if honest["ok"] is not True:
-        return ["the I/O tie didn't accept the honest run"]
-    return [why for k, why in TIE_REQUIRED.items() if honest.get(k) is not True]
 
 
 # --- what's still a stand-in ------------------------------------------------------------------------------------------

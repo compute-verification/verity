@@ -1,11 +1,7 @@
-"""The negatives harness (`negatives.py`): each tampering is a pure function on a run's artifacts, and the check it
-names refuses it by its code.
+"""The negatives harness (`negatives.py`): each negative names the check that refuses it by its code, and each
+advice or Commit tampering is a pure edit.
 
-At the certifier, on certifier-serve runs on an injected clock against a stub endpoint (`test_certifier_serve`'s): the
-shim's `late`, `extra`, `drop` and `token`, certified by the certifier, and the prover's tampered head under its original
-certificate. N2's verdict of record refuses late by the record's status, extra and drop by the counts (the served counts on
-a served link) and the head by its signed digest; it accepts token, whose counts are honest's and whose changed frames
-only the I/O tie (pending) reads. The advice's tamperings run on I1 v0 (the advice module's classes when they're
+The advice's tamperings run on I1 v0 (the advice module's classes when they're
 importable, a stand-in of their fields until then): each changes exactly what its check reads and leaves the advice
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
 a stand-in of I3 as drafted. The I/O tie's (`io_tie`, when importable) run on a fake upstream's cells and
@@ -14,7 +10,6 @@ committed cells (`warden_rows`, when importable), by the verifier's registered r
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import importlib.util
 import json
@@ -23,10 +18,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.accounting.certifier.verifier.certificate import Direction
 
 HERE = Path(__file__).resolve().parents[1]
-TOKENS, REQUESTS = 4, 8
 SESSION = bytes(range(32))
 
 
@@ -40,158 +34,10 @@ def _load(name: str):
 
 
 NG = _load("negatives")
-cs, ar = NG.cs, NG.ar
-
-
-async def _endpoint(reader, writer):
-    """A streaming completions endpoint that answers at once: `max_tokens` chunk events and `[DONE]`, chunked."""
-    head = await reader.readuntil(b"\r\n\r\n")
-    body = json.loads(await reader.readexactly(int(re.search(rb"content-length: (\d+)", head, re.I).group(1))))
-    events = [b'data: {"choices":[{"text":" t%d"}]}\n\n' % k for k in range(body["max_tokens"])] + [b"data: [DONE]\n\n"]
-    writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n"
-                 + b"".join(b"%x\r\n%s\r\n" % (len(p), p) for p in events) + b"0\r\n\r\n")
-    await writer.drain()
-    writer.close()
-
-
-def _run(run: Path, plan: dict, report: dict, url: str, upstream: tuple, certifier, challenger, strategy: str) -> None:
-    """One served run of `strategy` on the injected clock: the shim serves `negatives.shim(strategy)`'s plan."""
-    setup = ar.Setup(report)
-    run.mkdir(parents=True)
-    (run / "plan.json").write_text(json.dumps(plan))
-    (run / "calibration.json").write_text(json.dumps(report))
-    served = plan
-    if strategy != "honest":
-        NG.make(strategy, run, run.parent / f"{strategy}.shim")
-        served = json.loads((run.parent / f"{strategy}.shim" / "shim.json").read_text())
-
-    async def after(proxies, clock):
-        record = cs.deployment(proxies[0], setup, plan["windows"], session=SESSION, n2_link=cs.N2_LINK,
-                               link=("127.0.0.1", 0), reveal=("127.0.0.1", 0), origin_unix=0.0, url=url)
-        (run / "deployment.json").write_text(json.dumps(record))
-
-    publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, SESSION), cs.N2_LINK, threaded=False)
-    ar.run_virtual(served, report, run, upstream, salt=True, publish=publish, after=after,
-                   proxy_args={"challenger_key": challenger.public_key(), "signer": certifier,
-                               "served": cs.served_profile(plan)})
-
-
-def _runs(tmp: Path, profile: str, strategies) -> dict[str, Path]:
-    challenger = cs.signer(tmp / "keys" / "challenger", 6)
-
-    async def go():
-        endpoint = await asyncio.start_server(_endpoint, "127.0.0.1", 0)
-        upstream = endpoint.sockets[0].getsockname()[:2]
-        url = "http://%s:%d" % upstream
-        probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", TOKENS), 2, clock=lambda: 0.0)
-        report, plan = cs.served_plan(probed, REQUESTS, profile=profile)
-        for strategy in strategies:
-            certifier = cs.signer(tmp / "keys" / strategy, 6)
-            try:
-                await asyncio.to_thread(_run, tmp / strategy, plan, report, url, upstream, certifier, challenger,
-                                        strategy)
-            finally:
-                certifier.close()
-        endpoint.close()
-
-    try:
-        asyncio.run(go())
-    finally:
-        challenger.close()
-    return {s: tmp / s for s in strategies}
 
 
 STRATEGIES = ("honest", "late", "extra", "drop", "token")
 PROFILES = ("planned", "served")
-
-
-@pytest.fixture(scope="module")
-def runs(tmp_path_factory):
-    """Per N2 profile: each strategy's run, the tampered head of honest's, and N2's verdict on each."""
-    out = {}
-    for profile in PROFILES:
-        tmp = tmp_path_factory.mktemp(profile)
-        rs = _runs(tmp, profile, STRATEGIES)
-        rs["head"] = NG.make("head", rs["honest"], tmp / "head")
-        out[profile] = rs, {s: NG.n2(r, clock=lambda: 0.0) for s, r in rs.items()}
-    return out
-
-
-def _egress(run: Path, window: int = 0):
-    return cs.read_certified(run / "certified.jsonl")[0][(Direction.EGRESS, window)].head
-
-
-@pytest.mark.parametrize("profile", PROFILES)
-def test_honest_is_accepted_on_every_window_with_no_code(runs, profile):
-    rs, verdicts = runs[profile]
-    v = verdicts["honest"]
-    assert v["accepted"] and v["codes"] == [] and all(r["accepted"] for r in v["windows"])
-    assert len(v["windows"]) == json.loads((rs["honest"] / "plan.json").read_text())["windows"] and v["profile"] == profile
-
-
-@pytest.mark.parametrize("profile", PROFILES)
-@pytest.mark.parametrize("name", ["late", "extra", "drop", "head"])
-def test_each_certifier_side_negative_is_refused_by_the_code_it_names(runs, profile, name):
-    """Window 0's, where the tampering is, and no other window's: the served counts on a served link for extra and
-    drop, the counts against the profile on a planned one."""
-    _, verdicts = runs[profile]
-    got = NG.judge(name, verdicts[name])
-    assert got["refused"] and got["by_code"], got
-    assert got["code"] == (NG.SERVED if profile == "served" and name in ("extra", "drop") else NG.NEGATIVES[name].code)
-    assert [r["window"] for r in verdicts[name]["windows"] if r["codes"]] == [0]
-    today = {c for c in NG.NEGATIVES[name].also if c.split(".")[0] in NG.CHECKS_TODAY}
-    assert today <= set(verdicts[name]["codes"])
-
-
-def test_drop_and_extra_certify_one_frame_fewer_and_one_more_than_honest(runs):
-    rs, _ = runs["planned"]
-    honest = sum(_egress(rs["honest"]).counts)
-    assert sum(_egress(rs["drop"]).counts) == honest - 1
-    assert sum(_egress(rs["extra"]).counts) == honest + 1
-
-
-def test_a_tampered_head_fails_its_signed_digest_and_its_counts_under_the_original_certificate(runs):
-    rs, verdicts = runs["planned"]
-    honest, head = (cs.read_certified(rs[s] / "certified.jsonl")[0] for s in ("honest", "head"))
-    assert [k for k in honest if honest[k] != head[k]] == [(Direction.EGRESS, 0)]
-    assert head[(Direction.EGRESS, 0)].certificate == honest[(Direction.EGRESS, 0)].certificate
-    assert verdicts["head"]["windows"][0]["codes"] == [f"{NG.HEAD}.counts", f"{NG.HEAD}.signed", "audit.signature"]
-
-
-@pytest.mark.parametrize("profile", PROFILES)
-def test_certified_tokens_that_arent_the_endpoints_pass_n2_and_wait_for_the_tie(runs, profile):
-    """token's changed frames, every token of the responses to window 0's requests, are certified under honest's
-    counts: N2 accepts every window, and only the I/O tie (pending) can refuse them, which the registry says."""
-    rs, verdicts = runs[profile]
-    honest, token = _egress(rs["honest"]), _egress(rs["token"])
-    assert token.counts == honest.counts and token.root != honest.root
-    assert verdicts["token"]["accepted"] and verdicts["token"]["codes"] == []
-    plan = json.loads((rs["honest"] / "plan.json").read_text())
-    T = ar.Setup(json.loads((rs["honest"] / "calibration.json").read_text())).egress_params.buckets
-    window0 = {q["session"] for q in plan["requests"] if q["enqueue"] // T == 0}
-    assert set(json.loads((rs["token"].parent / "token.shim" / "shim.json").read_text())["token"]) == window0 != set()
-    events = [ar.read_events(rs[s] / "server.events.gz") for s in ("honest", "token")]
-    differ = {(a[1], a[2]) for a, b in zip(*events, strict=True) if a[4] != b[4]}
-    tokens = {(e[1], e[2]) for e in events[0] if e[1] in window0 and ar.event_data(ar.event_body(e[4]))}
-    assert differ == tokens and len(tokens) == TOKENS * len(window0)
-    assert not NG.judge("token", verdicts["token"])["refused"]
-    n = NG.NEGATIVES["token"]
-    assert n.code == f"{NG.TIE}.content" and "the I/O tie" in n.waits
-
-
-def test_the_suite_reports_each_negative_for_the_one_command(runs, tmp_path):
-    """From a rehearsal's runs: each certifier-side negative refused by its code, token passing N2 (its check pending),
-    the head made from honest's, and the advice and Commit negatives not run, saying what they need."""
-    rs, _ = runs["planned"]
-    rows = NG.suite({s: rs[s] for s in STRATEGIES}, tmp_path, clock=lambda: 0.0)
-    assert list(rows) == list(NG.NEGATIVES)
-    assert {k for k, r in rows.items() if r.get("ok")} == {"late", "extra", "drop", "head", "token"}
-    assert rows["head"]["run"] == str(tmp_path / "head") and rows["head"]["refused_windows"] == [0]
-    assert rows["token"]["n2_accepted"] and rows["token"]["waits"] == ["the I/O tie", "the warden's cells"]
-    assert all("tie" not in r for r in rows.values())
-    assert all(not r["ran"] and ("--advice" in r["why"] or "--commit" in r["why"])
-               for r in rows.values() if r["tampers"] in ("advice", "commit"))
-    assert not NG.suite({"honest": rs["honest"]}, tmp_path / "again", clock=lambda: 0.0)["late"]["ran"]
 
 
 def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
@@ -206,10 +52,9 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
     assert [n for n in NG.NEGATIVES.values() if not n.waits and n.tampers in ("advice", "commit")] == []
 
 
-def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root(tmp_path):
+def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root():
     """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
-    under the root, the changed one doesn't, and no other frame changes. The run keeps no frames, so `make` says what
-    the negative waits for."""
+    under the root, the changed one doesn't, and no other frame changes."""
     from verity.protocols.accounting.certifier.verifier.certificate import frames_root, open_frame, verify_frame
     from verity.protocols.accounting.certifier.verifier.grid import GridParams
 
@@ -221,8 +66,6 @@ def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_
     assert all(verify_frame(root, params, k, f, open_frame(frames, params, k)) for k, f in enumerate(frames))
     assert not verify_frame(root, params, 2, bad[2], open_frame(frames, params, 2))
     assert not verify_frame(root, params, 2, bad[2], open_frame(bad, params, 2))
-    with pytest.raises(NG.NotApplicable, match="the warden's"):
-        NG.make("frame", tmp_path, tmp_path / "out")
 
 
 # --- the advice: I1 v0, or a stand-in of its fields without the advice module ------------------------------------------
@@ -349,7 +192,7 @@ def test_every_advice_negative_is_valid_advice_that_round_trips_through_the_code
     a = _advice()
     for name, n in NG.NEGATIVES.items():
         if n.tampers == "advice":
-            b = n.make.edit(a)
+            b = n.edit(a)
             assert b != a and _check(b), name
             if V is not sys.modules[__name__]:
                 assert V.decode(V.encode(b)) == b, name
@@ -514,7 +357,7 @@ def test_the_advice_suite_ties_each_advice_negative_by_the_ingress_tie(tmp_path)
     assert made["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]}
     (tmp_path / "advice.bin").write_bytes(V.encode(_advice()))
     doc = NG.advice_run(tmp_path / "advice.bin", T=8, R=8)
-    assert doc["frame_bytes"] == cs.FRAME_BYTES and doc["received"] == [2] and doc["negatives"]["honest"]["ok"]
+    assert doc["frame_bytes"] == NG.FRAME_BYTES and doc["received"] == [2] and doc["negatives"]["honest"]["ok"]
     assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
 
 
@@ -552,69 +395,13 @@ def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_ti
                  (V.StepAdvice((V.Row(0, "prefill", 0, 339),)), V.StepAdvice((V.Row(0, "decode", 339, 1),
                                                                              V.Row(1, "prefill", 0, 16)))),
                  (3, 3, 3))
-    framing = NG.link_framing(cs.FRAME_BYTES, 339)
+    framing = NG.link_framing(NG.FRAME_BYTES, 339)
     assert (framing[15], framing[337], framing[338]) == (1, 1, 2)
-    rows = NG.advice_suite(a, T=8, request_frames=framing, received=[3], frame_bytes=cs.FRAME_BYTES)
+    rows = NG.advice_suite(a, T=8, request_frames=framing, received=[3], frame_bytes=NG.FRAME_BYTES)
     split = rows["prompt-split"]
     assert rows["honest"]["ok"] and rows["honest"]["request_tie"] == [True]
     assert split["prompt_lens"] == {0: [339, 16], 1: [16, 339]}
     assert split["codes"] == [NG.REQUEST_TIE] and split["request_tie"] == [False] and split["ok"]
-
-
-def test_an_advice_negative_waits_for_its_codec(tmp_path, monkeypatch):
-    monkeypatch.setattr(NG, "advice_module", lambda: None)
-    with pytest.raises(NG.NotApplicable, match="advice codec"):
-        NG.make("advice-length", tmp_path, tmp_path / "out", advice=tmp_path / "advice.bin")
-    with pytest.raises(NG.NotApplicable, match="--advice"):
-        NG.make("advice-length", tmp_path, tmp_path / "out")
-
-
-class _Codec:
-    """A codec of I1's shape (`encode`, `decode`) for the stand-in: JSON."""
-
-    @staticmethod
-    def encode(a) -> bytes:
-        return json.dumps(dataclasses.asdict(a)).encode()
-
-    @staticmethod
-    def decode(b: bytes):
-        d = json.loads(b)
-        rows = [[Row(**(r | {"sources": tuple(Source(**x) for x in r["sources"])})) for r in st["rows"]]
-                for st in d["steps"]]
-        return Advice(tuple(RequestAdvice(**q) for q in d["requests"]), tuple(StepAdvice(tuple(r)) for r in rows),
-                      tuple(d["release"]))
-
-    @staticmethod
-    def total_bits(a) -> int:
-        return 8 * len(_Codec.encode(a))
-
-
-def test_an_advice_negative_writes_the_edited_advice_beside_a_copy_of_the_run(tmp_path, monkeypatch):
-    """Through I1's codec (the stand-in's, until it lands): the tampered copy is the run and the edited advice."""
-    codec = V if V is not sys.modules[__name__] else _Codec
-    monkeypatch.setattr(NG, "advice_module", lambda: codec)
-    run = tmp_path / "run"
-    run.mkdir()
-    (run / "certified.jsonl").write_text("{}\n")
-    (tmp_path / "advice.bin").write_bytes(codec.encode(_advice()))
-    out = NG.make("advice-start", run, tmp_path / "out", advice=tmp_path / "advice.bin")
-    assert (out / "certified.jsonl").read_text() == "{}\n"
-    assert codec.decode((out / "advice.bin").read_bytes()) == NG.start_shifted(_advice())
-
-
-def test_the_suites_advice_rows_are_the_ingress_ties_codes_on_the_given_advice(runs, tmp_path, monkeypatch):
-    """With --advice, each advice negative's row in the one command's report is `advice_run`'s on it (the ingress tie's
-    codes, not N2's on the unchanged certified records), its tampered advice beside a copy of honest's run."""
-    codec = V if V is not sys.modules[__name__] else _Codec
-    monkeypatch.setattr(NG, "advice_module", lambda: codec)
-    (tmp_path / "advice.bin").write_bytes(codec.encode(_advice()))
-    rs, _ = runs["planned"]
-    rows = NG.suite({"honest": rs["honest"]}, tmp_path / "work", advice=tmp_path / "advice.bin", clock=lambda: 0.0)
-    advice = {k: r for k, r in rows.items() if r["tampers"] == "advice"}
-    assert advice and all(r["copy"] == str(tmp_path / "work" / k) for k, r in advice.items())
-    assert all("run" not in r for r in advice.values())
-    assert all(r["ran"] and r["valid"] and r["ok"] and r["honest_codes"] == [] for r in advice.values()), advice
-    assert {k for k, r in advice.items() if r["codes"]} == {"advice-missing", "advice-extra", "prompt-split"}
 
 
 # --- the I/O tie on a fake upstream (`io_tie`) -------------------------------------------------------------------------
@@ -701,71 +488,15 @@ def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_
         NG.tie_suite(a, IDS, T=8, R=2)
 
 
-def test_the_suite_carries_the_ties_verdict_on_each_negative_it_reads(runs, tmp_path, monkeypatch):
-    """With --advice and --ids, each negative the tie reads carries its verdict (`tie`), and its `ok` needs the tie's:
-    token is ok only when N2 accepts it and the tie refuses it; frame and wrong-token, which N2 can't run on a
-    certifier run, are judged by the tie alone. Without `io_tie` the rows say so and keep their verdicts."""
-    codec = V if V is not sys.modules[__name__] else _Codec
-    monkeypatch.setattr(NG, "advice_module", lambda: codec)
-    (tmp_path / "advice.bin").write_bytes(codec.encode(_advice()))
-    (tmp_path / "requests.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": x}) + "\n"
-                                                     for u, x in IDS.items()))
-    rs, _ = runs["planned"]
-    rows = NG.suite({s: rs[s] for s in STRATEGIES}, tmp_path / "work", advice=tmp_path / "advice.bin",
-                    ids=tmp_path / "requests.jsonl", clock=lambda: 0.0)
-    tied = {k: r for k, r in rows.items() if k in NG.TIE_PARTS}
-    assert set(tied) == set(NG.TIE_PARTS) and all("tie" in r for r in tied.values())
-    assert all("tie" not in r for k, r in rows.items() if k not in NG.TIE_PARTS)
-    if NG.io_tie_module() is None:
-        assert all(not r["tie"]["ran"] and "io_tie" in r["tie"]["why"] for r in tied.values())
-        assert rows["token"]["ok"] and rows["frame"].get("ok") is None
-        return
-    assert all(r["tie"]["ran"] and r["tie"]["ok"] and r["ok"] for r in tied.values()), tied
-    assert rows["token"]["n2_accepted"] and rows["token"]["tie"]["codes"] == [f"{NG.TIE}.content"]
-    assert not rows["frame"]["ran"] and not rows["wrong-token"]["ran"]
-
-
-def test_the_tie_on_a_fixed_plans_runs_has_no_verdict_and_names_what_they_lack(runs):
-    """A fixed plan's run keeps its frames, each window's held to its certified head at both ends, but they are text
-    events, none an id event, and the run keeps no Commit: honest and token alike have no verdict from the tie, which
-    names the id events and the Commit's rows as missing (and itself, on a tree without `io_tie`)."""
-    rs, _ = runs["planned"]
-    W = json.loads((rs["honest"] / "plan.json").read_text())["windows"]
-    lacks = ["id-events", "commit"] if NG.io_tie_module() else ["io-tie", "id-events", "commit"]
-    for s in ("honest", "token"):
-        row = NG.tie_run(rs[s], None)
-        assert row["verdict"] == NG.NOT_APPLICABLE and row["codes"] == [] and row["id_events"] == 0
-        assert row["held"] == {"egress": W, "ingress": W} and list(row["missing"]) == lacks
-        assert NG.tie_ok(s, row) is None
-
-
-def test_the_tie_owes_the_extra_run_a_refusal_by_content_as_it_owes_token_and_drop():
-    """Extra's run is a shim tamper the fake upstream doesn't build (`TIE_RUN_PARTS`, not `TIE_PARTS`), and `tie_ok`
-    holds it to IoTieWindow.content's refusal as it holds token's and drop's: refused by content is the verdict it
-    owes, accepted or another part's refusal isn't, and a run with no verdict owes none."""
-    def row(verdict, *parts):
-        return {"verdict": verdict, "codes": [f"{NG.TIE}.{p}" for p in parts]}
-    assert NG.TIE_RUN_PARTS.keys().isdisjoint(NG.TIE_PARTS)
-    for name in ("extra", "token", "drop"):
-        assert NG.tie_ok(name, row("refused", "content")) is True
-        assert NG.tie_ok(name, row("accepted")) is False
-        assert NG.tie_ok(name, row("refused", "cells_root")) is False
-        assert NG.tie_ok(name, row(NG.NOT_APPLICABLE)) is None
-
-
 # --- the Commit record: a stand-in of I3 as drafted --------------------------------------------------------------------
 
-def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_root(tmp_path):
+def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_root():
     commit = {"root": "ab" * 64, "steps": [{"rows": [{"user": "r0", "positions": [5]}, {"user": "r1", "positions": [2]}],
                                             "c00.input/ids": [11, 21], NG.SAMPLED: [12, 22]}]}
     out = NG.wrong_token(commit, step=0, row=1)
     assert out["steps"][0][NG.SAMPLED] == [12, 23] and out["root"] == commit["root"]
     assert commit["steps"][0][NG.SAMPLED] == [12, 22]
     assert NG.wrong_token(commit, row=0, vocab=13)["steps"][0][NG.SAMPLED] == [0, 22]
-    (tmp_path / "commit.json").write_text(json.dumps(commit))
-    (tmp_path / "run").mkdir()
-    written = NG.make("wrong-token", tmp_path / "run", tmp_path / "out", commit=tmp_path / "commit.json")
-    assert json.loads((written / "commit.json").read_text()) == NG.wrong_token(commit)
 
 
 def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():

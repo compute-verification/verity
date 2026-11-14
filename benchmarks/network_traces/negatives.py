@@ -1,23 +1,17 @@
-"""negatives: what network certification of arbitrary vLLM usage must refuse, beside honest traffic, each a pure function on a run's artifacts that
-writes a tampered copy, and each naming the check that refuses it by its refusal code.
+"""negatives: what network certification of arbitrary vLLM usage must refuse, beside honest traffic, each naming the
+check that refuses it by its refusal code, and the advice and Commit tamperings each a pure edit.
 
     python benchmarks/network_traces/negatives.py table [--markdown]
-    python benchmarks/network_traces/negatives.py make NAME --run DIR --out DIR [--advice FILE] [--commit FILE]
-    python benchmarks/network_traces/negatives.py n2 --run DIR
-    python benchmarks/network_traces/negatives.py judge NAME --run DIR
     python benchmarks/network_traces/negatives.py advice --advice FILE [--ids REQUESTS.jsonl] [--frame-bytes B]
         [--model M] [--T 50] [--R 32]
     python benchmarks/network_traces/negatives.py warden --run DIR
-    python benchmarks/network_traces/negatives.py tie-run --run TARBALL|DIR [--ids REQUESTS.jsonl]
 
-**A run** is a certifier-serve run's directory (`certifier_serve.py rehearse`'s, one per strategy): its `plan.json`,
-`calibration.json`, `deployment.json` and `certified.jsonl`, and, as their interfaces land, the advice (I1:
-`verity.protocols.accounting.certifier.verifier.advice`, its `encode` bytes) and the Commit record (I3, serve-openai's).
+The advice is I1's (`verity.protocols.accounting.certifier.verifier.advice`, its `encode` bytes) and the Commit record
+I3's (serve-openai's).
 
 **What is tampered, by whom** (`Negative.tampers`):
-- ``plan``: the shim's plan (`active_replay.adversary_plan`), served by `certifier_serve.py serve --tamper NAME`. The
-  certifier certifies what the shim wrote, so a tampering of the I/O that the certifier signs is the shim's, made while
-  serving; `rehearse --strategies honest,NAME,...` runs it. `make` writes the shim's plan (`shim.json`).
+- ``plan``: what the endpoint sent, tampered by a shim between the endpoint and the network certifier while serving:
+  the network certifier certifies what the shim wrote.
 - ``certified``: the certified records the prover commits (`certified.jsonl`) after the run, under the certificates the
   certifier issued.
 - ``frames``: the certified frames the prover opens under each record's frames root (the I/O tie's reads).
@@ -26,7 +20,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
 
 **The checks and their codes** (`Negative.code`). A code is ``CHECK.PART``: the check that refuses it, and the part of
 it that fails. On the proof system's stream every refusal shows only ``reject`` (the violation's kind stays in the
-verifier); the code is what the verifier establishes, which `n2` reads here in the clear for N2's checks:
+verifier); the code is what the verifier establishes:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
   profile's row, and its record digest under the certifier's salt the certificate's signed digest;
@@ -58,16 +52,6 @@ outputs released on the network certifier's schedule), each kept output a data c
 negative it reads is the tampered cells, port or advice (whose map the verifier computes), and `io_tie.reference_parts`
 names the part that refuses it (`TIE_PARTS`).
 
-**The tie on a certifier run** (`tie-run`, `tie_runs`): the I/O tie on each run of a gate run's tarball (or of a
-directory of runs), each egress window's certified frames held to its certified head, as one JSON document
-(`TIE_RUN`): `runs`, by strategy, each with its `verdict` (``accepted``, ``refused``, or ``not-applicable`` when the run
-lacks what the tie opens, which `missing` names by `TIE_MISSING`'s keys), its `codes` (``IoTieWindow.PART``), the
-failing parts by window, its `finish` (on a compact plan its records held to the sampled ids,
-`active.compact_finish_violations`, which refuses it when they aren't), and `ok` (`tie_ok`: honest accepted, a
-negative the tie reads refused by its part, `TIE_PARTS` or, for a shim tamper only a run has, `TIE_RUN_PARTS`); and
-`stand_ins`, what the tie takes for what the run doesn't keep (`TIE_STAND_INS`). It exits 0 when every run has a
-verdict and none is `ok` false, else 1.
-
 **The ingress tie on a fake upstream** (`advice_suite`): the warden's own ingress of the advice's requests, id
 requests at the link's cell size (each from its record, `--ids` as serve-openai writes it: prompt ids, user and what it
 brought), each window's arriving whole so their request cells are the honest `received`'s (`certified_ingress`), under
@@ -84,15 +68,9 @@ import hashlib
 import importlib
 import itertools
 import json
-import shutil
 import sys
-import tarfile
-import tempfile
-import time
 from collections import defaultdict
-from collections.abc import Collection
 from dataclasses import dataclass, field, replace
-from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
@@ -100,23 +78,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import active_replay as ar  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.blob_files import read_blobs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
-from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import (CANONICAL_STREAM,  # noqa: E402
-                                                                   compact_finish_violations, compact_record_data,
-                                                                   id_event_data)
-from verity.protocols.accounting.certifier.verifier.link_frame import (DATA, HEADER, decode_frame,  # noqa: E402
-                                                                       encode_frame)
+from verity.protocols.accounting.certifier.verifier.link_frame import (DATA, HEADER,  # noqa: E402
+                                                                       )
 from verity.protocols.accounting.certifier.verifier.id_form import ID_NAME_BYTES, id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
-                                                          real_frames)
 from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.service import LinkWindows  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.protocols.accounting.certifier.verifier.advice"
@@ -136,58 +103,15 @@ WARDEN_READ = "Flock.Registered.checkPort"
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
              "advice-missing": "content", "advice-extra": "map", "advice-release": "map", "advice-start": None,
              "wrong-token": "port", "advice-chunk": None, "prompt-split": None}
-#: the part of the I/O tie that refuses each shim tamper it reads only on a certifier run (`tie-run`), not on a fake
-#: upstream (`tie_suite`): extra's one event past a response's end is a data cell no committed output is
-TIE_RUN_PARTS = {"extra": "content"}
-CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
 ISSUER_REFUSED = "Issuer.refused"
-ENDS = ("egress", "ingress")
+FRAME_BYTES = 4096  # the link's frame size
 
 
 class NotApplicable(ValueError):
     """The run has nothing this tampering can change: say, advice with no chunked prefill to split differently."""
 
 
-# --- the certified records ---------------------------------------------------------------------------------------------
-
-def copy_run(src: Path, dst: Path) -> Path:
-    """A copy of the run directory `src` at `dst`, which must not exist."""
-    shutil.copytree(src, dst)
-    return dst
-
-
-def write_certified(path: Path, records: dict[tuple[Direction, int], CertifiedRecord], refused: list) -> None:
-    """`certified.jsonl` as `certifier_serve.CertifyingPublisher` writes it: one line per record, by window and end,
-    then the execution phases the signer refused."""
-    lines = [RF.certified_json(records[k]) for k in sorted(records, key=lambda k: (k[1], k[0].code))]
-    lines += [{"refused": r} for r in refused]
-    path.write_text("".join(json.dumps(x) + "\n" for x in lines))
-
-
-def one_count(record: CertifiedRecord, by: int = 1) -> CertifiedRecord:
-    """The record with its head `by` frames off in one bucket (one more in its first bucket that has frames and room,
-    else its first with room; one fewer in its first with frames), the certifier's salt and certificate unchanged."""
-    counts, r = list(record.head.counts), record.head.allocation
-    if by > 0:
-        t = next((t for t, n in enumerate(counts) if 0 < n < r), None)
-        t = t if t is not None else next(t for t, n in enumerate(counts) if n < r)
-    else:
-        t = next(t for t, n in enumerate(counts) if n > 0)
-    counts[t] += by
-    return CertifiedRecord(replace(record.head, counts=tuple(counts)), record.salt, record.certificate)
-
-
-def tampered_head(src: Path, dst: Path, window: int = 0, by: int = 1) -> Path:
-    """The run with window `window`'s egress head `by` frames off (`one_count`) under its original certificate: what a
-    prover that commits a head other than the certified one hands over (n2_zk's tampered head)."""
-    records, refused = cs.read_certified(src / "certified.jsonl")
-    key = (Direction.EGRESS, window)
-    if key not in records:
-        raise NotApplicable(f"{src}: no certified egress record of window {window}")
-    copy_run(src, dst)
-    records[key] = one_count(records[key], by)
-    write_certified(dst / "certified.jsonl", records, refused)
-    return dst
+# --- the network certifier's cells -------------------------------------------------------------------------------------
 
 
 def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
@@ -200,12 +124,6 @@ def frame_byte(frames: list[bytes], k: int = 0, at: int = -1) -> list[bytes]:
     f[at] ^= 1
     out[k] = bytes(f)
     return out
-
-
-def frames_edit(src: Path, dst: Path) -> Path:
-    raise NotApplicable("the run keeps its frames' root only (`certified.jsonl`'s heads); the frames negative waits "
-                        "for a record that keeps the cells (the warden's: `warden_frame` on a warden-serve run), and "
-                        "runs on the tie's fake upstream (--ids)")
 
 
 def cell_reads(WR, cells, k: int, row: bytes) -> bool:
@@ -255,20 +173,6 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
                 "row_bytes": len(rows[t]), "code": WARDEN_READ, "honest_reads": honest, "tampered_reads": tampered,
                 "ok": honest and not tampered}
     raise NotApplicable(f"{run}: no registered egress link-window with a data cell")
-
-
-def shim(strategy: str) -> Callable[[Path, Path], Path]:
-    """The tampering of `strategy` as the shim serves it: the run's plan as `active_replay.adversary_plan` makes it, in
-    `shim.json` beside a copy of the run's plan and calibration (`certifier_serve.py serve --tamper STRATEGY` serves it)."""
-    def make(src: Path, dst: Path) -> Path:
-        plan, report = (json.loads((src / f).read_text()) for f in ("plan.json", "calibration.json"))
-        dst.mkdir(parents=True)
-        for f in ("plan.json", "calibration.json"):
-            shutil.copy(src / f, dst / f)
-        (dst / "shim.json").write_text(json.dumps(ar.adversary_plan(plan, ar.Setup(report), strategy)))
-        return dst
-    make.__name__ = f"shim_{strategy}"
-    return make
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
@@ -549,19 +453,6 @@ def advice_module():
         return None
 
 
-def advice_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
-    """`edit` on the advice at `advice` (I1's `encode` bytes), written to `dst/advice.bin` beside a copy of the run."""
-    def make(src: Path, dst: Path, advice: Path) -> Path:
-        mod = advice_module()
-        if mod is None:
-            raise NotApplicable(f"no advice codec: {ADVICE_MODULE} (I1) isn't in this tree")
-        copy_run(src, dst)
-        (dst / "advice.bin").write_bytes(mod.encode(edit(mod.decode(advice.read_bytes()))))
-        return dst
-    make.__name__, make.edit = f"advice_{edit.__name__}", edit
-    return make
-
-
 # --- the Commit record (I3) --------------------------------------------------------------------------------------------
 # On a stand-in of I3: per step, each batch row's request, the committed `c00.input/ids` and
 # `runner.sampler/sampled_token_ids`, under the Commit's registered root. serve-openai's record (`serve_openai.py`'s
@@ -578,23 +469,14 @@ def wrong_token(commit: dict, step: int = 0, row: int = 0, vocab: int | None = N
     return out
 
 
-def commit_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
-    def make(src: Path, dst: Path, commit: Path) -> Path:
-        copy_run(src, dst)
-        (dst / "commit.json").write_text(json.dumps(edit(json.loads(commit.read_text()))))
-        return dst
-    make.__name__ = f"commit_{edit.__name__}"
-    return make
-
-
 # --- the registry ------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Negative:
     """One tampering: its `family` (the goal's four: `io`, `advice`, `token`, `circuit`), what it `tampers` (`plan`,
     `certified`, `frames`, `advice` or `commit`), the `check` that must refuse it and its refusal `code` (`served`: the code on a
-    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs), and `make`,
-    the pure function that writes the tampered copy."""
+    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs), and `edit`,
+    the pure edit of the advice or the Commit record it tampers (None: it tampers the link's records)."""
 
     name: str
     family: str
@@ -602,7 +484,7 @@ class Negative:
     what: str
     check: str
     code: str
-    make: Callable
+    edit: Callable | None = None
     served: str | None = None
     waits: tuple[str, ...] = ()
     also: tuple[str, ...] = field(default=())
@@ -617,64 +499,49 @@ class Negative:
 
 NEGATIVES = {n.name: n for n in [
     Negative("late", "io", "plan", "the shim holds a window-0 session past every sync; the certifier faults the window "
-             "and certifies none of it", "the certifier (it certifies no incomplete status)", ISSUER_REFUSED,
-             shim("late")),
+             "and certifies none of it", "the certifier (it certifies no incomplete status)", ISSUER_REFUSED),
     Negative("extra", "io", "plan", "the shim writes one event more than the endpoint sent; certified",
-             "N2's counts against the profile", f"{HEAD}.counts", shim("extra"), served=SERVED),
+             "N2's counts against the profile", f"{HEAD}.counts", served=SERVED),
     Negative("drop", "io", "plan", "the shim drops the first event of a response; certified",
-             "N2's counts against the profile", f"{HEAD}.counts", shim("drop"), served=SERVED,
+             "N2's counts against the profile", f"{HEAD}.counts", served=SERVED,
              also=(f"{TIE}.content",)),
     Negative("head", "io", "certified", "window 0's egress head one count off, its certificate the original's",
-             "N2's head check (the signed digest)", f"{HEAD}.signed", tampered_head, also=("audit.signature",)),
+             "N2's head check (the signed digest)", f"{HEAD}.signed", also=("audit.signature",)),
     Negative("token", "io", "plan", "the shim writes every token of window 0's responses with other bytes than the "
              "endpoint sent: certified, its counts honest's", "the I/O tie (a data cell's id against its port entry's)",
-             f"{TIE}.content", shim("token"), waits=("the I/O tie", "the warden's cells")),
+             f"{TIE}.content", waits=("the I/O tie", "the warden's cells")),
     Negative("frame", "io", "frames", "one byte of a certified cell changed, the cells' root kept",
-             "the I/O tie (the warden's cells under their root)", f"{TIE}.cells_root", frames_edit,
+             "the I/O tie (the warden's cells under their root)", f"{TIE}.cells_root",
              waits=("the I/O tie", "the warden's cells")),
     Negative("advice-length", "advice", "advice", "a request's output length one more than its certified frames, "
              "its next row keeping the sample", "the I/O tie (a kept output's data cell against the certified cells)",
-             f"{TIE}.content", advice_edit(output_length),
+             f"{TIE}.content", output_length,
              waits=("the advice module", "the I/O tie", "the warden's cells")),
     Negative("advice-missing", "advice", "advice", "a certified request missing from the advice, with its rows",
-             "IoTieRequest (each certified request against the advice's)", REQUEST_TIE, advice_edit(missing_request),
+             "IoTieRequest (each certified request against the advice's)", REQUEST_TIE, missing_request,
              waits=("the advice module", "the I/O tie"), also=(f"{TIE}.content",)),
     Negative("advice-extra", "advice", "advice", "a request in the advice that the ingress didn't certify",
-             "IoTieRequest (each certified request against the advice's)", REQUEST_TIE, advice_edit(extra_request),
+             "IoTieRequest (each certified request against the advice's)", REQUEST_TIE, extra_request,
              waits=("the advice module", "the I/O tie"), also=(f"{TIE}.content",)),
     Negative("prompt-split", "advice", "advice", "two requests' prompt lengths swapped, their total kept "
              "((338, 16) served, (16, 338) in the advice), every output and frame honest's",
              "IoTieRequest (each request's prompt length against the certified ingress cells)", REQUEST_TIE,
-             advice_edit(prompt_split), waits=("the advice module", "the I/O tie")),
+             prompt_split, waits=("the advice module", "the I/O tie")),
     Negative("advice-release", "advice", "advice", "a kept output released one bucket later than certified",
              "the I/O tie (the verifier's map of the advice's outputs against the warden's schedule)", f"{TIE}.map",
-             advice_edit(release_moved), waits=("the advice module", "the I/O tie", "the warden's cells")),
+             release_moved, waits=("the advice module", "the I/O tie", "the warden's cells")),
     Negative("advice-start", "advice", "advice", "a request's first row starting one position later, claiming a "
              "prefix-cache hit on another request's KV, its end kept: N2 accepts it",
              "the step unit (committed values against the compiled Program)", "StepUnit.values",
-             advice_edit(start_shifted), waits=("the advice module", "the compiler", "the prove path")),
+             start_shifted, waits=("the advice module", "the compiler", "the prove path")),
     Negative("wrong-token", "token", "commit", "a committed sampled id changed after the run; the registered root kept",
-             "the I/O tie and the step unit (the Commit's opening)", "Commit.opening", commit_edit(wrong_token),
+             "the I/O tie and the step unit (the Commit's opening)", "Commit.opening", wrong_token,
              waits=("the Commit record", "the I/O tie", "the prove path"), also=(f"{TIE}.port", "StepUnit.opening")),
     Negative("advice-chunk", "circuit", "advice", "a prefill chunk split one token differently (an unchunked one in "
              "two): N2 accepts it",
              "the step unit (the compiled Program's digest against the committed trace's)", "StepUnit.program",
-             advice_edit(chunk_split), waits=("the advice module", "the compiler", "the prove path")),
+             chunk_split, waits=("the advice module", "the compiler", "the prove path")),
 ]}
-
-
-def make(name: str, src: Path, dst: Path, *, advice: Path | None = None, commit: Path | None = None) -> Path:
-    """The tampered copy of the run `src` for negative `name`, written at `dst`."""
-    n = NEGATIVES[name]
-    if n.tampers == "advice":
-        if advice is None:
-            raise NotApplicable(f"{name} tampers the advice: give it (--advice)")
-        return n.make(src, dst, advice)
-    if n.tampers == "commit":
-        if commit is None:
-            raise NotApplicable(f"{name} tampers the Commit record: give it (--commit)")
-        return n.make(src, dst, commit)
-    return n.make(src, dst)
 
 
 def table(markdown: bool = True) -> str:
@@ -691,35 +558,7 @@ def table(markdown: bool = True) -> str:
     return "\n".join(out + ["| " + " | ".join(r) + " |" for r in rows[1:]])
 
 
-# --- N2's refusal codes ------------------------------------------------------------------------------------------------
-
-def link(run: Path) -> tuple[LinkWindows, dict]:
-    """The run's link and its plan, as `certifier_serve.check` builds them."""
-    plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json", "deployment.json"))
-    setup = ar.Setup(report)
-    profile = plan.get("occupancy") or {}
-    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, RF.read_public(dep["certifier_key"]),
-                     dep["run_id"], bytes.fromhex(dep["session"]), ingress=setup.ingress_params,
-                     proof_deadline=RC.PROOF_DEADLINE_S, occupancy=(profile.get("egress"), profile.get("ingress")),
-                     served=cs.served_profile(plan))
-    return lw, plan
-
-
-def codes(lw: LinkWindows, opening, root: bytes, syncs: list[ClockSync]) -> list[str]:
-    """What fails of N2's check on the opening under `root`, as codes: each end's head check parts, the served counts
-    on a served link, and each end's audit violation (`audit.Audit`, the Lean check's reference)."""
-    out = []
-    for end, inst in zip(ENDS, lw.head_checks(opening, root)):
-        if inst is None:
-            out.append(f"{HEAD}.shape")
-        else:
-            out += [f"{HEAD}.{part}" for part, ok in HC.reference_parts(inst).items() if not ok]
-    if lw.served is not None and not lw.served_check(opening, syncs):
-        out.append(SERVED)
-    egress, ingress = lw._audit(host_audit.Audit(), opening, syncs)
-    w = opening.window
-    out += [f"audit.{v[w].violation}" for v in (egress, ingress) if len(v) > w and v[w].violation is not None]
-    return sorted(set(out))
+# --- the ingress tie on a fake upstream (`io_request`) -----------------------------------------------------------------
 
 
 def link_received(advice, request_frames, received: list[int]) -> list[int]:
@@ -867,7 +706,7 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
             continue
         row: dict[str, Any] = {"code": n.code, "check": n.check, "waits": list(n.waits)}
         try:
-            b = n.make.edit(advice)
+            b = n.edit(advice)
         except NotApplicable as err:
             out[name] = row | {"ran": False, "why": str(err)}
             continue
@@ -881,7 +720,7 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
     return out
 
 
-def advice_run(path: Path, *, T: int = 50, R: int = 32, frame_bytes: int = cs.FRAME_BYTES, ids: Path | None = None,
+def advice_run(path: Path, *, T: int = 50, R: int = 32, frame_bytes: int = FRAME_BYTES, ids: Path | None = None,
                model: str = "") -> dict:
     """`advice_suite` on the advice at `path` (I1's encode bytes) under the link's framing at `frame_bytes`-byte
     frames (`link_framing`), all its requests' frames received in window 0: its shape and the rows (`negatives`, or why
@@ -1152,7 +991,7 @@ def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None
     for name in TIE_PARTS:
         if NEGATIVES[name].tampers == "advice":
             try:
-                edited[name] = tie_negative(NEGATIVES[name].make.edit(advice), advice, schedule)
+                edited[name] = tie_negative(NEGATIVES[name].edit(advice), advice, schedule)
             except NotApplicable as err:
                 edited[name] = err
     shape = tie_shape(IT, [advice, *(b for b in edited.values() if not isinstance(b, NotApplicable))], schedule,
@@ -1215,367 +1054,23 @@ def tie_suite(advice, ids: dict[str, list[int]], *, T: int, R: int | None = None
     return out
 
 
-# --- the I/O tie on a certifier run ------------------------------------------------------------------------------------
-# A certifier-serve run keeps the prover's copy of each window's egress frames (`responses.records`) beside the
-# certified heads (`certified.jsonl`), so its frames can be held to their certified head; it keeps no active network
-# certifier's cells, no advice and no Commit. `tie_run` runs `io_tie.reference_parts` on each egress window of it,
-# standing in for what it lacks (`TIE_STAND_INS`), and names what keeps the tie from opening a run (`TIE_MISSING`).
-
-TIE_RUN = "verity-network-tie-run/v1"
-#: what a run must keep for the tie to open it, by the key `tie_run`'s `missing` names it by
-TIE_MISSING = {
-    "io-tie": f"the I/O tie: {IO_TIE_MODULE} isn't in this tree",
-    "id-events": "token-id events: no egress frame is an id event (`active.id_event`), or on a compact plan a compact "
-                 "record (`active.compact_record`), so none is a data cell the tie reads an id from; a fixed plan's "
-                 "frames are text events, and only a varied plan (`certifier_serve.py plan --traffic varied`, with "
-                 "`--compact B` its records) writes them",
-    "commit": "the Commit's rows: the endpoint's sampled ids of the run's requests, by each id request's user (--ids), "
-              "which the run doesn't keep (the shim drops `user` before it forwards a request)",
-}
-#: what the tie on a run takes in place of what the proof block reads and the run doesn't keep
-TIE_STAND_INS = {
-    "cells_root": "each window's frames held to its certified egress head (record v2's frames root, under its "
-                  "certificate), then committed under fake salts in place of the warden's bucket rows",
-    "cells": "each certified id event as v4's data cell on the stream its ordinal names, and on a compact plan each "
-             "compact record (`active.compact_record_data`) as the data cell of its id, in an id event's frame "
-             "(`certifier_serve.FRAME_BYTES`); any other frame as it is",
-    "port": "the Commit's port from --ids: one row a certified request's output, in (stream, index) order, under fake "
-            "salts, each bucket opening the rows of its own data cells",
-    "map": "the certified placement, each data cell its stream's next output, since no advice says where an output "
-           "goes, and any other slot held to B zero bytes (`io_tie.UNHELD`, the certifier's padding); a committed "
-           "output no cell carries (`unplaced`), which the advice's map would place in its release window, fails "
-           "content at window -1",
-}
-#: the tie's parts in the order a run's `failing` lists them; ``map`` on every window when the certified ingress, which
-#: names each stream's request, doesn't hold
-TIE_ORDER = ("map", "cells_root", "port", "content")
-NOT_APPLICABLE = "not-applicable"
-
-
-def tie_cell(IT, slot: bytes | None, B: int, compact: bool = False) -> bytes:
-    """A certified egress slot as the tie's B-byte cell: padding a pad, an id event's canonical frame (or under
-    `compact` a compact record) the v4 data cell of its id on the stream its ordinal names, any other frame as it is."""
-    if slot is None:
-        return IT.pad_cell(B)
-    if compact:
-        got = compact_record_data(slot)
-        return slot if got is None else IT.data_cell(got[1], got[0], B)
-    kind, stream, payload = decode_frame(slot)
-    got = id_event_data(payload) if (kind, stream) == (DATA, CANONICAL_STREAM) else None
-    if got is None or slot != encode_frame(DATA, CANONICAL_STREAM, payload, B):
-        return slot
-    return IT.data_cell(got[1], got[0], B)
-
-
-def _is_id_event(slot: bytes) -> bool:
-    kind, stream, payload = decode_frame(slot)
-    return (kind, stream) == (DATA, CANONICAL_STREAM) and id_event_data(payload) is not None
-
-
-def frames_held(certified: CertifiedRecord | None, record, params, key, session: bytes, link: str) -> bool:
-    """Whether a window's frames (`record`, the prover's copy) are the certified ones: the certificate verifies under
-    the certifier's key and session, the head is the link's on the grid's parameters, and its counts and frames root
-    are the frames' (`certificate.frames_root` of their `real_frames`)."""
-    if certified is None or record is None or not certified.verify(key, session):
-        return False
-    h, p = certified.head, params
-    if (h.link, h.buckets, h.allocation, h.frame_bytes) != (link, p.buckets, p.allocation, p.frame_bytes):
-        return False
-    try:
-        frames = real_frames(record.grid, params)
-    except ValueError:
-        return False
-    return (h.counts == tuple(sum(f is not None for f in row) for row in record.grid)
-            and h.root == frames_root(frames, params))
-
-
-def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run",
-            aborted: Collection[str] = ()) -> dict:
-    """The I/O tie on each egress window of the certifier-serve run `run`, `ids` the endpoint's sampled ids by request
-    user (`read_ids`; None when not given), with `TIE_STAND_INS` for what the run doesn't keep. `verdict`: refused
-    when a window's parts fail (`failing`, by window, in `TIE_ORDER`; window -1 the committed outputs no cell carries;
-    `codes` their ``IoTieWindow.PART``) or the finish doesn't hold (`finish`), accepted when neither,
-    `NOT_APPLICABLE` when the run lacks what the tie opens (`missing`, by `TIE_MISSING`'s keys). `finish`: whether
-    each response's length and finish are the Commit's; on a compact plan the link's records held to the sampled ids,
-    the users the endpoint says their clients `aborted` (`read_aborted`) and each request's `max_tokens`
-    (`active.compact_finish_violations`, each (ordinal, why) in `finish_violations`), on id events true, their finish
-    being their ids'; None without the ids or the events. The windows whose frames are `held` to their certified
-    heads, at each end; the run's `id_events` (a compact plan's records), its certified requests' committed
-    `outputs`, the data cells `placed` on one, and the committed outputs no cell carries (`unplaced`)."""
-    IT = io_tie_module()
-    plan, report, dep = (json.loads((run / f).read_text())
-                         for f in ("plan.json", "calibration.json", "deployment.json"))
-    setup = ar.Setup(report)
-    e, i = setup.egress_params, setup.ingress_params
-    key, session, link = RF.read_public(dep["certifier_key"]), bytes.fromhex(dep["session"]), dep["links"]["n2"]
-    certified, _ = cs.read_certified(run / "certified.jsonl")
-    ins = [RF.unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
-    outs = [RF.unpack_record(b, e.frame_bytes) for b in read_blobs(run / "responses.records")]
-    windows, egress = plan["windows"], {r.window: r for r in outs}
-    ends = {Direction.EGRESS: (egress, e), Direction.INGRESS: ({r.window: r for r in ins}, i)}
-    held = {d.value: [w for w in range(windows)
-                      if frames_held(certified.get((d, w)), recs.get(w), p, key, session, link)]
-            for d, (recs, p) in ends.items()}
-    compact = bool(plan.get("compact"))
-    real = [s for r in sorted(outs, key=lambda r: r.window) for row in r.grid for s in row if s is not None]
-    events = sum((compact_record_data(s) is not None) if compact else _is_id_event(s) for s in real)
-    missing = {k: TIE_MISSING[k] for k, lacks in (("io-tie", IT is None), ("id-events", not events),
-                                                  ("commit", ids is None)) if lacks}
-    records = cs.certified_io(plan, setup, ins, outs)["records"] if events and ids is not None else None
-    users = None if records is None else {r["stream"]: r["user"] for r in records}
-    finish = compact_finish_violations({q: ids.get(u, ()) for q, u in users.items()}, plan["varied"]["eos_token_ids"],
-                                       real, max_tokens={r["stream"]: r["max_tokens"] for r in records},
-                                       aborted={q for q, u in users.items() if u in aborted}
-                                       ) if compact and users is not None else []
-    out = {"verdict": NOT_APPLICABLE, "codes": [], "failing": {}, "windows": windows,
-           "held": {end: len(ws) for end, ws in held.items()}, "id_events": events, "missing": missing,
-           "finish": None if users is None else not finish, "finish_violations": [list(v) for v in finish]}
-    if missing:
-        return out
-    step, rows = {}, []
-    for q in sorted(users):
-        for k, x in enumerate(ids.get(users[q], ())):
-            step[q, k] = len(rows)
-            rows.append(IT.port_row([x], 1))
-    DS = max(1, (len(rows) - 1).bit_length())
-    rows += [IT.port_row([], 1)] * ((1 << DS) - len(rows))
-    pd = IT.domain(hashlib.sha512(b"port" + seed).digest(), len(rows))
-    salts = [IT.fake_salt(seed + b"p", s) for s in range(len(rows))]
-    port = rows, salts, IT.rows_levels(pd.domain_id, rows, salts), pd.domain_id
-    nxt: dict[int, int] = defaultdict(int)
-    placed: dict[int, tuple[list[bytes], list]] = {}
-    B = cs.FRAME_BYTES if compact else e.frame_bytes
-    for w in range(windows):
-        grid = egress[w].grid if w in egress else [(None,) * e.allocation] * e.buckets
-        cells, at = [tie_cell(IT, s, B, compact) for row in grid for s in row], []
-        for c in cells:
-            p = IT.parse_cell(c)
-            if p is not None and p.data:
-                at.append((p.stream, step.get((p.stream, nxt[p.stream]))))
-                nxt[p.stream] += 1
-            else:
-                at.append(None)
-        placed[w] = cells, at
-    R = e.allocation
-
-    def bucket_steps(at: list, t: int) -> list[int]:
-        return sorted({x[1] for x in at[t * R:(t + 1) * R] if x and x[1] is not None})
-
-    S = max([1, *(len(bucket_steps(at, t)) for _, at in placed.values() for t in range(e.buckets))])
-    shape = IT.Shape(B, e.buckets, R, P=1, S=S, DS=DS)
-    ingress_held = len(held[Direction.INGRESS.value]) == windows
-    for w, (cells, at) in placed.items():
-        cmap, steps = [], []
-        for t in range(e.buckets):
-            mine = bucket_steps(at, t)
-            sigma = {s: n for n, s in enumerate(mine)}
-            cmap += [IT.MapEntry(x[0], sigma[x[1]]) if x and x[1] is not None else IT.UNHELD
-                     for x in at[t * R:(t + 1) * R]]
-            steps.append(tuple(mine + [mine[-1] if mine else 0] * (S - len(mine))))
-        inst = _instance(IT, shape, w, cells, cmap, steps, port, seed)
-        bad = {p for p, ok in IT.reference_parts(inst).items() if not ok}
-        bad |= {"cells_root"} if w not in held[Direction.EGRESS.value] else set()
-        bad |= {"map"} if not ingress_held else set()
-        if bad:
-            out["failing"][w] = [p for p in TIE_ORDER if p in bad]
-    committed = {q: len(ids.get(u, ())) for q, u in users.items()}
-    unplaced = sum(max(0, n - nxt[q]) for q, n in committed.items())
-    if unplaced:
-        out["failing"][-1] = ["content"]
-    out["codes"] = sorted({f"{TIE}.{p}" for parts in out["failing"].values() for p in parts})
-    out["verdict"] = "refused" if out["failing"] or out["finish"] is False else "accepted"
-    return out | {"outputs": sum(committed.values()),
-                  "placed": sum(1 for _, at in placed.values() for x in at if x and x[1] is not None),
-                  "unplaced": unplaced}
-
-
-def run_dirs(src: Path, scratch: Path) -> dict[str, Path]:
-    """The certifier-serve runs in `src` by name (each directory with a `certified.jsonl`, named for its strategy): a
-    gate run's tarball (`c…/out/STRATEGY/`) extracted into `scratch`, a directory of runs, or one run's directory."""
-    if src.is_file():
-        with tarfile.open(src) as tf:
-            tf.extractall(scratch, filter="data")
-        src = scratch
-    found: dict[str, Path] = {}
-    for p in sorted(src.rglob("certified.jsonl")):
-        if found.setdefault(p.parent.name, p.parent) != p.parent:
-            raise NotApplicable(f"{src}: two runs named {p.parent.name}")
-    return found
-
-
-def tie_ok(name: str, row: dict) -> bool | None:
-    """Whether the tie's verdict on run `name` is the one it owes: honest's accepted, a negative's it reads
-    (`TIE_PARTS`, `TIE_RUN_PARTS`) refused by its part; None for any other run, or one with no verdict."""
-    if row["verdict"] == NOT_APPLICABLE:
-        return None
-    if name == "honest":
-        return row["verdict"] == "accepted"
-    part = TIE_PARTS.get(name) or TIE_RUN_PARTS.get(name)
-    return f"{TIE}.{part}" in row["codes"] if part else None
-
-
-def tie_runs(src: Path, ids: Path | None = None) -> dict:
-    """`tie-run`'s document (`TIE_RUN`): the tie's row on each run in `src` (`run_dirs`, `tie_run`, the Commit's ids and
-    aborts `ids`' own, `read_ids` and `read_aborted`), by name, with
-    `ok` (`tie_ok`), and what it stands in for (`TIE_STAND_INS`)."""
-    sampled = read_ids(ids) if ids is not None else None
-    gone = read_aborted(ids) if ids is not None else set()
-    with tempfile.TemporaryDirectory() as scratch:
-        runs = run_dirs(src, Path(scratch))
-        if not runs:
-            raise NotApplicable(f"{src}: no certifier-serve run (no certified.jsonl in it)")
-        rows = {name: tie_run(run, sampled, aborted=gone) for name, run in runs.items()}
-    return {"format": TIE_RUN, "check": TIE, "source": str(src), "ids": None if ids is None else str(ids),
-            "stand_ins": TIE_STAND_INS,
-            "runs": {name: {"verdict": r["verdict"], "ok": tie_ok(name, r)} | r for name, r in rows.items()}}
-
-
-def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict on every execution phase of the run's `certified.jsonl`, through the proof system's stream as
-    `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
-    verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
-    link-window's codes (`codes`), and their union. The link stops at the first window without both certified records,
-    whose code is `ISSUER_REFUSED` when the certifier listed it as refused, else ``no-certified-record``."""
-    lw, plan = link(run)
-    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="negatives", coins=cs._no_coins, clock=clock)
-    certified, refused = cs.read_certified(run / "certified.jsonl")
-    rows, previous = [], None
-    for w in range(plan["windows"]):
-        pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
-        if None in pair:
-            code = ISSUER_REFUSED if any(r[2] == w for r in refused) else "no-certified-record"
-            rows.append({"window": w, "accepted": False, "codes": [code]})
-            break
-        opening = lw.commit(w, *pair)
-        reg = lw.register(st, lw.registration(opening, previous))
-        previous = reg.digest
-        draw = st.select(reg)
-        outcome = st.deliver(draw, [lw.session(opening, draw)]) or lw.unproved_outcome(st, draw, opening, syncs)
-        found = codes(lw, opening, bytes.fromhex(reg.record["roots"][0]["root"]), syncs)
-        rows.append({"window": w, "accepted": outcome.accepted, "symbols": list(outcome.verdict.codes),
-                     "codes": found if not outcome.accepted else []})
-        if outcome.accepted and found:
-            rows[-1]["diagnosed"] = found
-    network = lw.network_verdict(st, plan["windows"])
-    return {"accepted": network["accepted"], "network": network, "windows": rows, "issuer_refused": refused,
-            "profile": (plan.get("occupancy") or {}).get("kind"),
-            "codes": sorted({c for r in rows for c in r["codes"]})}
-
-
-def judge(name: str, verdict: dict) -> dict:
-    """Whether `verdict` (`n2`'s on the negative's run) refuses negative `name` by its code: the network verdict
-    rejects and a refused execution phase's codes include the code the negative names on the run's profile."""
-    n = NEGATIVES[name]
-    code = n.code_on(verdict.get("profile"))
-    return {"negative": name, "code": code, "refused": not verdict["accepted"],
-            "by_code": not verdict["accepted"] and code in verdict["codes"], "codes": verdict["codes"],
-            "pending": list(n.waits)}
-
-
-def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, commit: Path | None = None,
-          ids: Path | None = None, clock=time.monotonic) -> dict[str, dict]:
-    """Every negative's row for the one command's report, from a rehearsal's runs by strategy (`runs`, which must hold
-    honest): a shim negative is its own run (`rehearse --strategies`), any other is made from honest's under `work`.
-    A row says what the negative tampers, the check and code it names and what it waits on; whether it ran, and if so
-    N2's verdict, its refused execution phases and their codes, and `ok`: refused by its code; for a shim negative whose
-    check is pending (token), N2's accepting it, since only that check may refuse it; else None. An advice negative's
-    verdict is `advice_run`'s, the ingress tie's codes on it (`honest_codes` its codes on the honest advice), since the
-    certified records don't change with it; `ok` needs the honest advice accepted. With the run's sampled `ids` too,
-    each negative the I/O tie reads carries the tie's verdict on a fake upstream (`tie`, `tie_suite`'s row), and its
-    `ok` needs the tie to refuse it by its part (or accept it) and accept the honest windows."""
-    out, judged, tie = {}, None, {}
-    if advice is not None and ids is not None:
-        try:
-            doc = advice_run(advice, ids=ids)
-            judged, tie = doc["negatives"], doc["tie"]
-        except NotApplicable as err:
-            tie = {"why": str(err)}
-    for name, n in NEGATIVES.items():
-        row = {"family": n.family, "tampers": n.tampers, "check": n.check, "code": n.code, "waits": list(n.waits)}
-        run = runs.get(name)
-        if run is None and n.tampers != "plan":
-            try:
-                run = make(name, runs["honest"], work / name, advice=advice, commit=commit)
-            except NotApplicable as err:
-                row |= {"ran": False, "why": str(err)}
-        elif run is None:
-            row |= {"ran": False, "why": f"no run of it: rehearse --strategies honest,{name},..."}
-        if run is not None and n.tampers == "advice":
-            if judged is None:
-                judged = advice_run(advice)["negatives"]
-            got = judged.get(name)
-            if got is None:
-                row |= {"ran": False, "copy": str(run), "why": judged["why"]}
-            else:
-                honest = judged["honest"]
-                row |= {"copy": str(run), "honest_codes": honest["codes"]}
-                row |= {k: v for k, v in got.items() if k not in ("code", "check", "waits")}
-                if got["ran"]:
-                    row["ok"] = got["ok"] and honest["ok"]
-            run = None
-        if run is not None:
-            v = n2(run, clock=clock)
-            got = judge(name, v)
-            row |= {"ran": True, "run": str(run), "code": got["code"], "n2_accepted": v["accepted"],
-                    "refused_windows": [r["window"] for r in v["windows"] if r["codes"]], "codes": v["codes"],
-                    "by_code": got["by_code"]}
-            if not n.pending:
-                row["ok"] = got["by_code"]
-            elif n.tampers == "plan":
-                row["ok"] = v["accepted"]
-            else:
-                row["ok"] = None
-        t = tie.get(name) if name in TIE_PARTS else None
-        if name in TIE_PARTS and t is None and ids is not None:
-            t = {"ran": False, "why": tie.get("why", "no advice (--advice)")}
-        if t is not None:
-            row["tie"] = t
-            if t["ran"]:
-                ok = t["ok"] and tie["honest"]["ok"]
-                row["ok"] = ok if row.get("ok") is None else row["ok"] and ok
-        out[name] = row
-    return out
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="negatives.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     t = sub.add_parser("table", help="the negatives, their checks and codes")
     t.add_argument("--markdown", action="store_true")
-    m = sub.add_parser("make", help="write a negative's tampered copy of a run")
-    m.add_argument("name", choices=list(NEGATIVES))
-    m.add_argument("--advice", type=Path, help="the run's advice (I1's encode bytes)")
-    m.add_argument("--commit", type=Path, help="the run's Commit record (I3)")
-    m.add_argument("--out", required=True, type=Path)
-    x = sub.add_parser("n2", help="N2's verdict of record on a run, with the refused execution phases' codes")
-    j = sub.add_parser("judge", help="whether N2 refuses a negative's run by the code it names")
-    j.add_argument("name", choices=list(NEGATIVES))
     w = sub.add_parser("warden", help="frame on a warden-serve run's own cells, by the verifier's registered read")
-    for q in (m, x, j, w):
-        q.add_argument("--run", required=True, type=Path)
+    w.add_argument("--run", required=True, type=Path)
     a = sub.add_parser("advice", help="every advice negative of a run's advice, and the ingress tie's codes on it")
     a.add_argument("--advice", required=True, type=Path, help="the run's advice (I1's encode bytes)")
     a.add_argument("--T", type=int, default=50, help="buckets a window (the advice's release buckets')")
     a.add_argument("--R", type=int, default=32, help="egress frames a bucket")
-    a.add_argument("--frame-bytes", type=int, default=cs.FRAME_BYTES,
+    a.add_argument("--frame-bytes", type=int, default=FRAME_BYTES,
                    help="the link's frame size: each request's frames are its id request's at this size")
     a.add_argument("--model", default="", help="the model the run's requests named, in their id requests")
     a.add_argument("--ids", type=Path, help="the run's records (serve-openai's requests.jsonl): each request's prompt "
                    "and what it brought, for IoTieRequest's ingress, and its sampled ids, for the I/O tie")
-    r = sub.add_parser("tie-run", help="the I/O tie's verdict on each run of a gate run's tarball or a run directory")
-    r.add_argument("--run", required=True, type=Path,
-                   help="a gate run's tarball (c…/out/STRATEGY/), a directory of runs, or one run's directory")
-    r.add_argument("--ids", type=Path, help="the endpoint's sampled ids by request user (requests.jsonl: user, "
-                   "output_ids), the Commit's rows")
     args = ap.parse_args(argv)
-    if args.command == "tie-run":
-        try:
-            doc = tie_runs(args.run, args.ids)
-        except NotApplicable as err:
-            raise SystemExit(str(err))
-        print(json.dumps(doc, indent=1))
-        return 0 if all(r["verdict"] != NOT_APPLICABLE and r["ok"] is not False for r in doc["runs"].values()) else 1
     if args.command == "advice":
         try:
             doc = advice_run(args.advice, T=args.T, R=args.R, frame_bytes=args.frame_bytes, ids=args.ids,
@@ -1588,23 +1083,12 @@ def main(argv=None) -> int:
     if args.command == "table":
         print(table(args.markdown))
         return 0
-    if args.command == "make":
-        print(make(args.name, args.run, args.out, advice=args.advice, commit=args.commit))
-        return 0
-    if args.command == "warden":
-        try:
-            out = warden_frame(args.run)
-        except NotApplicable as err:
-            raise SystemExit(str(err))
-        print(json.dumps(out))
-        return 0 if out["ok"] else 1
-    verdict = n2(args.run)
-    if args.command == "n2":
-        print(json.dumps(verdict, indent=1))
-        return 0
-    out = judge(args.name, verdict)
+    try:
+        out = warden_frame(args.run)
+    except NotApplicable as err:
+        raise SystemExit(str(err))
     print(json.dumps(out))
-    return 0 if out["by_code"] else 1
+    return 0 if out["ok"] else 1
 
 
 if __name__ == "__main__":

@@ -69,7 +69,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
@@ -456,7 +455,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     selects, the prover proves the statement live behind the ZK server and delivers, and the verifier decides
     on the proof (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes
     what the verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
-    stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
+    stream = tie.stream(budget=len(rd.windows), delta=Z.DELTA, challenger="n2-tie-zk", coins=Z._no_coins,
                         clock=time.monotonic)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
     # FIREWALL-REFUSED otherwise), as a8's fw arm does
