@@ -1604,11 +1604,13 @@ fn firewall_on(st: &Stmt) -> bool {
     is_zk(st) && zk_server_asked()
 }
 
-/// The Lean verifier's name of the statement a ZK server session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
-/// this build's (the circuit's statement, with `+seed-injection` in a build whose identity pins `seed_injection`).
+/// The Lean verifier's name of the statement a ZK server session's `Hello` is set up under, in the session's version
+/// (`wide_leaf::lean_statement`): `FC_FIREWALL_STATEMENT`, else this build's (the circuit's statement, with
+/// `+seed-injection` in a build whose identity pins `seed_injection`); under `--wide-leaf` the statement's wide name, and a
+/// name or a build the wide version has none for is refused.
 fn lean_statement(st: &Stmt) -> String {
-    std::env::var("FC_FIREWALL_STATEMENT")
-        .unwrap_or_else(|_| format!("{}{}", st.c.statement(), if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" }))
+    let given = std::env::var("FC_FIREWALL_STATEMENT").ok();
+    wide_leaf::lean_statement(st.c.statement(), given.as_deref(), cfg!(feature = "seed-injection"), wide_mode()).unwrap_or_else(|e| refuse(e))
 }
 
 /// The verifier's own public file of `inst` (`Instances::public_file`), written where a Lean process `what` reads it.
