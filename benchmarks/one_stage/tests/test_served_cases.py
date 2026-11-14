@@ -81,12 +81,12 @@ UNNAMED = "the run's registration record is not the declared circuit's: its prog
 SUBSET = {"k": 1, "law": "subset"}
 
 
-def v1_case(program, query, previous: str | None = None, law: dict | None = None) -> dict:
+def v1_case(program, query, previous: str | None = None, design: dict | None = None) -> dict:
     """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``, sampled by
-    the design ``law`` (one unit of each stratum when None)."""
+    ``design`` (one unit of each stratum when None)."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = law or {"law": "stratified", "k": 1}
+    law = design or {"law": "stratified", "k": 1}
     rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
@@ -484,7 +484,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
     rejection is the case's verdict (a failed proof is a visible failure, never a missing case). The case is sampled
     by a subset design: v2 refuses any other at its parameters, before it reads the record."""
     program, query = toy()
-    v1 = v1_case(program, query, law=SUBSET)
+    v1 = v1_case(program, query, design=SUBSET)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--v2", "--v2-exe", v2_exe, "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
     assert rc == 0 and refused == [], out
@@ -500,7 +500,7 @@ def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp
     same form is refused by name at its params, the reason remote's composite would give for a v1 case. The case is
     sampled by a subset design, as v2's one statement asks."""
     program, query = toy()
-    v1 = v1_case(program, query, law=SUBSET)
+    v1 = v1_case(program, query, design=SUBSET)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1), "--sampled-exe", sampled_exe)
     assert rc == 0 and refused == [], out

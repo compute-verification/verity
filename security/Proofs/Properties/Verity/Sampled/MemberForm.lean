@@ -54,7 +54,7 @@ by) give of the bytes and the release log they accept, each stated at the code's
   hold it (`FormAccepts`, proved of the check by `formAccepts`).
 * `MemberForm.Run`: the form's run where every session accepted (`membersRun_ok`): the statements members' in order,
   one session each, at the statement read for its member (`statementAt_files`), the sessions' verdicts in order.
-* `MemberForm.SetsUp`: what a window's instance sets up at the form's parameters (`MembersSetUp`: the window the
+* `MemberForm.SetsUp`: what the instance of a window sets up at the form's parameters (`MembersSetUp`: the window the
   parameters' members on the registered files, `WindowOn`, laid out, each member's files passing, `FilesPass`),
   and how v2 reads the members' files (`membersRead`).
 * `MemberForm.States`: the statement the form read for a member is its window's member's (`statesMember`), so a

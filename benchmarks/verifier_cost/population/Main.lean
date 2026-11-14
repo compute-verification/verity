@@ -3,10 +3,14 @@ import Spot
 /-!
 `population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (which runs
 as `unitGatesFast`), `Slots.popOk` (the run's `population-order` check, which runs from the ranges as
-`Slots.popOkRanges`) and, unless `--no-ref`, the per-unit reference (`TemplateQuery.gates` on every unit, as `unitGates`
-first ran) and `popOk` as stated, off `Slots.layout`'s population, at the population and either side of it, each timed
-after the program is parsed, one `PHASE {json}` line each on stdout; exit 1 if the reference's gates differ from
-`unitGates`', the layout's `popOk` from the ranges', or `popOk` fails. `population.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
+`Slots.popOkRanges`), the one-stage check's call of it (`OneStageZk.popHeld`, as `Spot/OneStageZkStatement.lean`
+compiles it, on a record that names the population; its row carries the root's input gates, counted and never built)
+and, unless
+`--no-ref`, the per-unit reference (`TemplateQuery.gates` on every unit, as `unitGates` first ran) and `popOk` as stated,
+off `Slots.layout`'s population, at the population and either side of it, each timed after the program is parsed, one
+`PHASE {json}` line each on stdout; exit 1 if the reference's gates differ from `unitGates`', the layout's `popOk` from
+the ranges', or `popOk` or `popHeld` fails. `population.sh` builds it against the checkout's verifier and runs it; it is
+a measurement, not a verifier.
 -/
 
 open Lean Spot
@@ -39,6 +43,21 @@ def popOkLayout (p : Program) (q : Json) (n : Nat) : Bool :=
   | .error _ => false
   | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
 
+/-- The one-stage check's population step (`OneStageZk.popHeld`) on a verifier of the program `p` and the query `q`
+alone and a record that names the population `n`: whether it held. -/
+def popHeldOk (p : Program) (q : Json) (n : Nat) : Bool :=
+  let v : Registration.Verifier :=
+    { program := p, query := q, law := .null, workTable := none, scheme := "", ports := #[], leafLayer := none,
+      anchors := #[], log := #[], partition := none }
+  (OneStageZk.popHeld v (Json.mkObj [("population", toJson n)])).toBool
+
+/-- `Slots.inputGates`' size, without the array. -/
+def inputCount (d : Flock.TemplateQuery.Desc) : Nat := Id.run do
+  let some root := d.def? d.root | return 0
+  return root.nodes.foldl (fun acc x =>
+    let tid := d.callees.getD x.fn ""
+    if d.isInputNode x then acc + x.members * d.gates tid else acc) 0
+
 def main (args : List String) : IO UInt32 := do
   let (path, ref) ← match args with
     | [p] => pure (p, true)
@@ -58,6 +77,11 @@ def main (args : List String) : IO UInt32 := do
   row "popOk" pop ms [("ok", toJson ok)]
   if !ok then
     IO.eprintln "popOk refused the population"
+    return 1
+  let (held, ms) ← timed (fun t => t != 0 && popHeldOk p q n) fun b => if b then 1 else 0
+  row "popHeld" pop ms [("ok", toJson held), ("input_gates", toJson (inputCount p.desc))]
+  if !held then
+    IO.eprintln "popHeld refused the population"
     return 1
   if ref then
     let (ref, ms) ← timed (fun t => if t == 0 then none else

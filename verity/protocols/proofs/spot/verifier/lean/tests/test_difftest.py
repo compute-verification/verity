@@ -2515,7 +2515,8 @@ KEY_PARAMS = (f"the challenger's key is not at the deployed LMS parameters (W = 
 
 def subset_only(kind: str) -> str:
     """`OneStageZk.SUBSET_ONLY`"""
-    return f"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
+    return (f"the sampling design is {kind}, which the one-statement audit's soundness statement doesn't cover: "
+            "it covers a subset sampling design")
 
 
 def parsed_params_v2(j) -> dict:
@@ -2533,7 +2534,7 @@ def parsed_params_v2(j) -> dict:
     return p
 
 
-def subset_law(p: dict) -> dict:
+def subset_design(p: dict) -> dict:
     """`OneStageZk.paramsOfJson`'s last refusal, of parsed parameters (`parsed_params_v2`) whose sampling design is no
     `subset` one, by its kind (`subset_only`): a rate stated as text is its design over the population by here."""
     if p["law"]["law"] != "subset":
@@ -2543,8 +2544,8 @@ def subset_law(p: dict) -> dict:
 
 def decode_params_v2(j) -> dict:
     """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: `parsed_params_v2`'s, then a sampling design
-    that is no `subset` one (`subset_law`)."""
-    return subset_law(parsed_params_v2(j))
+    that is no `subset` one (`subset_design`)."""
+    return subset_design(parsed_params_v2(j))
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
@@ -2856,7 +2857,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
     one whose key is at other parameters (`KEY_PARAMS`) are refused, as are parameters whose sampling design is no
-    `subset` one (`subset_only`: a `stratified` or `work` law, as an object or as a rate stated as text, while a rate
+    `subset` one (`subset_only`: a `stratified` or `work` one, as an object or as a rate stated as text, while a rate
     that names the audit's subset sampling design over the population is read as that sampling design), and evidence holding more than its limits
     (`Challenger.LIMITS`: an opening's path one digest past `MAX_PATH`, and the evidence at it read on), and evidence
     whose coins are not the challenger's signed release is rejected: none, the record carrying its own key, coins under
@@ -2875,9 +2876,9 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
-    uncovered = {"a stratified law": ({"k": 3, "law": "stratified"}, None, "stratified"),
-                 "a work law": ({"k": 3, "law": "work"}, table, "work"),
-                 "a work law with no table": ({"k": 3, "law": "work"}, None, "work"),
+    uncovered = {"a stratified design": ({"k": 3, "law": "stratified"}, None, "stratified"),
+                 "a work design": ({"k": 3, "law": "work"}, table, "work"),
+                 "a work design with no table": ({"k": 3, "law": "work"}, None, "work"),
                  "a stratified rate": ("stratified-rate:1/2", None, "stratified"),
                  "a work rate": ("work-rate:1/2", table, "work")}
 
@@ -3001,8 +3002,8 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
              for name in DRAW_MUTATIONS if name not in ("before", "unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
-        for name, (other_law, work, kind) in uncovered.items():
-            a = audit_of(d, draw, coins, law=other_law, **({} if work is None else {"work_table": work}))
+        for name, (other, work, kind) in uncovered.items():
+            a = audit_of(d, draw, coins, law=other, **({} if work is None else {"work_table": work}))
             with pytest.raises(D.Reject) as refused:
                 decode_params_v2(a["params"])
             out = outcome(a)
@@ -5845,7 +5846,8 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
     * `subset:20` over the halves holds eight to twelve of each, 3 link points or 4, and misses neither;
     * `subset:2` over two and eighteen, and `stratified:1` over the halves, whose one stratum holds both members,
       miss either member and give each one count: link points alone pass them;
-    * a Bernoulli law of rate 0 samples nothing, so each member's fewest and most are none: link points alone pass it.
+    * a Bernoulli sampling design of rate 0 samples nothing, so each member's fewest and most are none: link points
+      alone pass it.
 
     With no members, the one-statement form's, every record passes. Then registrations of such windows and of small
     ones, their members cut at random and some broken, agree, a share of them refused for their link points and a
@@ -5860,24 +5862,24 @@ def test_link_points_holds_the_per_member_forms_members_as_the_python_does(piece
             (1, two, {"k": 2, "law": "subset"}, [[0, 2], [0, 2]], [0, 1], []),
             (0, half, {"k": 1, "law": "stratified"}, [[0, 1], [0, 1]], [0, 1], []),
             (1, two, {"law": "bernoulli", "p": "0/1"}, [[0, 0], [0, 0]], [0, 1], [])]
-    for setup, members, law, bounds, missed, differ in rows:
+    for setup, members, design, bounds, missed, differ in rows:
         s = LINK_SETUPS[setup]
-        rec = _record_of(s, None, law, WINDOW, leaf_layer=LEAF)
-        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, law
-        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, law
+        rec = _record_of(s, None, design, WINDOW, leaf_layer=LEAF)
+        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, design
+        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, design
         refused = sorted({*missed, *differ})
         counts = {"law": rec["law"], "members": members, "population": rec["population"]}
-        assert link_points(counts) == {"bounds": bounds, "refused": refused}, law
-        assert D.replay(LINK_POINTS, counts, pieces) == ("output", D.canonical(link_points(counts))), law
-        given = {"params": {"anchors": [], "delta": "1/1000", "law": law, "leaf_layer": LEAF, "log": [],
+        assert link_points(counts) == {"bounds": bounds, "refused": refused}, design
+        assert D.replay(LINK_POINTS, counts, pieces) == ("output", D.canonical(link_points(counts))), design
+        given = {"params": {"anchors": [], "delta": "1/1000", "law": design, "leaf_layer": LEAF, "log": [],
                             "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
                             "scheme": SCHEME, "work_table": None}, "record": rec}
         codes = ["link-points"] if refused else []
         for case, want in (({**given, "members": members}, codes), (given, []), ({**given, "members": []}, [])):
             reg = registration(case)
-            assert reg["codes"] == want, (law, case.get("members"))
+            assert reg["codes"] == want, (design, case.get("members"))
             assert D.replay(REGISTRATION, case, pieces) == ("output", D.canonical(reg))
-        if law["law"] == "stratified":
+        if design["law"] == "stratified":
             assert [t["k"] for t in rec["law"]["strata"]] == ([1, 9] if setup else [1])
     seen: dict[bool, int] = {}
 
@@ -7969,8 +7971,9 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger at the deployed LMS parameters so
     that its refusals of parameters naming none (`NO_CHALLENGER`) or another key (`KEY_PARAMS`) aren't what refuse them;
     the same work audit without the closure is accepted by v1. v1 accepts an honest audit under a `subset`, `stratified`
-    or `work` law; v2, whose one statement's soundness statement covers a subset sampling design alone, refuses the parameters of the
-    `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones' it doesn't. So v2 refuses the
+    or `work` sampling design; v2, whose one statement's soundness statement covers a subset sampling design alone,
+    refuses the parameters of the `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones'
+    it doesn't. So v2 refuses the
     work audit that carries the closure at its parameters, and a subset audit whose sample carries one at its evidence."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
         params, rec, evidence = _covered_case(kind)
@@ -7990,8 +7993,8 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         if kind == "closure":
             assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only('work')}"), out
             covered, held, plain = _covered_case("subset")
-            draw = plain["draw"]
-            widened = {**draw, "closure": [u for u in range(draw["population"]) if u not in draw["units"]][:1]}
+            sample = plain["draw"]
+            widened = {**sample, "closure": [u for u in range(sample["population"]) if u not in sample["units"]][:1]}
             carried = {k: v for k, v in plain.items() if k != "verdicts"} | {"draw": widened, "proofs": {"sessions": []}}
             out = server_v2.exchange(_json({**v2, "commitment": _hex(held), "evidence": _hex(carried),
                                             "params": {**v2["params"], "law": covered["law"], "work_table": None}}))
