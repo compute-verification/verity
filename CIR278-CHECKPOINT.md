@@ -56,3 +56,7 @@ Found the stall. Runs launched with --cwd source into one shared tree take that 
 ## 2026-11-14T18:14:18Z
 
 c616 cancelled too: it had waited 67 min for a slot and never started. Relaunched as r20261114-175434-1fdd (#9835 verity-flock 2/3, own tree). All of #9835's three (7860, fd54, 1fdd) are waiting for check slots. #10140: 9460 done (verity-vllm passed); 0603, ee58 and b806 are waiting. Change 5: 315f is running.
+
+## 2026-11-14T18:20:47Z
+
+#10032 merged with main (#10019 landed): head ccdf607b2eae8e22c378d7b31ff835da20811acc. The layout move 8469d5dc (registration_map) names only verity/hardware/registration.py, which none of the branch's own lines name, so a plain merge of main is what restack.py's script would give on them. One conflict, in test_repo_retired_terms.py with #10024 (Flock's caps, says()), resolved by keeping both. The list still deletes 27 and lowers 31 of circuits' entries (1,026 uses), none below what the tree holds. On the VM: test_repo_retired_terms.py, 29 passed. Its --changed suites (verity-vllm, repository, verity-graph) and ratchet: r20261114-182002-22e5. Still unmarked: it waits on top's yes, and none has come on CIR-278.
