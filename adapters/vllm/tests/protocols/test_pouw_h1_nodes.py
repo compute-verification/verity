@@ -29,6 +29,7 @@ def test_nodes_are_the_tuple_of_their_bytes():
     assert (got, 1) == (want, 1) and {want: 1}[got] == 1
     assert pickle.loads(pickle.dumps(got, protocol=5)) == want
     assert Nodes(raw.copy(), 64) == got and Nodes(raw, 32) != got and Nodes(raw[:0], 64) == ()
+    assert repr(got) == "Nodes(5 of 64 bytes)" and repr(Nodes(raw, 32)) == "Nodes(10 of 32 bytes)"
     with pytest.raises(IndexError):
         got[5]
     with pytest.raises(IndexError):
