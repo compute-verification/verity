@@ -1,16 +1,13 @@
-"""Proposition 2 and the certifier's semantics. By name, the tests mirror Proposition 2's five statements
-(`NetTiming.SecurityProofs.CardCountsLeLe` and the rest) and the lemmas of `NetTiming.SecurityProofs.Occupancy` that
-prove them or stand without a record, among them `card_free`, `card_leftPacked`, `card_counts_eq_le` and
-`encard_fifoGrids`. The certifier tests
-check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""
+"""Proposition 2's lemmas on grids and the certifier's semantics. By name, the tests mirror lemmas of
+`NetTiming.SecurityProofs.Occupancy`, among them the three without a record, `occ_fill`, `leftPacked_occ_fill` and
+`leftPacked_fifoGrid`. The certifier tests check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing,
+W5's untimed status, W6 fail-closed)."""
 
 import itertools
-import math
 import random
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import capacity
 from verity.protocols.accounting.certifier.verifier.grid import (
     COMPLETE, GridParams, Reason, Status, Certifier, fill, left_packed, occupancy, released, row_left_packed,
 )
@@ -27,16 +24,9 @@ def as_row(bits):
 
 
 @pytest.mark.parametrize("T,r", SMALL)
-def test_card_free(T, r):
-    patterns = list(itertools.product(itertools.product([False, True], repeat=r), repeat=T))
-    assert len(patterns) == capacity.free_patterns(T, r)
-
-
-@pytest.mark.parametrize("T,r", SMALL)
 def test_card_leftPacked(T, r):
     rows = [bits for bits in itertools.product([False, True], repeat=r) if row_left_packed(as_row(bits))]
     assert len(rows) == r + 1
-    assert len(rows) ** T == capacity.left_packed_patterns(T, r)
 
 
 @pytest.mark.parametrize("T,r", SMALL)
@@ -63,14 +53,6 @@ def test_exists_fill_of_leftPacked():
         assert g == fill(real, occupancy(g), r)
 
 
-@pytest.mark.parametrize("T,r", SMALL)
-def test_card_counts(T, r):
-    vectors = list(itertools.product(range(r + 1), repeat=T))
-    for M in range(T * r + 1):
-        assert sum(sum(n) == M for n in vectors) <= capacity.all_released_patterns(T, M)  # card_counts_eq_le
-        assert sum(sum(n) <= M for n in vectors) <= capacity.available_patterns(T, M)  # SecurityProofs.CardCountsLeLe
-
-
 def test_released_self():
     rng = random.Random(2)
     for _ in range(200):
@@ -95,15 +77,7 @@ def test_encard_fifoGrids(T, r):
     grids = {fill(frames(T * (r + 1)), released(r, enq), r)
              for enq in itertools.product(range(r + 2), repeat=T)}
     assert all(left_packed(g) for g in grids)  # leftPacked_fifoGrid
-    assert len(grids) == capacity.left_packed_patterns(T, r)
-
-
-@pytest.mark.parametrize("T,r", SMALL)
-def test_encard_fifoGrids_le_of_available(T, r):
-    for M in range(T * r + 2):
-        grids = {fill(frames(M), released(r, enq), r)
-                 for enq in itertools.product(range(M + 1), repeat=T) if sum(enq) <= M}
-        assert len(grids) <= capacity.available_patterns(T, M)
+    assert len(grids) == (r + 1) ** T
 
 
 def test_certifier_constant_rate_left_packed_fifo():
@@ -154,7 +128,3 @@ def test_certifier_malformed_frame_is_a_fault():
     w.tick()
     w.tick()
     assert w.close_window().status == Status(Reason.MALFORMED)
-
-
-def test_unbound_bits_is_about_8_T_r_B():
-    assert math.isclose(capacity.unbound_bits(6, 2, 8 * 2), 8 * 6 * 2 * 2, rel_tol=1e-3)

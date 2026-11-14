@@ -62,8 +62,7 @@ At bucket t the shaper hands, in canonical order, each frame whose `max(h(k), re
 then releases min(queue, r) of them, left-packed, and the proxy writes those and r − n padding frames. A frame handed at
 a bucket after h(k) is late: the declared sync didn't cover it, and the window it is handed in fails closed.
 
-**Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ (`calibration.size_ingress_ms`'s
-model) and released by the ingress `Certifier` at r_in. The released `DATA` frames are cut into requests by their
+**Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Certifier` at r_in. The released `DATA` frames are cut into requests by their
 lengths (`Requests`): the k-th request on the link is stream k, and its bytes, without the length or the fill, go to
 its stream's server connection.
 

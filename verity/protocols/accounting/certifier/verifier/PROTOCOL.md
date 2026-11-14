@@ -253,13 +253,13 @@ One execution phase's certificates are registered through the proof system
   system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. On a plain, served or network certifier link the verdict of record is the Lean's (`NetworkCheck.TransferBlocks`,
+  service's `late`. On a served or network certifier link the verdict of record is the Lean's (`NetworkCheck.TransferBlocks`,
   `service.OF_RECORD`), with the Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
   profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
   egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
   are the rest of the grid, and nothing in this protocol holds them, so it doesn't say the egress grid is the Program's.
-  A link whose egress end has neither an occupancy profile nor a served profile has no verdict (`ValueError`, failing
-  closed), since nothing would hold its egress timing.
+  `LinkWindows` refuses a link that is neither served nor a network certifier's (`ValueError`, failing closed), since
+  no occupancy profile holds a link's egress timing.
 - **The in-the-clear check** is `LinkWindows.clear`, over the opening: the opening reproduces the registered root,
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), and the audit accepts
   both records under the certifier's key in its session, comparing no grid (`check_link(grid=False)` on the status,
@@ -956,9 +956,7 @@ The Program fixes each real frame's content, its **anchor** (the recorded bucket
 `h(k) = max(eligible(k), h(k−1))`, and the certifier's grid **releases** it. Stated in Lean:
 `security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
 `constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the certifier
-program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python. The
-certifier signs each egress window's sync, salted, beside its record:
-[protocol/clock-certificate.md](protocol/clock-certificate.md).
+program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python.
 
 ## The audit (`audit`)
 
@@ -982,8 +980,7 @@ A declared sync outside Σ_sync, or other than the unit's, is an `advice` violat
 Program's grids are computed from each link's syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives
 a schedule), and every other window is checked against them. A window's grid reads only the syncs of its own and
 earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
-carries forward, for any clock-sync values, in the set or not (`expected_grids`, held to it by
-`test_network_certifier_capacity.py`). So a window before the violating one gets the same verdict whatever sync that window
+carries forward, for any clock-sync values, in the set or not (`expected_grids`). So a window before the violating one gets the same verdict whatever sync that window
 gave, and a later one is checked against the grid its advice gives it. No Lean states it of the check's grid.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
@@ -1001,10 +998,10 @@ if every execution phase of every link the audit checks is, so an accepted verdi
 window audited.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
-about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-512`; on certified
+about 8·T·r·B bits. On committed records, the bounds also assume `cr/sha-512`; on certified
 records, `cr/sha-512`, the signature's unforgeability and an honest network certifier.
 
-## Capacity (`capacity`)
+## Capacity
 
 | Quantity | Value | Lean |
 |---|---|---|
@@ -1013,8 +1010,8 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Exactly M released | at most `binom(T + M − 1, M)` | `NetTiming.card_counts_eq_le` |
 | At most M available | at most `binom(T + M, M)` grids | `NetTiming.encard_fifoGrids_le_of_available` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
-| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `capacity.accepted_bound_bits`; no Lean statement |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `test_network_certifier_capacity.py`; no Lean statement |
+| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | no Lean statement |
+| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `NetTiming.encard_accSeqs_le_constantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `NetTiming.encard_accSeqs_le_constantRate_executionPhases` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and an incorrect set is one `RAcc δ` allows (in `M_δ`, no unit sampled `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
@@ -1069,19 +1066,15 @@ inputs' bits, log2 of its possible incorrect sets, their committed bits and the 
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
 The inference-only policy charges an inference block the ingress covert capacity from the last wipe before it starts,
-plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
-(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
-calibration report records the K it used.
+plus what survived that wipe, as a share of K: 9.12e7 bits under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17).
 
 Every statement in the table's Lean column named `SecurityProofs.…` is a guarantee in `security/lean-audit.json`, frozen
 as no-function: each is stated over the model, not the network check's code (`security/Proofs/NetworkCertifier/README.md`,
-"The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. Two are bounds
-`calibration.calibrate` reports: ingress over a monitoring period (the K charge, `k_charge.share_of_k_by_span` from
-each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase (`envelope_bits_per_window`,
-`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). Its egress per window
-(`clock_sync.bits_per_window`, `log2 #Σ_sync`, held by `test_network_certifier_calibration.py`) is the check's charge
-for each window opened, counted from the run's first window, which no Lean states, as no Lean states the table's two
-rows of the check's accepted runs. The steps of their proofs are lemmas
+"The records"); one named `NetTiming.…` is a lemma, proved and audited, with no record. The ingress bounds
+are over a monitoring period (the K charge, `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase
+(`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). The egress charge per
+window, `log2 #Σ_sync` for each window opened, counted from the run's first window, is the check's, which no Lean
+states, as no Lean states the table's two rows of the check's accepted runs. The steps of their proofs are lemmas
 (`security/Proofs/NetworkCertifier/Lemmas.lean`): proved and audited, with no record.
 
 The egress bounds are proved in Lean for `constantRate`, the reference Program of `schedule`: E
@@ -1096,8 +1089,7 @@ number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per window at 16 × 8 syn
 reference's forms over the first m blocks and per block give nothing finer, so the check's bound over its first m
 windows comes from the program instead: a window's sync moves no hand tick before the window's start, so the first m
 windows' rows read only the content advice and those windows' syncs, and their sequences number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check; `test_network_certifier_capacity.py`
-holds both on small grids. The per-block form, a window's bits given everything the run showed before it, need not hold
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check. The per-block form, a window's bits given everything the run showed before it, need not hold
 of the check: the queue and the hand ticks carry from one window into the next, so the run shown before a window need
 not fix the rows the window's sync gives.
 
@@ -1268,7 +1260,7 @@ and the ingress terms, which stay the K charge's.
 Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md), with the adversarial cases each
 part's tests carry.
 
-## Calibration (`calibration`)
+## The prover's clock syncs (`calibration.choose_syncs`, `online`)
 
 Moved to [protocol/calibration.md](protocol/calibration.md).
 
@@ -1777,7 +1769,7 @@ them.
     anchor's window. The egress `Certifier` releases min(queue, r) frames per bucket, left-packed, and r − n padding
     frames follow them on the wire.
 - **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Certifier` at r_in
-  (`Bucketer`, `calibration.size_ingress_ms`'s model). On a served link (`Proxy(served=…)`, off by default) it is
+  (`Bucketer`). On a served link (`Proxy(served=…)`, off by default) it is
   enqueued only with its request's other frames, and only while the window, with the request, still ends idle: the
   admission rule ("A served link" above).
 - **The salt** (`Proxy(salt=…)`) is off by default, and with it off every record, wire and verdict is as above.

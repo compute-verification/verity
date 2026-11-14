@@ -782,8 +782,7 @@ def _private_chain_out(out: Path) -> Path:
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
-                       "rows": [{"window": 0, "certified": True}],
-                       "warden_check": {"accepted": True, "problems": 0, "requests": REQUESTS}},
+                       "warden_check": {"accepted": True, "requests": REQUESTS}},
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},

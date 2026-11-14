@@ -1282,6 +1282,31 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
             assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
 
 
+def test_the_check_refuses_entries_out_of_order_and_two_keys_with_one_identifier():
+    """The check holds the entries' order and their keys' identifiers itself, before the starts, of any parameters:
+    an entry that starts before the one listed before it, or at its start, is refused (`entriesOrderRefusal`), and so
+    are two keys with one identifier (`entriesKeyRefusal`); one key listed in two sessions is neither. The decoder
+    refuses both lists first (`out-of-order`, `overlap`, `one-id`), so no parameters `params` reads reach these: the
+    cases are the Lean `#guard`'s beside `startChecks`, with its keys and its words."""
+    p = PC.params(build("rows-honest", 0, small=True)["params"])
+    lp = p.entries[0].key.params
+
+    def found(*entries: tuple[int, int, int, int]) -> tuple:
+        es = tuple(PC.Entry(PC.LmsKey(lp, bytes([b]) * 16 + bytes([c]) * lp.N), bytes([s]) * 32, a)
+                   for b, c, s, a in entries)
+        return PC.check(dataclasses.replace(p, audits=(), windows=0, entries=es), PC.Commitment([], [], b""),
+                        ([], [], []))
+
+    order = "list the entries by their stretches' starts, no two at one"
+    assert found((1, 1, 7, 3), (2, 2, 8, 2)) == (
+        REJECT, f"{PC.ENTRIES_OUT_OF_ORDER}: entry 1 starts at 2, not after entry 0's 3: {order}")
+    assert found((1, 1, 7, 2), (2, 2, 8, 2)) == (
+        REJECT, f"{PC.ENTRIES_OUT_OF_ORDER}: entry 1 starts at 2, not after entry 0's 2: {order}")
+    assert found((1, 1, 7, 0), (2, 2, 8, 1), (1, 3, 9, 2)) == (
+        REJECT, f"{PC.ENTRIES_ONE_ID} (a key's first 16 bytes), entries 0 and 2: an identifier names one key")
+    assert found((1, 1, 7, 0), (1, 1, 9, 2))[1].startswith("starts: 0 shown for 2")
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the entry its execution phase picks: that entry's key, its session, the

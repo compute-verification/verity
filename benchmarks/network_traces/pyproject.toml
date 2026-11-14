@@ -23,7 +23,6 @@ untraced = [
     "tests/test_leak_guard.py",
     "tests/test_negatives.py",
     "tests/test_out_request_values.py",
-    "tests/test_replay.py",
     "tests/test_scan_zk_challenger.py",
     "tests/test_scan_zk_lean_one.py",
     "tests/test_served_session.py",
