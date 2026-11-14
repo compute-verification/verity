@@ -727,19 +727,6 @@ KNOWN: dict[str, str] = {
     # demos/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
-    "demos/lifecycle/lifecycle.py::Block":
-        "duplicate of the execution block (no canonical yet): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Layout":
-        "duplicate of the Site (`Verity.Site`): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Link":
-        "duplicate of the Site (`Verity.Site`): becomes a client of its link (top)",
-    "demos/lifecycle/lifecycle.py::Placement":
-        "duplicate of `CircuitRequirement.Placement`: becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Registration":
-        "duplicate of the registration log (`Verity.Registration`): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
-    "demos/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
     # infra/
     "infra/cluster/src/cluster/ledger.py::Ledger": "homonym, the shared machines' spend ledger: rename (infra)",
     "infra/cluster/src/cluster/model.py::Node": "homonym, a shared machine in the cluster's model: rename (infra)",
