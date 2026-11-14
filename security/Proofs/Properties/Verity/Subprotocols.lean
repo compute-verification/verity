@@ -27,7 +27,8 @@ everything (`soundness_at_of_componentBounds_nontrivial`).
 Each bound is a hypothesis until its subprotocol's piece proves it of its compiled component in the causal game: for a
 subprotocol that decides an `Audit` (`Subprotocol.ofAudit`), from a per-period guarantee of the coins model
 (`Accounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about its own case in
-the play's messages and reads no coin, and its target is proved outright (`Proofs.Properties.Verity.InferenceOnly`).
+the play's messages and reads no coin, and its target is proved outright where the composite lists v0
+(`Proofs.Properties.Verity.InferenceOnly`); at remote's plain sibling it is the rows check's, open.
 -/
 
 @[expose] public section

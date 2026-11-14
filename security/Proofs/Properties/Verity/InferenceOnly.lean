@@ -56,11 +56,13 @@ theorem policyHeld_of_same {k : Verity.Registration.Composite} {s : Sent} (h : S
   exact Properties.Remote.SecurityProofs.policyHeld (pub := pub') (prof := prof') hacc
 
 /-- **The claim reads a case that exists**: where the policy's component accepts in what the prover sent composite `k`,
-the policy's case decodes. -/
-theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent}
+which doesn't list the rows check, the policy's case decodes. -/
+theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent} (hk : rowsId ∉ k)
     (h : ComponentAccepts k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
   obtain ⟨Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
-  have hQ' : Q = NciCheck.Protocol.protocol := (component_eq_some.1 hQ).2
+  have hQ' : Q = NciCheck.Protocol.protocol := by
+    rw [(component_eq_some.1 hQ).2]
+    simp only [Subprotocol.protocolAt, hk, ↓reduceIte]
   subst hQ'
   have hx1' : P = NciCheck.Protocol.protocol := hx1
   subst hx1'
@@ -70,12 +72,10 @@ theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent}
 /-- **Remote's plain sibling lists no v0**, so `Vocab.inferenceOnlySound`'s hypothesis fails there. -/
 theorem v0_not_mem_plain : NciCheck.Protocol.protocolId ∉ Verity.Registration.Composite.plain := by decide
 
-/-- **Remote's plain sibling has no v0 component**: no case of its play is v0's. -/
-theorem v0_not_mem_componentsOf_plain : NciCheck.Protocol.protocol ∉ componentsOf .plain := by
-  intro h
-  have h' := List.mem_map_of_mem (f := BlobProtocol.id) h
-  rw [componentsOf_plain] at h'
-  revert h'
+/-- **Remote's plain sibling has no v0 component**: none of its compiled checks carries v0's id, so no case of its play
+is v0's. -/
+theorem v0_not_mem_componentsOf_plain : ∀ P ∈ componentsOf .plain, P.id ≠ NciCheck.Protocol.protocolId := by
+  rw [componentsOf_plain]
   decide
 
 namespace Vocab
@@ -91,7 +91,7 @@ theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : NciCheck.Pr
   calc Game.prob (fun o => V.Verdict k .inferenceOnly o ∧ ¬ V.Holds k θ F c σ .inferenceOnly o) (V.game θ F c) σ
       ≤ Game.prob (fun _ => False) (V.game θ F c) σ :=
         Game.prob_mono (fun _ ⟨⟨_, hsame, _⟩, hfail⟩ => hfail <| by
-          simp only [Holds, if_pos hk]
+          simp only [Holds, hk, ↓reduceIte]
           exact fun _ _ _ hc => policyHeld_of_same hsame hc) _ σ
     _ = 0 := Game.prob_false _ σ
     _ ≤ V.error .inferenceOnly θ F c σ := zero_le
@@ -100,7 +100,7 @@ theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : NciCheck.Pr
 reads. -/
 theorem holds_plain (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (o : Exchange) : V.Holds .plain θ F c σ .inferenceOnly o = rowsHeld .plain o.sent := by
-  simp only [Holds, if_neg v0_not_mem_plain]
+  simp only [Holds, v0_not_mem_plain, ↓reduceIte]
 
 end Vocab
 

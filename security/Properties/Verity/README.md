@@ -45,7 +45,9 @@ builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
 `security/Proofs/Properties/Verity/Soundness/Composite.lean`); the code builds no other (`Core.Composites.ofIds`), and
 refuses the plain sibling's list by name until its soundness is proved (`Verity.ofIds_plain`). No compiled check carries
 the rows check's id yet: the game reads it as `Verity.rowsCheck`, whose behavior nothing states (`rowsUnbuilt`, an
-`escapes` entry of the lock), so its target there is proved only from the compiled check that replaces it.
+`escapes` entry of the lock), so its target there is proved only from the compiled check that replaces it. Its claim
+there is `Verity.rowsHeld`, which nothing states either: v0's clause, which `Vocab.inferenceOnlySound` proves at a
+composite that lists v0, would read no case at the plain sibling (`Verity.v0_not_mem_plain`, `Vocab.holds_plain`).
 
 | Subprotocol | Target | Compiled check | Remote | Plain | Onsite |
 |---|---|---|---|---|---|
