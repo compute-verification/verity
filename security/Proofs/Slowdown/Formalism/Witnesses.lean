@@ -26,11 +26,11 @@ value, which both tokens read, and nothing for token `1`'s, which it computes.
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (Circuit RegisteredCircuit Partition)
-open InferenceOnly.Formalism.Assumptions
+open Slowdown.Formalism.Assumptions
 open scoped NNReal ENNReal
 
 /-- A2 holds at `p = 1` over one method. -/
@@ -109,7 +109,7 @@ namespace SecurityProofs
 
 namespace Chain
 
-open InferenceOnly.Formalism.Chain
+open Slowdown.Formalism.Chain
 
 theorem computed_card : d.D.computed.card = 4 := by decide
 
@@ -292,7 +292,7 @@ end Chain
 
 namespace Honest
 
-open InferenceOnly.Formalism.Honest
+open Slowdown.Formalism.Honest
 
 theorem boolean : d.D.Boolean := ⟨fun _ => rfl, by decide⟩
 
@@ -535,4 +535,4 @@ end Pair
 
 end SecurityProofs
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

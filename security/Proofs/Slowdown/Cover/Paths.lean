@@ -17,7 +17,7 @@ gate of the set reads, the output.
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
 theorem mem_inputs {C : Circuit} {I : Finset (Fin C.N)} {g : Fin C.N} :
     g ∈ C.inputs I ↔ g ∈ I ∧ (C.pred g = ∅ ∨ ¬ C.pred g ⊆ I) :=
@@ -124,4 +124,4 @@ theorem reachesIn_output (C : Circuit) (I : Finset (Fin C.N)) (o : Fin C.N) (ho 
       · exact hx
       · exact hπI v hv
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

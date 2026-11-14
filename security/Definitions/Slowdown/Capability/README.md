@@ -3,7 +3,7 @@
 This is the machinery for one question: **how much training can a small inference block do?** The inference-only
 policy cuts verified work into blocks of at most c gates, each taking in at most k fresh bits (bits that aren't
 registered information). A block can **import** information, spending fresh bits, or **reconstruct** it, spending
-gates. Every bound here says, in one ontology, how far those two budgets go. The Lean is `InferenceOnly.Capability` (the
+gates. Every bound here says, in one ontology, how far those two budgets go. The Lean is `Slowdown.Capability` (the
 vocabulary), `InferenceOnly.Assumptions` (the premises) and `InferenceOnly.Guarantees` (the bounds), one module per role. How the bounds
 enter the security argument is `security/README.md`, part 2. Over counted products, training's bound of record is the
 min-cut theorem (`security/README.md`, Start here); the bounds here bound what a block holds and the uses it serves.
@@ -15,14 +15,14 @@ min-cut theorem (`security/README.md`, Start here); the bounds here bound what a
 | Committed declaration | R | `Verity.Committed` | the registered circuit, the registered values θ, and a partition into B blocks |
 | Block | I | `Verity.Partition.IsCK` | c gates, at most k fresh bits; its **view** is those bits and its index |
 | Decoder budget | t | `Verity.LDL` | the time a reconstruction may take |
-| Item family | X | `InferenceOnly.Capability.Items` | things a block may hold; each item has **cells** (the gates of one version of its value) and a **price** p_i in bits |
-| Selection | (U, σ) | `InferenceOnly.Capability.Selects` | some items, one cell each |
-| Holding | | `InferenceOnly.Capability.holds` | a block holds a cell if it lies among the block's gates and what they read |
-| Budget | h | `InferenceOnly.Capability.HeldPriceAtMost` | every block holds selections priced at most h |
-| Counted products | 𝒥 | `InferenceOnly.Covering.MulBlocks` | product (i, j): updated slot i times an operand of use j |
-| Consumer | c | `InferenceOnly.Capability.Consumers` | something a block finishes (a use, an accumulated output), with an upstream region A_c and required gates G_c |
-| Certificate | | `InferenceOnly.Capability.Consumers.Upstream` | every required gate reaches, inside the region, what the finishing gates read |
-| Overlap weights | ω | `InferenceOnly.Capability.Consumers.OverlapWeights` | per-consumer weights summing to at most 1 over the regions holding any gate |
+| Item family | X | `Slowdown.Capability.Items` | things a block may hold; each item has **cells** (the gates of one version of its value) and a **price** p_i in bits |
+| Selection | (U, σ) | `Slowdown.Capability.Selects` | some items, one cell each |
+| Holding | | `Slowdown.Capability.holds` | a block holds a cell if it lies among the block's gates and what they read |
+| Budget | h | `Slowdown.Capability.HeldPriceAtMost` | every block holds selections priced at most h |
+| Counted products | 𝒥 | `Slowdown.Covering.MulBlocks` | product (i, j): updated slot i times an operand of use j |
+| Consumer | c | `Slowdown.Capability.Consumers` | something a block finishes (a use, an accumulated output), with an upstream region A_c and required gates G_c |
+| Certificate | | `Slowdown.Capability.Consumers.Upstream` | every required gate reaches, inside the region, what the finishing gates read |
+| Overlap weights | ω | `Slowdown.Capability.Consumers.OverlapWeights` | per-consumer weights summing to at most 1 over the regions holding any gate |
 | Weighted total | Ω | | the counted work at its weights, such as the consumers' ω; with every weight 1, the plain count |
 | Block yield | q | | the most of the weighted total one block can do |
 | Coverage | Core, Ω_*, T_max, η | `InferenceOnly.Assumptions.CoversEfficientMethods` | cheap successful methods carry at least Ω_* covered work |
@@ -104,8 +104,8 @@ So a block's served weight is at most k + c/g, or k when recomputing is priced o
 | a use: one token's input to one layer at one step | `ofUses` | that token's previous layer | its products, over many updated slots |
 | an accumulated output: a weight's gradient summed over tokens | `ofOutputs` | the sum's tree | its addends' products and partial sums |
 
-**Threading.** `InferenceOnly.Threading.Threaded` with `InferenceOnly.Assumptions.WeightsIncompressible` assumes read costs instead of
-deriving them; under them `InferenceOnly.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)). It is a
+**Threading.** `Slowdown.Threading.Threaded` with `Slowdown.Assumptions.WeightsIncompressible` assumes read costs instead of
+deriving them; under them `Slowdown.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)). It is a
 candidate sufficient condition, not part of the repertoire.
 
 ## The bounds
@@ -113,12 +113,12 @@ candidate sufficient condition, not part of the repertoire.
 | Bound | From | Gives | Lean | Status |
 |---|---|---|---|---|
 | Reconstruction | the view | LDL_{t,R}(view) ≤ k' | `Verity.Guarantees.BlockDescription` | proved |
-| Held budget | description hardness | h = k' + λ | `InferenceOnly.Guarantees.HeldBudget` | proved |
-| Statistical held budget | min-entropy hardness | h = k + λ | `InferenceOnly.Guarantees.StatHeldBudget` | proved |
-| Recovered budget | source hardness, recovery | β_v·\|𝒥_I\| ≤ k' + δ + amb | `InferenceOnly.Guarantees.RecoveredBudget` | proved |
-| Import or recompute | certificate, weights | finished ≤ k + recomputed | `InferenceOnly.Guarantees.ImportOrRecompute` | proved |
-| Recompute by gates | weights | recomputed ≤ c/g | `InferenceOnly.Guarantees.RecomputeByGates` | proved |
-| Recompute by state | budget | recomputed = 0 | `InferenceOnly.Guarantees.RecomputeByState` | proved |
+| Held budget | description hardness | h = k' + λ | `Slowdown.Guarantees.HeldBudget` | proved |
+| Statistical held budget | min-entropy hardness | h = k + λ | `Slowdown.Guarantees.StatHeldBudget` | proved |
+| Recovered budget | source hardness, recovery | β_v·\|𝒥_I\| ≤ k' + δ + amb | `Slowdown.Guarantees.RecoveredBudget` | proved |
+| Import or recompute | certificate, weights | finished ≤ k + recomputed | `Slowdown.Guarantees.ImportOrRecompute` | proved |
+| Recompute by gates | weights | recomputed ≤ c/g | `Slowdown.Guarantees.RecomputeByGates` | proved |
+| Recompute by state | budget | recomputed = 0 | `Slowdown.Guarantees.RecomputeByState` | proved |
 | Counting | a block yield | \|C\| ≥ c·Ω/q | `Verity.Guarantees.Counting` | proved |
 | Coverage floor | coverage | Pr[success below the floor] ≤ η | `InferenceOnly.Guarantees.CapabilityFloor` | proved |
 
@@ -128,7 +128,7 @@ when no block holds anything.
 
 Each bound has two witnesses, listed under the lock's `witnesses` and proved: an honest one, its premises holding
 together, and a nontrivial one, its conclusion failing where a premise is dropped. They are stated at the toy circuit
-`InferenceOnly.Capability.Toy` (four one-bit gates, one counted product; `Guarantees/Capability/Witnesses.lean`), and
+`Slowdown.Capability.Toy` (four one-bit gates, one counted product; `Guarantees/Capability/Witnesses.lean`), and
 `CapabilityFloor`'s at the toy task `Accounting.Slowdown.Toy`. The structural premises are proved there, and so are the
 information premises, none degenerately. `MinEntropyHard` holds at Λ = 0 for the product's value, a uniform bit. The toy
 decoder compresses: it describes `11`, the value of gates 2 and 3 in an honest run, in one bit, and every other two-bit

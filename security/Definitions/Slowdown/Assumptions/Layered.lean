@@ -5,7 +5,7 @@ public import Definitions.Slowdown.Layered
 /-!
 # The inference-only policy over threads: the reference circuit is keyed
 
-`InferenceOnly.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
+`Slowdown.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
 circuit (`Layered`). That the reference training circuit is keyed, and at which parameters, is checked on paper against
 a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit of a transformer exists to build a
 `Layered` on. Until one does, it is a named conjecture, stated over a reference circuit `c` and its threading `T` as
@@ -14,7 +14,7 @@ a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit 
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
 open Verity
 
@@ -48,4 +48,4 @@ inference block reading at most `S` bits holds at most `E` of a thread's lookups
 def CapBelowColumns (S : ℝ) (E b : ℕ) : Prop :=
   S < ((E + 1) * b : ℕ)
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

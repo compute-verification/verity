@@ -6,7 +6,7 @@ public import Definitions.Slowdown.Threads
 # The inference-only policy over threads: keyed reference circuits
 
 A structural class of reference circuits whose `(d, e)`-threading (`Threading.Threaded`) follows from their wiring and
-widths alone (`InferenceOnly.Guarantees.ThreadedOfLayered`).
+widths alone (`Slowdown.Guarantees.ThreadedOfLayered`).
 
 Each computed value of a thread has a *key*, one of its reads in the same thread, except at the *stops*:
 
@@ -29,7 +29,7 @@ activation's key path leaves the subcircuit, or to one of at most `E` lookups.
 
 @[expose] public section
 
-namespace InferenceOnly
+namespace Slowdown
 
 open Verity Finset
 
@@ -73,4 +73,4 @@ structure Layered {c : RegisteredCircuit} (T : Threading c) (d e eLk b : ℕ) wh
   col_bits : ∀ v ∈ lookups, b ≤ c.D.width (col v)
   col_disjoint : ∀ v ∈ lookups, ∀ v' ∈ lookups, v ≠ v' → T.thread v = T.thread v' → Disjoint (col v) (col v')
 
-end InferenceOnly
+end Slowdown
