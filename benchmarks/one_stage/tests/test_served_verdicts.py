@@ -31,9 +31,10 @@ step 6 defers the audit and the composite, leaving the follow-on's settings and 
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
 memory or another tree, under DAY holds the day's log as the deferral copied it to the serve's declaration, and audits,
 records about the served node and composes, each saying it composed elsewhere, as the record says where it was composed
-and what was deferred. What it publishes holds a load's tokens and span by path, leaving the inference-only policy, its
-digest and its verdict line as written. Its load, `serve_load.py
---varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
+and what was deferred. The compose follow-on reads its hand-off's settings as data, refusing any line but one of the
+hand-off's names at a value of the characters its writer writes, and runs none of it. What it publishes holds a load's
+tokens and span by path, leaving the inference-only policy, its digest and its verdict line as written. Its load,
+`serve_load.py --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
 
@@ -4528,6 +4529,74 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
         (d / change).write_text("changed")
     rc, lines, order = _compose(tmp_path, keep, **extra)
     assert (rc, lines, order) == (3, [line.replace("{d}", str(d))], []), lines
+
+
+#: `served_verdicts.sh`'s COMPOSES, every setting a hand-off may carry
+HAND_OFF_NAMES = ("K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
+                  "AUDITED_ON SAMPLED_AUDIT STEPS")
+SETTINGS_REFUSED = ("PREFLIGHT: the compose follow-on reads the hand-off's settings (the serve dir's "
+                    "private/compose/compose.env) as data, and refuses them, none set: its line {n} ")
+OTHER_CHARACTERS = "sets K to a value of other characters than A-Za-z0-9._/:+@=,-"
+
+
+def _read_env(f: Path, names: str) -> dict[str, str]:
+    """`f`'s settings by `names`, as `served_verdicts.sh compose` reads them (the script's own `read_env`)."""
+    fns = re.search(r"^ENV_VALUE=.*?^}\n", (HERE.parent / "served_verdicts.sh").read_text(), re.S | re.M)
+    assert fns, "served_verdicts.sh defines no ENV_VALUE and read_env"
+    script = (f'{fns.group(0)}read_env "$1" "{names}" || {{ echo "$ENV_REFUSED" >&2; exit 1; }}\n'
+              f'for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done')
+    said = subprocess.run(["bash", "-c", script, "_", str(f)], check=True, capture_output=True, text=True).stdout
+    return dict(x.split("=", 1) for x in said.splitlines())
+
+
+@pytest.mark.parametrize("bad, why", [
+    ("K=$(touch {ran})", OTHER_CHARACTERS),
+    ("K=`touch {ran}`", OTHER_CHARACTERS),
+    ("K=7; touch {ran}", OTHER_CHARACTERS),
+    ("ONSITE_PIECES={evil}", "sets ONSITE_PIECES, which is no setting of a hand-off"),
+    ("touch {ran}", "is not NAME=VALUE"),
+])
+def test_a_compose_follow_on_reads_the_hand_offs_settings_as_data_and_runs_no_line_of_them(tmp_path, bad, why):
+    """compose.env is the prover's bytes on an auditor host, so the compose follow-on reads it as data and never runs it:
+    a value a shell would expand (`$(...)`, a backtick, a `;` and a command), a name outside the hand-off's settings
+    (ONSITE_PIECES, a file the script would source in turn) and a line that isn't NAME=VALUE (a bare command) each refuse
+    the hand-off before anything is composed, naming the line, and none of it runs: the marker it would make is absent."""
+    assert _handed(tmp_path).returncode == 0
+    ran, evil = tmp_path / "ran", tmp_path / "evil.sh"
+    evil.write_text(f"touch {ran}\n")
+    env = tmp_path / "serve" / "private" / "compose" / "compose.env"
+    honest = env.read_text().splitlines()
+    assert honest[0] == "K=7"
+    bad = bad.format(ran=ran, evil=evil)
+    lines = [bad, *honest[1:]] if bad.startswith("K=") else [*honest, bad]
+    env.write_text("".join(f"{x}\n" for x in lines))
+    rc, said, order = _compose(tmp_path)
+    assert (rc, said, order) == (3, [SETTINGS_REFUSED.format(n=lines.index(bad) + 1) + why], []), said
+    assert not ran.exists()
+
+
+@pytest.mark.parametrize("extra", [{}, {"ALPHA": "0.25", "GAMMA": "1e-3"}])
+def test_the_served_nodes_hand_off_reads_as_data_to_the_settings_sourcing_it_gives(tmp_path, extra):
+    """The served node's own compose.env, as `printf %q` writes it (a comma as \\, and an empty value as ''), reads as data
+    to exactly the settings a shell sourcing it sets, so the honest compose follow-on runs at the settings it did."""
+    assert _handed(tmp_path, **extra).returncode == 0
+    env = tmp_path / "serve" / "private" / "compose" / "compose.env"
+    assert "STEPS=0\\,3" in env.read_text().splitlines() and "AUDITED_ON=''" in env.read_text().splitlines()
+    got = _read_env(env, HAND_OFF_NAMES)
+    assert got == _env_of(env, HAND_OFF_NAMES)
+    assert (got["STEPS"], got["AUDITED_ON"], got["ALPHA"], got["GAMMA"]) == ("0,3", "", *(
+        (extra["ALPHA"], extra["GAMMA"]) if extra else ("", "")))
+
+
+def test_a_hand_off_whose_setting_the_compose_node_would_refuse_is_refused_on_the_served_node(tmp_path):
+    """The served node holds its compose.env to what COMPOSE_NODE reads: a setting of another character (here a space
+    in COMPOSE_NODE) refuses the hand-off there, which writes no sums for a copy to be held to."""
+    run = _handed(tmp_path, COMPOSE_NODE="vy-auditor-2 x")
+    assert run.returncode == 1
+    assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
+        "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and its line 9 sets "
+        "COMPOSE_NODE to a value of other characters than A-Za-z0-9._/:+@=,-"]
+    assert not (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").exists()
 
 
 def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):
