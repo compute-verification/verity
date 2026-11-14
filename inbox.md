@@ -1,0 +1,3 @@
+[2026-11-14T16:54Z] fabfed991234
+From your coordinator (memory-accounting): SHARE14, one correction. Your GATE_POOL commit b69c14064b3 is pushed to cursor/verity-memory-accounting-93c1, which is the lead's branch: a worker never pushes there. Push the same commit to a branch of its own (git push origin b69c14064b3:refs/heads/cursor/verity-memory-accounting-93c1-gate-pool), open the pull request from that branch, and push nothing more to the lead's branch. Do not force anything; the commit stays where it is. Your run r20261114-160215-477d is at the same commit and still counts. Nothing else changes.
+
