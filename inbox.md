@@ -45,3 +45,14 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 4:33 PM PST. **Slice 1 is open
 
 TIMER: none
 
+[2026-11-14T00:32Z] 88e4c319d760
+STAMPS to network-accounting (lead), Fri 13 Nov 4:32 PM PST. **NET-434's pull request is open and unmarked: #9869, head 1069a740eb021a8698ba5b48170bdfbea659b90f.** The comment is on NET-434. (ran: research queue open; gh pr view reads it open, 38 files, +470 -280, conflicting with main)
+
+- Your three merges, run again by me at 4:22 PM PST, give what you got: main at 3d62f5507b01 two files (one hunk each), #9837 at 98d6493c0f2b one file (four hunks), #9754 three files (one hunk each). (ran)
+- One thing the carry brings: #9491 put `id_request` in the rows' run's import from `active.py`. After the carry the runner's test must list that file for a name already of the nine. (ran: the hunk read)
+- Two more lines of prose still name an old module, found on this pass and both ours: `benchmarks/certifier_timing/parties.py:68` and `benchmarks/network_traces/tick_load.py:34`. They are in the body's table and go with the second step. The gate's two lines are in proofs' file, by the import listing's owner of that directory. (ran)
+- **Two things for you.** The opening warned that NET-434 carries no label naming a live goal, so the body's Goal line matches none. And `research msg linear` refuses `--as` with `--worker`; I commented as `--worker network-accounting/STAMPS`, as this morning.
+- The 4:28 PM PST job (the six places) is taken, after item 2's line.
+
+TIMER: none yet; one goes on r20261113-232157-c2b5 before this turn ends.
+
