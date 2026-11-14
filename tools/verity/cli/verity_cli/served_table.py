@@ -30,6 +30,7 @@ proof or timed response, and validation: the pieces and the onsite check).
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -51,6 +52,7 @@ from verity.protocol import Channel, ProtocolDef, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
@@ -542,6 +544,21 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
                               dial_to=None if role.name == listener else {listener: address}).outcomes[role.name]
 
 
+def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """`trusted-device`'s premise for a memory challenger's ``piece``, from its outcome: the key its session is signed
+    under (the outcome's ``public_key``) against the pins the configuration gives that party for that protocol, under the
+    configuration's hash (`memory_challenger.trusted_device`, `committed` its committed set). ``None`` for a party that
+    signs no session; a session that reports no key reads rehearsal."""
+    if piece.party != MEMORY_CHALLENGER:
+        return None
+    key = (outcome or {}).get("public_key")
+    machine = {p["name"]: p["machine"] for p in cfg["party"]}[piece.party]
+    return {mc.PREMISE: mc.trusted_device(cfg.get("pin", []), piece.party, piece.component,
+                                          None if key is None else hashlib.sha512(bytes.fromhex(key)).hexdigest(),
+                                          f"the {piece.party} ran on {machine}", configuration=K.digest(cfg),
+                                          committed=mc.committed())}
+
+
 def composite(env: Mapping[str, str]) -> dict[str, str]:
     """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
     composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
@@ -630,6 +647,8 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
         mine = out.setdefault(x.party, {"outcome": {}, "refused": None})
         mine["outcome"][x.component] = got.get("outcome")
         mine["refused"] = mine["refused"] or got.get("refused")
+        if (where := placement(cfg, x, got.get("outcome"))) is not None:
+            mine.setdefault("placement", {})[x.component] = where
 
     for x, start in ready:
         if x.session.before:
@@ -662,5 +681,5 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 
 __all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "SERVED", "WORKLOADS", "Held",
-           "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "prepare", "served_window", "unbound",
-           "variables"]
+           "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement", "prepare", "served_window",
+           "unbound", "variables"]
