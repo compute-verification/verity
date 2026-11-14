@@ -32,6 +32,15 @@ and the same for every branch. With `--kept`, a check that passed is kept as a f
 restack across a move pays for the check and the rest don't. The file's key is everything that decides the check
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
 
+A move commit's record is corrected in `tools/move/move_lines.toml` (`MOVE_LINES`), under the commit's full id, which every
+reader of a move line reads before the commit's message: `line`, the move line it ran by, and `hand`, the paths where its
+tree is, by hand, not what that script writes on B (a word put back in prose, the map the script rewrote left as it was),
+each entry with its `reason`; a malformed entry, or one of a commit the clone lacks, stops everything. A move with `hand`
+passes the check only where it differs from the script's tree in exactly those paths, and after step 2 its hand changes are
+merged into the branch's moved tree with the script's tree on B as the merge base (step `hand`; a hand change to a line the
+branch changed is `conflicted` there). Without that merge, step 3, with M as its base, would undo them. Nothing is skipped:
+the script still runs on the branch's own lines and `stale-words` reads them, as for any move.
+
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after` M: step 3 would bring main's commits since B in a second time and still report
 clean (duplicate imports and lock entries), so M's script never runs on it. A `--move-commit` it is based after refuses
@@ -146,6 +155,11 @@ DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd()
 GIT_OWN = frozenset({"text", "binary", "union"})
 #: the map a `Layout-move` line's script reads with no `--map` (layout.py's default)
 LAYOUT_MAP = "tools/move/layout_map.toml"
+#: corrections to move commits' own records, each under the commit's full id, which `move_line`, `moves_on` and
+#: `check_generated` read before the commit (`corrections`)
+MOVE_LINES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "move_lines.toml")
+#: an entry's keys: at least one of `line` and `hand`, and always `reason`
+ENTRY_KEYS = {"line", "hand", "reason"}
 #: a hunk's header in `git diff -U0`: the old side's line count, the new side's first line and its count
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 #: the most `stale_words` lines `line` prints; the JSON holds every one
@@ -466,17 +480,60 @@ def keep_generated(key: dict, tree: str) -> None:
                 os.unlink(tmp)
 
 
-def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
+def corrections(cwd: str | None) -> dict[str, dict]:
+    """`MOVE_LINES`'s entries by commit id (none without the file). Refused, with the fix, unless every key is a full 40-hex
+    id of a commit this clone has and every entry holds a `reason` and a `line` that is a move line (`MOVE_LINE`), a
+    `hand` that lists paths, or both, and nothing else."""
+    if not os.path.isfile(MOVE_LINES):
+        return {}
+    with open(MOVE_LINES, "rb") as f:
+        try:
+            data = tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            raise SystemExit(f"{MOVE_LINES} doesn't parse ({e}): fix it") from None
+    bad = []
+    for sha, e in data.items():
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            bad.append(f'["{sha}"] is no full commit id: key the entry by the commit\'s 40-hex id (git rev-parse SHA)')
+        elif not isinstance(e, dict) or set(e) - ENTRY_KEYS or not set(e) & {"line", "hand"}:
+            bad.append(f'["{sha}"] holds {sorted(e) if isinstance(e, dict) else e!r}: give it a `line`, a `hand` or both, '
+                       "and a `reason`, and nothing else")
+        elif not isinstance(e.get("reason"), str) or not e["reason"].strip():
+            bad.append(f'["{sha}"] has no `reason`: say in one sentence why the commit\'s own record is not what it did')
+        elif "line" in e and not (isinstance(e["line"], str) and MOVE_LINE.fullmatch(e["line"])):
+            bad.append(f'["{sha}"] line {e["line"]!r} is no move line: `Move: tools/move/MAP.toml` or `Layout-move: '
+                       "tools/move/MAP.toml`, with ` --no-lock` where the move ran so")
+        elif "hand" in e and not (isinstance(e["hand"], list) and e["hand"]
+                                  and all(isinstance(p, str) and p for p in e["hand"])):
+            bad.append(f'["{sha}"] hand {e["hand"]!r} is no list of paths: list each path where the commit\'s tree is not '
+                       "what its script writes on its base")
+    if not bad and data:
+        p = git("cat-file", "--batch-check", cwd=cwd, input="".join(f"{s}^{{commit}}\n" for s in data).encode())
+        bad = [f'["{line.split("^")[0]}"] is no commit this clone has: fetch it (git fetch origin), or fix the id'
+               for line in p.stdout.decode().splitlines() if line.endswith(" missing")]
+    if bad:
+        raise SystemExit(f"{MOVE_LINES}: " + "\n  ".join(bad))
+    return data
+
+
+def hand_of(move: str, cwd: str | None) -> list[str]:
+    """The paths where ``move``'s tree is, by hand, not what its script writes on its base (`MOVE_LINES`' `hand`)."""
+    return sorted(corrections(cwd).get(move, {}).get("hand", []))
+
+
+def check_generated(move: str, base: str, python: str, cwd: str | None) -> str:
     """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
-    fixups) taken as the move would make the third merge undo them, while every branch still reported clean.
+    fixups) taken as the move would make the third merge undo them, while every branch still reported clean. A move whose
+    `MOVE_LINES` entry lists `hand` paths passes only when it differs from the script's tree in exactly those. Returns the
+    script's tree, which `restack` merges the hand changes in against.
 
     With `KEEP`, a check that passed is kept (`kept_path`) under everything that decides it (`generated_key`), so a later
     restack of another branch across the same move, in another process, doesn't run the script on the base again. Only a
     pass is kept, and a kept file counts only when it records this very key and the move's own tree: anything else runs
-    the script."""
-    key = (move, base, python, SCRIPT, SCRIPT_ARGS)
+    the script. A move with `hand` paths is never kept: its crossing needs the script's own tree."""
+    key, hand = (move, base, python, SCRIPT, SCRIPT_ARGS), hand_of(move, cwd)
     if key not in _GENERATED:
-        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd) if KEEP else None
+        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd) if KEEP and not hand else None
         if full and kept_generated(full, want):
             print(f"restack.py: {move[:12]} is what {SCRIPT} writes on {base[:12]}, as checked before ({kept_path(full)})",
                   file=sys.stderr)
@@ -488,13 +545,22 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                 raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
             if full and _GENERATED[key] == want:
                 keep_generated(full, want)
-    if _GENERATED[key] != (want := tree_of(move, cwd)):
-        differ = out("diff", "--name-only", "--no-renames", want, _GENERATED[key], cwd=cwd).splitlines()
+    want = tree_of(move, cwd)
+    differ = sorted(out("diff", "--name-only", "--no-renames", want, _GENERATED[key], cwd=cwd).splitlines()
+                    if _GENERATED[key] != want else [])
+    if hand and differ != hand:
+        raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]} but by hand in the paths its "
+                         f"entry in {MOVE_LINES} lists as `hand`: make the list these paths, where they are the hand "
+                         f"changes the commit made beside its script.\n  differ, unlisted: {sorted(set(differ) - set(hand))}"
+                         f"\n  listed, not differing: {sorted(set(hand) - set(differ))}")
+    if differ and not hand:
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
                          "generated, and a later commit on the move's branch as --onto (the script runs here with no limit "
                          f"on the text it reads: a text file of {base[:12]} over the script's own limit, which the move left "
-                         f"as it was, is one more cause). The {len(differ)} paths that differ"
-                         + (", the first 20" if len(differ) > 20 else "") + ":\n  " + "\n  ".join(differ[:20]))
+                         f"as it was, is one more cause). Where the move's own commit holds hand changes beside its script's "
+                         f"output, list these paths as its `hand` in {MOVE_LINES}, with a `reason`. The {len(differ)} paths "
+                         "that differ" + (", the first 20" if len(differ) > 20 else "") + ":\n  " + "\n  ".join(differ[:20]))
+    return _GENERATED[key]
 
 
 def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str | None:
@@ -544,7 +610,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     onto = rev(onto, cwd) if onto else move
     if not contains(move, onto, cwd):
         raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
-    check_generated(move, base, python, cwd)
+    generated = check_generated(move, base, python, cwd)
     r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
     _, plain = merge_trees(head, onto, cwd)
     r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
@@ -577,6 +643,18 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
                    f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
             tip = commit_tree(tree, [tip], msg, cwd)
             r["steps"].append({"step": "script", "commit": tip, "restored": restored, "output": output})
+        if generated != tree_of(move, cwd):
+            hand = hand_of(move, cwd)
+            script_on_base = commit_tree(generated, [], f"restack: what {SCRIPT} writes on {base[:12]}\n", cwd)
+            tree, conflicts = merge_trees(tip, move, cwd, base=script_on_base)
+            if conflicts:
+                return {**r, "status": "conflicted", "step": "hand", "files": conflicts}
+            if tree != tree_of(tip, cwd):
+                msg = (f"restack: the hand changes {move[:12]} made beside its script, on {branch}\n\n"
+                       f"{', '.join(hand)}, as {SCRIPT_DIR}/{os.path.basename(MOVE_LINES)} lists them.\n\n"
+                       f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
+                tip = commit_tree(tree, [tip], msg, cwd)
+                r["steps"].append({"step": "hand", "commit": tip, "files": hand})
     if contains(onto, tip, cwd):
         return with_pins(r, tip, python, cwd, pins)
     tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
@@ -601,18 +679,21 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
 
 
 def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | None:
-    """The script and arguments ``commit``'s move line names, or None when it has none."""
-    m = MOVE_LINE.search(out("log", "-1", "--format=%B", commit, cwd=cwd))
+    """The script and arguments ``commit``'s move line names, its `MOVE_LINES` entry's where it has one, or None when it has
+    none."""
+    m = MOVE_LINE.search(corrections(cwd).get(rev(commit, cwd), {}).get("line")
+                         or out("log", "-1", "--format=%B", commit, cwd=cwd))
     return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
 
 
 def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
-    """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line."""
+    """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
+    its `MOVE_LINES` entry's where it has one."""
     log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
-    found = []
+    found, lines = [], corrections(cwd)
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
         commit, body = rec.split("\x00", 1)
-        if m := MOVE_LINE.search(body):
+        if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):
             found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
     return found
 
