@@ -617,7 +617,8 @@ def _glob(path: str, glob: str) -> bool:
 def scoped_words(move: str, script: str, args: tuple[str, ...], cwd: str | None) -> list[tuple[str, str, list[str], re.Pattern]]:
     """(old word, new word, the globs of the files it is renamed in, its pattern) for each word ``move``'s map, at the move's
     base, renames only in the files a block names: rename.py's `[[words_in]]`, as the whole word it renames there, and
-    layout.py's `[rewrite] words_in`, a moved directory's name alone between quotes or backticks. Such a word means another
+    layout.py's `[rewrite] words_in`, a moved directory's name alone between quotes or backticks. A word several blocks rename
+    is one entry, with every block's globs, and the first block's new word, as rename.py takes it. Such a word means another
     thing in other files, so the script leaves it in a file the branch adds or changes outside its block, where it may mean
     the renamed name. A word the map renames everywhere ([words], [rewrite] words) that still stands after the script ran was
     kept on purpose, and a prose map (`scope = "prose"`) renames no code: neither is here."""
@@ -627,19 +628,19 @@ def scoped_words(move: str, script: str, args: tuple[str, ...], cwd: str | None)
     data = tomllib.loads(shown.stdout.decode()) if shown and not shown.returncode else {}
     if data.get("scope") == "prose":
         return []
-    found = []
+    found: dict[str, tuple[str, list[str], re.Pattern]] = {}
     for block in data.get("words_in", []):
         for old, new in block.get("words", {}).items():
             left = (r"(?<![\w.])" if old.endswith(".") else r"(?<!\w)") if re.match(r"\w", old) else ""
-            found.append((old, new, list(block.get("files", [])),
-                          re.compile(left + re.escape(old) + (r"(?!\w)" if re.match(r"\w", old[-1]) else ""))))
+            right = r"(?!\w)" if re.match(r"\w", old[-1]) else ""
+            found.setdefault(old, (new, [], re.compile(left + re.escape(old) + right)))[1].extend(block.get("files", []))
     dirs = {k.rstrip("/").rsplit("/", 1)[-1]: v.rstrip("/").rsplit("/", 1)[-1]
             for k, v in data.get("paths", {}).items() if k.endswith("/")}
     for glob, names in data.get("rewrite", {}).get("words_in", {}).items():
         for old in (n.rstrip("/") for n in names):
-            found.append((old, dirs.get(old, "its directory's new name"), [glob],
-                          re.compile(rf"(?<=[\"'`]){re.escape(old)}(?=[\"'`])")))
-    return found
+            quoted = re.compile(rf"(?<=[\"'`]){re.escape(old)}(?=[\"'`])")
+            found.setdefault(old, (dirs.get(old, "its directory's new name"), [], quoted))[1].append(glob)
+    return [(old, new, globs, pattern) for old, (new, globs, pattern) in found.items()]
 
 
 def own_lines(onto: str, result: str, cwd: str | None):

@@ -1305,16 +1305,33 @@ def test_only_the_branchs_own_lines_are_read_never_mains(scoped):
 
 def test_a_layout_maps_scoped_names_are_its_quoted_names_and_a_prose_map_has_none(tmp_path):
     """layout.py's `[rewrite] words_in` lists a moved directory whose name alone between quotes is the directory in the files
-    its glob matches, and renames it to the destination's name; a word map with `scope = "prose"` renames no code."""
+    its glob matches, and renames it to the destination's name, one entry with every glob that lists it; a word map with
+    `scope = "prose"` renames no code."""
     repo = tmp_path / "maps"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     commit(repo, "maps", {RS.LAYOUT_MAP: '[paths]\n"bench/census/" = "verity/tables/"\n\n[rewrite]\n'
-                                         'words_in = { "tools/*.py" = ["census/"] }\n',
+                                         'words_in = { "tools/*.py" = ["census/"], "bench/*.py" = ["census"] }\n',
                           WORDS_MAP: 'scope = "prose"\n\n[words]\n"a" = "b"\n\n[[words_in]]\nfiles = ["x"]\n'
                                      'words = { "c" = "d" }\n'})
     move = commit(repo, "the move")
     (word,) = RS.scoped_words(move, RS.LINE_SCRIPT["Layout-move"], (), str(repo))
-    assert word[:3] == ("census", "tables", ["tools/*.py"])
+    assert word[:3] == ("census", "tables", ["tools/*.py", "bench/*.py"])
     assert word[3].search('ROOT / "census"') and not word[3].search("bench/census/x.py")
     assert RS.scoped_words(move, RS.LINE_SCRIPT["Move"], ("--map", WORDS_MAP), str(repo)) == []
+
+
+def test_a_word_two_blocks_rename_in_disjoint_files_counts_only_outside_both(tmp_path):
+    """Two `[[words_in]]` blocks of one map rename `Session` in disjoint files: in each one's own file the word is the
+    renamed name's, whichever block names it, so neither file is named, while a file neither block names still is."""
+    repo = tmp_path / "blocks"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, "base", {WORDS_MAP: '[words]\n"a" = "b"\n\n[[words_in]]\nfiles = ["Net/One.lean"]\n'
+                                     'words = { "Session" = "ChallengePhase" }\n\n[[words_in]]\nfiles = ["Net/Two.lean"]\n'
+                                     'words = { "Session" = "ChallengePhase" }\n'})
+    move = commit(repo, "the move")
+    lines = "theorem t : Session.ok := rfl\n"
+    result = commit(repo, "the branch's own lines", {"Net/One.lean": lines, "Net/Two.lean": lines, "Net/Three.lean": lines})
+    words = RS.stale_words(result, move, [(move, RS.LINE_SCRIPT["Move"], ("--map", WORDS_MAP))], str(repo))
+    assert [(w["file"], w["line"], w["word"], w["new"]) for w in words] == [("Net/Three.lean", 1, "Session", "ChallengePhase")]
