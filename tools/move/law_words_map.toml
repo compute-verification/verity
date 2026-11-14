@@ -116,6 +116,10 @@ files = ["*.lean"]
 "getElem_lawOf" = "getElem_samplingDesignOf"
 "subsetLaw" = "subsetSamplingDesign"
 "lawName" = "samplingDesignName"
+
+[[words_in]]
+files = ["security/Proofs/Pouw/TS/*.lean"]
+[words_in.words]
 "hLaw" = "hSamplingDesign"
 
 [[words_in]]
