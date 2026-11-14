@@ -161,7 +161,14 @@ skipped and named (`skipped`): the later move's base merge brings it in, as a me
 for its map's old names in what the branch adds. A crossing that skipped a move reports `clean-skipped`, never `clean`,
 pushes nothing and exits 1, and prints the command that crosses the same moves named (`--move-commit` for each, `--onto`),
 which skips none: running it is the owner saying the skip is right. The last move, one no later move's base contains, and
-one named with `--move-commit` are never skipped: the branch is refused (`based-after`), and its owner merges `main`
-instead.
+one named with `--move-commit` are never skipped: the branch is refused (`based-after`). A plain `git merge main` on it is
+clean and wrong: the move's script never runs on the branch's own lines, so the files it adds stay at their old paths. A
+line stacked on another pull request's old head is refused so once that head has crossed the move and landed. The
+refusal gives the command that carries the branch against the move's own commit, which it shares no late commit with:
+
+    python3 tools/move/restack.py BRANCH --main MOVE    # or each --move-commit up to MOVE, where the moves were named
+
+Its owner then merges today's `main` into that result, a merge inside the new layout, and checks that the merge's tree
+holds the branch's own files at the new paths.
 
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")

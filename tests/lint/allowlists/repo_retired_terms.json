@@ -5456,6 +5456,7 @@
     {"file": "tests/import_order.toml", "count": 4},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu", "count": 5},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh", "count": 13},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4}
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4},
+    {"file": "security/Proofs/Flock/SpotFlock/OneWaitClassAvg.lean", "count": 1}
   ]
 }
