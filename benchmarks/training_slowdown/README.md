@@ -458,7 +458,7 @@ of M named `tf32` is priced apart from its trace, and ρ is refused.
   forward).
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
-The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.
+The suite: `uv run tools/check/suites.py benchmarks/training_slowdown`.
 
 ## The grader
 
@@ -476,7 +476,7 @@ holds to the commit named. It writes `OUT.json`: the step's matrix products as r
 wires (a flash attention the step keeps at a cc as the products its head Definitions compute, `grader.ATTENTION`), the
 circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of this package's
 capture beside them. It computes no ρ. Its tests are a suite of their own:
-`uv run tools/verity/check/suites.py benchmarks/training_slowdown/grader`.
+`uv run tools/check/suites.py benchmarks/training_slowdown/grader`.
 
 ## What it reads, what it writes and what loads it
 

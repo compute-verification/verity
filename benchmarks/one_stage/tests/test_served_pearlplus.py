@@ -161,7 +161,7 @@ def test_under_pearlplus_tie_verify_holds_the_passes_to_the_windows_class(tmp_pa
 
 
 def test_under_pearlplus_tie_w_is_chained_after_the_serves_first_registration_record(tmp_path):
-    """Where the window serve wrote its first registration record (served_verdicts.sh's weights():
+    """Where the window serve wrote its first docket (served_verdicts.sh's weights():
     SERVE_DIR/deployment-registration.json, which registers the weights before the first request), `retain` gets it as
     ``--previous-record`` beside ``--window-record W``, so W is chained after it and the weights' record is the log's
     first; a serve dir with none leaves W chained after nothing (the test above)."""
@@ -191,7 +191,7 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
 
 
 @pytest.mark.parametrize("case", ["held", "unclosed", "refused", "unread"])
-def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, case):
+def test_under_pearlplus_tie_and_the_gate_the_piece_samples_only_after_a_period_whose_reserves_held(tmp_path, case):
     """Under the gate the window serve closed its Pearl-C period (served_verdicts.sh's serve()), its period.json saying
     whether the lane's reserves since the open were the window's salt sessions alone (``reserves``) and holding the gate's
     close (``close``): the piece samples only after one that closed and held, and once the coin is flipped its RULE line reads
@@ -317,7 +317,7 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
 
 
-def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw(tmp_path):
+def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):
     """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
     right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
     fills, refuses every other reserve of the lane, so none comes between its close and the sample, which a compose takes

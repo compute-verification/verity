@@ -15,7 +15,7 @@ conjecture N_L, `products_pass.py` counts data products on property/v1's pass, a
 and `verity/circuits/tests/test_stacking.py` cite it. Decided by `rg property_redteam` over `verity/`, `benchmarks/`,
 `demos/`, `tests/`, `adapters/` and `security/`.
 
-**Run:** `uv run tools/verity/check/suites.py benchmarks/property_redteam` runs every attack and the cases on the CPU.
+**Run:** `uv run tools/check/suites.py benchmarks/property_redteam` runs every attack and the cases on the CPU.
 `uv run python benchmarks/property_redteam/run.py --check MODULE:FUNCTION --out FILE.json` grades one check.
 
 **Reads and writes:** `run.py` reads the cases and a check, and writes a JSON report; `run.py --json` writes

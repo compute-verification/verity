@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ExecSampleOS
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Game
@@ -14,19 +14,19 @@ exact uniform sample `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rej
 
 * `bernoulli_eq`: the loop as a list recursion (`bernLoop`), through `Std.Legacy.Range.forIn_eq_forIn_range'`.
 * `bernLoop_streamOf`, `bernL_le`: on a stream of uniform bytes the loop reads, unit by unit, `uniformL` on the rest of
-  the stream (`DrawExec.uniformL_le`), so a unit of `B` is missed with probability `(den − num)/den` independently of
+  the stream (`SampleExec.uniformL_le`), so a unit of `B` is missed with probability `(den − num)/den` independently of
   what came before, and `B` with at most `((den − num)/den)^|B|`.
 * `Law.bernoulli_exec_escape_le`: over a uniform stream of `L` bytes, the executable returns a sample missing `B` with
   probability at most `Law.bernoulli`'s escape, `((den − num)/den)^|B|` (`Law.bernoulli_escape`).
 * `Law.bernoulli_append`: a sample that succeeds is the same on a longer stream, so `Flock.Draw.onWith`'s extend-and-rerun
-  never changes it; `Law.drawOS_bernoulli_escape_le`, `Law.execOS_bernoulli_escape_le`: the live sample
-  (`Flock.Draw.drawWith`, `Law.runOS`) on a uniform byte source (A3) escapes no more often, as `ExecDrawOS.lean` proves
-  for the other three laws.
+  never changes it; `Law.sampleOS_bernoulli_escape_le`, `Law.execOS_bernoulli_escape_le`: the live sample
+  (`Flock.Draw.drawWith`, `Law.runOS`) on a uniform byte source (A3) escapes no more often, as `ExecSampleOS.lean` proves
+  for the other three sampling designs.
 -/
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.DrawExec
+namespace FlockSoundness.Audit.SampleExec
 
 open Flock.Draw Game
 open scoped ENNReal
@@ -220,7 +220,7 @@ theorem bernLoop_append (num den : ℕ) (a b : ByteArray) : ∀ (l : List ℕ) (
       rw [Law.uniform_append den a b _ pos r p hu _ (by rw [ByteArray.size_append]; omega)]
       exact ih _ _ _ h
 
-end FlockSoundness.Audit.DrawExec
+end FlockSoundness.Audit.SampleExec
 
 namespace FlockSoundness.Audit.Law
 
@@ -235,8 +235,8 @@ theorem bernoulli_append (num den n : ℕ) (a b : ByteArray) (D : Array ℕ)
   · subst h0; simpa [Flock.Draw.bernoulli] using h
   by_cases h1 : num = den
   · subst h1; simpa [Flock.Draw.bernoulli, h0] using h
-  rw [DrawExec.bernoulli_eq num den n _ h0 h1] at h ⊢
-  exact DrawExec.bernLoop_append num den a b _ _ _ D h
+  rw [SampleExec.bernoulli_eq num den n _ h0 h1] at h ⊢
+  exact SampleExec.bernLoop_append num den a b _ _ _ D h
 
 theorem bernoulli_escape_empty {n num den : ℕ} [NeZero den] (h : num ≤ den) : (bernoulli n num den).escape ∅ = 1 := by
   rw [bernoulli_escape h, Finset.card_empty, pow_zero]
@@ -250,11 +250,11 @@ theorem bernoulli_exec_escape_le (n num den L : ℕ) [NeZero den] (h : num ≤ d
   classical
   have hden : 0 < den := Nat.pos_of_ne_zero (NeZero.ne den)
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
-  · rw [bernoulli_escape_empty h]; exact DrawExec.prCoin_le_one _
+  · rw [bernoulli_escape_empty h]; exact SampleExec.prCoin_le_one _
   by_cases h0 : num = 0
   · subst h0
     rw [bernoulli_escape h]
-    refine (DrawExec.prCoin_le_one _).trans (le_of_eq ?_)
+    refine (SampleExec.prCoin_le_one _).trans (le_of_eq ?_)
     rw [bernFactor, Nat.cast_zero, zero_mul, zero_add, Nat.sub_zero,
       ENNReal.div_self (by exact_mod_cast hden.ne') (ENNReal.natCast_ne_top _), one_pow]
   by_cases h1 : num = den
@@ -270,25 +270,25 @@ theorem bernoulli_exec_escape_le (n num den L : ℕ) [NeZero den] (h : num ≤ d
   have hcard : B'.card = B.card := card_image_of_injective _ Fin.val_injective
   calc prCoin (fun f : Fin L → Fin 256 =>
           ∃ D, Flock.Draw.bernoulli num den n (streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D)
-      ≤ prCoin (fun f : Fin L → Fin 256 => ∃ D, DrawExec.bernL num den (L + 1) (List.range' 0 n)
-          (DrawExec.bsOf f) = some D ∧ ∀ u ∈ B', u ∉ D) := by
+      ≤ prCoin (fun f : Fin L → Fin 256 => ∃ D, SampleExec.bernL num den (L + 1) (List.range' 0 n)
+          (SampleExec.bsOf f) = some D ∧ ∀ u ∈ B', u ∉ D) := by
         refine prCoin_mono fun f ⟨D, hD, hmiss⟩ => ?_
-        rw [DrawExec.bernoulli_eq num den n _ h0 h1] at hD
-        obtain ⟨D', hD', hmem⟩ := DrawExec.bernLoop_streamOf f num den _ #[] 0 (Nat.zero_le _) D hD
+        rw [SampleExec.bernoulli_eq num den n _ h0 h1] at hD
+        obtain ⟨D', hD', hmem⟩ := SampleExec.bernLoop_streamOf f num den _ #[] 0 (Nat.zero_le _) D hD
         rw [List.drop_zero] at hD'
         refine ⟨D', hD', fun u hu huD => ?_⟩
         obtain ⟨v, hv, rfl⟩ := mem_image.1 hu
         exact hmiss v hv ((hmem _).2 (Or.inr huD))
     _ ≤ (((den - num : ℕ) : ℝ≥0∞) / den) ^ ((List.range' 0 n).filter (· ∈ B')).length :=
-        DrawExec.bernL_le num den (L + 1) hden B' _ L
+        SampleExec.bernL_le num den (L + 1) hden B' _ L
     _ = (bernoulli n num den).escape B := by
-        rw [DrawExec.length_filter_range' n B' hB'n, hcard, bernoulli_escape h, bernFactor, mul_zero, zero_add]
+        rw [SampleExec.length_filter_range' n B' hB'n, hcard, bernoulli_escape h, bernFactor, mul_zero, zero_add]
 
-theorem drawWith_bernoulli_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Option ByteArray) (num den pop : ℕ) (s : ℕ → ℕ) :
+theorem sampleWith_bernoulli_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Option ByteArray) (num den pop : ℕ) (s : ℕ → ℕ) :
     (Flock.Draw.drawWith get (.bernoulli num den) pop).run s =
       ((Flock.Draw.onWith (get 0) (2 * pop * Flock.Draw.width den + 64)
         (Flock.Draw.bernoulli num den pop)).run s).map fun p =>
-        (p.1.map fun units => ({ law := .bernoulli num den, population := pop, units } : Flock.Draw.UnitDraw), p.2) := by
+        (p.1.map fun units => ({ law := .bernoulli num den, population := pop, units } : Flock.Draw.UnitSample), p.2) := by
   unfold Flock.Draw.drawWith
   rw [StateT.run_bind]
   cases (Flock.Draw.onWith (get 0) (2 * pop * Flock.Draw.width den + 64) (Flock.Draw.bernoulli num den pop)).run s <;>
@@ -296,7 +296,7 @@ theorem drawWith_bernoulli_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Optio
 
 /-- **The live Bernoulli sample escapes no more often than the model's** (`Law.bernoulli`), extend-and-rerun included, on a
 uniform byte source (A3). -/
-theorem drawOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
+theorem sampleOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ den) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     prCoin (fun ω => ∃ d, runOS (t ω) (.bernoulli num den) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤
       (bernoulli n num den).escape B := by
@@ -311,7 +311,7 @@ theorem drawOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ d
         obtain rfl : s = 0 := Subsingleton.elim _ _
         refine ⟨d.units, ?_, hmiss⟩
         unfold runOS at hd
-        rw [drawWith_bernoulli_run] at hd
+        rw [sampleWith_bernoulli_run] at hd
         cases ho : (Flock.Draw.onWith (tapeGet (tapesOf f) 0) (2 * n * Flock.Draw.width den + 64)
             (Flock.Draw.bernoulli num den n)).run (fun _ => 0) with
         | none => rw [ho] at hd; exact absurd hd (by simp)
@@ -341,6 +341,6 @@ theorem execOS_bernoulli_escape_le (n num den : ℕ) [NeZero den] (h : num ≤ d
     (B : Finset (Fin n)) :
     (execOS (n := n) t (.bernoulli num den) n).escape B ≤ (bernoulli n num den).escape B :=
   execOS_escape_le_of t _ n B _ (fun hB => by rw [hB, bernoulli_escape_empty h])
-    (drawOS_bernoulli_escape_le n num den h L t ht B)
+    (sampleOS_bernoulli_escape_le n num den h L t ht B)
 
 end FlockSoundness.Audit.Law

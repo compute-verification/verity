@@ -10,7 +10,7 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at verity-verify-proof `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
-  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's law), at `keyProgP` and the binding
+  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's sampling design), at `keyProgP` and the binding
   `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's escape of `W` and the extraction's
   terms (`zk_flock_escapeC_regC`), at any sample `L`;
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
@@ -42,7 +42,7 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session of `J` tables at the verifier's public inputs, under the registration's
-law, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
+sampling design, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
 wrong with probability at most the sample's escape of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
 theorem zk_session_soundHJ_custody_escCP
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -52,14 +52,14 @@ theorem zk_session_soundHJ_custody_escCP
     (hscope : Layout.scopeOkH c = true)
     (law : Draw.Law) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ) (L : Law n)
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
       fun _ => law)
-    (hsz : ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd)
+    (hsz : ∀ S D, Draw.UnitSample.ofJson (dj S) = .ok D → D.units.size = kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (W : Finset (Fin n))
     (canon : Fin ((keyProgP c pi hU n).circuit (Layout.outsOfP c hU n pi)).N →

@@ -57,12 +57,12 @@ theorem exact_bind_nil {α β : Type} {g : Game α} {f : α → Game β} {σ : L
   have h := Exact.bind h₁ h₂
   rwa [List.append_nil] at h
 
-theorem drawFin_exact {F : Type} [Field F] [Fintype F] [DecidableEq F] :
-    ∀ n : ℕ, Exact (drawFin (F := F) n) (List.replicate n (.coin F))
-  | 0 => by rw [drawFin]; exact .ret _
+theorem sampleFin_exact {F : Type} [Field F] [Fintype F] [DecidableEq F] :
+    ∀ n : ℕ, Exact (sampleFin (F := F) n) (List.replicate n (.coin F))
+  | 0 => by rw [sampleFin]; exact .ret _
   | n + 1 => by
-      rw [drawFin, List.replicate_succ]
-      exact Exact.draw_bind fun _ => exact_bind_nil (drawFin_exact n) fun _ => .ret _
+      rw [sampleFin, List.replicate_succ]
+      exact Exact.draw_bind fun _ => exact_bind_nil (sampleFin_exact n) fun _ => .ret _
 
 theorem degRounds_exact {F : Type} [Field F] [Fintype F] [DecidableEq F] (k : ℕ) :
     ∀ (n : ℕ) (claim : F), Exact (degRounds k n claim) (degKinds F k n)
@@ -78,7 +78,7 @@ theorem sparsePhase_exact {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Fi
     (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (h : Fin 64 → F) :
     Exact (sparsePhase A sh pub τ h) (sparseKinds F sh) := by
   unfold sparsePhase sparseKinds
-  refine Exact.bind (drawFin_exact 6) fun ζc => ?_
+  refine Exact.bind (sampleFin_exact 6) fun ζc => ?_
   refine Exact.bind (degRounds_exact 1 6 _) fun x => ?_
   obtain ⟨ζr, c₂⟩ := x
   refine Exact.bind (exact_recv F) fun v₂ => ?_
@@ -87,13 +87,13 @@ theorem sparsePhase_exact {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Fi
   refine Exact.bind (degRounds_exact _ _ _) fun x => ?_
   obtain ⟨rs, c₄⟩ := x
   refine Exact.bind (exact_recv _) fun u => ?_
-  refine Exact.bind (drawFin_exact _) fun ζp => ?_
+  refine Exact.bind (sampleFin_exact _) fun ζp => ?_
   dsimp only
   by_cases ht : sh.tLog = 0
   · rw [ite_eq_left ht, ite_eq_left ht]
-    exact Exact.bind (.ret _) fun _ => exact_bind_nil (drawFin_exact _) fun _ => .ret _
+    exact Exact.bind (.ret _) fun _ => exact_bind_nil (sampleFin_exact _) fun _ => .ret _
   · rw [ite_eq_right ht, ite_eq_right ht]
-    exact Exact.bind (exact_recv _) fun _ => exact_bind_nil (drawFin_exact _) fun _ => .ret _
+    exact Exact.bind (exact_recv _) fun _ => exact_bind_nil (sampleFin_exact _) fun _ => .ret _
 
 /-! ## A unit's steps -/
 

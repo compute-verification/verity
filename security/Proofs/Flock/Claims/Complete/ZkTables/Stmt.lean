@@ -50,9 +50,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `StmtOkJ` holds (`stmtOkJ`), and `completeJS`, `completeAllS` are `completeJO`, `completeAll` without it.
 
 * A session of several tables (`setupTables_spec`) keeps the statement's sample, which is a subset or a stratified sample
-  (the setup refuses any other law at several tables) whose units are the session's instances; its `Σ` is a SHA-512
+  (the setup refuses any other sampling design at several tables) whose units are the session's instances; its `Σ` is a SHA-512
   digest; and its `Hello` is `helloOf`'s at the tables' names.
-* A subset sample that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
+* A subset sample that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitSample.ofJson`'s key
   count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
   stratified one has exactly `law`, `population`, `units`, `k` and `strata`, so it is printable
   (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's sample is JSON that
@@ -279,9 +279,9 @@ theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : L
 set_option maxHeartbeats 4000000 in
 /-- **A subset sample that decodes is printable**, an object of exactly `law`, `population`, `units` and `k`, so it has no
 closure. -/
-theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
+theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {k : ℕ}
     (hl : D.law = .subset k) : Good j ∧ D.closure = #[] := by
-  unfold Draw.UnitDraw.ofJson at h
+  unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -326,9 +326,9 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
 set_option maxHeartbeats 4000000 in
 /-- **A stratified sample that decodes has no closure**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, so it holds no `closure` key. -/
-theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
+theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : D.closure = #[] := by
-  unfold Draw.UnitDraw.ofJson at h
+  unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -372,10 +372,10 @@ theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.
 
 /-! ## The setup of several tables -/
 
-private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitDraw}
-    (h : Option.mapM Draw.UnitDraw.ofJson (some d) = .ok u?) : ∃ u, u? = some u ∧ Draw.UnitDraw.ofJson d = .ok u := by
+private theorem mapM_some_ok {d : Json} {u? : Option Draw.UnitSample}
+    (h : Option.mapM Draw.UnitSample.ofJson (some d) = .ok u?) : ∃ u, u? = some u ∧ Draw.UnitSample.ofJson d = .ok u := by
   simp only [Option.mapM_some] at h
-  cases hd : Draw.UnitDraw.ofJson d with
+  cases hd : Draw.UnitSample.ofJson d with
   | error e => rw [hd] at h; cases h
   | ok u => rw [hd] at h; cases h; exact ⟨u, rfl, rfl⟩
 
@@ -389,8 +389,8 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     {spec : SessionSpec} {sts : Array Flock.Stmt}
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) (hs : 1 < sts.size) :
-    spec.unitDraw = draw ∧ spec.sigma.size = 64 ∧
-      (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧
+    spec.unitSample = draw ∧ spec.sigma.size = 64 ∧
+      (∀ d, draw = some d → ∃ D, Draw.UnitSample.ofJson d = .ok D ∧
         ((∃ k, D.law = .subset k) ∨ ∃ K st, D.law = .stratified K st) ∧ spec.instances = D.units.size) ∧
       Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello := by
   unfold Stmt.setupTables at h
@@ -423,7 +423,7 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
   all_goals
     intro d hd
     subst hd
-    obtain ⟨u, hu, hd⟩ := mapM_some_ok ‹Option.mapM Draw.UnitDraw.ofJson (some d) = _›
+    obtain ⟨u, hu, hd⟩ := mapM_some_ok ‹Option.mapM Draw.UnitSample.ofJson (some d) = _›
     cases hu <;> first
       | exact absurd ‹some _ = none› (by simp)
       | exact (‹∀ u, some _ = some u → False› _ rfl).elim
@@ -435,7 +435,7 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
 /-! ## The statement at a good case of several tables -/
 
 
-theorem ofJson_obj {j : Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) : j ≠ Json.null := by
+theorem ofJson_obj {j : Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) : j ≠ Json.null := by
   rintro rfl
   cases h
 
@@ -485,20 +485,20 @@ theorem Case.stmtAt (c : Case H rel) (hc : 1 < c.sts.size) : StmtAt c := by
   rw [hco] at hh
   obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok hh
   refine ⟨by rw [hsig]; omega, ?_, hu, m, kvs, hp, hm, hkv, hmg, hg⟩
-  unfold DrawOk
+  unfold SampleOk
   rw [hu]
   cases hdr : c.s.read.draw with
   | none => trivial
   | some d =>
     obtain ⟨D, hD, hlaw, hn⟩ := hd d hdr
-    have hw := (insOf_draw_norm (setupOf_some c.setup).1 hdr).2
+    have hw := (insOf_sample_norm (setupOf_some c.setup).1 hdr).2
     obtain ⟨hgd, hcl⟩ : Good d ∧ D.closure = #[] := by
       rcases hlaw with ⟨k, hk⟩ | ⟨K, st, hK⟩
       · exact good_subset hw hD hk
       · exact ⟨JsonRT.good_stratified hw hD hK, closure_stratified hw hD hK⟩
     refine ⟨ofJson_obj hD, hgd, D, hD, ?_⟩
     rw [hn]
-    simp [Draw.UnitDraw.proved, hcl]
+    simp [Draw.UnitSample.proved, hcl]
 
 /-- **`StmtOkJ` holds**, under the JSON library's specification. -/
 theorem stmtOkJ : StmtOkJ H rel := fun c hc => c.stmtAt hc

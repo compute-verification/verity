@@ -33,7 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
-pub mod firewall;
+pub mod zk_server;
 pub mod glue;
 pub mod huge_pages;
 pub mod proved_scope;
@@ -551,7 +551,7 @@ pub mod unit_draw {
         }
 
         #[test]
-        fn a_stratified_draw_takes_each_strata_k_from_its_own_units() {
+        fn a_stratified_sample_takes_each_strata_k_from_its_own_units() {
             for _ in 0..200 {
                 let d = draw(&law(), 16).unwrap();
                 let units = check(&d).unwrap();
@@ -561,7 +561,7 @@ pub mod unit_draw {
         }
 
         #[test]
-        fn every_unit_of_a_stratum_is_drawn() {
+        fn every_unit_of_a_stratum_is_sampled() {
             let mut seen = [false; 16];
             for _ in 0..400 {
                 for u in check(&draw(&law(), 16).unwrap()).unwrap() {
@@ -577,7 +577,7 @@ pub mod unit_draw {
         }
 
         #[test]
-        fn a_malformed_law_or_draw_is_refused() {
+        fn a_malformed_law_or_sample_is_refused() {
             let Law::Stratified { k, strata } = law() else { unreachable!() };
             assert!(strata_problem(k, &strata, 17).is_some(), "the strata don't tile 17 units");
             let mut wrong = strata.clone();
@@ -601,7 +601,7 @@ pub mod unit_draw {
         }
 
         #[test]
-        fn the_stand_in_draw_has_every_draws_count() {
+        fn the_stand_in_sample_has_every_samples_count() {
             let d = law().first(16).unwrap();
             assert_eq!(check(&d).unwrap(), vec![0, 1, 2, 4, 5]);
         }
@@ -1272,13 +1272,13 @@ pub struct SessionConfig {
     /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
     pub coin_tree: Option<coin_tree::Spec>,
     /// Or serve this sample, the verifier's own (made outside the server, as `docs/audit-protocols.md` recommends), at `Register`.
-    pub draw_given: Option<Value>,
+    pub sample_given: Option<Value>,
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
-               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None, coin_tree: None }
+               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, sample_given: None, coin_tree: None }
     }
 
     /// The record's digest of `b`.
@@ -1416,8 +1416,8 @@ struct CommitRec {
 }
 
 /// The sampled proof blocks' statement: from the sample, the session configuration (carrying the sample) and the verifier.
-pub type DrawHook = Box<dyn FnMut(&Value) -> Result<(SessionConfig, Box<dyn StatementVerifier>), String> + Send>;
-/// `(stream, round, block)`: a malicious verifier's edit of a committed block ([`coin_tree::CoinTree::draw_with`]).
+pub type SampleHook = Box<dyn FnMut(&Value) -> Result<(SessionConfig, Box<dyn StatementVerifier>), String> + Send>;
+/// `(stream, round, block)`: a malicious verifier's edit of a committed block ([`coin_tree::CoinTree::sample_with`]).
 pub type CoinEdit = Box<dyn Fn(&str, usize, &mut [F128]) + Send>;
 
 pub struct Server {
@@ -1449,7 +1449,7 @@ pub struct Server {
     /// with `retain_rounds`: (stream, round) -> the round's bytes as received
     round_msg: BTreeMap<(String, usize), Vec<u8>>,
     /// Rebuilds the statement for the sampled proof blocks (`SessionConfig::draw_law`): its configuration (with `unit_draw`) and verifier.
-    on_draw: Option<DrawHook>,
+    on_draw: Option<SampleHook>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
     /// M2: the committed coin schedule (sampled at `Hello`, here or by the challenger), and a test harness's random tape for
@@ -1460,7 +1460,7 @@ pub struct Server {
     /// the prover's nonce from its `Hello` (the keyed coin tree's prefix; in the record)
     coin_nonce: Option<[u8; coin_tree::NONCE_BYTES]>,
     coin_tape: Option<[u8; 32]>,
-    /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::draw_with`)
+    /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::sample_with`)
     coin_edit: Option<CoinEdit>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
@@ -1485,7 +1485,7 @@ impl Server {
     }
 
     /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the sampled statement from `hook`.
-    pub fn with_draw(mut self, hook: DrawHook) -> Self {
+    pub fn with_sample(mut self, hook: SampleHook) -> Self {
         self.on_draw = Some(hook);
         self
     }
@@ -1695,7 +1695,7 @@ impl Server {
                 if self.hello.is_some() || self.cfg.unit_draw.is_some() {
                     return self.refuse("U: the units are drawn once, after registration and before Hello".into());
                 }
-                let drawn = match (&self.cfg.draw_given, &self.cfg.draw_law) {
+                let drawn = match (&self.cfg.sample_given, &self.cfg.draw_law) {
                     (Some(d), _) => unit_draw::check(d).map(|_| d.clone()),
                     (None, Some((law, population))) => unit_draw::draw(law, *population),
                     (None, None) => return Resp::Draw("null".into()),
@@ -1763,11 +1763,11 @@ impl Server {
                         Some(t) => {
                             use rand_chacha::{ChaCha20Rng, rand_core::{RngCore, SeedableRng}};
                             let mut r = ChaCha20Rng::from_seed(t);
-                            coin_tree::CoinTree::draw_with(spec, &nonce, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
+                            coin_tree::CoinTree::sample_with(spec, &nonce, &mut |b: &mut [u8]| r.fill_bytes(b), edit)
                         }
                         None => {
                             let mut f = File::open("/dev/urandom").expect("/dev/urandom");
-                            coin_tree::CoinTree::draw_with(spec, &nonce, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
+                            coin_tree::CoinTree::sample_with(spec, &nonce, &mut |b: &mut [u8]| f.read_exact(b).expect("urandom"), edit)
                         }
                     };
                     // the session key leaves the verifier here, with the root, and not before
@@ -2691,7 +2691,7 @@ mod coin_server_tests {
     /// and records the same coins; the challenger opened its link points after its record's link roots and its round after
     /// the round's msg_sha512, as the audit of its release log holds the record to.
     #[test]
-    fn a_session_on_the_challengers_tree_is_the_session_its_tape_draws_here() {
+    fn a_session_on_the_challengers_tree_is_the_session_its_tape_samples_here() {
         let (address, served) = tree_from::fake::challenger([3; 32], tree_from::fake::How::Honest);
         let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
         let mut there = Server::try_new(linked(), Box::new(NoProofs)).unwrap().with_tree_from(c.clone());

@@ -276,7 +276,7 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
         "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
         "--cwd", "source", "--timeout", "120m", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
         "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
-        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
         "--run-max", "7200", "--",
         "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
         "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
@@ -293,7 +293,7 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
     assert [flags[i + 1] for i, t in enumerate(flags) if t == "--env"] == [
         queued_flags[i + 1] for i, t in enumerate(queued_flags) if t == "--env"] == ["VERITY_BENCH_VENV=/workspace/jobs/venv312"]
     assert through_slot(workload)
-    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py"]
+    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
     assert workload[workload.index("--run-max") + 1] == "7200"
     lease = workload[workload.index("--", 4) + 1:]
     assert lease[:3] == ["gpu-lease", "1", "--wait"] and lease[lease.index("--max-min") + 1] == "120"
@@ -1104,7 +1104,7 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
     assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120",
                                              "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
     assert arm.to_json()["protocols_config"] == arm.protocols_config
     settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]
@@ -1456,7 +1456,7 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     from benchmarks.pouw.pearl_c_vllm import bench_arm
     assert set(bench_arm.KERNEL_SCHEMES.values()) <= set(pearl_c_schemes())
     assert all((root / "benchmarks/pouw" / d).is_dir() for d in bench_arm.KERNEL_SCHEMES)
-    monkeypatch.setenv("PEARLC_KERNEL", str(root / "benchmarks/pouw/pearl_c_sm90"))
+    monkeypatch.setenv("PEARLC_KERNEL", str(root / "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90"))
     monkeypatch.delenv("PEARLC_SCHEME", raising=False)
     monkeypatch.delenv("PEARLC_CUBIN", raising=False)
     whole = bench_arm.PearlCWholeArm()

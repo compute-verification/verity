@@ -62,7 +62,7 @@ T = _module("test_pearl_c_vllm", ROOT / "benchmarks" / "pouw" / "tests" / "test_
 VR = T.VR
 Wd = T.Wd
 Ch = T.Ch
-VP = T.load("pearl_c_vllm_volunteer_pass", T.KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+VP = T.load("pearl_c_vllm_volunteer_pass", T.POUW / "pearl_c_vllm" / "volunteer_pass.py")
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
@@ -121,7 +121,7 @@ def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SO
     return got
 
 
-def challenger_draw(entropy: int = 7, after: bytes | None = None):
+def challenger_sample(entropy: int = 7, after: bytes | None = None):
     """`bench_arm.LiveDraw`'s sample on the run's commitment C from a seeded sample session (`window.draw_challenger`): its
     coin ``pouw/draw`` 0, opened after C (or `after`), and the record's ``draw`` naming it."""
     def draw(root: bytes, asking) -> tuple[bytes, dict]:
@@ -406,7 +406,7 @@ def test_a_live_epoch_and_a_challenger_draw(exe, tmp_path):
     a, b = (T.proved_pass(tmp_path / n, H100, ix, live=0)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
     (b.parent / "coins.json").write_text((a.parent / "coins.json").read_text())
     rec = tmp_path / "coin.json"
-    got = same(exe, [a, b], 8, None, rec, draw=challenger_draw())
+    got = same(exe, [a, b], 8, None, rec, draw=challenger_sample())
     assert got["verdict"] == "accept" and len(got["source"]) == 128
     held = json.loads(rec.read_text())
     assert held["schema"] == VR.COIN_SCHEMA and held["draw"]["from"] == "challenger"
@@ -431,7 +431,7 @@ def test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins(exe, tmp
     v1.write_text(json.dumps({**{k: v for k, v in json.loads(node.read_text()).items() if k != "draw"},
                               "schema": "verity-pouw/pearl-plus-coin/v1"}))
     drawn = tmp_path / "drawn.json"
-    assert same(exe, [plain], 3, None, drawn, draw=challenger_draw())["verdict"] == "accept"
+    assert same(exe, [plain], 3, None, drawn, draw=challenger_sample())["verdict"] == "accept"
     for paths, source, record, why in (([live], None, node, "drawn on the serving node"),
                                        ([live], None, v1, "not verity-pouw/pearl-plus-coin/v2"),
                                        ([live], SOURCE, None, "the source is given on the command line"),
@@ -446,15 +446,15 @@ def test_a_verdict_of_record_takes_only_a_challenger_draw_on_live_coins(exe, tmp
 def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
     """A record whose challenger sample was opened after another commitment, whose source isn't its coin, whose commitment
     isn't a sample session's or whose opening doesn't parse: the Lean refuses it (`draw`) with the compose's words
-    (`served_verdicts.pearlplus_live_draw`), of record or not, where the Python, which leaves the sample to the compose,
+    (`served_verdicts.pearlplus_live_sample`), of record or not, where the Python, which leaves the sample to the compose,
     accepts."""
     path = T.proved_pass(tmp_path, H100, live=0)[0]
     rec = tmp_path / "coin.json"
     other = VR.verify_passes([path], 3, 1, "test", VR.epoch_coins(path.parent / "coins.json"), record=rec,
-                             draw=challenger_draw(after=b"\x0c" * 64), test_instance=True)
+                             draw=challenger_sample(after=b"\x0c" * 64), test_instance=True)
     assert other["answer"]["verdict"] == "accept"
     good = tmp_path / "good.json"
-    same(exe, [path], 3, None, good, draw=challenger_draw())
+    same(exe, [path], 3, None, good, draw=challenger_sample())
     held = json.loads(good.read_text())
     salt_only = Ch.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, random.Random(7).randbytes).commitment.to_json()
     cases = [(json.loads(rec.read_text()), "the record's draw coin: coin was not opened after what the verifier recorded"),

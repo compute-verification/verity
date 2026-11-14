@@ -53,7 +53,7 @@ from verity_difftest import protocol as P
 
 from verity.protocols.accounting.pouw.verifier import core_check, credit, period_check
 from verity.protocols.proofs.spot.device import challenger as CH
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -74,7 +74,7 @@ def module(name: str, path: Path) -> ModuleType:
 
 
 #: SPOT's one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
-#: `subset_design` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
+#: `subset_design` and `_challenger_sample` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_period_cases.py")

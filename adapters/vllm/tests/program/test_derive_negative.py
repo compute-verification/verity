@@ -272,6 +272,19 @@ def test_shape_mismatch_input_vs_weight_is_refused():
     assert_refused(out, "shape", "ResMLP with a 9-wide input into Linear(8, 16)")
 
 
+class InputNamedWeights(ResMLP):
+    def forward(self, weights):
+        return super().forward(weights)
+
+
+def test_an_input_named_as_the_weights_record_is_refused():
+    """The derived function's parameters are the inputs by name and then the module's record, `weights`: an input of that name
+    would make two parameters of one name, which every decoder of a Definition refuses."""
+    out = run_importer(InputNamedWeights(), (meta(H),))
+    assert_refused(out, "shape", "an input named `weights` beside the weights record")
+    assert "input 'weights' has the name of a parameter this function gets beside its inputs (weights)" in out.detail, out
+
+
 def test_rank_mismatch_is_refused_or_batched_exactly():
     """A [3, H] input into a module derived for [H]: either refused (E_SHAPE) or derived as 3 dataflow-independent
     rows — never a Program whose gate count equals the single-row program (silent row drop)."""
@@ -934,9 +947,9 @@ def test_corrupted_captured_value_fails():
     P, truth, call = _tiny_program_with_truth()
     gates = call.returns
     inputs_only = {g: v for g, v in truth.items() if any(lo <= g < hi for lo, hi in _input_gate_ranges(P))}
-    cap = np.array([truth[g] for g in gates], dtype=np.uint16)
-    cap[3] ^= 0x0001  # one flipped mantissa bit in one word
-    r = _check(call, gates, inputs_only, cap)
+    captured = np.array([truth[g] for g in gates], dtype=np.uint16)
+    captured[3] ^= 0x0001  # one flipped mantissa bit in one word
+    r = _check(call, gates, inputs_only, captured)
     assert r["status"] == "mismatch" and r["mismatches"] == 1 and r["first_mismatches"][0]["word"] == 3, r
 
 

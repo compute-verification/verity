@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity.circuits.defs import bind
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import boolean_dsa_topk_mask as BM
 from verity.definitions.registry import dsa_topk as T
 from verity.definitions.registry import dsa_topk_mask_cut as X

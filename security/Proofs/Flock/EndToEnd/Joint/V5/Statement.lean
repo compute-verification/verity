@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Finders
 its own statement at one table (`SampledKSLiveV5`'s binders: its circuit file's descriptor, public input ports and public
 file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's audit (`JointAuditV5`)
 registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
-(`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream) under the registration's law (`Bridge.LawOn`: subset,
+(`Bridge.execSel`, `Spot.Draw.sampleUnits` on one stream) under the registration's sampling design (`Bridge.LawOn`: subset,
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
 then runs one verity-verify-proof session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The deployed sample
@@ -88,7 +88,7 @@ structure MemberV5 (Reg : Type) (nJ : ℕ) where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
     LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
@@ -185,17 +185,17 @@ noncomputable def link (L : Law m.n) : ℝ≥0∞ :=
 
 end MemberV5
 
-/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.drawUnits`) under `design` over
+/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.sampleUnits`) under `design` over
 `[0, pop)` returned a sample before the stream ran out. `Bridge.execSel` samples every unit where it did not. -/
 def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (design : Flock.Draw.Law)
     (pop : ℕ) (ω : Ω) : Bool :=
-  match Spot.Draw.drawUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
+  match Spot.Draw.sampleUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
   | .ok _ => true
   | .error _ => false
 
 /-- **A window's audit of several members**: every member registered at one registration `Reg`, in the registration's
 order; one live sample over the population of all their `nJ` proof blocks, sampled by the deployed sample on the verifier's
-one byte stream `src` under the registration's law `law` on strata of sizes `ns`, sampling `kd` proof blocks; then one
+one byte stream `src` under the registration's sampling design `law` on strata of sizes `ns`, sampling `kd` proof blocks; then one
 session per member, in order. Each member's part of every sample that ended has its session's link points (`hcls`).
 That some outcome of the stream ends the sample is no field: what needs it (`memberLaw` and what is built on it) takes
 it as `Nonempty EndΩ`, and where no outcome does no run is accepted (`prob_accepts_of_not_ends`). -/
@@ -225,7 +225,7 @@ open Classical
 
 variable (w : JointAuditV5)
 
-/-- The window's sample: the deployed sample under the registration's law on the verifier's bytes, over every member's
+/-- The window's sample: the deployed sample under the registration's sampling design on the verifier's bytes, over every member's
 proof blocks. -/
 def L : Law w.nJ := Bridge.execSel (n := w.nJ) w.src w.law w.nJ
 
@@ -324,7 +324,7 @@ noncomputable def eps : ℝ≥0∞ := ∑ k, ((w.ms.get k).epsKs (w.design k) + 
 end JointAuditV5
 
 /-- **A window's sample over several members, `EndToEndHiddenV5`'s form.** For a window's audit as in `JointAuditV5`,
-whose one live sample under the registration's law covers every member's proof blocks and whose members' sessions each
+whose one live sample under the registration's sampling design covers every member's proof blocks and whose members' sessions each
 prove their part of it, every live prover `τ` and every set `W` of the population's proof blocks, the probability that
 the sample ended, verity-verify-proof accepts the session of every member with a proof block in the sample and every proof
 block of `W` is incorrect is at most
@@ -375,7 +375,7 @@ structure AuditRecV5 (W : ℕ → JointAuditV5) where
   idx : ℕ
   accepted : Prop
   wrong : Finset (Fin (W idx).nJ)
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace AuditRecV5
 
@@ -413,14 +413,14 @@ def Plays (W : ℕ → JointAuditV5) (T : ℕ) (s : Strategy (game W T)) (t : �
   MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
 
 /-- **The most harm in the period's confidence set**: the largest total weight over every choice of a set of proof
-blocks in each of the run's windows whose laws' own misses multiply to at least `δ`. -/
+blocks in each of the run's windows whose sampling designs' own misses multiply to at least `δ`. -/
 noncomputable def maxHarm (W : ℕ → JointAuditV5) (h : (t : ℕ) → Fin (W t).nJ → ℕ) (δ : ℝ)
     (l : List (AuditRecV5 W)) : ℝ :=
   ⨆ B : {B : (i : Fin l.length) → Finset (Fin (W l[i].idx).nJ) //
       ENNReal.ofReal δ ≤ ∏ i, ENNReal.ofReal ((W l[i].idx).pa (B i))},
     ((∑ i, ∑ u ∈ B.1 i, h l[i].idx u : ℕ) : ℝ)
 
-/-- **The run's incorrect proof blocks are in the period's confidence set at `δ`**: the windows' laws miss them together
+/-- **The run's incorrect proof blocks are in the period's confidence set at `δ`**: the windows' sampling designs miss them together
 with probability at least `δ`, and their ANDs and their output bits in all are each at most the most any choice in that
 set holds. -/
 def Within (W : ℕ → JointAuditV5) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ) (l : List (AuditRecV5 W)) :
@@ -437,7 +437,7 @@ end JointPeriodV5
 probability that every window's run accepts (`JointAuditV5.Accepts`) and their incorrect proof blocks are not in the
 period's confidence set is at most
 $$\delta + \sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}):$$
-outside it, when every window is accepted, the product of the windows' laws' own misses of their incorrect proof blocks is
+outside it, when every window is accepted, the product of the windows' sampling designs' own misses of their incorrect proof blocks is
 at least `δ`, and their ANDs and output bits in all are at most the period's `maxHarm`. The sampling term is `δ` however
 many windows and members the period has. Its named assumptions, at every window: A3 (`Assumptions.UniformRandomBytes`)
 for its sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw`), and `cr/sha-512`

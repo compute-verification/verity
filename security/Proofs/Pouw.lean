@@ -53,7 +53,7 @@ public import Proofs.Pouw.Fp8Atom.Proofs
 public import Proofs.Pouw.FpG1
 public import Proofs.Pouw.FpG1.H1
 public import Proofs.Pouw.Game
-public import Spot.HiddenDraw
+public import Spot.HiddenSample
 public import Proofs.Pouw.H1Zy
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
@@ -125,6 +125,7 @@ public import Proofs.Pouw.PearlC.HiddenTileGame
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.PearlC.Instance
 public import Proofs.Pouw.PearlC.KernelWrefGap
+public import Proofs.Pouw.PearlC.Mend
 public import Proofs.Pouw.PearlC.Peel
 public import Proofs.Pouw.PearlC.PeelExactChecks
 public import Proofs.Pouw.PearlC.PeelExactProofs

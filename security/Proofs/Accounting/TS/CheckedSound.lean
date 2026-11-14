@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SoundAtBridge
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.LawSample
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -59,10 +59,10 @@ a token, so `Proofs/Accounting.lean` imports it.
 namespace FlockSoundness.Audit.Law
 
 /-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
-theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitDraw}
+theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitSample}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
-  rw [drawWith_subset_run] at hd
+  rw [sampleWith_subset_run] at hd
   cases ho : (Flock.Draw.onWith (tapeGet (tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
       (Flock.Draw.subset k n)).run (fun _ => 0) with
   | none => rw [ho] at hd; exact absurd hd (by simp)

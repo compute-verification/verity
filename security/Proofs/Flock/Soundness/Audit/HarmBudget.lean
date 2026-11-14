@@ -19,13 +19,13 @@ resample.
 **The design condition** (`Law.Design L π`): `Pr[D ∩ B = ∅] ≤ exp(−Σ_{u ∈ B} π_u)` for every `B`
 fixed before the coins. The Bernoulli (`bernoulli_design`, exact at rate `bernRate`:
 `bernoulli_design_exact`), uniform-subset (`subset_design`), stratified (`stratified_design`) and
-work (`work_design`) laws meet it.
+work (`work_design`) sampling designs meet it.
 
 **The model** (`Adaptive.Play`) is the run tree of one prover strategy, its own choices resolved: a
-`round L B k` node is a round whose incorrect proof blocks `B` and law `L` are fixed by the history before its
+`round L B k` node is a round whose incorrect proof blocks `B` and sampling design `L` are fixed by the history before its
 coin, `coin` nodes are the session's other coins, and `stop acc` ends the session. `Play n N` has at
 most `N` rounds, and the prover may stop after any of them. `Drawn err` is the per-round drawn-unit
-bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_drawn` gives with
+bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_sampled` gives with
 `err_t = ε_ks,t + δ_link,t` (`HarmBudgetLife`).
 
 **The theorem** (`harm_budget`): for harms `h ≥ 0` and any `λ ≥ 0` with `λ h_u ≤ π_u`, in
@@ -35,7 +35,7 @@ The proof is the supermartingale `exp(λ (Σ_{s<t} h(B_s) − H))` plus the erro
 at `T`, by induction on the tree: in each round the design condition pays for the harm the sample
 missed, and `Drawn` for the harm it hit (`prEv_le_exp`). Markov is the base case.
 
-**The count corollary** (`harm_count`, `harm_count_kstar`): under a Bernoulli law of rate `q`, the
+**The count corollary** (`harm_count`, `harm_count_kstar`): under a Bernoulli sampling design of rate `q`, the
 number of wrong steps reaches `K` with probability at most `(1 − q)^K + Σ err`, and
 `k*(p) = ln(1/(1−p)) / (−ln(1−q))` wrong steps with at most `1 − p + Σ err`. It is tight: one round
 that accepts exactly when its sample misses `B` meets `(1 − q)^{|B|}` (`harm_count_tight`).
@@ -220,7 +220,7 @@ noncomputable def pass : {N : ℕ} → Play n N → ℝ≥0∞
   | _, @Play.coin _ _ _ _ _ k => avg fun c => pass (k c)
   | _, .round _ _ _ => 1
 
-/-- Every round's law satisfies `S`. -/
+/-- Every round's sampling design satisfies `S`. -/
 def Laws (S : Law n → Prop) : {N : ℕ} → Play n N → Prop
   | _, .stop _ => True
   | _, @Play.coin _ _ _ _ _ k => ∀ c, Laws S (k c)
@@ -349,7 +349,7 @@ theorem prEv_le_exp {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞
         _ = ENNReal.ofReal (Real.exp (lam * (a - H))) + (∑ m ∈ range N, err m + err N) := by
             rw [add_assoc, add_comm (err N)]
 
-/-- **The cumulative harm budget.** Over at most `N` adaptive rounds whose laws meet the design
+/-- **The cumulative harm budget.** Over at most `N` adaptive rounds whose sampling designs meet the design
 condition with weights `π` and whose sampled proof blocks fail with at most `err`, for harms with
 `λ h ≤ π` and `λ ≥ 0`, the session accepts with total harm at least `H` with probability at most
 `e^{−λH} + Σ_t err_t`. -/
@@ -438,7 +438,7 @@ theorem oneShot_laws {S : Law n → Prop} {L : Law n} (hS : S L) (B : Finset (Fi
     (oneShot L B).Laws S :=
   ⟨hS, fun _ => trivial⟩
 
-theorem oneShot_drawn (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fun _ => 0) := by
+theorem oneShot_sampled (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fun _ => 0) := by
   refine ⟨le_of_eq ?_, fun _ => trivial⟩
   refine Eq.trans ?_ (avg_const (C := L.Ω) (0 : ℝ≥0∞))
   refine congrArg avg (funext fun ω => ?_)

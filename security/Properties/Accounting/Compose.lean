@@ -69,7 +69,7 @@ program `p` and query:
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
 open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
 its leaf under the weights' or the transcript's root is the extractor's too. The sample conjunct is over the code alone
-and could be proved first (`Select.select`'s subset sample from bytes, `Draw.drawUnits`), beside
+and could be proved first (`Select.select`'s subset sample from bytes, `Draw.sampleUnits`), beside
 `Properties.Spot.DrawMisses`.
 -/
 

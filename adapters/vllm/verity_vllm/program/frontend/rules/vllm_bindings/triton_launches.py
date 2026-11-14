@@ -165,7 +165,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
             return f"kernel source sha256 {meta.get('src_sha256')} differs from the pin {QKV_RMS_PINS['src_sha256']}"
         if not ctx.vocab.has("triton_block_rmsnorm"):
             return "numerics_unregistered: the vocabulary has no triton_block_rmsnorm"
-        sc, nw = meta.get("scalars", {}), (meta.get("geometry") or {}).get("num_warps")
+        sc, nw = meta.get("scalars", {}), meta["geometry"].get("num_warps")
         sizes = [sc.get(k[-1]) for k in QKV_ARGS]
         if not all(isinstance(n, int) and n > 0 for n in sizes) or not isinstance(sc.get("eps"), float):
             return f"Q_SIZE, KV_SIZE {sizes} and eps {sc.get('eps')!r} are not static positive sizes and a float"
@@ -362,13 +362,13 @@ def _pouw_scheme(node) -> str | None:
     """The PoUW scheme a launch is lowered under: the active target's ``pouw:<scheme>`` when that scheme has a circuit
     (`verity.protocols.accounting.pouw.prover.circuit.SCHEMES`) and the launch belongs to a linear layer (`linear_types`, by the class of the innermost
     module in the node's module stack)."""
-    from verity.protocols.accounting.pouw.prover import circuit
+    from verity.protocols.accounting.pouw.prover.serving import NCP_CIRCUIT_SCHEMES
 
     entries = dict(e.split(":", 1) for e in (active_target_profile().protocols or ()))
     scheme = entries.get("pouw")
-    if scheme not in circuit.SCHEMES:
+    if scheme not in NCP_CIRCUIT_SCHEMES:
         return None
-    stack = node.meta.get("nn_module_stack") or {}
+    stack = node.meta.get("nn_module_stack")    # a node no module call made (a placeholder, an output) has none
     cls = module_type(list(stack.values())[-1][1]) if stack else None
     return scheme if cls is not None and issubclass(cls, linear_types()) else None
 

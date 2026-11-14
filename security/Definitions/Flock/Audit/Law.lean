@@ -9,7 +9,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
 /-!
-# Draw laws
+# Sampling designs
 
 A sampling design is the verifier's coin space `Ω`, uniform, and the set of units each coin samples, core's `Verity.Law`
 (`Definitions.Core.Draw`) over `Fin n`. What a sampling design gives a consumer is its escape function: the probability that a sample
@@ -17,7 +17,7 @@ misses a set `B` of units.
 
 * `escape L B`: the sample is disjoint from `B`;
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
-  curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a sampling design that samples every unit (`miss_eq_zero_of_draw_univ`);
+  curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a sampling design that samples every unit (`miss_eq_zero_of_sample_univ`);
 * `incl L u`: the probability that `u` is sampled; a single unit escapes with `1 - incl L u`
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).

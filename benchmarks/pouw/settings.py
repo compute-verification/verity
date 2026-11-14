@@ -21,7 +21,9 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 
 #: the files that run outside the tree, relative to this one; `tools/move/layout.py` follows a `./` path to a file it
 #: moves, and a bare one only in a file it moves too
-STANDALONE = ("pearl_c_sm120/run.py", "pearl_c_sm90/run.py", "pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
+STANDALONE = ("../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/run.py",
+              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/run.py",
+              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
               "../../verity/protocols/accounting/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
 
 
@@ -120,7 +122,7 @@ REGISTRY = Registry(
                                             "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
                                             "kernels and hold them to the SASS gate"),
     S("POUW_SASS_GATE_CACHE", str, None, WHERE, "the SASS gate's cache; unset, ~/.cache/pouw-harness/sass-gate"),
-    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, verity/protocols/accounting/pouw/prover/kernels/harness/native/build/libpouw_harness.so"),
+    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, native/build/libpouw_harness.so"),
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),

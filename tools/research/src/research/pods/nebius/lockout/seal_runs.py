@@ -194,7 +194,7 @@ def seal_pass(roots: list[str], *, dry_run: bool, max_dirs: int = MAX, quiet_s: 
             say(f"vy-seal-runs: {root} is not root's and sticky, so a sealed run there can still be renamed (vy-lockout roots)")
         for name in candidates(Path(root), uid):
             if len(rep["sealed"]) >= max_dirs:
-                say(f"vy-seal-runs: cap of {max_dirs} reached; the rest wait for the next pass")
+                say(f"vy-seal-runs: limit of {max_dirs} reached; the rest wait for the next pass")
                 return rep
             d = Path(root) / name
             try:

@@ -25,7 +25,7 @@ registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conju
   (`HoloSatSome`: the slots' types are the partition's, private, so the statement binds them existentially — for some
   hidden types — below `2^tLog`, the range the zero outputs pin), with
   probability at most `RecursiveSound`'s bound with candidate 3's error (`holoError`) as its inner term;
-* (ii) zero knowledge: `RecursiveFirewallPrivate`, as in `PublicAudit`.
+* (ii) zero knowledge: `RecursiveZkServerPrivate`, as in `PublicAudit`.
 
 What it takes, against `PublicAudit`:
 
@@ -140,7 +140,7 @@ def ChecksC3 (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (c
 /-- **`ChecksC3` reads the transcript only through its record's sample**: `setupOf` reads the record through
 `recordDraw` alone, and `checkLabels` reads that sample, so the checks transfer to any transcript whose record carries
 the same sample. -/
-theorem checksC3_of_recordDraw {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
+theorem checksC3_of_recordSample {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
     {coins : Option Flock.RecCoins.Source} {j : ℕ} {f : VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} {I : FlockSoundness.Discharge.Exec.Inputs}
     {own : Array Flock.Registered.Port} {t t' : FlockSoundness.Discharge.Exec.Transcript}
@@ -348,7 +348,7 @@ the inner shape `ish`, and every prover `σ` of the recursive audit
 with candidate 3's compiled table as its inner protocol (`holoInnerAt`, its messages of the stages' types `holoTys`
 and its coins of types `CT st hp`),
 at the sampling design of the registration's samples
-(`drawLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
+(`sampleLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
 as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, their registrants' records covering the
 rows their reads files name `_hRC`, the table's prefix `tbl` and the `b ‖ c`
 `bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
@@ -388,7 +388,7 @@ slack, and candidate 3's error.
 At a private inner shape (`ish.holo`), the verifier's list is V*'s holo statements (`FlockC3.VStarList.statements_holo`):
 each part's file is V*'s holo one (`RecVStar.circuitFile` at `ish.holo`), and the event counts those runs as it counts
 plain ones. Candidate 3 is not deployed: its inner session is run by `88-rec-c3-inner.sh` alone, at a private inner
-shape (`--holo`), for its tests' fixture; at a plain shape no honest rep unit passes (`DrawnRounds`).
+shape (`--holo`), for its tests' fixture; at a plain shape no honest rep unit passes (`SampledRounds`).
 
 Check 5's source `coins` is any, a record of what check 5 reads (`Source.coins`) included, though no reader builds one
 (`RecCoins.refuseCoins` refuses `--rec-inner-coins`). The verifier never accepts one at candidate 3 either: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the
@@ -424,7 +424,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap salt bcs')
     -- V*'s statements over the verifier's inner shape's list, as the prover supplies their sessions
     {Vs : Fin (vstarCount ish) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
+    (zr : Reg → (sampleLaw draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -448,7 +448,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover, at the audit's game written out (`recGame` at the inner protocol's parameter-level coin
     -- type and round count), so its type reads no typing's protocol
-    (σ : Strategy (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
+    (σ : Strategy (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
       rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
         (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
@@ -463,7 +463,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- VBridge at the committed rounds, a premise: at some typing `τv` of the slots — its discharge takes the
     -- registered one, which the zero outputs pin below `2^tLog` — V*'s circuits compute candidate 3's inner verifier
@@ -495,7 +495,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
-        (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
+        (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
           rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
             (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ = 0 ∨
     ∃ h : Typed zr,
@@ -552,7 +552,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
                   (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
                 (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
-          (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
+          (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
             rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
               (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ ≤
         expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -574,7 +574,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
                   j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (holoError (holoAt st hp))
 
-/-- **`RecursiveAuditC3At` with no A3**: `RecursiveAuditC3At` without its A3 premise, at the same bound. V*'s laws are
+/-- **`RecursiveAuditC3At` with no A3**: `RecursiveAuditC3At` without its A3 premise, at the same bound. V*'s sampling designs are
 the full sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
@@ -606,7 +606,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap salt bcs')
     -- V*'s statements over the verifier's inner shape's list, as the prover supplies their sessions
     {Vs : Fin (vstarCount ish) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
+    (zr : Reg → (sampleLaw draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -630,7 +630,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover, at the audit's game written out (`recGame` at the inner protocol's parameter-level coin
     -- type and round count), so its type reads no typing's protocol
-    (σ : Strategy (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
+    (σ : Strategy (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
       rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
         (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
@@ -643,7 +643,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- VBridge at the committed rounds, a premise: at some typing `τv` of the slots — its discharge takes the
     -- registered one, which the zero outputs pin below `2^tLog` — V*'s circuits compute candidate 3's inner verifier
@@ -675,7 +675,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
-        (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
+        (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
           rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
             (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ = 0 ∨
     ∃ h : Typed zr,
@@ -732,7 +732,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
                   (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
                 (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
-          (Game.send Reg fun R => Game.coin (drawLaw draw).Ω fun ω =>
+          (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
             rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
               (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ ≤
         expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -758,7 +758,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
 coins of their coin kinds in the run's order (`holoCTs`: the link points, then the coins of the stages' shapes,
 `holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
-`RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
+`RecursiveZkServerPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
 and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
@@ -767,10 +767,10 @@ statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `ve
 accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at `κ + t'·ε`.
 -/
 def RecursiveAuditHolo : Prop :=
-  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveZkServerPrivate
 
 /-- **`RecursiveAuditHolo` with no A3**: `RecursiveAuditHolo` with its first part with no A3. -/
 def RecursiveAuditHoloNoA3 : Prop :=
-  RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveZkServerPrivate
 
 end Flock.Guarantees
