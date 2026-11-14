@@ -18,6 +18,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
 import pytest
 from circuit_properties import points as PT
 from circuit_properties import work as WK
@@ -1179,6 +1180,73 @@ def test_a_specific_operand_is_tested_at_the_point_too(monkeypatch):
     w = WK.read(_specific_overflow(), KB)
     (g,) = w.groups
     assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+
+
+def _specific_alone(how: str) -> Program:
+    """`_attention_loop`'s O1 = P V1^T cancelled against itself, Q = O1 plus -1 times O1, whose rows the reading
+    shows specific and not distinct and which are 0 for every input; with ``how`` "nan" a NaN in every word (O1
+    squared and times 2^127 twice, an inf, before the cancel), and with "scan" Q's rows plus a stated 1 by a scan over
+    them, whose contexts repeat before its last iteration; and u Q^T, u carried."""
+    one, big, neg = const(32, 0x3F800000), const(32, 0x7F000000), const(32, 0xBF800000)
+    inner = _def("Inner" + how.title(), ((("acc", F32), ("q", X_T)), Tuple(F32, X_T)),
+                 lambda B, S, acc, q: tuple_of(acc, _add(B, q, B.call(one))))
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, u = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        if how == "nan":
+            o1 = _mul(B, _mul(B, _mul(B, o1, o1), B.call(big)), B.call(big))
+        q = _add(B, o1, _mul(B, o1, B.call(neg)))
+        if how == "scan":
+            q = Coll(ROWS_T, B.scan(bind(inner), B.call(const(32, 0)), xs=[q], shared=[])[1].refs)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, u, z)), B.call(LIN_A, u, q)
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("u", X_T))
+    name = "Specific" + how.title()
+    return _loop(name, carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
+
+
+def test_specific_rows_cancelled_against_themselves_are_refused_at_the_word_by_word_point(monkeypatch):
+    """Q's rows are specific alone by the reading's rules and 0 for every input. The one-word point holds one token at
+    every position, which breaks `P_BATCH`, so it can't show a specific operand's rows distinct; the word-by-word
+    point, whose tokens are distinct rows of the table, meets it, and refuses Q, rows 0 and 1, as rows equal by an
+    identity of the circuit. Without the point u Q^T is charged."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("cancel"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificCancelStep_v1", "w", (0, 1))
+    monkeypatch.setattr(PT, "check", lambda *a: None)
+    w = WK.read(_specific_alone("cancel"), KB)
+    (g,) = w.groups
+    assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+
+
+def test_the_word_by_word_point_refuses_a_nan_and_an_unrun_scan_as_the_one_word_point_does():
+    """A specific-alone operand that holds a NaN in every word, or reads the outputs of a scan the point runs 1 of its
+    PN iterations, is refused at the word-by-word point, by the same refusals a distinct one gets at the one-word
+    point."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("nan"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows, e.value.nan) == \
+        ("SpecificNanStep_v1", "w", None, (PN, PN))
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("scan"), KB)
+    assert (e.value.scan.fn, e.value.scan.ran, e.value.scan.n, e.value.operand) == ("SpecificScanStep_v1", 1, PN, "w")
+
+
+def test_the_word_by_word_points_tokens_are_distinct_rows_of_every_table():
+    """Each lane's tokens are a permutation of the least table's rows, repeated, so any that many positions running
+    pick distinct rows of every table at least as long; with no table, distinct words a narrowing to i32 keeps."""
+    rng = np.random.default_rng(0)
+    t = PT.tokens(rng, (3, 40), 16)
+    assert all(len(set(row[i:i + 16].tolist())) == 16 for row in t for i in range(40 - 16 + 1))
+    assert all(len({int(x) % 24 for x in row[:16]}) == 16 for row in t)
+    free = PT.tokens(rng, (2, 50), None)
+    assert all(len(set(row.tolist())) == 50 for row in free) and 0 < free.min() and free.max() < 1 << 31
 
 
 #: a chain longer than Python's default recursion limit

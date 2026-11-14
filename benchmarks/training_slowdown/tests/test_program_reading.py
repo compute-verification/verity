@@ -378,7 +378,9 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
 def test_the_point_evaluates_each_iteration_it_runs_once(readings):
     """The reading's test at a point (`points.check`) passes the step's loop, its charged claims among them, and
     costs about one evaluation of the step: the two iterations the reader reads as distinct contexts, of two and of
-    three, each the step's primitive words once, at one point, none by the reference a word at a time."""
+    three, each the step's primitive words once, at one point, none by the reference a word at a time. Its 23
+    specific-alone claims are tested at the word-by-word point, its lanes beside the one-word point's, and its 23
+    distinct ones at the one-word point."""
     memo: dict = {}
 
     def words(fn) -> int:
@@ -392,7 +394,11 @@ def test_the_point_evaluates_each_iteration_it_runs_once(readings):
         p = loop(readings.step, n)
         _w, R, root, reasons = WK._read(p, K0, WK.PRODUCTS, WK.LOOKUPS)
         t = PT.check(p, R, root, reasons)
-        assert (t.words, t.points, t.claims, dict(t.reference)) == (2 * words(readings.step.root), 1, 23, {})
+        cl = PT.claims(R, root, reasons)
+        alone = Counter(wb for nodes in cl.values() for cs in nodes.values() for *_c, wb in cs)
+        assert (t.words, t.points, t.word_points, t.claims, dict(t.reference)) == \
+            (2 * words(readings.step.root), 1, 1, 46, {})
+        assert alone == {False: 23, True: 23}
 
 
 def test_the_readings_constants_are_the_benchmarks():

@@ -60,8 +60,9 @@ where any may, and two arrays are one where any references overlap. A rule's bra
 the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
 the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
 say which products are the head's. So, under the reading's two premises (`SHARED_PREFIX`'s and the updates', below),
-every error of the reading is less work or a smaller `β` than the trace's reading of the same
-step, and a bound true but weak: a product the tables don't name is not counted, a value with any
+every error of a reading the point passes (`points.check`, which tests each charged operand whose rows the rules show
+distinct or specific) is less work or a smaller `β` than the trace's reading of the same step, and a bound true but
+weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
@@ -90,6 +91,11 @@ gives a gathered value:
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
+The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens, so it shows a
+specific operand's rows are not equal by an identity of the circuit (the attention's output plus -1 times itself is 0
+for every input). That the served data meets `P_BATCH` stays the premise it is today, and with it that a specific
+operand's rows the second draw shows differing are not equal only at values a submitter found by trying circuits
+against its public seed.
 The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
 under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
