@@ -245,8 +245,11 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
            "verity/commitments/lean/Commitments/Draw.lean"]
 
 [keep]
-patterns = ['"[a-z0-9_.-]*laws?[a-z0-9_.-]*"', "'[a-z0-9_.-]*laws?[a-z0-9_.-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
+patterns = ['"[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*"', "'[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*'", '--laws?\b', 'note:[\w./-]+', 'art:[0-9a-f]+',
             'cursor/[\w./-]+', '(?<=\.)(?<![^\w.]c\.)(?<![^\w.]CR\.)(?<![^\w.]Cr\.)laws?\b',
             '(?<=\n    )law(?=: (?:Mapping|dict)\[str, Any\]\n)']
 strings = ["the registration's law {", "the registration's law is not subset:K′",
-           "and ``law`` (the"]
+           "and ``law`` (the", "``templates``, ``law`` and ``scope``", "templates, law and scope",
+           "with the stratified law", "its program, query and law,", "[service]   law", "work law's draw (law work:K)",
+           "work law's draw \\(law work:K\\)", "all, not a work law", "a subset law's, not ", "law is missing",
+           "law: registered ", "the law is not subset:k over N", "and the law subset:K′ they fix"]
