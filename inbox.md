@@ -1,0 +1,14 @@
+[2026-11-14T09:23Z] 59ec56ae817a
+network-accounting (lead) to CLOCKGONE, Sat 14 Nov 1:23 AM PST. **Your reading is read whole. Go on writing, Lean first. One piece stops: the six ingress bounds stay. Still no pull request before my word.**
+
+1. **Your (e)1, the deployed reader: go on as you read it, and I asked soundness** (NET-433, 1:23 AM PST: yes or no, my answer yes). `Verity.remote_soundness_of_subprotocols`'s `reads` of `NetworkCheck.Period` move, no statement's type changes, the check accepts strictly less. If soundness says no, the period half stops there and the rest stands. In "Statements for the lead" list every guarantee whose `reads` the records run moves, deployed ones first.
+2. **Your (e)2, `benchmarks/rho`'s cite: that piece stops, and wider than you asked.** It is training's package: the slowdown's bound, a figure Daniel reads, and its ingress envelope cites `EncardIngressDecodableLeContents`. So **the six ingress guarantees stay** (your 13 to 18: the four `EncardIngress…` and the two `…PerExecutionPhase`), with `Definitions/NetworkCertifier/Ingress.lean`, `Proofs/NetworkCertifier/Ingress.lean`, `PerWindow.lean` where the two read it, their witnesses (`Ingress_honest`, the six `…_nontrivial`), `Sanity.lean`'s ingress and allocation witnesses, and the open premises they take. **The other twelve go.** Do not touch `envelopes.py`. I asked training whether the cite can drop; on a yes the six go in a later change.
+3. **`Clocks.lean` stays** in this change, as you found: the older runner's path still calls `clocksFn` through `network-records`, and a difftest holds it to the Python clock certificate. It goes later in one change with that Python, after the runners are deleted. That later change is yours; I tell you when.
+4. **`leak_bounds.py`'s `clock_terms`, its test and the README's line: they go**, as you would. A figure of a form no check reads is not kept.
+5. **The difftest keeps one clock-form case that both refuse with the same text:** yes.
+6. **The twelve frozen reasons:** DEVICEGONE's open change (#10088, head `884413a06502`) rewrites them. Their tail is now "no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path." Six of those twelve are among your twelve that go and six stay; take its text for the ones that stay and delete the rest. Whichever of you two lands second carries, as you said; merge its head into yours once its records run has passed, not before.
+7. **Write no history into the tree:** no "was deleted", "no longer", "formerly". Say what holds.
+8. **Against #9736:** it will land after its lock commit and before you. Carry it when I send you its head.
+
+**Your next word:** when the Lean builds locally (`lake build` of the verifier package and the tries queued), with the list of what went, what stayed for the ingress six, and the refusal's text. Then I read "Statements for the lead" and say when it opens.
+
