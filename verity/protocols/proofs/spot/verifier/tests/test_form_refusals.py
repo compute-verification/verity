@@ -17,6 +17,7 @@ The sessions are a fetched fixture (`artifacts.json`), which `suites.py` fetches
 missing fixture fails these tests rather than skipping them."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -36,6 +37,10 @@ PUBLIC_INPUTS = Path(__file__).resolve().parents[3] / "flock" / "prover" / "test
 #: a descriptor of one primitive Definition, which reads no registered value
 DESCRIPTOR = {"schema": "verity-ir/descriptor/v1", "callees": [], "definitions": {"Main_v1": {"form": "primitive"}},
               "root": "Main_v1"}
+#: the hm96 leaf scheme's salt source `Flock.Tags` pins, which the public-input fixture's circuit predates
+SALT_SOURCE = "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored"
+#: META's bindings, which a circuit's class leaves out (`HmRow.BINDING_KEYS`)
+BINDING_KEYS = ("partition", "program_sha512", "program_digests")
 CHECK_OWN = ("public inputs: the circuit names public input ports; pass the verifier's own recomputation "
              "(--public-inputs F)")
 N = 4
@@ -116,21 +121,29 @@ def test_the_v2_audits_own_run_accepts_the_honest_session_and_refuses_the_tail_f
     assert (tail.accepted, tail.why) == (False, _cases(fx)["tail"]["lean"]["why"]), tail
 
 
+def _circuit_text(head: str, meta: dict, rest: str) -> str:
+    return head + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n" + rest
+
+
 def _public_inputs_files(to: Path) -> tuple[Path, Path, dict]:
-    """Flock's public-input fixture (`PUBLIC_INPUTS`: a RoPE head whose `cs` is a public input port) bound to a
-    `verity/partition/v1` object over its program, the binding v2's statement checks first, and its public file pinned
-    to that circuit; the circuit, the public file and the partition object."""
+    """Flock's public-input fixture (`PUBLIC_INPUTS`: a RoPE head whose `cs` is a public input port) under v2's
+    statement: its leaf scheme's salt source the one the statement pins (`Flock.Tags`), its partition a
+    `verity/partition/v1` object over its program, and its public file pinned to that circuit and its class
+    (`HmRow.classOf`: the file without META's bindings); the circuit, the public file and the partition object."""
     assert (PUBLIC_INPUTS / "stage" / "circuit.txt").is_file(), (
         f"{PUBLIC_INPUTS} is not fetched: `uv run research data fetch-fixtures {PUBLIC_INPUTS.relative_to(ROOT)}`")
     head, meta_line, rest = (PUBLIC_INPUTS / "stage" / "circuit.txt").read_text().split("\n", 2)
     meta = json.loads(meta_line[5:])
     assert meta["public_inputs"], meta
+    meta["leaf_scheme"]["salt_source"] = SALT_SOURCE
     partition = {"format": PO.FORMAT, "program": meta["program_sha512"], "query": PO.call_query()}
     meta["partition"] = {"digest": PO.digest(partition), "rule": PO.FORMAT}
     circuit = to / "circuit.txt"
-    circuit.write_text(head + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":")) + "\n" + rest)
+    circuit.write_text(_circuit_text(head, meta, rest))
+    unbound = _circuit_text(head, {k: v for k, v in meta.items() if k not in BINDING_KEYS}, rest)
     h, body = (PUBLIC_INPUTS / "stage" / "pub-4.bin").read_bytes().split(b"\n", 1)
     header = {**json.loads(h), "circuit_sha512": PF.file_sha512(circuit)}
+    header["units"]["classes"] = [hashlib.sha512(unbound.encode()).hexdigest()] * len(header["units"]["classes"])
     public = to / "pub-4.bin"
     public.write_bytes(json.dumps(header, sort_keys=True).encode() + b"\n" + body)
     return circuit, public, partition
