@@ -20,7 +20,7 @@ the claim reads of it (`WindowInstance.ClaimReads`). This module states it at th
   (`Spot.OneStageZk.Member`) on files: the statement's tags, the circuit and public files the member's digests name,
   the lookup tables the circuit file registers, one table, the member's partition object and program as flock-verify's
   inputs, no work, stratified or closure input and no recomputation of public input words, as
-  `Spot.OneStageZk.inputsOf` hands them, and the member's units, a range of the window's population from its first.
+  `Spot.OneStageZk.inputsAt` hands them, and the member's units, a range of the window's population from its first.
   Its files are then read as `memberRead` reads them (`MemberOn.fileRead_eq`).
 * **The window** (`WindowOn`): the window's members are the parameters', in the order of their first units, each on
   the registered files; the sample's law is the verifier's over the window's population, and its bytes `MAX_COINS`

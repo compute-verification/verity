@@ -101,7 +101,7 @@ by) give of the bytes and the release log they accept, each stated at the code's
 * `MemberForm.Sent`: each session of the form in what the prover sent: the evidence sent for the `u`-th session
   (`sentEvidenceAt`), the `j`-th statement's one session as the evidence's `j`-th, named at place `j` (`named_at`),
   its record and evidence among what was sent (`sentRecordAt_session`, `sentEvidenceAt_session`), its one table and
-  that table's coin tree (`rootBTables_one`, `Member.spec_coinTree`).
+  that table's coin tree (`ownRootBTables_one`, `Member.spec_coinTree`).
 * `MemberForm.Reads`: at a play the form accepts, every release of the sample's family precedes every opening and
   the play has the sessions of the window's sample (`windowRead_members`).
 * `MemberForm.WindowPasses`: what a window's instance takes of the form's acceptance. At each play the form

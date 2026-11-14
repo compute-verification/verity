@@ -70,14 +70,15 @@ def sessionsOf (zs : List (_root_.Spot.OneStageZk.StatementFiles × _root_.Spot.
   zs.flatMap fun z => z.1.sessions.toList.map fun s => (z.2, s)
 
 /-- **What `membersTreesHeld` names the session `z.2` of the member `z.1`**, on the blobs `bs`: the session's name,
-its tables with the `root_B` lengths its statement fixes on the member's own files and its record (`rootBTables`),
+its tables with the `root_B` lengths its statement fixes on the member's own files and lookup tables and its record
+(`ownRootBTables`),
 the record a blob holds as UTF-8, parsed (`null` where it doesn't parse), and the SHA-512, in hex, of the session's
 evidence (`sessionEvidence`). -/
 def NamedOf (bs : _root_.Core.Blobs) (z : _root_.Spot.OneStageZk.Member × _root_.Spot.OneStageZk.RunFiles)
     (x : String × Array (String × Option ℕ) × Json × String) : Prop :=
   ∃ blob record evidence, bs.get z.2.record s!"session {z.2.name}'s record" = .ok blob ∧
     String.fromUTF8? blob = some record ∧ _root_.Spot.OneStageZk.sessionEvidence bs z.2 = .ok evidence ∧
-    x = (z.2.name, _root_.Spot.OneStageZk.rootBTables z.1.own bs record,
+    x = (z.2.name, _root_.Spot.OneStageZk.ownRootBTables z.1.own bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null, sha512Hex evidence)
 
 /-- **What `membersTreesHeld` names the one session of the statement `z.1`**, at its member `z.2`. -/

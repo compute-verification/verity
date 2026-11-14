@@ -327,7 +327,7 @@ theorem session_sample {vm : _root_.Spot.OneStageZk.Member} {rec : Json}
       Flock.Witness.recordDraw record =
         some (Flock.Draw.UnitDraw.toJson ⟨.subset us.size, vm.count, us, #[]⟩) ∧
       units = us.map (lo + ·) := by
-  obtain ⟨tags0, circuitB, pubB, -, -, -, -, hI⟩ := statement_reads hs
+  obtain ⟨tags0, circuitB, pubB, names, -, -, -, -, -, hI⟩ := statement_reads hs
   obtain ⟨-, epop⟩ := statement_checks hs
   obtain ⟨dj, D, kd, hdj, hD, hl, sts, hset⟩ := sessionVerdict_subset hv
   obtain ⟨hasc, hprint⟩ := recordDrawn_of_subset hdj hD hl

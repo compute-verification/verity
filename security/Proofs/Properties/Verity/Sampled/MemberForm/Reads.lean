@@ -141,8 +141,8 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     rw [hM.sessions]
     exact hsj
   obtain ⟨n?, hroot⟩ :=
-    rootBTables_one hon.tags vm.own (_root_.Core.Blobs.ofArray x.sent.blobs) record
-  have htabx : _root_.Spot.OneStageZk.rootBTables vm.own (_root_.Core.Blobs.ofArray x.sent.blobs) record =
+    ownRootBTables_one hon.tags vm.own (_root_.Core.Blobs.ofArray x.sent.blobs) record
+  have htabx : _root_.Spot.OneStageZk.ownRootBTables vm.own (_root_.Core.Blobs.ofArray x.sent.blobs) record =
       #[(W.table, n?)] := by rw [hroot, hMA.table m hmem]
   obtain ⟨J, -, -, -, hpj, -⟩ := decode_coinTree hdec hctree
   have hJ : Flock.JsonParse.parse record =

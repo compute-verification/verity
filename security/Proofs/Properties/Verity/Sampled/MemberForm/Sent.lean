@@ -19,7 +19,7 @@ device's log to at it. This module reads those off what the per-member form's ch
 * **The session at a place** (`sessions_at`, `named_at`): at statements of one session each, the `j`-th session of
   the evidence is the `j`-th statement's one session, and the check names it at the `j`-th place.
 * **Its record and evidence in what was sent** (`sentRecordAt_session`, `sentEvidenceAt_session`).
-* **Its tables** (`rootBTables_one`): one table, the statement's.
+* **Its tables** (`ownRootBTables_one`): one table, the statement's.
 * **Its coin tree** (`Member.spec_coinTree`, `Member.coinSpec_one`): the session `--zk` sets up at a member of one
   table is on the coin tree of that table.
 * **The order on the device's log** (`opensLast_congr`): a log of the same frames as one whose openings of a tree
@@ -191,16 +191,16 @@ theorem sentEvidenceAt_session {x : Verity.Exchange} {p : _root_.Spot.OneStageZk
 
 /-! ## The session's tables -/
 
-/-- **A session's tables with their `root_B` lengths are one table's, the statement's**: `rootBTables` pairs each of
-the session's tables (`Spot.OneStageZk.sessionTables`, the statement's one) with a length. -/
-theorem rootBTables_one {tags0 : Flock.Tags}
+/-- **A member's session's tables with their `root_B` lengths are one table's, the statement's**: `ownRootBTables`
+pairs each of the session's tables (`Spot.OneStageZk.sessionTables`, the statement's one) with a length. -/
+theorem ownRootBTables_one {tags0 : Flock.Tags}
     (ht : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0) (p : _root_.Spot.OneStageZk.Own)
     (bs : _root_.Core.Blobs) (record : String) :
-    ∃ n?, _root_.Spot.OneStageZk.rootBTables p bs record = #[(tags0.table, n?)] := by
+    ∃ n?, _root_.Spot.OneStageZk.ownRootBTables p bs record = #[(tags0.table, n?)] := by
   have htab : _root_.Spot.OneStageZk.sessionTables = #[tags0.table] := by
     simp only [_root_.Spot.OneStageZk.sessionTables, ht, Option.map_some, Option.getD_some]
     rfl
-  unfold _root_.Spot.OneStageZk.rootBTables
+  unfold _root_.Spot.OneStageZk.ownRootBTables
   simp only [htab, Array.mapIdx_singleton]
   exact ⟨_, rfl⟩
 

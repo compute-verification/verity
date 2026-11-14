@@ -297,7 +297,7 @@ theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {
     Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray o.sent.blobs) := by
   obtain ⟨_, _, _, p, _, _, _, _, hcase, hp, -, -, -, -, pub, prof, hck⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   cases params_of_case hv.2.1 hcase hp hθ
-  have h := Properties.Spot.SecurityProofs.tablesRegistered.2 _ _ _ _ _ _ _ hck
+  have h := Properties.Spot.SecurityProofs.tablesRegistered.2.1 _ _ _ _ _ _ _ hck
   unfold Properties.Spot.AcceptHoldsTables at h
   rw [hone _ hθ] at h
   exact h
@@ -339,6 +339,63 @@ theorem pinnedTables_extend {s : Verity.Sent} {circuitB : ByteArray} {names : Li
       have htt : t' = t := List.inj_on_of_nodup_map mufu_nodup ht' hc.1 hyn
       subst htt
       simp only [ha, ht _ ht' a b ha hb, Option.map_some]
+    · cases h
+
+/-- **The blobs' pinned tables a circuit file looks up extend the ones it registers**, where the blobs sent hold
+each pinned table the circuit file looks up (`Spot.OneStageZk.tablesAmong`, every name of
+`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its registered file (`TablesSent`), whatever other pinned
+table the blobs hold. -/
+theorem pinnedTables_among {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
+    (hl : _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names)
+    (hn : (_root_.Spot.OneStageZk.tablesAmong names (_root_.Core.Blobs.ofArray s.blobs)).map (·.1) = names)
+    (ht : TablesSent s) :
+    TablesExtend (pinnedTables circuitB)
+      (_root_.Spot.OneStageZk.tablesAmong names (_root_.Core.Blobs.ofArray s.blobs)) := by
+  classical
+  have hp : pinnedTables circuitB = Flock.MUFU_TABLES.filterMap fun t =>
+      if t ∈ Flock.MUFU_TABLES ∧ names.contains t.name = true then (pinnedFile t.sha512).map (fun b => (t.name, b))
+      else none := by
+    simp only [pinnedTables, hl]
+    refine List.filterMap_congr fun t ht => ?_
+    by_cases hc : names.contains t.name = true
+    · rw [if_pos hc, if_pos ⟨ht, hc⟩]
+    · rw [if_neg hc, if_neg fun h => hc h.2]
+  have hq : _root_.Spot.OneStageZk.tablesAmong names (_root_.Core.Blobs.ofArray s.blobs) =
+      Flock.MUFU_TABLES.filterMap fun t =>
+        if names.contains t.name = true then (tableFile t.sha512 s.blobs).map (fun b => (t.name, b)) else none := by
+    unfold _root_.Spot.OneStageZk.tablesAmong
+    rw [tablesOf_ofArray, List.filter_filterMap]
+    refine List.filterMap_congr fun t _ => ?_
+    cases tableFile t.sha512 s.blobs <;> simp [Option.filter]
+  have hn' : ∀ n ∈ names, n ∈ (Flock.MUFU_TABLES.filterMap fun t =>
+      if names.contains t.name = true then (tableFile t.sha512 s.blobs).map (fun b => (t.name, b)) else none).map
+        (·.1) := by
+    intro n hmem
+    rw [← hq, hn]
+    exact hmem
+  rw [hp, hq]
+  refine extend_filterMap mufu_nodup (fun t x h => ?_) (fun t x h => ?_) (fun t x h => ?_)
+  · split at h
+    · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
+      rfl
+    · cases h
+  · split at h
+    · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
+      rfl
+    · cases h
+  · split at h
+    · rename_i hc
+      obtain ⟨b, hb, rfl⟩ := Option.map_eq_some_iff.1 h
+      have hm : t.name ∈ names := by simpa using hc.2
+      obtain ⟨y, hy, hyn⟩ := List.mem_map.1 (hn' _ hm)
+      obtain ⟨t', ht', hft'⟩ := List.mem_filterMap.1 hy
+      split at hft'
+      · obtain ⟨a, ha, rfl⟩ := Option.map_eq_some_iff.1 hft'
+        have htt : t' = t := List.inj_on_of_nodup_map mufu_nodup ht' hc.1 hyn
+        subst htt
+        rw [if_pos hc.2]
+        simp only [ha, ht _ ht' a b ha hb, Option.map_some]
+      · cases hft'
     · cases h
 
 /-- **v2 reads `A`'s files** where its parameters name the vocabulary's digests, the vocabulary reads the lookup tables

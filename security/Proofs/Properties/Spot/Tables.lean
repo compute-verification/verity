@@ -30,8 +30,8 @@ import all Std.Data.DTreeMap.Internal.Def
 so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and on parameters that
 name no members `checkBlobsAt` accepts only where its chain of refusals ends in `run`'s acceptance
 (`checkBlobsAt_run`). On parameters that name members it accepts only where the per-member run returned, which holds
-every member's statement (`Spot.OneStageZk.membersRun_files`), and a member's statement binds `tablesHeld` first at
-the member's own files (`statement_tables`, `checkBlobsAt_members_tables`).
+every member's statement (`Spot.OneStageZk.membersRun_files`), and a member's statement holds its own circuit's
+tables among the blobs (`Spot.OneStageZk.Member.statement_tables`, `checkBlobsAt_members_tables`).
 
 `tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
 the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
@@ -93,31 +93,24 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨-, -, h7⟩ := bind_ok h6
     exact ⟨r, h7⟩
 
-/-- A member's statement binds `tablesHeld` first, at the member's own files. -/
-theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs} {a : OneStageZk.StepAt}
-    (h : m.statement slice bs = .ok a) : HoldsRegisteredTables m.own bs := by
-  unfold OneStageZk.Member.statement at h
-  obtain ⟨a', hs, -⟩ := bind_ok h
-  unfold OneStageZk.statementOf at hs
-  obtain ⟨u, hu, -⟩ := bind_ok hs
-  exact tablesHeld_ok hu
-
-/-- **On parameters that name members, an accept holds every member's registered tables**, sampled or not: the
-per-member run returned (`Spot.OneStageZk.checkMembersAt_accept`), so every member's statement was read
-(`Spot.OneStageZk.membersRun_files`). -/
+/-- **On parameters that name members, an accept holds each table each member's circuit looks up**, sampled or not:
+the per-member run returned (`Spot.OneStageZk.checkMembersAt_accept`), so every member's statement was read
+(`Spot.OneStageZk.membersRun_files`) at its own tables (`Spot.OneStageZk.Member.statement_tables`). -/
 theorem checkBlobsAt_members_tables {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     {ms : Array OneStageZk.Member} (hm : p.members = some ms)
-    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) : ∀ m ∈ ms, HoldsRegisteredTables m.own bs := by
+    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∀ m ∈ ms, ∃ tables, HandedOwnTables m.own bs tables := by
   obtain ⟨sts, -, h⟩ := OneStageZk.checkBlobsAt_accept_members hm h
   obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
   obtain ⟨roots, -, hf⟩ := OneStageZk.membersRun_files hr
   intro m hmem
   obtain ⟨a, ha, -⟩ := hf m hmem
-  exact statement_tables ha
+  exact ⟨a.I.tables, OneStageZk.Member.statement_tables ha⟩
 
 theorem tablesRegistered : TablesRegistered := by
-  refine ⟨fun _ _ => tablesHeld_ok, fun p c ξ e bs pub prof h => ?_⟩
+  refine ⟨fun _ _ => tablesHeld_ok, fun p c ξ e bs pub prof h => ?_,
+    fun _ _ _ _ h => OneStageZk.Member.statement_tables h⟩
   unfold AcceptHoldsTables
   split
   · rename_i hm

@@ -340,10 +340,33 @@ def tablesHeld (p : Own) (bs : Core.Blobs) : V Unit := do
   let names (ns : List String) := if ns.isEmpty then "none" else ", ".intercalate ns
   if got != want then throw s!"{NO_TABLES}: the circuit looks up {names want}, the blobs hold {names got}"
 
-/-- `tablesHeld` on a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`) and blobs
-under the digests `digests` (lowercase hex), whatever their bytes: the `tables_held` piece,
-`{"lookups": ..., "digests": [hex, ...]}` to `{"why": refusal or null}`. -/
-def tablesPiece (j : Json) : V Json := do
+/-- `tablesHeld` past its reads: the lookup tables a statement is handed, `tables`, held to the ones its circuit looks
+up, `want`. Other names refuse: a table the circuit does not look up, as one it looks up that is not handed. -/
+def tablesMatch (tables : List (String × ByteArray)) (want : List String) : V Unit := do
+  let got := tables.map (·.1)
+  let names (ns : List String) := if ns.isEmpty then "none" else ", ".intercalate ns
+  if got != want then throw s!"{NO_TABLES}: the circuit looks up {names want}, the blobs hold {names got}"
+
+/-- `tablesHeld` is its reads of the circuit file, then `tablesMatch` at the blobs' lookup tables. -/
+theorem tablesHeld_match (p : Own) (bs : Core.Blobs) :
+    tablesHeld p bs =
+      bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= tablesMatch (tablesOf bs) :=
+  rfl
+
+/-- The blobs' pinned MUFU tables among the names `names`, in `Flock.MUFU_TABLES`' order. -/
+def tablesAmong (names : List String) (bs : Core.Blobs) : List (String × ByteArray) :=
+  (tablesOf bs).filter fun t => names.contains t.1
+
+/-- **A member's own lookup tables** (module docstring, **per member**): the blobs' pinned MUFU tables its registered
+circuit looks up (`lookupsOf`), and no other the blobs hold, so a table another member's circuit looks up is none of
+its. A refusal where no blob holds the circuit file or its META's `lookups` does not read. -/
+def ownTables (p : Own) (bs : Core.Blobs) : V (List (String × ByteArray)) :=
+  bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= fun names => pure (tablesAmong names bs)
+
+/-- The case of the `tables_held` and `own_tables` pieces, `{"lookups": ..., "digests": [hex, ...]}`: the verifier's
+own files naming a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`), and blobs
+holding it and, under the digests `digests` (lowercase hex), whatever their bytes. -/
+def tablesCase (j : Json) : V (Own × Core.Blobs) := do
   let .arr ds := getD j "digests" | throw "digests is not a list"
   let entries ← ds.mapM fun
     | .str s => return (← Flock.unhex s, ByteArray.empty)
@@ -356,15 +379,39 @@ def tablesPiece (j : Json) : V Json := do
   let own : Own :=
     { programJ := Json.null, program := .empty, partition := Json.null, circuit := Flock.hexOf d, pub := "",
       registered := none }
-  return Json.mkObj [("why", match tablesHeld own ⟨#[(d, c)] ++ entries⟩ with
+  return (own, ⟨#[(d, c)] ++ entries⟩)
+
+/-- `tablesHeld` on the case `j` names (`tablesCase`): the `tables_held` piece, to `{"why": refusal or null}`. -/
+def tablesPiece (j : Json) : V Json := do
+  let (own, bs) ← tablesCase j
+  return Json.mkObj [("why", match tablesHeld own bs with
     | .ok () => Json.null
     | .error w => Json.str w)]
+
+/-- A member's own lookup tables on the case `j` names (`tablesCase`), held to its circuit's lookups as its statement
+holds them (`ownTables`, then `tablesMatch`): the `own_tables` piece, to `{"tables": [name, ...], "why": refusal or
+null}`, the tables by name, null where they do not read. -/
+def ownTablesPiece (j : Json) : V Json := do
+  let (own, bs) ← tablesCase j
+  return match ownTables own bs with
+    | .error w => Json.mkObj [("tables", Json.null), ("why", Json.str w)]
+    | .ok tables =>
+      Json.mkObj [("tables", Lean.toJson (tables.map (·.1))),
+        ("why", match bs.get own.circuit "circuit" >>= lookupsOf >>= tablesMatch tables with
+          | .ok () => Json.null
+          | .error w => Json.str w)]
 
 /-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
 `tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
 object and program. -/
 def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Core.Blobs) : Flock.Witness.Inputs :=
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
+    program := some p.program }
+
+/-- `inputsOf` at the lookup tables `tables` a statement is handed, rather than every pinned table the blobs hold. -/
+def inputsAt (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (tables : List (String × ByteArray)) :
+    Flock.Witness.Inputs :=
+  { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables, partition := some p.partition,
     program := some p.program }
 
 /-- The bound on each length a session's statement holds: `flock-verify`'s statement writes every length in an 8-byte
@@ -629,6 +676,18 @@ def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String ×
   let tabs : Option (Array Flock.Setup) := (do
     let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
     let I := inputsOf tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") bs
+    let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
+    pure tabs : V (Array Flock.Setup)).toOption
+  sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
+
+/-- `rootBTables` for a member's session: the session `setupAt` sets up on the member's own files `p` at its own lookup
+tables (`ownTables`), the inputs its statement holds (`Member.statement`), whatever other pinned table the blobs
+hold. -/
+def ownRootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+  let tabs : Option (Array Flock.Setup) := (do
+    let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+    let tables ← ownTables p bs
+    let I := inputsAt tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") tables
     let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
   sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
@@ -1039,12 +1098,12 @@ structure StepAt where
 def StepAt.step (a : StepAt) (bs : Core.Blobs) (r : Run) (s : RunFiles) : V Run :=
   OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
 
-/-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the blobs' lookup
-tables and the registered reads `rd`, as `run` builds its own, with `population` its population check. The circuit
-file is parsed once, and every check that reads the parse is made on it here. -/
-def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
-    (population : V Unit) : StepAt :=
-  let I := inputsOf tags0 p circuitB pubB bs
+/-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the lookup tables
+`tables` and the registered reads `rd`, as `run` builds its own at the blobs' tables, with `population` its population
+check. The circuit file is parsed once, and every check that reads the parse is made on it here. -/
+def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
+    (rd : Reads) (population : V Unit) : StepAt :=
+  let I := inputsAt tags0 p circuitB pubB tables
   let parsed := Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables
   { I, rd, scope := scopeAt parsed I rd
     ksFiles := Flock.PortRoots.checkOf parsed (Flock.Witness.zkTags I) pubB
@@ -1054,13 +1113,15 @@ def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs 
     programSha := programDigest p.program
     want := getD p.partition "program" }
 
-/-- **The statement the sessions at the inputs `p` are held to, read off the blobs before any session**: `run`'s own
-checks in `run`'s order (the blobs' lookup tables the circuit's, the statement's tags with hiding leaves, registered
-values read only with the verifier's registered file, the circuit and public files, each length within a statement's
-word, the registered reads), then `StepAt.ofOwn` with the population check `population` on the public file. A
-refusal where `run` refuses. -/
-def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
-  tablesHeld p bs >>= fun _ =>
+/-- **The statement the sessions at the inputs `p` are held to on the lookup tables `tables` it is handed, read off
+the blobs before any session**: `run`'s own checks in `run`'s order (the tables handed the circuit's, by name, as `run`
+holds the blobs' to them, `tablesMatch`; the statement's tags with hiding leaves, registered values read only with the
+verifier's registered file, the circuit and public files, each length within a statement's word, the registered
+reads), then `StepAt.ofOwn` at those tables with the population check `population` on the public file. A refusal
+where `run` refuses on blobs whose pinned tables are `tables`. -/
+def statementOf (p : Own) (population : ByteArray → V Unit) (tables : List (String × ByteArray)) (bs : Core.Blobs) :
+    V StepAt :=
+  (bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= tablesMatch tables) >>= fun _ =>
   match Flock.Tags.find? STATEMENT with
   | none => throw s!"the statement {STATEMENT} is not known"
   | some tags0 =>
@@ -1074,16 +1135,19 @@ def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) 
       | false =>
         bs.get p.circuit "circuit" >>= fun circuitB =>
         bs.get p.pub "public file" >>= fun pubB =>
-        match fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
+        match fitsWhy WORD circuitB pubB tables (some p.program) (some p.partition) p.registered with
         | some what => throw s!"{what}: {FITS}"
         | none =>
-          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB bs rd (population pubB))
+          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB tables rd (population pubB))
 
-/-- **The statement a member's session is held to**: `statementOf` at the member's own inputs, its population check the
-member's at its `slice` of the registration (`Member.population`), and its circuit's units a proof block the
-parameters' (`Member.blockHeld`). -/
+/-- **The statement a member's session is held to**: `statementOf` at the member's own inputs and its own lookup tables
+(`ownTables`: the blobs' pinned tables its circuit looks up, so a table of the blobs that only another member's circuit
+looks up does not refuse it, and one its circuit looks up that the blobs do not hold does, `NO_TABLES`), its
+population check the member's at its `slice` of the registration (`Member.population`), and its circuit's units a
+proof block the parameters' (`Member.blockHeld`). -/
 def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
-  statementOf m.own (m.population slice) bs >>= fun a => m.blockHeld a.g >>= fun _ => pure a
+  (ownTables m.own bs >>= fun tables => statementOf m.own (m.population slice) tables bs) >>= fun a =>
+    m.blockHeld a.g >>= fun _ => pure a
 
 /-- **A statement's files held to what its sessions' verdicts check of the files alone**, with no session: the scope
 (`scope`), the files' ports and roots (`ksFiles`), the form the sampled audit's knowledge soundness covers, without a
@@ -1111,55 +1175,70 @@ own tags `tags0` and its circuit file. -/
 def tagsAt (tags0 : Flock.Tags) (circuitB : ByteArray) : Flock.Tags :=
   Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
 
-/-- `tablesHeld` past its reads: the pinned tables the blobs hold, `tables`, against the ones a circuit looks up,
-`want`. -/
-def tablesMatch (tables : List (String × ByteArray)) (want : List String) : V Unit := do
-  let got := tables.map (·.1)
-  let names (ns : List String) := if ns.isEmpty then "none" else ", ".intercalate ns
-  if got != want then throw s!"{NO_TABLES}: the circuit looks up {names want}, the blobs hold {names got}"
-
-/-- `inputsOf` at the blobs' lookup tables `tables`, read off the blobs before it. -/
-def inputsAt (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (tables : List (String × ByteArray)) :
-    Flock.Witness.Inputs :=
-  { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables, partition := some p.partition,
     program := some p.program }
 
 /-- **What the files' pass keeps of a circuit file**, each a function of the file, the statement's tags and the
 blobs' lookup tables, so the members that name one file share one: the blob under its digest (`circuit`), the pinned
-tables its META looks up (`lookups`), the tags its statement's sessions run under (`tags`), and what the statement's
-checks read of its parse (`kept`: the circuit's own verdicts and the circuit without its rows,
+tables its META looks up (`lookups`), those of them the blobs hold, the lookup tables of a member that names the file
+(`tables`, as `ownTables` reads them), the tags its statement's sessions run under (`tags`), and what the statement's
+checks read of its parse at those tables (`kept`: the circuit's own verdicts and the circuit without its rows,
 `Spot.CircuitKept.Kept`). It does not hold the parse. -/
 structure FileKept where
   circuit : V ByteArray
   lookups : V (List String)
+  tables : V (List (String × ByteArray))
   tags : Flock.Tags
   kept : V CircuitKept.Kept
 
 /-- What the files' pass keeps of the circuit file under the digest `d`, at the statement's tags `tags0` and the
-blobs' lookup tables `tables`: the file is found, its META read and its rows parsed here and nowhere else in the
-pass. -/
-def fileOf (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (bs : Core.Blobs) (d : String) : FileKept :=
+blobs' lookup tables `pinned`: the file is found, its META read and its rows parsed, at the tables of `pinned` it
+looks up, here and nowhere else in the pass. -/
+def fileOf (tags0 : Flock.Tags) (pinned : List (String × ByteArray)) (bs : Core.Blobs) (d : String) : FileKept :=
   match bs.get d "circuit" with
-  | .error e => { circuit := .error e, lookups := .error e, tags := tags0, kept := .error e }
+  | .error e => { circuit := .error e, lookups := .error e, tables := .error e, tags := tags0, kept := .error e }
   | .ok circuitB =>
-    { circuit := .ok circuitB, lookups := lookupsOf circuitB, tags := tagsAt tags0 circuitB
-      kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
-        (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) }
+    match lookupsOf circuitB with
+    | .error e =>
+      { circuit := .ok circuitB, lookups := .error e, tables := .error e, tags := tagsAt tags0 circuitB
+        kept := .error e }
+    | .ok names =>
+      { circuit := .ok circuitB, lookups := .ok names, tables := .ok (pinned.filter fun t => names.contains t.1)
+        tags := tagsAt tags0 circuitB
+        kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB
+            (pinned.filter fun t => names.contains t.1)).map
+          (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) }
 
-/-- What `fileOf` keeps under a digest whose blob is `circuitB`. -/
-theorem fileOf_ok {tags0 : Flock.Tags} {tables : List (String × ByteArray)} {bs : Core.Blobs} {d : String}
-    {circuitB : ByteArray} (hc : bs.get d "circuit" = .ok circuitB) :
-    fileOf tags0 tables bs d =
-      { circuit := .ok circuitB, lookups := lookupsOf circuitB, tags := tagsAt tags0 circuitB
-        kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
+/-- What `fileOf` keeps under a digest whose blob is `circuitB`, a circuit file that looks up `names`. -/
+theorem fileOf_ok {tags0 : Flock.Tags} {pinned : List (String × ByteArray)} {bs : Core.Blobs} {d : String}
+    {circuitB : ByteArray} {names : List String} (hc : bs.get d "circuit" = .ok circuitB)
+    (hl : lookupsOf circuitB = .ok names) :
+    fileOf tags0 pinned bs d =
+      { circuit := .ok circuitB, lookups := .ok names, tables := .ok (pinned.filter fun t => names.contains t.1)
+        tags := tagsAt tags0 circuitB
+        kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB
+            (pinned.filter fun t => names.contains t.1)).map
           (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) } := by
   unfold fileOf
   rw [hc]
+  dsimp only
+  rw [hl]
+
+/-- What `fileOf` keeps under a digest whose blob's META's `lookups` does not read: the refusal. -/
+theorem fileOf_unread {tags0 : Flock.Tags} {pinned : List (String × ByteArray)} {bs : Core.Blobs} {d e : String}
+    {circuitB : ByteArray} (hc : bs.get d "circuit" = .ok circuitB) (hl : lookupsOf circuitB = .error e) :
+    fileOf tags0 pinned bs d =
+      { circuit := .ok circuitB, lookups := .error e, tables := .error e, tags := tagsAt tags0 circuitB
+        kept := .error e } := by
+  unfold fileOf
+  rw [hc]
+  dsimp only
+  rw [hl]
 
 /-- What `fileOf` keeps under a digest no blob has: the refusal. -/
-theorem fileOf_error {tags0 : Flock.Tags} {tables : List (String × ByteArray)} {bs : Core.Blobs} {d e : String}
+theorem fileOf_error {tags0 : Flock.Tags} {pinned : List (String × ByteArray)} {bs : Core.Blobs} {d e : String}
     (hc : bs.get d "circuit" = .error e) :
-    fileOf tags0 tables bs d = { circuit := .error e, lookups := .error e, tags := tags0, kept := .error e } := by
+    fileOf tags0 pinned bs d =
+      { circuit := .error e, lookups := .error e, tables := .error e, tags := tags0, kept := .error e } := by
   unfold fileOf
   rw [hc]
 
@@ -1169,12 +1248,6 @@ theorem ok_bind {α β : Type} (a : α) (f : α → V β) : (Except.ok a : V α)
 
 /-- A bind on a refusal is the refusal. -/
 theorem error_bind {α β : Type} (e : String) (f : α → V β) : (Except.error e : V α) >>= f = Except.error e :=
-  rfl
-
-/-- `tablesHeld` is its reads of the circuit file, then `tablesMatch` at the blobs' lookup tables. -/
-theorem tablesHeld_match (p : Own) (bs : Core.Blobs) :
-    tablesHeld p bs =
-      bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= tablesMatch (tablesOf bs) :=
   rfl
 
 /-- The strata of the partition `partition`'s query over a program as parsed, `parsed`: what a member's population
@@ -1305,9 +1378,9 @@ theorem Member.population_on (m : Member) (slice : Json) :
   exact (bind_assoc (Program.parse m.own.program)
     (fun p => Partition.strata p (getD m.own.partition "query")) _).symm
 
-/-- `StepAt.ofOwn` on what is kept of the circuit file and the program: the blobs' lookup tables `tables`, the tags
-its sessions run under `tags`, what its checks read of the parse `k`, and the program's digest `sha`. Every check that
-read the parse reads `k`, and the three that load the public file read one load of it
+/-- `StepAt.ofOwn` on what is kept of the circuit file and the program: the lookup tables `tables` it is handed, the
+tags its sessions run under `tags`, what its checks read of the parse `k`, and the program's digest `sha`. Every
+check that read the parse reads `k`, and the three that load the public file read one load of it
 (`Spot.CircuitKept.loadOf`). -/
 def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
     (rd : Reads) (population : V Unit) (tags : Flock.Tags) (k : V CircuitKept.Kept) (sha : Option String) : StepAt :=
@@ -1336,11 +1409,11 @@ theorem scopeAt_kept (parsed : V Flock.Circuit) (I : Flock.Witness.Inputs) (rd :
 
 /-- **`StepAt.ofOwn` is `StepAt.ofKept` at what `fileOf` keeps of its circuit file**: the statement on the parse is
 the statement on the circuit's own verdicts and the circuit without its rows. -/
-theorem StepAt.ofOwn_kept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
-    (population : V Unit) :
-    StepAt.ofOwn p tags0 circuitB pubB bs rd population =
-      StepAt.ofKept p tags0 circuitB pubB (tablesOf bs) rd population (tagsAt tags0 circuitB)
-        ((Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB (tablesOf bs)).map
+theorem StepAt.ofOwn_kept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray)
+    (tables : List (String × ByteArray)) (rd : Reads) (population : V Unit) :
+    StepAt.ofOwn p tags0 circuitB pubB tables rd population =
+      StepAt.ofKept p tags0 circuitB pubB tables rd population (tagsAt tags0 circuitB)
+        ((Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
           (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk)) (programDigest p.program) := by
   show StepAt.mk _ _ _ _ _ _ _ _ _ = StepAt.mk _ _ _ _ _ _ _ _ _
   congr 1
@@ -1349,11 +1422,12 @@ theorem StepAt.ofOwn_kept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteAr
   · exact CircuitKept.filesOf_kept _ _ _ true 1 templateOk
   · exact CircuitKept.keptOf_g _ _ true 1 templateOk
 
-/-- `statementOf` on what the files' pass keeps of its circuit file (`fk`) and its program's digest (`sha`), at the
-statement's tags `tags0` and the blobs' lookup tables `tables`: `statementOf`'s checks in its order, each read of
-the circuit file taken from `fk`. -/
-def statementOn (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (fk : FileKept) (sha : Option String)
-    (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
+/-- `statementOf` at a member's own lookup tables, on what the files' pass keeps of its circuit file (`fk`) and its
+program's digest (`sha`), at the statement's tags `tags0`: the tables kept of the file, then `statementOf`'s checks
+in its order, each read of the circuit file taken from `fk`. -/
+def statementOn (tags0 : Flock.Tags) (fk : FileKept) (sha : Option String) (p : Own)
+    (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
+  fk.tables >>= fun tables =>
   (fk.lookups >>= tablesMatch tables) >>= fun _ =>
   match tags0.plainLeaves with
   | true => throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
@@ -1371,39 +1445,43 @@ def statementOn (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (fk :
         readsOf p.registered >>= fun rd =>
           pure (StepAt.ofKept p tags0 circuitB pubB tables rd (population pubB) fk.tags fk.kept sha)
 
-/-- **`statementOf` is `statementOn` at the blobs' lookup tables, what `fileOf` keeps of its circuit file and its
-program's digest**, where the statement's tags are known. -/
+/-- **`statementOf` at the inputs' own lookup tables (`ownTables`) is `statementOn` at what `fileOf` keeps of its
+circuit file, read at the blobs' lookup tables, and its program's digest**, where the statement's tags are known. -/
 theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (p : Own)
     (population : ByteArray → V Unit) (bs : Core.Blobs) :
-    statementOf p population bs =
-      statementOn tags0 (tablesOf bs) (fileOf tags0 (tablesOf bs) bs p.circuit) (programDigest p.program) p
-        population bs := by
-  unfold statementOf statementOn
-  rw [tablesHeld_match]
+    (ownTables p bs >>= fun tables => statementOf p population tables bs) =
+      statementOn tags0 (fileOf tags0 (tablesOf bs) bs p.circuit) (programDigest p.program) p population bs := by
+  unfold ownTables statementOf statementOn
   simp only [StepAt.ofOwn_kept, ht]
   cases hc : bs.get p.circuit "circuit" with
   | error e =>
     rw [fileOf_error hc]
     simp only [error_bind] <;> rfl
   | ok circuitB =>
-    rw [fileOf_ok hc]
-    simp only [ok_bind] <;> rfl
+    simp only [ok_bind]
+    cases hl : lookupsOf circuitB with
+    | error e =>
+      rw [fileOf_unread hc hl]
+      simp only [error_bind] <;> rfl
+    | ok names =>
+      rw [fileOf_ok hc hl]
+      simp only [ok_bind, pure_bind] <;> rfl
 
 /-- `Member.files` on what the files' pass keeps of the member's circuit file (`fk`) and of its program (`pk`):
 `statementOn` in place of `statementOf`, and the population check on the strata kept of the program. -/
-def Member.filesOn (m : Member) (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (fk : FileKept)
-    (pk : ProgramKept) (slice : Json) (bs : Core.Blobs) : V StepAt :=
-  ((statementOn tags0 tables fk pk.sha m.own (m.populationOn pk.strata slice) bs >>= fun a =>
+def Member.filesOn (m : Member) (tags0 : Flock.Tags) (fk : FileKept) (pk : ProgramKept) (slice : Json)
+    (bs : Core.Blobs) : V StepAt :=
+  ((statementOn tags0 fk pk.sha m.own (m.populationOn pk.strata slice) bs >>= fun a =>
       m.blockHeld a.g >>= fun _ => pure a) >>=
     fun a => a.filesHeld >>= fun _ => pure a).mapError (s!"member {m.name}: {·}")
 
-/-- `Member.files` is `Member.filesOn` at the blobs' lookup tables, what `fileOf` keeps of its circuit file and what
-`programOf` keeps of its program under its partition. -/
+/-- `Member.files` is `Member.filesOn` at what `fileOf` keeps of its circuit file, read at the blobs' lookup tables,
+and what `programOf` keeps of its program under its partition. -/
 theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (m : Member)
     (slice : Json) (bs : Core.Blobs) :
     m.files slice bs =
-      m.filesOn tags0 (tablesOf bs) (fileOf tags0 (tablesOf bs) bs m.own.circuit)
-        (programOf m.own.program m.own.partition) slice bs := by
+      m.filesOn tags0 (fileOf tags0 (tablesOf bs) bs m.own.circuit) (programOf m.own.program m.own.partition)
+        slice bs := by
   unfold Member.files Member.statement Member.filesOn
   rw [statementOf_on ht, Member.population_on] <;> rfl
 
@@ -1437,9 +1515,10 @@ theorem KeptFiles.find_held {tags0 : Flock.Tags} {tables : List (String × ByteA
 /-- `membersFiles` on the circuit files `kept` and the program `prog` the member before read: each member's files
 held on what is kept under its circuit's digest, which is read under it (`fileOf`) for the first member that names
 it and kept for the members still to come, and on what is kept of its program under its partition
-(`ProgramKept.next`). A circuit file is found, read and parsed once in the pass, the blobs' lookup tables `tables`
-once before it, and a program is parsed and hashed, and its partition's query evaluated on it, once for the members
-in a row that read it under the partition the parameters give them all. -/
+(`ProgramKept.next`). A circuit file is found, read and parsed once in the pass, at the tables of the blobs' lookup
+tables `tables` it looks up, which are read once before the pass, and a program is parsed and hashed, and its
+partition's query evaluated on it, once for the members in a row that read it under the partition the parameters give
+them all. -/
 def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (tables : List (String × ByteArray)) :
     KeptFiles → Option ProgramKept → List Member → V (List (String × StepAt))
   | _, _, [] => pure []
@@ -1447,11 +1526,11 @@ def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (
     let pk := ProgramKept.next prog m.own.program m.own.partition
     match kept.find m.own.circuit with
     | some fk =>
-      m.filesOn tags0 tables fk pk (slice m) bs >>= fun a =>
+      m.filesOn tags0 fk pk (slice m) bs >>= fun a =>
         keptFiles slice bs tags0 tables kept (some pk) ms >>= fun as => pure ((m.name, a) :: as)
     | none =>
       let fk := fileOf tags0 tables bs m.own.circuit
-      m.filesOn tags0 tables fk pk (slice m) bs >>= fun a =>
+      m.filesOn tags0 fk pk (slice m) bs >>= fun a =>
         keptFiles slice bs tags0 tables ((m.own.circuit, fk) :: kept) (some pk) ms >>= fun as =>
           pure ((m.name, a) :: as)
 

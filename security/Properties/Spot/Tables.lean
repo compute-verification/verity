@@ -8,13 +8,21 @@ public import Spot.OneStageZk
 The parameters of the one-stage audit's v2 (`Spot.OneStageZk`) register its circuit file by its SHA-512, and
 the circuit names the lookup tables its session reads: its META's `lookups` (`OneStageZk.lookupsOf`). v2 refuses blobs
 whose pinned MUFU tables (`OneStageZk.tablesOf`, the tables `inputsOf` hands `flock-verify`) are other than those
-before it sets up a session (`tablesHeld`, the first statement of `run` and of each member's statement,
-`statementOf`), so wherever its check accepts, the session's table set is the registered circuit's.
+before it sets up a session (`tablesHeld`, the first statement of `run`), so wherever the one statement's check
+accepts, the session's table set is the registered circuit's.
+
+In the per-member form the blobs are one set a window, and its members' circuits may look up different tables. There
+each member's statement (`Spot.OneStageZk.Member.statement`) is handed the blobs' pinned tables its own circuit looks
+up (`OneStageZk.ownTables`) and refuses where the blobs lack one of them, so a member's inputs hold its own circuit's
+tables and no other, whatever other pinned table the blobs hold.
 
 * `TablesRegistered`: on blobs `tablesHeld` accepts, the registered circuit file is among the blobs and the pinned
-  tables the blobs hold are, by name, the ones it looks up (`HoldsRegisteredTables`); and on blobs on which v2's check
+  tables the blobs hold are, by name, the ones it looks up (`HoldsRegisteredTables`); on blobs on which v2's check
   at any coins (`checkBlobsAt`) accepts, that holds of the verifier's own files where the parameters name no members,
-  and of each member's own files where they name members, sampled or not (`AcceptHoldsTables`).
+  and where they name members the blobs hold each table each member's circuit looks up, sampled or not
+  (`AcceptHoldsTables`); and where a member's statement reads, its circuit file is among the blobs and the lookup
+  tables its inputs hold are the blobs' pinned tables among the names it looks up, every one of those names
+  (`HandedOwnTables`).
 
 It takes no premise.
 -/
@@ -32,22 +40,36 @@ def HoldsRegisteredTables (p : OneStageZk.Own) (bs : Core.Blobs) : Prop :=
   ∃ circuitB, bs.get p.circuit "circuit" = .ok circuitB ∧
     OneStageZk.lookupsOf circuitB = .ok ((OneStageZk.tablesOf bs).map (·.1))
 
+/-- **The tables `tables` are the blobs' pinned tables the circuit of `p` looks up, every one of them**: the circuit
+file the files `p` name is among the blobs, `tables` are the pinned MUFU tables the blobs hold among the names it looks
+up (`OneStageZk.tablesAmong`, in `Flock.MUFU_TABLES`' order), and their names are exactly those names: the blobs hold
+each table the circuit looks up, and `tables` hold no table it does not look up, whatever else the blobs hold. -/
+def HandedOwnTables (p : OneStageZk.Own) (bs : Core.Blobs) (tables : List (String × ByteArray)) : Prop :=
+  ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+    tables = OneStageZk.tablesAmong names bs ∧ tables.map (·.1) = names
+
 /-- **What an accept holds of the blobs' lookup tables, in the form the parameters `p` name**: where they name no
-members, the blobs hold the registered tables of the verifier's own files (`p.own`); where they name members, the
-blobs hold the registered tables of each member's own files, a member the sample missed as one it holds. -/
+members, the blobs hold the registered tables of the verifier's own files (`p.own`) and no other pinned table; where
+they name members, the blobs hold each table each member's circuit looks up (`HandedOwnTables`, at the tables its
+statement is handed), a member the sample missed as one it holds, whatever pinned table of another member's circuit
+they hold besides. -/
 def AcceptHoldsTables (p : OneStageZk.Params) (bs : Core.Blobs) : Prop :=
   match p.members with
   | none => HoldsRegisteredTables p.own bs
-  | some ms => ∀ m ∈ ms, HoldsRegisteredTables m.own bs
+  | some ms => ∀ m ∈ ms, ∃ tables, HandedOwnTables m.own bs tables
 
-/-- **v2 holds the blobs' lookup tables to the registered circuit's**: on blobs its refusal (`tablesHeld`) accepts, the
-pinned tables are the registered circuit's lookups; and on blobs its check accepts at any coins, they are in the form
-the parameters name (`AcceptHoldsTables`): the one statement's circuit's, or each member's circuit's. -/
+/-- **v2 holds the lookup tables a session reads to its registered circuit's**: on blobs its refusal (`tablesHeld`)
+accepts, the pinned tables are the registered circuit's lookups; on blobs its check accepts at any coins, they are in
+the form the parameters name (`AcceptHoldsTables`): the one statement's circuit's, or each table each member's circuit
+looks up; and where a member's statement of the per-member form reads, the lookup tables its inputs hold are its own
+circuit's among the blobs' (`HandedOwnTables`). -/
 def TablesRegistered : Prop :=
   (∀ (p : OneStageZk.Own) (bs : Core.Blobs), OneStageZk.tablesHeld p bs = .ok () → HoldsRegisteredTables p bs) ∧
-    ∀ (p : OneStageZk.Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : OneStageZk.Evidence) (bs : Core.Blobs)
+    (∀ (p : OneStageZk.Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : OneStageZk.Evidence) (bs : Core.Blobs)
       (pub : OneStage.Public) (prof : Core.Integrity),
-      OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof → AcceptHoldsTables p bs
+      OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof → AcceptHoldsTables p bs) ∧
+    ∀ (m : OneStageZk.Member) (slice : Lean.Json) (bs : Core.Blobs) (a : OneStageZk.StepAt),
+      m.statement slice bs = .ok a → HandedOwnTables m.own bs a.I.tables
 
 /-- A digest under which the witnesses' blobs hold their circuit file, whatever its bytes: `Core.Blobs` pairs each file
 with the digest it is found under. -/

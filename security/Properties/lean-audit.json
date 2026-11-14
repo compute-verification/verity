@@ -13053,6 +13053,10 @@
      {
       "function": "Spot.OneStageZk.checkBlobsAt",
       "outcome": "accept"
+     },
+     {
+      "function": "Spot.OneStageZk.Member.statement",
+      "outcome": "accept"
      }
     ]
    },
