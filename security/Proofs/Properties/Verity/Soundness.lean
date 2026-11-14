@@ -135,7 +135,7 @@ theorem entryHeld_compiled {lms : Lms.Params} {q : AuditorPin} {e : _root_.Netwo
   rcases lms with ⟨N, W, H⟩
   rcases q with ⟨role, key, ⟨qN, qW, qH⟩, marks, link, session, start, servers⟩
   simp [Composites.entryHeld, AuditorPins.certifierPin, Composites.sameKey, Composites.sameBytes,
-    AuditorPins.EntryHeld, eq_toArray_iff, and_assoc]
+    AuditorPins.EntryHeld, and_assoc]
 
 /-- **A period's entries pass the compiled certifier pins `qs` exactly where they are `qs`, one for one.** -/
 theorem entriesHeld_compiled {lms : Lms.Params} :
