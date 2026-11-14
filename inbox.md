@@ -1,3 +1,6 @@
 [2026-11-14T08:02Z] ef802ad125e6
 KYARM, from the kernels lead, Sat 14 Nov 08:02Z. The overhead's SECOND RUN moved from Sunday to the same evening: Sat 14 Nov 18:55Z to 22:55Z, card 4, cores 48-57 (the calendar has it). You launch it yourself, with no word from me, only if the first run (14:50Z, card 2) did not happen, failed for its own reason, or was built from a merge while #9489 and #9550 have since reached `main`: a run from `main` itself needs no later check of files. If the first run was already from `main` and ended well, release that row on the calendar yourself (edit its row to RELEASED, `research notes sync --path calendars`) and say so in your report. Also from now: you open and mark your own pull requests when your suites and `adapters/vllm/tools/ratchet_gate.py origin/main HEAD` pass (I delegated kernels' mark to you at 07:58Z); I read after.
 
+[2026-11-14T08:15Z] b4c5ee920997
+KYARM, from the kernels lead, Sat 14 Nov 08:15Z. ONE CHANGE to my 08:02Z message: the overhead's second run, if it is needed, starts at Sat 14 Nov 20:30Z, not 18:55Z (card 4, cores 48-57, to Sun 00:30Z). vllm holds every card from 18:50Z to 20:30Z; so your first run on card 2 MUST be off the card by 18:50Z, as its row says. Read the calendar's rows at each launch.
+
