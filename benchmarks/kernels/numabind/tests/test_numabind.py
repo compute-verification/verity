@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Never
 
 import pytest
 
-DITHER = (Path(__file__).resolve().parents[3] / "hash" / "dither")
-sys.path.insert(0, str(DITHER))
+HERE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(HERE))
 import numabind  # noqa: E402
 
 if TYPE_CHECKING:
@@ -93,7 +93,7 @@ def test_cpu_lists_and_bus_ids_read_as_the_kernel_writes_them() -> None:
 def test_the_command_runs_with_the_record_in_its_environment_and_its_exit_code(tmp_path: Path) -> None:
     rec = tmp_path / "out/numa.json"
     show = "import json, os; print(json.loads(os.environ['DITHER_NUMA_RECORD'])['reason']); raise SystemExit(7)"
-    r = subprocess.run([sys.executable, str(DITHER / "numabind.py"), str(rec), sys.executable, "-c", show],
+    r = subprocess.run([sys.executable, str(HERE / "numabind.py"), str(rec), sys.executable, "-c", show],
                        env={**os.environ, "DITHER_NUMA": "0"}, capture_output=True, text=True)
     assert r.returncode == 7
     assert r.stdout.splitlines() == ["numa: unbound (DITHER_NUMA=0)", "DITHER_NUMA=0"]

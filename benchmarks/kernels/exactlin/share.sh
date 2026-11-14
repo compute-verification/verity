@@ -19,7 +19,7 @@ if [ "${1:-}" != --leased ]; then
   [ -x "$NSYS" ] || { echo "share.sh: no nsys on $(hostname) (looked for NSYS, \$CUDA/bin, PATH, /opt/nvidia/nsight-systems)" >&2; exit 3; }
   echo "share: nsys $NSYS; asking for one GPU at $(date -u +%H:%M:%SZ)"
   pre=(); [ "${SHARE_PREEMPTIBLE:-0}" = 1 ] && pre=(--preemptible)   # a preempted trace is lost whole
-  numa=(python3 "$(cd "$(dirname "$0")/../../hash/dither" && pwd)/numabind.py" "$OUT/env/numa.json")
+  numa=(python3 "$(cd "$(dirname "$0")/../numabind" && pwd)/numabind.py" "$OUT/env/numa.json")
   NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- "${numa[@]}" \
     bash "$ROOT/benchmarks/kernels/exactlin/share.sh" --leased
   rc=$?
