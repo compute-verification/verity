@@ -52,6 +52,9 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_dsa_capture_gpu,
         glm53_fa3_prefill_capture_gpu,
         glm53_fused_rmsnorm_capture_gpu,
+        glm53_mtp_eh_norm_capture_gpu,
+        glm53_mtp_eh_proj_capture_gpu,
+        glm53_mtp_indexer_logits_capture_gpu,
         glm53_tp8_allreduce_capture_gpu,
         sigmoid_router_capture_gpu,
         tp4_nccl_tree_replay,
@@ -81,6 +84,9 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["dsv4_moe_capture"].schema == dsv4_moe_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_decode_index_row_capture"].schema == dsv4_decode_index_row_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_decode_metadata_capture"].schema == dsv4_decode_metadata_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_mtp_eh_norm_capture"].schema == glm53_mtp_eh_norm_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_mtp_eh_proj_capture"].schema == glm53_mtp_eh_proj_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_mtp_indexer_logits_capture"].schema == glm53_mtp_indexer_logits_capture_gpu.SCHEMA
 
 
 def test_harnesses_return_sealed_records(tmp_path):

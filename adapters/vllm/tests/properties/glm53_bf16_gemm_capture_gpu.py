@@ -258,7 +258,10 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
 
     Random k16-leading values separate contiguous from strided partitions.  Row 0 plants split partials around 2^25 so serial
     forward reduction leaves +1 while reverse (and, from four splits, tree) loses it.  Row 1 makes the first partial 2^16 + 1
-    and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.
+    and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.  Where the random rows
+    leave the strided partition's words the contiguous one's (the bf16 rounding of a long row can hide every difference), row 2
+    plants 2^25 in block 0, -2^25 in block 1 and +1 in block `splits`: a contiguous first chunk cancels the pair and keeps the
+    +1, while the round-robin partition adds the +1 to block 0's 2^25, which absorbs it.
     """
     from verity.definitions.registry import bf16_gemm_check as BC
 
@@ -281,6 +284,10 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     w[1, starts[0] + 1] = 0x3F80
     w[1, starts[1]] = 0xC780
     models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
+    if np.array_equal(models[BC.CUBLAS_SPLITK_HYPOTHESIS], models["strided-f32-forward"]) and K > 16 * splits:
+        w[2] = 0
+        w[2, [0, 16, 16 * splits]] = [0x4C00, 0xCC00, 0x3F80]
+        models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
     candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
     differ = {name: int(np.count_nonzero(candidate != words)) for name, words in models.items()}
     if any(v == 0 for name, v in differ.items() if name != BC.CUBLAS_SPLITK_HYPOTHESIS):
