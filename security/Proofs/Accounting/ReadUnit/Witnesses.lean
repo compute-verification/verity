@@ -1,6 +1,5 @@
 module
 
-public import Properties.Flock.ReadNet
 public import Proofs.Accounting.ReadUnit.Digests
 public import Proofs.Accounting.ReadUnit.Accepts
 public import Proofs.Accounting.ReadUnit.Guarantees
