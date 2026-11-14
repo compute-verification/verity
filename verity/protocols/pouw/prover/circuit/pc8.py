@@ -60,10 +60,10 @@ from verity.circuits import partition_object as PO
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
+from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
                              HopperE4m3QgmmaDot32)
-from verity.definitions.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
+from verity.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 
 from verity.protocols.pouw.verifier.protocol import DomainError
 from ..schemes import pearl_c as C

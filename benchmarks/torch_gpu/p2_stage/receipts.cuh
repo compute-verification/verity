@@ -3,7 +3,7 @@
 // compression from its midstate over a block holding the 72 message bytes, 0x80 and the 1,600-bit length. On the device
 // and the host, with the GPU's one SHA-512 compression (every word a big-endian u64).
 #pragma once
-#include "../../../verity/definitions/kernels/sha512.cuh"
+#include "../../../verity/circuits/kernels/sha512.cuh"
 
 namespace p2r {
 
