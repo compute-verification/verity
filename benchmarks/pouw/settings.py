@@ -23,7 +23,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 #: moves, and a bare one only in a file it moves too
 STANDALONE = ("../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/run.py",
               "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/run.py",
-              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py", "pearl_c4/dev.py",
+              "../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py", "../../verity/protocols/experimental/pearl_c4/prover/kernels/dev.py",
               "../../verity/protocols/accounting/pouw/prover/sass_gate.py", "harness/ieee_pin.py")
 
 
