@@ -191,7 +191,8 @@ protocols = [
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # the withheld sample's honest lemma is built on an honest session of the challenger, whose proofs read PoUS's
-    # memory challenger, PoUB's schedule and the onsite composites
+    # memory challenger, PoUB's schedule and the onsite composites; the line goes in the pull request that makes
+    # `security/Proofs/Properties/Challenger/Withheld.lean` public
     "security/Proofs/Pouw/Credit/Withheld.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
