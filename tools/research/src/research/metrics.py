@@ -5,7 +5,7 @@ loop's readings sent to it with POST /api/metrics.
                                                             each benchmark's script: benchmarks/README.md's
                                                             "Metrics"): its latest value, changes over 7 and 30
                                                             days, age and standing
-  research metrics send --loop NAME [--commit SHA] [--dry-run] --metric ID (--value N | --why TEXT) --time ISO
+  research metrics send [--command SCRIPT] [--commit SHA] [--dry-run] --metric ID (--value N | --why TEXT) --time ISO
                         [--mark M] [--target N] [--period P] [--over O] [--member M] [--run R]
                                                             one reading, or with no --metric the readings on stdin
                                                             (a JSON object or list), sent with the control pod's
@@ -18,14 +18,16 @@ The page and this command read one door. It answers a site key with events:read 
 minted for the route. A site key goes only to the console's own route: --url anywhere else carries the identity.
 
 A reading is `metric`, `value` (or null with `why`), `mark` and `time` (when the number was read, not when it is sent),
-and may carry `target`, `period`, `over`, `member`, `run` and `commit`; one a loop sends names the loop (`loop`) and the
-commit of the copy that runs. The control pod's loops send theirs with infra/control/loop_metrics.py.
+and names the `run` that recorded it or the `command` (a loop's script) that computed it, with `commit` beside either; it
+may carry `unit`, `ci95`, `target`, `verdict`, `period`, `over` and `member`. The door refuses a request whose reading
+holds any other key, and `send` refuses it first. The control pod's loops send theirs with infra/control/loop_metrics.py.
 """
 from __future__ import annotations
 
 import argparse
 import http.client
 import json
+import re
 import sys
 import urllib.error
 from pathlib import Path
@@ -39,7 +41,10 @@ METRICS = f"{DEFAULT_URL}/api/metrics"   # the route, and its OIDC token's audie
 SITE_HOST = urlsplit(DEFAULT_URL).netloc   # the one host the panels key goes to
 KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 MARKS = ("measured", "modeled", "partial")   # kit.MARKS
-OPTIONAL = ("target", "period", "over", "member", "run", "commit", "loop")
+#: every key the door takes (the site's lib/console/metrics/readings.ts, KEYS): it refuses a reading with any other
+KEYS = ("metric", "time", "value", "mark", "unit", "ci95", "target", "verdict", "why", "period", "over", "member", "run",
+        "commit", "command")
+COMMIT = re.compile(r"[0-9a-f]{7,40}")
 
 
 def off_site(url: str) -> str | None:
@@ -78,8 +83,8 @@ def _refused(r: object) -> str | None:
     if not isinstance(r, dict):
         return "a reading is not a JSON object"
     m = r.get("metric", "?")
-    if unknown := sorted(set(r) - {"metric", "value", "why", "mark", "time", *OPTIONAL}):
-        return f"{m}: unknown field {', '.join(unknown)}"
+    if unknown := sorted(set(r) - set(KEYS)):
+        return f"{m}: unknown key {', '.join(unknown)}, which the door refuses"
     if not all(isinstance(r.get(k), str) and r[k] for k in ("metric", "time")):
         return f"{m}: a reading needs its metric and the time its number was read"
     if r.get("mark") not in MARKS:
@@ -89,16 +94,22 @@ def _refused(r: object) -> str | None:
         return f"{m}: a null value needs its why"
     if v is not None and (isinstance(v, bool) or not isinstance(v, int | float)):
         return f"{m}: value is {v!r}, not a number or null"
+    if not (r.get("run") or r.get("command")):
+        return f"{m}: names neither the run that recorded it nor the command that computed it"
+    if r.get("commit") is not None and not (isinstance(r["commit"], str) and COMMIT.fullmatch(r["commit"])):
+        return f"{m}: commit is {r['commit']!r}, not a commit's hex"
     return None
 
 
-def send(readings: list[dict], *, loop: str, commit: str | None, url: str | None = None, key: Path | None = None,
+def send(readings: list[dict], *, command: str | None, commit: str | None, url: str | None = None, key: Path | None = None,
          dry_run: bool = False, post=None, out=print) -> str | None:
-    """POST ``readings`` to the door, each naming ``loop`` and ``commit``, with the panels key: None when the site took them (or,
-    with ``dry_run``, when the request is printed with the key left out and nothing sent), else why not, in one line. Never
-    raises on the network or a missing key, so a loop goes on. ``url`` may only be on the site's own host."""
+    """POST ``readings`` to the door, each naming ``command`` and ``commit`` where given, with the panels key: None when the
+    site took them (or, with ``dry_run``, when the request is printed with the key left out and nothing sent), else why not,
+    in one line. Never raises on the network or a missing key, so a loop goes on. ``url`` may only be on the site's own
+    host."""
     url, key = url or METRICS, key or PANELS_KEY
-    body = {"readings": [{**r, "loop": loop, **({"commit": commit} if commit else {})} for r in readings]}
+    body = {"readings": [{**r, **({"command": command} if command else {}), **({"commit": commit} if commit else {})}
+                         for r in readings]}
     what = f"POST {url}"
     if not body["readings"]:
         return f"{what}: no reading to send"
@@ -219,7 +230,7 @@ def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
     s.add_argument("--owner", action="append", default=[], metavar="HANDLE", help="only this lead's; repeat for more")
     s.add_argument("--json", action="store_true")
     s = sub.add_parser("send", help="send readings with the panels key; with no --metric, a JSON reading or list on stdin")
-    s.add_argument("--loop", required=True, help="the loop that computed them")
+    s.add_argument("--command", help="the script that computed them, as its metrics.toml row names it")
     s.add_argument("--commit", help="the commit of the copy that runs (its COMMIT file)")
     s.add_argument("--dry-run", action="store_true", help="print the request without the key and send nothing")
     s.add_argument("--metric", metavar="ID")
@@ -237,7 +248,7 @@ def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
         except SlackError as e:
             print(f"research metrics: {e}")
             return 1
-        if why := send(readings, loop=ns.loop, commit=ns.commit, url=ns.url, dry_run=ns.dry_run):
+        if why := send(readings, command=ns.command, commit=ns.commit, url=ns.url, dry_run=ns.dry_run):
             print(f"research metrics: {why}")
             return 1
         if not ns.dry_run:

@@ -12,12 +12,16 @@ panels key. Each reads only what its loop already leaves on the pod, and each is
                         pass once, even across a restart: the last one sent is kept in FILE, replaced whole, before its send,
                         so one whose send fails isn't sent again. FILE's lock is held while it runs: a second copy refuses
                         (the watchers loop `loop-metrics`)
-    loop_metrics.py index --pass FILE [--dry-run]    a store index pass's length in seconds
+    loop_metrics.py index --pass FILE [--state FILE] [--dry-run]    a store index pass's length in seconds
                         (infra/store-index-pass-seconds), from the record store_index.sh writes as each pass ends (start,
                         end and exit code in epoch seconds, and its tree's commit); null with its exit code's meaning when
                         the pass failed
 
-A failed send or an unreadable input is one line on stderr and exit 1; `compute --every` goes on to its next pass.
+Each reading names the script that computed it (`command`) and its tree's commit. An unreadable input is one line on stderr
+and exit 1. A failed send is one line with its reason, said once: while the door answers the same way (refuses, or isn't
+there) nothing more is said, and the first send it takes after that says so once; the reason last said is kept in the
+--state FILE (`index` without one says each failure). `compute --every` goes on to its next pass; `index` exits 1 only when
+it says a failure.
 """
 from __future__ import annotations
 
@@ -43,7 +47,8 @@ ROWS = Path(__file__).resolve().with_name("metrics.toml")
 COMMIT_FILE = Path(__file__).resolve().parents[2] / "COMMIT"
 #: a guard poll this old as a reading is sent, or a fleet pass this old, is not the rate now
 STALE_S = 600
-COMPUTE_LOOP, INDEX_LOOP = "loop-metrics", "store-index"
+#: the script that computes each reading, as its metrics.toml row names it: the reading's `command`
+COMPUTE_COMMAND, INDEX_COMMAND = "infra/control/loop_metrics.py", "infra/control/store_index.sh"
 
 
 def _epoch(t: str) -> float:
@@ -133,6 +138,21 @@ def _keep(state: Path, kept: dict) -> None:
     os.replace(tmp, state)
 
 
+def _told(now: float, kept: dict, metric: str, why: str | None) -> bool:
+    """Says a failed send's reason unless it is the one ``kept`` last said, and the first send that goes through after one;
+    whether it said anything (and so changed ``kept``)."""
+    if why is None:
+        if kept.pop("failing", None) is None:
+            return False
+        _say(now, f"{metric}: the door took it again")
+        return True
+    if why == kept.get("failing"):
+        return False
+    kept["failing"] = why
+    _say(now, f"{why} (said once while the door answers so)")
+    return True
+
+
 def compute(every: float | None = None, dry_run: bool = False, state: Path | None = None,
             clock: Callable[[], float] = time.time, sleep: Callable[[float], None] = time.sleep,
             send: Callable[..., str | None] = metrics.send, passes: int | None = None) -> int:
@@ -183,12 +203,15 @@ def _passes(every: float | None, dry_run: bool, state: Path | None, clock: Calla
             _say(now, f"{COMPUTE}: not read: {type(e).__name__}: {e}")
         if r is not None:
             try:
-                why = send([r], loop=COMPUTE_LOOP, commit=commit, dry_run=dry_run)
+                why = send([r], command=COMPUTE_COMMAND, commit=commit, dry_run=dry_run)
             except Exception as e:  # noqa: BLE001 (whatever a send raises is its one line, and the loop goes on)
                 why = f"{COMPUTE}: the send raised {type(e).__name__}: {e}"
-            if why:
-                rc = 1
-                _say(now, why)
+            rc = 1 if why else rc
+            if _told(now, kept, COMPUTE, why) and state is not None and not dry_run:
+                try:
+                    _keep(state, kept)
+                except OSError as e:
+                    _say(now, f"{COMPUTE}: {state} not kept: {type(e).__name__}: {e}")
         if every is None or passes == 0:
             break
         sleep(max(1.0, every - (clock() - now)))
@@ -196,17 +219,26 @@ def _passes(every: float | None, dry_run: bool, state: Path | None, clock: Calla
 
 
 def index(path: Path, dry_run: bool = False, send: Callable[..., str | None] = metrics.send,
-          clock: Callable[[], float] = time.time) -> int:
+          clock: Callable[[], float] = time.time, state: Path | None = None) -> int:
     try:
         rec = json.loads(path.read_text())
         r = index_reading(rec)
+        kept = _kept(state)
     except (OSError, ValueError, KeyError, TypeError) as e:
-        _say(clock(), f"{INDEX}: nothing sent: the pass record {path} is unreadable ({type(e).__name__}: {e})")
+        _say(clock(), f"{INDEX}: nothing sent: the pass record {path} or {state} is unreadable ({type(e).__name__}: {e})")
         return 1
-    if why := send([r], loop=INDEX_LOOP, commit=rec.get("commit") or None, dry_run=dry_run):
-        _say(clock(), why)
-        return 1
-    return 0
+    why = send([r], command=INDEX_COMMAND, commit=rec.get("commit") or None, dry_run=dry_run)
+    if state is None:
+        if why:
+            _say(clock(), why)
+        return 1 if why else 0
+    said = _told(clock(), kept, INDEX, why)
+    if said and not dry_run:
+        try:
+            _keep(state, kept)
+        except OSError as e:
+            _say(clock(), f"{INDEX}: {state} not kept: {type(e).__name__}: {e}")
+    return 1 if why and said else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -214,14 +246,16 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("compute")
     c.add_argument("--every", type=float, help="a pass every this many seconds (default: one pass); needs --state")
-    c.add_argument("--state", type=Path, help="the last fleet pass sent, replaced whole; its lock is held while this runs")
+    c.add_argument("--state", type=Path, help="the last fleet pass sent and the failed send's reason last said, replaced whole; "
+                                              "its lock is held while this runs")
     i = sub.add_parser("index")
     i.add_argument("--pass", dest="record", type=Path, required=True, help="the record store_index.sh writes at a pass's end")
+    i.add_argument("--state", type=Path, help="the failed send's reason last said, replaced whole (default: say each one)")
     for p in (c, i):
         p.add_argument("--dry-run", action="store_true", help="print the request without the key and send nothing")
     a = ap.parse_args(argv)
     if a.cmd == "index":
-        return index(a.record, a.dry_run)
+        return index(a.record, a.dry_run, state=a.state)
     if a.every is not None and a.state is None:
         ap.error("--every needs --state: a restarted loop must not send a fleet pass again")
     return compute(a.every, a.dry_run, a.state)

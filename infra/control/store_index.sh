@@ -5,11 +5,13 @@
 # tools/research tree whose COMMIT file names it. The credentials go only into the environment: r2.env is sourced, and the
 # unquoted lines of store-index.env (its URL has `&`) and store-export.env are read with sed. Log: /data/infra/store-index.log
 # Each pass's start, end, exit code and commit replace $PASS as it ends, and the watchers tree's loop_metrics.py sends its length
-# to the metrics door in the background, under `timeout 60` and without the lock's descriptor; the next pass reaps it, and a send
-# that failed or was killed by its timeout is a line `metrics send rc=N` in the log then. The loop never waits on a send.
+# to the metrics door in the background, under `timeout 60` and without the lock's descriptor; the next pass reaps it. A failed
+# send's reason is said in the log once, with `metrics send rc=1`, while the door answers so ($SENT keeps it); one its timeout
+# killed is `metrics send rc=124` each time. The loop never waits on a send.
 LOG=/data/infra/store-index.log
 CONF=/root/.config/verity
 PASS=/data/infra/store-index-pass.json
+SENT=/data/infra/store-index-send.json
 WATCHERS_SRC=/data/watchers/src
 exec 9> /root/store-index.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/store-index.lock" >> "$LOG"; exit 0; }
@@ -45,7 +47,7 @@ while :; do
     wait "$sending" || { sent=$?; echo "$(date -u +%FT%TZ) metrics send rc=$sent" >> "$LOG"; }
   fi
   PYTHONPATH=$WATCHERS_SRC/tools/research/src timeout 60 python3.12 -s "$WATCHERS_SRC/infra/control/loop_metrics.py" index \
-    --pass "$PASS" >> "$LOG" 2>&1 9>&- &
+    --pass "$PASS" --state "$SENT" >> "$LOG" 2>&1 9>&- &
   sending=$!
   sleep 300
 done

@@ -1,13 +1,15 @@
 """The control pod's loops' numbers (infra/control/loop_metrics.py): all compute's dollars an hour, every Nebius machine of the
 fleet's last pass (none when none runs) and every RunPod pod the budget guard read, against the row's limit, or null with its
 why; the guard's poll aged as the reading is sent; each fleet pass sent once, across a restart too, and a null at most every
-ten minutes while no pass comes; a send that raises or fails is one line; a second copy of the loop refuses; the rows name
-the loops that send them. A store index pass's length or its exit code's meaning, from the record store_index.sh writes.
+ten minutes while no pass comes; a send that raises or fails is one line, said once while the door answers the same way; a
+second copy of the loop refuses; the rows name the loops that send them, and each reading names its script and holds only
+the keys the door takes. A store index pass's length or its exit code's meaning, from the record store_index.sh writes.
 The sender is a stand-in and the clock is injected. One test runs store_index.sh itself for two passes, its paths moved under
 tmp_path and stand-ins for `date`, `sleep` and `python3.12` first on PATH, so it reads no clock."""
 from __future__ import annotations
 
 import fcntl
+import functools
 import importlib.util
 import json
 import os
@@ -117,13 +119,13 @@ def test_the_loop_sends_each_pass_once_across_a_restart_and_a_null_at_most_every
             _guard(tmp_path, monkeypatch, later - 40, rate=0.0)
             _pass(later, 6.34)
 
-    def send(readings, *, loop, commit, dry_run):
-        sent.append((now[0] - T0, readings[0]["value"], readings[0]["time"], loop, commit, dry_run))
+    def send(readings, *, command, commit, dry_run):
+        sent.append((now[0] - T0, readings[0]["value"], readings[0]["time"], command, commit, dry_run))
     assert M.compute(every=60, state=kept, clock=lambda: now[0], sleep=sleep, send=send, passes=8) == 0
     assert [s[:3] for s in sent] == [(1, 12.68, M.fleet.utc(T0)), (601, None, M.fleet.utc(T0 + 601)),
                                      (1201, None, M.fleet.utc(T0 + 1201)), (1500, 6.34, M.fleet.utc(later))], (
         "each fleet pass once at its own time; while none is newer than 10 min, a null at most every 10 min")
-    assert {s[3:] for s in sent} == {("loop-metrics", "c" * 40, False)}
+    assert {s[3:] for s in sent} == {("infra/control/loop_metrics.py", "c" * 40, False)}
     assert json.loads(kept.read_text()) == {"sent": M.fleet.utc(later), "said": T0 + 1500}
     assert sorted(p.name for p in tmp_path.iterdir() if p.name.startswith(".loop-metrics")) == [], "replaced, no temporary left"
     del sent[:]
@@ -135,10 +137,13 @@ def test_the_loop_sends_each_pass_once_across_a_restart_and_a_null_at_most_every
     assert json.loads(kept.read_text())["sent"] == M.fleet.utc(later), "a dry run keeps no state"
 
 
-def test_a_send_that_raises_or_fails_is_one_line_and_the_loop_goes_on(tmp_path, monkeypatch, capsys):
+def test_a_send_that_raises_or_fails_is_said_once_per_reason_and_the_loop_goes_on(tmp_path, monkeypatch, capsys):
+    """Until the door is live it answers each pass the same way: that is said once, not every pass, and so is the first send
+    it takes after."""
     _guard(tmp_path, monkeypatch, T0)
     _pass(T0, 1.0)
-    now, outcomes = [T0 + 5], iter([RuntimeError("IncompleteRead(0 bytes read)"), "POST https://x/api/metrics: HTTP 503"])
+    now = [T0 + 5]
+    outcomes = iter([RuntimeError("IncompleteRead(0 bytes read)"), *["POST https://x/api/metrics: HTTP 404"] * 4, None])
 
     def send(readings, **k):
         o = next(outcomes)
@@ -149,10 +154,17 @@ def test_a_send_that_raises_or_fails_is_one_line_and_the_loop_goes_on(tmp_path, 
     def sleep(s):
         now[0] += 400
         _pass(now[0], 1.0)
-    assert M.compute(every=60, clock=lambda: now[0], sleep=sleep, send=send, passes=2) == 1
+    kept = tmp_path / "loop-metrics.json"
+    assert M.compute(every=60, state=kept, clock=lambda: now[0], sleep=sleep, send=send, passes=4) == 1
+    once = " (said once while the door answers so)\n"
     assert capsys.readouterr().err == (
-        f"{M.fleet.utc(T0 + 5)} infra/compute-usd-per-hour: the send raised RuntimeError: IncompleteRead(0 bytes read)\n"
-        f"{M.fleet.utc(T0 + 405)} POST https://x/api/metrics: HTTP 503\n")
+        f"{M.fleet.utc(T0 + 5)} infra/compute-usd-per-hour: the send raised RuntimeError: IncompleteRead(0 bytes read){once}"
+        f"{M.fleet.utc(T0 + 405)} POST https://x/api/metrics: HTTP 404{once}")
+    assert json.loads(kept.read_text())["failing"] == "POST https://x/api/metrics: HTTP 404"
+    assert M.compute(every=60, state=kept, clock=lambda: now[0], sleep=sleep, send=send, passes=3) == 1
+    assert capsys.readouterr().err == f"{M.fleet.utc(T0 + 2005)} infra/compute-usd-per-hour: the door took it again\n", (
+        "a restart doesn't say the refusal again; the first send the door takes is said once")
+    assert "failing" not in json.loads(kept.read_text())
     (M.fleet.FLEET_DIR / "last-sample.json").write_text("{cut")
     assert M.compute(clock=lambda: T0 + 5, send=send) == 1
     assert capsys.readouterr().err.startswith(f"{M.fleet.utc(T0 + 5)} infra/compute-usd-per-hour: not read: JSONDecodeError")
@@ -243,4 +255,40 @@ def test_store_index_sh_replaces_its_record_and_reaps_and_logs_each_send_which_n
         "the next pass reaps the send and logs the timeout's exit")
     sent = []
     assert M.index(record, send=lambda r, **k: sent.append((r, k))) == 0
-    assert sent == [([M.index_reading(rec)], {"loop": "store-index", "commit": "c1", "dry_run": False})]
+    assert sent == [([M.index_reading(rec)], {"command": "infra/control/store_index.sh", "commit": "c1", "dry_run": False})]
+
+
+def test_a_store_index_send_the_door_refuses_is_said_once_and_exits_1_only_then(tmp_path, capsys):
+    record, sent = tmp_path / "pass.json", tmp_path / "send.json"
+    record.write_text(json.dumps({"start": T0, "end": T0 + 365, "rc": 0, "commit": "c1d2e3f"}))
+    answers = iter(["POST x: HTTP 404", "POST x: HTTP 404", "POST x: HTTP 503", None, None])
+    rcs = [M.index(record, send=lambda r, **k: next(answers), clock=lambda: T0, state=sent) for _ in range(5)]
+    assert rcs == [1, 0, 1, 0, 0], "store_index.sh logs `metrics send rc=1` only beside a reason it hasn't said"
+    at = M.fleet.utc(T0)
+    assert capsys.readouterr().err == (f"{at} POST x: HTTP 404 (said once while the door answers so)\n"
+                                       f"{at} POST x: HTTP 503 (said once while the door answers so)\n"
+                                       f"{at} infra/store-index-pass-seconds: the door took it again\n")
+    assert json.loads(sent.read_text()) == {}
+    assert M.index(record, send=lambda r, **k: "POST x: HTTP 404", clock=lambda: T0) == 1, "with no --state, each is said"
+
+
+def test_every_reading_names_its_rows_script_and_holds_only_the_keys_the_door_takes(tmp_path, monkeypatch):
+    """Through the real sender: the door refuses a whole request for one key it doesn't know (`loop` was one)."""
+    door = {"metric", "time", "value", "mark", "unit", "ci95", "target", "verdict", "why", "period", "over", "member", "run",
+            "commit", "command"}
+    (key := tmp_path / "panels.key").write_text("k")
+    (tmp_path / "COMMIT").write_text("c" * 40 + "\n")
+    bodies = []
+    send = functools.partial(M.metrics.send, key=key, post=lambda method, url, body, k, what: bodies.append(body))
+    _guard(tmp_path, monkeypatch, T0 - 30)
+    _pass(T0, 6.34)
+    assert M.compute(clock=lambda: T0 + 5, send=send) == 0
+    assert M.compute(clock=lambda: T0 + 5000, send=send) == 0
+    (record := tmp_path / "pass.json").write_text(json.dumps({"start": T0, "end": T0 + 365, "rc": 0, "commit": "c1d2e3f"}))
+    assert M.index(record, send=send, clock=lambda: T0) == 0
+    readings = [r for b in bodies for r in b["readings"]]
+    assert [r["metric"] for r in readings] == [M.COMPUTE, M.COMPUTE, M.INDEX] and [r["value"] for r in readings][1] is None
+    assert all(set(r) <= door for r in readings), [sorted(set(r) - door) for r in readings]
+    for r in readings:
+        assert r["command"] in ROWS[r["metric"]]["command"].split(), "the reading names the script its row runs"
+    assert [r["commit"] for r in readings] == ["c" * 40, "c" * 40, "c1d2e3f"]
