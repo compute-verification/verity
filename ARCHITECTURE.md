@@ -267,7 +267,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The check | `tools/verity/check/` | `tools/check/` |
 | The numbers each benchmark declares | one shared list | each benchmark's own directory, its owner's |
 | The compute audit's cost model, and the commands that run an audit on a served run | proofs' scripts under `benchmarks/` | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
-| Registration | `protocols/interface/`, `verity/hardware/site/` and `verity/hardware/registration.py`. Three test files of SPOT's read it today and move with it | `verity/protocols/accounting/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
+| Registration | Its Lean is in `protocols/interface/`. The log's Python is in `verity/protocols/accounting/registration/verifier/` already. Three test files of SPOT's read it today and move with it | `verity/protocols/accounting/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
 | The policy's two calculators | inside `protocols/inference_only/` | two directories under `benchmarks/`; training renames the slowdown one |
 | The network certifier a served run starts: its serving loop, its keys, its prover | `benchmarks/`, about 25,000 lines, and the auditor's device runs them from there, which rule 9 forbids | the certifier's `device/` and `prover/` |
 | The areas of `security/` | named before the carve | each carries its protocol's name, and the accounting area holds one protocol's files |
@@ -295,7 +295,6 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The Lean takes a data sheet as a parameter | Two Lean tables restate their data sheets |
 | Every benchmark on the dashboard | 5 of 69 wired; 3 of the 5 show a value no older than their schedule allows |
 | The proofs' status on the dashboard: guarantees fully proved, open premises per lead | Printed by the Lean check only |
-| The Lean check passes on the public repository | On Tuesday's export 14 of 16 Lean packages pass |
 | Every area of `security/` has a lead | 826 of its 4,816 files fall to lean because no lead claims them |
 | A memory-read session is proved in zero knowledge | Each span's openings go to the verifier as they are |
 | PoUS's setup is a proof about the store | The check reads the whole store |

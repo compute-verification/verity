@@ -26,3 +26,8 @@ def test_a_statement_reads_back_to_what_dump_wrote() -> None:
 def test_a_statement_that_isnt_one_is_refused_by_field(change: dict, error: type, field: str) -> None:
     with pytest.raises(error, match=field):
         InferenceBlocks.of({**ST.dump(), **change}, "s.json")
+
+
+def test_a_statement_that_is_no_json_object_is_refused() -> None:
+    with pytest.raises(RecordError, match="'format' cannot be read: the statement is a list, not a JSON object"):
+        InferenceBlocks.of([ST.dump()], "s.json")

@@ -1,0 +1,46 @@
+# Fresh input in prose: what `tools/move/rename.py --map tools/move/fresh_input_prose_map.toml` renames, the input a
+# block takes in that is not registered information, under its older names "novel reads", "novel information" and
+# "novel bits", where a comment, a docstring or Markdown's text says them (GLOSSARY.md, Older names).
+#
+# This move renames prose only (`scope = "prose"`): never code, a string, backticks or a data file, so it moves no path,
+# renames no declaration and leaves every lock and pin as it is. Each row is a phrase, since "novel" alone has other
+# senses that stay (C-Flock's novel basis, a training method's novel data).
+# What it leaves, each for a hand edit: the Lean's `novelReads` and the names built on it, which a change of their own
+# renames; "novel" before any other word ("novel gates", "novel intake", "a novel read"); and the sentence of the check's
+# README that says the older names stay ([keep]).
+scope = "prose"
+
+[words]
+# --- a block's count, in bits
+"bits of novel information" = "fresh input bits"
+"bits of novel reads" = "fresh input bits"
+"novel reads" = "fresh input bits"
+"novel bits" = "fresh input bits"
+# --- what is read
+"novel information" = "fresh input"
+"novel input gates" = "fresh input gates"
+"novel input gate" = "fresh input gate"
+"novel inputs" = "fresh inputs"
+"novel input" = "fresh input"
+"novel values" = "fresh input values"
+"novel value" = "fresh input value"
+# --- where a sentence opens with them
+"Novel reads" = "Fresh input bits"
+"Novel bits" = "Fresh input bits"
+"Novel information" = "Fresh input"
+"Novel inputs" = "Fresh inputs"
+"Novel input" = "Fresh input"
+
+[rewrite]
+# Never rewritten: the term source and the lints and tables that spell the old words on purpose, records of what was
+# (the earlier moves and their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated
+# fixtures, files whose bytes a digest pins and lock files.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+strings = ['"novel information" and `novelReads` for fresh input']
