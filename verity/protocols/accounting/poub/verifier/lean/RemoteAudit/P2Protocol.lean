@@ -309,8 +309,8 @@ def account : Core.Account :=
 check runs at `Lms.deployed`. -/
 
 private def toy : Lms.Params := ⟨8, 1, 1⟩
-private def toySession : ByteArray := ByteArray.mk (Array.replicate 32 1)
-private def otherSession : ByteArray := ByteArray.mk (Array.replicate 32 2)
+private def toyRecord : ByteArray := ByteArray.mk (Array.replicate 32 1)
+private def otherRun : ByteArray := ByteArray.mk (Array.replicate 32 2)
 private def toyLog : Array Line := #[⟨"{\"op\":\"p2_fail\"}".toUTF8, .fail⟩]
 private def toyHead : ByteArray := ByteArray.mk (Array.replicate 64 5) ++ "0".toUTF8
 
@@ -326,33 +326,33 @@ private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose �
     (record.getD (P2Close.closeRecord toyLog.size chain))).toOption
   let s ← (Lms.signAt k 0 m).toOption
   let close := edit ⟨k.publicKey, toyLog.size, chain, s.encode⟩
-  pure (closeRefusal toy ⟨0, .null, toySession, if trust then #[close.publicKey] else #[]⟩ head ⟨log, close⟩)
+  pure (closeRefusal toy ⟨0, .null, toyRecord, if trust then #[close.publicKey] else #[]⟩ head ⟨log, close⟩)
 
 /-- A PoUS session record and a wipe record of the toy session, each a digest. -/
 private def pousRecord : Option ByteArray :=
-  (MemoryChallenger.message { (default : MemoryChallenger.SessionCommitment) with session := toySession }
+  (MemoryChallenger.message { (default : MemoryChallenger.ChallengePhaseCommitment) with session := toyRecord }
     MemoryChallenger.COMPLETE #[]).toOption
 private def wipeRecord : Option ByteArray :=
   (MemoryChallenger.StreamedWipe.message
-    { (default : MemoryChallenger.StreamedWipe.Commitment) with session := toySession }
+    { (default : MemoryChallenger.StreamedWipe.Commitment) with session := toyRecord }
     MemoryChallenger.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
 
 private def flipLast (b : ByteArray) : ByteArray := b.set! (b.size - 1) (b[b.size - 1]! ^^^ 1)
 
-#guard refusal toySession true == some none
-#guard refusal toySession false == some (some UNTRUSTED)
-#guard refusal toySession true (fun c => { c with lines := 2 }) ==
+#guard refusal toyRecord true == some none
+#guard refusal toyRecord false == some (some UNTRUSTED)
+#guard refusal toyRecord true (fun c => { c with lines := 2 }) ==
   some (some "the close counts 2 lines, not the log's 1")
-#guard refusal toySession true (log := toyLog.push toyLog[0]!) ==
+#guard refusal toyRecord true (log := toyLog.push toyLog[0]!) ==
   some (some "the close counts 1 lines, not the log's 2")
-#guard refusal toySession true (fun c => { c with chain := flipLast c.chain }) == some (some UNCHAINED)
-#guard refusal toySession true (head := flipLast toyHead) == some (some UNCHAINED)
-#guard refusal toySession true (head := ByteArray.empty) == some (some UNCHAINED)
-#guard refusal otherSession true == some (some UNSIGNED)
-#guard refusal toySession true (fun c => { c with signature := flipLast c.signature }) == some (some UNSIGNED)
+#guard refusal toyRecord true (fun c => { c with chain := flipLast c.chain }) == some (some UNCHAINED)
+#guard refusal toyRecord true (head := flipLast toyHead) == some (some UNCHAINED)
+#guard refusal toyRecord true (head := ByteArray.empty) == some (some UNCHAINED)
+#guard refusal otherRun true == some (some UNSIGNED)
+#guard refusal toyRecord true (fun c => { c with signature := flipLast c.signature }) == some (some UNSIGNED)
 #guard pousRecord.map (·.size) == some 64 && wipeRecord.map (·.size) == some 64
-#guard (pousRecord.bind fun r => refusal toySession true (record := some r)) == some (some UNSIGNED)
-#guard (wipeRecord.bind fun r => refusal toySession true (record := some r)) == some (some UNSIGNED)
+#guard (pousRecord.bind fun r => refusal toyRecord true (record := some r)) == some (some UNSIGNED)
+#guard (wipeRecord.bind fun r => refusal toyRecord true (record := some r)) == some (some UNSIGNED)
 #guard hexOf (P2Close.closeRecord 3 (ByteArray.mk (Array.replicate 64 0xab))) ==
   "766572697479" ++ "2f72656d6f74652d62616e647769647468" ++ "2f70322f636c6f73652f763000" ++ "0000000000000003" ++
     String.join (List.replicate 64 "ab")

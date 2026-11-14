@@ -135,7 +135,7 @@ theorem flock_headline_exec
       (batchStratL H512 enc512 leaf512 (planAt ht dj x₀)
         (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planAt ht dj x₀)
               (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding

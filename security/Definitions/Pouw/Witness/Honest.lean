@@ -48,7 +48,7 @@ def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Co
     (queryAll (P.qWt s u (U.layout.fixedId u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- The honest reference: every unit's honest program, in order. -/
-def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
+def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Trace :=
   upTo (unitProg P U act s) U.layout.N
 
 end Honest

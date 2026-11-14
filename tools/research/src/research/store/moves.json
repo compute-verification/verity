@@ -3346,6 +3346,21 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py": "benchmarks/pouw/filler/pfill_ref.py",
+        "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py": "benchmarks/pouw/filler/dfill_ref.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Pouw/EndToEndWindow/": "security/Proofs/Pouw/EndToEndExecutionPhase/",
+        "security/Proofs/Properties/Verity/Sampled/MemberForm/WindowPasses.lean": "security/Proofs/Properties/Verity/Sampled/MemberForm/ExecutionPhasePasses.lean",
+        "security/Proofs/Properties/Verity/WindowFiles.lean": "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
+        "security/Properties/Verity/WindowFiles.lean": "security/Properties/Verity/ExecutionPhaseFiles.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/PeriodRecord.lean"
+      }
+    },
+    {
+      "paths": {
         "security/Definitions/InferenceOnly/Assumptions/Capability.lean": "security/Definitions/Slowdown/Assumptions/Capability.lean",
         "security/Definitions/InferenceOnly/Assumptions/Capability/Information.lean": "security/Definitions/Slowdown/Assumptions/Capability/Information.lean",
         "security/Definitions/InferenceOnly/Assumptions/Cover.lean": "security/Definitions/Slowdown/Assumptions/Cover.lean",

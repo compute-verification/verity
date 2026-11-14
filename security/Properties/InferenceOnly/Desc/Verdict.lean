@@ -46,16 +46,16 @@ owners are its inference blocks `d.𝓘`, the registered compiler's, each meets 
 def DescWitnesses : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Witnessed j out
 
-/-- **A verdict of compliance of the description-sized check throttles every threaded reference circuit the declaration
-contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
+/-- **A verdict of compliance of the description-sized check throttles every threaded reference training circuit the
+declaration contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
 `ThetaRegistered`). On every instance with a verdict of `InferenceOnlyCheck.Desc.evaluate`, the verdict is `Throttled` on every
 expansion. -/
 def DescThrottles : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions Throttled j out
 
 /-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
-gates**, for every threaded reference circuit the declaration contains partly, if its weights are incompressible and its
-θ registered (`WeightsIncompressible`, `ThetaRegistered`). On every instance with a verdict of
+gates**, for every threaded reference training circuit the declaration contains partly, if its weights are
+incompressible and its θ registered (`WeightsIncompressible`, `ThetaRegistered`). On every instance with a verdict of
 `InferenceOnlyCheck.Desc.evaluate`, the verdict is `ThrottledDark` on every expansion. -/
 def DescThrottlesDark : Prop :=
   ∀ (j out : Json), Desc.evaluate j = .ok out → OnExpansions ThrottledDark j out

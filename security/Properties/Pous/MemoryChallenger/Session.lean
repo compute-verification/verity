@@ -61,7 +61,7 @@ structure Params (Ω : Type) where
 
 /-- The session's commitment, which the device builds before the session and releases once it is signed
 (`MemoryChallenger.Properties.Run.commitment`). -/
-def Params.commitment {Ω : Type} (p : Params Ω) (ω : Ω) : SessionCommitment :=
+def Params.commitment {Ω : Type} (p : Params Ω) (ω : Ω) : ChallengePhaseCommitment :=
   (⟨p.coins ω, p.limitNs, p.blockBytes, p.binding, []⟩ : MemoryChallenger.Properties.Run).commitment
 
 /-- The device's channels in a session: its challenges, one frame an exchange to the prover over the session's
@@ -78,7 +78,7 @@ inductive Msg
   | warmup
   | index (i : Nat)
   | done
-  | report (signed : SignedSession) (commitment : SessionCommitment) (openings : Array CoinOpening)
+  | report (signed : SignedChallengePhase) (commitment : ChallengePhaseCommitment) (openings : Array CoinOpening)
 
 /-- One exchange of a session, over what is taken of a warm-up's answer (`W`) and of a round (`R`): a warm-up, whose
 answer the device drops, or a timed round. -/

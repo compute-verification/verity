@@ -9,12 +9,12 @@ public import Definitions.Assumptions
 # The slowdown, remote protocol: the guarantees
 
 The remote slowdown `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
-T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`, and `benchmarks/slowdown`'s
+T2: `residual_share`, `fit.residual_with_lag` and `fit.slowdown`, and `benchmarks/slowdown`'s
 `theorem.multiple_bound`), with its two terms that `SlowdownThreaded` takes inside its residual's hypothesis derived,
 and the two that SPOT and PoUW's deficit add:
 
-* `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate wrong with probability at most `p`
-  (`PouwSound`), the windows whose certificates are wrong hold more than `ε' C` of the capacity with probability at most
+* `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate incorrect with probability at most `p`
+  (`PouwSound`), the windows whose certificates are incorrect hold more than `ε' C` of the capacity with probability at most
   `p/ε'`, by Markov's inequality, which needs no independence between windows;
 * `VerdictLag` ([VERDICT-LAG]): under `TerminalDetection`, the declared work skipped between each identity's first
   detected incorrect proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
@@ -40,16 +40,16 @@ namespace InferenceOnly.Guarantees
 open Verity InferenceOnly.Slowdown
 
 /-- **The certificate slack** ([CERTIFICATE-SLACK]). PoUW certifies each of `N` windows, window `i` of capacity
-`c_i ≥ 0`, `∑ c_i ≤ C`, and each window's certificate is wrong with probability at most `p ≥ 0` under the outcomes'
-distribution `μ` (`PouwSound`). Then the windows whose certificates are wrong hold more than `ε' C` of the capacity with
+`c_i ≥ 0`, `∑ c_i ≤ C`, and each window's certificate is incorrect with probability at most `p ≥ 0` under the outcomes'
+distribution `μ` (`PouwSound`). Then the windows whose certificates are incorrect hold more than `ε' C` of the capacity with
 probability at most `p/ε'`: their expected capacity is at most `p C`, and Markov's inequality, which reads each window's
 marginal and nothing of how windows depend on one another. At `ε' = 10⁻⁴` the failure probability is `10⁴ p`:
 `2.7 · 10⁻⁸` if `p` were `3 · 2⁻⁴⁰`, which no guarantee gives (`PouwSound`). Outside that event the work certified
 correctly is at least `W_cert − ε' C`. -/
 def CertificateSlack : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε C : ℝ),
-    0 ≤ p → 0 < ε → 0 < C → (∀ i, 0 ≤ c i) → ∑ i, c i ≤ C → Assumptions.PouwSound μ wrong p →
-      prob μ (fun ω => ε * C < wrongCapacity c (wrong ω)) ≤ p / ε
+  ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (incorrect : Ω → Fin N → Prop) (p ε C : ℝ),
+    0 ≤ p → 0 < ε → 0 < C → (∀ i, 0 ≤ c i) → ∑ i, c i ≤ C → Assumptions.PouwSound μ incorrect p →
+      prob μ (fun ω => ε * C < incorrectCapacity c (incorrect ω)) ≤ p / ε
 
 /-- **The verdict lag** ([VERDICT-LAG]). Of a developer's incorrect proof blocks `bad`, block `b` is run by identity
 `ident b`, one of the `J = |I|` it controls, at time `τ b`, and skips `w_b` of declared work; those `detected` fail
@@ -65,7 +65,7 @@ def VerdictLag : Prop :=
       ∑ b ∈ bad, w b ≤ lagShare I.card Δ H * C + ∑ b ∈ escaped bad detected ident τ, w b
 
 /-- **The slowdown, remote protocol.** Outcomes `ω` are sampled from `μ` on a finite space. PoUW certifies `N`
-windows of capacities `c_i ≥ 0`, `∑ c_i ≤ C`, each certificate wrong (`wrong ω i`) with probability at most `p ≥ 0`
+windows of capacities `c_i ≥ 0`, `∑ c_i ≤ C`, each certificate incorrect (`incorrect ω i`) with probability at most `p ≥ 0`
 (`PouwSound`). The developer's incorrect proof blocks `bad ω`, run by `J = |I|` identities, those `detected ω` failing
 their proof, under `TerminalDetection` at a lag `Δ`, skip `w_b ≥ 0` of declared work each, at most `Φ Δ` per identity
 within any span of `Δ`, `Φ H ≤ C`, as in `VerdictLag`, and at most `B` each; each faulty block with no earlier detection
@@ -73,8 +73,8 @@ of its identity is detected with probability at least `q ∈ (0, 1]` whatever ca
 accepted before their identity's first detection skip at most `((1 − q)/q) B` per identity in expectation. Its counted
 multiplications `M` are as in `SlowdownThreaded`, with no memory cap: unmonitored compute trains like the unconstrained
 developer, at model-FLOP utilization `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`); the residual trains at full efficiency on the
-monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the wrong windows'
-capacity and the skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`); the
+monitored compute outside the work certified correctly and run, at least `(1 − ε_W) W_cert` less the incorrect windows'
+capacity and the skipped work, `ε_W` PoUW's deficit (`M_r ≤ κ (C − (1 − ε_W) W_cert + incorrectCapacity + skipped)/2`); the
 declared computation is the charged work `W_d` (its `N_d` MACs, `O_d` output wires) of a declaration `d` whose count
 verdict is `CompliesAtMost c k n`, under (H) at the costs `β_w, β_x > 0` and the read cap `k` and (E) at `b > 0`, so
 `N_d ≤ X = n (k + α) + (k/2) √(n O_d / (β_w β_x))` (`CountHE`); incorrect proof blocks inject at most the cheating
@@ -84,12 +84,12 @@ share `χ`, 0 with no sampling. Then, at an escape slack `θ > 0`, with probabil
 `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν + χ)/MFU₀))`, with `r̂ = 1 − W_cert/C` and
 `ν = (2/κ) X/(C + U)` (`efficiency κ X C U`). -/
 def SlowdownRemote : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (cap : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
+  ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (cap : Fin N → ℝ) (incorrect : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad detected : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ)
     (Φ Δ H q B θ εW : ℝ)
     (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (d : RegisteredCircuit) (c k n : ℕ) (γ V : Type) [Fintype γ]
     [DecidableEq γ] [DecidableEq V] (Wd : Cut.Work d.D γ) (val : Finset (Fin d.D.N) → V) (βw βx b : ℝ),
-    0 ≤ p → 0 < ε → (∀ i, 0 ≤ cap i) → Assumptions.WithinCompute cap C → Assumptions.PouwSound μ wrong p →
+    0 ≤ p → 0 < ε → (∀ i, 0 ≤ cap i) → Assumptions.WithinCompute cap C → Assumptions.PouwSound μ incorrect p →
     0 < H → 0 ≤ Δ → Φ * H ≤ C → (∀ ω, ∀ b ∈ bad ω, ident b ∈ I) →
     (∀ ω, Assumptions.TerminalDetection (bad ω) (detected ω) ident τ Δ) →
     (∀ ω j t, ∑ b ∈ bad ω with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
@@ -100,7 +100,7 @@ def SlowdownRemote : Prop :=
     Cut.Assumptions.Hardness d ![Wd.allW, Wd.allX] val ![βw, βx] k → Cut.Assumptions.Exports Wd b →
     (∀ ω, 0 < M ω) → (∀ ω, Assumptions.SourcesCover (M ω) (Mu ω) (Mr ω) Wd.N (Mx ω)) →
     (∀ ω, (Mu ω : ℝ) ≤ mfu * κ * U / 2) →
-    (∀ ω, Assumptions.ResidualAtMost (Mr ω) κ C εW W (wrongCapacity cap (wrong ω)) (∑ b ∈ bad ω, w b)) →
+    (∀ ω, Assumptions.ResidualAtMost (Mr ω) κ C εW W (incorrectCapacity cap (incorrect ω)) (∑ b ∈ bad ω, w b)) →
     (∀ ω, (Mx ω : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - (p / ε + I.card * ((1 - q) / q * B) / (θ * C)) ≤ prob μ (fun ω => efficiency κ (M ω) C U ≤
           unregisteredShare C U +
