@@ -17,9 +17,9 @@ The sessions' coins take two facts about a play the two-stage form accepts as pr
 * **What `membersRun` ran** (`membersRun_held`): the statements' structure (`membersHeld`), the challenger's trees
   (`treesOf`), the interior's release log's lines (`linesOf`) and `membersTreesHeld` on them.
 * **What `membersTreesHeld` named** (`Named`, `named_exact`): for the statements' sessions in order, each session's
-  record as `Verity.Sampled.recordOn` reads it and the SHA-512 of its evidence (`sessionEvidence`), in hex; and
-  `Spot.Challenger.membersTreeReason` accepted them. So the records it named are the sessions' records, in order
-  (`named_records`).
+  record as `Verity.Sampled.recordOn` reads it, the SHA-512 of its evidence (`sessionEvidence`), in hex, and its
+  tables, one entry at the circuit statement's table (`rootBTables_one`); and `Spot.Challenger.membersTreeReason`
+  accepted them. So the records it named are the sessions' records, in order (`named_records`).
 * **The statements and their members** (`HeldSize`, `zip_sessions`): `membersTreesHeld` runs over the statements paired
   with their members, which are all the statements where `membersHeld` returns a member for each. That it does is
   `HeldSize`, a premise here: the cut's file proves it (`held_size`, as `SessionCut.heldSize`), and this file does not
@@ -77,12 +77,28 @@ theorem membersRun_held {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk
 
 /-! ## What `membersTreesHeld` named -/
 
+/-- The session `Spot.OneStageZk.run` sets up has one table, the circuit statement's. -/
+theorem sessionTables_circuit : Spot.OneStageZk.sessionTables = #[Flock.Tags.circuit.table] := by
+  have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+  simp only [Spot.OneStageZk.sessionTables, htag, Option.map_some, Option.getD_some]
+  rfl
+
+/-- **The tables a session's record is held at are one entry, at the circuit statement's table**, whatever the
+member's own files, the blobs and the record's text: `Spot.OneStageZk.rootBTables` is the session's tables
+(`sessionTables_circuit`), each with a `root_B` length or none. -/
+theorem rootBTables_one (p : Spot.OneStageZk.Own) (bs : Core.Blobs) (record : String) :
+    ∃ n?, Spot.OneStageZk.rootBTables p bs record = #[(Flock.Tags.circuit.table, n?)] := by
+  simp only [Spot.OneStageZk.rootBTables, sessionTables_circuit, Array.mapIdx_singleton]
+  exact ⟨_, rfl⟩
+
 /-- **A session as `membersTreesHeld` names it**: the entry's record is the session's on the blobs
-(`Verity.Sampled.recordOn`), and its digest is the SHA-512 of the session's evidence (`sessionEvidence`), in hex. -/
+(`Verity.Sampled.recordOn`), its digest is the SHA-512 of the session's evidence (`sessionEvidence`), in hex, and its
+tables are one entry, at the circuit statement's table (`rootBTables_one`). -/
 def Named (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles)
     (x : String × Array (String × Option ℕ) × Json × String) : Prop :=
   Verity.Sampled.recordOn bs s = some x.2.2.1 ∧
-    ∃ ev, Spot.OneStageZk.sessionEvidence bs s = .ok ev ∧ x.2.2.2 = Spot.sha512Hex ev
+    (∃ ev, Spot.OneStageZk.sessionEvidence bs s = .ok ev ∧ x.2.2.2 = Spot.sha512Hex ev) ∧
+    ∃ n?, x.2.1 = #[(Flock.Tags.circuit.table, n?)]
 
 theorem sessionEvidence_spec (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) :
     ⦃⌜True⌝⦄ Spot.OneStageZk.sessionEvidence bs s ⦃⇓? r => ⌜Spot.OneStageZk.sessionEvidence bs s = .ok r⌝⦄ :=
@@ -90,14 +106,15 @@ theorem sessionEvidence_spec (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) :
 
 theorem named_step {bs : Core.Blobs} {l pre : List Spot.OneStageZk.RunFiles}
     {acc : Array (String × Array (String × Option ℕ) × Json × String)} {s : Spot.OneStageZk.RunFiles}
-    {b ev : ByteArray} {t : String} {tabs : Array (String × Option ℕ)}
+    {b ev : ByteArray} {t : String} {p : Spot.OneStageZk.Own}
     (hI : List.Forall₂ (Named bs) (l ++ pre) acc.toList)
     (hu : String.fromUTF8? b = some t) (hg : bs.get s.record s!"session {s.name}'s record" = .ok b)
     (hev : Spot.OneStageZk.sessionEvidence bs s = .ok ev) :
     List.Forall₂ (Named bs) (l ++ (pre ++ [s]))
-      (acc.push (s.name, tabs, (Flock.JsonParse.parse t).toOption.getD Json.null, Spot.sha512Hex ev)).toList := by
+      (acc.push (s.name, Spot.OneStageZk.rootBTables p bs t,
+        (Flock.JsonParse.parse t).toOption.getD Json.null, Spot.sha512Hex ev)).toList := by
   rw [← List.append_assoc, Array.toList_push]
-  refine List.rel_append hI (List.Forall₂.cons ⟨?_, ev, hev, rfl⟩ .nil)
+  refine List.rel_append hI (List.Forall₂.cons ⟨?_, ⟨ev, hev, rfl⟩, rootBTables_one p bs t⟩ .nil)
   simp [Verity.Sampled.recordOn, hg, hu, Except.toOption]
 
 theorem reason_none {α : Type} {o x : Option α} (hx : o = x) (h : ∀ a, x = some a → False) : o = none := by
@@ -109,8 +126,8 @@ theorem reason_none {α : Type} {o x : Option α} (hx : o = x) (h : ∀ a, x = s
 -- `mvcgen` walks `membersTreesHeld`'s two loops, past the default heartbeats
 set_option maxHeartbeats 1000000 in
 /-- **What `membersTreesHeld` named and held**: an entry for each statement's session, in the statements' order, each
-the session's record and its evidence's SHA-512 (`Named`), which `Spot.Challenger.membersTreeReason` accepted against
-the trees and the lines. -/
+the session's record, its evidence's SHA-512 and its one table (`Named`), which `Spot.Challenger.membersTreeReason`
+accepted against the trees and the lines. -/
 theorem named_exact {ts : Array Spot.Challenger.LoggedTree} {L : List String}
     {sts : Array (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)} {bs : Core.Blobs}
     (h : Spot.OneStageZk.membersTreesHeld ts L sts bs = .ok ()) :
@@ -252,8 +269,8 @@ theorem sessionRecords_of {C : CaseOf} {o : Exchange} {k : Case} {e : VStar.Recu
 /-! ## The members' check on the log the check read -/
 
 /-- **The members' check held of the log the check read, with what it named**: `MembersAccepted`, and each entry
-`membersTreeReason` accepted is its session's record and its evidence's SHA-512 (`Named`), for the statements'
-sessions in order. -/
+`membersTreeReason` accepted is its session's record, its evidence's SHA-512 and its one table (`Named`), for the
+statements' sessions in order. -/
 def MembersNamed (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
     ∃ (k : Case) (e : VStar.Recursive.SampledTwo.Evidence) (label : String) (after : ByteArray) (ξ : ByteArray)
@@ -406,13 +423,13 @@ theorem closes_after {C : CaseOf} (h : MembersNamed C) :
     fun pre r post hpre t ht st n hr q hq t' ht' s' n' hq' =>
       h2 pre r post hpre t (lt_of_lt_of_eq ht hlen) st n hr q hq t' (lt_of_lt_of_eq ht' hlen) s' n' hq',
     fun pre r post hpre t s st n hs hr t' s' hlt hs' => ?_⟩
-  · obtain ⟨x, hx, -, ev, hev, hxe⟩ := forall₂_getElem? hN hs
+  · obtain ⟨x, hx, -, ⟨ev, hev, hxe⟩, -⟩ := forall₂_getElem? hN hs
     rw [Array.getElem?_toList] at hx
     obtain ⟨tr, -, -, -, -, Lc, c, L₂, st, n, hlog, hc, hname, hcount, hun, hlast⟩ := h1 t x hx
     exact ⟨ev, Lc, c, L₂, st, n, hev, hlog, hc, hname, hcount,
       Verity.Sampled.MemberForm.answers_of_hex hun hxe, hlast⟩
   · obtain ⟨x, hx, -⟩ := forall₂_getElem? hN hs
-    obtain ⟨x', hx', -, ev, hev, hxe⟩ := forall₂_getElem? hN hs'
+    obtain ⟨x', hx', -, ⟨ev, hev, hxe⟩, -⟩ := forall₂_getElem? hN hs'
     rw [Array.getElem?_toList] at hx hx'
     have ht : t < records.size := (Array.getElem?_eq_some_iff.1 hx).1
     obtain ⟨q, hq, hun⟩ := h3 pre r post hpre t ht st n hr t' x' hlt hx'

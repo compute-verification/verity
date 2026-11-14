@@ -259,7 +259,7 @@ theorem logCloses_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : 
   have hx' : records.toList[t]? = some x := by
     rw [Array.getElem?_toList]
     exact hx
-  obtain ⟨s, hs, -, ev, hev, hxe⟩ := forall₂_getElem?_right hN hx'
+  obtain ⟨s, hs, -, ⟨ev, hev, hxe⟩, -⟩ := forall₂_getElem?_right hN hx'
   have htr : t < records.size := (Array.getElem?_eq_some_iff.1 hx).1
   obtain ⟨tree, H⟩ := membersHeld_of hT hR hM
   obtain ⟨Lc, c, L₂, st, n, hlog, hcf, hun, hlast⟩ := H.closing hT hR hM hx
