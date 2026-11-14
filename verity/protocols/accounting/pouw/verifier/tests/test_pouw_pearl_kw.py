@@ -130,7 +130,7 @@ def test_interface_and_domain():
 def test_ada_tile_through_the_protocol():
     """One honest 16 x 16 tile on the 4090's device: admissible, digest reproducible, useful output near A·Bᵀ."""
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = get("pearl-fp8-v4"), 1024
     c = IN["tiles"][0]
