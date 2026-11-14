@@ -2784,7 +2784,8 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
     assert why(e=e2 | {"proofs": one}) == "evidence: the keys of the evidence's proofs are not statements"
     assert why(p=params | {"proofs": {"circuit": ms[0].circuit_sha512, "public": ms[0].public_sha512,
-                                      "registered": None}}) == "params: the keys of proofs are not members"
+                                      "registered": None}}) == ("params: the keys of proofs are not members, or "
+                                                         "members and wiring")
     again = pm["members"] | {"z/c0": {**pm["members"][ms[0].name], "units": [[1, 2]]}}
     assert why(p=params | {"proofs": {"members": again}}) == (
         "params: proofs: unit 1 is in two members' units: a unit is one member's")
