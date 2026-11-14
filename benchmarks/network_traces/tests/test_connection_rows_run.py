@@ -396,7 +396,8 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     both = refused(out, another_session, file, (wrong, session))
     assert len(both) > 3 and [p.split(":")[0] for p in both[:3]] == [
         "the deployment record's key's SHA-512 is not the one the check was handed",
-        "the deployment record's session is not the one the check was handed", "requests window 0 isn't certified"]
+        "the deployment record's session is not the one the check was handed",
+        "the session's start isn't certified (signature)"]
     assert sum("is not the one the check was handed" in p for p in both) == 2 and not file.exists()
 
     def another_digest() -> None:
