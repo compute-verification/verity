@@ -33,9 +33,9 @@ theorem remote_soundness_deployedReady_honestSession :
   · refine Or.inl ⟨?_, ?_, ?_, live.y₀.hshape.1⟩
     · show session θ₀ = some live
       unfold session
-      rw [if_pos ⟨rfl, hd⟩]
-    · rw [live_inputs] <;> rfl
-    · rw [live_inputs] <;> rfl
+      rw [ite_eq_left ⟨rfl, hd⟩]
+    · rw [live_inputs]; rfl
+    · rw [live_inputs]; rfl
   · exact Or.inr (collision hd)
 
 end Verity.Sampled

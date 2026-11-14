@@ -122,12 +122,12 @@ noncomputable def inst : Instance Verity.Idle.device Unit where
   circuitHash θ' A h := by
     obtain ⟨rfl, -, -⟩ := session_some h
     show programDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then circuitFile else θ₀).data.toList)
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact (Params.digests JsonCanon.jsonFacts).1
   publicHash θ' A h := by
     obtain ⟨rfl, -, -⟩ := session_some h
     show publicDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then publicFile else θ₀).data.toList)
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact (Params.digests JsonCanon.jsonFacts).2
   registered _ := Array.append_empty.symm
 
@@ -150,17 +150,17 @@ theorem sets_up (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) live
   obtain ⟨p, hp, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩ := Params.params_spec JsonCanon.jsonFacts
   have hI := live_inputs
   have hcirc : live.I.circuitFile = base.circuitFile θ₀ (base.registered θ₀) := by
-    rw [hI, circuit_at] <;> rfl
+    rw [hI, circuit_at]; rfl
   have hpub : live.I.publicFile = base.publicFile θ₀ (base.registered θ₀) := by
-    rw [hI, public_at hd] <;> rfl
+    rw [hI, public_at hd]; rfl
   refine
-    { params := ⟨p, hp, by rw [hI, hpart] <;> rfl, by rw [hI, hprog] <;> rfl, ?_, ?_, ?_, key₀, label₀,
-          _root_.Spot.Challenger.MAX_COINS, hch, by show (label₀, _) ∈ families θ₀; simp [families], by rw [live_lb] <;> rfl⟩
+    { params := ⟨p, hp, by rw [hI, hpart]; rfl, by rw [hI, hprog]; rfl, ?_, ?_, ?_, key₀, label₀,
+          _root_.Spot.Challenger.MAX_COINS, hch, by show (label₀, _) ∈ families θ₀; simp [families], by rw [live_lb]⟩
       tags := by rw [hI]; exact tags_find
-      count := by rw [hI] <;> rfl
-      work := by rw [hI] <;> rfl
-      stratified := by rw [hI] <;> rfl
-      closure := by rw [hI] <;> rfl
+      count := by rw [hI]; rfl
+      work := by rw [hI]; rfl
+      stratified := by rw [hI]; rfl
+      closure := by rw [hI]; rfl
       own := live_own
       circuit := hcirc
       publicFile := hpub
@@ -174,10 +174,10 @@ theorem sets_up (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) live
   · show readOf PinnedTables.empty θ₀ (base.registered θ₀) = live.fileRead
     refine readOf_eq base PinnedTables.empty (fun _ => rfl) (fun _ => rfl) ?_ ?_ hcirc hpub ?_
     · rw [hI]; exact tags_find
-    · rw [hI] <;> rfl
+    · rw [hI]; rfl
     · rw [hI]
       sorry -- piece P9 (instance): `pinnedTables` at no registered table is `[]`
-  · rw [live_epsilon] <;> rfl
+  · rw [live_epsilon]; rfl
 
 theorem sessions_ready : inst.SessionsReady := by
   intro θ' F A hs _

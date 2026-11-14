@@ -78,7 +78,7 @@ theorem exists_live : ∃ A : Live,
       hpop := Program.popMatches
       lj := law
       tb := none
-      hsub := by rw [Program.design_eq] <;> rfl
+      hsub := by rw [Program.design_eq]; rfl
       hdiv := by rw [nTab_inputs]; exact Nat.mod_one _
       S₀
       d₀
