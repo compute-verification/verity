@@ -1,6 +1,7 @@
 """The collector's staging defaults (`native_collect.window_mb_default`, the levels and bounded-staging defaults) and the Commit's
 (`pipeline.commit.resolve_staging`): unset, the windowed worker stages over a ring of 256 MiB windows, bounded, with no levels when
-it keeps no values; every default has its off-switch, and a collector off the windowed worker is refused.  The committer runs on
+it keeps no values; every default has its off-switch, and a collector off the windowed worker is refused.  The Commit reads only
+the keys of the ring's record the collector's `enable_windows` returns.  The committer runs on
 `test_native_collect_plan_cache`'s CPU fakes; the roots under each setting are the byte-identity suites' (`test_windowed_rows_sha512`,
 `test_native_collect_plan_cache`)."""
 from __future__ import annotations
@@ -85,6 +86,26 @@ def test_the_commit_resolves_the_collector_s_defaults(argv, want):
 
     a = cd.resolve_staging(cli.parse("commit", ["--out", "o", *argv], {}))
     assert (a.retain, a.window_mb, a.window_slots, a.bounded_staging, a.open_after_release) == want
+
+
+def test_the_commit_reads_only_the_keys_enable_windows_returns(monkeypatch):
+    """`pipeline.commit.main` prints the window ring and writes its record from the dictionary the collector's `enable_windows`
+    returns, beside an engine and so on a GPU only, where the committers of its tests are stand-ins: every key `main` subscripts
+    that dictionary with is one the collector's own `enable_windows` returns, here over the CPU fakes."""
+    import ast
+    import inspect
+
+    from verity_vllm.pipeline import commit as cd
+
+    tree = ast.parse(inspect.getsource(cd.main))
+    bound = {t.id for n in ast.walk(tree) if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, "attr", None) == "enable_windows" for t in n.targets if isinstance(t, ast.Name)}
+    read = {n.slice.value for n in ast.walk(tree) if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name)
+            and n.value.id in bound and isinstance(n.slice, ast.Constant)}
+    assert {"slots", "window_bytes"} <= read, "main no longer subscripts a name it binds to enable_windows(): point this test at its reader"
+    info = committer(monkeypatch, "none", VERITY_WINDOW_MB=P.WINDOW_MB, VERITY_WINDOW_SLOTS=str(P.SLOTS)).enable_windows(None)
+    assert not read - set(info), (f"pipeline.commit.main reads {sorted(read - set(info))} of the dictionary enable_windows returns, "
+                                  f"whose keys are {sorted(info)}: a windowed Commit stops there with a KeyError")
 
 
 def test_tp_commit_reads_the_ranks_ring_as_their_committers_do():

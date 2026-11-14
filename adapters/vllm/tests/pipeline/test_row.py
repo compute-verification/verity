@@ -14,7 +14,6 @@
 * the Match of record (``fast`` inside ``shared``) is the default and the caller can choose the audit checker;
 * the weights of record beside a component are reused only when they are this Program's, of this tree's schema and
   complete; an unresolved checkpoint dir is named in row.log;
-* the admission plan is advisory: it writes admission.json and one row.log line and never stops the row;
 * the taps run by default (NORM_TAP=0 etc. for A/B only), each attached only where the row's manifest names its family, and a TP
   row runs the guarded-max build and every tap that applies to it;
 * a tree without the run store's tool beside it (`tools/research/src`) refuses a row at setup, by name: what a row does past
@@ -45,7 +44,6 @@ from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_stages import SingleRow
 
 TREE = Path(__file__).resolve().parents[2]
-WL = TREE / "workloads"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 
 
@@ -88,7 +86,7 @@ def test_the_match_of_record_is_the_default_and_the_caller_can_choose_the_audit(
 
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
     o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf"})
-    assert o.env.hf_home == "/elsewhere/hf" and o.env.hot_root == cli.MACHINE["RunEnv.hot_root"] and o.env.sweep_dir == str(tmp_path)
+    assert o.env.hf_home == "/elsewhere/hf" and o.env.norm_tap_so == cli.MACHINE["RunEnv.norm_tap_so"] and o.env.sweep_dir == str(tmp_path)
     assert _opts(tmp_path, "--hf-home", "/flag/hf", environ={"HF_HOME": "/elsewhere/hf"}).env.hf_home == "/flag/hf"
     assert o.env.environ["HF_HOME"] == "/elsewhere/hf"
 
@@ -422,7 +420,7 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
         Path(f"{r.d}/build_request/instances.json.gz").write_bytes(b"")
         return 0, 0
 
-    for name, fn in (("gpu_exclusive", lambda why: None), ("follow_compose", follow_compose), ("derive_all", derive_all),
+    for name, fn in (("follow_compose", follow_compose), ("derive_all", derive_all),
                      ("guarded", lambda what, fn, *a: summary), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
                      ("required_manifest", required_manifest), ("run_tl", run_tl), ("call_boundaries", lambda to, cmd=None: None)):
         monkeypatch.setattr(r, name, fn)
@@ -499,7 +497,7 @@ def _built(r: SingleRow, monkeypatch, **kw) -> dict:
         Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
         return 0
 
-    for name, fn in (("prepare", lambda: None), ("gpu_exclusive", lambda why: None), ("derive_all", lambda to: (0, 0)),
+    for name, fn in (("prepare", lambda: None), ("derive_all", lambda to: (0, 0)),
                      ("guarded", lambda what, fn, *a: "PASS"), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
                      ("required_manifest", lambda stage: 0), ("run_tl", child), ("timeline_report", lambda: None)):
         monkeypatch.setattr(r, name, fn)
@@ -650,7 +648,6 @@ def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatc
         verified.append(m)
         raise Stop(0)
     monkeypatch.setattr(r, "manifest_of_record", lambda stage="commit": man)
-    monkeypatch.setattr(r, "gpu_exclusive", lambda what: None)
     monkeypatch.setattr(r, "run_gpu", lambda *a: 0)
     monkeypatch.setattr(r, "manifest_verify", verify)
     with pytest.raises(Stop):
@@ -780,6 +777,35 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
         req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
         assert req == {"dir": f"{r.d}/serving-rows", "partition": pf, "run": r.row, "committer": {"source": r.env.environ.get("RESEARCH_SOURCE_SHA")}}
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
+
+
+def test_the_serving_rows_request_carries_the_per_expert_tables_under_their_key(tmp_path):
+    """SERVING_ROWS_TABLES reaches the request as the ``tables`` `expert_rows.of_request` reads, ``{rank}`` left for each rank; a
+    registration without its key is refused before the Commit serves anything."""
+    pf, reg, key = str(tmp_path / "partition.json"), str(tmp_path / "tables-rank{rank}.json"), str(tmp_path / "tables.key")
+    tp = _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1", "SERVING_ROWS_TABLES": reg,
+                                              "SERVING_ROWS_TABLES_KEY": key})
+    cmd = tp.commit_cmd([])
+    req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
+    assert req["partition"] == pf and req["tables"] == {"key": key, "registration": reg}
+    with pytest.raises(SystemExit, match="SERVING_ROWS_TABLES_KEY"):
+        _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1", "SERVING_ROWS_TABLES": reg}).commit_cmd([])
+
+
+def test_a_row_given_a_run_dir_writes_nothing_into_the_runners(tmp_path):
+    """`--research-run-dir` is where the row's result, its record copies and its Commit's window go, whatever run dir the
+    runner's environment names: a script whose run dir is published keeps them out of it."""
+    kept, published = tmp_path / "kept", tmp_path / "published"
+    kept.mkdir(), published.mkdir()
+    r = _row(tmp_path / "sweep", "--research-run-dir", str(kept), environ={"RESEARCH_RUN_DIR": str(published), "SERVING_ROWS": "p.json"})
+    r.child_env["RESEARCH_RUN_DIR"] = str(published)
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    Path(r.d, "stages.txt").write_text("build PASS 2026-01-01T00:00:00Z digest=00\n")
+    cmd = r.commit_cmd([])
+    assert Path(cmd[cmd.index("--serving-rows") + 1]).parent == kept / "serving-rows" / r.row
+    r.research_result()
+    assert (kept / "result.json").is_file() and (kept / "evidence" / "stages.txt").is_file(), Path(r.d, "row.log").read_text()
+    assert list(published.iterdir()) == []
 
 
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
@@ -1162,31 +1188,6 @@ def test_the_pin_at_b_ge_2_is_derived_from_the_first_manifest_component(tmp_path
     assert R.wor_component(str(d)) == str(d / "build_request_LP9_T2")
     (d / "build_request_LP9_T2" / "result.json").write_text(json.dumps({"ok": False, "LP": 9, "T": 2}))
     assert R.wor_component(str(d)) == str(d / "build_request_LP5_T3")
-
-
-# ---------------------------------------------------------------------------------------------------------------- admission
-
-@pytest.mark.skipif(not WL.exists(), reason="sweep workloads not in this checkout")
-def test_the_admission_plan_is_written_logged_once_and_never_stops_the_row(tmp_path):
-    row = "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
-    r = _row(tmp_path, "--snapshot-max-bytes", "33554432", row=row)
-    r.snap_steps, r.snap_def = None, "0,1"
-    r.admission()
-    doc = json.loads((Path(r.d) / "admission.json").read_text())
-    assert doc["schema"] == "verity-sweep/admission/v1" and doc["advisory"] is True and doc["model"] == "mistral-7b"
-    assert doc["config"]["snapshot_max_bytes"] == 33554432 and doc["config"]["snapshot_steps"] == "0,1" and doc["config"]["pairs"] == 3
-    assert set(doc["stages"]) == {"build", "match", "commit"}
-    assert (Path(r.d) / "row.log").read_text().count("ADMISSION advisory") == 1
-    evs = [(e["stage"], e["ev"]) for e in _timeline(r)]
-    assert evs == [("admission", "start"), ("admission", "end")] and _timeline(r)[1]["advisory"] is True
-
-
-def test_the_admission_plan_survives_a_broken_planner_input(tmp_path):
-    r = _row(tmp_path, row="nosuch-row__x")
-    r.snap_steps, r.snap_def = None, "0,1"
-    r.admission()
-    log = (Path(r.d) / "row.log").read_text()
-    assert "ADMISSION advisory unavailable" in log and "WARN" not in log
 
 
 def test_a_tp_rows_gpu_budget_is_the_option_else_the_workloads_else_tp_util(tmp_path, monkeypatch):

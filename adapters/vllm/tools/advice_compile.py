@@ -20,8 +20,10 @@ compiled.json and exits 2; `--partial` refuses request by request instead, and c
 
 `--window K` reads a `verity-vllm serve-openai --seal` run instead: window K's advice (`advice/w<K>/private/advice.bin`, its
 registration's ℓ), the certified body of each of window K's requests from `requests.jsonl` (the records whose ``windows`` hold
-K, by `user`: the sampling fields its ingress record says it brought, and its prompt ids), and the model, target,
-execution and default seed from `serve.json`.  A window's advice is `window_advice`'s: a request window K carries in from the
+K, by `user`: the sampling fields its ingress record says it brought, and its prompt ids), the model, target,
+execution and default seed from `serve.json`, and window K's seed coin from its `windows.jsonl` line (`window_coin`), from which
+the compile derives the seed of each unseeded stochastic request, as serving did (`engine.served_seed.derived`), and which the
+manifest names with its source.  A window's advice is `window_advice`'s: a request window K carries in from the
 one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
 window before K that ran steps (`windows.jsonl`), whose close K must open on (`window_advice.follows`); K is refused (exit 2) when
 it doesn't, or when it carries a request in and that advice isn't there.  The Build dirs go into `--out` itself (default the
@@ -69,7 +71,8 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
-    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
+    (`LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1, the length the built engine
+    reads back, ``effective``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
     (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
     own order; a ValueError for a rank the world doesn't have."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
@@ -80,6 +83,8 @@ def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
     engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if engine.get("max_model_len") == -1:
+        engine["max_model_len"] = (rec.get("effective") or {}).get("max_model_len")
     if "env_flags" in rec:
         flags = rec["env_flags"] or {}
         engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
@@ -107,6 +112,16 @@ def phi_of(meta: dict, hf_config: dict, rank: int):
     dtype = checkpoint_dtype(hf_config)
     return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config, **({"dtype": dtype} if dtype else {})},
                target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
+
+
+def window_coin(run: Path, window: int) -> dict | None:
+    """Window K's seed coin as its ``windows.jsonl`` line names it (``seed_coin``: its hex, its index and its source), which
+    `compile_steps` takes as the window's seed salt (``salt``) and derives an unseeded stochastic request's seed from, as serving
+    did; None when the line names none (a server that filled a seed in), and the compile then refuses such a request by name."""
+    path = run / "windows.jsonl"
+    lines = path.read_text().splitlines() if path.exists() else []
+    got = [d for d in map(json.loads, filter(str.strip, lines)) if int(d["window"]) == int(window)]
+    return (got[-1].get("seed_coin") or None) if got else None
 
 
 def registered_seed(meta: dict) -> int:
@@ -176,9 +191,10 @@ def main() -> int:
         trace_commands,
     )
 
-    reg_doc, carry = None, None
+    reg_doc, carry, coin = None, None, None
     if a.window is not None:
         path, meta, bodies, reg_doc = served_inputs(run, a.window)
+        coin = window_coin(run, a.window)
         data = Path(a.advice or path).read_bytes()
         try:
             carry = carry_of(run, a.window, data)
@@ -216,7 +232,7 @@ def main() -> int:
         return 2
     reg = Registered.of(phi, default_seed=seed, cap_bits=cap)
     try:
-        compiled = compile_steps(reg, data, ingress, partial=a.partial)
+        compiled = compile_steps(reg, data, ingress, salt=bytes.fromhex(coin["coin"]) if coin else None, partial=a.partial)
     except Unexpressible as e:
         (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"[advice-compile] compile_steps refuses the advice: {e}", flush=True)
@@ -237,7 +253,7 @@ def main() -> int:
     print(f"[advice-compile] equal {cmp['equal']}, different {cmp['different']}, no trace {cmp['no_trace']}", flush=True)
     if a.window is not None:
         from verity_vllm.program.predict.steps import trace_dir
-        man = {"schema": MANIFEST, "run": str(run), "window": a.window, "registration": reg_doc, "cap_bits": cap,
+        man = {"schema": MANIFEST, "run": str(run), "window": a.window, "registration": reg_doc, "cap_bits": cap, "seed_coin": coin,
                "compiler": summary["compiler"], "workload_digest": summary["workload_digest"],
                "requests": {u["id"]: {"digest": u["digest"], "build_dir": trace_dir(u), "LP": u["LP"], "T": u["T"], "first_step": u["first_step"]}
                             for u in summary["requests"] if u is not None},

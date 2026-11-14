@@ -27,7 +27,10 @@ names each gap. `EXPERIMENTAL` says what the bound rests on.
 device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory outside the
 fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM after it,
 `wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.side_of`; this node by default, a
-process whose key and session log are beside the periods). No network certifier counts the session's egress yet, so the
+process whose key and session log are beside the periods). The verifier trusts one memory-challenger key, the one whose
+SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
+key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
+key its session came with. No network certifier counts the session's egress yet, so the
 challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. The
 leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an uncounted egress, the
 node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
@@ -59,7 +62,7 @@ from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.pous.device import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_party, wipe_store
-from .period import serve
+from .period import decided_by, serve
 from .wipe_party import READS, UNCOUNTED
 
 PROTOCOL = "verity/wipe/v0"
@@ -219,7 +222,8 @@ def keeping(foreign: int) -> Callable[[sw.WipeParams], sw.Prover]:
 
 @dataclass(frozen=True)
 class Wipe:
-    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the challenger's `host`;
+    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the challenger's `host`,
+    the SHA-512 of the key it signs under, `key_sha512`, and whether that is the key the verifier pinned, `key_pinned`;
     with the challenger a party of its own the session's `window` on its clock and the prover's `connection`; with the
     native streamer its gate and figures, `streamer` and `fill`) and the signed session, if signed."""
 
@@ -247,15 +251,17 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         log: mc.SessionLog | None = None, party: Side | None = None,
         prover: Callable[[sw.WipeParams], sw.Prover] = sw.Prover, egress_bits: int = UNCOUNTED,
         clock: Callable[[], int] = time.perf_counter_ns, secret: bytes | None = None, session_id: bytes | None = None,
-        coin_secret: bytes | None = None, stop_after: int | None = None, trusted: Collection[bytes] | None = None,
+        coin_secret: bytes | None = None, stop_after: int | None = None, trusted_sha512: str | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL,
         chunk: int = wipe_party.CHUNK) -> Wipe:
     """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the challenger signs under
     `signer` with `egress_bits`, claims its session in `log` and reads `clock`; `secret`, `session_id` and `coin_secret`
     are fresh from the OS unless a test gives them. With `party` its side runs where `party` starts it, with its own
     secret, coins, key, log, clock and egress count, and those arguments are unused. `prover` makes the prover's side,
-    which with `stop_after` leaves after that many reads. `trusted` is the verifier's list of memory-challenger keys (by
-    default the challenger's), `schemes` the signature schemes it accepts and `protocol` the id it answers under."""
+    which with `stop_after` leaves after that many reads. `trusted_sha512` is the verifier's pin, the SHA-512 in hex of
+    the one memory-challenger key it trusts: a session signed under another key is rejected. With none it trusts the key
+    the session came with, which only a challenger whose key this run made may be given (never one on its own host).
+    `schemes` are the signature schemes it accepts and `protocol` the id it answers under."""
     params = params_for() if params is None else params
     server = node.encode()
     if party is None:
@@ -279,14 +285,16 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         signed = None if got["signed"] is None else wipe_party.signed_of(got["signed"])
         report = {"ended": got["ended"], "host": got["host"], "reads": got["reads"]}
         report |= {k: got[k] for k in ("connection", "fill", "streamer", "window") if k in got}
-    trusted = (key,) if trusted is None else tuple(trusted)
+    key_sha = hashlib.sha512(key).hexdigest()
+    report |= {"key_sha512": key_sha, "key_pinned": key_sha == trusted_sha512}
+    trusted = (key,) if trusted_sha512 in (None, key_sha) else ()
     return Wipe(answer(server, commitment.session, trusted, commitment, signed, schemes, protocol),
                 case(server, commitment.session, trusted, commitment, signed), report, signed)
 
 
 CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
           "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
-          "egress_bits": None, "reads": None, "links": [], "disk": None, "dram": None}
+          "egress_bits": None, "reads": None, "links": [], "disk": None, "dram": None, "trusted_sha512": None}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
 through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, the driver's reserve included
 (`wipe_store.Cuda.info`'s `total_bytes`), so that what the fill doesn't reach counts in `R`; `disk`, the server's disks
@@ -304,7 +312,10 @@ of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound a
 with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the leg refuses
 a session at another count. `None`: whatever the challenger chooses (`READS` here). `links` are the links leaving the
 node besides the one to a challenger on its own host, which the leg adds from the connection it made: each `{"name",
-"to", "via"}`, with `mbps` and `counted_by` (the network certifier that counts it) when known (`wipe_party.link`)."""
+"to", "via"}`, with `mbps` and `counted_by` (the network certifier that counts it) when known (`wipe_party.link`).
+`trusted_sha512` is the verifier's pin, the SHA-512 of the memory challenger's public key in 128 lowercase hex digits:
+the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
+this node made for the run."""
 LINK_KEYS = {"name", "to", "via", "mbps", "counted_by"}
 DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, "spare_bytes": 0, "direct": True}
 """`wipe.disk` and its defaults: the targets (`paths`, each a directory the fill takes a file in or a block device
@@ -362,6 +373,9 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
                 and (e.get("counted_by") is None or type(e["counted_by"]) is str)):
             raise ValueError(f"period.json's wipe.links: each is {{\"name\", \"to\", \"via\"}} (strings) with an optional "
                              f"int \"mbps\" and string \"counted_by\", not {e!r}")
+    if (pin := c["trusted_sha512"]) is not None and not (type(pin) is str and re.fullmatch("[0-9a-f]{128}", pin)):
+        raise ValueError(f"period.json's wipe.trusted_sha512 is null or the SHA-512 of the memory challenger's public "
+                         f"key in 128 lowercase hex digits, not {pin!r}")
     return c
 
 
@@ -529,9 +543,12 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
     `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
     party of its own on `period.json`'s `challenger_host` (`wipe_party.side_of`; on this node by default, a process
-    whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
-    gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
+    whose key and session log are in `wipe-challenger` beside the periods) and the prover here. The verifier trusts the
+    key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
+    before its session. A `wipe_store` prover gates its store before the session.
+    With `wipe-protocol` among the period's tools, the Lean answers (the
+    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
+    which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
@@ -549,6 +566,10 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     if party.host != node and c["egress_bits"] is not None:
         raise ValueError(f"period.json's wipe.egress_bits reaches only a challenger on this node: the challenger on "
                          f"{party.host} signs the count its own side is started with (challenger.wipe.command)")
+    if party.host != node and c["trusted_sha512"] is None:
+        raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory challenger on {party.host}: the "
+                         "verifier trusts a challenger on its own host only under its pinned key (the SHA-512 of its "
+                         "public key, as its host gives it)")
     memory, store = store_of(c), None
     try:
         tier = c["tier"] or (TIER if memory is None else memory.tier)
@@ -566,7 +587,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         kept = None if memory is None else memory.info() | {"bytes": store.size}
         t, p0 = time.monotonic(), time.time_ns()
         in_python = keeping(foreign) if foreign else sw.Prover
-        wipe = run(node, params, party=party, prover=in_python if store is None else lambda _: store)
+        wipe = run(node, params, party=party, prover=in_python if store is None else lambda _: store,
+                   trusted_sha512=c["trusted_sha512"])
         seconds, p1 = round(time.monotonic() - t, 2), time.time_ns()
         prover = None if store is None else store.record()
     finally:
@@ -599,7 +621,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
     (out / "wipe.case.json").write_text(json.dumps(wipe.case, sort_keys=True))
-    (out / "wipe.json").write_text(json.dumps({"answer": answer, "lean": lean, "placement": where, "prover": prover,
+    (out / "wipe.json").write_text(json.dumps({"answer": answer, "decided_by": decided_by(tools.get("wipe-protocol")),
+                                               "lean": lean, "placement": where, "prover": prover,
                                                "report": wipe.report, "seconds": seconds, "session": timing(wipe.signed),
                                                "uncertified": uncertified(where, wipe.signed), "window": window,
                                                "wipe": c | {"foreign_labels": foreign, "k": k,
@@ -611,13 +634,16 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
 
 def summary(record: Mapping[str, Any]) -> dict[str, Any]:
-    """`wipe.json`'s headline: the verdict and who gave it, the reads the challenger ran (`k`), where each party ran, the
-    session's window on the challenger's clock (`t0`, `t1`), what the bound doesn't cover, and the fill's and the reads'
-    figures on each side."""
+    """`wipe.json`'s headline: the verdict and who gave it (`decided_by`: the program, `wipe-protocol` or `python`, and
+    the host it ran on), the SHA-512 of the challenger key the session was signed under (`key_sha512`) and whether it is
+    the key the verifier pinned (`key_pinned`; an accept without it trusted the key of a challenger on the node itself),
+    the reads the challenger ran (`k`), where each party ran, the session's window on the challenger's clock (`t0`,
+    `t1`), what the bound doesn't cover, and the fill's and the reads' figures on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
     w, window = record["wipe"], (record.get("window") or {}).get("challenger") or {}
-    return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "judge": "lean" if record["lean"] else
-            "python", "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
+    return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "decided_by": record["decided_by"],
+            "key_sha512": record["report"]["key_sha512"], "key_pinned": record["report"]["key_pinned"],
+            "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
             "foreign_labels": w.get("foreign_labels", 0),
             "placement": record["placement"], "seconds": record["seconds"],
             "t0": window.get("t0"), "t1": window.get("t1"), "uncertified": record.get("uncertified", []),

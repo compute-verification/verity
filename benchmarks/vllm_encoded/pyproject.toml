@@ -14,5 +14,5 @@ inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "be
           "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/codec.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py",
-          "verity/hardware",
+          "verity/hardware/__init__.py", "verity/hardware/cards",
           "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py"]  # kv_bench.py reads the RTX PRO 6000's card

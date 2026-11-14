@@ -9,7 +9,7 @@
         [--copy-records-to $OUT] [--admit arrival|release-order|tick [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--tick-bucket-ms 100 --tick-sat-ms MS --tick-free-ms MS]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
+        [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -27,9 +27,12 @@ other request (the network certifier's shim and probes, the load) is answered as
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
-engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
-`engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its sample is not a function of the committed values.
+engine's resulting parameters, the seed and its rule). A greedy request without a ``seed`` carries the public default,
+`engine.served_seed.DEFAULT_SEED`, which its sample never reads; a stochastic one is sampled under
+`engine.served_seed.derived` of its window's seed coin and its ``user``, as the engine loop adds it (`serve_loop.EngineLoop`,
+`engine.served_seed.SeedCoins`), and one that sends no ``user`` is refused (`engine.served_seed.UNSEEDED`); each window's
+``windows.jsonl`` line names its coin (``seed_coin``). A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's
+split count is not pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -46,6 +49,7 @@ rows also keep the scheduler's order, so a step's new rows are in admission orde
 ``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
 buckets the network certifier's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
 engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
+No compile slice replays that admission, so its windows' served rows name none (`no_slice`, `serve_commit.NO_TICK_SLICE`).
 The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
 (`serve_row`).
 
@@ -58,13 +62,17 @@ window back from the committed bytes into the served record (`commit.served_reco
 committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
 seeds, by position. Once a request has finished, `BlockValues.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
-(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). Before it
-listens, under bounded staging, the committer learns its declared static shape's plans in a learn-only pass (`serve_learn`).
+(off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`). With it,
+``VERITY_POOL_ROW`` (the carried pool's token width CTW) keys the cache's blocks by BlockKey_v1 and exports the pool's row at
+each close (`engine.pool_row`, `CommitWindows._pool_row`): ``pool_rows/w<k>.json`` and the window line's ``pool_row``. Before it listens, under bounded staging, the committer learns its declared static
+shape's plans in a learn-only pass (`serve_learn`).
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
+whose rows and salts go to ``served_rows/w<k>.json``; the record's ``slice`` names that slice, `serve_commit.SERVED_SLICE`, and
+under ``--admit tick`` is null, with why in its ``no_slice`` and once in ``serve.json``'s ``served_rows_no_slice``),
+``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
@@ -117,13 +125,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
-from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
                                    serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, disk_record, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
@@ -219,7 +228,8 @@ class Options:
     admit: str = option("--admit", choices=ADMIT, default="arrival",
                         help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
                              "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
-                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate)")
+                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate), its windows' "
+                             "served rows naming no compile slice (serve_commit.NO_TICK_SLICE)")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
                                 help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
                                      "tick: open the gate once the watermark has stalled this long")
@@ -380,15 +390,18 @@ class Server:
         except ValueError as e:
             raise RequestError(str(e)) from e
         try:
-            params = proto.seeded(proto.sampling_params(req, max_tokens, self.defaults))
+            params = proto.sampling_params(req, max_tokens, self.defaults)
         except ValueError as e:                              # SamplingParams' own validation
             raise RequestError(str(e)) from e
         top_p = param_of(params, "top_p")
         if top_p is not None and float(top_p) < 1:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
+        user = user_of(req.raw)
+        if user is None and rule_of(params) == "derived":
+            raise RequestError(UNSEEDED, param="user")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
-                              user_of(req.raw), release, dict(times or {}))
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, proto.brought(req), user, release,
+                              dict(times or {}))
 
     def stream_error(self, adm: Admission, proto: Any, error: str) -> None:
         """A stream the engine failed, in the server's record (``summary.json``'s ``stream_errors``: the count and the
@@ -526,6 +539,19 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
+def no_slice(opts: Options) -> str | None:
+    """Why the windows' served rows name no compile slice: under ``--admit tick``, `serve_commit.NO_TICK_SLICE`. None
+    under any other admission, whose windows name `serve_commit.SERVED_SLICE`."""
+    return NO_TICK_SLICE if opts.admit == "tick" else None
+
+
+def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
+    """serve.json's ``served_rows_no_slice``, why the windows' served rows name no slice (`CommitWindows.no_slice`); no
+    field where they name `serve_commit.SERVED_SLICE`, or where nothing is committed."""
+    why = windows.no_slice if windows is not None else None
+    return {} if why is None else {"served_rows_no_slice": why}
+
+
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -545,6 +571,11 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
+    if settings.VERITY_POOL_ROW < 0:
+        raise UsageError(f"VERITY_POOL_ROW {settings.VERITY_POOL_ROW}: a token width is at least 1 (0 is off)")
+    if settings.VERITY_POOL_ROW and not (opts.prefix_caching and opts.commit):
+        raise UsageError("VERITY_POOL_ROW exports the prefix cache's pool at each Commit window's close: it needs "
+                         "--prefix-caching and the Commit")
     if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
@@ -598,13 +629,29 @@ def main(opts: Options) -> int:
         arm = SH.arm_of(opts, llm, com, out, flush=trace.drain)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
+        pool = pool_block = None
+        if ctw := settings.VERITY_POOL_ROW:
+            from verity_vllm.engine import pool_row as PR
+
+            if (len(tok) - 1) >> ctw:
+                raise UsageError(f"VERITY_POOL_ROW {ctw}: the tokenizer's {len(tok)} tokens need "
+                                 f"{(len(tok) - 1).bit_length()} bits")
+            pool_block = trace.sched.block_size
+            PR.install_keys(ctw, pool_block)
+
+            def live_pool() -> Any:
+                return trace.sched.kv_cache_manager.block_pool
+
+            pool = live_pool
+            PR.genesis_reset(pool())                         # the learn pass cached its blocks under vLLM's own keys
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
-                                served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
+                                served=served_statics(scheduler_config(trace.sched), served_class(opts)),
+                                no_slice=no_slice(opts), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests, arm=arm, release=draws)
+                                request_cap=opts.window_requests, arm=arm, release=draws, pool=pool, pool_block=pool_block)
         if arm is not None:
             arm.drawing(draws)
     if draws_dir is not None:
@@ -617,15 +664,14 @@ def main(opts: Options) -> int:
     served = opts.served_model_name or opts.model
     order = rows = ticked = None
     if opts.admit in ("release-order", "tick"):
-        from verity_vllm.engine.handle import model_runner
-        from verity_vllm.engine.step_trace import scheduler_of
-        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
+        from verity_vllm.engine.handle import model_runner, scheduler
+        rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler(engine))
     if opts.admit == "release-order":
         order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
     elif opts.admit == "tick":
         from verity_vllm.engine.engine_driver import external_id
         from verity_vllm.pipeline.serve_admit import install
-        loop.sched = scheduler_of(engine)
+        loop.sched = scheduler(engine)
         loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
         ticked = install(loop.sched, loop.gate, key=external_id)      # over the advice trace's wrappers, which see admissions
         order = TickAdmit(loop.submit, loop.abort, loop.tick)
@@ -655,7 +701,7 @@ def main(opts: Options) -> int:
               "commit": opts.commit, "scheme": com.commit_scheme if com is not None else None,
               "learn_warmup": getattr(com, "learn_warmup", None),
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
-              "served_rows_statics": windows.served if windows is not None else None,
+              "served_rows_statics": windows.served if windows is not None else None, **no_slice_record(windows),
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
               "seal_process": sealer.summary()["process"] if sealer is not None and sealer.process is not None else None,
               "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,

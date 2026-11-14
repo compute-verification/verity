@@ -17,3 +17,9 @@ uv run benchmarks/f32_exhaustive/run.py boolean F32Sqrt --out DIR [--procs N] [-
 `DIR/exhaustive-<fn>.json` (`exhaustive-boolean-WORD.json`) holds the range, the inputs checked, the mismatch count and up to
 1000 mismatches (the input and the two words). `--procs` defaults to every CPU the process may run on. The 100-digit
 `decimal` evaluators make a whole range a CPU node's work, so split it with `--lo` and `--hi` across runs.
+
+## Interface
+
+- **Provides:** `run.py`, a command, and the result file it writes.
+- **Loaded by:** nothing.
+- **Loads:** `verity.definitions` (`registry`, `boolean`), `verity.circuits.evaluation` and gmpy2.

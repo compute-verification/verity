@@ -16,7 +16,8 @@ in blocks of 16, 16 and 8, in two splits, two heads, DV = 32: one column block):
 
 `test_a_window_of_one_row_commits_and_its_wires_hold` takes minutes, all of it the window's population program lowering the
 five templates: it is the one test of the committed window and its public bodies, which the others reach only through the rows.
-`benchmarks/one_stage/a5_sparse_mla.py` audits the same window (`window`, `Served`).
+`benchmarks/one_stage/a5_sparse_mla.py` audits the same row's window (`window`, `Served`) over ``BITS``, each key block its
+Boolean body (``SparseMlaHeadBlock_v2``): the same units, rows and wires, staged flat, the form `verify --zk` takes.
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from verity.commitments.windows import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
+from verity.definitions import boolean as BB
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla as BM
 from verity.definitions.registry import boolean_sparse_mla_split as BX
@@ -89,6 +91,9 @@ def comb(n: int, S: dict = TOY, boolean: bool = False) -> str:
 F16, B16, F8, E0, C2 = block(16), block(), block(8), cols(0), comb(2)
 TMPLS = [F16, B16, F8, E0, C2]
 CAPS = {F16: 3, B16: 4, F8: 4, E0: 3, C2: 4}
+#: ``TMPLS`` with each key block its Boolean body, what a partition names for a window proved under ``--zk``
+BITS = [block(16, boolean=True), block(boolean=True), block(8, boolean=True), E0, C2]
+BITS_PER_CHUNK = dict(zip(BITS, CAPS.values()))
 #: TOY's places in a head's chain: split 0's blocks 1 and 0 (visit order) and its column end, split 1's block 2 and its column
 #: end, then the combine; per block place, its split, its block in the split's visit order and its keys
 PLACES = {F16: [0], B16: [1], E0: [2, 4], F8: [3], C2: [5]}
@@ -129,15 +134,15 @@ class Served:
         return self.y[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
-    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=CAPS) -> list[CS.Member]:
+    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
-    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
-    ms = members(s, tmpls, caps)
+def window(s: Served, tmpls=TMPLS, per_chunk=CAPS, design: dict | None = None) -> CS.Binding:
+    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
+    ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -176,8 +181,9 @@ def words(x) -> list[int]:
 
 def test_a_split_row_holds_each_split_s_chain_its_column_ends_and_the_combines():
     """The units `sparse_mla_split.split_chain` cuts the row into, each a ``chain`` template, in a head's places as
-    `chain_rows.plan` orders them; a whole block's EX2 reads go in lookup slots, the rest inline.  At NS = 1 (prefill's) the
-    row is a ``SparseMla_v1`` row's chain."""
+    `chain_rows.plan` orders them; a whole block's EX2 reads go in lookup slots, the rest inline, and a key block's Boolean
+    body (``BITS``, each `boolean_version`'s), reading no table, is flat.  At NS = 1 (prefill's) the row is a ``SparseMla_v1``
+    row's chain."""
     assert SRW.unit_templates(row()) == ((row(), 1), (F16, 2), (F8, 2), (B16, 2), (E0, 4), (C2, 2))
     assert [(p.key, p.split, p.block, p.keys, p.col, p.reads) for p in CH.plan(TOY)] == [
         (("block", 16, True), 0, 0, (16, 32), 0, ()),
@@ -197,6 +203,8 @@ def test_a_split_row_holds_each_split_s_chain_its_column_ends_and_the_combines()
         ("chain", F16, "slots", "first"), ("chain", B16, "slots", "block"), ("chain", F8, "inline", "first"),
         ("chain", E0, "inline", "cols"), ("chain", C2, "inline", "combine")]
     assert [SRW.template(t).word for t in (cols(0, boolean=True), comb(2, boolean=True))] == [E0, C2]
+    assert [(SRW.template(t).word, CR.reads(SRW.template(t))) for t in BITS] == [(t, "inline") for t in TMPLS]
+    assert [descriptor_id(BB.boolean_version(SRW.template(t).fn)) for t in TMPLS[:3]] == BITS[:3]
     DV = TOY["DV"]
     assert CR.unit_rows(SRW.template(E0)) == ([("in0", V2, 32, ["m"]), ("in1", V2, 4 * 32, ["l"]), ("in2", V2, 32 * DV, ["o"])],
                                               [(V2, (0,)), (V2, (1,))])
@@ -205,6 +213,18 @@ def test_a_split_row_holds_each_split_s_chain_its_column_ends_and_the_combines()
     for t, key in ((comb(3), "('combine', 3)"), (end(), "('end',)"), (block(4), "('block', 4, True)")):
         with pytest.raises(ValueError, match=re.escape(f"a row of T=40 keys in NS=2 splits holds no unit {key} of it")):
             CH.positions(SRW.template(t), spec_statics(row()))
+
+
+def test_the_key_blocks_boolean_bodies_are_the_same_units_rows_and_wires():
+    """A window over ``BITS`` is the window over ``TMPLS`` but for its key blocks' template ids: each member's rows, outputs,
+    units and wires, and every word serving reads for it."""
+    s = Served(n=2)
+    ms, bits = members(s), members(s, BITS, BITS_PER_CHUNK)
+    of = dict(zip(TMPLS, BITS))
+    assert [(of[m.template], m.rows, m.outs, m.n, m.base, m.wired) for m in ms] == [
+        (m.template, m.rows, m.outs, m.n, m.base, m.wired) for m in bits]
+    for (g, e), (gb, eb) in zip(read(s, ms), read(s, bits, BITS), strict=True):
+        assert e == eb and all(np.array_equal(g[x][q], gb[x][q]) for x in ("rows", "outs") for q in g[x] | gb[x])
 
 
 def test_each_read_row_is_wired_to_the_unit_that_wrote_it():

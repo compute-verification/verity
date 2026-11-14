@@ -1,6 +1,7 @@
 """hidden_zk's summarize.py on a row unit, whose Lean checks pass `--public-inputs`, a form flock-verify refuses until its
-soundness proof covers it: every check is held to REFUSED, an honest check passes only with that refusal as its reason, a
-control when a check rejects it too, and no check passes when it is accepted."""
+soundness proof covers it: every check is held to REFUSED, an honest check is as expected only with that refusal as its
+reason, a control when a check rejects it too, and no check is as expected when it is accepted. That refusal counts as
+neither an acceptance nor a refusal for `NO_PROGRAM` alone."""
 
 from __future__ import annotations
 
@@ -34,8 +35,9 @@ def test_a_row_units_checks_are_held_to_the_refusal(tmp_path):
     _proved(d, {"honest-own": REFUSAL, "honest-wrong": REFUSAL, "honest-chosen": False, "st-honest": REFUSAL,
                 "st-public_input_claim_false": False})
     s = _summary(tmp_path)
-    assert s["all_pass"] is True
-    assert {t: (c["expect"], c["verdict"], c["pass"]) for t, c in s["lean"].items()} == {
+    assert (s["as_expected"], s["lean_accepted"], s["lean_refused_no_program"]) == (True, 0, 0)
+    assert not {"all_pass", "pass"} & (set(s) | {k for c in s["lean"].values() for k in c})
+    assert {t: (c["expect"], c["verdict"], c["as_expected"]) for t, c in s["lean"].items()} == {
         "honest-own": ("REFUSED", "REFUSED", True), "honest-wrong": ("REFUSED", "REFUSED", True),
         "honest-chosen": ("REFUSED", "REJECT", True), "st-honest": ("REFUSED", "REFUSED", True),
         "st-public_input_claim_false": ("REFUSED", "REJECT", True)}
@@ -43,6 +45,6 @@ def test_a_row_units_checks_are_held_to_the_refusal(tmp_path):
     _proved(d, {"honest-own": False, "st-honest": "refused: a unit reading 2 input groups: a statement form the soundness "
                                                   "proof does not cover", "honest-wrong": True})
     s = _summary(tmp_path)
-    assert s["all_pass"] is False
-    assert {t: (s["lean"][t]["verdict"], s["lean"][t]["pass"]) for t in ("honest-own", "st-honest", "honest-wrong")} == {
+    assert (s["as_expected"], s["lean_accepted"], s["lean_refused_no_program"]) == (False, 0, 0)
+    assert {t: (s["lean"][t]["verdict"], s["lean"][t]["as_expected"]) for t in ("honest-own", "st-honest", "honest-wrong")} == {
         "honest-own": ("REJECT", False), "st-honest": ("REJECT", False), "honest-wrong": ("ACCEPT", False)}

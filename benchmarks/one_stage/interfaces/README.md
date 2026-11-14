@@ -52,9 +52,11 @@ for one server block and the Lean check's answer for it. It extends the all-prot
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
 - the subprotocols, keyed `integrity` (sampled proofs), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is
   `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity's count bound,
-  `profile.Stratified.count_bound` over its sample, W_cert,
-  S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
-  and 1/10^6, its run ids, and `source: real|fixture`;
+  `profile.Stratified.count_bound` over its sample: over the answer's own `strata`, which the quantity then carries,
+  where its profile samples each stratum on its own, and over a uniform sample of the checked level otherwise; W_cert,
+  S0, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
+  and 1/10^6, its run ids, and `source: real|fixture`. S0 is PoUS's state bound ⌊ρ·|C|⌋; the schema also reads
+  `S_cert`, that quantity's older name, which nothing writes;
 - the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0` or
   `verity/remote/v0`, as the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
@@ -75,6 +77,9 @@ subprotocols accept, and a wipe is carried but not composed, since it ran on ano
 verdict is undecided, and the error sum is at least sampled proofs' 1/2 from its 2-unit sample. `block-record-b71a-w30`
 carries its window's Lean `onsite check` answer, which accepts. `block-record-r1-window10` is one window with
 sampled proofs at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
+`integrity-profile-stratified` is the profile of a served run's SPOT answer, which samples each template's units as a
+stratum of their own (all 160 of one, 2 of another's 4): its bound is 2 of 164 at δ = 1/100, where a uniform sample of
+162 of 164 would say 1.
 
 ## Demo A's report
 

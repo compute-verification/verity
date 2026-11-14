@@ -253,3 +253,16 @@ def test_a_rank_that_ends_before_planning_opens_nothing(tmp_path, monkeypatch):
         manager.shutdown()
     assert published["plan"]["session"] is None and "was not opened" in published["error"]
     assert nothing_reserved(tmp_path)
+
+
+def test_a_local_open_whose_challenger_signed_nothing_is_refused_without_the_sessions_secret(tmp_path, monkeypatch):
+    """The gate answers an open with the session's secret even when its challenger stopped before it signed a commitment
+    (`auditor.gate_open`). `Local.open` refuses that open by name with the gate's answer less its secret, so the text a
+    run's log keeps holds no session's secret."""
+    session = AC.Local(tmp_path, [AC.on_main([])])
+    monkeypatch.setattr(AC.Local, "_serve", lambda self, s: None)  # the session's unit stops before it signs
+    with pytest.raises(Ch.CoinError, match="the local gate refused the open, or its challenger signed no commitment: ") as e:
+        session.open(ROOT, [[AC.FAMILY, 2]])
+    secret = (session.host.sessions / session.session / session.A.SECRET).read_text().strip()
+    assert len(secret) == 64 and secret not in str(e.value)
+    assert f'"session": "{session.session}"' in str(e.value) and '"commitment": null' in str(e.value)

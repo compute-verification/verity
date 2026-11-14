@@ -8,7 +8,8 @@ for the account balance.
 
 Where the laptop files are absent (a cloud VM with only the Cursor secrets) the
 environment stands in, and a file that exists always wins:
-``RUNPOD_API_KEY`` for the API key (with the default GraphQL URL);
+``RUNPOD_API_KEY`` for the API key (with the default GraphQL URL), and with
+neither, the REST calls are asked of the control pod's gate (``pods/door.py``);
 ``RUNPOD_SSH_KEY_B64`` for the ssh key, decoded once to a mode-600 file under
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``), with its
 known_hosts beside it.  Neither value is ever printed.
@@ -128,7 +129,15 @@ def public_key() -> str:
 
 
 def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
-    cfg = _config()
+    try:
+        cfg = _config()
+    except PodError as no_key:
+        # a machine with no RunPod key asks the control pod's gate, which holds the account's (pods/door.py)
+        try:
+            from . import door
+        except ImportError:                 # this file alone on a pod: no package around it
+            raise no_key from None
+        return door.api(method, path, body, no_key=str(no_key))
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
         f"{REST}{path}",

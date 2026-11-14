@@ -1,6 +1,6 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`archive/examples/h200/e2e_h200/plan.py`'s
-`Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (the `Map` of the H200 demo's `plan.py`, in history
+at `5c095bb4ab70`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
 **Harm.** A unit's work is its subcircuit's own ANDs (`Candidate.ands`, not its rows' openings), every subcircuit alike,
@@ -52,17 +52,16 @@ import json
 import sys
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from math import ceil, comb, floor, fsum, inf, log, log2, nextafter
+from math import ceil, comb, floor, inf, log, log2, nextafter
 from pathlib import Path
-
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h200 as H  # noqa: E402
 
 from verity.protocols.pouw.verifier.window import eps_at  # noqa: E402
-from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
+from verity.protocols.spot.verifier.consumers import entropy_bits
+from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum  # noqa: E402
 from verity.protocols.spot.optimize import (  # noqa: E402
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
@@ -236,29 +235,13 @@ _RISK: dict[tuple[int, int, int], float] = {}
 
 class _Memo(Stratum):
     """Core's `Stratum`, its `_risk` remembered: `harm_bound`'s bisection asks the same m of each stratum many times, and
-    `_risk` sums k terms while k <= 2^14. Every value is core's, but where core's fails:
-
-    - past 2^53 units m / (n - i) rounds to 1 at m = n - k, and `log1p(-1)` raises: there each term is core's
-      `neg_log_ratio` of (n - i - m) / (n - i) in integers;
-    - past 2^14 samples core takes lgamma's differences, which at a year's 1e17 units keep no digit (lgamma(1e17) is
-      4e18, its ulp 512): past 2^25 units this sums core's own log1p terms instead, pairwise in binary64."""
+    `_risk` sums up to 2^14 terms."""
 
     def _risk(self, m: int) -> float:
         key = (self.size, self.k, m)
-        if key in _RISK:
-            return _RISK[key]
-        n, k = self.size, self.k
-        if not (k > 1 << 14 and n > 1 << 25 and 0 < m <= self._finite()):
-            try:
-                v = Stratum._risk(self, m)
-            except ValueError:
-                v = fsum(neg_log_ratio(n - i - m, n - i) for i in range(k))
-        elif 2 * m < n - k + 1:
-            v = -float(np.log1p(-m / (n - np.arange(k, dtype=np.float64))).sum())
-        else:
-            v = fsum(neg_log_ratio(n - i - m, n - i) for i in range(k))
-        _RISK[key] = v
-        return v
+        if key not in _RISK:
+            _RISK[key] = Stratum._risk(self, m)
+        return _RISK[key]
 
 
 def law(sizes: dict[str, int], cands: list[Candidate]) -> Stratified:
@@ -280,8 +263,7 @@ def location(n: int, count: int) -> float:
         return 0.0
     if 2 * count >= n:
         return float(n)
-    x = count / n
-    return min(float(n), nextafter(n * (-x * log2(x) - (1 - x) * log2(1 - x)) * (1 + MARGIN), inf))
+    return min(float(n), nextafter(entropy_bits(n, count) * (1 + MARGIN), inf))
 
 
 def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Objective) -> PlanBounds:

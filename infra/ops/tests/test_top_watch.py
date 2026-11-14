@@ -1,9 +1,12 @@
 """Top's loops on the control pod (infra/control/top_watch.py): the asks relay applies Daniel's ticks to his Asks pages and rings
 the lane and top once each, quoting only his own new reply text; the sweep rings each finding's owner once."""
 import calendar
+import gzip
 import importlib.util
 import sys
 from pathlib import Path
+
+import pytest
 
 CONTROL = Path(__file__).resolve().parents[3] / "infra" / "control"
 _spec = importlib.util.spec_from_file_location("top_watch", CONTROL / "top_watch.py")
@@ -326,6 +329,25 @@ def test_a_persons_ask_off_track_rings_its_lane_once_a_window_until_it_holds(tmp
     assert sorted(again) == ["ci", "compute-accounting"] and "(unstaffed 1, slipped 1)" in again["ci"]
 
 
+def test_an_issue_waiting_only_on_landing_is_no_finding_of_the_sweeps_as_in_the_command_its_ring_names(tmp_path, monkeypatch):
+    slip = finding("NET-1", "slipped", "network-accounting")
+
+    class Lin:
+        def audit(self, owners, teams=None, now=None, waiting=None):         # the slipped issue is In Review on pull request 20 alone
+            return FOUND + ([] if waiting and waiting([20]) else [slip])
+
+        def unread(self, teams):
+            return []
+
+    monkeypatch.setattr(T.linear, "Linear", Lin)
+    monkeypatch.setattr(T.linear, "owners", lambda reg: {"NET": "network-accounting"})
+    monkeypatch.setattr(T, "volume_json", lambda: VOLUME)
+    monkeypatch.setattr("research.queue.landing_waiter", lambda: lambda numbers: numbers == [20])    # #20 is marked ready
+    ring = Ring()
+    T.linear_check({}, ring, {}, at(19, 12, 30), tmp_path / T.AUDIT_LOG)
+    assert [to for to, _, _ in ring.rings] == ["top", "infra", "proofs"]
+
+
 def test_a_clean_audit_rings_nobody_and_tops_daily_line_gives_the_change_from_the_line_24_h_earlier(tmp_path):
     state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
     T.linear_audit(state, ring, at(19, 20), lambda: FOUND, lambda: VOLUME, log)
@@ -370,3 +392,29 @@ def test_tops_daily_line_names_the_teams_the_audit_cant_read(tmp_path):
     T.linear_audit({}, ring, at(19, 20), lambda: [], lambda: VOLUME, tmp_path / T.AUDIT_LOG, lambda: ["HASH", "TRN"])
     (to, body, _), = ring.rings
     assert to == "top" and body.endswith("; no line 24 h earlier yet; not audited, the app can't read team(s) HASH, TRN")
+
+
+def test_the_sweep_saves_the_goals_page_each_hour_and_drops_the_dumps_past_their_keep(tmp_path):
+    dump = [{"id": "top/velocity-loop", "status": "on-track", "due": "2026-10-23", "title": "Vélocité"}]
+    out = tmp_path / T.GOALS_DIR
+    T.save_goals(at(1, 9, 0), lambda: dump, out)
+    T.save_goals(at(19, 20, 0), lambda: dump, out)
+    T.save_goals(at(19, 21, 2), lambda: dump[:0], out)                      # the first dump is past KEEP_S now, and goes
+    assert sorted(p.name for p in out.iterdir()) == ["goals-20261019T2000Z.json.gz", "goals-20261019T2102Z.json.gz"]
+    assert T.json.loads(gzip.decompress((out / "goals-20261019T2000Z.json.gz").read_bytes())) == dump
+    T.save_goals(at(19, 22, 0), lambda: dump, None)                          # a dry run reads the page and saves nothing
+    assert len(list(out.iterdir())) == 2
+
+
+def test_the_goals_page_is_read_with_the_pods_site_key_and_its_absence_says_where_it_goes(tmp_path, monkeypatch):
+    with pytest.raises(RuntimeError, match="no site key at .*goals.key: put one with events:read there"):
+        T.goals_page(tmp_path / T.GOALS_KEY)
+    (tmp_path / T.GOALS_KEY).write_text("a-dummy-site-key\n")
+    seen = []
+
+    def answer(method, url, data, headers):
+        seen.append((method, headers["Authorization"]))
+        return {"goals": [{"id": "top/velocity-loop"}]}
+
+    monkeypatch.setattr(T.goals, "http_json", answer)
+    assert T.goals_page(tmp_path / T.GOALS_KEY) == [{"id": "top/velocity-loop"}] and seen == [("GET", "Bearer a-dummy-site-key")]

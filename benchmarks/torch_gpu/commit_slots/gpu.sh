@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # commit_slots on one leased GPU (cwd = the source tree's root): outside the lease, the engine's build (sha512_rows; nvcc,
-# for this GPU) and its host twin's; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots
+# for this GPU), its host twin's and the fetch of the layout fixture the tests read; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots
 # against the CPU reference's, the frozen layout at 4,096 to 20,480 slots on sampled slots) and bench.py (GB/s and share of
 # the step). Python is PY (CUDA torch; default benchmarks/harness/env.sh's), with the tree on PYTHONPATH.
 #
@@ -23,10 +23,20 @@ git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:
 { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
   echo "cuda ${CUDA:-none}"; nvcc --version | tail -2; nvidia-smi --query-gpu=index,name,compute_cap,driver_version --format=csv; } \
   > "$O/env.txt" 2>&1
+STEPS_ASKED=${STEPS:-tests check bench}
 CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d ' ')
 $PY -c "import slots_gpu as G; print(G.build('$CAP'))" > "$O/build.txt" 2>&1
 echo "build rc $?" > "$O/rc.txt"
-export O PY D ROOT STEPS=${STEPS:-tests check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-} STEP_ARGS=${STEP_ARGS:-}
+# the fetched fixture the tests read, which a fresh clone lacks (commitments' layouts): fetched here, outside the lease,
+# where this Python runs the store's command and reaches the store or its public export; where it doesn't, the test that
+# reads it skips with its reason and the rest run
+FIXTURES=verity/commitments/tests/fixtures/layouts
+case " $STEPS_ASKED " in *" tests "*)
+  PYTHONPATH=$ROOT/tools/research/src:$PYTHONPATH $PY -m research data fetch-fixtures --repo "$ROOT" "$ROOT/$FIXTURES" \
+    > "$O/fixtures.txt" 2>&1 && echo "fixtures fetched" >> "$O/rc.txt" \
+    || echo "fixtures not fetched (fixtures.txt): the test that reads $FIXTURES skips" >> "$O/rc.txt" ;;
+esac
+export O PY D ROOT STEPS=$STEPS_ASKED CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-} STEP_ARGS=${STEP_ARGS:-}
 export STEP_WRAP=${STEP_WRAP:-}
 export LEASE_MIN=${LEASE_MIN:-25} LEASE_END=${LEASE_END:-}
 # shellcheck disable=SC2016
