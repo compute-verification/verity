@@ -5,7 +5,7 @@ public import InferenceOnlyCheck.Theta
 /-!
 # What θ's provenance check's acceptance means
 
-`InferenceOnlyCheck.Theta.evaluate` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Theta.lean`) is the NCI check of
+`InferenceOnlyCheck.Theta.evaluate` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Theta.lean`) is the inference-only check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
 run's own record and the program function's parameters. `InferenceOnly.Assumptions.ThetaRegistered`
 (`Definitions/InferenceOnly/Assumptions/Theta.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,
