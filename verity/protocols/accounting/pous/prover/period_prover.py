@@ -23,7 +23,7 @@ a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's ro
 `leg(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's
 store up once at `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory
 challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
-at S1's deployed parameters (`memory_challenger.LMS`) that `challenger_party.device_key` makes once on that host; the
+at S1's deployed parameters (`memory_challenger.LMS`) that `onsite.device_key` makes once on that host; the
 prover and the verifier run on the node. `records` is the store it sets up: the period's files, the auditor's ledger in
 them cut to the entries their window cites (`cite`).
 """

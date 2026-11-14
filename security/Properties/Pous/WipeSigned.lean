@@ -45,7 +45,7 @@ the model. The model takes the challenger's clock readings and the answers it re
 nothing of them. It takes the start mark as the bytes the challenger held, and does not model the certificate or who
 made it. It does not model what refuses a session before it starts. The challenger may run any number of wipes
 under a key, each signed once, and the key signs PoUS's sessions too: `wipe_party.main` signs with
-`challenger_party.device_key`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
+`onsite.device_key`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/

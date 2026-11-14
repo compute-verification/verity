@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests")]
 
 import pous_test_signer as ts  # noqa: E402
-from verity.protocols.accounting.pous.device import challenger_party  # noqa: E402
+from verity.protocols.accounting.pous.device import onsite  # noqa: E402
 from verity.protocols.accounting.poub.verifier import p2_parties  # noqa: E402
 
-challenger_party.device_key = lambda directory: ts.AtLeaf(b"p2-party-at-leaf")
+onsite.device_key = lambda directory: ts.AtLeaf(b"p2-party-at-leaf")
 raise SystemExit(p2_parties.main())

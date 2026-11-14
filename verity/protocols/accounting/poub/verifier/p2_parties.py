@@ -56,7 +56,7 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 `python -m verity.protocols.accounting.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
-log in `--challenger`'s directory (`pous.device.challenger_party.device_key`) signing the close of the one session the auditor
+log in `--challenger`'s directory (`pous.device.onsite.device_key`) signing the close of the one session the auditor
 named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
@@ -961,7 +961,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
     ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key and "
-                                                    "session log (`pous.device.challenger_party.device_key`), which sign the "
+                                                    "session log (`pous.device.onsite.device_key`), which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
                                       "challenger for this session; without them, no session has a case")
@@ -1006,9 +1006,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     closer = None
     if a.challenger is not None:
-        from verity.protocols.accounting.pous.device import challenger_party
+        from verity.protocols.accounting.pous.device import onsite
 
-        signer = challenger_party.device_key(a.challenger)
+        signer = onsite.device_key(a.challenger)
         closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
 
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
@@ -1040,7 +1040,7 @@ the key it signs PoUS's sessions with."""
 
 
 def pinned_signer(configuration: Mapping[str, Any], directory: Path) -> mc.LmsSigner:
-    """The memory challenger's key in its device's `directory` (`pous.verifier.period.challenger`), refused unless the
+    """The memory challenger's key in its device's `directory` (`pous.device.onsite.device_key`), refused unless the
     SHA-512 of its public key is the configuration's pin `CLOSER_PIN`. A directory holding no key is refused, never
     given a new one, which no pin could name."""
     pin = next((p["key-sha512"] for p in configuration.get("pin", ()) if (p["party"], p["protocol"]) == CLOSER_PIN),
@@ -1049,9 +1049,9 @@ def pinned_signer(configuration: Mapping[str, Any], directory: Path) -> mc.LmsSi
         raise Refused("unpinned-key", f"the configuration pins no key for {CLOSER_PIN}, which signs each close")
     if not (directory / "seed").is_file():
         raise Refused("no-key", f"{directory} holds no memory challenger's key; its setup makes one")
-    from verity.protocols.accounting.pous.verifier import period
+    from verity.protocols.accounting.pous.device import onsite
 
-    signer = period.challenger(directory)
+    signer = onsite.device_key(directory)
     if hashlib.sha512(signer.public_key).hexdigest() != pin:
         raise Refused("unpinned-key", f"the key in {directory} is not the one the configuration pins for {CLOSER_PIN}")
     return signer

@@ -318,7 +318,7 @@ def deployment(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 SETUP_WORKERS = 32
 """The processes the leg encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
-CPUs each may run on (`period_prover.setup_store`; `challenger_party.device_key`, from `challenger_party.main`)."""
+CPUs each may run on (`period_prover.setup_store`; `onsite.device_key`, from `challenger_party.main`)."""
 
 
 __all__ = ["DEPLOYMENT", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL",
