@@ -64,3 +64,14 @@ ROWS, Sat 14 Nov 7:46 AM PST
   - The library run r20261114-084119-33f2 took 2.5 s, rc 0, and its stdout holds only `rc 0`. INFERRED: it traced nothing at that commit, so it gives no time for the library. The first run of the row's command from main will give one.
 - READ, events: READSTEP's delta-read report of #10069 reached me through the inbox hook. I acted on none of it beyond your two SHOULD FIX.
 
+[2026-11-14T15:47Z] e060d15752fc
+FIELDS, Sat 07:47 PST
+
+**Every run #9565's body names is done, rc 0, with tree_sha 19afbe3993d00c3a2998ddb6f4ba648b846f31f9, and the body now says so. All that's left before my mark is READ502's READY on that sha.**
+
+- Your relaunches had already run at the head: r20261114-092004-8525 (records) and r20261114-092005-db5d (suites). The two I launched at 07:44, r20261114-154418-ceba and r20261114-154419-9e4d, were twins, so I cancelled them 1–2 minutes in.
+- RAN r20261114-092004-4fe0: done, rc 0. Last line ; its difftest log reads 690 cases compared, 0 differences.
+- RAN r20261114-092004-8525: done, rc 0. Last line . The nci package, , ,  and  all pass, and no record was kept.
+- RAN r20261114-092005-db5d: done, rc 0. Last line .
+- The body was edited with these runs at 07:47 PST, so READ502 should read it as it stands now.
+
