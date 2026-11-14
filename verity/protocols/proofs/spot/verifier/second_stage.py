@@ -152,6 +152,9 @@ OWN_SOURCES = ("bytes",)
 #: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
 #: (`SecondStage.VERDICT_ONE`).
 VERDICT_ONE = (("bytes", "00000001"),)
+#: `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
+#: (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`). `_opened_row` doesn't read it until `half_leaves` is written.
+VERDICT_ONE_LEAF = (("bytes", "0001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64

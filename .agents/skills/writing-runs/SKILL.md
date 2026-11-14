@@ -18,7 +18,7 @@ there when the workload exits and publishes to the store:
 
 - always, the run's logs and records (`custody.RUN_FILES`) and all of `$OUT` (`$RESEARCH_RUN_DIR/out`, whatever the cwd);
 - each `--declared-output GLOB` (quote it; `fnmatch` on paths relative to the run dir, so `*` crosses `/`);
-- other files in path order up to 256 MiB in all (`custody.UNDECLARED_CAP_BYTES`, kept for older launches; it drops to 0
+- other files in path order up to 256 MiB in all (`custody.UNDECLARED_LIMIT_BYTES`, kept for older launches; it drops to 0
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
 
