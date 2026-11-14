@@ -232,10 +232,13 @@ def why (p : Public) : String :=
 #guard why { pub (listing [1, 3] [1, 3]) with tables := some { counts := #[5], starts := #[0], refs := #[1, 3] } } ==
   "registered reads: port a0: one position and one path per table row"
 
--- the rows an entry gives (`opened`, what a verdict reports), and `gives` agreeing with it at every row
-#guard Registered.opened none 4 == [0, 1, 2, 3] && Registered.opened (some #[1, 3]) 4 == [1, 3]
-#guard [none, some #[], some #[1, 3], some #[0, 1, 2, 3], some #[2], some #[0, 5, 9, 12, 40]].all fun sel =>
-  (List.range 48).all fun r => Registered.gives sel r == (Registered.opened sel 48).contains r
+-- a listed row's index (`indexOf`, by halving) is its first index in the listing, at every row; and the entry by table row
+-- (`entry`, what the guarantees read) spreads the listing to the table's length
+#guard [#[], #[1, 3], #[0, 1, 2, 3], #[2], #[0, 5, 9, 12, 40]].all fun (ls : Array Nat) =>
+  (List.range 48).all fun r => Registered.indexOf ls r == (List.range ls.size).find? (ls[·]! == r)
+#guard Registered.place 5 #[1, 3] #[10, 30] 0 == #[0, 10, 0, 30, 0]
+#guard (Registered.entry (pub (listing [1, 3] [1, 3])) { (default : Registered.Port) with name := "a0", value := "h1/a" }).toOption.map
+    (·.1) == some #[0, 1, 0, 3]
 
 end Sampled
 

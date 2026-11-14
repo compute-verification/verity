@@ -37,15 +37,21 @@ theorem forM_ok {ε α : Type} {f : α → Except ε Unit} : ∀ {l : List α}, 
     | head => exact hu
     | tail _ hx => exact forM_ok hrest x hx
 
-/-- A row of its table that an entry gives (`gives`) is among the rows `checkPort` opens (`opened`). -/
-theorem mem_opened {sel : Option (Array Nat)} {rows r : Nat} (hr : r < rows) (hg : gives sel r = true) :
-    r ∈ opened sel rows := by
-  cases sel with
-  | none => exact List.mem_range.mpr hr
-  | some ls =>
-    simp only [gives, decide_eq_true_eq] at hg
-    obtain ⟨hk, he⟩ := Array.getElem?_eq_some_iff.mp hg
-    exact Array.mem_toList_iff.mpr (he ▸ Array.getElem_mem hk)
+/-- A row an entry's `table_rows` name by `indexOf` is the listing's row at that index. -/
+theorem indexOf_some {ls : Array Nat} {r k : Nat} (h : indexOf ls r = some k) : ls[k]? = some r := by
+  unfold indexOf at h
+  split at h
+  · cases h; assumption
+  · cases h
+
+/-- The spread entry (`place`) at a row of the table that `indexOf` finds among the `table_rows` is the listing's own. -/
+theorem place_getD {α : Type} {n : Nat} {ls : Array Nat} {xs : Array α} {d : α} {r k : Nat} (hr : r < n)
+    (hk : indexOf ls r = some k) : (place n ls xs d).getD r d = xs.getD k d := by
+  rw [Array.getD_eq_getD_getElem?, place, Array.getElem?_ofFn]
+  simp only [hr, ↓reduceDIte, hk, Option.getD_some]
+
+theorem place_size {α : Type} (n : Nat) (ls : Array Nat) (xs : Array α) (d : α) : (place n ls xs d).size = n :=
+  Array.size_ofFn
 
 /-- **What `checkPort` accepting establishes, with the entry it read**: the port is the circuit's first port `p` of its
 name, of the registration's leaf schema and rows; the header's entry gives `positions` and `paths` by table row
@@ -71,27 +77,71 @@ theorem checkPort_spec {c : Circuit} {pub : Public} {t : Tables} {indices : Arra
       split at h
       · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
       · rename_i hfit
-        obtain ⟨⟨positions, paths⟩, hent, h⟩ := except_bind_ok h
+        obtain ⟨⟨positions, paths⟩, hgiv, h⟩ := except_bind_ok h
         try simp only at h
-        obtain ⟨sel, -, h⟩ := except_bind_ok h
-        try simp only at h
-        split at h
-        · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
-        · rename_i hsz
-          simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hsz
+        obtain ⟨sel, hsel, h⟩ := except_bind_ok h
+        cases sel with
+        | none =>
+          try simp only at h
+          have hent : entry pub reg = .ok (positions, paths) := by
+            unfold entry; rw [hgiv, hsel]; rfl
           split at h
-          · exact absurd h (throw_ne_ok _ _)
-          · rename_i hrow
+          · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+          · rename_i hsz
+            simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] at hsz
             split at h
-            · rename_i hinst
-              refine ⟨p, positions, paths, hp, by simpa using hsch, by simpa using hfit, hent, hsz.1, fun i hi => ?_⟩
-              have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
-              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not,
-                Bool.not_eq_false] at hi'
-              obtain ⟨⟨hr, hg⟩, hreads⟩ := hi'
-              have ho := List.find?_eq_none.mp hrow _ (mem_opened hr hg)
-              exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
             · exact absurd h (throw_ne_ok _ _)
+            · rename_i hrow
+              split at h
+              · rename_i hinst
+                refine ⟨p, positions, paths, hp, by simpa using hsch, by simpa using hfit, hent, hsz.1, fun i hi => ?_⟩
+                have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
+                simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or,
+                  Classical.not_not] at hi'
+                obtain ⟨hr, hreads⟩ := hi'
+                have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
+                exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
+              · split at h
+                · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+                · split at h <;> exact absurd h (throw_ne_ok _ _)
+        | some ls =>
+          try simp only at h
+          obtain ⟨m, hlen, h⟩ := except_bind_ok h
+          try simp only at h
+          split at h
+          · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
+          · rename_i hm
+            simp only [bne_iff_ne, ne_eq, Classical.not_not] at hm
+            split at h
+            · exact absurd h (throw_ne_ok _ _)
+            · rename_i hrow
+              split at h
+              · rename_i hinst
+                have hent : entry pub reg = .ok (place m ls positions 0, place m ls paths ByteArray.empty) := by
+                  unfold entry; rw [hgiv, hsel]
+                  show (listedRows pub reg ls positions paths >>= fun n =>
+                    pure (place n ls positions 0, place n ls paths ByteArray.empty)) = _
+                  rw [hlen]; rfl
+                refine ⟨p, _, _, hp, by simpa using hsch, by simpa using hfit, hent, (place_size _ _ _ _).trans hm,
+                  fun i hi => ?_⟩
+                have hi' := List.find?_eq_none.mp hinst i (List.mem_range.mpr hi)
+                cases hk : indexOf ls (ref t c.ports.size p i) with
+                | none => rw [hk] at hi'; exact absurd rfl hi'
+                | some k =>
+                  rw [hk] at hi'
+                  simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or,
+                    Classical.not_not] at hi'
+                  obtain ⟨hr, hreads⟩ := hi'
+                  have hrm : ref t c.ports.size p i < m := by omega
+                  have hls := indexOf_some hk
+                  obtain ⟨hkl, -⟩ := Array.getElem?_eq_some_iff.mp hls
+                  have hrk : ls.getD k 0 = ref t c.ports.size p i := by
+                    rw [Array.getD_eq_getD_getElem?, hls, Option.getD_some]
+                  have ho := List.find?_eq_none.mp hrow k (List.mem_range.mpr hkl)
+                  rw [hrk] at ho
+                  rw [place_getD hrm hk, place_getD hrm hk]
+                  exact ⟨hr, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
+              · exact absurd h (throw_ne_ok _ _)
   · exact absurd h (throw_ne_ok _ _)
 
 /-- A port `checkPort` accepts is the circuit's port `p`, of the registration's leaf schema, whose rows are the
