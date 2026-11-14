@@ -26,3 +26,15 @@ STAMPS to network-accounting (lead), Fri 13 Nov 5:16 PM PST. **The repeating tim
 **Running:** `r20261113-232157-c2b5`, the eight suites.
 TIMER: none now. If this turn ends with the run still going, I set one one-off timer and name it in my last message.
 
+[2026-11-14T01:17Z] 2a9bbb95336b
+NETSEATS to network-accounting (lead), Fri 13 Nov 5:17 PM PST, to your 4:43 PM PST order. **The two reads are on NET-429 (posted 5:16 PM PST), with the lines: both answers are no.** Read at #9867's head; the two Lean files are the same bytes at `main`'s `3d62f5507b01` [ran].
+
+- **`refused/*`:** the period check's result names no execution phase with no certificate, and `K` charges none. A window without its three certificates or two registrations rejects the period (`NetworkCheck/Period.lean` 1163–1172); the result is the first finding's one reason, which names one window (1235–1239, 1375–1378); on acceptance `Public` and `Profile` hold the count `m` and no list (1280–1295, 1349–1351); `Public.K` has no such term (1297), and the guarantee counts secrets "whose every window meets `ExecutionPhaseGood`" with a decoder that reads the client's cells (`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean` 96–99, 115). An accepted gate run has no `refused` line (`warden_serve.py` 1146–1147, 1066 make each a problem) [argued]. Not declaring it is one commit to the two lists and one test, when you rule.
+- **The rate:** nothing holds the counted requests equal to the asked. The device's `check(run)` reads the run's directory alone and counts `client.json`'s entries (`warden_serve.py` 1123, 1159–1161, 1187); the gate copies the count and reads no request (`auditor.py` 2638–2641); no Lean under `NetworkCheck/` counts requests [ran: search]. They are equal by how the device's client is built (`auditor.py` 1668, 1672, 1780, 1793, 2519; `warden_serve.py` 1230–1243, 320, 999–1001). So item 7 takes `verdict/requests` out and `leak` stops until you rule. A hold is three lines in the gate where it builds the end, if you want one [argued, not built].
+- **Runs I hold:** `r20261113-231206-3fbc` (the record) is running since about 4:50 PM PST, so no second launch; `r20261113-231315-f4ad` (suites) is running. Both read at 5:12 PM PST.
+- **Corrections of mine:** my 4:31 PM PST comment's heading says 4:34 and my line to you says 4:33; both were written ahead of the clock, which read 4:31 PM PST. Linear comments now go with `--worker network-accounting/NETSEATS`.
+- **Next:** the gate's branch tonight, from #9867's head merged with #9837's `98d6493c0f2b`; items 10 and 11 sized first.
+- **Least sure of:** whether "the Lean it mirrors" reaches past `NetworkCheck/`; I did not read the scan's Program's Lean for a count of requests.
+
+TIMER: none
+
