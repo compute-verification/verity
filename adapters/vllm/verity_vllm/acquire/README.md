@@ -25,5 +25,5 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
   `benchmarks/served_commit` and `benchmarks/harness`.
 - **Loads:** torch and numpy, vLLM inside functions, and Triton in the norm tap's kernel
   (`norm_tap_src.rms_norm_tap`); the integration's `engine`, `query`, `commit`, `config`, `settings`, `program`,
-  `protocols`, `correspondence`, `records` and `log`; and `verity.definitions`, `verity.circuits` and
+  `protocols`, `correspondence`, `records` and `log`; and `verity_vllm.definitions`, `verity.circuits` and
   `verity.device`.

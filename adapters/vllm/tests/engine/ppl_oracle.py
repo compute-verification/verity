@@ -1,4 +1,4 @@
-"""The plain int8 linear's oracle: the registered Definition's equations (`verity/definitions/registry/int8_exact.py`,
+"""The plain int8 linear's oracle: the registered Definition's equations (`adapters/vllm/verity_vllm/definitions/registry/int8_exact.py`,
 `Int8RowQuant` then `ScaledMmS8`), in torch on the CPU, one rounding per operation.
 
     s    = RN32(max(max_k |x_k|, RN32(1e-30)) / 127)            per row of x and per output row of the weight
