@@ -66,9 +66,12 @@ and firmware.
 - `WorkSoundAt`, `WorkSoundOnCard` and their instances on both tables (`WorkSoundH200`, `WorkSoundSm120`,
   `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`) follow from Dither's `WorkSound`, with no premise beyond its own
   and the card assumption (`Proofs/Pouw/DitherInstance.lean`).
-- The assumption holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`). The deployed
-  `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048, fits the H200's table in its seconds (`kernel_fits`) and leaves
-  C = A·B in device memory (`kernel_computes`).
+- The assumption holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`) on every card
+  whose figures meet `GemmFigures`: each rate positive, an `s8` MAC one tensor unit, and code, register, shared-memory
+  and device-memory sizes that hold the kernel at `n = 2048`. The deployed `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048,
+  fits such a card in its seconds (`kernel_fits`) and leaves C = A·B in device memory (`kernel_computes`). The H200's
+  sheet, as a value (`sheetCard`, `Proofs/Core/Accel/Sheet.lean`), meets them (`h200_gemmFigures`), so the assumption
+  holds at a real card (`h200_cardWithinAccel`).
 - The assumption refuses a card that changes memory in no time (`cardWithinAccel_fails`), and one that changes more words
   of shared memory, L2 or device memory in `T` seconds than the table's rate times `T` (`cardWithinAccel_fails_rate`)
   (`Proofs/Core/Accel/Model.lean`).
