@@ -21,6 +21,9 @@ STUB = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" 
 
 
 from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
+
+zk_drivers.install()
 
 
 @pytest.mark.slow
