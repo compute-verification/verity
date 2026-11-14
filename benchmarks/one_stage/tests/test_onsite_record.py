@@ -225,7 +225,7 @@ UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 #: the guarantees of `RESTS_ON` as they are, and those no statement of which is pinned yet
 RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
 UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
-ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
+ACCEPTED = "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted"
 #: the theorem that discharges the free-input count's premise
 (COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
 #: the Property of the Lean audit over the network certifier's signed records that discharges schedules-covered
@@ -533,7 +533,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     rec = record(accepted(tmp_path))
     b = rec["bound"]
     assert (b["K"], b["phases"], b["period_s"], b["statement"]) == (
-        K, 1, "63/50", "NetTiming.Guarantees.PeriodLeakAccepted")
+        K, 1, "63/50", "NetTiming.Guarantees.MonitoringPeriodLeakAccepted")
     assert "eps" not in b and b["delta_net"] == {"note": OR.UNVALUED, "terms": [
         {"symbol": "eps", "value": "1/1048576", **OR.EPS}, {"symbol": "ε_ks", "times": 1, **OR.ERRORS["ε_ks"]},
         {"symbol": "ε_bind", "times": 1, **OR.ERRORS["ε_bind"]}, {"symbol": "ε_tap", "times": 1, **OR.ERRORS["ε_tap"]}]}
@@ -660,7 +660,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
     ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
     ({ACCEPTED: ["Accounting.Covered"]}, []),
-    ({ACCEPTED: ["NetTiming.TapOpens"]}, []),
+    ({ACCEPTED: ["NetTiming.CertifierRegisters"]}, []),
     ({ACCEPTED: None}, [ACCEPTED])])
 def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_none_but_a_standing_assumption_taken(
         tmp_path, lock, given, open_):
