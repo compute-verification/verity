@@ -6,7 +6,7 @@ the node's and the climb's in `Frame/Parts.lean`.
 -/
 module
 
-public import Proofs.Poub.ReadUnit.Frame.Parts
+public import Proofs.Accounting.ReadUnit.Frame.Parts
 
 @[expose] public section
 
