@@ -120,7 +120,7 @@ CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
 PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
-#: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
+#: the one origin a credited window's coins may come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
@@ -322,7 +322,7 @@ class H1Run:
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None,
+                 coins_from: str = "in-process", opener: Opener | None = None, served: Any = None,
                  prover: str | None = None, session: str | None = None, graphs: Sequence[int] = (),
                  commit_record: CT.CommitRecord | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
@@ -348,7 +348,7 @@ class H1Run:
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
-        self.draw, self.admission, self.coin_source, self.commit_record = draw, admission, coin_source, commit_record
+        self.draw, self.admission, self.coins_from, self.commit_record = draw, admission, coins_from, commit_record
         #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
@@ -670,7 +670,7 @@ class H1Run:
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
                                     "readmitted": len(self.readmitted), "gaps": self.request_gaps(),
                                     "coins": "live" if self.rounds is not None else "none",
-                                    "coin_source": self.coin_source, "admission": self.admission,
+                                    "coin_source": self.coins_from, "admission": self.admission,
                                     "a_roots": "bound: each call's A table is under its round's root" if unbound is None
                                     else f"unbound: {unbound}"}
         self.details["static"] = self.static()
@@ -704,7 +704,7 @@ class H1Run:
         ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
         untied = bool(tie.get("reason")) if (tie := self.details.get("roots1")) else False
-        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
+        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coins_from != CHALLENGER),
                         (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
         return out
@@ -730,7 +730,7 @@ class H1Run:
         return {"rule": "gate-pass the served rows of calls whose served y is the credited kernel's own output only, and none "
                         "in a window that served a row of a request with no entry or whose coins the auditor's challenger "
                         "didn't draw; padded work and refused calls are shown, not gate-passed", "requests": gaps,
-                "coins": self.coin_source,
+                "coins": self.coins_from,
                 "gate_passed": {"rows": sum(c.served for c in ok), "macs": sum(c.served * c.n * c.k for c in ok)},
                 "refused": {"calls": len(no), "rows": sum(c.served for c in no), "macs": sum(c.served * c.n * c.k for c in no),
                             "reasons": CG.reasons(verdicts[c.index] for c in no)},

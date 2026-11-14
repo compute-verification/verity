@@ -33,7 +33,7 @@ U = (0, 1)
 
 # --- the honest opening ------------------------------------------------------------------------------------------------------
 
-class _Sample(A.CoinSource):
+class _Sample(A.RoundCoins):
     """The verifier's coins flipped as the prover goes, in the rounds `rec_algebra.run` reads them."""
 
     def __init__(self, g: random.Random):

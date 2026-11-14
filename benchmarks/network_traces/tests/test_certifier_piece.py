@@ -167,7 +167,8 @@ def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), 
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
     (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
-        {"window": w, "answer": {"verdict": "accept"}, "registrations": list(registrations)}]}))
+        {"window": w, "registration": {"program": "ab" * 64}, "answer": {"verdict": "accept"},
+         "registrations": list(registrations)}]}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
     return d
 
