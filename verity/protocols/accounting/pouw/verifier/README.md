@@ -54,7 +54,7 @@ PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on
   randomness and committed before the phase begins; a served challenger also holds its LMS key and its signed log. It
   sends the verifier the commitment, and opens each challenge once, only after the verifier has recorded what it
   follows: the salt after the prover's root, the sampling challenge after the registration. It trusts nothing it
-  receives. It is the one auditor-trusted device PoUW relies on (`trusted-host`); the auditor-party assumptions
+  receives. It is the one auditor-trusted device PoUW relies on (`trusted-device`); the auditor-party assumptions
   (`Accounting.Assumptions.Parties`) state no PoUW challenger yet.
 - **The verifier** is the auditor's own check, the Lean `pouw-check` (`PouwCheck.check`, with the Python of the same
   names as its reference). It holds the phase's commitment, records the prover's root and registration, forwards each
@@ -223,7 +223,7 @@ The guarantees rest on named assumptions, each a hypothesis of the statement: th
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
 (`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled
-tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
+tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-device`, `live-verifier`, `cr/sha-512`
 and `prf/sha-512` (`verity.claims`).
 
 ## Core API

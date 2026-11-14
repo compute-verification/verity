@@ -418,7 +418,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
                                                                                        why=why))
     assert S.main(["--runs", str(runs), "--marker", str(marker), "--log", str(log), "--auditor"]) == 0
     assert sent == [30, 20]
-    assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor host's {marker}"}
+    assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor device's {marker}"}
     marker.write_text("")
     assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "verity/protocols/compose/device/live_challenger/run.sh"], marker)
     assert S.auditor_commands(tmp_path / "absent") == []

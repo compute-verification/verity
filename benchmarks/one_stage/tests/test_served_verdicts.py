@@ -612,7 +612,7 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert "; the bandwidth audit: error: " in line["reason"]
 
 
-def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
+def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path):
     """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
     accept isn't read as the auditor's devices having placed it."""
@@ -622,11 +622,11 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
         "public": {"K": 15764, "eps": "1/100", "windows": 1},
-        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+        "profile": {"placement": {"kind": "not-placed", "trusted-device": premise}}}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
-    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
+    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-device {premise}; ")
 
 
 def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
@@ -636,7 +636,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     states the premise alone."""
     node, host = "vy-dc-h200", "192.0.2.84"
     gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
-             "trusted-host": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
+             "trusted-device": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
                              f"prover's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                         "via": "the warden's tunnel to the endpoint's port"},
@@ -644,7 +644,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
     local = {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
-             "trusted-host": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+             "trusted-device": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
              "links": [], "uncounted": f"every link of {node}'s"}
     clause = {}
     for name, place in (("gated", gated), ("local", local)):
@@ -659,8 +659,8 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     assert clause["gated"].startswith(
         f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
         f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
-        f"trusted-host {gated['trusted-host']}; ")
-    assert clause["local"].startswith(f"accept (trusted-host {local['trusted-host']}; ")
+        f"trusted-device {gated['trusted-device']}; ")
+    assert clause["local"].startswith(f"accept (trusted-device {local['trusted-device']}; ")
     assert "K counts" not in clause["local"]
 
 
@@ -1794,7 +1794,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
 
 
 @pytest.mark.parametrize("case, why", [
-    ("in-process coins", "its epoch's coins come from 'in-process', not a live session on the auditor host's challenger"),
+    ("in-process coins", "its epoch's coins come from 'in-process', not a live session on the auditor device's challenger"),
     ("session refused", "the live session's check refused its passes: pass 2: coin: bad"),
     ("no pin", "the compose holds the coins to no key pin (--key-sha512, H1_KEY_SHA512)"),
     ("other key", "the live session's challenger key is not the compose's pin: the challenger key at "),
@@ -2203,7 +2203,7 @@ def test_a_development_pouw_piece_rejects_what_its_checks_refuse(tmp_path, monke
     doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=None if case == "no gate" else GATE, key="ff" * 64, main=None,
                  check=lambda *a: refused if case == "coins" else ok)
     why = {"coins": "coins: session s1 is not the one the ledger opened", "untied": "ROOTS1:",
-           "in-process": "coins: in-process, not the auditor host's challenger's", "no gate": "coins: ValueError: no gate"}
+           "in-process": "coins: in-process, not the auditor device's challenger's", "no gate": "coins: ValueError: no gate"}
     assert doc["verdict"] == "reject" and doc["reasons"][0].startswith(why[case]), doc["reasons"]
     salt = {"coins": "the challenger check refused the window's coins, its salt among them: session s1",
             "untied": S.SALT_MET, "in-process": "the challenger check didn't run on the window: coins: in-process",
@@ -4975,12 +4975,12 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
 
 @pytest.mark.parametrize("made, kind, to, extra, rc, line", [
     ("deferred", "deferred", "vy-auditor-2", {}, 3, "COPY refused: the deferral's list holds the window's witness, and "
-     "vy-auditor-2 is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"),
+     "vy-auditor-2 is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("deferred", "deferred", "research@vy-auditor-3.example", {"COMPOSE_NODE": "vy-auditor-3"}, 3, "COPY refused: the "
-     "deferral's list holds the window's witness, and vy-auditor-3.example is COMPOSE_NODE, an auditor host where no "
+     "deferral's list holds the window's witness, and vy-auditor-3.example is COMPOSE_NODE, an auditor device where no "
      "witness goes: copy it to a prover node"),
     ("deferred", "deferred", "research@vy-auditor-2:incoming", {}, 3, "COPY refused: the deferral's list holds the "
-     "window's witness, and vy-auditor-2 is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"),
+     "window's witness, and vy-auditor-2 is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: vy-dc-h200.example is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE (vy-auditor-2)"),
     ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
