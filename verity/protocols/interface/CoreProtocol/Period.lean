@@ -2,7 +2,7 @@
 Ticks, spans of ticks and the monitoring period, as the code reads them: the code packages' copy of
 `Security/Definitions/Core/Period.lean` (`Verity.Tick`, `Verity.TickSpan`, `Verity.MonitoringPeriod`), on Lean core and
 Flock's canonical JSON, so a verifier reads them without requiring `security`. `Properties.Core.Period` states that the
-copy is the spec's, and `verity.periods` is its Python mirror, which `core-periods-difftest` holds to it.
+copy is the spec's, and `verity.protocol` is its Python mirror, which `core-periods-difftest` holds to it.
 
 * A span of ticks (`TickSpan`): the ticks `[start, start + len)` on the one clock (`OneClock`), ending at `stop`;
   `within` decides that one span lies inside another.
