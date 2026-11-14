@@ -97,7 +97,7 @@ def test_the_checked_templates_are_pinned(dev, k, tile):
 def test_the_deployed_tile_is_pinned(dev, k, tile):
     """Catches a change to the deployed template at K = 8192 that the table check and the K = 128 pins don't see,
     such as one gated on the depth or the tile."""
-    assert pc8.TILE == tile
+    assert tile == pc8.TILE
     assert program_digest(Program(pc8.templates(k, tile, dev)["tile"])) == DEPLOYED[dev, k, tile]
 
 
@@ -175,5 +175,5 @@ def test_the_checked_tile4_templates_are_pinned(k, tile):
 @pytest.mark.parametrize("k,tile", sorted(DEPLOYED4))
 def test_the_deployed_tile4_is_pinned(k, tile):
     """Catches a change to `pc4`'s deployed template at K = 8192 that the table check and the K = 128 pins don't see."""
-    assert pc4.TILE == tile
+    assert tile == pc4.TILE
     assert program_digest(Program(pc4.templates(k, tile)["tile"])) == DEPLOYED4[k, tile]
