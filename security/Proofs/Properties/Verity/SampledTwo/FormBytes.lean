@@ -175,7 +175,6 @@ theorem prefix_before_of_no_opening {L : CoinMap.Locate} {n : ℕ} (hL : OpensFr
       | nil =>
         rw [List.append_nil] at ha'
         rw [ha']
-        exact List.prefix_refl _
       | cons y t' =>
         rw [List.cons_append] at ht
         have hy : rl = y := (List.cons.inj ht).1
