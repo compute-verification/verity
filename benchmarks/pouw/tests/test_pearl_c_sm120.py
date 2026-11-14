@@ -1,4 +1,4 @@
-"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for
+"""Pearl-C's sm_120 tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120): the shared-memory swizzles conflict-free for
 every ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a
 lowered or spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal
 and dry run on a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name,
@@ -8,6 +8,7 @@ them.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a bui
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -25,13 +26,26 @@ from verity_config.settings import of
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 
 
 #: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
 F = load("pearl_c_sm120/fixture.py")
-S = load("pearl_c_sm120/sass_gate.py")
-RUN = load("pearl_c_sm120/run.py")
+
+
+def kernel(file: str):
+    """The kernel's FILE as a module named ``pearl_c_sm120_<stem>``, as `load` names a script, run once however many
+    tests ask."""
+    name = f"pearl_c_sm120_{Path(file).stem}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, HERE / file)
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+S = kernel("sass_gate.py")
+RUN = kernel("run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
 HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (HERE / "hash_fast.cuh").read_text()

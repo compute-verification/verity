@@ -30,7 +30,7 @@ from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.records import replay_codes as RC
 
 
 def _programs(w):

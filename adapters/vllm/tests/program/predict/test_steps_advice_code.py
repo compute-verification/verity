@@ -24,7 +24,7 @@ EOS = 2
 #: two sequences and an 8-token budget: the second request's prefill is chunked beside the first's, the third waits for a slot
 ENGINE = SC.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)
 TICK = SC.Tick(bucket_us=1000, sat_us=1000, free_us=1000)
-CAP = 1 << 13
+BITS = 1 << 13
 
 
 def _v1_session(tick: bool = True) -> tuple[V1.Record, V1.Registered, I1.Advice, bytes, dict]:
@@ -41,7 +41,7 @@ def _v1_session(tick: bool = True) -> tuple[V1.Record, V1.Registered, I1.Advice,
     return record, code, advice, V1.encode(advice, record, code), ingress
 
 
-def _coded(code: V1.Registered, cap_bits: int = CAP) -> Registered:
+def _coded(code: V1.Registered, cap_bits: int = BITS) -> Registered:
     return Registered.of(_registered().phi, 7, cap_bits=cap_bits, code=code)
 
 
@@ -53,7 +53,7 @@ def test_a_v1_string_compiles_to_the_compilation_of_the_i1_it_carries():
         record, code, advice, data, ingress = _v1_session(tick)
         assert [[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps][:2] == [[(0, 0, 2), (1, 0, 6)], [(1, 6, 1), (0, 2, 4)]]
         coded = compile_steps(_coded(code), data, ingress, record=record)
-        plain = compile_steps(_registered(cap_bits=CAP), I1.encode(advice), ingress)
+        plain = compile_steps(_registered(cap_bits=BITS), I1.encode(advice), ingress)
         assert coded.summary() == plain.summary() and len(coded.programs) == 1 and coded.batch_rule is None
         assert plan_steps(_coded(code), data, ingress, record=record).steps == plan_steps(_registered(), advice, ingress).steps
         bits = sum(V1.bits_by_window(data, record, code).values())
@@ -61,7 +61,7 @@ def test_a_v1_string_compiles_to_the_compilation_of_the_i1_it_carries():
         assert 7 * 8 * len(data) < 8 * len(I1.encode(advice))
 
 
-def test_the_cap_bounds_the_v1_strings_bits():
+def test_the_length_bound_holds_the_v1_strings_bits():
     """ℓ is held to the string's bits before any of it is read: at its length the string compiles, a bit below it is refused, and
     at that ℓ a registration that selects no code refuses the session's I1 bytes."""
     record, code, advice, data, ingress = _v1_session(tick=False)
@@ -177,7 +177,7 @@ def test_a_small_record_round_trips_with_its_lengths_sent():
     assert 0 <= 8 * len(data) - sum(V1.bits_by_window(data, record, code).values()) < 8
     ingress = _ingress(record)
     assert (compile_steps(_coded(code), data, ingress, record=record).summary()
-            == compile_steps(_registered(cap_bits=CAP), I1.encode(advice), ingress).summary())
+            == compile_steps(_registered(cap_bits=BITS), I1.encode(advice), ingress).summary())
 
 
 def test_a_length_is_never_charged_after_its_admission_window():

@@ -491,7 +491,7 @@ def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
     `whole_options` takes but the pass end's and pearl_c_sm120's B̃ prefetch, so a new served option fails here."""
     import inspect
 
-    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import whole_options
     spec = importlib.util.spec_from_file_location("pearl_c_vllm_bench_arm", HERE.parent / "pearl_c_vllm" / "bench_arm.py")
     B = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(B)
@@ -570,7 +570,7 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     from verity.protocols.accounting.pouw.verifier import core_check as CC
     from verity.protocols.accounting.pouw.verifier.audit import (

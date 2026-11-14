@@ -33,7 +33,7 @@ which a code at least 64 levels deep has for the registered reads (`depthsAt_of`
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 open Lean (Json)
 open FlockSoundness.Refine
 

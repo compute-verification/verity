@@ -2,7 +2,7 @@
 
 The canary (verity_vllm/ops/canary.sh) runs `negative flipweight exit3 <regex> ... --flip-weight model.layers.0.self_attn.qkv_proj.weight:7`
 on the SmolLM2 positive's derived weights_of_record.json and grades the attack DETECTED when commit_delta exits 3 with a first_fail_reason
-matching <regex>.  Two facts have to stay in lock-step and neither is exercised by the GPU-free suites otherwise:
+matching <regex>.  Two facts have to stay in lock-step, and the second is exercised by the GPU-free suites nowhere else:
 
   1. commit_delta declares --flip-weight and applies the flip BEFORE register_weights (else the committed weights root would still be
      the honest one and the pin would compare honest digests: a negative that cannot fail), and records the flip in verdict.json
@@ -12,7 +12,8 @@ matching <regex>.  Two facts have to stay in lock-step and neither is exercised 
      "weights of record: ..." when only the verdict's own pin rule fires -- matches the canary's regex; a rename of either side turns the
      live negative into a FAIL of the canary (harness gap), never into a silent PASS.
 
-Torch-free: (1) is read from the source with ast/str.index, (2) runs the real commit_verdict on a synthetic Commit record with the real
+Torch-free: (1) is read from the source with ast, by the statements of each function (the tests that run commit's main,
+tests/pipeline/test_commit_main.py, hold the same order by what it does), (2) runs the real commit_verdict on a synthetic Commit record with the real
 weights_of_record.check mismatch text and matches it against the regex extracted from canary.sh (bash ERE == Python re for this pattern).
 """
 from __future__ import annotations
@@ -40,6 +41,27 @@ def _canary_regex() -> str:
     return m.group(1)
 
 
+def _function(tree: ast.Module, name: str) -> ast.FunctionDef:
+    return next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
+
+
+def _text(src: str, fn: ast.FunctionDef) -> str:
+    text = ast.get_source_segment(src, fn)
+    assert text is not None
+    return text
+
+
+def _statement_that_calls(fn: ast.FunctionDef, name: str) -> int:
+    """Which statement of `fn`'s body calls `name` (a function's name or a method's): its index, of the one that does."""
+    def called(node: ast.AST) -> str | None:
+        f = node.func if isinstance(node, ast.Call) else None
+        return f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
+
+    at = [i for i, statement in enumerate(fn.body) if any(called(node) == name for node in ast.walk(statement))]
+    assert len(at) == 1, f"{fn.name} calls {name} in {len(at)} of its statements"
+    return at[0]
+
+
 def test_commit_delta_declares_flip_weight_and_applies_it_before_register_weights():
     src = DELTA.read_text()
     tree = ast.parse(src)
@@ -47,12 +69,15 @@ def test_commit_delta_declares_flip_weight_and_applies_it_before_register_weight
     opts = [a.value for node in ast.walk(options) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
             and node.func.id == "option" for a in node.args if isinstance(a, ast.Constant)]
     assert opts.count("--flip-weight") == 1
-    # order in the source of main(): record initialised -> flip applied (named_parameters, before register_weights) -> verdict.json carries it
-    i_init = src.index("flip_weight_rec: dict | None = None")
-    i_flip = src.index("_pmap = dict(eng.model.named_parameters())")
-    i_reg = src.index("w = com.register_weights()")
-    i_verdict = src.index('"negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None)')
-    assert i_init < i_flip < i_reg < i_verdict
+    # the order, by the statements of each function: main() initialises the record, then sets each committer up, then writes the verdict,
+    # which carries the record; a committer's setup applies the flip (one element of a live parameter) before it registers the weights
+    main, setup = _function(tree, "main"), _function(tree, "committer_setup")
+    i_init = next(i for i, statement in enumerate(main.body)
+                  if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name) and statement.target.id == "flip_weight_rec")
+    assert i_init < _statement_that_calls(main, "committer_setup") < _statement_that_calls(main, "write_verdict")
+    assert _statement_that_calls(setup, "flip_weight") < _statement_that_calls(setup, "register_weights")
+    assert "_pmap = dict(eng.model.named_parameters())" in _text(src, _function(tree, "flip_weight"))
+    assert '"negatives": ({"flip_weight": flip_weight_rec} if flip_weight_rec else None)' in _text(src, _function(tree, "write_verdict"))
     # the flip refuses to be a no-op (an unchanged element would make the negative un-failable)
     assert "did not change the element" in src
     # the flag is documented as a negative-test-only flag, never a row-procedure flag

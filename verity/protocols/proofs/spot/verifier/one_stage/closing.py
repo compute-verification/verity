@@ -3,7 +3,7 @@
 An audit of several members runs their sessions one after another, each on a coin tree of the window's challenger
 session, and each session ends with its tree's closing round (`challenger.CLOSING_ROUND`, `challenger.closes`): a round
 of no coins the challenger opens after the SHA-512 of the session's evidence, so its release log shows that evidence
-fixed before the next session's first coin. The evidence is what the session's verdict is read from, its record and
+fixed before the next session's tree is sampled. The evidence is what the session's verdict is read from, its record and
 its proof files:
 
     evidence = be64(parts) ‖ (be64(len(part)) ‖ part)*       parts: session.json's bytes, then for each proof file,
