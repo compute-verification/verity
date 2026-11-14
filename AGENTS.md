@@ -100,7 +100,8 @@ protocol or adapter imports it; `circuits/` imports nothing and `commitments/` o
 `security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it, the
 audits on those, and compose on top; no protocol imports a configuration.
 
-`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity verify proof ARGS`,
+`verity --help`.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -122,8 +123,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
   from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
-  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
-  refuses a plain session past what the plain theorem covers (one table today).
+  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and
+  `verity verify proof` refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the

@@ -557,6 +557,21 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 
+def test_an_added_seed_takes_the_place_of_the_lines_seed():
+    """A job's ``--seed=N`` is the server's seed on the recipe's line, once, where every other flag the line sets is
+    refused; an arm whose line takes no added flag keeps ``--seed 0``."""
+    glm, context = S.MODELS["glm53"], S.published_context("prod", "glm53", None)
+    def seeds(arm: str, added: tuple[str, ...] = ()) -> list[str]:
+        argv = S.server_argv(S.ARMS[arm], glm, Path("/ck"), 8000, max_model_len=context, added=added)
+        return [argv[i + 1] for i, x in enumerate(argv) if x == "--seed"] + [x for x in argv if x.startswith("--seed=")]
+    assert seeds("prod") == ["0"] and seeds("prod", ("--seed=3",)) == ["3"]
+    assert seeds("prod", ("--gpu-memory-utilization=0.95", "--seed=3")) == ["3"]
+    assert seeds("record", ("--seed=3",)) == ["0"]
+    for refused in (("--max-model-len=131072",), ("--seed=1", "--seed=2")):
+        with pytest.raises(SystemExit, match=refused[0].split("=")[0] + ": the arm's line sets it already"):
+            S.server_argv(S.ARMS["prod"], glm, Path("/ck"), 8000, max_model_len=context, added=refused)
+
+
 def test_the_boundary_arm_takes_edges_every_period_or_at_set_times_and_keeps_no_kv_file_at_tp():
     def ns(**kw) -> argparse.Namespace:
         return argparse.Namespace(**({"arm": "boundary", "model_id": "glm53", "edges_s": None, "edges_every_s": None,

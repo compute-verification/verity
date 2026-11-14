@@ -22,7 +22,7 @@ A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is i
 own table as one `verity.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
 first and last of each region (`probe_entries`), never all of them; the record says how many words the vectors read.
 
-An operand over the input budget (a weight, `circuit_check.targets.LAZY_OPERANDS`) is sampled as `vectors` samples a parameter, its
+An operand over the input budget (a weight, `circuit_check.targets.lazy_operands`) is sampled as `vectors` samples a parameter, its
 j-th edge in every leaf for an edge vector and seeded random words for the rest (finite ones on the rows of odd index), but one
 vector at a time (`wide_words`), and read word by word as the gates ask for it, never held as ``n`` vectors.
 """

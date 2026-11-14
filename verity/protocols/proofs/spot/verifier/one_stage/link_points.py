@@ -1,4 +1,4 @@
-"""A member's link points (Lean `SampledProofs.LinkPoints`, which the difftest's `link_points` piece holds this to).
+"""A member's link points (Lean `Spot.LinkPoints`, which the difftest's `link_points` piece holds this to).
 
 A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` points for its `c` proved units and its
 circuit's `g` units a proof block (META `vus_per_block`). A sample over several members samples a random count of each

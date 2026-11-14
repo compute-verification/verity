@@ -14,8 +14,8 @@ last step's output, plus the on-loop part of the closes of the Commit windows it
   query-key pairs a head and layer, QKᵀ and PV head_dim MACs each), at θ/2, the card's bf16 rate;
 - the LM head: hidden × vocab MACs a token the step emitted, at θ/2.
 
-θ is the H200's dense int8 (and FP8) rate in MACs at each reading of its clock (`RHO`, the tensor clock's and the boost
-clock's), side by side. The declared utilization is the steps' ideal seconds over the wall, and ``terms`` splits it into
+θ is the H200's dense int8 (and FP8) rate in MACs at each reading of its clock its card states (`RHO`, the tensor
+clock's and the SM clock's), side by side. The declared utilization is the steps' ideal seconds over the wall, and ``terms`` splits it into
 the three terms' own shares, which sum to it.
 
 The credited share reads Pearl+'s verdict (``--credit``: ``served_passes.py verify``'s ``answer.json``, core's answer
@@ -45,15 +45,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity.device import READINGS, load_card, readings
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import served_overhead as O  # noqa: E402
 
-#: the H200's clock readings, the tensor clock's (the data sheet's dense int8 and FP8 rate) and the boost clock's, and θ at
-#: each: 132 SMs × 4,096 MACs a clock
-CLOCKS_MHZ = {"tensor": 1830, "boost": 1980}
-RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
+#: the H200 card's readings of its tensor's clock (`verity.device.readings`), the tensor clock's (the data sheet's dense
+#: int8 and FP8 rate) and the SM clock's, and θ at each, in int8 MACs a second
+H200 = load_card("h200-sxm-141gb")
+CLOCKS_MHZ = {r: H200["clock"][r]["value"] for r in READINGS}
+RHO = {r: float(rho) for r, rho in readings(H200).items()}
 #: Llama-3.2-1B's layer: its four linears (name, n, k), merged as vLLM serves them at TP 1
 LLAMA32_1B = {"layers": 16, "linears": (("self_attn.qkv_proj", 3072, 2048), ("self_attn.o_proj", 2048, 2048),
                                         ("mlp.gate_up_proj", 16384, 2048), ("mlp.down_proj", 2048, 8192)),

@@ -309,6 +309,20 @@ def test_live_mode_kills_a_lease_still_there_thirty_seconds_after_its_sigterm(c,
     assert sent == [(7, signal.SIGTERM), (7, signal.SIGKILL), (7, signal.SIGKILL)]
 
 
+def test_an_eviction_of_a_pid_already_gone_says_so_and_logs_no_signal(tmp_path, capsys):
+    def gone(pid, sig):
+        raise ProcessLookupError
+
+    assert agent.Executor(tmp_path, kill=gone).evict(T0, "gl-7@1", (0,), "pid=7", 20, 8, "w") is None
+    assert not (tmp_path / "preempted.log").exists()
+    assert "pid 7 of gl-7@1 was gone before SIGTERM; nothing to evict" in capsys.readouterr().err
+
+
+def test_a_preempted_log_not_yet_written_reads_as_no_lines(tmp_path, capsys):
+    assert agent.PreemptedLog(tmp_path / "preempted.log").new() == []
+    assert capsys.readouterr().err == ""
+
+
 def test_the_footprint_counts_anything_that_would_touch_nvml():
     fp = agent.Footprint()
     fp.hook("subprocess.Popen", ("nvidia-smi", ["nvidia-smi", "-L"], None, None))
