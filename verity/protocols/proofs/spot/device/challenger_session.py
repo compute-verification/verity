@@ -108,7 +108,7 @@ def served_h1():
 
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
          work_table: Mapping[str, Any] | None = None) -> int:
-    """The most coins one rank's sample reads, known from its window before anything opens. The window gives the stream's law:
+    """The most coins one rank's sample reads, known from its window before anything opens. The window gives the stream's sampling design:
     the rule over its N and strata (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
     the rule's rate puts over the one the rank registers with (`service.selection_table`), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) samples that sampling design on bytes that reject no
     word (zeros: a zero word is below every largest multiple), and the need is what it reads plus its longest stream once

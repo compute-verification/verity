@@ -1,7 +1,7 @@
-"""difftest adapter for `tp2/AllReduceSumBf16@v1`: production = `ncclAllReduce(…, ncclBfloat16, ncclSum)` over R = 2 CUDA devices.
+"""difftest adapter for `tp2/AllReduceSumBf16@v1`: the served side = `ncclAllReduce(…, ncclBfloat16, ncclSum)` over R = 2 CUDA devices.
 
-The protected `difftest.produce` is single-process and hands `production` the R operand tensors on `cuda:0`.  An NCCL all-reduce needs
-one process per rank, so `production` spawns R processes (torch.multiprocessing, NCCL backend over loopback), gives rank r its operand
+The protected `difftest.produce` is single-process and hands the served side the R operand tensors on `cuda:0`.  An NCCL all-reduce needs
+one process per rank, so the served side spawns R processes (torch.multiprocessing, NCCL backend over loopback), gives rank r its operand
 on `cuda:r`, all-reduces with `ReduceOp.SUM`, and returns rank 0's result; every other rank's result is asserted bit-equal (the "every
 rank receives the same word" fact of the module docstring).  Needs a host with R visible GPUs (a 2×4090 pod).
 

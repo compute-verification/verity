@@ -6,7 +6,7 @@ The reservation model for one row stage is
 
 where every term is a NAMED allocation object of the row procedure (see `INVENTORY` below and
 `out/gen/sweep/evidence/admit/INVENTORY.md`) with a lifetime (first/last substage where it is resident) and a size
-law in plan-time scale variables (tokens, requests, layers, instances, workers, ...).  Coefficients are measured
+formula in plan-time scale variables (tokens, requests, layers, instances, workers, ...).  Coefficients are measured
 constants (each carries the attempt dir + numbers that pin it, in `CALIBRATION`); there is no global multiplier.
 Simultaneity is computed by a sweep over the stage's substage timeline (`peak_overlap`): sequential reuse is not
 simultaneous residency (the FP8 3-pair result), and a term that outlives its substage (the pymalloc heap residual,
@@ -89,7 +89,7 @@ class RowScale:
     model: str
     requests: int = 1
     prompt_tokens: int = 1024            # sum over requests
-    decode_rows: int = 128               # sum over requests of decode steps (cap + lag)
+    decode_rows: int = 128               # sum over requests of decode steps (max_tokens + lag)
     steps: int = 129
     max_context: int = 1152              # K of the longest reachable context
     pairs: int = 3
@@ -107,8 +107,8 @@ class RowScale:
     # C2 byte source (module outputs) and drops the M1 export stream's chunk-aligned interior (no C2 consumer reads it; opens by replay)
     bounded_staging: bool = False
     retain_exclude: list[str] = field(default_factory=list)
-    largest_request_rows: int | None = None   # (cap + lag) of the request with the largest rows x context product
-    largest_request_ctx: int | None = None    # its prompt_len + cap + lag
+    largest_request_rows: int | None = None   # (max_tokens + lag) of the request with the largest rows x context product
+    largest_request_ctx: int | None = None    # its prompt_len + max_tokens + lag
     host_limit_bytes: int | None = None
     notes: list[str] = field(default_factory=list)
 
@@ -143,7 +143,7 @@ class RowScale:
             return int(self.largest_request_rows), int(self.largest_request_ctx)
         if self.requests <= 1:
             return int(self.decode_rows), int(self.max_context)
-        # a mixed row: the longest prompt with the longest cap is the row's (I, O) pair
+        # a mixed row: the longest prompt with the largest max_tokens is the row's (I, O) pair
         rows = int(self.max_context) - int(self.prompt_tokens // max(1, self.requests)) if self.max_context else self.decode_rows // self.requests
         return max(1, min(int(self.max_context), max(rows, self.decode_rows // self.requests))), int(self.max_context)
 

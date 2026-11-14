@@ -3,12 +3,12 @@ module
 public import Proofs.Flock.SpotFlock.InstanceStmt.Bytes
 public import Proofs.Flock.SessionLoop.Concrete.Public
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Spot.SecondStage
 import Flock.Comp
 import Flock.JsonParse
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Canon
 import all Lean.Data.Json.Basic
@@ -42,9 +42,9 @@ by `kernel_rfl`, the run's strings left as variables), so `plain` reads it membe
 
 namespace SpotFlock.InstanceStmt
 
-open Flock Flock.Firewall
+open Flock Flock.ZkServer
 open FlockDeploy.Concrete (objT plain_obj_of noNl utf8_noTen findByte_eq plainStr_hexOf fromUTF8?_toByteArray)
-open FlockSoundness.Discharge.Recursion.FirewallJson (parse_printJson)
+open FlockSoundness.Discharge.Recursion.ZkServerJson (parse_printJson)
 open FlockSoundness.Refine
 open Lean (Json)
 open Std.DTreeMap.Internal (Impl)
@@ -165,7 +165,7 @@ theorem hdr_plain {r : Run} (hr : r.Plain) {circ cls : String} (hc : plainStr ci
     ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, units_plain hk⟩⟩
 
 theorem fjnorm_hdr (r : Run) (circ cls : String) :
-    FlockSoundness.Discharge.Recursion.FirewallJson.norm (hdrJ r circ cls) = hdrJ r circ cls := by kernel_rfl
+    FlockSoundness.Discharge.Recursion.ZkServerJson.norm (hdrJ r circ cls) = hdrJ r circ cls := by kernel_rfl
 theorem norm_hdr (r : Run) (circ cls : String) : Flock.norm (hdrJ r circ cls) = hdrJ r circ cls := by kernel_rfl
 
 theorem hdr_noTen {r : Run} (hr : r.Plain) {circ cls : String} (hc : plainStr circ = true)
@@ -240,7 +240,7 @@ theorem sample_plain : plain sampleJ = true := by
   exact ⟨⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, by plain_lit⟩,
     ⟨by plain_lit, by plain_lit⟩⟩
 
-theorem fjnorm_sample : FlockSoundness.Discharge.Recursion.FirewallJson.norm sampleJ = sampleJ := by kernel_rfl
+theorem fjnorm_sample : FlockSoundness.Discharge.Recursion.ZkServerJson.norm sampleJ = sampleJ := by kernel_rfl
 theorem norm_sample : Flock.norm sampleJ = sampleJ := by kernel_rfl
 
 theorem port_obj (value : String) (dom bc : ByteArray) (words : Nat) :
@@ -274,10 +274,10 @@ theorem reg_plain : plain regJ = true := by
   exact ⟨⟨by plain_lit, by plain_lit⟩,
     ⟨by plain_lit, io_plain (port_plain (by plain_lit) _ _ _) (port_plain (by plain_lit) _ _ _)⟩⟩
 
-theorem fjnorm_reg : FlockSoundness.Discharge.Recursion.FirewallJson.norm regJ = regJ := by kernel_rfl
+theorem fjnorm_reg : FlockSoundness.Discharge.Recursion.ZkServerJson.norm regJ = regJ := by kernel_rfl
 theorem norm_reg : Flock.norm regJ = regJ := by kernel_rfl
 
-theorem jsonOf_print {j : Json} (h : plain j = true) (hn : FlockSoundness.Discharge.Recursion.FirewallJson.norm j = j)
+theorem jsonOf_print {j : Json} (h : plain j = true) (hn : FlockSoundness.Discharge.Recursion.ZkServerJson.norm j = j)
     (what : String) : FlockDeploy.jsonOf what (printJson j).toUTF8 = .ok j := by
   unfold FlockDeploy.jsonOf
   rw [fromUTF8?_toUTF8]
