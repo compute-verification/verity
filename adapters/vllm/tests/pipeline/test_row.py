@@ -873,7 +873,8 @@ def test_a_tp_rows_commit_names_the_trees_checkpoint_pins_as_its_replay_does(tmp
         return 0
 
     monkeypatch.setattr(tp, "run_tl", run_tl)
-    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or os.path.exists(p))
+    isdir = os.path.isdir
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "/ck" or isdir(p))
     os.makedirs(f"{tp.d}/commit")
     Path(f"{tp.d}/commit/replay_deferred.json").write_text("{}")
     tp.replay()
