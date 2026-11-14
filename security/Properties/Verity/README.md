@@ -94,6 +94,13 @@ In this order:
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
   a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
+- **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
+  (`security/Proofs/Properties/Verity/Sampled/Target.lean`) proves `SpotSound` at every composite, for a vocabulary whose
+  sampled fields are the deployment's sessions (`Sampled.Deployed`, `Sampled.Covers`), from the coupling at each session
+  (`Sampled.CouplingTarget`). It reads Flock's knowledge soundness through one listed theorem,
+  `Flock.SecurityProofs.SampledKSLiveV5`, at the session v2 sets up (`Sampled.Live.v5_at`); the rest it reads are
+  lemmas instantiating that theorem's binders and the coupling's pieces. `Verity.Sampled.remote_soundness_deployedReady`
+  (`security/Proofs/Properties/Verity/Sampled/OpensAt.lean`) states remote's soundness with it.
 - **SPOT** at the recursive configuration: `Verity.Recursive.spotRecursive`
   (`security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
