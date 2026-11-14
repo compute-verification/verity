@@ -44,7 +44,7 @@ import Mathlib.Topology.Sheaves.Init
 * (a) the `ok` rows are the verifier's, proved from verity-verify-proof's known-content refusal (`Registered.checkKnownAll`)
   and `FlockC3.RegLevels.knownColl_spec`, not a premise. The service names the `ok` port's known content in the
   registered file, each row the word `1` (`okRow`) under its salt;
-* (b) every sampled proof block's checks hold in the declared circuit (`Accounting.Served.Held`), under
+* (b) every sampled proof block's checks hold in the registered circuit (`Accounting.Served.Held`), under
   `Accounting.Assumptions.TS.OkRealizes`, the premise that the Flock circuit's `ok` wires carry them.
 
 The bound is `CheckedSessionSound`'s `δ`: an accepted proof whose rows meet `CheckedRel` meets `HeldRel` on every path,
@@ -65,7 +65,7 @@ checked.** `CheckedSessionSound`'s window and premises, at the held layer `heldL
 right` (accepted where verity-verify-proof `--zk --registered` accepts, at the registered file's known content `known x w i`;
 opening the committed rows at the registered reads; its relation `HeldRel`), and in addition at every session: the known
 content names the port `ok` with rows each the word `1` (`okRow`), and its key program's `ok` wires carry the checks of
-round `w`'s declared circuit `Cd w` (`Accounting.Assumptions.TS.OkRealizes`). Then the layer accepts only where
+round `w`'s registered circuit `Cd w` (`Accounting.Assumptions.TS.OkRealizes`). Then the layer accepts only where
 verity-verify-proof accepts (`AcceptedLive`), and each proof is accepted with committed rows that fail `HeldRel` on the path
 with probability at most `δ`: outside `δ` the rows are one assignment the circuit's evaluation agrees with on every
 sampled proof block, at which every sampled proof block's checks of `Cd` hold, or the registrant's `ok` openings exhibit an explicit

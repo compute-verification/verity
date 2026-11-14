@@ -45,8 +45,8 @@ Under option A a sampled 32 × 32 H1 leaf is proved as 33 statements (`h1zy`, SE
 its whole z/y record, row `l` of the leaf's partials, the salt, position and roots, and the index `l`, and returning
 `ok`; and their combine `PouwH1Combine_v1{TILE}`, reading the 32 partials rows and the leaf's receipt and returning `ok`.
 
-The leaf is one unit of the declared circuit: the 33 statements' `ok` words are that unit's
-`check` words, and its partials are proof-layer values, no values of the declared circuit. They are committed once,
+The leaf is one unit of the registered circuit: the 33 statements' `ok` words are that unit's
+`check` words, and its partials are proof-layer values, no values of the registered circuit. They are committed once,
 after the sample, under hiding leaves, read only by the unit's own 33 statements, which all open that one commitment,
 and they are what the unit's checks are proved through, not inputs it is credited on. So the unit's served checks
 (`UnitServed`) read its A and B rows, its record and its receipt, and no partials row.

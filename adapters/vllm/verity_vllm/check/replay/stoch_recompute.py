@@ -35,7 +35,6 @@ from __future__ import annotations
 import glob
 import gzip
 import json
-import os
 import struct
 import time
 from dataclasses import dataclass
@@ -45,7 +44,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.check.replay import launch_args
-from verity_vllm.check.replay.fork import fork_pool
+from verity_vllm.check.replay.fork import cpu_quota, fork_pool
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import read_log
@@ -59,8 +58,6 @@ VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temp
            "+ argmax/gather; torch.multinomial not used")
 #: the prefix of a record entry naming an input file that is there but couldn't be read
 UNREADABLE = "unreadable: "
-#: the cgroup v2 file that states this process's CPU quota: `<quota> <period>`, or `max <period>` where it has none
-CGROUP_CPU_MAX = "/sys/fs/cgroup/cpu.max"
 
 
 def _f32_bits(x: float) -> int:
@@ -169,25 +166,13 @@ EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTo
                          "held word-equal to the lane walk by tests/program/test_sampling_rows.py and by the reference rows of this run"}
 
 
-def _cpu_quota() -> int:
-    """The CPUs this process may use: the cgroup's quota where it states one (`CGROUP_CPU_MAX`), else os.cpu_count(): the file is
-    absent (no cgroup v2 CPU controller), cannot be read, says `max` or is not `<quota> <period>` in integers."""
-    try:
-        q, per = Path(CGROUP_CPU_MAX).read_text().split()
-        if q != "max":
-            return max(1, int(q) // int(per))
-    except (OSError, ValueError):
-        pass
-    return os.cpu_count() or 1
-
-
 def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane") -> list[tuple[int, np.ndarray, float]]:
     """Evaluate every pending row; `n_jobs` worker processes (fork; default min(32, the cgroup's CPU quota)) when there is more than one
     row.  `evaluator`: 'lane' (the interpreter, the path of record) or 'rows' (the vectorised twins; one row is milliseconds, so no pool)."""
     fn = EVALUATORS[evaluator]
     if evaluator == "rows":
         return [fn(j) for j in jobs]
-    n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
+    n = int(n_jobs) if n_jobs else min(32, cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
     with fork_pool(min(n, len(jobs))) as pool:
@@ -747,7 +732,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
             "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (adapters/vllm/verity_vllm/definitions/registry/sampling.py)",
             # WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
             "evaluator": {"name": evaluator, "what": EVALUATOR_DOC[evaluator], "eval_seconds_total": eval_seconds_total,
-                          "reference": ref_check, "jobs": jobs, "cpu_quota": _cpu_quota()},
+                          "reference": ref_check, "jobs": jobs, "cpu_quota": cpu_quota()},
             # the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
             # (executed, unserved) samples Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
             # and nothing else moves; a wrong pos on a device row is a mismatch by name above
