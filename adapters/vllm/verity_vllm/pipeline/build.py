@@ -445,7 +445,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["unsupported"] = rep.unsupported.to_json()
             res["rules_applied_before_refusal"] = rep.provenance.get("rules_applied_before_refusal")
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
-            json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
+            with open(os.path.join(out, "derive-report.json"), "w") as f:
+                json.dump(rep.provenance, f, indent=1, default=str)
         else:
             # the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
             # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
