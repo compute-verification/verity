@@ -1,0 +1,23 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_leak_guard.py"]
+# test_certifier_term counts the certifier's term through leak_bounds, over the census's reference datacenter and the
+# world (rho's world fleet and its machine's GPUs), the workload card's parameters and the sampling plan's requests (the
+# break-even planner's case, built from Figure 1's lines and the cards they read), and runs `verity bench
+# certifier_term`'s runner. test_leak_guard runs chain_record.sh. test_warden_serve reads demo_stub's endpoint records,
+# and it and test_connection_rows_run import the prover's scan_zk and stop verdicts, which read what the prover suite
+# lists: one_stage's coins, lowering and staging, and the period check's Python mirror with verity_difftest's decoders.
+inputs = ["verity",
+          "benchmarks/network_traces/leak_bounds.py", "benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
+          "benchmarks/census/hardware.json", "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml",
+          "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
+          "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven", "benchmarks/certifier_term/run.py",
+          "benchmarks/network_traces/chain_record.sh", "benchmarks/network_traces/demo_stub.py",
+          "benchmarks/one_stage/a0.py", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a7.py",
+          "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_leg.py", "benchmarks/one_stage/r2_population.py",
+          "tools/difftest/python/verity_difftest"]
