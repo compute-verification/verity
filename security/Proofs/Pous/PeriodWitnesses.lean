@@ -160,6 +160,61 @@ noncomputable def certifiedAudit : Audits Unit Unit where
   device _ := ⟨fun pk =>
     if pk = certifiedPrivateKey.publicKey then [honestChallengerRun certifiedPublic.root certifiedBlock] else []⟩
 
+theorem certified_setup_accepts (hP : Pous.P2.Assumptions.PrimeP16448)
+    (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
+    SetupProtocol.check P2.Params.deployed certifiedCommitment certifiedStore = .accept certifiedPublic () := by
+  simpa [certifiedCommitment, certifiedStore, certifiedPublic] using
+    PousCheck.Properties.SecurityProofs.Accepts.check_honest hP (zeros_size 24) hk certifiedSetupState_spec
+
+theorem certified_run_accepts :
+    PousCheck.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
+      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok () := by
+  obtain ⟨hIs, hps, hpI⟩ :=
+    MemoryChallenger.Attest.Properties.SecurityProofs.pub_spec certifiedPrivateKey_spec
+  have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed _ _
+    certifiedPrivateKey 0 certifiedLmsMessage certifiedSignature rfl certifiedPrivateKey_spec
+    certifiedSignature_spec.1).2
+  have hv : MemoryChallenger.lmsVerify Lms.deployed certifiedPrivateKey.publicKey honestSid
+      certifiedRecordMessage certifiedSignature.encode = .ok true := by
+    unfold MemoryChallenger.lmsVerify MemoryChallenger.memoryChallengerMessage
+    simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
+    exact certifiedSignature_spec.2
+  unfold PousCheck.Run.check
+  refine checkAt_of (beq_self_eq_true _)
+    (by simp [certifiedPublic, certifiedSalt, PousCheck.Run.SALT, zeros_size])
+    (by
+      rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
+      exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
+        (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _)
+    ?_ (beq_self_eq_true _) (beq_self_eq_true _)
+    (by simp [honestCommitment]) (beq_self_eq_true _)
+    (beq_self_eq_true _) (beq_self_eq_true _) ?_
+  · show (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedSalt
+      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) == some certifiedPublic.root) = true
+    rw [PousCheck.Properties.SecurityProofs.Accepts.root_setup]
+    exact beq_self_eq_true _
+  · exact MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of
+      (p := Lms.deployed) (m := certifiedRecordMessage) (by simp [MemoryChallenger.SCHEMES]) (by simp)
+      certifiedRecordMessage_spec hv (commitment_beq_self _) rfl
+      (by simp [honestRounds, honestCommitment])
+      (rounds_honest certifiedPublic.root
+        (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
+
+/-- The strings an audit's play hashes at the coin `ω`: the store's key-stream inputs under its salt (`storeStrings`),
+and the strings `RunBreak` and `TableBreak` read. -/
+def playStrings (P : Audits Unit Unit)
+    (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) : List ByteArray :=
+  storeStrings (keyPrefix (P.commitment (ω.1, ω.2.1)).salt) ++
+    (MemoryChallenger.Properties.runStrings (P.session ω).signed (P.device ω) ++
+      blockStrings (P.session ω).signed.publicKey (P.device ω) (P.store (ω.1, ω.2.1))) ++
+    tableStrings (P.pub (ω.1, ω.2.1)) (P.digests (ω.1, ω.2.1)) (P.store (ω.1, ω.2.1))
+
+/-- **A collision in an audit's play**: at some coin, two different strings of `playStrings` have one SHA-512
+digest. -/
+def PlayCollision (P : Audits Unit Unit) : Prop :=
+  ∃ ω, ∃ x ∈ playStrings P ω, ∃ y ∈ playStrings P ω,
+    x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
+
 /-- **An audit of one accepted play**: the verifier's one trusted key `key`, the 32-byte session id `honestSid`, the
 commitment `c`, the store `C`, setup's public output `pub`, the row digests `digests` and the session `r`, the same on
 every coin. -/
