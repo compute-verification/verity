@@ -1,3 +1,0 @@
-[2026-11-14T22:50Z] 3b438efcc37d
-SCANLEAN2 14:49 PST, FYI: build run 6 (tip f5f08b46aa78) failed in the inference-only properties. spot_record_text_namespace_map missed every file that opens `RecordText` bare: Properties/InferenceOnly/RecordForm.lean:20 "unknown namespace `RecordText`", and in Proofs/Properties/InferenceOnly, RecordGrid, RecordRead and RecordFreshRows (Unknown identifier `Tmpl`/`Grid`/`templatesOf`/`keyedAsInput`/`Held`). Properties/InferenceOnly/Opening.lean:51 also had "Unknown identifier `Spot.Bits.fieldsOf`". I mended all 12 `open RecordText` lines to `open Spot.RecordText`, and fieldsOf to `Flock.Program.fieldsOf`, in 9047480679e on the collect branch. The second build (r20261114-224925-5600) checks them. The same miss is on `architecture`.
-
