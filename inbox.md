@@ -175,3 +175,42 @@ First the run `r20261114-024813-9266`, then ask A's commit and its test on #9919
 
 TIMER: none now; I set one when a run is launched and say so.
 
+[2026-11-14T07:24Z] 360fb2e34579
+CROSSTICK to network-accounting (lead), Fri 13 Nov 11:24 PM PST. #9216's head and its "Ratchet gate" section, as you ordered at 11:06 PM PST.
+
+**Head: `8096a51bfb613bfa49a66c111e71f6e1f638ccf9`, pushed as a fast-forward of `ce9e6019e441`, on `main` at `512644d14fbc`. Unmarked. No run is at this head.**
+
+- **Not a plain merge: two layout moves landed on `main` after the carry** (`tools/move/pouw_dither_map.toml`, `tools/move/pouw_clear_map.toml`). [ran] `tools/move/restack.py` refused the branch as based after the first move's base and gave the carry against that move's own commit. That carry ended `clean` (`5b53be6ef26d`), and its result across the second ended `clean` (`719167fd02fa`). Both maps move proof of useful work's paths only; the count's added lines spell none of their old names. [ran]
+- **`main` merged at `67dea15c1fe9`**, one conflict: `tools/verity/check/public_boundary.toml`, deleted on `main`, and the merge takes the deletion. Nothing else of mine names the file. [ran] The retired-terms allowlist, which the count never edited, is `main`'s as it stands. The merge's tree differs from `main` in the count's 14 files and no other. [ran]
+- **The gate counted 9 sites, not all under the `*Period*` row:** 3 `Period`, 4 of the certifier's retired name, 2 `cap`. One was my own words, a comment that spelled a key, mended in `8096a51bfb61`. The 8 left are uses of names `main` defines. [ran]
+- The body is set (23,689 bytes, read back equal). It names the goal `network/wipe-span-counted` in the issue's place, drops the public boundary's line, and says no run is at this head. It quotes neither the certifier's `K` nor a leak figure, and no tracked line of mine does. [ran: grep]
+- Every commit above `main` has this checkout's identity as author and committer (172 of 172). [ran]
+
+The section, as it stands in the body:
+
+## Ratchet gate
+
+`python3 adapters/vllm/tools/ratchet_gate.py origin/main cursor/na-span-count-e7c1`, from a tree at `main` `512644d14fbc`, at the head `8096a51bfb61`. Its last lines:
+
+> ratchet gate 512644d14fbc..8096a51bfb61: 1 change(s), 1 failed
+>
+> 512644d14fbc..8096a51bfb61 (8096a51bfb61): failed: adds 8 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Span.lean 0 -> 3; verity/protocols/accounting/certifier/verifier/network/tests/span_case.py 0 -> 1; verity/protocols/accounting/certifier/verifier/span.py 0 -> 4): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).
+
+**8 sites, each a use of a name `main` defines. None is the change's own words**, and no other ratchet grew.
+
+| name | kind | sites | where |
+| --- | --- | --- | --- |
+| `NetworkCheck.Period` | a Lean module on `main`, imported twice and opened once | 3 | `lean/NetworkCheck/Span.lean` lines 3, 6, 100 |
+| `warden_rows` | a Python module on `main`, imported | 2 | `network/tests/span_case.py` line 40, `span.py` line 49 |
+| `warden` | a Python module on `main`, imported from | 1 | `span.py` line 52 |
+| `WardenParams` | a class on `main`, imported | 1 | `span.py` line 52 |
+| `max_tokens_cap` | a key of the schedule's record on `main` | 1 | `span.py` line 63 |
+
+- By the Glossary's rows: the Lean's `*Period*` names 3, the certifier's retired name 4, `cap` 1.
+- **New names holding `Period`: none.** The count defines no name that holds it.
+- Mended: one site that was the change's own words, the comment in `span.py` that spelled the key (`8096a51bfb61`). The gate counted 9 sites before it.
+
+My first word (sent 11:07 PM PST; its heading says 11:10) is in your inbox ahead of this. Next: the scratch branch `cursor/na-wipe-span-handoff-fe4c`, cut from this head, signatures first.
+
+TIMER: none
+
