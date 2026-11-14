@@ -10,7 +10,7 @@ from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import sampling as SM
 
-from tests.program.test_train_step import _bits, _data, _outputs, _program, _same_bits
+from tests.frontend.test_train_step import _bits, _data, _outputs, _program, _same_bits
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.rules.training import training_rules

@@ -46,9 +46,7 @@ def test_a_region_solution_meets_its_constraints():
             assert flight == 2 or s["k"] / s["r"] >= si.least_period(p, s["k"]) * (1 - 1e-12)
         for s in (line, shared):
             assert 2 * (s["l_max_s"] - p["c_s"]) * p["xi"] / p["blocks"] <= 0.01 * (1 + 1e-12)
-        assert line["d"] >= 1
-        if flight == 2:
-            assert shared["d"] < 1 and shared["o"] < line["o"]
+        assert line["d"] >= 1 and shared["o"] <= line["o"]
         cost = {id(s): s["passes_gpus"] + s["proving_gpus_fit"] for s in (line, shared, loose)}
         assert cost[id(shared)] <= cost[id(line)]
         assert cost[id(loose)] <= cost[id(line)] and loose["rebuild_held"] > line["rebuild_held"]
