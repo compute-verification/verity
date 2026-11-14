@@ -193,11 +193,6 @@ keeps or drops from and never adds to.
   registry handle of the lane that answers for it. `--update` fills each record, and the `reads` section, from the
   build (`judge`, `read_groups`, `PREMISE_KINDS`); without it the audit fails on any difference. A record holds the
   statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it.
-- An unowned lock (`unowned_lock`): one that lists a guarantee or a premise and holds no lane field (`LANE_FIELDS`,
-  `LANE_SECTIONS`), the lock of a tree with no lanes; no flag makes a lock unowned. No entry owes an owner (a premise
-  the lock doesn't list still fails); its `AUDIT` line ends with `unowned`, and its report holds `"unowned": true`.
-  One lane field, or `--owner` for that run, makes it owned and held to every rule. Every lock of this tree is owned
-  (`tests/test_lean_packages.py`).
 - `shape`: the shape every guarantee has (the lean-proofs skill, "One shape"): `properties`, `premises`, `frozen`,
   `statements`, `events`, `conjectures` (`shape`, `part_refusals`, `reordered`, `shares`), and `inline`, the inline
   hypotheses still allowed, which only shrinks (`inline_failures`).
