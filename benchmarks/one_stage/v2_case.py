@@ -28,7 +28,7 @@ A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the 
 records (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4
 --seed 1``): the circuit is public structure, and the file is used only if its SHA-512 is the pin, which the check
 reads anyway. The case goes to ``--out`` private as `composite.py` reads it (0700, its files 0600): ``case.json``,
-``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``sampled-proofs-one-stage-zk``),
+``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``spot-one-stage-zk``),
 ``answer.json``. ``case.json`` also holds the label, where the circuit file and the public digest came from, under
 ``files``. The label is no part of the case: `composite.py` takes ``params``, ``commitment``, ``evidence`` and ``blobs``
 from that file by name, and Lean is given the three files beside it. A blob with no file, or a refused public file,
@@ -175,7 +175,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--scratch", type=Path, required=True, help="where a circuit file the run didn't keep is rebuilt")
-    ap.add_argument("--exe", help="sampled-proofs-one-stage-zk, for the case's own Lean answer")
+    ap.add_argument("--exe", help="spot-one-stage-zk, for the case's own Lean answer")
     a = ap.parse_args(argv)
     try:
         v2, how, n = case(a.window, a.scratch)

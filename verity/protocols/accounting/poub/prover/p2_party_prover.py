@@ -33,7 +33,7 @@ class Peer(Protocol):
     def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
         """Pass i of window t: one step's reads under the pass's seed, its receipts committed; the root."""
 
-    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
+    def open(self, t: int, samples: Sequence[tuple[int, int]]) -> list[p2.Opening]:
         """Window t's sampled receipts `(pass, position)` opened."""
 
     def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:

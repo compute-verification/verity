@@ -24,7 +24,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/certifier", 
           "verity/protocols/accounting/certifier/prover", "verity/circuits", "verity/commitments",
           "verity/commitments/crypto",
-          # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports sampled proofs'
+          # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports SPOT's
           # produced and registered row helpers
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",

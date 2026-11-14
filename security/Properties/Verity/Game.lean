@@ -482,7 +482,7 @@ The challenger refuses further frames this device serves (a spec past its other 
 length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a
 play here with the same log, and the plays it refuses only add strategies. Each frame it serves
 releases one of the families' coins or writes one of its coin-tree lines, so it serves at most `frames fs`. A withheld
-session, the one a sampled-proofs window's sample reads, answers its hello with the families alone and each coin with its
+session, the one a SPOT window's sample reads, answers its hello with the families alone and each coin with its
 raw bytes, as the device here releases them, and its close with the commitment and every coin's salt and path, which
 the play samples after the last release (`finish`). A nonce the prover leaves to the challenger is sampled apart from
 everything else, so a prover that reads it is a mixture of strategies here.

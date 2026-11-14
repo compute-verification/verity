@@ -227,7 +227,7 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both. Lake builds a
 #: package's path requirements in their own `.lake`, so most packages' builds write the verifier's beside lean-build (main
-#: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built sampled-proofs-verifier from the pytest
+#: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built spot-verifier from the pytest
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",

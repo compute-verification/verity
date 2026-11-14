@@ -26,8 +26,8 @@ and its terms over `MonitoringPeriodLeakAccepted`'s windows (the execution phase
 parameters, commitments, evidence and cases). Its parameters list the signer's entry (its key, its session and the
 start of its stretch, at or before `first`, so the signer's numbers are the period's less that start), alone in a
 small period and otherwise among up to two more whose stretches hold none of the period's execution phases; `second-key`
-lists the signer second of two, and `two-stretches` two entries whose stretches each hold some of the period's execution
-phases, each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn,
+lists the signer second of two, and `two-stretches` two entries, the period's one execution phase the second's
+stretch's first, signed by that entry at its number 0. Refused: two listed entries that sign in turn,
 each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); a certificate or a
 rows registration under the other listed entry, outside its stretch (`cert-outside-stretch`, `reg-outside-stretch`),
 under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the other entry's session
@@ -37,9 +37,11 @@ out of order or with one start, one session twice, two keys under one key identi
 first entry, or the earlier forms `"key"`, `"session"` and `"sessions"`. A period's evidence shows each listed entry's
 session's signed start, its base on its key's life sampled for a key's first listed entry and, for a later one, as many
 of the schedule's execution phases on as its start is, and its ordinal among its key's sessions, sampled for a key's
-first listed entry and the next for each later one. `restart` lists the signer's key in two sessions, each stretch
-holding some of the period, and is accepted. Refused: that list with the second session's base another
-(`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a shown start that is not its session's
+first listed entry and the next for each later one. `two-sessions` lists the signer's key in two sessions, the period's
+one execution phase in the second's stretch, and is accepted. Refused: that list with the second session's base
+another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a period of two execution phases,
+one in each of the two sessions' stretches (`restart`), as a period is one execution phase (`startCarriedRefusal`);
+a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
 shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
 `first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
@@ -1400,7 +1402,8 @@ def _start_refusal(w: int, i: int, reg: dict) -> str | None:
     """`scanStartCheck`'s refusal of execution phase `w`'s scan, the `i`-th of its period: none when it is its period's
     first and, where it is the run's first, execution phase 0, its scan starts from the empty state (`_start_empty`).
     A period's first that is not the run's first starts from a state the check holds to nothing, and is charged
-    (`public`'s ``start``)."""
+    (`public`'s ``start``). A period is one execution phase: a later one is refused (`CARRIED`), so a period spanning a
+    restart is too, though its device restarted honestly."""
     if i != 0:
         return CARRIED
     return None if w != 0 or _start_empty(reg) else UNPINNED
@@ -1544,8 +1547,8 @@ def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
 
 EXPECT = {
     "rows-honest": ACCEPT, "rows-second-key": ACCEPT, "rows-two-stretches": ACCEPT, "rows-two-signers": REJECT,
-    "rows-restart": ACCEPT, "rows-start-not-signed": REJECT, "rows-start-uncertified": REJECT,
-    "rows-start-count": REJECT, "rows-start-skipped": REJECT,
+    "rows-two-sessions": ACCEPT, "rows-restart": REJECT, "rows-start-not-signed": REJECT,
+    "rows-start-uncertified": REJECT, "rows-start-count": REJECT, "rows-start-skipped": REJECT,
     "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
     "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
@@ -1581,15 +1584,18 @@ MUTATIONS = list(EXPECT)
 #: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
 #: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
 #: outside its stretch, and at the period's number where the session's belongs. The check reads each session's
-#: signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
-#: second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second session's
-#: base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`). `case` aims at none
-#: (`AIMS`), so its period lists the one entry that signs it.
+#: signed start: accepted, one key listed in two sessions, the period's one execution phase in the second's stretch, the
+#: second starting where the two sessions' signed bases put it (`two-sessions`); refused, that list with the second
+#: session's base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`), and a period of
+#: two execution phases, one in each session's stretch (`restart`): a period is one execution phase, so one spanning a
+#: restart is refused (`startCarriedRefusal`). `case` aims at none (`AIMS`), so its period lists the one entry that
+#: signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number",
-         "restart", "start-not-signed", "start-skipped")
-#: The changes whose parameters list one key in two sessions, each stretch holding some of the period
-RESTARTS = ("restart", "start-not-signed", "start-skipped")
+         "two-sessions", "restart", "start-not-signed", "start-skipped")
+#: The changes whose parameters list the signer's key in two sessions, the period's one execution phase in the second's
+#: stretch, the signer's; `restart` lists it so too, its period two execution phases, one in each stretch
+RESTARTS = ("two-sessions", "start-not-signed", "start-skipped")
 #: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
 #: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
@@ -2261,7 +2267,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
     link = r.choice(["eth0", "a", "d-e"])
     carry = rp.choice(CARRIES) if m == "start-carried" else None
-    least_windows = 2 if m in ("undecided-and-reject", "delta", "two-stretches", *RESTARTS) or carry else 1
+    least_windows = 2 if m in ("undecided-and-reject", "delta", "restart") or carry else 1
     least_audits = 2 if m == "state-untied" else \
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     # a rows period is one execution phase (`scanStartCheck`): more only where the change asks, refused, and a later one
@@ -2271,23 +2277,24 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # an execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1)))
     first = r.choice([0, 0, r.randrange(1, 6)])
-    if (m in SECOND or carry == "later" or m == "start-charged") and first == 0:
+    if (m in (*SECOND, *RESTARTS, "two-stretches", "start-charged") or carry == "later") and first == 0:
         first = rk.randrange(1, 6)
     elif m == "start-unpinned" or carry == "more":
         first = 0
     # the entries the parameters list, by their stretches' starts, the signer's (`key`, `session`) among them, its
-    # numbers the period's less its start; seed 1's key is never listed. Two entries whose stretches each hold some of
-    # the period's execution phases, the signer's from one of them on (`two-stretches`); two, the period in the second's
-    # stretch, the signer's (`SECOND`); else the signer's, alone in a small period, or among up to two more whose
+    # numbers the period's less its start; seed 1's key is never listed. Two, the period's one execution phase the
+    # second's stretch's first, the signer's (`two-stretches`); two of the signer's key, each stretch holding one of the
+    # period's two execution phases (`restart`); two, the period in the second's stretch, the signer's (`SECOND`, and
+    # `RESTARTS` under the signer's key); else the signer's, alone in a small period, or among up to two more whose
     # stretches hold none of the period's execution phases, before the signer's or after the period
     other = lambda k, start: Stretch(k, rk.randbytes(lms.SESSION_BYTES), start)  # noqa: E731
-    if m == "two-stretches" or m in RESTARTS:
-        # two stretches under two keys, or under the signer's key in two sessions
-        listed = [other(key if m in RESTARTS else _key(ki, 2), rk.randint(0, first)),
-                  Stretch(key, session, first + rk.randrange(1, n_windows))]
-    elif m in SECOND:
+    if m == "two-stretches":
+        listed = [other(_key(ki, 2), rk.randrange(first)), Stretch(key, session, first)]
+    elif m == "restart":
+        listed = [other(key, rk.randint(0, first)), Stretch(key, session, first + 1)]
+    elif m in SECOND or m in RESTARTS:
         start = rk.randint(1, first)
-        listed = [other(_key(ki, 2), rk.randrange(start)), Stretch(key, session, start)]
+        listed = [other(key if m in RESTARTS else _key(ki, 2), rk.randrange(start)), Stretch(key, session, start)]
     else:
         start = rk.randint(0, first)
         more = [] if small else [_key(ki, 2), _key(ki, 3)][:rk.randrange(3)]
