@@ -1,10 +1,11 @@
 """The served compare: a tied Pearl+ serve dir held to the row of record, on the CPU, once Pearl+'s piece wrote W.
 
     served_compare.py --serve D --row ROW --class S,P,O --pearl-tables SCHEME --pred PRED --of-record PROGRAM:MANIFEST
-        --window-record W --out DIR
+        --window-record W --out DIR [--revision REV]
 
 - PHI: D's serve.json states row ROW's declared φ. serve.json's φ is read as the registered compiler reads it
-  (`prove_path.phi_of_serve`), the row's is `score.phi_of` on its workload file at PRED's checkpoint config; both have the
+  (`prove_path.phi_of_serve`), the row's is `score.phi_of` on its workload file at PRED's checkpoint config, taken at
+  revision REV when given (`at_revision`: another revision the manifests pin of the row's model); both have the
   same model, revision, checkpoint config, execution and default seed, and lower one window circuit at the class, cut at
   Pearl+'s linears under SCHEME (`window_circuit.lower`): each circuit's facts (its templates' ids and units, its
   registered values' sizes and the cut's calls, DIR/circuit_facts.json) are compared by their SHA-512. PRED's checkpoint
@@ -12,6 +13,8 @@
   `predict row`), else the file predicted.json names (`checkpoint_config`): that path is in the serving run's own
   tree, so a serve dir kept after the tree is gone is compared again, by any tree, from the copy. The verdict keeps the
   SHA-256 of the config it read, and PHI holds it to the comparing tree's config of record for the served checkpoint.
+  PHI's line and verdict name the revision served and the one the row's workload declares, and under REV the last line
+  names both too, so EQUAL is never read as a serve at the row's declared revision.
 - BUILD: PRED is the row's Build of record: its predicted.json names Program digest PROGRAM and manifest digest MANIFEST.
 - CUT: W, Pearl+'s window record, registers exactly the circuit's Pearl+ values (`PEARL_VALUES`), each at its size in the
   circuit (two u16 words an FP32 word), under SCHEME, in 32-bit words, and beside them only what its version registers
@@ -79,24 +82,37 @@ def facts(low: Any) -> dict[str, Any]:
     return {**doc, "digest": hashlib.sha512(json.dumps(doc, sort_keys=True).encode()).hexdigest()}
 
 
-def lowered_facts(serve: Mapping[str, Any], row: str, config: str, cls: str, scheme: str) -> tuple[dict, dict, dict]:
-    """serve.json's φ and row `row`'s declared φ at checkpoint config `config`, each as `phi` compares it, and the facts of
-    the window circuit each lowers at class `cls` cut at Pearl+'s linears under `scheme` -> (the φ fields, the served
-    circuit's facts, the row's)."""
+def at_revision(declared: Any, revision: str | None) -> Any:
+    """The row's declared φ `declared` with only its model's repo, revision and checkpoint config, at `revision` when given:
+    another revision of the row's model, which the manifests must pin (`pinned_hf_config`). The row's Build and its circuit
+    read no weight byte, and its checkpoint config is compared as it is."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.program.predict.phi import Phi
+
+    repo, own = declared.model["repo"], declared.model["revision"]
+    if revision not in (None, own) and pinned_hf_config(repo, revision) is None:
+        raise ValueError(f"--revision {revision}: no manifest pins {repo} at it")
+    return Phi(model={"repo": repo, "revision": revision or own, "hf_config": declared.model["hf_config"]},
+               target=dict(declared.target), execution=declared.execution)
+
+
+def lowered_facts(serve: Mapping[str, Any], row: str, config: str, cls: str, scheme: str,
+                  revision: str | None = None) -> tuple[dict, dict, dict]:
+    """serve.json's φ and row `row`'s declared φ at checkpoint config `config` (at `revision` when given, `at_revision`),
+    each as `phi` compares it, and the facts of the window circuit each lowers at class `cls` cut at Pearl+'s linears under
+    `scheme` -> (the φ fields, the row's own revision among them, the served circuit's facts, the row's)."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.pipeline.workload_file import workload_file
     from verity_vllm.program.predict import window_circuit as WC
-    from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.score import phi_of
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.window_class import PearlTables
 
     served = PP.phi_of_serve(serve)
-    declared = phi_of({"row": row, "workload": read_json(workload_file(WORKLOADS / f"{row}.json"))}, config=config)
-    declared = Phi(model={k: declared.model[k] for k in ("repo", "revision", "hf_config")}, target=dict(declared.target),
-                   execution=declared.execution)
+    row_phi = phi_of({"row": row, "workload": read_json(workload_file(WORKLOADS / f"{row}.json"))}, config=config)
+    declared = at_revision(row_phi, revision)
 
     def digest(o: Any) -> str:
         return hashlib.sha512(json.dumps(o, sort_keys=True).encode()).hexdigest()
@@ -107,7 +123,8 @@ def lowered_facts(serve: Mapping[str, Any], row: str, config: str, cls: str, sch
               "hf_config": [digest(served.model["hf_config"]), digest(declared.model["hf_config"])],
               "execution": [served.execution, declared.execution],
               "default_seed": [serve.get("default_seed"), DEFAULT_SEED],
-              "target": sorted(k for k in set(st) | set(dt) if st.get(k) != dt.get(k))}
+              "target": sorted(k for k in set(st) | set(dt) if st.get(k) != dt.get(k)),
+              "row_revision": row_phi.model["revision"]}
     window_class, tables = PP.window_class_of(cls), PearlTables(scheme)
     low = [WC.lower(Registered.of(p, DEFAULT_SEED), window_class, tables=tables) for p in (served, declared)]
     return fields, facts(low[0]), facts(low[1])
@@ -115,11 +132,14 @@ def lowered_facts(serve: Mapping[str, Any], row: str, config: str, cls: str, sch
 
 def phi(fields: Mapping[str, Any], served: Mapping[str, Any], declared: Mapping[str, Any]) -> dict[str, Any]:
     """PHI from `lowered_facts`: every φ field equal and the two circuits' facts one digest. The declared target profile
-    may differ from the served one where the circuit doesn't read it (``target_differs``)."""
-    differ = sorted(k for k, v in fields.items() if k != "target" and v[0] != v[1])
+    may differ from the served one where the circuit doesn't read it (``target_differs``); the row's own revision is
+    reported (``row_revision``), never compared."""
+    differ = sorted(k for k, v in fields.items() if k not in ("target", "row_revision") and v[0] != v[1])
     if served["digest"] != declared["digest"]:
         differ.append("circuit")
-    return {"ok": not differ, "differ": differ, "fields": {k: v for k, v in fields.items() if k != "target"},
+    return {"ok": not differ, "differ": differ,
+            "fields": {k: v for k, v in fields.items() if k not in ("target", "row_revision")},
+            "row_revision": fields.get("row_revision", fields["revision"][1]),
             "target_differs": fields["target"], "circuit": [served["digest"], declared["digest"]],
             "templates": len(served["templates"]), "values": len(served["params"])}
 
@@ -180,7 +200,9 @@ def said(name: str, v: Mapping[str, Any], a: argparse.Namespace) -> str:
                 f"checkpoint config, execution, default seed, and the window circuit at class {a.cls} cut at Pearl+'s "
                 f"linears under {a.pearl_tables}: facts sha512 {v['circuit'][0][:16]}… against {v['circuit'][1][:16]}…, "
                 f"{v['templates']} templates, {v['values']} registered values; the declared target differs in "
-                f"{', '.join(v['target_differs']) or 'nothing'}){end}")
+                f"{', '.join(v['target_differs']) or 'nothing'}; revision served {str(v['fields']['revision'][0])[:12]}…, "
+                f"compared with {str(v['fields']['revision'][1])[:12]}…, the row's workload declaring "
+                f"{str(v['row_revision'])[:12]}…){end}")
     if name == "BUILD":
         return (f"BUILD: {a.pred}/predicted.json names Program digest {str(v['names'][0])[:16]}…, manifest digest "
                 f"{str(v['names'][1])[:16]}…; the row's Build of record is {v['of_record'][0][:16]}…, "
@@ -200,6 +222,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--of-record", required=True, help="the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST")
     ap.add_argument("--window-record", type=Path, required=True, help="W, Pearl+'s window record")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--revision", default=None,
+                    help="the revision the serve declares, when the manifests pin it beside the row's (`at_revision`)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "served_compare.json").unlink(missing_ok=True)
@@ -209,7 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = checkpoint_config(a.pred)
         read = {"file": str(config), "sha256": hashlib.sha256(config.read_bytes()).hexdigest()}
         fields, served, declared = lowered_facts(read_json(a.serve / "serve.json"), a.row, str(config), a.cls,
-                                                 a.pearl_tables)
+                                                 a.pearl_tables, a.revision)
         circuits.update(served=served, declared=declared)
         (a.out / "circuit_facts.json").write_text(json.dumps(circuits, indent=1) + "\n")
         return {**phi(fields, served, declared), "config": read}
@@ -222,7 +246,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(said(name, verdicts[name], a), flush=True)
     ok = all(verdicts[n]["ok"] for n in VERDICTS)
     failed = [n for n in VERDICTS if not verdicts[n]["ok"]]
-    line = (f"SERVED-COMPARE: {'EQUAL' if ok else 'NOT EQUAL'} (the serve against row {a.row}'s Build of record: "
+    own = verdicts["PHI"].get("row_revision")
+    at = (f" at revision {a.revision[:12]}…" if a.revision and a.revision != own else "")
+    whose = "" if not at else f", whose workload declares {own[:12]}…" if own else ", whose declared revision PHI didn't reach"
+    line = (f"SERVED-COMPARE: {'EQUAL' if ok else 'NOT EQUAL'} (the serve{at} against row {a.row}'s Build of record{whose}: "
             + ("PHI, BUILD and CUT PASS" if ok else f"{', '.join(failed)} FAIL") + "; B-OF-RECORD is the seal's)")
     (a.out / "served_compare.json").write_text(json.dumps(
         {"row": a.row, "class": a.cls, "scheme": a.pearl_tables, "ok": ok, "verdicts": verdicts, "line": line},

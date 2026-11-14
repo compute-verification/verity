@@ -80,6 +80,22 @@ def test_the_served_file_is_what_the_tree_computes_of_its_class() -> None:
     assert p.unexplained == 0 and p.outside == p.k - P.scan_state_bits(p.cls) > 0
 
 
+def test_a_model_pinned_at_several_revisions_has_a_shape_only_under_one_config(monkeypatch) -> None:
+    """A model the manifests pin at several revisions of one config.json is taken at its first pin; at two configs its
+    shape isn't known."""
+    from verity_vllm.engine.profiles import dense_generic as DG
+
+    base = next(e for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == "unsloth/Llama-3.2-1B")
+    for config, ok in ((base["config_sha256"], True), ("0" * 64, False)):
+        pins = [base, {**base, "revision": "ab" * 20, "config_sha256": config}]
+        monkeypatch.setattr(DG, "checkpoint_entries", lambda _m, pins=pins: pins)
+        if ok:
+            assert P.pinned("unsloth/Llama-3.2-1B")[0] == base["revision"]
+        else:
+            with pytest.raises(ValueError, match="pin 2 revisions of it of more than one config.json"):
+                P.pinned("unsloth/Llama-3.2-1B")
+
+
 def test_a_policy_file_that_misstates_its_work_is_refused(tmp_path) -> None:
     text = P.SERVED.read_text().replace("total = 36241670144", "total = 36241670145")
     assert text != P.SERVED.read_text()

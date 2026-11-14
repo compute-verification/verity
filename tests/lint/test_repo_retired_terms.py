@@ -31,7 +31,7 @@ key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds
 elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
 nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``), by the code around it (hypothesis's ``draw``) and by the
 file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live proof block's caps, a PoUW
-session's cap).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
+session's cap, Flock's caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
 with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
 it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
 base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
@@ -120,6 +120,9 @@ OWN_CAPS = {
     "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
     "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
+    "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
