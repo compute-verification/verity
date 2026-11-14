@@ -34,6 +34,7 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
@@ -51,8 +52,9 @@ with PP.network_traces():
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
-    """`prove_path.kept_scan` with the certifier's reader of its ingress rows, as its composing caller passes it."""
-    return PP.kept_scan(serve_dir, cls, users, window_rows=WRW.window_rows)
+    """`prove_path.kept_scan` with the certifier's readers of its ingress records and rows, as its composing caller passes them."""
+    return PP.kept_scan(serve_dir, cls, users, window_rows=WRW.window_rows,
+                        ingress=lambda run, params: RC.read_records(run, params)[RC.INGRESS])
 
 
 _spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py")
@@ -180,7 +182,7 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
 
 
 def test_a_kept_run_read_with_no_reader_of_its_ingress_rows_is_refused_by_name(serve_dir, tmp_path):
-    with pytest.raises(ValueError, match="by the certifier's reader, which SPOT never imports"):
+    with pytest.raises(ValueError, match="by the certifier's readers, which SPOT never imports"):
         PP.kept_scan(serve_dir, CLASS, USERS[:3])
     assert PP.kept_scan(tmp_path, CLASS, USERS) is None
 
