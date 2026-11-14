@@ -4369,6 +4369,11 @@
       "paths": {
         "benchmarks/pous/streamed_wipe/wipe_on_node.py": "verity/protocols/accounting/pous/prover/wipe_on_node.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/torch_gpu/p2_stage/served_weights.py": "verity/protocols/accounting/pous/prover/served_weights.py"
+      }
     }
   ]
 }
