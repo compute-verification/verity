@@ -170,10 +170,14 @@ def test_a_fold_view_that_states_no_number_fails_the_runs_compare_and_the_verdic
     (MissingField("a record", "its.field"), refused),
     (ValueError("invalid literal for int() with base 10: 'thirteen'"), not_run),
     (KeyError("alloc"), not_run),
-], ids=["a-refusal-by-name", "a-missing-field", "a-value-error-that-names-no-record", "a-key-error"])
+    (RecordError("a record", "its.field", "is " + "9" * 400 + ", not a number"), refused),
+    (ValueError("invalid literal for int() with base 10: " + "9" * 400), not_run),
+], ids=["a-refusal-by-name", "a-missing-field", "a-value-error-that-names-no-record", "a-key-error",
+        "a-refusal-of-more-than-300-characters", "a-value-error-of-more-than-300-characters"])
 def test_what_a_compare_raises_fails_the_run_only_where_it_refuses_a_record_by_name(tmp_path, compared, capsys, monkeypatch, raised, record):
     """A refusal by name is a `ValueError`, and only it fails the run's compare: any other error, a `ValueError` among them,
-    leaves the compare not run, with no result, and the value correspondence as it was."""
+    leaves the compare not run, with no result, and the value correspondence as it was.  Either way the compare's record keeps
+    the first 300 characters of the reason and of the error."""
     def raises(*args: Any, **kw: Any) -> Record:
         raise raised
 
