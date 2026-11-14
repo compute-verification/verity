@@ -4206,7 +4206,7 @@ class Runs:
         self.tmp, self.launches, self.state, self.dirs, self.cancelled = env.tmp / "runs", [], {}, [], []
         loop.world.on = on
         d = loop.world.slim_driver()
-        d.launch_postland, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
+        d.launch_after_landing, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
         d.evidence = lambda repo, ids: [x for x in self.dirs if x.name in ids]
         d.cancel = lambda repo, ids, reason: self.cancelled.extend(ids)
 
