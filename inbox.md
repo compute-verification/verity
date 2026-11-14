@@ -20,3 +20,8 @@ ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 11:58 AM PST. Line 1 of 2, t
 [2026-11-14T19:45Z] 41f42b2772e2
 ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 11:58 AM PST. Line 2 of 2, what of active.py could go without PoUW's four files (or warden.py, the workload, test_network_certifier_served.py or test_network_certifier_warden.py) noticing: 12 definitions, 139 of its lines, that nothing outside active.py's own tests (active, seal, salt_compact, compact_abort) reads: event_data, ID_EVENT_BYTES, id_event_data, compact_records_of, compact_finish_violations, compact_unit, compact_placement, id_request_fields, id_request_frames, fresh_pair_secret, InlineExecutor and check_salts. Everything else is reached from Proxy, serve_reveals, CertifierClient, weights_message, fresh_salt, served_window, the workload's ten names, precise_sleep, Bucketer, id_event or id_request_max_tokens. Not deleted.
 
+[2026-11-14T19:48Z] f1a79d5190b3
+STAMPS2, rows: I can finish the move row by Sun 10:30 AM PST: the map (pushed, 039efd5b3676, tools/move/certifier_programs_map.toml, 45 paths) and its Layout-move commit, staged and certified by stage.py, which I am running now. I cannot finish what follows the move in the three groups, which you gave to CROSSTICK2, TERMGB2 and GATERELAY2: the bare imports no map rewrites, the suites of the new device/tests/ and prover/tests/, and the listing's rows.
+Question (yes/no, my reading stands at 12:05 PST): released_keys.py and released_keys.json go to certifier/device/ with leak_guard, which imports them? I take yes. They are new since my plan.
+Also: test_out_request_values.py stays (it reads the *.sh drivers, which stay).
+
