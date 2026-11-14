@@ -61,7 +61,7 @@ class ThreadPublisher:
     def __init__(self, out: Path, key: Path, commit) -> None:
         self.signer = ws.cs.signer(key)
         self.inline = ws.Publisher(out, ws.Issuer(self.signer, SESSION), PARAMS, commit)
-        self.start = ws.start_json(ws.certify_start(self.inline.issuer, 0, PARAMS))
+        self.start = ws.start_json(ws.certify_start(self.inline.issuer, 0, 0, PARAMS))
         self.executor, self.futures = ThreadPoolExecutor(1), []
         self.key = self.signer.public_key()
 
@@ -99,7 +99,7 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
     if process:
         from benchmarks.network_traces import warden_serve
 
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit, base_ms=0)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit, base_ms=0, ordinal=0)
         release = publisher.release if release_edit is None else release_edit(publisher.release)
         if transport is not None:
             publisher.rows.put = transport(publisher.rows.put)
