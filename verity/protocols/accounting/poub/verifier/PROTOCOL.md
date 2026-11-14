@@ -88,7 +88,8 @@ commitment only once the session has its outcome (§4). The windows' PRF advanta
 sample's third term, which nothing prices and no guarantee assumes: named with their claim (`prf/sha-512`,
 `ledger.PRF_CLAIM`) beside every δ, with no value and in none. The memory line's \(\delta\) carries the
 binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
-(\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
+(\(n \cdot 2^{-191}\) over \(n\) windows for all but a \(2^{-64}\) fraction of keys, `ledger.hiding`), beside its
+\(2^{-\text{slack}}\) a pass. Under the default
 receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
 derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
@@ -569,8 +570,9 @@ pass's seed, so like the seed they exist only once the root before it does.
 **The rows.** sketch-sha512's \(k_s\) is a registration parameter (`receipts.ROWS`: 16 or 64), bound in the digest
 (§3) and in the signs' key (`"k"`), so 64-row signs are not 16-row signs and 48 more, and a session's `Params.rows`
 must be the registration's. 16 is the default. 64 rows read the bound at \(r^* = 27\), \(2^{-215.85}\) a compression
-(below), so no session is long enough to need a cap. On the device reader they cost τ = 1.226 a pass in one kernel
-with an L2 hint, below 16 rows' 1.258. In
+(below), so no session is long enough to need a cap. On the stand-alone device reader (`benchmarks/codec_tensor`, one
+card) they cost τ = 1.226 a pass in one kernel with an L2 hint, below 16 rows' 1.258 on that reader; neither is a
+session's pass on the node. In
 the fused GEMM they cost more: at 70B and B = 8, its step cost d is 3.49 / 4.00 at k = 2 / 3 against 16 rows'
 2.40 / 3.18, since the two sketch warps bind there. So 16 stays the
 default, and a registration names 64 to use it.
@@ -671,10 +673,14 @@ verifier records with δs (`sketch_failure`'s `outside`) and the auditor's line 
 a session stays below \(2^{-40}\) up to \(Q = 2^{55.12}\) compressions, 0.67 s of one node's hashing at \(F = 2^{20}\)
 (8.1 days at \(F = 1\)). One node's 10-minute session reads \(2^{-30.19}\) (\(2^{-50.19}\) at \(F = 1\)), a node-day
 \(2^{-23.02}\), and gate run 8's 227 s session \(2^{-31.59}\) (\(2^{-51.59}\) at \(F = 1\), \(2^{-41.59}\) at
-\(2^{10}\)). The memory line barely feels it, since AuditRO's \(2^{-41}\) a pass dominates its δ: gate run 8's 2,118
-passes put it at \(2^{-29.95}\) at \(F = 1\) and \(2^{-29.55}\) at \(2^{20}\), 0.4 bits. 64 rows brings δs under
-\(2^{-50}\) at \(F = 2^{20}\) (\(2^{-127.13}\) for 10 minutes, the keys' birthday) at τ 1.226 a pass on the reader, the option if that
-slack is ever cut; \(2^{-64}\) is out of reach at 16 rows and needs it too. The fused GEMM's cost at 64 rows isn't
+\(2^{10}\)). On a record of that session's counts (2,118 one-pass windows over 97,517,568 blocks in 226.9 s, 48
+openings a window), `ledger.memory`'s line δ, the sum of `ledger.delta_parts`, is \(2^{-39.99}\) at \(F = 1\), where the
+windows' profile δ \(2^{-40.00}\) is its largest part, and \(2^{-31.59}\) at \(F = 2^{20}\), where δs is: \(F = 2^{20}\)
+costs that line 8.40 bits. AuditRO's slack is \(2^{-55.95}\) of it, \(2^{-67}\) a pass (`audit.SLACK_LOG2`).
+`timing.SKETCH_OUTSIDE`'s docstring gives every part, and `tests/test_sketch_reading.py` holds them to the ledger. 64
+rows bring δs under \(2^{-50}\) at \(F = 2^{20}\) (\(2^{-127.13}\) for 10 minutes, the keys' birthday) at τ 1.226 a pass
+on the stand-alone reader (above), the option wherever δs is the line's largest part; \(2^{-64}\) is out of reach at 16
+rows and needs it too. The fused GEMM's cost at 64 rows isn't
 measured yet.
 
 A grinding try is not a pass's commitment. It reads no block: re-salting one receipt leaf changes the root without
@@ -688,10 +694,13 @@ root's last, and the seed's and the key's 2 each, whose first blocks hold the ro
 any of these counts: it charges a key to every compression.
 
 None of this moves γ: \(\delta_s\) adds to the failure probability, not to the reads certified. The ledger adds
-\(\delta_s\) to the memory line's δ and to γ's error (`ledger.sketch`), not to a term of γ. That δ is the profile's
-δ, AuditRO's \(2^{-41}\) a pass and \(\delta_s\): over one node's 10-minute horizon at 50 passes a second,
-\(2^{-40} + 2^{-26.13} + 2^{-30.19} = 2^{-26.04}\) (\(2^{-26.13}\) at \(F = 1\)). The stated claim at \(2^{-40}\) (§10) is
-the openings' δ; the line's total is above it on the slack alone, whatever \(F\). Both leave out
+\(\delta_s\) to the memory line's δ and to γ's error (`ledger.sketch`), not to a term of γ. That δ is the sum of
+`ledger.delta_parts`: the profile's δ, AuditRO's \(2^{-67}\) a pass, the hiding, the binding, \(\delta_s\) and the
+sample's rejection. Over one node's 10-minute horizon at 50 passes a second (30,000 one-pass windows, 48 openings a
+window) they are \(2^{-40.00}\), \(2^{-52.13}\), below \(2^{-159}\) together for the hiding and the binding,
+\(2^{-30.19}\) (\(2^{-50.19}\) at \(F = 1\)) and \(2^{-43.54}\), and `ledger.memory`'s line δ is \(2^{-30.19}\)
+(\(2^{-39.88}\) at \(F = 1\)). The stated claim at \(2^{-40}\) (§10) is the openings' δ; the line's total is above it by
+its other parts, whatever \(F\). Both leave out
 \(\sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed; §1).
 
 What each costs on the GPU: one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
@@ -1007,7 +1016,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one execution phase's transfer blocks as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
-  (`ledger.hiding`, which `LineHeld` states while it reads the prover's records through the commitment), plus the
+  for all but a \(2^{-64}\) fraction of keys (`ledger.hiding`, which `LineHeld` states while it reads the prover's records through the commitment), plus the
   receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
   bounds (`ledger.binding`, §1; it takes the gap `binding-split` as closed),
   plus the sketch's (`timing.sketch_failure`) plus the sample's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`),

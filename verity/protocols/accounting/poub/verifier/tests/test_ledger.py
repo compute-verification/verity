@@ -228,7 +228,7 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 def test_the_coin_commitments_hiding_is_charged(store) -> None:
     """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledSample` reads none)."""
+    within 2^-192, n·2^-191 over the record's n windows for all but a 2^-64 fraction of keys, which the line's δ carries (`PooledSample` reads none)."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()

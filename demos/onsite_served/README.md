@@ -56,7 +56,7 @@ deploy bindings:
 | `V3C_LAW` | sampled proofs | `[service] law` |
 | `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY`, `DEVELOPMENT` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; the records audits, V3c's of record among them, take their coins from the live challenger when `gate` is bound, else from a local development session in a development run (`DEVELOPMENT=1`) |
 | `H1_GATE`, `H1_PEER`, `H1_KEY_SHA512` | PoUW | `challenger.pouw`: `gate` (the gate command), `peer`, `key-sha512`; `POUW_CMD` is the runner's default then |
-| `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
+| `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 1% + 2^-128, `period.certify`: more reads than a certificate's keep its ε) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
 | `SERVE_ARGS` (`--protocol ids --id-payload 503`), `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`); the front sends its requests in the id form, which serve-openai answers only under those flags, every other request as before |
 | `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND`, `WIPE_KEY_SHA512` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command`, `key-sha512` |

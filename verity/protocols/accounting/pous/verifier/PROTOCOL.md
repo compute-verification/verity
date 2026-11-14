@@ -572,7 +572,8 @@ keeping `z` means `M + E` bits held `z` and `g + 1` labels, which happens for a 
 egress and a counting term. `z` survives when a function of what is held inside and outside returns it, so the bound
 covers prior content moved out of the boundary too.
 
-At the deployed fill, `N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half of it for sampling:
+At the reference fill (`DEPLOYED_FILL_BYTES`, every tier of one server; a run's fill is its own `WipeParams`'),
+`N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half of it for sampling:
 
 - `k = 72,074` is the fewest challenges for which a server short of 1 GB of labels passes with probability at most
   `2^-40` (`challenges_for`, sampling alone);

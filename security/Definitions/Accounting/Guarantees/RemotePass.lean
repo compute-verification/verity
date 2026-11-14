@@ -32,8 +32,11 @@ except with probability `(1 − ε_s)^s + s·2^-h + C(q, k)·2^-λ`. The three t
 passes without its contents on chip at a query: the sample misses the blocks the device never queried (`((k − 1)/N)^s`),
 a guessed tag (`2^-h` per sampled block), and a device that queried `k` blocks with less information than they hold
 (`C(q, k)·2^-λ`, by compression: its state, side bits, regenerated blocks and ingress, plus which `k` of its queries
-named them, would describe the store in fewer bits than it has). `λ` is the slack the last term charges; with
-`q ≤ 2^40`, `λ = 40·k + 41` makes it at most `2^-41`, 40 bits of 16,448 per deployed block (0.24%).
+named them, would describe the store in fewer bits than it has). `λ` is the slack the last term charges, and the
+statement holds at every `q` and `λ`. PoUB's code reads it at `q = 2^64` (`audit.QUERIES_LOG2`) with
+`λ = named_bits(k) + 67` (`audit.named_bits`, at least `log₂ C(q, k)`, and `audit.SLACK_LOG2`), which makes the last term
+at most `2^-67` a pass and charges at most 64 bits a block at both of its block sizes: 0.20% of the codec's 32,768-bit
+block and 0.39% of the P2 layout's 16,448-bit block.
 
 Parameters, not constants: `c` is every side channel's capacity over the window (`cap · T`), and `G` is the window over
 the regeneration time `R_regen` (about 2 ms sequential for a P2 root), times the devices that regenerate. Proof:

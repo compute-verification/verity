@@ -207,7 +207,7 @@ def rejection(record: audit.Record) -> float:
 def hiding(record: audit.Record) -> float:
     """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
     window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
-    pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
+    pinned key, n·2^-191 in all for all but a 2^-64 fraction of keys (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
     prover is sent the commitment only at the session's end (`coins.py`), so `PooledSample` reads no hiding term and
     `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
     return hiding_over(len(record.windows))
