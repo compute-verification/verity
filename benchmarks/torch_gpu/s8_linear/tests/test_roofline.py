@@ -28,7 +28,7 @@ def test_the_ridge_solves_compute_equals_traffic() -> None:
     assert RF.ridge(n * k, lambda mm: RF.bytes_of(n, k, mm, 2), 1e9, B) == math.inf
 
 
-def test_interp_is_exact_on_a_power_law() -> None:
+def test_interp_is_exact_on_a_square_root() -> None:
     ms = [16, 64, 256]
     ts = [3.0 * m**0.5 for m in ms]
     assert RF.interp(ms, ts, 128) == pytest.approx(3.0 * 128**0.5, rel=1e-12)

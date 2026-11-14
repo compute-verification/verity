@@ -122,7 +122,11 @@ four bytes an id, and hands them with the release (`Released.request`, `Released
 three more tables a class under the same head. Under form 2 those tables hold a row a release filed in the class and
 no other, at most `WardenParams.phase_releases`, a bound on an execution phase's releases. The hand copies an
 execution phase's ids and makes nothing else: the tables are laid, committed and signed by whoever takes the hand,
-never on the tick.
+never on the tick. A schedule with **request words** (`WardenParams.request_words`, none by default, with content
+rows under form 2 and a response cap only) has a fourth table a class, of two words of each released request: its
+`max_tokens` and the count of its prompt's ids, read from the request's bytes in the hand
+(`content_rows.request_words`) by the form every cell of a released request was held to at ingress, and from nothing
+more of the device or of a server.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
@@ -132,8 +136,9 @@ what it did.
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
 cap (limit), the server's connection failing (upstream), an egress cell out of the egress form (format), ingress past
-its bounds (ingress), a client cell of another kind than `DATA` or `END` (malformed), a request refused under the
-response cap (cap). Its `FAIL` cell is in the slot of the next egress cell, and it is in the egress record.
+its bounds (ingress), a client cell of another kind than `DATA` or `END` or a request to the watermark's path
+(malformed), a request refused under the response cap (cap). Its `FAIL` cell is in the slot of the next egress cell,
+and it is in the egress record.
 Every `FAIL` is the same bytes: the reason is a frame of the network certifier's `fails` record (`reason_frame`),
 witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
 whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once
@@ -164,6 +169,15 @@ reads that connection and no tick waits on it: the lines sent before it opens ar
 `WRITE_BACKLOG` of them are unwritten it is closed. It is the one connection to the server the network certifier opens
 with no admission: every other is opened by `connect` when the client's connection is admitted. Each line's t and n
 are functions of the ingress record, its lost releases the server connections' state, and no cell or record changes.
+The stream's path is the network certifier's alone, with `watermark` or without: released, a client's request to it
+would reach the server under the run's id, as the stream does, and a server would read its body as the watermark's
+lines. So a request whose first cell opens as one to that path (`release.to_watermark`: the path as a server reads it
+off the request line) is refused before that cell is cut: none of its bytes is cut into a cell or reaches the server,
+its ingress is padding and it fails as its client's (malformed). A request line that ends past the first cell (line
+breaks before it, a long authority) is read at the request's `END`, with the request whole, before that cell is cut:
+the cells before it are in the ingress record, and the request has no `END`, no place in the release order and no
+byte for the server. Past a request's first line the network certifier reads nothing here: a second request on the
+connection is the server's to refuse.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
@@ -197,6 +211,7 @@ from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridP
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
 from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+from verity.protocols.accounting.certifier.verifier.release import to_watermark
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the network certifier's cell kinds, beside `active`'s PAD and DATA
@@ -235,6 +250,7 @@ class WardenParams:
     max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
     lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1 or 2, or none
     content: tuple[tuple[int, ...], ...] | None = None  # the content rows' classes (`content_rows.classes`), or none
+    request_words: bool | None = None  # the request words (the module docstring's "The content rows"): True, or none
 
 
     def __post_init__(self) -> None:
@@ -272,6 +288,15 @@ class WardenParams:
                                  f"at most the window ({self.window}) and egress_cells at most {1 << 16}")
             _request_form().layout(self.cell_bytes)
             _connection_rows().check_slots(self.stride_releases, self._stride_that_fits)
+        if self.request_words is not None:
+            if self.request_words is not True:
+                raise ValueError(f"request_words is true, for a schedule with request words, or unset, not "
+                                 f"{self.request_words!r}")
+            if self.content is None or not self.closes or cap is None:
+                raise ValueError("a words row is a release's in its class, one for each the class holds, and its "
+                                 "max_tokens the one its response is held to, so a schedule with request words has "
+                                 "content rows under the lengths rows' form 2 and a response cap (lengths is 2, "
+                                 "content its classes, each (P, O), and max_tokens_cap set)")
         if self.content is not None:
             object.__setattr__(self, "content", _content_rows().classes(self))
 
@@ -311,7 +336,9 @@ class WardenParams:
         its connection's admission, so an execution phase's releases are of connections admitted in T +
         `ingress_buckets` − 1 buckets in a row; and a connection holds its lane through its admission's bucket + D,
         so the connections admitted in any D + 1 buckets in a row are live together, at most `lanes` of them. It is
-        a bound: at some schedules a load releases R in an execution phase, and at others none does."""
+        a bound: at some schedules a load releases R in an execution phase, and at others none does. It does not
+        use that the device releases no request in its admission's bucket, so it may count one bucket more than a
+        load can reach."""
         return self.lanes * -(-(self.window + self.ingress_buckets - 1) // (self.delay + 1))
 
     @property
@@ -348,15 +375,16 @@ class WardenParams:
     @cached_property
     def digest(self) -> bytes:
         """The 64 bytes each record head's `parameters` carries. A schedule without a response cap has neither the
-        cap nor its reason in what it hashes, one without lengths rows not their form and one without content rows
-        not their classes, so its digest is the one it had before any of them was a parameter."""
+        cap nor its reason in what it hashes, one without lengths rows not their form, one without content rows not
+        their classes and one without request words not that it has none, so its digest is the one it had before
+        any of them was a parameter."""
         values = {k: v for k, v in asdict(self).items() if k not in OPTIONAL_FIELDS or v is not None}
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(values | {"kinds": sorted(KIND_NAMES),
                                                                             "reasons": list(self.reasons)}))
 
 
 #: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
-OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content")
+OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content", "request_words")
 #: the lengths rows' forms (the module docstring's "The lengths rows"): which execution phases are handed, and whether
 #: one that isn't is ended without releases
 LENGTHS_FORMS = (1, 2)
@@ -507,7 +535,7 @@ class _Connection:
     egress_cells: int = 0  # egress slots past s + D, released
     problem: str | None = None  # the client's: failed at the next slot
     max_tokens: int | None = None  # under a response cap, its request's, read at its first request cell
-    refused: bool = False  # under a response cap, its request was refused (cap): no request cell is cut
+    refused: bool = False  # its request was refused (under a response cap, or to the watermark's path): no more is cut
     left: int = 0  # with lengths rows, its request's bytes still to be cut (`io_request.read`'s carry)
     upstream: str | None = None  # the server connection's: failed at the first egress slot without a whole cell
     failed: str | None = None  # one of REASONS
@@ -895,7 +923,9 @@ class Warden:
     def _ingress(self, c: _Connection, t: int) -> list[bytes]:
         """Connection c's r ingress cells at bucket t, their payloads held for the server until the `END`'s release,
         then written whole with the release order, or kept until its connection opens (at most the ingress bound's
-        bytes): the release never waits on the server."""
+        bytes): the release never waits on the server. A request that opens as one to the watermark's path
+        (`release.to_watermark`) is refused with the client's reason malformed, where its first cell says so before any
+        cell of it is cut, and where only the whole request does before its `END` is: either way nothing is released."""
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
         out, sent, pad = [], [], _pad(c, B)
         for _ in range(r):
@@ -908,6 +938,11 @@ class Warden:
                 out.append(pad)
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended) or c.ingress_ended:
                 kind = DATA if len(c.ingress) > p or not c.ingress_ended else END
+                if (kind == END or not (c.ingress_cells or sent)) and \
+                        to_watermark(bytes(c.held) + b"".join(sent) + bytes(c.ingress[:p])):
+                    c.refused, c.problem = True, c.problem or "malformed"
+                    out.append(pad)
+                    continue
                 made = cell(kind, c.ordinal, bytes(c.ingress[:p]), B)
                 if self.params.lengths is not None and not _id_request_cell(self.params, c, made):
                     c.problem = c.problem or "malformed"
