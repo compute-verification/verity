@@ -45,54 +45,6 @@ check's own form has some, and `PinnedReadNontrivial`, that with the verdict bit
 
 @[expose] public section
 
-namespace NciCheck.Properties.Record
-
-open Lean (Json)
-open Flock.Program (Prog Defn)
-open NciCheck.RecordText (Row Held)
-open Accounting
-
-/-- **An honest pinned read**: of the check's own form (`NciCheck.Record.SecurityProofs.form`), some instance, record,
-circuit file and transcript meet `PinnedRead`, so `PinnedReadBinds` is not vacuous of it. So that it does not hold
-emptily, by a table of one constant row: the check accepts the record (`Accepts`); the table has two different rows
-within its count; and the transcript chooses the index, which no index gate's registered constant fixes and which
-lies within the table's count. Not proved: that the record reads with its opening held rests on `Provenance` for the
-check's form, and that the read's check accepts the template and the file parses are runs of code on a file, which
-the kernel does not evaluate. -/
-def PinnedReadHonest : Prop :=
-  ∃ (c : NciCheck.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
-    (dfn : Defn) (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray)) (ct : Flock.Circuit) (tu : Flock.TmplUnit)
-    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
-    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
-    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
-    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
-    PinnedRead NciCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
-      consts u q Yc table ∧
-    Accepts NciCheck.Record.SecurityProofs.form j tr c ∧
-    (∃ i i', i < q.count ∧ i' < q.count ∧ (table i).row ≠ (table i').row) ∧
-    (∀ b, consts (q.tok b) = none) ∧
-    q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) < q.count
-
-/-- **An opening's declared row is the row its reader returns**: where the check's own form accepts a record and holds
-its row `r` as an opening under a pin, and the opening declares a row (`Form.openedRow`), that row is the output row
-`out` at which the reader's Definition is a table read (`readRows`). An opening that declares no row is outside it.
-The check refuses a declared row unless its reader's template has six input rows and its outputs are that row and
-then the verdict (`RecordText.inputsOf`), and `readRows` names the first of exactly two outputs. Not proved: it reads
-the check's `read` through to that refusal. -/
-def OpenedRowReturned : Prop :=
-  ∀ (j tr : Json) (c : NciCheck.Record.SecurityProofs.form.Case) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
-    (dfn : Defn) (ro : Roles) (o out : String) (count words : ℕ),
-    Accepts NciCheck.Record.SecurityProofs.form j tr c →
-    Flock.Program.decode (NciCheck.Record.SecurityProofs.form.inst c).program.toUTF8 = .ok P →
-    NciCheck.Record.SecurityProofs.form.held c r = some (.opened name p pin) →
-    P.index[r.tid]? = some k → P.defs[k]? = some dfn →
-    NciCheck.Record.SecurityProofs.form.layout dfn = some ro →
-    readRows dfn ro out count words = true →
-    NciCheck.Record.SecurityProofs.form.openedRow c r = some o → o = out
-
-end NciCheck.Properties.Record
-
 namespace NciCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Defn)
