@@ -86,3 +86,6 @@ def encode_segments(codec: Codec, params: Geometry, prims: Any, w: bytes | Itera
     """Each segment's labels, in order."""
     for s, seg in enumerate(split(params, w)):
         yield codec.encode_segment(params, prims, salt, s, seg)
+
+
+__all__ = ["Codec"]

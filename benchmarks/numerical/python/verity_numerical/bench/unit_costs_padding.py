@@ -329,16 +329,16 @@ def _short(w: str) -> str:
 
 
 def render(pad: Mapping[str, Any]) -> str:
-    L = [f"# F6 padding: unit = one subcircuit, K = {pad['K']} draws, δ = {pad['delta']}", "",
+    L = [f"# F6 padding: unit = one subcircuit, K = {pad['K']} sampled proof blocks, δ = {pad['delta']}", "",
          "Per-unit nonzeros: " + str(pad.get("nnz")), "",
          "zpad: Z rounding only; pad_mean: with sessions of B slots rounded up; public: each shape's session count fixed at "
-         "its 1 − 2⁻⁴⁰ quantile (hides the drawn mix); pad_q: bound on the 1 − 2⁻⁴⁰ quantile of padded / actual. All over the "
+         "its 1 − 2⁻⁴⁰ quantile (hides the sample's mix); pad_q: bound on the 1 − 2⁻⁴⁰ quantile of padded / actual. All over the "
          "body's expected actual nonzeros. Tail: the samplers and units over "
          f"{pad['tail_factor']}x the body's 99th-percentile Z, each its own bucket at B = 1.", "",
          "## Compact: each workload x menu at its best B", "",
          f"best B: the largest B within {pad['b_tolerance']:.0%} of B = 1's pad_mean.", "",
          "| workload | menu | buckets | best B | zpad | pad_mean | round extra | public | hide extra | pad_q | sessions mean / "
-         "public | tail share of draws | tail actual / body actual | tail public / body actual | same, token-select at its step "
+         "public | tail share of the sample | tail actual / body actual | tail public / body actual | same, token-select at its step "
          "model |", "|" + "---|" * 15]
     for w in pad["workloads"]:
         t, ts = w["tail"]["eval"], w["tail"]["eval_step_model"] or w["tail"]["eval"]
@@ -357,12 +357,12 @@ def render(pad: Mapping[str, Any]) -> str:
         for m in w["menus"]:
             L.append(f"| {_short(w['workload'])} | {m['menu']} | " + " | ".join(
                 f"{m['by_B'][str(B)]['pad_mean']:.3f} / {m['by_B'][str(B)]['public']:.3f}" for B in pad["Bs"]) + " |")
-    L += ["", "## Tails", "", "| workload | tail unit | src | nnz | draw share |", "|---|---|---|---|---|"]
+    L += ["", "## Tails", "", "| workload | tail unit | src | nnz | share of the sample |", "|---|---|---|---|---|"]
     for w in pad["workloads"]:
         for u in sorted(w["tail"]["types"], key=lambda u: -u["nnz"]):
             L.append(f"| {_short(w['workload'])} | {u['unit_type']} | {u['source'][:1].upper()} | {_si(u['nnz'])} | {u['draw_share']:.2e} |")
     L += ["", "## Large units: unit types over Z (must be split)", "",
-          "| workload | Z | types over / all | draw share over | mean pieces | largest by share |", "|---|---|---|---|---|---|"]
+          "| workload | Z | types over / all | share of the sample over | mean pieces | largest by share |", "|---|---|---|---|---|---|"]
     for w in pad["workloads"]:
         for g in w["large"]:
             top = ", ".join(f"{u['unit_type']} ({u['draw_share']:.1%}, {u['pieces']} pieces)" for u in g["units"][:3])

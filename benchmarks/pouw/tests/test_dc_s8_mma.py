@@ -3,29 +3,17 @@ word check passes a device that returns the sm_120 step's words and names the on
 needs an H200 or a B200 (dc/s8_mma.sh)."""
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
 import numpy as np
-import pytest
+import s8_mma as s8
 
-DC = Path(__file__).resolve().parents[1] / "dc"
 SWEEP = "random_random_acc"
-
-
-@pytest.fixture(scope="module")
-def s8():
-    spec = importlib.util.spec_from_file_location("dc_s8_mma_under_test", DC / "s8_mma.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def _line(pc: int, text: str) -> str:
     return f"        /*{pc:04x}*/                   {text} ;  /* 0x0000000000000000 */"
 
 
-def test_sass_kernels_keeps_each_kernels_tensor_instructions(s8):
+def test_sass_kernels_keeps_each_kernels_tensor_instructions():
     sass = "\n".join([
         _line(0x00, "IMMA.16832.S8.S8.SAT R0, R4.ROW, R8.COL, R0"),      # before any kernel: no kernel's
         "\t\tFunction : s8_mma_form0",
@@ -47,7 +35,7 @@ def test_sass_kernels_keeps_each_kernels_tensor_instructions(s8):
     }
 
 
-def _tiles(s8, tiles: int):
+def _tiles(tiles: int):
     """`tiles` mma.sync tiles of random bytes, the second half against accumulators within 1000 of an s32 end, and each
     form's words computed here in Python integers: the 32 products and C, clamped once at the end or wrapped."""
     m, n = s8.SHAPES["mma"]
@@ -78,9 +66,9 @@ def _tiles(s8, tiles: int):
     return A, B, C, [{"family": SWEEP, "start": 0, "tiles": tiles}], device
 
 
-def test_check_words_passes_the_sm120_steps_words_and_names_a_word_that_differs(s8):
+def test_check_words_passes_the_sm120_steps_words_and_names_a_word_that_differs():
     m, n = s8.SHAPES["mma"]
-    A, B, C, meta, device = _tiles(s8, 2)
+    A, B, C, meta, device = _tiles(2)
     forms, structured, ok = s8.check_words("mma", A, B, C, meta, device)
     assert ok and structured == {} and sorted(forms) == sorted(s8.FORMS)
     for form, rec in forms.items():

@@ -156,6 +156,7 @@ def test_a_replayed_token_that_differs_fails_the_job_naming_the_token_and_the_st
     replayed(out, tokens={b: [7, 9]})
     rc, txt, r = run(out)
     assert rc == 1 and r["tokens"]["reproduces"] is False
+    assert (r["tokens"]["tokens_before_first_difference"], r["tokens"]["tokens_given_back"]) == (3, 3)
     # the first token that differs: its request and position, the ids on each side, and the step that emitted it
     assert ("tokens: FAILED: 2 requests replayed, 4 served tokens compared with 4 replayed, 1 differ in 1 requests\n"
             f"  the first token that differs: request {b} position 1: served id 1, replayed id 9; serving emitted it in "
@@ -177,8 +178,10 @@ def test_a_replay_that_stops_short_or_runs_another_schedule_fails_too(tmp_path: 
     out = job(tmp_path)
     a, b = rid(f"{LOAD}1", 0), rid(f"{LOAD}1", 1)
     replayed(out, tokens={a: [7]})
-    rc, txt, _ = run(out)
+    rc, txt, r = run(out)
     assert rc == 1 and f"request {a} position 1 (served 2 tokens, replayed 1; 1 positions differ)" in txt
+    assert (r["tokens"]["tokens_before_first_difference"], r["tokens"]["tokens_given_back"], r["tokens"]["tokens_differing"]) \
+        == (3, 3, 1)
     assert f"the first token that differs: request {a} position 1: served id 0, the replay ended before it; serving" in txt
     shutil.rmtree(out / "replay-compiled")
     # the same tokens from other rows: the replay did not run the served schedule, and the first step says how
@@ -1089,6 +1092,135 @@ def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_p
     shutil.rmtree(out / "replay-compiled")
     replayed(out, tokens={rid(f"{LOAD}1", 0): [8, 0]})
     assert run(out)[0] == 1 and json.loads((tmp_path / "result.json").read_text())["validation"]["status"] == "failed"
+
+
+def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
+    """The measurements of the run's result.json once the report of a job with the cost line ``c`` is declared in it,
+    where the benchmark's cost step wrote its own and an earlier report one under the metric's id."""
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
+    (tmp_path / "out").mkdir(exist_ok=True)
+    (tmp_path / "result.json").write_text(json.dumps({
+        "schema": P.RESULT, "run_id": "r-1", "validation": {"status": "passed"},
+        "measurements": [{"name": S.AGENTIC, "value": 0.5}, {"name": "vllm/prod-serving-cost-glm53", "value": 9.0},
+                         {"name": "vllm/prod-replay-match-glm53", "value": 9.0},
+                         {"name": "vllm/prod-advice-bits-glm53", "value": 9.0}]}))
+    r = {"cost": c, "tokens": P.not_measured("no replay ran"), "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
+         "arms": {"stock": stock, "again": None, "ours": ours}}
+    assert P.declare(tmp_path / "out", r, tmp_path / "out" / "replay-compiled") == tmp_path / "result.json"
+    return json.loads((tmp_path / "result.json").read_text())["measurements"]
+
+
+def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_where_it_stands(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/metrics.toml names, the
+    figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
+    and the arms are at the same settings. Where it does not, the result holds no entry under the id."""
+    theirs = {"name": S.AGENTIC, "value": 0.5}
+    # three lifetimes an arm whose costs agree: the cost stands and is under the target
+    c, own = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
+    assert (c["stands"], c["metric"], c["verdict"]) == (True, "vllm/prod-serving-cost-glm53", "under")
+    got = declared(tmp_path, monkeypatch, c)
+    assert got == [theirs, {
+        "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
+        "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
+        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1"}]
+    assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
+    # one lifetime an arm: the benchmark's own cost stands as a value with no interval, and so does the line's
+    ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
+    by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-record": sessions_arm("prod-record", ours)}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    got = declared(tmp_path, monkeypatch, c)
+    assert [(x["name"], x["value"]) for x in got] == [(S.AGENTIC, 0.5), ("vllm/prod-serving-cost-glm53", 0.5)]
+    assert (got[1]["ci95"], got[1]["verdict"], got[1]["lifetimes"]) == (None, "not shown", 1)
+    # the arms at other settings: the figure is not our changes' cost, and the entry an earlier report wrote is dropped
+    assert declared(tmp_path, monkeypatch, c | {"settings_differ": ["the context limit"]}) == [theirs]
+    # the arms did not do the same work: the benchmark's own cost does not stand, nor does the line
+    by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["measured"] and not c["stands"] and declared(tmp_path, monkeypatch, c) == [theirs]
+    # another model, or arms other than the recipe's: no metric of this benchmark's
+    by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.94
+    other = {n: a | {"model_id": "moonlight"} for n, a in by.items()}
+    c = P.cost(tmp_path, other, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] is None and declared(tmp_path, monkeypatch, c) == [theirs]
+    by["prod-again"] = sessions_arm("prod-again", [2.0] * 6)
+    c = P.cost(tmp_path, by, "prod-again", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] is None
+    assert declared(tmp_path, monkeypatch, c, stock="prod-again") == [theirs]
+    c = P.cost(tmp_path, by, "prod", "prod-again", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] is None
+    assert declared(tmp_path, monkeypatch, c, ours="prod-again") == [theirs]
+    # a load that is not a sessions load: its figure is none of the benchmark's measurements
+    stock = [300.0, 301.0, 299.0, 300.5, 299.5, 300.0]
+    bench_arm(tmp_path / "chat", "prod", {"chat@16": stock})
+    bench_arm(tmp_path / "chat", "prod-record", {"chat@16": [x / 1.004 for x in stock]})
+    c = P.cost(tmp_path / "chat", {a: S.arm_metrics(tmp_path / "chat" / a) for a in ("prod", "prod-record")}, "prod",
+               "prod-record", None, "chat", 1.0)
+    assert c["measured"] and c["metric"] == "vllm/prod-serving-cost-glm53" and not c["stands"]
+    assert declared(tmp_path, monkeypatch, c) == [theirs]
+    # nor is a cost that was not measured
+    assert declared(tmp_path, monkeypatch, P.not_measured("prod did not serve load agentic")) == [theirs]
+
+
+def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where_they_stand(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Of `prod-record` on GLM-5.3, the share of the replayed window's served tokens the replay gave back before each
+    request's first difference and the advice in bits a request are the measurements benchmarks/metrics.toml names
+    beside the cost: the match where the replay's record agrees with what it kept, the advice where the line is
+    measured. Another arm as ours or another model names no id, and an earlier report's entry under an id whose figure
+    does not stand is dropped."""
+    # a token after a request's first difference is not given back, though it is equal at its position
+    assert P.given_back({"r": [1, 2, 3, 4]}, {"r": [1, 9, 3, 4]}) == {"tokens_before_first_difference": 1,
+                                                                      "tokens_given_back": 3}
+    # a replay that stopped short gives back its common prefix; one that ran on, or none, the served tokens or none
+    assert P.given_back({"r": [1, 2, 3, 4]}, {"r": [1, 2]}) == {"tokens_before_first_difference": 2, "tokens_given_back": 2}
+    assert P.given_back({"r": [1, 2], "s": [3]}, {"r": [1, 2, 5]}) == {"tokens_before_first_difference": 2,
+                                                                       "tokens_given_back": 2}
+    out, a, b = tmp_path / "out", rid(f"{LOAD}1", 0), rid(f"{LOAD}1", 1)
+    monkeypatch.setattr(P, "encodings", Loader)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
+    stale = [{"name": "vllm/prod-replay-match-glm53", "value": 9.0}, {"name": "vllm/prod-advice-bits-glm53", "value": 9.0}]
+
+    def report(ours: str = "prod-record", again: str = "prod-again", model: str = "glm53", **replay: object) -> tuple[dict, list]:
+        shutil.rmtree(out, ignore_errors=True)
+        for arm, tps in (("prod", [100.0, 101.0, 102.0]), ("prod-again", [100.5, 101.0, 101.5]),
+                         ("prod-record", [99.0, 100.0, 101.0])):
+            corpus_arm(out, arm, tps, trace=arm == ours, model_id=model)
+        replayed(out, ours, **replay)
+        (tmp_path / "result.json").write_text(json.dumps({"schema": P.RESULT, "run_id": "r-1", "measurements": stale}))
+        P.main(["report", str(out), "--load", LOAD, "--stock", "prod", "--again", again, "--ours", ours])
+        return (json.loads((out / "prod_repro.json").read_text()),
+                json.loads((tmp_path / "result.json").read_text())["measurements"])
+
+    # b's first token differs and its second is equal, and a's replay ran one token past its end: 2 of the 4 served
+    # tokens given back before a difference, 3 equal at their position
+    r, got = report(tokens={a: [7, 0, 5], b: [8, 1]})
+    t, v = r["tokens"], r["advice"]
+    assert (t["metric"], v["metric"]) == ("vllm/prod-replay-match-glm53", "vllm/prod-advice-bits-glm53")
+    assert (t["tokens_served"], t["tokens_before_first_difference"], t["tokens_given_back"], t["tokens_differing"]) == \
+        (4, 2, 3, 2)
+    assert r["cost"]["measured"] and not r["cost"]["stands"]
+    on = {"load": LOAD, "ours": "prod-record", "commit": "c" * 40, "run": "r-1", "rep": 1}
+    assert got == [
+        {"name": "vllm/prod-replay-match-glm53", "value": 50.0, "unit": "percent of served tokens", "better": "higher",
+         "tokens_served": 4, "tokens_before_first_difference": 2, "requests": 2, "requests_differing": 2,
+         "reproduces": False, **on},
+        {"name": "vllm/prod-advice-bits-glm53", "value": (230 + 6997) / 32, "unit": "bits a request", "better": "lower",
+         "bits": 230 + 6997, "requests": 32, "tick": False, **on}]
+    assert got[1]["value"] == v["bits_a_request"]
+    # a replay whose record disagrees with the tokens it kept: the match does not stand, the advice does
+    _, got = report(tokens={b: [7, 9]}, requests_tokens_differing=0)
+    assert [x["name"] for x in got] == ["vllm/prod-advice-bits-glm53"]
+    # every served token given back
+    _, got = report()
+    assert got[0]["name"] == "vllm/prod-replay-match-glm53" and (got[0]["value"], got[0]["reproduces"]) == (100.0, True)
+    # another arm as ours, or another model: no id, and the earlier entries are dropped
+    for kw in ({"ours": "prod-again", "again": "prod-record"}, {"model": "moonlight"}):
+        r, got = report(**kw)
+        assert r["tokens"]["measured"] and r["advice"]["measured"]
+        assert (r["tokens"]["metric"], r["advice"]["metric"], got) == (None, None, [])
 
 
 def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(

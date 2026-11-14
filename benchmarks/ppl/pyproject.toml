@@ -3,6 +3,7 @@
 # (`uv run tools/verity/check/suites.py benchmarks/ppl`). Needs torch and numpy (the workspace's torch-cpu extra).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]

@@ -47,7 +47,8 @@ from . import reference
 from .params import REAL, TINY, Params, Reject
 from .step import check_step_expr, gen_step
 
-__all__ = ["SPECS", "Spec", "exhaustive", "single_hint_search", "z3_gadget", "z3_group_step", "main"]
+__all__ = ["GOLDILOCKS", "M31", "ModZ3Ctx", "QueryResult", "SPECS", "Spec", "exhaustive", "render", "single_hint_search",
+           "z3_gadget", "z3_group_step", "main"]
 
 P40 = 2**40 - 87                 # a 40-bit prime (relation.py's stated field size)
 M31 = 2**31 - 1                  # Mersenne31
@@ -473,14 +474,12 @@ def single_hint_search(p: Params, cases: Iterable[tuple[int, list[int], list[int
                        seed: int = 0) -> SingleHintResult:
     """For each input, each hint of the honest witness is replaced by every other value of its contract range
     (or ``sample`` values when the range is large); the checker must reject, or accept with the same output."""
-    from .reference import dot
-
     rng = random.Random(seed)
     res = SingleHintResult(repr(p))
     t0 = time.perf_counter()
     ctx = IntCtx()
     for c, a, b in cases:
-        y = dot(p, c, a, b)
+        y = reference.dot(p, c, a, b)
         h = gen_step(p, c, a, b)
         assert check_step_expr(ctx, p, c, a, b, h) == y
         res.inputs += 1
@@ -530,7 +529,7 @@ class ModZ3Ctx(Z3Ctx):
         m = self.fresh("wrap")
         return a - b == m * self.modulus
 
-    def lt_pow(self, name, x, ipow, bits):
+    def lt_pow(self, name: str, x: object, ipow: object, bits: int) -> None:
         if not self.ideal_bounds:
             super().lt_pow(name, x, ipow, bits)         # the reference realisation: the product, read mod p
             return
@@ -539,26 +538,26 @@ class ModZ3Ctx(Z3Ctx):
         rep = self.fresh(f"{name}.rep")
         self._add(self.z3.And(rep >= 0, rep * ipow < 2**bits, self._cong(x, rep)))
 
-    def rng(self, name, x, lo, hi):
+    def rng(self, name: str, x: object, lo: int, hi: int) -> None:
         if isinstance(x, int):
             self._add(lo <= x % self.modulus < hi or lo <= x < hi)
             return
         rep = self.fresh(f"{name}.rep")
         self._add(self.z3.And(rep >= lo, rep < hi, self._cong(x, rep)))
 
-    def eq(self, name, a, b):
+    def eq(self, name: str, a: object, b: object) -> None:
         if isinstance(a, int) and isinstance(b, int):
             self._add((a - b) % self.modulus == 0)
             return
         self._add(self._cong(a, b))
 
-    def boolean(self, name, b):
+    def boolean(self, name: str, b: object) -> None:
         if isinstance(b, int):
             self._add(b % self.modulus in (0, 1))
             return
         self._add(self.z3.Or(self._cong(b, 0), self._cong(b, 1)))
 
-    def lookup(self, name, table: Table, key):
+    def lookup(self, name: str, table: Table, key: object) -> tuple[object, ...]:
         z3 = self.z3
         if isinstance(key, int):
             return super().lookup(name, table, key)
@@ -770,7 +769,7 @@ def modular_queries(p: Params = REAL, *, timeout_ms: int = 20_000) -> list[Query
 def integer_queries(p: Params = REAL, *, timeout_ms: int = 20_000, targeted: bool = True) -> list[QueryResult]:
     out = [z3_gadget(spec, p, timeout_ms=timeout_ms) for spec in SPECS.values()]
     if targeted:
-        # the handoff's named targets, as dropped predicates: each must turn the UNSAT into a SAT (the bound matters)
+        # the named bounds, as dropped predicates: each must turn the UNSAT into a SAT (the bound matters)
         out.append(z3_gadget(SPECS["group_max"], p, timeout_ms=timeout_ms, drop=("attained",), label="excessive E: without `attained`"))
         out.append(z3_gadget(SPECS["group_max"], p, timeout_ms=timeout_ms, drop=("onehot",), label="false selector: without `onehot`"))
         out.append(z3_gadget(SPECS["align_state"], p, timeout_ms=timeout_ms, drop=("rem",), label="remainder: without `rem`"))

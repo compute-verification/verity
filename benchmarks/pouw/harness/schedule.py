@@ -9,6 +9,12 @@ import random
 import statistics
 from dataclasses import dataclass, field
 
+#: what `bench.py` and the tests read
+__all__ = [
+    "GateError", "GateLedger", "MAX_SETS", "MIN_BURST", "MIN_REPS", "MIN_SETS", "burst_len", "consistency",
+    "rep_orders", "set_count", "summary",
+]
+
 MIN_SETS, MAX_SETS, MIN_BURST = 2, 512, 4
 MIN_REPS = 20
 #: the consistency gate's kernel-efficiency floor e: a hash-free call issuing Σ_p macs_p tensor MACs takes at least
