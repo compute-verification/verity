@@ -301,39 +301,39 @@ SETUPS = {s.name: s for s in (W63, W63K4, TEST, TEST2)}
 CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
 SESSION = bytes(range(32))
-#: a round's templates in its Program's order
-TEMPLATES = ("first", "ingress", "egress")
+#: a link-window's scan's templates in its Program's order: the start unit (`IngressScanStart`), then every bucket's
+#: ingress unit (`IngressScanBucket`, bucket 0's too) and its egress unit, 2T + 1 units, one link-window a registration
+TEMPLATES = ("start", "ingress", "egress")
 #: the unread round's: one ingress unit
 UNREAD = ("ingress",)
 #: the block round's: the slot entries' stand-in (`SlotEntry`), one unit a slot entry, whose o0 rows are the scan's
 #: slot entries
 BLOCK = ("block",)
-#: the carried shape's (``--carried``): the start unit (`IngressScanStart`), then every bucket's ingress unit
-#: (`IngressScanBucket`, bucket 0's too) and its egress unit, one link-window a registration
-CARRIED = ("start", "ingress", "egress")
-#: the carried shape's negative: a start unit alone
+#: the stale round's: a start unit alone
 STALE = ("start",)
-#: the carried start: the start unit's ``sin`` as the Program names it (`scan_root`'s ``<i>.<name>``; a population's
-#: too), the one-stage registered value a link-window's record names the state its scan starts from by
+#: the start: the start unit's ``sin`` as the Program names it (`scan_root`'s ``<i>.<name>``; a population's too), the
+#: one-stage registered value a link-window's record names the state its scan starts from by
 CARRY = "0.sin"
-#: the port of a link-window's record the next one's carried start reads: its last ingress unit's o1, the last state
+#: the port of a link-window's record the next one's start reads: its last ingress unit's o1, the last state
 CARRY_PORT = "last/o1"
-#: the templates whose o0 is a committed row the verifier never opens (the slot entries', the carried start's copy),
-#: every other's its public word
+#: the templates whose o0 is a committed row the verifier never opens (the slot entries', the start's copy), every
+#: other's its public word
 ROWS_O0 = frozenset({*BLOCK, "start"})
 #: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
 #: compression before its last block at any length, as Flock's statement needs of one row (`verity_flock.circuit.
 #: compose`); at the test class every block row is shorter than a block (NE = 176 bits)
 ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
-FIXED = {"first": 1, "start": 1, "ingress": 2, "egress": 1}
-#: each round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every read
-#: held and its unit's ok bit 0; the block first, since the scan reads its outputs
+FIXED = {"start": 1, "ingress": 2, "egress": 1}
+#: each kind of round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every
+#: read held and its unit's ok bit 0; the block first, since the scan reads its outputs. A round is one link-window's,
+#: ``<kind>-<w>`` (`round_name`)
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
-          "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0")}
+          "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0"), "stale": (STALE, "does not open")}
+#: the kinds of round with a start unit, whose record names the state its scan starts from (`carry_of`)
+STARTED = frozenset(k for k, (templates, _o) in ROUNDS.items() if "start" in templates)
 #: each round Program's directory, by its templates
-PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block", CARRIED: "carried",
-            STALE: "stale"}
+PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block", STALE: "stale"}
 #: Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which a block member's o0 rows
 #: are committed and so its lane's ``prog<j>`` tree (`block_binding`), and a member's own rows of a port (`Frame`;
 #: `stage` refuses a member whose frame root of such a port isn't its tree's)
@@ -343,9 +343,19 @@ FRAME_BINDING = domains.FLOCK_CIRCUIT_BINDING
 def value(kind: str) -> str:
     """A scan registration's value: a tree's, ``state``'s, ``view``'s or lane j's slot entries' (``prog<j>``), or
     ``frame``, a member's own rows of a port no tree or network certifier row registration holds (`Frame`), registered
-    as the member's frame root of the port; ``start``'s is the carried start, the record's own registered value
-    (`CARRY`)."""
+    as the member's frame root of the port; ``start``'s is the state the scan starts from, the record's own
+    registered value (`CARRY`)."""
     return CARRY if kind == "start" else f"verity/certifier/scan-{kind}/v1"
+
+
+def round_name(kind: str, w: int) -> str:
+    """Link-window ``w``'s round of ``kind`` (`ROUNDS`), as the summary and the rounds' directories name it."""
+    return f"{kind}-{w}"
+
+
+def kind_of(name: str) -> str:
+    """A round's kind (`round_name`'s)."""
+    return name.rsplit("-", 1)[0]
 
 
 def lane_kinds(cls: IS.Class) -> tuple[str, ...]:
@@ -353,14 +363,14 @@ def lane_kinds(cls: IS.Class) -> tuple[str, ...]:
     return tuple(f"prog{j}" for j in range(cls.NR))
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
-#: the honest round's stream on the auditor's challenger's coins (``--challenger``): its challenger, the format of the
-#: group's root its session opens on (`window_root`), and each member's share of the proof deadline
+#: an honest round's stream on the auditor's challenger's coins (``--challenger``): its challenger, the format of the
+#: link-window's root its session opens on (`window_root`), and each member's share of the proof deadline
 CHALLENGER = "scan_zk.py on the auditor's challenger's coins"
-WINDOW_ROOT = "verity/certifier/scan-window-root/v2"
+WINDOW_ROOT = "verity/certifier/scan-window-root/v3"
 MEMBER_DEADLINE_S = 5 * 3600
-#: the format of ``answers.json`` (`answers`): the honest round's registration, the block's audit and each
-#: link-window's answer and rows
-ANSWERS = "verity/certifier/scan-answers/v2"
+#: the format of ``answers.json`` (`answers`): each link-window's registration, answer and rows, and the blocks'
+#: audits
+ANSWERS = "verity/certifier/scan-answers/v3"
 #: in V3c's window directory (``--v3c``), its `SCAN_STATE`'s rows (u16 little-endian, row-major) and then their salts,
 #: prover only (`prove_path.py window-commit` writes it): its ``v<j>-private.bin`` holds only the rows its members read
 SCAN_STATE_FILE = "scan-state-private.bin"
@@ -393,15 +403,15 @@ def ports_of(cls: IS.Class) -> dict[str, tuple[tuple[tuple[str, int], ...], tupl
     NE = IS.entry_bits(cls)
     row, progs = ("row", 8 * cls.S * cls.B), tuple((f"prog{j}", NE) for j in range(cls.NR))
     outs = (("o1", IS.state_bits(cls)), ("o2", IS.view_bits(cls)))
-    return {"first": ((row, *progs), outs), "ingress": ((row, ("sin", IS.state_bits(cls)), *progs), outs),
+    return {"ingress": ((row, ("sin", IS.state_bits(cls)), *progs), outs),
             "egress": ((("state", IS.view_bits(cls)),), (("o1", 8 * cls.egress.R * cls.B),)),
             "block": ((("x", NE),), (("o0", NE),)),
             "start": ((("sin", IS.state_bits(cls)),), (("o0", IS.state_bits(cls)),))}
 
 
-def entries_of(cls: IS.Class, G: int, T: int) -> int:
-    """The slot entries of a group of G link-windows of T buckets: NR a boundary, G·T / EVERY boundaries."""
-    return cls.NR * (G * T // cls.EVERY)
+def entries_of(cls: IS.Class, T: int) -> int:
+    """The slot entries of a link-window of T buckets: NR a boundary, T / EVERY boundaries."""
+    return cls.NR * (T // cls.EVERY)
 
 
 def entry_at(cls: IS.Class, t: int) -> int:
@@ -419,38 +429,35 @@ def slot_entries(cls: IS.Class, progs: list[list[int]]) -> list[list[list[int]]]
     return [[IS.prog_rows(cls, progs[b * cls.EVERY])[j] for b in range(nb)] for j in range(cls.NR)]
 
 
-def members_of(templates: tuple[str, ...], G: int, T: int, bucket: int = 1, entries: int = 0,
+def members_of(templates: tuple[str, ...], T: int, bucket: int = 0, entries: int = 0,
                lanes: int = 1) -> list[SimpleNamespace]:
-    """A round's members in its Program's order, one a template and link-window w of the group: its name, its first
-    unit (``base``) and the scan's buckets its units compute, unit ``base + k`` bucket ``buckets[k]``. The first unit
-    computes bucket 0, the ingress template buckets 1 … G·T − 1 (with no first unit, 0 …), bucket G·T − 1 a member of
-    its own (``last``: its S_t has no state leaf, and a registered port holds every instance's row), the egress
-    template 0 … G·T − 1; the unread round's one unit (`UNREAD`) bucket ``bucket``; the block round's (`BLOCK`) the
-    group's ``entries`` slot entries (`entries_of`) cut into ``lanes`` members of consecutive units, as one-stage cuts
-    a template (``block-c<j>``, lane j's, its ``lane``), unit j·nb + b slot entry b of lane j, since its o0 rows are
-    the lane's ``prog<j>`` tree. The carried shape's start unit (`CARRIED`, `STALE`) is a member of its own, ``start``,
-    which computes no bucket: its one unit is listed as bucket 0, the bucket whose ``sin`` its o0 is."""
+    """A link-window's round's members in its Program's order: each one's name, its first unit (``base``) and the
+    link-window's buckets its units compute, unit ``base + k`` bucket ``buckets[k]``. The scan's (`TEMPLATES`):
+    ``start``, the start unit, which computes no bucket (its one unit is listed as bucket 0, the bucket whose ``sin``
+    its o0 is); ``ingress-0``, buckets 0 … T − 2, and ``last``, bucket T − 1, a member of its own (its S_t has no
+    state leaf, and a registered port holds every instance's row); ``egress-0``, buckets 0 … T − 1: the members
+    `NetworkCheck.ScanOk` names. The stale round's (`STALE`) the start unit alone; the unread round's one unit
+    (`UNREAD`) bucket ``bucket``; the block round's (`BLOCK`) the link-window's ``entries`` slot entries
+    (`entries_of`) cut into ``lanes`` members of consecutive units, as one-stage cuts a template (``block-c<j>``,
+    lane j's, its ``lane``), unit j·nb + b slot entry b of lane j, since its o0 rows are the lane's ``prog<j>``
+    tree."""
     if templates == UNREAD:
-        return [SimpleNamespace(template="ingress", window=bucket // T, name=f"ingress-{bucket // T}", base=0,
-                                buckets=range(bucket, bucket + 1))]
+        return [SimpleNamespace(template="ingress", name="ingress-0", base=0, buckets=range(bucket, bucket + 1))]
     if templates == BLOCK:
         if entries < 1 or lanes < 1 or entries % lanes:
-            raise ValueError("the block round's members are the group's slot entries, a lane each: give entries "
-                             "(entries_of) and lanes, the lanes dividing the entries")
+            raise ValueError("the block round's members are the link-window's slot entries, a lane each: give "
+                             "entries (entries_of) and lanes, the lanes dividing the entries")
         nb = entries // lanes
-        return [SimpleNamespace(template="block", window=0, name=f"block-c{j}", base=j * nb,
+        return [SimpleNamespace(template="block", name=f"block-c{j}", base=j * nb,
                                 buckets=range(j * nb, (j + 1) * nb), lane=j) for j in range(lanes)]
+    cut = {"start": ((range(1), "start"),), "ingress": ((range(T - 1), "ingress-0"), (range(T - 1, T), "last")),
+           "egress": ((range(T), "egress-0"),)}
     out, at = [], 0
     for tp in templates:
-        one = tp in ("first", "start")
-        lo = 1 if tp == "ingress" and "first" in templates else 0
-        for w in range(1 if one else G):
-            bs = range(1) if one else range(max(lo, w * T), (w + 1) * T)
-            parts = ((bs[:-1], f"{tp}-{w}"), (bs[-1:], "last")) if tp == "ingress" and w == G - 1 else \
-                ((bs, tp if one else f"{tp}-{w}"),)
-            out += [SimpleNamespace(template=tp, window=w, name=name, base=at + part.start - lo, buckets=part)
-                    for part, name in parts if part]
-        at += counts_of(out)[tp]
+        for part, name in cut[tp]:
+            if part:
+                out.append(SimpleNamespace(template=tp, name=name, base=at, buckets=part))
+                at += len(part)
     return out
 
 
@@ -602,11 +609,11 @@ def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
 def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
     """The scan's state reads as its registration's `window` states them (``reads``, `NetworkCheck.Period`'s
     `stateRead`), from each member's ``--registered`` ports (`tree_port`: unit ``reads_from + i`` at leaf ``reads[i]``):
-    its ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo, hi]}``, unit lo + i at leaf
-    l + i. SystemExit when a port's reads are no one run."""
+    its ``o0`` (the start unit's), ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo,
+    hi]}``, unit lo + i at leaf l + i. SystemExit when a port's reads are no one run."""
     at: dict[str, dict[int, int]] = {}
     for ps in ports:
-        for p in ("sin", "o1"):
+        for p in ("o0", "sin", "o1"):
             if p in ps and ps[p]["value"] == value("state"):
                 at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
     runs = {}
@@ -617,14 +624,6 @@ def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
                              "registration states them")
         runs[p] = {"leaf": got[lo], "units": [lo, hi]}
     return runs
-
-
-def state_empty(reg: ADV.Committed | Held) -> dict:
-    """Row 0's opening as the scan's registration's `window` gives it (``empty``, `NetworkCheck.Period`'s
-    `stateEmpty`): the empty state, its ``words`` zero u16 words, under leaf 0's salt through its path. The row is
-    public, and no unit reads leaf 0, so its salt opens no row a proof hides."""
-    o = reg.open(0)
-    return {"words": reg.n_bits // 16, "salt": o.salt.hex(), "path": b"".join(o.path).hex()}
 
 
 def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
