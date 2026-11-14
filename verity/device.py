@@ -605,10 +605,11 @@ class Sheet:
 
     @classmethod
     def of_file(cls, card: Mapping[str, Any]) -> Sheet:
-        """The sheet a card file gives (`load_card(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
-        and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
-        its SMs at that clock. Its memory figures as `Accel.Card.toDevice` reads the card: the bandwidth in bits a
-        second, a ceiling rounded up, and the stores' sizes exact."""
+        """The sheet a card file gives (`load_card(sku)`'s table). Its figures: the SKU, the clock of the card's default
+        reading (`clock.default`, one of `READINGS`) in Hz, and as every operand class's peak rate the tensor's peak at
+        that reading, `readings(card)[card["clock"]["default"]]` (every class is int8, `rate.tensor`'s unit). Its memory
+        figures as `Accel.Card.toDevice` reads the card: the bandwidth in bits a second, a ceiling rounded up, and the
+        stores' sizes exact."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
@@ -617,8 +618,9 @@ class Sheet:
         mem = v(store["dram"])
         if chip.denominator != 1 or mem.denominator != 1:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
-        clock = v(card["clock"]["sm"]) * 10 ** 6
-        figures = DeviceFigures(_str(card["sku"], "sku"), clock, sms * v(card["rate"]["tensor"]) * clock)
+        default = card["clock"]["default"]
+        clock = v(card["clock"][default]) * 10 ** 6
+        figures = DeviceFigures(_str(card["sku"], "sku"), clock, readings(card)[default])
         return cls(figures, math.ceil(8 * v(card["memory"]["bandwidth"])), int(chip), int(mem))
 
     def to_json(self) -> dict[str, Any]:
@@ -1570,7 +1572,7 @@ def skus(kind: str | None = None, *, directory: Path | None = None) -> list[str]
 
 def load_card(sku: str, *, directory: Path | None = None) -> dict:
     """The card file of ``sku`` in ``directory`` (``CARDS`` when ``None``) as parsed TOML, refused unless every number
-    in it carries its unit, mark and source."""
+    in it carries its unit, mark and source, and a GPU's unless its ``clock.default`` is one of ``READINGS``."""
     directory = CARDS if directory is None else directory
     path = directory / f"{sku}.toml"
     if not path.is_file():
@@ -1581,6 +1583,9 @@ def load_card(sku: str, *, directory: Path | None = None) -> dict:
     if card.get("kind") not in CARD_KINDS:
         raise InvalidArtifact(f"{path.name}: kind = {card.get('kind')!r}; set it to one of {CARD_KINDS}")
     check_card(card, path.name)
+    if card["kind"] == "gpu" and card.get("clock", {}).get("default") not in READINGS:
+        raise InvalidArtifact(f"{path.name}: clock.default = {card.get('clock', {}).get('default')!r}; set it to the "
+                              f"reading its figures are stated at, one of {READINGS}")
     return card
 
 
