@@ -1495,6 +1495,7 @@ def network_traces() -> Iterator[None]:
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
+              ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None,
               ) -> tuple[list[list[int]], list[str | None]] | None:
     """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
@@ -1502,30 +1503,30 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
     None for a slot no request starts (`scan_state.scan_state`). The window is the execution phase, of the class's
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from execution phase 0 and the outputs its egress cells carry (`warden_chain.io`).
-    ``window_rows`` reads one ingress record's rows: the network certifier's reader, which the caller passes, since SPOT
-    reads the certifier's record as a certified input and never imports the certifier.
+    ``ingress_records`` reads the kept run's ingress records, one an execution phase, from its witness directory, and
+    ``window_rows`` one record's rows: the network certifier's readers, which the caller passes, since SPOT reads the
+    certifier's record as a certified input and never imports the certifier.
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan or the
-    caller passed no reader."""
+    caller passed no readers."""
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
         import certifier_piece as CP
         from benchmarks.network_traces import warden_chain as WCH
-        from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None
-    if window_rows is None:
+    if window_rows is None or ingress_records is None:
         raise ValueError("the serve kept a network certifier run, whose scan reads its certified ingress rows by the "
-                         "certifier's reader, which SPOT never imports: run this from a caller that passes it "
-                         "(main's window_rows)")
+                         "certifier's readers, which SPOT never imports: run this from a caller that passes them "
+                         "(main's window_rows and ingress_records)")
     unpacked = None
     try:
         run = CP.kept_run(serve_dir)
         unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
         _, params = WCH.deployment(kept)
         io = WCH.io(kept)
-        records = RC.read_records(WCH.witness(kept), params)
+        records = list(ingress_records(WCH.witness(kept), params))
     except (SystemExit, CP.NotRun) as e:
         raise ValueError(f"the certifier front's kept run: {e}") from None
     finally:
@@ -1544,10 +1545,10 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
                          "served traffic the network certifier didn't see")
     if None in (release := [by[u]["release"] for u in users]):
         raise ValueError("a request of the window has no END in the kept run's ingress")
-    windows = sorted(r.window for r in records[RC.INGRESS])
+    windows = sorted(r.window for r in records)
     if windows != list(range(len(windows))):
         raise ValueError(f"the kept run's ingress records are execution phases {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records[RC.INGRESS], key=lambda r: r.window) for x in window_rows(r, params)]
+    ingress = [x for r in sorted(records, key=lambda r: r.window) for x in window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
@@ -1679,7 +1680,8 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     return w, [json.loads(Path(held[s]["manifest"]).read_text()) for s in rounds], rounds, WC.PearlTables(scheme)
 
 
-def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
+def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
+                            ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
@@ -1704,10 +1706,11 @@ def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, A
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="builds-", dir=out.parent) as builds:
         a.builds = builds
-        return window_commit_of_builds(a, window_rows)
+        return window_commit_of_builds(a, window_rows, ingress_records)
 
 
-def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
+def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
+                            ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
     """`window_commit_of_advice` over its own Build of each Program, from its compile (`own_builds`, into ``a.builds``
     beside ``--out``, as ``circuit``'s), never its row dir's: those are `advice_compile`'s, written once the serve is done,
     and a window tied to W is committed at its close, before its sample coin (`serve_tie`)."""
@@ -1767,7 +1770,7 @@ def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, A
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
-    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], window_rows=window_rows)
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], window_rows=window_rows, ingress_records=ingress_records)
     state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
@@ -1869,9 +1872,11 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
             "requests": len(reqs)}
 
 
-def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> int:
-    """The commands (the module docstring). ``window_rows`` is the network certifier's reader of its ingress rows, which
-    ``window-commit`` needs where the serve kept a certifier run (`kept_scan`): a caller that holds the certifier passes it."""
+def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
+         ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None) -> int:
+    """The commands (the module docstring). ``window_rows`` and ``ingress_records`` are the network certifier's readers of its
+    ingress rows and records, which ``window-commit`` needs where the serve kept a certifier run (`kept_scan`): a caller
+    that holds the certifier passes them."""
     from verity_vllm.pipeline.workload_file import workload_file
 
     def workload_arg(s: str) -> str:
@@ -2061,7 +2066,7 @@ def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequen
                  "weights-registration"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
                     "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
-                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows), "weights-registration": weights_registration_of_serve}
+                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows, ingress_records=ingress_records), "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:
