@@ -40,7 +40,8 @@ identifier twice), a period that starts before the first entry, or the earlier f
 sampled for a key's first listed entry and, for a later one, as many of the schedule's execution phases on as its start
 is, and its ordinal among its key's sessions, sampled for a key's first listed entry and the next for each later one.
 `restart` lists the signer's key in two sessions, each stretch holding some of the period, and is accepted. Refused:
-that list with the second session's base another (`start-not-signed`); a shown start that is not its session's certified
+that list with the second session's base another (`start-not-signed`), or its ordinal not the first's next
+(`start-skipped`); a shown start that is not its session's certified
 start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); evidence that shows a start too
 few or too many, or none (`start-count`); and a clock-form period whose evidence shows one (`start-shown`). In the clock
 form: the execution phases of one link from the execution phase
@@ -176,10 +177,12 @@ OUTSIDE = "a listed key outside its stretch"
 NO_STRETCH = "no listed entry's stretch holds execution phase"
 #: What a refusal says, as Lean's does (`startCheck`, `startChecks`), of a listed entry's start in the rows form: a
 #: start shown for it that is not its session's certified start, then why, by `CertifiedStart.refusal`'s code; an
-#: entry that does not start where its key's first listed entry and their sessions' signed bases put it; evidence
+#: entry that does not start where its key's first listed entry and their sessions' signed bases put it; an entry whose
+#: session's ordinal is not the next after that of its key's entry listed before it (`follows`); evidence
 #: that does not show a start for each listed entry; and, in the clock form, evidence that shows one
 UNCERTIFIED = "a start its session did not certify"
 NOT_SIGNED = "a start that is not the one its session signed"
+SKIPPED = "a session that is not the one after its key's entry listed before it"
 STARTS_COUNT = "listed entries: show each listed entry's session's signed start"
 STARTS_CLOCK = "starts: the clock form reads no session's signed start"
 START_KEYS = ["base_ms", "certificate", "ordinal", "schedule"]
@@ -963,11 +966,18 @@ def _held_to(L: int, a: Entry, xa: CertifiedStart, e: Entry, x: CertifiedStart) 
     return a.start * L + x.base_ms == e.start * L + xa.base_ms
 
 
+def _follows(xb: CertifiedStart, x: CertifiedStart) -> bool:
+    """`follows`: the session whose signed start is `x` is the one right after the session whose signed start is `xb`
+    among their key's sessions, its ordinal the next."""
+    return xb.ordinal + 1 == x.ordinal
+
+
 def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: CertifiedStart) -> Finding | None:
     """`startCheck`: listed entry `i`'s start's finding in the rows form. The start shown for it is its session's
     certified start, read as the network certifier's own verifier reads it (`CertifiedStart.refusal`: under the
-    entry's key, in its session, for the link, under the period's schedule's parameters digest); and the entry starts
-    where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself."""
+    entry's key, in its session, for the link, under the period's schedule's parameters digest); the entry starts
+    where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself; and its
+    session is the one right after that of its key's entry listed before it (`_follows`)."""
     why = x.refusal(e.key, e.session, p.link, p.schedule.digest)
     if why is not None:
         return Finding(REJECT, f"entry {i}: {UNCERTIFIED} ({why})")
@@ -976,6 +986,11 @@ def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: C
         return Finding(REJECT, f"entry {i}: {NOT_SIGNED}: it starts at execution phase {e.start} and its session at "
                                f"{x.base_ms} ms of its key's life, and its key's entry that starts at {a.start} at "
                                f"{xa.base_ms} ms")
+    before = [z for y, z in zip(p.entries[:i], starts[:i]) if y.key.key_id == e.key.key_id]
+    if before and not _follows(before[-1], x):
+        return Finding(REJECT, f"entry {i}: {SKIPPED}: its session is its key's number {x.ordinal} and that entry's "
+                               f"{before[-1].ordinal}; its key's device state numbers its sessions one after another, "
+                               f"so a gap is a session no entry lists")
     return None
 
 
@@ -1560,7 +1575,7 @@ EXPECT = {
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": ACCEPT, "rows-second-key": ACCEPT, "rows-two-stretches": ACCEPT, "rows-two-signers": REJECT,
     "rows-restart": ACCEPT, "rows-start-not-signed": REJECT, "rows-start-uncertified": REJECT,
-    "rows-start-count": REJECT,
+    "rows-start-count": REJECT, "rows-start-skipped": REJECT,
     "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
     "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
@@ -1598,12 +1613,13 @@ MUTATIONS = list(EXPECT)
 #: outside its stretch, and at the period's number where the session's belongs. In the rows form, which reads each
 #: session's signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
 #: second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second session's
-#: base another (`start-not-signed`). `case` aims at none (`AIMS`), so its period lists the one entry that signs it.
+#: base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`). `case` aims at none
+#: (`AIMS`), so its period lists the one entry that signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number",
-         "restart", "start-not-signed")
+         "restart", "start-not-signed", "start-skipped")
 #: The changes whose parameters list one key in two sessions, each stretch holding some of the period
-RESTARTS = ("restart", "start-not-signed")
+RESTARTS = ("restart", "start-not-signed", "start-skipped")
 #: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
 #: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
@@ -2753,6 +2769,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         # the second session's base is not the one its start is read off: an execution phase on or back, a
         # millisecond on, or the first session's own
         bases[1] = rs.choice([bases[1] + L, bases[1] - L, bases[1] + 1, bases[0]])
+    if m == "start-skipped":
+        # the second session is not the one after the first: one or many of the key's sessions between them, which the
+        # list leaves out, or the first's own ordinal or one before it
+        ordinals[1] = rs.choice([ordinals[1] + 1, ordinals[1] + rs.randrange(2, 1 << 40), ordinals[0],
+                                 ordinals[0] - 1 if ordinals[0] else ordinals[1] + 2])
 
     def signed_start(i: int, how: str | None = None) -> dict:
         """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base, its ordinal and

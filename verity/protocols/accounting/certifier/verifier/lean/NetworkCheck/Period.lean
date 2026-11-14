@@ -163,8 +163,12 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `window · bucket_ms`, an execution phase's milliseconds, two listed entries of one key, starting at `a` and `a'` with
   bases `b` and `b'`, have `a · L + b' = a' · L + b`. Each key's life starts at 0, so two keys' bases share no origin:
   a key's first listed entry's start is the auditor's pin, and every later entry of that key is read off it by the
-  certifier's signatures, which is why a key may be listed in more than one session. In the clock form the evidence
-  shows no start;
+  certifier's signatures, which is why a key may be listed in more than one session. A later entry of a key also runs
+  the session right after its key's entry listed before it (`follows`): its ordinal is that entry's plus one. The
+  key's device state gives each session it starts the next ordinal and moves the key's life on by the session's whole
+  span, so an entry whose ordinal is not the next, which a session of the key that no entry lists would leave, is
+  refused by name, and the stretches of a key's entries are each its session's whole span. In the clock form the
+  evidence shows no start;
 * link-window `w` (the `i`-th, `w = w₀ + i`): its registration names the link's Program and the provenance
   `{"kind": "served", "window": w}`, the developer's record, in the period's numbers;
   both certificates are the key's of the entry `w` picks (`entryAt`; a certificate whose signer is another listed key,
@@ -1683,10 +1687,16 @@ phase from `a`'s satisfies. -/
 def heldTo (L : Nat) (a : Entry) (xa : Start) (e : Entry) (x : Start) : Bool :=
   a.start * L + x.baseMs == e.start * L + xa.baseMs
 
+/-- Whether the session whose signed start is `x` is the one right after the session whose signed start is `xb`,
+among their key's sessions: its ordinal is the next. The key's device state gives each session it starts the next
+ordinal and none twice, so a session of the key that runs between the two leaves a gap. -/
+def follows (xb x : Start) : Bool := xb.ordinal + 1 == x.ordinal
+
 /-- Listed entry `i`'s start's finding in the rows form: a refusal unless the start shown for it is its session's
-certified start (`startRefusal`) and the entry starts where its key's first listed entry puts it (`heldTo`, by key
-identifier, which names one key, `certifierEntriesOf`). A key's first listed entry is held to itself: its start is
-the auditor's pin, and each later entry of the key is read off it by the certifier's signatures. -/
+certified start (`startRefusal`), the entry starts where its key's first listed entry puts it (`heldTo`, by key
+identifier, which names one key, `certifierEntriesOf`), and its session is the one right after that of its key's entry
+listed before it (`follows`). A key's first listed entry is held to itself: its start is the auditor's pin, and each
+later entry of the key is read off it by the certifier's signatures. -/
 def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Start) (i : Nat) (e : Entry) (x : Start) :
     Option (Core.Verdict × String) :=
   match startRefusal p sd e x with
@@ -1694,12 +1704,20 @@ def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Star
     some (.reject, s!"entry {i}: a start its session did not certify ({why}): show the certificate its key signed \
       in its session for {startLink p.link}, egress, window 0, over its base and the period's schedule's digest")
   | none =>
-    match (p.entries.zip starts).find? (·.1.key.extract 0 16 == e.key.extract 0 16) with
+    let same := fun (q : Entry × Start) => q.1.key.extract 0 16 == e.key.extract 0 16
+    let listed := p.entries.zip starts
+    match listed.find? same with
     | some (a, xa) =>
-      if heldTo s.windowMs a xa e x then none else
+      if !heldTo s.windowMs a xa e x then
         some (.reject, s!"entry {i}: a start that is not the one its session signed: it starts at execution phase \
           {e.start} and its session at {x.baseMs} ms of its key's life, and its key's entry that starts at \
           {a.start} at {xa.baseMs} ms, an execution phase being {s.windowMs} ms")
+      else if let some (_, xb) := (listed.extract 0 i).toList.reverse.find? same then
+        if follows xb x then none else
+          some (.reject, s!"entry {i}: a session that is not the one after its key's entry listed before it: its \
+            session is its key's number {x.ordinal} and that entry's {xb.ordinal}; its key's device state numbers \
+            its sessions one after another, so a gap is a session no entry lists")
+      else none
     | none => none
 
 /-- The listed entries' starts' findings. In the rows form one an entry, in order (`startCheck`), or the one finding
@@ -1730,8 +1748,9 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
 -- link's start link; another key's; another schedule's; a digest that is not its base's and its schedule's; and,
 -- with those four held, a signature that does not verify. A key's entries are held to its first listed one by their
 -- sessions' bases: at 60,000 ms an execution phase, the entry 3 execution phases on is the session whose base is
--- 180,000 ms on, and neither a millisecond less nor an execution phase more. Evidence that shows no start for an entry
--- is one finding
+-- 180,000 ms on, and neither a millisecond less nor an execution phase more; and a session follows another whose
+-- ordinal is one less, and not one whose ordinal is two less, its own, or one more. Evidence that shows no start for an
+-- entry is one finding
 #guard
   let key := fun (b : UInt8) => (⟨Array.replicate 80 b⟩ : ByteArray)
   let session := fun (b : UInt8) => (⟨Array.replicate attachmentBytes b⟩ : ByteArray)
@@ -1757,6 +1776,9 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
     heldTo 60000 e (start 7 1) later (start 180007 1) && heldTo 60000 e (start 7 1) e (start 7 1) &&
     !heldTo 60000 e (start 7 1) later (start 180006 1) &&
     !heldTo 60000 e (start 7 1) { later with start := 6 } (start 180007 1) &&
+    follows (start 7 1) { start 180007 1 with ordinal := 1 } &&
+    !follows (start 7 1) { start 180007 1 with ordinal := 2 } && !follows (start 7 1) (start 180007 1) &&
+    !follows { start 7 1 with ordinal := 1 } (start 180007 1) &&
     (startChecks p ⟨#[], #[], #[start 0 1]⟩).map (·.map (·.2)) == #[some "starts: 1 shown for 3 listed entries: show \
       each listed entry's session's signed start, in the entries' order"]
 
