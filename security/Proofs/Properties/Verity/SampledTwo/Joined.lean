@@ -21,7 +21,7 @@ from the others, with the acceptance `Acc` and the predicate `Good` still any:
 
 `joined` then takes each remaining piece in its owner's words:
 
-* the wiring (`hAcc`), the coin map's law at the frame (`hLaw`), the cut (`hCut`);
+* the wiring (`hAcc`), the coin map's distribution at the frame (`hLaw`), the cut (`hCut`);
 * the stages' bytes within their rounds' releases that fit (`FirstFits`, `SecondFits`) and the sessions' releases'
   agreement (`SessionsAgree`), which give `DevAgrees` (`devAgrees_formReading`, `firstElems_of`, `secondElems_of`);
 * the three groups' coins (`CoinsAgree`) and no coin read at the statements' round (`StmtReadsNone`);
@@ -85,7 +85,7 @@ noncomputable def joinMiss (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteAr
     ((Messages.msgFinder V θ F c σ (joinPlace V A x θ F c σ L) (joinReading A C S L) Dg i q).Pr Verity.sha512Msg))
 
 /-- **The projection's bound, joined over any acceptance**: at the join's frame and reading, the wiring, the coin map's
-law, the stages' bytes within their rounds' releases, the sessions' releases' agreement, the three groups' coins, the
+distribution, the stages' bytes within their rounds' releases, the sessions' releases' agreement, the three groups' coins, the
 messages opening their digests, each digest fixed by the coins shown before it, the cut, the accept on the rounds a run
 reaches at the plays `Acc` and `Good` hold of, and the statement read give the projection's bound at the hiding term,
 the join's `miss` and the cut's `terms`. -/

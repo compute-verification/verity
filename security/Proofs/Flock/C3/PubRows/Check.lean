@@ -402,7 +402,7 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
 
 /-- **(n1) Every family holds its rows**: a transcript a session writes and accepts records the sampling design's sample file (the
 record's custody, `hRec`), the table each unit is sampled into has a sampled statement (`drawn_of_acceptsZKR`), and that
-table's sample proves the unit (the challenger's live-coin part's sample, `hDraw`), since V*'s law, the full sample, samples every unit
+table's sample proves the unit (the challenger's live-coin part's sample, `hDraw`), since V*'s sampling design, the full sample, samples every unit
 (`execOS_subset_full_mem`). -/
 theorem rowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : RowsHeld F := by
   rintro R ω t R₂ j R' tr ⟨ω', o, rfl⟩ hacc _ _ _ u _ _

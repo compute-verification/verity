@@ -672,7 +672,7 @@ def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_p
     assert "lean" not in read() and read()["share"]["free"] == 48
     none = read(lean=True)
     assert none["share"]["free"] == 48 and none["lean"]["file"] == str(slots) and none["lean"]["pools"] is None
-    assert auto._lean(none, "build") == (0, "; no Lean slots to wait for there"), "a machine with no slots file caps no Lean"
+    assert auto._lean(none, "build") == (0, "; no Lean slots to wait for there"), "a machine with no slots file limits no Lean"
     slots.parent.mkdir()
     slots.write_text("# NAME N\nbuild 2   # the records runs'\n# audit 4\ncheck 0\n")
     doc = read(lean=True)
@@ -1019,7 +1019,7 @@ def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites
     """A pool's slot holds a run's reservation against the node for as long as the run holds the slot. A sized run of many
     suites (research.suite_size) asks the slot for its `reserve_gb` and hands slot.py the whole figure as `--budget-gb`, which
     its suites.py counts its test processes on; it is placed by what it reserves. Its own --mem-gb is reserved as given, and on
-    the queue the whole figure is the job's cap."""
+    the queue the whole figure is the job's limit."""
     launched, placed = [], []
     monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=40))})
     monkeypatch.setattr(remote, "launch", _refusing(launched))

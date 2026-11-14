@@ -259,7 +259,8 @@ def test_a_generated_table_has_one_shape() -> None:
 @pytest.mark.parametrize("section, key, value, named", [
     ("store", "l2", 50 * 2 ** 20 + 2, "store.l2 in words"), ("store", "smem", 262146, "store.smem in words"),
     ("store", "reg", "65536.5", "store.reg"), ("sm", "count", "131.5", "sm.count"),
-    ("model", "instruction_bytes", 7, "store.dram over model.instruction_bytes"), ("model", "exact", "30.5", "model.exact")])
+    ("model", "instruction_bytes", 7, "store.dram_installed over model.instruction_bytes"),
+    ("model", "exact", "30.5", "model.exact")])
 def test_a_generated_table_has_no_truncating_division(section: str, key: str, value: object, named: str) -> None:
     """A field of ℕ in a generated table divides only where the division is exact, as ``evaluate`` reads it, since
     Lean's ℕ division truncates; a card file whose entry would leave a fraction there is refused, naming the entry."""

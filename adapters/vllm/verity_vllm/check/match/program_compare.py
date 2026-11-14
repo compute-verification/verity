@@ -58,11 +58,11 @@ def _norm_T(spec: str) -> str:
 
 
 # The divergence REPORT of a step whose spec sequences differ.  difflib.SequenceMatcher over a WHOLE step is
-# O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, and a step differing throughout ran 40 min to 3 h per leg.
+# O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, so a step differing throughout is quadratic in that count.
 # No verdict depends on it (spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check); it only fills
 # `first_divergences_T_normalised` and `n_divergent_opcodes`.  So the common prefix and suffix are located in O(n) and the matcher runs
 # over the differing CORE only, at most `_DIVERGENCE_WINDOW` items of each side (the first divergences lie at its start); a longer core
-# is reported truncated BY NAME (`divergence_window`).  An equal step never enters this path.  Cost ~ W^2 (W 1024: 0.8 s, 4096: 49 s).
+# is reported truncated BY NAME (`divergence_window`).  An equal step never enters this path.  Cost ~ W^2.
 _DIVERGENCE_WINDOW = 1024
 
 

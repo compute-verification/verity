@@ -7,7 +7,7 @@ its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That is
 processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than it holds at each one's figure), so a run stays
 inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked. A run of named suites
 reserves it whole. A run of many suites has processes at their figure only while the few suites that reach it run, and in a
-pool's slot the reservation caps nothing and is held against the node, whether or not the run reaches it, for as long as the run
+pool's slot the reservation limits nothing and is held against the node, whether or not the run reaches it, for as long as the run
 holds the slot: there it reserves MANY_RESERVED of the budget (`reserve_gb`) and plans its processes on all of it (slot.py's
 BUDGET_OPT). A run
 past its reservation meets the node's own limits, as one past its budget does, and where the node orders its OOM kills by

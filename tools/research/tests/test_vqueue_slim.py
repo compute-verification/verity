@@ -1437,6 +1437,7 @@ def test_a_suite_s_failing_test_is_read_by_its_id_and_its_file_from_the_reposito
 def test_a_suite_failed_by_its_machine_is_infra_by_what_its_run_printed_not_by_what_a_test_s_code_quotes():
     row = _row("research", "tools/research", "tests/test_telemetry.py::test_a_stage_timeout_ends_the_runs_workers_outside_its_group")
     assert suite_kind(row, REFUSED_LOG) == "infra"
+    assert suite_kind(row, REFUSED_LOG.replace("this machine caps", "this machine limits")) == "infra", "as an older run printed it, or now"
     assert suite_kind(row, REFUSED_LOG.replace("[tele run] refused", "[tele run] started")) == "own"
     assert suite_kind({**row, "timed_out": 900.0}, REFUSED_LOG) == "timeout"
     assert suite_kind({**row, "nondeterministic": row["failed_tests"]}, "") == "flaky"

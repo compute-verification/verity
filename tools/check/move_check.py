@@ -15,7 +15,8 @@ Every path git sees changed must be one of:
   comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
   `benchmarks/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
   (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
-  moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
+  moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or from the
+  name of an import root (`[roots] old` of a map the range ran by) to where `tools/move/layout.py` writes it, or a dotted
   name (`verity.protocols.proofs.flock.prover.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
@@ -30,6 +31,8 @@ Every path git sees changed must be one of:
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
   files (its lakefile, manifest, lock or toolchain), as a suite's inputs list what Lake reads;
+- in `WORKSPACE_FILES` (the root `pyproject.toml`, `uv.lock`), a quoted distribution's directory rewritten to where its
+  `pyproject.toml` went, also out of a directory the range split (`rules`'s `members`);
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
   proof modules a root of their own while their declarations keep their namespace, or a moved path from the root (a doc
@@ -146,6 +149,8 @@ from pathlib import Path
 MOVES = "tools/research/src/research/store/moves.json"
 #: the files where a new package is registered by an added line (`registration`)
 REGISTRIES = {"pyproject.toml": "workspace", "tests/test_lean_packages.py": "lean"}
+#: the workspace's own files, which name each distribution by the directory its `pyproject.toml` is in
+WORKSPACE_FILES = ("pyproject.toml", "uv.lock")
 #: files whose quoted relative paths name another directory of the tree (a Lake `require`, a manifest's `dir`, a uv source)
 RELATIVE_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json"}
 LAKEFILES = ("lakefile.toml", "lakefile.lean")
@@ -389,21 +394,47 @@ def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
                              for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old)]) is not None
 
 
-def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
+def short_forms(pmap: dict[str, str], base: Tree, maps: list[dict] = ()) -> dict[str, str]:
     """Each moved path as written below a directory its old and new paths share (`verity_vllm/program/predict` for
-    `adapters/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
-    names a path of BASE's tree from the root."""
+    `adapters/vllm/verity_vllm/program/predict`), keeping at least one shared part; and, for each import root of a path map
+    the range ran by (`[roots] old`, `verity_vllm = "adapters/vllm/verity_vllm"`), a moved path below it as written from the
+    root's name, to what `tools/move/layout.py` writes for where it went (its `_short_form`: from the name of the `[roots]
+    new` root it is now below, else from the repository's root). Dropped where two moves disagree or where it names a path
+    of BASE's tree from the root."""
     out: dict[str, str] = {}
     bad: set[str] = set()
+
+    def add(so: str, sn: str) -> None:
+        if so in pmap or so in base.set or base.has_dir(so) or out.setdefault(so, sn) != sn:
+            bad.add(so)
+
     for old, new in pmap.items():
         o, n = old.split("/"), new.split("/")
         c = 0
         while c < min(len(o), len(n)) - 1 and o[c] == n[c]:
             c += 1
         for k in range(1, c):
-            so, sn = "/".join(o[k:]), "/".join(n[k:])
-            if so in pmap or so in base.set or base.has_dir(so) or out.setdefault(so, sn) != sn:
-                bad.add(so)
+            add("/".join(o[k:]), "/".join(n[k:]))
+    for data in maps:
+        roots = data.get("roots")
+        olds, news = (roots.get("old"), roots.get("new")) if isinstance(roots, dict) else (None, None)
+        if not isinstance(olds, dict) or not isinstance(news, dict):
+            continue
+        under = sorted(((k, str(d).strip("/")) for k, d in news.items()), key=lambda kd: -len(kd[1]))
+
+        def written(new: str) -> str:
+            for name, d in under:
+                if new == d or new.startswith(d + "/"):
+                    return name + new[len(d):] if d != name else new
+            return new
+
+        for name, d in olds.items():
+            d = str(d).strip("/")
+            if d == name:
+                continue                                # written from the root, which the path map reads
+            for old, new in pmap.items():
+                if old.startswith(d + "/"):
+                    add(name + old[len(d):], written(new))
     return {k: v for k, v in out.items() if k not in bad}
 
 
@@ -1652,8 +1683,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             entries.remove(a)
             d.update(status="R", score=100 if d["shas"][0] == a["shas"][1] else 0, new=new,
                      modes=(d["modes"][0], a["modes"][1]), shas=(d["shas"][0], a["shas"][1]))
-    short = short_forms(pmap, B)
-    rows = Rows(layout_maps(B, head, cwd), pmap, B, H)
+    path_maps = layout_maps(B, head, cwd)
+    short = short_forms(pmap, B, path_maps)
+    rows = Rows(path_maps, pmap, B, H)
     renamed = [(e["old"], e["new"]) for e in entries if e["status"] == "R"]
     modules = Modules(renamed, dotted)
     lmods, dests = {}, {}
@@ -1815,6 +1847,15 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         reg = REGISTRIES.get(path)
         return bool(reg) and list_addition(x, y, new_dir if reg == "workspace" else new_lake)
 
+    dists = {posixpath.dirname(o): posixpath.dirname(n) for o, n in renamed
+             if posixpath.basename(o) == posixpath.basename(n) == "pyproject.toml" and posixpath.dirname(o) != posixpath.dirname(n)}
+
+    def member_pair(path: str, x: str, y: str) -> bool:
+        """Whether, in the workspace's own files, `y` is `x` with each quoted distribution's directory (a member, a lock's
+        package source) named where its `pyproject.toml` went, also from a directory the range split."""
+        return bool(dists) and path in WORKSPACE_FILES and x != y and \
+            re.sub(r'"([^"]+)"', lambda m: f'"{dists.get(m[1], m[1])}"', x) == y
+
     def registered(path: str, y: str) -> bool:
         """Whether an added line registers exactly a package the range created: a workspace member or its uv source, or a
         Lake package with its lock; or, in any `pyproject.toml`, a line of quoted paths each a Lake file at the root of a new
@@ -1948,6 +1989,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                            or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
                            or (sh_here and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap, sh_here) and not took.add("anchor"))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)
+                           or (member_pair(new, z, y) and not took.add("members"))
                            for z in dict.fromkeys((x, substitute(x, short))))
 
             def block(xs: list[str], ys: list[str]) -> bool:

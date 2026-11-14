@@ -20,24 +20,24 @@ population-order hypotheses read off acceptance), applied at the session v2 sets
 files and at the strategy a strategy of the period's game projects to. This module states its Flock side.
 
 * **The session** (`Live`): V5's binders, each the value v2's check derives on the parameters and the committed files,
-  with three of V5's hypotheses as fields (A3 at the device's bytes, `TagsOkZHJ`, and the registration's law on its
+  with three of V5's hypotheses as fields (A3 at the device's bytes, `TagsOkZHJ`, and the registration's sampling design on its
   layout's strata, `Flock.Bridge.LawOn`), and the bound's parameters. The circuit names no public input port: v2 hands
   `verity-verify-proof` no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the
   session's ports are `HmIn.parse`'s empty ones. What the period's registration fixes is the session's, not a field:
   the registration the prover sends before the sample is the registration record's digest, which the composite's
   commitment binds and the sample's coins are released after (`Live.Reg`); the record's sample file is the `.subset` print
-  of the member's share of the window's sample under the verifier's law `L`, its `kd` units (`printedDraw`, `Live.dj`),
+  of the member's share of the window's sample under the verifier's sampling design `L`, its `kd` units (`printedDraw`, `Live.dj`),
   so V5's `hsz` holds at it (`Live.hsz`), and the bound comes from v1's window check (`Spot.OneStage.checkAt`,
   which v2 runs at the window and which derives the sample under the verifier's own sampling design); each round's digest is SHA-512
   (`Live.dg`); and the writer is one that writes, at a sample's live outcome, a transcript `verify --zk` accepts recording
   it (`Live.wr`, `wrZP`), so what it writes at the outcome an accepted transcript's files decode to is accepted, and
-  V5's `RecordCustodyZKJPLaw` holds at it under the sample file's law with no premise (`Live.hCust`). At the device's
+  V5's `RecordCustodyZKJPLaw` holds at it under the sample file's sampling design with no premise (`Live.hCust`). At the device's
   bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no premise (`Live.deployed`).
 * **The sample** (`Live.L`): the sampling design the parameters' selection rule derives over the population (`design`), sampled as
   `Spot.Select.select` samples it, by `Spot.Draw.drawUnits` on the device's one byte stream (`src`); a
-  sample that fails samples every unit. It is V5's sample at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
+  sample that fails samples every unit. It is V5's sample at the session's bytes and sampling design (`Live.L_eq`, `Flock.Bridge.execSel`).
 * **The live audit at the session** (`Live.game`), and V5's simulator and extractor at any strategy of it (`Live.sim`,
-  `Live.Xr`), at the sample file's law (`decodesZCJH_custodyP`); the sample and `δ` are the sampling design's (`Live.L`,
+  `Live.Xr`), at the sample file's sampling design (`decodesZCJH_custodyP`); the sample and `δ` are the sampling design's (`Live.L`,
   `Live.drawMiss`).
 * **The claim's transcript at a strategy** (`Live.extract`): V5's trace fixed at registration, opened at the deployed
   commitment and read at the circuit's gates with its constants, on the committed files' circuit. Without public input
@@ -46,7 +46,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
 * **The projection** (`Constructions`): a strategy of the period's game is read as a strategy of the live audit. A
   Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Widening`:
   other families' coins, other trees' samples) widen the sample's sample (`Live.extend`), which the sample doesn't read: the
-  sample's law, A3 and the leg's δ are the session's (`uniform_fst`, `Live.delta_extend`).
+  sample's sampling design, A3 and the leg's δ are the session's (`uniform_fst`, `Live.delta_extend`).
 * **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
   game as verity-verify-proof `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the coin trees' hiding term at every leaf, the read finder's collision and the forger's forgery.
@@ -274,7 +274,7 @@ at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
 /-- **The session's sample file**: at each sample, the `.subset` print `verity-verify-proof draw` gives of the session's `kd` units
-(`printedDraw`), the member's share of the window's sample under the verifier's law `L`; `verify --zk` at the session
+(`printedDraw`), the member's share of the window's sample under the verifier's sampling design `L`; `verify --zk` at the session
 admits only a subset sample (`recordDraw_subset`). The bound comes from v1's window check
 (`Spot.OneStage.checkAt`), which v2 runs at the window and which derives the sample under the verifier's own
 sampling design. -/
@@ -298,7 +298,7 @@ noncomputable abbrev wr : (S : Finset (Fin A.n)) → (R : A.Reg) →
       FlockSoundness.Discharge.Exec.Transcript :=
   Claims.Bridge.CustodyZkP.wrZP A.I A.own A.dj fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length
 
-/-- **`live-verifier` at the writer under the sample file's law at every sample**, as V5 reads it, holds with no premise:
+/-- **`live-verifier` at the writer under the sample file's sampling design at every sample**, as V5 reads it, holds with no premise:
 the record's sample is the `.subset` print of the session's `kd` units (`recordCustodyZKJPLaw_deployed`). The session's
 samples hold `kd` units (`Flock.Bridge.drawUnits_size`), so at each of them this sampling design is a member's `subset |S|`. -/
 theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
@@ -331,7 +331,7 @@ noncomputable def deployed : Live where
   hA3 := uniformRandomBytes_deployed
 
 /-- **The session with the sample's sample widened by the coins `S`**: the sample reads only the session's bytes, so the
-sample's law is the session's and A3 holds at the widened sample (`uniform_fst`). -/
+sample's sampling design is the session's and A3 holds at the widened sample (`uniform_fst`). -/
 noncomputable def extend (S : Widening) : Live where
   __ := A
   Ω := A.Ω × S.T
@@ -340,7 +340,7 @@ noncomputable def extend (S : Widening) : Live where
   src ω := A.src ω.1
   hA3 := uniform_fst A.hA3
 
-/-- **The sample's law**: the session's law over the population as `Spot.Select.select` samples it,
+/-- **The sample's sampling design**: the session's sampling design over the population as `Spot.Select.select` samples it,
 `Spot.Draw.drawUnits` on the device's bytes in order; a sample that fails samples every unit. -/
 noncomputable def L : FlockSoundness.Audit.Law A.n where
   Ω := A.Ω
@@ -349,7 +349,7 @@ noncomputable def L : FlockSoundness.Audit.Law A.n where
     | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
     | .error _ => Finset.univ
 
-/-- The session's sample is V5's, `Flock.Bridge.execSel` at the session's bytes and law. -/
+/-- The session's sample is V5's, `Flock.Bridge.execSel` at the session's bytes and sampling design. -/
 theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.design A.n := by
   unfold Live.L Flock.Bridge.execSel
   refine congrArg (@Verity.Law.mk (Fin A.n) A.Ω _ _) (funext fun ω => ?_)
@@ -380,7 +380,7 @@ noncomputable def vb :=
 
 /-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at verity-verify-proof
 `--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the sample file's size give at the sample
-file's law, the subset sampling design of `kd` units. -/
+file's sampling design, the subset sampling design of `kd` units. -/
 noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
   simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
     (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
@@ -665,7 +665,7 @@ theorem ParamsAt.unique {θ : ByteArray} {p p' : _root_.Spot.OneStageZk.Params} 
 def OneStatement (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → p.members = none
 
-/-- **The Flock law the sample reads over `n` units** under the verifier `v`'s agreed law: the sampling design
+/-- **The Flock sampling design the sample reads over `n` units** under the verifier `v`'s agreed sampling design: the sampling design
 `Spot.Draw.deriveLaw` derives, or else the expanded rule's (`Spot.Draw.flockLaw` at
 `Spot.Draw.derive`'s), as `Spot.OneStage.drawnFrom` reads it before `Spot.Draw.drawUnits`
 samples. -/

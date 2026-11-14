@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "adapters/vllm/verity_vllm/commit/committer/native_rows.cu"
 #: the directory of the headers SRC includes by name (the JIT stages them beside it)
 KERNELS = ROW_COMMIT.parent
-COMMIT_GPU = ROOT / "benchmarks/pouw/commit_gpu/commit_gpu.cu"
+COMMIT_GPU = ROOT / "verity/commitments/cuda/commit_gpu/commit_gpu.cu"
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
 
 

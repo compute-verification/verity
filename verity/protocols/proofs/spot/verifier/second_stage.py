@@ -159,6 +159,11 @@ KEY_BOUNDS_WHY = ("a read's key is wired, and its rows give a unit a writer row 
 #: A read's ports (`gates.embedding.EmbeddingRead`, `Flock.ReadNet.readTmpl`): its key, the table's root and domain
 #: id, the opened row with its salt and its path, and its verdict (`SecondStage.OPENING_KEY` and the names after it).
 OPENING_KEY, OPENING_TABLE, OPENING_ROW, OPENING_VERDICT = "tok", ("root", "domain"), ("row", "salt", "path"), "o1"
+#: A read's ports a key reads at: its key, its row's ports and its verdict (`SecondStage.KEYED_PORTS`).
+KEYED_PORTS = (OPENING_KEY, *OPENING_ROW, OPENING_VERDICT)
+KEY_ROWS_WHY = ("a read whose key is wired lists table_rows at a port of its opening: the rows it reads are a function "
+                "of a committed value, never public positions, so it lists none")
+TABLE_ROWS_WHY = "a registered read lists table_rows, which round 2 does not read yet: a read lists every row"
 OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, among
 #: them the root and the domain id it computed for a table, which `Own.supplied` holds in place of the table's name
@@ -166,11 +171,8 @@ OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: the prover's after the sample, and a ``position`` or a ``window`` source the interior record's population or window.
 #: A ``history`` source left unresolved is none of the verifier's bytes.
 OWN_SOURCES = ("bytes",)
-#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
-#: (`SecondStage.VERDICT_ONE`).
-VERDICT_ONE = (("bytes", "00000001"),)
-#: `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
-#: (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`). `_opened_row` doesn't read it until `half_leaves` is written.
+#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1 as one 16-bit half, one leaf
+#: of the verdict's one word (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`).
 VERDICT_ONE_LEAF = (("bytes", "0001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
@@ -1522,7 +1524,7 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
     (`Own.wired_key`), one wire, whole (`_key_failure`), the key at each sampled unit its writer unit's committed output
     row (``second-read``'s `_read_ok`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
     statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each row
-    `VERDICT_ONE`. With the switch off, a key the block computes, a wire, is refused: no statement covers it
+    `VERDICT_ONE_LEAF`. With the switch off, a key the block computes, a wire, is refused: no statement covers it
     (`_inputs_why`)."""
     t = x.template
     at = lambda p: [y.value for y in own.links or () if y.template == t and y.port == p]  # noqa: E731
@@ -1535,7 +1537,7 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
             and all(_one_table(own, mine, t, r, d) for r in roots for d in domains)
             and ((bool(at(OPENING_KEY)) and all(map(held, at(OPENING_KEY)))) if _wire_of(own, t, OPENING_KEY) is None
                  else own.wired_key and _key_failure(own, t) is None)
-            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE for r in mine[verdict]))
+            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE_LEAF for r in mine[verdict]))
 
 
 def _read_unlinked(own: Own, v: str) -> bool:
@@ -1621,7 +1623,31 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
     found += [("second-cover", {"template": p.template}) for p in ps if p.template not in covered]
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
+    found += table_rows_failures(own, ss)
     return found if found or allow else [("two-stage-form", FORM_WHY)]
+
+
+def table_rows_why(own: Own, t: str, port: str, e: Any) -> str | None:
+    """`SecondStage.tableRowsWhy`: why template `t`'s registered read at `port`, entry `e`, is refused for the
+    ``table_rows`` it lists; None where it lists none. A read whose key is wired lists none at a port of its opening
+    (`KEYED_PORTS`): `KEY_ROWS_WHY`. Round 2 reads no ``table_rows`` yet, so every other one listed is refused too
+    (`TABLE_ROWS_WHY`), until the change that reads them."""
+    if _get(e, "table_rows") is None:
+        return None
+    return KEY_ROWS_WHY if port in KEYED_PORTS and _wire_of(own, t, OPENING_KEY) is not None else TABLE_ROWS_WHY
+
+
+def table_rows_failures(own: Own, ss: Sequence[Any]) -> list[tuple[str, Any]]:
+    """`SecondStage.tableRowsFailures`: ``second-table-rows`` for each registered read of statements `ss` that lists
+    ``table_rows`` (`table_rows_why`), naming the statement, its template, the port and why, ports in key order."""
+    out = []
+    for i, j in enumerate(ss):
+        s = _stmt(j)
+        for port, e in sorted(_entries(_get(s.registered, "ports")), key=lambda x: x[0]) if s is not None else ():
+            why = table_rows_why(own, s.template, port, e)
+            if why is not None:
+                out.append(("second-table-rows", {"statement": i, "template": s.template, "port": port, "why": why}))
+    return out
 
 
 def check_twin(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
@@ -1672,4 +1698,5 @@ __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KE
            "interior_reads", "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_widths",
            "replay_wires", "returns_ok", "row_at", "rows_of",
-           "set_name", "statement_reads", "supplied_of", "verified_of", "widths_of", "wire_runs", "wires_of"]
+           "set_name", "statement_reads", "supplied_of", "table_rows_failures", "table_rows_why", "verified_of",
+           "widths_of", "wire_runs", "wires_of"]

@@ -421,7 +421,7 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
     CPU.kept_sample(site, slim)
     drawn["picks"] = drawn["picks"][::-1]
-    with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 drawn\); the record draws by 'uniform'"):
+    with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 sampled\); the record samples by 'uniform'"):
         CPU.kept_sample(site, slim)
     drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
     with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):

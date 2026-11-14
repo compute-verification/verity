@@ -79,6 +79,9 @@ SAMPLED = SC.SAMPLED
 UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
 #: the sampling design v2's one statement reads: a uniform sample of a fixed count
 SUBSET = {"k": 1, "law": "subset"}
+#: The one statement's refusal of a stratified design (`Spot.OneStageZk.SUBSET_ONLY`)
+SUBSET_ONLY = ("the sampling design is stratified, which the one-statement audit's soundness statement doesn't cover: it "
+               "covers a subset sampling design")
 
 
 def v1_case(program, query, previous: str | None = None, design: dict | None = None) -> dict:
@@ -498,7 +501,8 @@ def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, cap
     """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
     the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
     same form is refused by name at its params, the reason remote's composite would give for a v1 case. The case is
-    sampled by a subset design, as v2's one statement asks."""
+    sampled by a subset design, as v2's one statement asks; the same case under a stratified design is not written: the
+    one statement's parser refuses the design by its kind."""
     program, query = toy()
     v1 = v1_case(program, query, design=SUBSET)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
@@ -511,6 +515,12 @@ def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, cap
     assert got["protocol"] == SAMPLED and got["verdict"] == "reject", got
     assert got["reason"].startswith("params: the parameters name no proofs: one-stage v1 "), got
     assert "is refused" in got["reason"], got
+    stratified = v1_case(program, query, design={"law": "stratified", "k": 1})
+    rc, _, refused, out = run(capsys, "--audit", audit_dir(tmp_path / "stratified", stratified), "--private",
+                              tmp_path / "stratified" / "private", "--alpha", "1", "--gamma", 1,
+                              *stand_ins(tmp_path, stratified), "--sampled-exe", sampled_exe)
+    assert rc == 1 and [(r["protocol"], r["reason"].split(": params: ")[-1]) for r in refused] == \
+        [(SAMPLED, SUBSET_ONLY)], out
 
 
 @pytest.mark.parametrize("change, reason", [

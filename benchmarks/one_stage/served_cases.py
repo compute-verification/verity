@@ -31,7 +31,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names sampled proofs missing. a5
   writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
-  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's law is
+  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
   `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
   and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
