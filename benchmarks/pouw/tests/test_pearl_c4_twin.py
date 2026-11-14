@@ -1,4 +1,4 @@
-"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.protocols.pouw.prover.schemes.pearl_c4`: the
+"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`: the
 vectorized casts on grids through every rounding case, and whole tiles (forming, C̃, U, the peel factors, the leaf and the
 tickets) for both formats."""
 
@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 import twin as W
 
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 
 def grid() -> np.ndarray:

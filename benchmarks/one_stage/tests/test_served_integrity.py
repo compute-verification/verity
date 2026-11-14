@@ -30,9 +30,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.verifier.one_stage import audit as A, registration as R
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
