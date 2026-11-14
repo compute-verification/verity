@@ -183,7 +183,7 @@ def memberOf (rs : Ranks) (regs : Array Registered) (t : String) (u : Nat) : Opt
 
 /-- `ranks-window` of served rank records `served` (each its `H` and the digest of its bytes, in rank order) against
 registrations `regs`: each is its rank's window, and its rank's registration binds both. -/
-def runFailures (rs : Ranks) (regs : Array Registered) (served : Array (String × String)) : List (String × Json) :=
+def servedFailures (rs : Ranks) (regs : Array Registered) (served : Array (String × String)) : List (String × Json) :=
   let ok := served.size == rs.of.size && (List.range rs.of.size).all fun r =>
     match served[r]?, rs.of[r]?, regs.find? (·.rank == r) with
     | some hc, some q, some reg => hc.1 == q.window && reg.digest == hc.1 && reg.circuit == hc.2
@@ -396,7 +396,7 @@ def failures (rec : Json) (records : Array Json) (served : Array (String × Stri
   match Ranks.ofJson? (getD rec "ranks") with
   | none => [("ranks-shape", Json.str SHAPE_WHY)]
   | some rs =>
-    runFailures rs regs served ++ runFailures rs regs root logged ++ membersFailures rs regs ++
+    servedFailures rs regs served ++ runFailures rs regs root logged ++ membersFailures rs regs ++
       recordFailures rs rec records
 
 /-- **The ranks' check** (module docstring): each code once, with the detail it first failed with. -/
