@@ -1,0 +1,96 @@
+# The names the period maps' stage 4 (`period_proofs_map.toml`) leaves on a retired word beside a sibling it renames,
+# renamed as their siblings are: the period's game of `security/Proofs/Flock/EndToEnd/` (a monitoring period's "period"
+# -> "monitoring period"), the keyed sample over PoUW's window of `security/Proofs/Flock/Soundness/` (an execution
+# phase), the SPOT challenger's constants and seed tag (its window -> "run", its session -> "challenge phase"), and the
+# lemmas of Verity's sampled reads and the live salt's ledger about the challenger's functions (its gate session ->
+# "challenge phase"). `tools/move/rename.py --map tools/move/kernels_names_map.toml` renames them in one move; its
+# `--moves` is what the locks' records take (`check.py --update --moved`). The challenger's Python, which SPOT's difftest
+# reads, keeps its names, as do PoUW's own `SESSION_FORM` and `WINDOW_SALT`.
+
+[words]
+# Each holds its word with other parts, and no other declaration holds it in another sense.
+"periodGood_of_plays" = "monitoringPeriodGood_of_plays"
+"periodGood_mono" = "monitoringPeriodGood_mono"
+"periodGood_true" = "monitoringPeriodGood_true"
+"periodE" = "monitoringPeriodE"
+"period_union" = "monitoringPeriod_union"
+"period_horizon" = "monitoringPeriod_horizon"
+"period_prod" = "monitoringPeriod_prod"
+"PlanDraw.window" = "PlanDraw.executionPhase"
+"covers_window" = "covers_executionPhase"
+"closure_escape_le_window" = "closure_escape_le_executionPhase"
+
+[[words_in]]
+# The PoUW draw's declaration, its call and the doc line that spells it with its arguments, as whole phrases: `window` is
+# these files' prose word and a vector's key too, which keep it.
+files = ["security/Proofs/Flock/Soundness/PlanDraw.lean", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean"]
+words = { "def window" = "def executionPhase", "match window" = "match executionPhase", "window key calls L" = "executionPhase key calls L" }
+
+[[words_in]]
+# Whole names, since `windowK` begins PoUW's `windowKeys`.
+files = [
+    "security/Proofs/Flock/Soundness/Audit/Window.lean",
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "verity/protocols/pouw/verifier/tests/test_circuit_plan.py",
+]
+words = { "windowK" = "executionPhaseK", "windowK_le" = "executionPhaseK_le" }
+
+[[words_in]]
+# The lock is where `--moves` reads a guarantee's rename.
+files = [
+    "security/Definitions/Pouw/Window.lean",
+    "security/Proofs/Flock/Soundness/Audit/README.md",
+    "security/Proofs/Flock/Soundness/Audit/Window.lean",
+    "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "security/lean-audit.json",
+    "verity/protocols/pouw/prover/circuit/__init__.py",
+    "verity/protocols/pouw/prover/circuit/plan.py",
+    "verity/protocols/pouw/verifier/tests/test_circuit_plan.py",
+]
+words = { "audit_window" = "audit_executionPhase", "audit_window_split_of_record" = "audit_executionPhase_split_of_record", "audit_window_of_le" = "audit_executionPhase_of_le", "audit_window_of_record" = "audit_executionPhase_of_record", "audit_window_of_le_slack" = "audit_executionPhase_of_le_slack", "audit_window_split_of_record_of_le_slack" = "audit_executionPhase_split_of_record_of_le_slack", "extraction_audit_window" = "extraction_audit_executionPhase", "extraction_audit_window_of_le_slack" = "extraction_audit_executionPhase_of_le_slack", "extraction_audit_window_split_of_record_of_le_slack" = "extraction_audit_executionPhase_split_of_record_of_le_slack" }
+
+[[words_in]]
+files = ["verity/protocols/spot/verifier/lean/Spot/ChallengerDraw.lean"]
+words = { "SEED_SALT_WINDOW" = "SEED_SALT_RUN" }
+
+[[words_in]]
+files = [
+    "verity/protocols/spot/verifier/lean/Spot/ChallengerSession.lean",
+    "verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean",
+]
+words = { "MAX_SESSION_ID" = "MAX_CHALLENGE_PHASE_ID", "SESSION_FORM" = "CHALLENGE_PHASE_FORM", "WINDOW_FORM" = "RUN_FORM" }
+
+[[words_in]]
+files = ["verity/protocols/spot/verifier/lean/Spot/Supplied.lean"]
+words = { "WINDOW_SALT" = "RUN_SALT" }
+
+[[words_in]]
+# The challenger's own `sessionNamed_ok` and `trustedSessionOf_ok` (`Properties.Challenger.Session`) keep theirs here, so
+# Verity's sampled reads' are renamed only where `namespace Verity.Sampled` reads them.
+files = [
+    "security/Proofs/Properties/Verity/Sampled/Assembled.lean",
+    "security/Proofs/Properties/Verity/Sampled/LinkFirst.lean",
+    "security/Proofs/Properties/Verity/SampledRead.lean",
+]
+words = { "sessionOf_ok" = "challengePhaseOf_ok", "sessionOf_spec" = "challengePhaseOf_spec", "sessionNamed_ok" = "challengePhaseNamed_ok", "trustedSessionOf_ok" = "trustedChallengePhaseOf_ok", "trustedSessionOf_spec" = "trustedChallengePhaseOf_spec" }
+
+[[words_in]]
+files = [
+    "security/Proofs/Properties/Pouw/LiveSalt.lean",
+    "security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean",
+]
+words = { "sessionOf_spec" = "challengePhaseOf_spec", "sessionNamed_root" = "challengePhaseNamed_root" }
+
+[[words_in]]
+files = ["security/Proofs/Properties/Challenger/Session.lean"]
+words = { "lawfulBEqByteArraySession" = "lawfulBEqByteArrayChallengePhase" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']

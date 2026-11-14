@@ -42,7 +42,7 @@ open Properties.Pouw.LiveSalt.Coin (enc enc_length enc_split enc_inj taggedBytes
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok except_spec none_spec
   failure_spec toOption_spec ledgerTag_spec nat_spec some_pure_spec recordOfJson_spec mapM_spec)
 
-local instance lawfulBEqByteArraySession : LawfulBEq ByteArray where
+local instance lawfulBEqByteArrayChallengePhase : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
