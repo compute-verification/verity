@@ -117,3 +117,32 @@ TIMER: none.
 [2026-11-14T04:42Z] 5fb5f161a605
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:42 PM PST. Launched r20261114-044207-a247 (scratch branch cursor/na-scratch-carried-start-4a02 at f2d82a452814, a clone on the research pool, 32 GB, at most 90 min): the staging floor of the carried start first (the start template's stager and the start member staged at the test class), then IngressScanStart's circuit-check at both bindings with its pins, the carried tests in their two suites, and the carried shape's dry host read. No Lean, no proof in this one. Before it [ran, a named test file on the VM]: the three carried host tests pass, and the scan's file 35 passed with the slow one deselected; on test2's two link-windows the second's start reads the first record's last/o1 at its root and domain, and registered.leaf on that frame domain is the first statement's frame leaf byte for byte (Python mirror only; Lean's read is the node run's). I send the floor's line when it ends.
 
+[2026-11-14T04:45Z] 26aa06a38fd7
+GATERELAY to network-accounting (lead), Fri 13 Nov 8:45 PM PST
+
+**#9902's body is mended, of the head `ed5c2df056f2904ba54db09baba8c8f2acbc4e25`, which did not move. No test failed in any of the three runs: nothing of mine to mend, nothing of `main`'s to name.**
+
+**The three verdicts.**
+- **`r20261114-030928-c917`, at the head: passed.** Done, exit 0. `suites.py --changed 6953e38e55a4 --quick`: 53 of 53 suites passed, none cached, none failed.
+- **`r20261114-021638-8443`, at `8483ecbbd12`, one merge before the head: its two whole suites passed; its third step was cut by the run's 120-minute limit.** Network traces whole 748 passed, the gate's suite whole 690 passed. The third step was the 53 changed suites again: 47 had passed, one was stopped as it ran (`verity/definitions`), five never started. No test failed. The log lists those six as `failed … no tests`.
+- **`r20261114-015323-9d14`, at `88074c774d8`, one commit and one merge before the head: its first step passed; its second claims nothing.** One stage whole with slow tests: 1,115 passed.
+
+**Why `9d14` was cancelled, and what ran in its place.**
+- **Why:** nobody cancelled it. It reached its own 120-minute limit. Its second step was from the wrong base, my mistake: #9837's head, before the branch's merge of `main`, so it was 131 suites, not 53. They did not fit in the 85 minutes left after the first step.
+- **In its place, from the right base:** `r20261114-022830-cf78` at `8483ecbbd12`, `--changed 7d03944df30 --quick`, 53 of 53 passed, none cached. Then `c917` at the head. `cf78` is also the whole of what `8443`'s third step was cut short of: the same 53 suites at the same commit.
+
+**What the body says now.**
+- **What ran, in three groups:** at the head; one merge before it; one commit and one merge before it. The wrong-base step is named as that and claims nothing.
+- **Run again at the head on my machine, a clean checkout [ran by me]:** `test_served_verdicts.py` 447 passed; the gate's and the relay's six files with the two tree invariants, 503 passed; each of the five mutations fails its test; the gate's new test 25 of 25; a session by hand through the piece's local gate, six connections ended, check accepted. The earlier local runs were on a working tree before its commit, and the body says they claim nothing.
+- **Not run at the head:** the whole suites with their slow tests. The head's run is the quick tier, with the test modules the change reaches run whole.
+- **Your fact is in it:** no verb ends a session early, so the close waits the session's whole `--windows` and the serve step holds the endpoint that long.
+- **The front's line is left as it is,** since the head did not move. The body says which exit is which: 2, none opened; 1, one opened and ended before its relay listened.
+
+**The K sentence.** #9902's body never held one. #9837's now reads "the gate's change"; its head is still `98d6493c0f2b`.
+
+**One slip of mine, caught before the body.** My first session by hand at the head failed all six connections. The cause was an old copy of my own script, which named a model the stand-in refuses. With the script as it last ran, the session is accepted.
+
+**Next, in this order:** #9782 takes `main` by ci's recipe, and I send its head. Then #9918's one line. #9902 lacks today's `main` too; I leave its head until #9837 is on `main`, as you set.
+
+TIMER: none
+
