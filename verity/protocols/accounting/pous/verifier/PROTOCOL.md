@@ -471,8 +471,12 @@ c_j   = derive(coin_secret, "verity/pous/streamed-wipe-coins/v1", {server, sessi
 ~~~
 
 A label's message is 75 bytes, one SHA-512 compression, so a GPU derives labels faster than any link carries them.
-SHA-512 is the PRF (C3, claim `prf/sha-512`). `coin_secret` is sampled from the OS once the fill is complete, and the
-indices are uniform and independent, with replacement: live coins, never Fiat–Shamir.
+SHA-512 is the PRF of both lines (C3, claim `prf/sha-512`): the labels are its outputs under `K`, and each index is
+read from a counter-mode stream under the key `derive` gives from `coin_secret`, 32 bytes sampled from the OS once the
+fill is complete: a live coin, never Fiat–Shamir. So the indices are uniform and independent, with replacement, before
+the coins' PRF advantage, as the labels are uniform before the labels'. The bound below carries the labels' advantage
+as its term `Adv_PRF` and takes the indices as uniform, so the coins' advantage is outside it; neither is priced and
+neither is assumed (SHA-512 as PRF: not priced, not assumed).
 
 **Messages.** One session per server and wipe, under an id the auditor designates (`session`, 32 bytes):
 
@@ -850,7 +854,8 @@ the timed audit and the simulator with the dense codec as default.
 ## In Lean (`lean/`)
 
 - **Trusted without proof:** `security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs
-  `OracleAlgorithm`), `security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
+  `OracleAlgorithm`), `security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`, and the models below),
+  `security/Definitions/Assumptions/Pous.lean` (`TimedINC`, a named assumption),
   `security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `security/Definitions/Pous/Assumptions.lean`,
   `security/Definitions/Pous/Guarantees.lean` and, for the lemmas, `security/Proofs/Pous/Statements.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and

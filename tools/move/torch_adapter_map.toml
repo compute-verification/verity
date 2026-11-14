@@ -20,8 +20,9 @@
 #   adapters/vllm/tests/program/test_moe_pad_route_a3.py
 #   adapters/vllm/tests/program/test_moe_pad_stage2.py
 #   adapters/vllm/tests/program/test_rule_lists.py
-#   adapters/vllm/tests/program/test_train_step.py
-#   adapters/vllm/tests/program/train_step_lf.py
+#   adapters/vllm/tests/program/test_train_step.py (cut: moved by `torch_train_step_map.toml`, its check that a training
+#     rule set holds no rule of `VLLM_RULES` back in `adapters/vllm/tests/program/test_rule_lists.py`)
+#   adapters/vllm/tests/program/train_step_lf.py (moved whole by `torch_train_step_map.toml`)
 #   adapters/vllm/verity_vllm/program/frontend/README.md
 #   adapters/vllm/verity_vllm/program/frontend/derive_examples.py
 #   adapters/vllm/verity_vllm/program/frontend/rules/README.md

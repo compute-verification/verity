@@ -24,8 +24,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
@@ -47,6 +45,8 @@ from verity_vllm.pipeline import weight_rows as WT
 from verity_vllm.query.program_view import spec_statics
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.fields import RecordError
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
+from verity_flock.class_statement import UnitStager
 
 E, TOPK, K, N, G, KB, NR, T = 8, 2, 64, 4, 32, 32, 2, 2
 NB, KG, B, P = -(-N // G), K // G, N // NR, T * TOPK
@@ -125,8 +125,9 @@ def build(monkeypatch, proj: str = "w13", rank: int = 0, n: int = N) -> SimpleNa
     pr, pi, nb = ids(proj, n), Index(proj, n), -(-n // G)
     w, ws = _e4m3(rng, E * n * K), _f32(rng, 1e-4, 1e-2, E * nb * KG)
     ops = {json.dumps([["p", 0, 0, w.size]]): w, json.dumps([["p", 0, w.size, w.size + ws.size]]): ws}
-    words = {"topk_weights": [], "topk_ids": [], "out": []}
-    routers, pairs, experts = [], [], []
+    words: dict[str, list[int]] = {"topk_weights": [], "topk_ids": [], "out": []}
+    routers, experts = [], []
+    pairs: list[tuple] = []
     bias = (rng.standard_normal(E) * 1e-2).astype(np.float32).view(np.uint32)
     ops[json.dumps([["x", 90, 0, E]])] = bias
     for t in range(T):

@@ -49,15 +49,16 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import of_record as OR
 import verity_difftest as D
+from of_record_lean import Record
 
+from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as PV
 from verity.protocols.accounting.pouw.verifier import window as Wd
 
-REPO = Path(__file__).resolve().parents[7]
+REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
 V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
@@ -283,7 +284,7 @@ class Sides:
         self.core = D.Server(D.ProtocolPort("pouw-check", CC.case_twin, inputs=None, package=LEAN).argv())
         self.opening = D.Server(D.Port("pouw-check-difftest", "opening", opening_reference, inputs=None,
                                        package=LEAN).argv())
-        self.record = OR.Record()
+        self.record = Record()
 
     def coin(self, kind: str, x: dict) -> tuple[Any, bool]:
         """Lean's outcome of a pass or sample check, and whether Python's is the same (`of_record`)."""

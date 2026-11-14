@@ -106,7 +106,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": ("verity/circuits/private_circuits/universal.py::Netlist",),
+    "Netlist": (),  # nothing in scope declares it
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
@@ -640,7 +640,7 @@ KNOWN: dict[str, str] = {
     # security/Properties/
     "security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
-    "security/Properties/Pous/Period.lean::Pous.Period.Strategy":
+    "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
     "security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
@@ -696,7 +696,7 @@ KNOWN: dict[str, str] = {
         "homonym, a served request's benchmark row: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py::Window":
+    "benchmarks/pouw/served_zk/replay_window.py::Window":
         "homonym, one replayed window's checks: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
