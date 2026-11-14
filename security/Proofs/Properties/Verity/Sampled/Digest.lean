@@ -177,26 +177,69 @@ theorem eq_of_bindMsg {k : Verity.Registration.Composite} {s s' : Verity.Sent} (
 theorem sha512Msg_bytes (b : ByteArray) : sha512Msg b.data.toList = (Flock.Sha512.hash b).data.toList :=
   rfl
 
-open Classical in
+/-- **The digests what the prover sent binds, as a function** (`BindsAt`): the three byte strings decode under the
+composition's formats, `Properties.Composition.digests` gives the list `ds`, and `bind` of it is the decoded
+commitment; else none. It is `BindsAt` read off the data (`bindsOf_eq`). -/
+noncomputable def bindsOf (k : Verity.Registration.Composite) (s : Verity.Sent) :
+    Option (List (String × ByteArray)) :=
+  match _root_.Core.canonicalJson s.params >>= _root_.Core.Composition.decodeParams with
+  | .error _ => none
+  | .ok ps =>
+    match _root_.Core.Composition.decodeCommitment s.commitment with
+    | .error _ => none
+    | .ok c =>
+      match _root_.Core.Composition.decodeEvidence s.evidence with
+      | .error _ => none
+      | .ok ev =>
+        match Properties.Composition.digests (s.components k) ps ev with
+        | none => none
+        | some ds => if _root_.Core.Composition.bind (Verity.verifier k).id ds = c then some ds else none
+
+/-- **`bindsOf` is `BindsAt`**: the digests the data gives are exactly the ones the commitment binds. -/
+theorem bindsOf_eq {k : Verity.Registration.Composite} {s : Verity.Sent} {ds : List (String × ByteArray)} :
+    bindsOf k s = some ds ↔ BindsAt k s ds := by
+  constructor
+  · intro h
+    rw [bindsOf] at h
+    split at h
+    · cases h
+    · rename_i ps hps
+      split at h
+      · cases h
+      · rename_i c hc
+        split at h
+        · cases h
+        · rename_i ev hev
+          split at h
+          · cases h
+          · rename_i ds' hdig
+            split at h
+            · rename_i hb
+              obtain rfl := Option.some.inj h
+              exact ⟨ps, c, ev, ⟨hps, hc, hev⟩, hdig, hb⟩
+            · cases h
+  · rintro ⟨ps, c, ev, ⟨hps, hc, hev⟩, hdig, hb⟩
+    rw [bindsOf, hps, hc, hev, hdig, if_pos hb]
+
 /-- **What a play reveals for the commitment `c`**: where what the prover sent has the commitment `c` and binds a list
-of digests (`BindsAt`), the message `bind` hashed over it (`bindMsg`); else none. -/
+of digests (`bindsOf`), the message `bind` hashed over it (`bindMsg`); else none. -/
 noncomputable def bindReveal (k : Verity.Registration.Composite) (c : ByteArray) (o : Exchange) : Option Claims.Msg :=
-  if h : o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds then some (bindMsg k h.2.choose) else none
+  if o.sent.commitment = c then (bindsOf k o.sent).map (bindMsg k) else none
 
 theorem bindReveal_of {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange}
     {ds : List (String × ByteArray)} (hc : o.sent.commitment = c) (hB : BindsAt k o.sent ds) :
     bindReveal k c o = some (bindMsg k ds) := by
-  have h : o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds := ⟨hc, ds, hB⟩
-  rw [bindReveal, dite_eq_left h, BindsAt.unique h.2.choose_spec hB]
+  rw [bindReveal, if_pos hc, bindsOf_eq.mpr hB, Option.map_some]
 
 theorem bindReveal_some {k : Verity.Registration.Composite} {c : ByteArray} {o : Exchange} {w : Claims.Msg}
     (h : bindReveal k c o = some w) :
     o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds ∧ w = bindMsg k ds := by
-  by_cases hc : o.sent.commitment = c ∧ ∃ ds, BindsAt k o.sent ds
-  · rw [bindReveal, dite_eq_left hc] at h
-    exact ⟨hc.1, hc.2.choose, hc.2.choose_spec, (Option.some.inj h).symm⟩
-  · rw [bindReveal, dite_eq_right hc] at h
-    cases h
+  rw [bindReveal] at h
+  split at h
+  · rename_i hc
+    obtain ⟨ds, hds, rfl⟩ := Option.map_eq_some_iff.1 h
+    exact ⟨hc, ds, bindsOf_eq.mp hds, rfl⟩
+  · cases h
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
