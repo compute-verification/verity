@@ -100,7 +100,7 @@ assumption, guarantee or proof (the lock's `layers`).
 
 * Properties of the code: `security/Properties/Pous/`. Proofs: `security/Proofs/Pous.lean` and `security/Proofs/Pous/`.
 * Locks: `security/lean-audit.json` (the guarantees) and `security/Properties/lean-audit.json` (the properties).
-* The Python reference: `verity/protocols/pous/verifier` (its README). PoUS's grader, `verity/protocols/pous/lean`,
+* The Python reference: `verity/protocols/accounting/pous/verifier` (its README). PoUS's grader, `tools/pous_grader`,
   pins this module and every module under `security/Definitions/Pous` (`TRUSTED.sha256`).
 -/
 

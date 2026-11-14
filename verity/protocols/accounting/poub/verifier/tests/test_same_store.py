@@ -21,6 +21,7 @@ from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_parties
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period as pous
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -103,12 +104,12 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     store = _committed()
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    held = pous.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+    held = period_prover.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
                              store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
                              pous.setup_case(q, reg.commitment, reg.salt,
                                              [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
-    space = pous.audit("n0", held, COINS, **kw)
-    other = pous.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
+    space = period_prover.audit("n0", held, COINS, **kw)
+    other = period_prover.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
                      **kw)
     sid = hashlib.sha512(b"a P2 session").digest()[:32]
     held = p2_parties.registration_json(reg, None)

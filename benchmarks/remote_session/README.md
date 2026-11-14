@@ -1,7 +1,7 @@
 # benchmarks/remote_session
 
 The session harness of PoUB (`verity/protocols/accounting/poub/verifier`), not the remote
-protocol's demo, which is `verity demo vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
+protocol's demo, which is `demos/remote.toml`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 
 ## Interface
