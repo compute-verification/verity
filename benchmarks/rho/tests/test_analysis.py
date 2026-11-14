@@ -225,9 +225,10 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
 
 
 def test_run_lists_omega_max_and_mu_where_the_serving_cut_sets_the_bound(tmp_path, monkeypatch, capsys):
-    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the serving cut cites a
-    draft) rests on its structure's `ω_max` and `μ`, its boundary term's: `rho.md` names both declarations and
-    `rho.json`'s structure record holds both values. A remote bound has no serving cut, so its text names neither."""
+    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose cap the
+    serving cut sets, `fanout-priced` and `fanout-split`, each cite a `draft:` statement of their own) rests on its
+    structure's `ω_max` and `μ`, its boundary term's: `rho.md` names both declarations and `rho.json`'s structure record
+    holds both values. A remote bound has no serving cut, so its text names neither."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 
