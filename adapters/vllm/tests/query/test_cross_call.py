@@ -1,4 +1,4 @@
-"""Cross-Call recomputes (`verity.definitions.cross_call`): a Call computed twice, a subset of a Call's gates computed twice by
+"""Cross-Call recomputes (`verity.circuits.cross_call`): a Call computed twice, a subset of a Call's gates computed twice by
 another Call of its spec, one gate computed in two Calls of different specs, each caught and named; structure (values from constants
 alone) not counted; the honest synthetic Program passes; the hierarchical support analysis equals the gate-by-gate one."""
 from __future__ import annotations
@@ -13,8 +13,8 @@ from verity.circuits.cut import separable
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions import cross_call as X
-from verity.definitions import word as W
+from verity.circuits import cross_call as X
+from verity.circuits import word as W
 from verity.definitions.registry import prims as P
 
 from verity_vllm.pipeline import manifest as M
