@@ -21,21 +21,27 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import importlib.util
 import json
+from pathlib import Path
 
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier.warden import Released, WardenParams
+from verity.protocols.accounting.certifier.verifier.warden import REFUSED, Released, WardenParams
 
-import test_stop_verdicts as TSV
 from test_warden_serve import _run, ws
-import connection_rows_run
+from verity.protocols.accounting.certifier.device import connection_rows_run, runner_parts as rp
 from verity.protocols.accounting.certifier.verifier import link_frame, warden_rows as WR
-import runner_parts as rp
 from verity.protocols.accounting.certifier.verifier import (connection_rows_check as CRC, record_files as RF,
     relay_check as RC)
+
+_tsv = importlib.util.spec_from_file_location(
+    "test_stop_verdicts",
+    Path(__file__).resolve().parents[2] / "prover/tests/test_stop_verdicts.py")
+TSV = importlib.util.module_from_spec(_tsv)
+_tsv.loader.exec_module(TSV)
 
 crr = connection_rows_run
 #: the reader of the registrations' file, and its tests' records
@@ -799,6 +805,35 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
     assert not any("connection rows" in p or "no head" in p for p in result["problems"]) and not result["accepted"]
 
 
+def test_under_form_2_a_run_through_its_last_buckets_passes_the_check_which_counts_the_arrivals_turned_away(tmp_path):
+    """Eight requests at form 2 over a run of two execution phases, the last four from the first bucket that admits
+    nothing to the run's last: the network certifier serves the first four and turns the last four away, each with
+    one cell, in its bucket; it refuses none, so both execution phases are certified and each has its head. The
+    run's log counts the four on their own, and the check accepts the run, its summary and its table saying that the
+    four clients whose outcome is refused were turned away."""
+    out = tmp_path / "run"
+    first = 2 * T - ENDS.span
+    late = (first, first, first + 3, 2 * T - 1)
+    device, _ = served(out, tmp_path / "key", windows=2, params=ENDS,
+                       prompts=(*PROMPTS[:4], (14,), (15, 16), (17,), (18,)), answers=ANSWERS[:4],
+                       arrive=dict(enumerate((0, 0, T, first - 1, *late))))
+    (out / "warden.json").write_text(json.dumps({"connections": device.log, **ws.counts(device)}))
+    assert ws.counts(device) == {"ordinals": 4, "refused": 0, "refused_windows": [], "turned_away": 4,
+                                 "turned_away_reset": 0, "ticks": 2 * T}
+    assert [(c["admitted"], c["failed"], c["cut"]) for c in device.log] == \
+        [(t, None, False) for t in (0, 0, T, first - 1)]
+    assert phases_of(out, ENDS) == [(0, "registration"), (1, "registration")]
+    clients = json.loads((out / "client.json").read_text())["connections"]
+    assert [(c["outcome"], c["kinds"], c["arrivals_ms"]) for c in clients[4:]] == \
+        [("refused", ws.KIND_CHARS[REFUSED], [t * ENDS.bucket_ms + 1]) for t in late]
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    s = result["summary"]
+    assert (s["requests"], s["ended"], s["refused"], s["turned_away"], s["withheld_windows"]) == (8, 4, 4, 4, [])
+    assert (s["certified_windows"], s["connection_rows"]["registered"], s["connection_rows"]["of"]) == (6, 2, 2)
+    assert "4/8 ended, 4 refused or turned away (4 turned away)," in ws.table(result)
+
+
 def left(out) -> list[dict]:
     """The lines of the run's `rows.jsonl`, in the order they were written in."""
     return [json.loads(x) for x in (out / crr.ROWS).read_text().splitlines()]
@@ -912,10 +947,8 @@ def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_
         with pytest.raises(ValueError, match="in a schedule with a head offset, and in no other, the network "
                                              "certifier's tick writes each execution phase's line"):
             rp.Keeper(tmp_path, None, params, ws.LINK, back=back)
-    import warden_serve  # by name, so that the spawned process finds its functions
-
     ws.ck.load_key(tmp_path / "key-3", 5)
-    publisher = warden_serve.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS, base_ms=0, ordinal=0)
+    publisher = ws.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS, base_ms=0, ordinal=0)
     try:
         with pytest.raises(ValueError, match="sends lines back in a schedule with a head offset, to one taker"):
             publisher.heads(lambda window, line: None)

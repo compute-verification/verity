@@ -85,22 +85,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-from verity.commitments import hm96  # noqa: E402
-from verity.commitments.hm96 import batch as HB  # noqa: E402
-from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
-from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
-from verity.commitments.crypto import chacha20  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import transfer_rows as TR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
-from verity.protocols.accounting.pous.verifier.schemes import p2 as P2  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.load_check import FORMAT, H200, KIND, LINK, SCHEMA  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.load_check import SHAPES, Shape, TINY, Value, WINDOW  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.load_check import manifest, shape_named  # noqa: E402
+from verity.commitments import hm96
+from verity.commitments.hm96 import batch as HB
+from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth
+from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
+from verity.commitments.crypto import chacha20
+from verity.protocols.accounting.certifier.verifier import transfer_rows as TR
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.verifier.load_check import FORMAT, H200, KIND, LINK, SCHEMA
+from verity.protocols.accounting.certifier.verifier.load_check import SHAPES, Shape, TINY, Value, WINDOW
+from verity.protocols.accounting.certifier.verifier.load_check import manifest, shape_named
 
 _INST = hm96.SHA512
 _KEY = _INST.default_key
@@ -300,7 +296,7 @@ def os_salts(value: int, first: int, n: int) -> bytes:
 
 
 @dataclass(frozen=True)
-class keyed_salts:  # noqa: N801
+class keyed_salts:
     """Interface 1's prover-side salts (Flock's ``hm96_salt``): row r of the value at manifest index i, ChaCha20 blocks
     3r .. 3r + 2 under `key` with nonce i. Only to hold this commit to interface 1's fixture roots."""
 
@@ -1150,7 +1146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--format p2 needs the store's --salt, and takes the whole load")
     if a.bytes:
         values = first_values(values, a.bytes)
-    import certifier_key as CK
+    from verity.protocols.accounting.certifier.device import certifier_key as CK
     from verity.protocols.accounting.certifier.verifier import record_files as RF
     key_dir = Path(a.key) if a.key else out / "certifier"
     signer = CK.signer(key_dir, a.height)

@@ -30,25 +30,26 @@ from benchmarks.scan_cost import result as R  # noqa: E402
 RUN, OTHER = "r20000101-000000-aaaa", "r20000101-000001-bbbb"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
 SOURCE = "the synthetic run (scan_traffic.serve), signed with the driver's own key"
-#: a class's T, as its public part's blocks give it (2T blocks an execution phase)
-TICKS = {cls: len(pin["proved"]) // 2 for cls, pin in json.loads(R.PUBLIC.read_text(encoding="utf-8")).items()}
+#: a class's T, as its public part's blocks give it (2T + 1 blocks an execution phase)
+TICKS = {cls: (len(pin["proved"]) - 1) // 2 for cls, pin in json.loads(R.PUBLIC.read_text(encoding="utf-8")).items()}
 
 
-def members(ticks: int, group: int) -> list[tuple[str, int]]:
-    """The honest round's members with their blocks, as a scan at a group of `group` names them."""
-    scans = [(f"ingress-{g}", ticks - (g == 0) - (g == group - 1)) for g in range(group)]
-    return [("first", 1), *scans, ("last", 1), *((f"egress-{g}", ticks) for g in range(group))]
+def members(ticks: int) -> list[tuple[str, int]]:
+    """An honest round's members with their blocks, as the scan names them in each execution phase."""
+    return [("start", 1), ("ingress-0", ticks - 1), ("last", 1), ("egress-0", ticks)]
 
 
 def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: bool = True, public: dict | None = None) -> Path:
-    """A scan's kept files under `out`. Member i's prover process takes 12 + i s: 2 s to Register, 4 s from there to the
-    repetitions, 2 s of level 0, 3 + i s of repetitions and a 1 s tail; its staging takes 0.5 s; its Lean verifier
-    takes 4 + i s of wall, of which 1 s reading inputs, 2 s of setup and 0.5 + i/10 s of checks, and 3 + i s of CPU.
-    Another round's verifier process, 9 s, is in `lean.jsonl` beside the honest round's."""
-    ticks, names = TICKS[cls], members(TICKS[cls], group)
-    timing, rnd, base = {}, {}, 0
-    for i, (name, n) in enumerate(names):
-        logs = out / "sczk" / R.ROUND / f"session-{name}"
+    """A scan's kept files under `out`, an honest round an execution phase. Session i, counted over the rounds in
+    order, takes 12 + i s of its prover process: 2 s to Register, 4 s from there to the repetitions, 2 s of level 0,
+    3 + i s of repetitions and a 1 s tail; its staging takes 0.5 s; its Lean verifier takes 4 + i s of wall, of which
+    1 s reading inputs, 2 s of setup and 0.5 + i/10 s of checks, and 3 + i s of CPU. Another round's verifier process,
+    9 s, is in `lean.jsonl` beside the honest rounds'."""
+    ticks, names = TICKS[cls], members(TICKS[cls])
+    sessions = [(f"honest-{w}", name, n) for w in range(group) for name, n in names]
+    timing, rnd = {}, {}
+    for i, (rname, name, n) in enumerate(sessions):
+        logs = out / "sczk" / rname / f"session-{name}"
         logs.mkdir(parents=True)
         live = {"e2e_s": 10 + i, "tp_s": 6 + i, "prove_total_s": 5 + i, "prove_s": [1 + i, 2], "witness_s": 0.25,
                 "wait_e2e_s": 0.5, "k_log": 20, "dense_m": 22,
@@ -60,26 +61,26 @@ def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: boo
         (logs / "lean-verify.log").write_text(
             f"$ verifier verify\n# rc 0 in {4 + i} s\n--- stdout\nVERDICT {{}}\n--- stderr\ninputs: 1000 ms\n"
             f"setup (sampled): 2000 ms\n/tmp/scan/sessions/{name}: {2500 + 100 * i} ms\n", encoding="utf-8")
-        timing[name] = {"session_s": 12 + i, "lean_verify_s": 4 + i, "timing": {"k_log": 20, "dense_m": 22}}
-        rnd[name] = {"stage_s": 0.5}
-        base += n
-    summary = {"T": ticks, "group": group, "setup": cls, "source": SOURCE,
+        timing.setdefault(rname, {})[name] = {"session_s": 12 + i, "lean_verify_s": 4 + i,
+                                              "timing": {"k_log": 20, "dense_m": 22}}
+        rnd.setdefault(rname, {})[name] = {"stage_s": 0.5}
+    summary = {"T": ticks, "group": group, "windows": list(range(group)), "setup": cls, "source": SOURCE,
                "params": {"bucket_ms": 100},
-               "members": {R.ROUND: [{"name": name, "n": n} for name, n in names]},
-               "stagers": {f"joint/{k}": {"lower_s": 3.0} for k in ("first", "ingress", "egress")},
-               "rounds": {R.ROUND: {**rnd, "audit": {"timing": dict(reversed(timing.items()))}}}}
+               "members": {r: [{"name": name, "n": n} for name, n in names] for r in rnd},
+               "stagers": {f"joint/{k}": {"lower_s": 3.0} for k in ("start", "ingress", "egress")},
+               "rounds": {r: {**rnd[r], "audit": {"timing": dict(reversed(timing[r].items()))}} for r in rnd}}
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
-    answer = {"verdict": "accept", "reason": None, "commitment": "c0", "public": public or R.pinned(cls, group)}
+    answer = {"verdict": "accept", "reason": None, "commitment": "c0", "public": public or R.pinned(cls)}
     (out / "sczk" / "answers.json").write_text(json.dumps({"windows": [{"answer": answer}] * group}), encoding="utf-8")
     (out / "host.txt").write_text(f"CPU(s): 64\nthreads {cores}\n", encoding="utf-8")
     (out / "rss.jsonl").write_text("".join(json.dumps({"command": ["prove"], "rc": 0, "wall_s": 12, "peak_gb": gb}) + "\n"
                                            for gb in (1.5, 3.5)), encoding="utf-8")
     if pin:
         rows = [{"command": [c], "archive": a, "core": 8, "rc": 0, "wall_s": w, "cpu_s": cpu, "peak_gb": 1.0}
-                for i, (name, _) in enumerate(names)
+                for i, (rname, name, _) in enumerate(sessions)
                 for c, a, w, cpu in (("archive-put", None, 1, 1),
-                                     ("verify", f"sczk/{R.ROUND}/session-{name}/archive", 4 + i, 3 + i))]
-        rows.append({**rows[-1], "archive": "sczk/chain/session-first/archive", "wall_s": 9, "cpu_s": 9})
+                                     ("verify", f"sczk/{rname}/session-{name}/archive", 4 + i, 3 + i))]
+        rows.append({**rows[-1], "archive": "sczk/chain-0/session-start/archive", "wall_s": 9, "cpu_s": 9})
         (out / "lean.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     return out
 
@@ -115,14 +116,14 @@ def test_the_two_numbers_are_the_round_over_its_execution_phases(tmp_path):
     assert doc["round"] == {"sessions_s": 54, "staging_s": 2.0, "to_register_s": 8, "register_to_reps_s": 16, "level0_s": 8,
                             "reps_s": 18, "tail_s": 4, "lean_cpu_s": 18, "lean_s": 22, "lean_inputs_s": 4.0,
                             "lean_setup_s": 8.0, "lean_check_s": 2.6}
-    assert doc["lowering_s"] == {"first": 3.0, "ingress": 3.0, "egress": 3.0}
+    assert doc["lowering_s"] == {"start": 3.0, "ingress": 3.0, "egress": 3.0}
     # the whole scan's verifier processes, the other round's among them; the number is the honest round's alone
     assert (doc["peak_gb"], doc["verifier"]) == (3.5, {"cores": 1, "processes": 5, "wall_s": 31, "cpu_s": 27})
 
 
 def test_a_session_is_read_in_the_rounds_order_and_its_stages_sum_to_its_process(tmp_path):
     doc = doc_of(tmp_path, "a")
-    assert [(s["member"], s["blocks"]) for s in doc["sessions"]] == [("first", 1), ("ingress-0", 14), ("last", 1), ("egress-0", 16)]
+    assert [(s["member"], s["blocks"]) for s in doc["sessions"]] == [("start", 1), ("ingress-0", 15), ("last", 1), ("egress-0", 16)]
     for i, s in enumerate(doc["sessions"]):
         assert sum(s["prover"][k] for k in R.STAGES) == s["prover"]["process_s"] == s["session_s"] == 12 + i
         assert s["prover"] | {"process_s": 0} == {
@@ -144,19 +145,18 @@ def test_a_log_without_its_lines_gives_no_stage_and_the_number_stands(tmp_path):
     assert "sessions" in names and "the repetitions" not in names and "Lean verifier wall: setup" not in names
 
 
-def test_a_group_is_its_execution_phases_and_every_blocks_answer(tmp_path):
+def test_a_group_is_its_execution_phases_each_a_round_and_every_blocks_answer(tmp_path):
     doc = doc_of(tmp_path, "a", group=2)
     assert [(s["member"], s["blocks"]) for s in doc["sessions"]] == [
-        ("first", 1), ("ingress-0", 15), ("ingress-1", 15), ("last", 1), ("egress-0", 16), ("egress-1", 16)]
+        (f"honest-{w}/{name}", n) for w in range(2) for name, n in members(16)]
     assert (doc["group"], doc["phase_s"], doc["guard"]["holds"]) == (2, 3.2, True)
-    assert doc["numbers"]["proving"] == 28.125          # six sessions of 12 to 17 s and 6 × 0.5 s of staging over 3.2 s
-    assert R.pinned("test", 2)["proved"] == list(range(64)) and R.pinned("test", 1)["proved"] == list(range(32))
-    one = R.document(kept(tmp_path / "b", group=2, public=R.pinned("test", 1)), 0, RUN)
-    lists = ", ".join(sorted(k for k, v in R.pinned("test", 1).items() if v == list(range(32))))
-    assert lists.endswith("proved") and lists != "proved"
-    assert one["guard"]["why"] == [f"execution phase {i}'s public part is not public.json's for test in {lists}"
+    assert doc["numbers"]["proving"] == 40.0          # eight sessions of 12 to 19 s and 8 × 0.5 s of staging over 3.2 s
+    assert R.pinned("test")["proved"] == list(range(33)) and doc["identity"]["sample"] == "every unit"
+    old = {**R.pinned("test"), "drawn": list(range(32)), "proved": list(range(32))}
+    one = R.document(kept(tmp_path / "b", group=2, public=old), 0, RUN)
+    assert one["guard"]["why"] == [f"execution phase {i}'s public part is not public.json's for test in drawn, proved"
                                    for i in (0, 1)]
-    assert one["identity"]["sample"] == "32 of 64 units"
+    assert one["identity"]["sample"] == "32 of 33 units"
 
 
 def test_an_unpinned_verifier_has_no_number_and_says_why(tmp_path):
@@ -184,7 +184,7 @@ def test_a_pinned_verifier_with_no_line_for_a_session_has_no_number(tmp_path):
     ({"rests_on_period_check": []}, "execution phase 0's public part is not public.json's for test in rests_on_period_check"),
 ])
 def test_the_guard_refuses_another_public_part(tmp_path, change, why):
-    doc = R.document(kept(tmp_path / "a", public={**R.pinned("test", 1), **change}), 0, RUN)
+    doc = R.document(kept(tmp_path / "a", public={**R.pinned("test"), **change}), 0, RUN)
     assert doc["guard"] == {"holds": False, "scan_exit": 0, "why": [why]}
 
 
@@ -237,11 +237,11 @@ def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
     assert all(set(m["inputs"][1:]) <= names for m in result["measurements"])
     text = capsys.readouterr().out
     assert "guard: holds" in text and "proving seconds a second of execution phase: 35.0 (3.5 s a tick)" in text
-    assert "the round      32     54.0      2.0" in text
+    assert "the round      33     54.0      2.0" in text
 
 
 def test_a_result_whose_guard_does_not_hold_has_no_measurement(run_dir, capsys):
-    kept(run_dir / "out", public={**R.pinned("test", 1), "bound": 2})
+    kept(run_dir / "out", public={**R.pinned("test"), "bound": 2})
     assert R.main(["write", str(run_dir), "--scan-exit", "0"]) == 1
     result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
     assert result["measurements"] == [] and result["validation"]["status"] == "failed"
@@ -262,7 +262,7 @@ def test_a_round_without_a_sessions_seconds_has_no_result(run_dir, capsys):
     assert result["validation"]["detail"] == "the guard holds, and the summary lacks a session's seconds or staging: no number"
     del summary["rounds"][R.ROUND]["audit"]["timing"]["last"]["session_s"]
     (out / "sczk" / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
-    with pytest.raises(R.Refused, match="lack what the honest round is read by \\(KeyError: 'session_s'\\)"):
+    with pytest.raises(R.Refused, match="lack what the honest rounds are read by \\(KeyError: 'session_s'\\)"):
         R.document(out, 0, RUN)
     assert "the summary lacks" in capsys.readouterr().out
 
@@ -271,7 +271,7 @@ def test_a_kept_file_that_does_not_parse_is_refused_not_passed_over(tmp_path):
     out = kept(tmp_path / "a")
     with (out / "lean.jsonl").open("a", encoding="utf-8") as f:
         f.write("{half a line\n")
-    with pytest.raises(R.Refused, match="lack what the honest round is read by \\(JSONDecodeError: "):
+    with pytest.raises(R.Refused, match="lack what the honest rounds are read by \\(JSONDecodeError: "):
         R.document(out, 0, RUN)
 
 
@@ -301,9 +301,9 @@ def test_a_comparison_at_one_identity_is_a_second_of_execution_phase_beside_anot
     text = R.compare(doc_of(tmp_path, "a"), doc_of(tmp_path, "b", OTHER, group=2))
     assert text.splitlines()[:3] == [
         f"scan_cost: {OTHER} (group 2) beside {RUN} (group 1), at one identity",
-        "  proving seconds a second of execution phase: 28.1 beside 35.0, 0.804 of the baseline",
-        "  Lean verifier CPU seconds a second of execution phase, on one core: 10.3 beside 11.2, 0.917 of the baseline"]
-    assert "    sessions: 27.2 beside 33.8" in text and "    Lean verifier wall: setup: 3.8 beside 5.0" in text
+        "  proving seconds a second of execution phase: 40.0 beside 35.0, 1.143 of the baseline",
+        "  Lean verifier CPU seconds a second of execution phase, on one core: 16.2 beside 11.2, 1.444 of the baseline"]
+    assert "    sessions: 38.8 beside 33.8" in text and "    Lean verifier wall: setup: 5.0 beside 5.0" in text
 
 
 def test_the_baseline_names_a_run_and_holds_no_number(tmp_path, monkeypatch, capsys):
@@ -358,7 +358,7 @@ def test_the_pinned_baseline_is_the_scan_as_it_stands_at_the_benchmarks_identity
     assert set(base) == {"schema", "run", "commit", "identity", "group"} and base["group"] == 1
     assert {k: base["identity"][k] for k in ("class", "sample", "cores", "verifier_cores")} == {
         "class": "w63k4", "sample": "every unit", "cores": 21, "verifier_cores": 1}
-    assert set(base["identity"]) == set(R.IDENTITY) and R.pinned(base["identity"]["class"], base["group"])
+    assert set(base["identity"]) == set(R.IDENTITY) and R.pinned(base["identity"]["class"])
     run_sh = (HERE.parent / "run.sh").read_text(encoding="utf-8")
     assert 'N=${SC_CORES:-21}' in run_sh and 'SC_CLASS="${SC_CLASS:-w63k4}"' in run_sh
 
@@ -370,7 +370,7 @@ def test_a_document_is_a_file_a_directory_or_a_run(tmp_path, capsys):
     assert R.main(["table", str(tmp_path / "a")]) == 0
     text = capsys.readouterr().out
     assert "  Lean verifier CPU seconds a second of execution phase, on one core: 11.2; its wall beside it: 13.8\n" in text
-    assert "the round, in seconds" in text and "first           1     12.0" in text
+    assert "the round, in seconds" in text and "start           1     12.0" in text
     with pytest.raises(R.Refused, match="names no run record \\(no such run\\)"):
         R.opened(OTHER, store({}))
     with pytest.raises(R.Refused, match="no scan_cost.json, no directory holding one and no run's id"):
@@ -441,11 +441,11 @@ def test_run_sh_removes_the_verifiers_copies_a_kept_log_names_and_nothing_else(t
     copy no log of its round names stays, with a line saying so, and so does every other kept file: the session's logs,
     the verifier's other files, the lowered Definitions' program, and a circuit's text outside a verifier's directory."""
     files = kept(tmp_path / "kept", cls="w63k4")
-    named = {f"sczk/{R.ROUND}/verifier/first-circuit.txt": "first", f"sczk/{R.ROUND}/verifier/ingress-0-circuit.txt": "ingress-0",
+    named = {f"sczk/{R.ROUND}/verifier/start-circuit.txt": "start", f"sczk/{R.ROUND}/verifier/ingress-0-circuit.txt": "ingress-0",
              f"sczk/{R.ROUND}/verifier/program.json": "last"}
-    unnamed = [f"sczk/{R.ROUND}/verifier/egress-0-circuit.txt", "sczk/chain/verifier/program.json"]
-    stays = [f"sczk/{R.ROUND}/verifier/first-session-l0-circuit.rep0.bin", f"sczk/{R.ROUND}/stage-first/first-circuit.txt",
-             "sczk/joint/program.json", "sczk/chain/verifier/notes.txt"]
+    unnamed = [f"sczk/{R.ROUND}/verifier/egress-0-circuit.txt", "sczk/chain-0/verifier/program.json"]
+    stays = [f"sczk/{R.ROUND}/verifier/start-session-l0-circuit.rep0.bin", f"sczk/{R.ROUND}/stage-start/start-circuit.txt",
+             "sczk/joint/program.json", "sczk/chain-0/verifier/notes.txt"]
     for rel in [*named, *unnamed, *stays]:
         (files / rel).parent.mkdir(parents=True, exist_ok=True)
         (files / rel).write_text(f"the bytes of {rel}", encoding="utf-8")
@@ -455,7 +455,7 @@ def test_run_sh_removes_the_verifiers_copies_a_kept_log_names_and_nothing_else(t
         log.write_text(log.read_text(encoding="utf-8").replace("$ verifier verify", f"$ verifier verify --reads {digest}"),
                        encoding="utf-8")
     # the chain round's program is the honest round's file under another name: a log of another round does not vouch
-    shutil.copy2(files / f"sczk/{R.ROUND}/verifier/program.json", files / "sczk/chain/verifier/program.json")
+    shutil.copy2(files / f"sczk/{R.ROUND}/verifier/program.json", files / "sczk/chain-0/verifier/program.json")
     before = {p.relative_to(files).as_posix() for p in files.rglob("*") if p.is_file()}
     for name, exit_ in (("held", 0), ("failed", 7)):
         r = run_sh(tree, tmp_path / name, KEPT=str(files), SC_CORES="1", SCAN_EXIT=str(exit_))

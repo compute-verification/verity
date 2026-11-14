@@ -512,7 +512,7 @@ def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advi
     committed = rows[114]["committed_bits"] + rows[115]["committed_bits"]
     assert rows[115]["v0_bits"] == 0 and 0 < rows[114]["v0_bits"] < committed
     lag = rows[115]["bucket"] - rows[114]["bucket"]
-    joined = chain.WC.join(list(zip((114, 115), carried)), lambda k, rid, i, bucket: bucket + lag * k)
+    joined = chain.WC.join(list(zip((114, 115), carried)), lambda k, rid, i, bucket: bucket + lag * k, chain.WA)
     assert rows[114]["v0_bits"] == chain.I1.total_bits(joined) and len(joined.requests) == 3 + 4
     assert b["v0_total"] == info["bits"] == sum(x["v0_bits"] for x in b["windows"]) \
         == sum(x["v0_bits"] for x in rows.values())
