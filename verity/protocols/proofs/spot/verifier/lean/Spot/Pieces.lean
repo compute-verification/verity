@@ -131,7 +131,8 @@ two-stage rule's second stage, on the coins after the interior registration), `c
 `check_proved`, `record`, `across`, `across_all`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
 outcome to it),
 `hello`,
-`stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
+`stream` (each of `service.Stream`'s ops), `fleet` (each of `service.Fleet`'s), and the challenger's ledger and session:
+`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and `challenger_pinned`.
 -/
 module
 
@@ -388,11 +389,20 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of Flock's sampling design of the challenger's
-sample, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
+/-- The sampling design of a `Flock.Draw.Law` at its sizes: each stratum named by its template, its size
+its ranges' total. `none` for a Bernoulli law of denominator 0. -/
+private def designOfLaw : Flock.Draw.Law → Option Core.SamplingDesign
+  | .subset k => some (.subset k)
+  | .bernoulli a b => (Core.Ratio.mk' a b).map .bernoulli
+  | .stratified _ strata => some (.stratified (strata.map fun s => { name := s.template, size := s.size, k := s.k }))
+  | .work k strata => some (.work k (strata.map fun s =>
+      { name := s.template, size := s.size, k := s.k, work := s.work, floor := s.floor }))
+
+/-- `select`'s input to `{"design"}`: the sampling design (`designOfLaw`) of the challenger's sample's law,
+as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
-  let some design := Core.SamplingDesign.ofFlock d.samplingDesign | throw "the draw's law has no sampling design"
+  let some design := designOfLaw d.law | throw "the draw's law has no sampling design"
   return Json.mkObj [("design", design.toJson)]
 
 /-- `{"sample", "ns", "ks", "source"}` to `{"draw", "read"}`: a two-stage rule's second stage (`Select.selectSecond`)
@@ -1090,9 +1100,10 @@ def table : List (String × (Json → V Json)) :=
    ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
    ("history_roots", HistoryTable.rootsPiece)]
 
-/-- The verifier's pieces: `table`'s, by name. -/
+/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
+    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet",
+    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
 
 end Spot.Pieces

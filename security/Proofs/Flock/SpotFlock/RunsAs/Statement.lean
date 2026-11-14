@@ -27,7 +27,7 @@ What the run does not decide, each a named premise of `SpotRunAcceptsPlay`:
 * `SessionsAccept`: the session statements' message states the statements round 2 checked (`StmtsAre`), each with
   the clauses on its own bytes (`RoundsHeld`, `ScopeHeld`, `PinHeld`), and each template's session is a run Flock's
   masked verifier accepts. `Run.run` reads the sessions' verdicts as JSON (`Service.checkVerdicts`) and holds no
-  statement or transcript of a session, so this is what the verdict of record (`flock-verify`'s) says;
+  statement or transcript of a session, so this is what the verdict of record (`verity-verify-proof`'s) says;
 * `TwoHolds`: the held copies are in the two-stage scope the model decides (`two`: `scopeOk`, `filesOk`,
   `templateOk`), which `Run.run` does not check;
 * `NamesDistinct`, `RecordsHeld` and `RegistersNone`: the templates' names are distinct, the run's records name their

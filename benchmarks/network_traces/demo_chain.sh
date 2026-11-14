@@ -6,7 +6,7 @@
 # it with the endpoint's records and CR_PATH=certifier-only. Varied traffic is the advice profile, whose egress counts
 # no N2 unit holds, so chain_record.sh runs no N2 and its report isn't accepted. Off-host, from a clone, in one of the
 # network slots, as a job of at most 240 minutes on a CPU node:
-#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
+#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 bash benchmarks/network_traces/demo_chain.sh
 # With DC_UPSTREAM the endpoint is that one (the H200's) and none is started here; CR_ENDPOINT then names its records.
 # The endpoint's records hold request values (requests.jsonl's prompt and streamed ids, advice_trace.jsonl's arrivals and

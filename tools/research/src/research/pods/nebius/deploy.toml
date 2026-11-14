@@ -398,7 +398,7 @@ owner = "infra"
 # rename replaces the copy whole. No entry places a file under check-slot/ but this one.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
-src = "tools/verity/check/slot.py"
+src = "tools/check/slot.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
@@ -655,7 +655,7 @@ owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
-src = "tools/verity/check/common.py"
+src = "tools/check/common.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]

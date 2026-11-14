@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the sample and proved-block checks, the profile."""
+"""One-stage audit: the demo partition query, the docket, the sample and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     partition as P,
     registered as G,
     docket as R,
+    caller as C,
 )
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -54,6 +55,12 @@ def _check(rec, prog, q, **kw):
     n = P.units(prog, q)
     args = {"law": LAW, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
     return R.check(rec, prog, q, **args)
+
+
+def _check_both(rec, prog, q, **kw):
+    n = P.units(prog, q)
+    args = {"law": LAW, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
+    return C.both(rec, prog, q, **args)
 
 
 def test_the_query_makes_each_instance_one_unit():
@@ -137,7 +144,7 @@ def test_several_templates_one_population():
 
 EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
-#: the program and registration record digests of `_registration(6, version=0)`: what an old record holds
+#: the program and docket digests of `_registration(6, version=0)`: what an old record holds
 V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
              "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
 V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
@@ -203,7 +210,7 @@ def test_v1_names_a_template_by_its_descriptor_id_and_decodes_from_its_descripto
 
 
 def test_an_old_v0_record_still_decodes_and_verifies():
-    """A registration made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
+    """A docket made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
     copy, built or decoded from its descriptor; v1's program of the same population is another program, which it refuses."""
     old, q, rec = _registration(6, version=0)
     assert (rec["program"], R.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
@@ -293,17 +300,17 @@ def test_the_window_runs_its_days_declared_circuit():
     prog, q, rec = _registration(6)
     bodies = [G.Declaration(0, rec["program"], (PAIR.id,)), G.Declaration(1, "0" * 128, (PAIR.id,))]
     declared = G.check(G.Auditor(), "remote", G.chain("remote", bodies)).view().to_json()["declarations"]
-    assert _check(rec, prog, q).ok and _check(rec, prog, q, day=0, declarations=declared).ok
-    assert _check(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
-    assert _check(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
+    assert _check_both(rec, prog, q).ok and _check_both(rec, prog, q, day=0, declarations=declared).ok
+    assert _check_both(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
+    assert _check_both(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
     with pytest.raises(G.Refused, match="entry 2: duplicate-declaration"):
         G.check(G.Auditor(), "remote", G.chain("remote", [*bodies, G.Declaration(0, "0" * 128)]))
     twice = [*declared, {"blocks": [], "day": 0, "program": "0" * 128}]
-    assert _check(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
+    assert _check_both(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
     for day, given in ((0, None), (None, declared), (-1, declared), (True, declared),
                        (0, [{"day": 0, "program": rec["program"]}])):
         with pytest.raises(ValueError, match="declar"):
-            _check(rec, prog, q, day=day, declarations=given)
+            _check_both(rec, prog, q, day=day, declarations=given)
 
 
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
@@ -469,7 +476,7 @@ def test_audit_record_needs_every_check_and_verdict():
 
 
 def _accepted(verdicts: dict) -> dict:
-    """An accepted audit record of the six-block registration over the sample [1, 4], on `verdicts`."""
+    """An accepted audit record of the six-block docket over the sample [1, 4], on `verdicts`."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, verdicts,
@@ -479,7 +486,7 @@ def _accepted(verdicts: dict) -> dict:
 
 
 def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
-    """`audit.answer` is one-stage's accept of the record's registration, its public outputs the sample, the proved
+    """`audit.answer` is one-stage's accept of the record's docket, its public outputs the sample, the proved
     proof blocks, the bound and the record's own ``complete``: true when every verdict ran, false beside one not of
     record that did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
