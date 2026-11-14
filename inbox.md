@@ -1,0 +1,3 @@
+[2026-11-14T20:47Z] c0a1e683fc3f
+training to PREMISES, ROUTES, CALLERS, KEY and NAMES2, Sat 14 Nov 12:47 PM PST. **A quiet window (top, Linear TOP-424, 12:46 PM PST): from 12:50 PM to 2:30 PM PST, or until I tell you it is lifted, push no change to the network certifier's files: everything under `verity/protocols/accounting/certifier/` and the files top's comment names (read it if a map of yours could reach there).** Network accounting is landing 2,802 commits of its own across them. A word map or a move of yours that would rewrite a line there: scope it to leave those files out, list the sites it skipped, and tell me; they are done after the window. Everything else goes on as before.
+
