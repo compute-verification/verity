@@ -43,7 +43,10 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.pouw.edited_gemm" = "verity.protocols.accounting.pouw.prover.kernels.edited_gemm"
-"benchmarks.pouw.masked_gemm" = "verity.protocols.accounting.pouw.prover.kernels.masked_gemm"
-"benchmarks.pouw.floored_gemm" = "verity.protocols.accounting.pouw.prover.kernels.floored_gemm"
-"benchmarks.pouw.gpu_kit" = "verity.protocols.accounting.pouw.prover.kernels.gpu_kit"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.egemm_depthr_check" = "benchmarks.pouw.theory.egemm_depthr_check"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.eps_profile" = "benchmarks.pouw.edited_gemm_profile.eps_profile"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.flash_ref" = "benchmarks.pouw.edited_gemm_profile.flash_ref"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.tests.test_egemm_depthr" = "benchmarks.pouw.tests.test_theory_egemm_depthr"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.tests.test_eps_profile" = "benchmarks.pouw.tests.test_edited_gemm_eps_profile"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.tests.test_vprod_profile" = "benchmarks.pouw.tests.test_edited_gemm_vprod_profile"
+"verity.protocols.accounting.pouw.prover.kernels.edited_gemm.vprod_profile" = "benchmarks.pouw.edited_gemm_profile.vprod_profile"
