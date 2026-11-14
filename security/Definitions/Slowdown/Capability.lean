@@ -16,7 +16,7 @@ information, spending its bits, or **reconstruct** it, spending its gates. Two m
 
 The premises (`Definitions.Slowdown.Assumptions.Capability`) are stated over items; the bounds
 (`Definitions.Slowdown.Guarantees.Capability`) consume a budget over items and a structure over consumers. The survey of
-both is `Security/Definitions/Slowdown/Capability/README.md`.
+both is `security/Definitions/Slowdown/Capability/README.md`.
 -/
 
 @[expose] public section

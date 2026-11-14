@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Assumptions.ZkP
 /-!
 # The `--zk` session's premises that are instances of its named ones
 
-`shape.premises` in `Security/lean-audit.json` names this module, and none of it sits in an `Assumptions` module, so the
+`shape.premises` in `security/lean-audit.json` names this module, and none of it sits in an `Assumptions` module, so the
 audit reads each abbrev here as the premise it unfolds to.
 
 * `RecordCustodyZKJ` (`live-verifier`): `Assumptions.Zk.RecordCustodyZKJPLaw` at no public inputs, every sample under the

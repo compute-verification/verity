@@ -12,7 +12,7 @@ public import Definitions.Poub.RateAuditPooled
 `log₂ C(q, k)` bits, which `λ` must cover. Naming the `k` words themselves costs `log₂ C(N, k)`: a decoder that replays
 the chip recomputes its queries and the receipts it committed, and finds each named word's contents at the query whose
 oracle value is that word's receipt. Two of the run's queries with one oracle value could mislead it, at
-`C(q, 2)/2^h`. Proofs are in `Security/Proofs/Poub/RateAudit/Named.lean`. No named assumption, as for
+`C(q, 2)/2^h`. Proofs are in `security/Proofs/Poub/RateAudit/Named.lean`. No named assumption, as for
 `RateConservationRO`.
 
 * `RateConservationNamedRO`: at a count `k`, `C(N, k)/2^λ` in place of `C(q, k)/2^λ`.

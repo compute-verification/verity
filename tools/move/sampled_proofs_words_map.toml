@@ -105,7 +105,7 @@
 # lint, whose docstrings and examples name the older name as the older name, files whose bytes a digest pins (`rename.py`
 # repins a `TRUSTED.sha256` line itself, and the vLLM registry's three files whose function sources enter a manifest's
 # digest), lock files, move_check's own tests and the Lean tools' fixtures.
-exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+exclude = ["tests/lint/test_repo_retired_terms.py", "tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "tests/test_retired_terms.py", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "**/uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py", "benchmarks/census/schemas/**",
            "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",

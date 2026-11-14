@@ -40,6 +40,6 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
 # digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
-exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+exclude = ["tests/lint/test_repo_retired_terms.py", "tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "**/*.lock", "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
            "adapters/vllm/verity_vllm/definitions/registry/prims.py", "adapters/vllm/verity_vllm/definitions/registry/b1.py"]

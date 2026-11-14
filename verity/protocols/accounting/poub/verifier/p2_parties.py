@@ -971,13 +971,13 @@ def main(argv: Sequence[str] | None = None, *, device_key: Callable[[Path], mc.L
         ap.error("--pous-record and --pous-session go together")
     if (a.challenger is None) != (a.session is None):
         ap.error("--challenger and --session go together")
-    if a.challenger is not None and device_key is None:
-        ap.error("--challenger needs the memory challenger's key loader handed to main (device_key): run the party as "
-                 "the auditor's gate does (live_verifier/host.py's bw_party)")
     if a.session is not None and not re.fullmatch(r"[0-9a-f]{64}", a.session):
         ap.error("--session is a session id, 64 lowercase hex digits")
     if a.session is not None and a.listen is not None and a.sessions != 1:
         ap.error("--session names one session: --sessions 1")
+    if a.challenger is not None and device_key is None:
+        ap.error("--challenger needs the memory challenger's key loader handed to main (device_key): run the party as "
+                 "the auditor's gate does (live_verifier/host.py's bw_party)")
     data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
     cases = None
     if a.device is not None:
