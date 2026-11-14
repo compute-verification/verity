@@ -56,3 +56,49 @@ I pushed to #9782's branch alone. #9837's head and #9902's head did not move.
 
 TIMER: none
 
+[2026-11-14T05:12Z] 7771691bea4f
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 9:13 PM PST. Your 9:01 PM PST line is read.
+
+**1. #9921's records run failed, on one thing I had not written. It is mended and launched again. The head is now `fb15fcc6b5c8`.**
+
+- **What it said** [ran: `r20261114-041936-d5fb`, at `ac595a6f306e`, exit 1]: `shape: Accounting.SecurityProofs.EgressRegistered has no entry under shape.properties naming its function and its outcome`. Nothing else failed in `security`, and `security/Proofs` and `security/Properties` passed. The run keeps no record of a build that fails so.
+- **The record it computed is as the body says** [ran; read in the run's report]: one premise, `Accounting.Placed.Links`, under `open`; none under `assumptions` or `domain`. No `witnesses.missing`.
+- **The mend is a hand entry, no Lean:** `shape.properties` gets `EgressRegistered` with the functions `Accounting.Placed.egress` and `Accounting.linkCapacity` and the outcome `none`, as `B4` has `Accounting.Actual.Run.acts` and `none`. One commit, `fb15fcc6b5c8`. The statement is unchanged.
+- **Why it fits** [read: `shape`, `part_refusals` and `Facts.lean`'s `shapeInfo` at `ac595a6f306e`; not run]: the statement is `∀ S i, … ∧ …`, which the rule reads as one part with two inputs and no hypothesis, and its conclusion reaches both functions.
+- **The records run again, once:** `r20261114-050921-05cc`, launched 9:09 PM PST at `fb15fcc6b5c8`. Its record's commit, the two suites and the body follow it; the head moves once more for the record.
+- **For the body, as a rule for the next one:** a new listed guarantee needs two hand entries, under `guarantees` and under `shape.properties`, and its record committed before its pre-mark suites. I write that with the record.
+
+**2. P1: #9736's `361671651710` is merged into the scratch branch.** Head `10b3822bd261`, pushed 9:10 PM PST.
+
+- **A merge, not a new cut,** and it merged with no conflict, the two locks too: P1 holds no record of its own yet.
+- **Before the merge, the suites passed at `f9b5bcd0289a`** [ran: `r20261114-041412-2a1e`]: 118, and 1,461 with 1 skipped.
+- **On the merged tree, launched once each at 9:10 PM PST:** the three tries in a row (`Period.lean`, the period's proofs, the scan's proofs) and the two certifier suites, `r20261114-051017-0776`. Results in my next line.
+- `ac8b3b51e490` and training's rename are noted. P1 takes `main` only with #9736.
+
+**3. NET-440 is ported from the scratch file into its own files, and each new file passes its try** [ran]. Scratch only, no pull request: `cursor/network-accounting-leak-parts-scratch-b51f`, head `51a96c6969f3`, on #9921's `fb15fcc6b5c8`. Its files of that kind are named `RegisteredSite`, as you say.
+
+| File tried, with `--siblings` | Tree | Run | Result |
+|---|---|---|---|
+| `security/Proofs/Accounting/Actual/RegisteredSite.lean` | `cc9beb106f01` | `r20261114-044823-cf2c` | `lean exit 0`; 8 theorems clean, `LeakPartsRegistered` among them |
+| `security/Proofs/Accounting/Actual/RegisteredWitness.lean` | `cc9beb106f01` | `r20261114-044823-35e8` | failed: a filter's decidability not found; mine, mended |
+| `security/Proofs/Accounting/Actual/Parts.lean` | `443c8f9c6329` | `r20261114-045456-c81f` | `lean exit 0`; 8 theorems clean, `LeakParts` among them |
+| `security/Proofs/Accounting/Actual/RegisteredWitness.lean` | `443c8f9c6329` | `r20261114-045456-d31c` | `lean exit 0`; 3 theorems clean, `LeakPartsRegistered_honest` among them |
+
+- **The three changes from what ran in the old scratch are now run.** The link kinds and the links' ends are concluded from `Registration.Valid`; `S.sharedOf pinned i ⊆ units` stands for the old hypothesis; the last term is the model's own `β°` at the Site's table.
+- **The honest lemma is as lean asked** [ran, but for the move]: no binder and no hypothesis; it concludes `Registration.Valid` and `RecordsWithin` at `Site.ofLog` of the example's log with the device set `S.placesIn (S.certifiersOf "node0" ∪ ∅)`; the third conjunct says that set is not empty.
+- **One change since those tries, not yet tried:** the binder order below. Its try is launched at `51a96c6969f3`.
+
+**4. Five things differ from NET-440's notes. The first two are for lean; say if any is to change.**
+
+- **`Registration.Valid` is written after the data binders, not first** [argued from the shape rule; not run]. The rule reads a property with the outcome `none` as inputs, then hypotheses that are premises of the modules under `shape.premises`. `Registration.Valid`'s module is not one, so written first it is refused. Written after the last input it is read with the rest, as `B4`'s premises are. The statement says the same. The other way is lean's list: add `Definitions.Core.Site` to `shape.premises`. The outcome `accept` at `Registration.Valid` would put the guarantee under the witnesses rule with both halves, which is not (b).
+- **The honest instance's circuit, strategy and cells are in a definitions file, not the proofs tree.** `trees.reads` covers every definition a listed theorem reads [read: `tree_failures`], and the statement reads those three as it reads the log. They are in `security/Definitions/Accounting/RecordsToy.lean` (`Accounting.Records.Toy`), over any leaf type, reading no example, as `CoverageToy.lean` is for the slowdown guarantee.
+- **The move takes `auditor` as well as `onsite` and what it is built from.** The first conjunct is `Registration.Valid digests auditor .onsite [onsite]`. By my read the names that move are `stated`, `sheetA`, `sheetB`, `digests`, `auditor`, `device`, `memory`, `node` and `onsite`. Until the move the honest lemma is not in the lock.
+- **`certifiersOf`, `challengersOf` and `Within` are written over the Site's own `far`,** not with a link's two ends spelled out. One lemma joins the two (`Site.mem_far_of_link`). On a valid log they say the same, since no link joins a place to itself [argued].
+- **In lean's file `security/Proofs/Core/Site.lean`: `Registration.Valid.ends_known`,** over `Site.Known`, where the notes say `Valid.ends_places`, so the file gains no import. With it there: `Site.LinkKinds`, its decidability, `Site.host_of_challenger`, `Registration.Valid.linkKinds`; 68 lines in all.
+
+**5. NET-440's lock on the scratch branch** [by hand; not run]: `guarantees` and `shape.properties` list `LeakParts` and `LeakPartsRegistered` (`Accounting.Actual.Run.acts`, `none`); `domain` lists `Accounting.RecordsWithin` and `Verity.Registration.Valid` with the draft's two `why`s. Nothing under `open`, `assumptions`, `witnesses`, `shape.frozen` or `trees.except`. `LeakParts` takes `Accounting.Covered`, which is `open` on `main` already. Its records run goes once, after #9921's record is committed and merged under it. If it says `witnesses.missing` or anything else than lean's reading, the line comes to you.
+
+**Next, in order:** #9921's record, the two suites, the body, the head to you; P1's tries and suites on the merged tree; NET-440's try, then its records run.
+
+TIMER: none
+
