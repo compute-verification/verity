@@ -329,8 +329,12 @@ def test_a_run_s_protocols_take_its_replay_and_a_premise_its_rows_leave_unshown_
         under.append((comp, len(steps.replays)))
         return run() | {"pouw_ncp_v2": {"result": True}}
 
+    def premises(read: Any) -> list[str]:
+        rows.extend(read)
+        return ["a premise"]
+
     monkeypatch.setattr(PWC, "replayed", replayed)
-    monkeypatch.setattr(DF, "premises", lambda read: rows.extend(read) or ["a premise"])
+    monkeypatch.setattr(DF, "premises", premises)
     sr, _lk = C2.evaluate(s, {})
     assert under == [(s.protocols, 0)] and [c[5] for c in steps.calls if c[0] == "replay"] == [False, True]
     assert (sr["pouw_ncp_v2"], sr["premises"]) == ({"result": True}, ["a premise"])

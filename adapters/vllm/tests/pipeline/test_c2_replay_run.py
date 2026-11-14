@@ -253,7 +253,12 @@ def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(m
         asked.append(name)
         if isinstance(released, OSError):
             raise released
-        return SimpleNamespace(malloc_trim=lambda pad: asked.append(pad) or released)
+
+        def malloc_trim(pad: int) -> int:
+            asked.append(pad)
+            return released
+
+        return SimpleNamespace(malloc_trim=malloc_trim)
 
     monkeypatch.setattr(ctypes, "CDLL", cdll)
     sr, held = Record(), {"programs": object()}

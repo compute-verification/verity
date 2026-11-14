@@ -72,7 +72,12 @@ def test_under_a_programs_root_each_request_s_program_is_found_by_its_label_its_
     """Each request's `max_tokens` is its own, else the workload's, else 1."""
     asked: list[tuple[Record, str]] = []
     built: Record = {"r0": BUILT, "r1": BUILT | {"dir": "/programs/r1"}}
-    monkeypatch.setattr(MF, "programs_for", lambda fx, root: asked.append((fx, root)) or built)
+
+    def programs_for(fx: Record, root: str) -> Record:
+        asked.append((fx, root))
+        return built
+
+    monkeypatch.setattr(MF, "programs_for", programs_for)
     monkeypatch.setattr(MF, "load_program", lambda d: pytest.fail("a root's Programs are not loaded one by one"))
     reqs = [REQS[0] | {"cached": 1}, REQS[1]]
     args = SimpleNamespace(program_digest="d1", programs_root="/programs", program_dir=None)
