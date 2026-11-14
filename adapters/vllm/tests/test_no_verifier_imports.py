@@ -68,7 +68,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.registered",
         ),
         # The compiler's served rows (`verity_vllm/compiler/served_rows.py`): the Lean verifier's `--registered` port form
-        # (`produced.port`, `registered.READS_FROM`), until the workload side offers them (TOP-424).
+        # (`produced.port`, `registered.READS_FROM`), until SPOT's workload side offers the registered-port format.
         "verity_vllm/compiler/served_rows.py": (
             "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),
@@ -110,8 +110,8 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/program/predict/steps.py": ("accounting.certifier.verifier.advice",),
         # The compiler's (`verity_vllm/compiler/`): the replay step's and chain's circuits and row forms, the charge's
         # book and code (`charge_chain`, `arith_encode`), the IO tie's routing, the advice's form (its reader, constants
-        # and error) and head_check's circuit helpers (`_Consts`, `_coll`, `ands`), until the workload side offers them
-        # (TOP-424).
+        # and error) and head_check's circuit helpers (`_Consts`, `_coll`, `ands`), until the certifier's workload side
+        # offers them.
         "verity_vllm/compiler/advice_check.py": (
             "accounting.certifier.verifier.advice.FINISHES", "accounting.certifier.verifier.advice.MalformedAdvice",
             "accounting.certifier.verifier.advice.VERSION", "accounting.certifier.verifier.advice.WIDTH_BITS",
