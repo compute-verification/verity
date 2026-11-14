@@ -10,9 +10,9 @@ must be `inference-only-check --policy`'s.
       per Call (`run.instance`)
   glm --out DIR --phases EXE --scratch DIR --workload PATH [--word-only]
       GLM-5.3's rank 0 workload Program of the B1 Build (root: its inputs and one Call, the request) word-level as built,
-      then on bits: `verity.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
-      (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one inference block, the
-      request, at `inference_only_glm.GAMMA`, `inference_only_glm.ALPHA`
+      then on bits: `verity_vllm.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
+      (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one IU, the
+      request, at `nci_glm.GAMMA`, `nci_glm.ALPHA`
 
 DIR/CASE.jsonl has a row per check: the description's sizes, `inference-only-check --policy`'s seconds, peak RSS and verdict, and
 `inference-only-phases`'s PHASE lines (DIR/phases/<name>.log keeps them as they come). `--big N` is the body size from which
@@ -177,7 +177,7 @@ def peak_gb() -> float:
 def glm(args) -> int:
     from verity.circuits import codec
     from verity.circuits.program import Program
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
 
     import lift
 

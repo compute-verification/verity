@@ -14,12 +14,13 @@ The Commit: it commits a served run's values while it serves. The package's docs
   `store_dump`). The integration's other packages import from those and from `challenge`, `capture_map`, `binding`,
   `partition`, `executed_prefix`, `served_record`, `registered_rows`, `run_roots`, `native_ranges`, `json_chunks` and
   five more of the committer's modules (`device_pool`, `flush_points`, `plan_cache`, `run_values`, `topp_splits`).
-  Not yet behind an `__all__`: `protocols.pouw.h1` reads five private helpers of `row_tables_device` (`_build`, `_hm`,
-  `_prefixes`, `_width`, `_words`), and one module of another package reads `store_dump._as_bytes`.
+  `row_tables_device` and `history_tables_device` take the row-table kernels' build from PoUW's serving package
+  (`RowTableLibrary`, `row_table_host_lib`, `hm_tables`, …) and re-export none of it. Not yet behind an `__all__`: one
+  module of another package reads `store_dump._as_bytes`.
 - **Loaded by:** the integration's `pipeline`, `check`, `acquire`, `protocols`, `engine` and
   `program.predict` packages and its `glue`, and `benchmarks/served_commit` and the other benchmarks that commit or open
   a run's values.
 - **Loads:** `verity.commitments`, `verity.circuits`, `verity.commitments.cuda`, `verity.commitments.periods`,
-  `verity.commitments.randomness`, `verity.definitions` and `verity.errors`; `verity.protocols.proofs.spot.verifier`, in
+  `verity.commitments.randomness`, `verity_vllm.definitions` and `verity.errors`; `verity.protocols.proofs.spot.verifier`, in
   `registered_rows`; torch; and the integration's `acquire`, `query`, `engine`, `pipeline`, `records`, `config` and
   `settings`.

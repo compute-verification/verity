@@ -27,7 +27,7 @@ proved.
 * The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
   the whole registered circuit, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
-* chi, the cheating share: with sampled proofs at a budget, the incorrect proof blocks the sampling design accepts number
+* chi, the cheating share: with SPOT at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
   injects a chosen output fails its proof whenever it is sampled, so luck doesn't multiply those: ln(1/delta) / q of them
@@ -69,10 +69,9 @@ BLOCK_NAME_BITS = 25
 #: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
 REFERENCE_THREADED = (10.0, 37248.0)
 
-#: the ACCEL model's card table, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its
-#: firmware's maximum (``Verity.Accel.Sm120.card``, 188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit,
-#: the clock's ceiling 2430 MHz), pinned from security/Definitions/Core/Accel/Sm120.lean;
-#: tests/test_tiers.py holds the pin to the file
+#: the card file, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its firmware's maximum
+#: (188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit, the tensor clock's ceiling 2430 MHz), pinned from
+#: hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
 #: the clock PoUW credits on sm_120, the card file's clock.sm (hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
 #: tests/test_tiers.py holds the literal to it

@@ -6,7 +6,7 @@ public import Definitions.Accounting.Assumptions.RateAudit
 public import Definitions.Accounting.Assumptions.RateAuditDeployed
 
 /-!
-# The remote bandwidth audit as deployed: conservation over a session (trusted)
+# PoUB as deployed: conservation over a session (trusted)
 
 One guarantee from "the verifier accepts a session of `n` chained windows" to "the session conserves its words, at
 `γ` no more than the sum of its named terms", over the deployed game (`Definitions/Accounting/RateAuditDeployed.lean`):
@@ -17,7 +17,7 @@ pooled sample a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Depl
 * `RemoteRunConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB
   blocks, SHA-512 receipts, 2,773 openings a window, `d̄ = 0.15%`, `d_w = 1%`, at most `2^55` compressions), where
   the sample's two terms are each at most `2^-40` from seven windows on.
-* `RemoteRunRoutes`: the session as a run of the remote audit (`Accounting.Remote.Run.ofDeployed`) meets its routes
+* `RemoteRunRoutes`: the session as a run of PoUB (`Accounting.Remote.Run.ofDeployed`) meets its routes
   `Sampled d̄` and `Paid`, at the errors above.
 * `RemoteMonitoringPeriodConservation`: `Accounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
   run's tier reads are at least `(1 − (d̄ + μ))·C`, the same `γ̄` as `RemoteRunConservation`'s pooled reading.
@@ -46,7 +46,7 @@ open Accounting Accounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
-/-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the monitoring period and
+/-- **PoUB as deployed: an accepted session conserves its words, over the monitoring period and
 in every window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P`
 chained passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side
 sources that ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one
@@ -101,7 +101,7 @@ def RemoteRunConservation : Prop :=
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
 
-/-- **The remote bandwidth audit at its deployed parameters.** `RemoteRunConservation` at the stated codec, masked
+/-- **PoUB at its deployed parameters.** `RemoteRunConservation` at the stated codec, masked
 Sloth over `p = 2^1024 − 105` at `k = 3` rounds (`WorkHardness 32768 3 c_root cost`, a block's price `3·c_root`), on
 4 KiB blocks (`b = 32,768` bits), SHA-512 receipts (`h = 512`), 2,773 openings a window, `d̄ = 0.15%` over the
 monitoring period and `d_w = 1%` in every window, and at most `C = 2^55` SHA-512 compressions a pass and `2^55`
@@ -136,7 +136,7 @@ def RemoteRunConservationDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n * P * 2 ^ 55 : ℝ≥0∞) *
         ((N : ℝ≥0∞) / 2 ^ 512 + (((2 ^ 55 : ℕ).choose 2 : ℕ) : ℝ≥0∞) / 2 ^ 512 + (2 ^ N : ℝ≥0∞) / 2 ^ lam)
 
-/-- **The deployed session meets the remote audit's routes.** Read as a run of the remote audit on a node `Nd` whose
+/-- **The deployed session meets PoUB's routes.** Read as a run of PoUB on a node `Nd` whose
 declared capacity over `a`'s interval is the session's `n·P·N·b` bits, with `a`'s passes the session's `n·P`, its word
 `b` and its slack `λ` (`Accounting.Remote.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
 deployed session under `RemoteRunConservation`'s hypotheses meets
@@ -164,7 +164,7 @@ def RemoteRunRoutes : Prop :=
       (Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
         ((n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam))
 
-/-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`.** Under
+/-- **The deployed session conserves its words as a run of PoUB, at the same `γ`.** Under
 `RemoteRunRoutes`' hypotheses, the probability that the run of the session (`Accounting.Remote.Run.ofDeployed`)
 accepts while its correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, is at
 most the two routes' errors summed:
@@ -194,8 +194,8 @@ def RemoteMonitoringPeriodConservation : Prop :=
           (1 - (dbar + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * Nd.declared a.T ≤
             ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
-/-- **Each window of the deployed session conserves its words as a run of the remote audit, at the same `γ_w`.**
-Window `w` read as a run of the remote audit (`Accounting.Remote.Run.ofDeployedWindow`) on a node `Nd` whose declared
+/-- **Each window of the deployed session conserves its words as a run of PoUB, at the same `γ_w`.**
+Window `w` read as a run of PoUB (`Accounting.Remote.Run.ofDeployedWindow`) on a node `Nd` whose declared
 capacity over `a`'s interval is the window's `P·N·b` bits, with `a`'s passes the window's `P`: under
 `RemoteRunConservation`'s hypotheses and `d_w ≤ 1`, the run meets `Sampled d_w` except with probability
 `(1 − d_w/n)^(d·n)` and `Paid` except with `P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`, and
@@ -226,7 +226,7 @@ def RemoteWindowRunConservation : Prop :=
           (1 - (dw + Deployed.gammaPass N b ρ S L lam rounds cRoot F)) * Nd.declared a.T ≤
             ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
-/-- **The remote bandwidth audit as deployed, with side sources that may relay receipts.** `RemoteRunConservation`
+/-- **PoUB as deployed, with side sources that may relay receipts.** `RemoteRunConservation`
 without its hypothesis that the side sources ignore the oracle: the rest of the prover may answer the chip's side reads
 with anything, receipts it computed elsewhere included. For every `m`, the probability that every opening of every
 window passes while the session's tier reads fall short of `(1 − γ̄)` of its bits or some window's fall short of
@@ -266,7 +266,7 @@ def RemoteRunConservationRelay : Prop :=
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
 
-/-- **The deployed session with relaying side sources conserves its words as a run of the remote audit.**
+/-- **The deployed session with relaying side sources conserves its words as a run of PoUB.**
 `RemoteMonitoringPeriodConservation` without the hypothesis that the side sources ignore the oracle, for every `m`, with the
 run's slack `a.λ = λ + m·b` a pass: the probability that the run (`Accounting.Remote.Run.ofDeployed`) accepts while its
 correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less than `(1 − γ̄)·C`, with
@@ -295,8 +295,8 @@ def RemoteMonitoringPeriodConservationRelay : Prop :=
           (1 - (dbar + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * Nd.declared a.T ≤
             ((Remote.Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
-/-- **Each window of the deployed session with relaying side sources conserves its words as a run of the remote
-audit.** `RemoteWindowRunConservation` without the hypothesis that the side sources ignore the oracle, for every `m`,
+/-- **Each window of the deployed session with relaying side sources conserves its words as a run of
+PoUB.** `RemoteWindowRunConservation` without the hypothesis that the side sources ignore the oracle, for every `m`,
 with the run's slack `a.λ = λ + m·b` a pass: the probability that every window's sample passes while window `w`'s correct
 receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`, with
 `γ_w = d_w + μ_chip + μ_link + μ_rebuild + (λ + m·b)/(N·b)`, is at most
@@ -321,7 +321,7 @@ def RemoteWindowRunConservationRelay : Prop :=
           (1 - (dw + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * Nd.declared a.T ≤
             ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
-/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
+/-- **PoUB with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
 windows samples one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass (the
 grinding its Fiat–Shamir pass seed allows, `fiat-shamir`), then samples `d` of the window's `P·N` receipts. Every pass is
 a `RateSketch.Prover`: it obtains 32-byte sectors only whole and verbatim. If each pass rebuilds at most `X` bits, and

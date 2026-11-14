@@ -25,7 +25,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
-    (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`).
+    (`flock/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
     for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/lean/`),
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
@@ -36,16 +36,16 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
-    sampling of units). `verity/definitions/`: the circuits
-    written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
-    `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
-    requirement in Lean (`evaluate`, `requirement`). Target, not yet: `verity/circuits/` also holds the circuits a
-    protocol names, and the served kernels' circuits go with the adapter that serves them.
+    sampling of units). The circuits written in it are under `verity/circuits/` too: `ops` (the primitive circuits'
+    Definitions), `silicon` (the GPUs' exact semantics), `kernels`, `private_circuits` (the universal circuit), and the
+    evaluator and a circuit's requirement in Lean (`evaluate`, `requirement`). The served kernels' circuits are the vLLM
+    adapter's (`adapters/vllm/verity_vllm/definitions/`). Target, not yet: `verity/circuits/` also holds the circuits a
+    protocol names.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `lean` (the Lean card tables' writer); its types, and the readers of
-    the data sheets, which are in the top-level `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
+  - `verity/hardware/`: the registered hardware, with no module of its own: its types, and the readers of the data
+    sheets, which are in the top-level `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
@@ -58,7 +58,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. Target, not yet: a torch adapter beside it, which the vLLM adapter sits on.
-- `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
+- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+  code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).

@@ -9,7 +9,6 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
-public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape

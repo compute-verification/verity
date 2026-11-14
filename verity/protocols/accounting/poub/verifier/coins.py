@@ -111,6 +111,20 @@ def window(registration: bytes, session: int) -> dict:
 RELEASED_FORM = "a released coin is {after, coin, epoch, index, label}: integers, a string and lowercase hex"
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
+#: the goal whose Lean answers the checks the Python still makes alone; an interface to one of them raises
+#: `NotImplementedError` with it until its body is written
+UNWRITTEN = "memory-accounting/lean-decides-memory-verdicts"
+
+
+class Undecided(Exception):
+    """A check whose Lean answer isn't written: the Python didn't refuse, and can't accept alone. Not a `CoinError` (a
+    `ValueError`), so no reader that refuses on one takes it for a refusal: its reader answers undecided."""
+
+
+def undecided(check: str) -> str:
+    """The reason a check is undecided: its Lean answer (`check`) isn't written yet."""
+    return f"undecided: the Lean's answer for the {check} isn't written yet ({UNWRITTEN})"
+
 
 @dataclass(frozen=True, slots=True)
 class Released:
@@ -381,7 +395,7 @@ def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
     `sampled-proofs-verifier`: `challenger_head`, `_ledger`, `_pinned`, `_session` or `_credited`), the one acted on.
     `python` is the Python mirror's answer to the same request, computed first so that its refusal raises there: it may
     refuse, never accept alone.  Raises `CoinError` where the Lean refuses or can't run, or answers otherwise."""
-    # imported here, so that only a read that asks the Lean loads sampled proofs' verifier
+    # imported here, so that only a read that asks the Lean loads SPOT's verifier
     from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier
     got = spot_verifier.lean(piece, json.loads(json.dumps(request)))
     if "refused" in got:
@@ -392,5 +406,6 @@ def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
 
 
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "RELEASED_FORM", "Released", "SCHEME",
-           "SessionCoins", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "lean_answer", "local",
-           "openings_coins", "received_reason", "released", "released_reason", "trusted", "window", "window_root"]
+           "SessionCoins", "UNWRITTEN", "Undecided", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason",
+           "lean_answer", "local", "openings_coins", "received_reason", "released", "released_reason", "trusted",
+           "undecided", "window", "window_root"]

@@ -73,7 +73,7 @@ def findings(config: Path, *paths: str) -> tuple[R.Violation, ...]:
 
 @cache
 def scan() -> tuple[R.Violation, ...]:
-    return findings(CONFIG, ".", str(R.DEFINITIONS))
+    return findings(CONFIG, ".")
 
 
 def test_no_new_findings() -> None:

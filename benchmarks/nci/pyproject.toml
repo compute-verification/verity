@@ -17,9 +17,8 @@ inputs = [
   "security/Definitions/InferenceOnly/Assumptions/Layered.lean",
   "security/Definitions/InferenceOnly/Guarantees/Layered.lean",
   "verity/circuits/ops/boolean/gemm.py",
-  # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ the card file's clock.sm, read through
-  # verity.device (test_tiers.py)
-  "security/Definitions/Core/Accel/Sm120.lean",
+  # tiers.CARD pins the RTX PRO 6000 Server Edition's card file, and CREDITED_CLOCK_HZ the card file's clock.sm, read
+  # through verity.device (test_tiers.py)
   "verity/device.py",
   "hardware/cards/rtx-pro-6000-server.toml",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
@@ -38,4 +37,11 @@ inputs = [
   "verity/protocol.py",
   "verity/channel.py",
   "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py", "verity/circuits/ops/__init__.py", "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py", "benchmarks/slowdown/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/__init__.py",
+          "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
+          "verity/protocols/policy/__init__.py", "verity/circuits/ops/__init__.py",
+          "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
+          "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py",
+          "benchmarks/slowdown/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]

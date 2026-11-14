@@ -40,7 +40,7 @@ every product, is a reference, not an answer.
 
 ## Parties
 
-PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on the deployment layer
+PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)`, on the deployment layer
 `verity.runtime`). Each execution phase runs the same rounds between them:
 
 - **The prover** is the developer's: its GPU serving and the PoUW prover (`verity/protocols/accounting/pouw/prover/`,
@@ -77,8 +77,8 @@ record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); an
 (`Core.Composition.tiedSameB`, `verity/protocols/compose/verifier/lean/README.md`). H1's development executable
 (`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
-Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
-(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+Commit record (`Core.Remote.windows`). In the vLLM served run, on that development executable
+(`adapters/vllm/tools/served_run/`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/protocols/compose/verifier/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/protocols/compose/verifier/onsite`).
@@ -167,7 +167,9 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's FP4 with scale groups, NVFP4 only.
+  replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel is
+  `verity/protocols/experimental/pearl_c4/`'s, and its scheme and circuit (`prover/circuit/pc4.py`) stay here while PoUW's
+  own circuits build on `pc4`.
 - **NCP** (`ncp-v1`, `verity/protocols/accounting/pouw/prover/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
@@ -262,8 +264,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 ## Where things are
 
 - `protocol`: the `PoUWScheme` interface.
-- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `PROTOCOL`), each machine's work
-  a capability it is given.
+- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `protocol(ask)`), each
+  machine's work a capability it is given.
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/protocols/accounting/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,

@@ -100,7 +100,7 @@ inputs = [
     "verity/protocols/accounting/pouw/prover/serving/h1/tables_device.py",
     "benchmarks/vllm_encoded/bench_arm.py",
     "benchmarks/vllm_encoded/step_spans.py",
-    "benchmarks/vllm_encoded/paged.cu",
+    "verity/protocols/accounting/poub/prover/word_codec/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
     "verity/protocols/accounting/poub/prover/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",

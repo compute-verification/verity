@@ -10,6 +10,11 @@ to a deployment configuration (`config.Component`), which is where it says what 
   and the messages sent before them (`after`);
 - its messages: the wire schemas (`verity.channel.Schema`), each with its kind.
 
+`ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`), and
+for a party a deployment starts on its machine, its starter (`starts`): from the configuration as data, the party's deploy
+bindings for the protocol (`[PARTY.COMPONENT]`, the hosts and addresses no configuration states) and its state directory,
+what the run hands it (`Start`): its parameters, its machine's capabilities by name and the reading its clock takes.
+
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
 and each channel's link meets its latency bound (`latency`). It refuses anything else by name, or, in a `simulated`
@@ -42,12 +47,16 @@ monitoring period raises `PeriodError`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from verity.channel import NAME, MessageTypes, Refused, Schema
+
+if TYPE_CHECKING:
+    from .party import Party
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")
@@ -133,6 +142,34 @@ class Manifest:
     def peers(self, party: str) -> tuple[str, ...]:
         return tuple(sorted({c.receiver for c in self.channels if c.sender == party}
                             | {c.sender for c in self.channels if c.receiver == party}))
+
+
+@dataclass(frozen=True)
+class Start:
+    """What a run hands a party it starts: its parameters, its machine's capabilities by name (`Identity.capabilities`),
+    and the reading its real clock takes, in ns (`clock`; None for the runtime's own)."""
+
+    params: Mapping[str, Any]
+    capabilities: Mapping[str, Any] = field(default_factory=dict)
+    clock: Callable[[], int] | None = None
+
+
+type Starter = Callable[[Mapping[str, Any], Mapping[str, Any], Path | None], Start]
+"""A party's start from the configuration, its deploy bindings for the protocol and its state directory."""
+
+
+@dataclass(frozen=True)
+class ProtocolDef:
+    """A protocol as a run takes it: its manifest, a factory for each of its parties, and a starter for each party a
+    deployment starts on its machine."""
+
+    manifest: Manifest
+    parties: Mapping[str, Callable[[], Party]]
+    starts: Mapping[str, Starter] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if extra := sorted(set(self.starts) - set(self.parties)):
+            raise ValueError(f"{self.manifest.protocol} starts {extra}, which it has no factory for")
 
 
 # --- placement ----------------------------------------------------------------------------------------------------------
@@ -397,4 +434,4 @@ class MonitoringPeriod:
 
 
 __all__ = ["DELTAS", "MONITORING_PERIODS", "Channel", "Cut", "Manifest", "MonitoringPeriod", "PeriodError", "PlaceResult",
-           "Role", "TickSpan", "Topology", "block_count", "place", "site_of"]
+           "ProtocolDef", "Role", "Start", "Starter", "TickSpan", "Topology", "block_count", "place", "site_of"]

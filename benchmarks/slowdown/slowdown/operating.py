@@ -9,7 +9,7 @@ the registry).
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the registered circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
-* **Incorrect outputs** (`incorrect.*`): a block the sampled proofs let go unchecked returns outputs the adversary
+* **Incorrect outputs** (`incorrect.*`): a block SPOT lets go unchecked returns outputs the adversary
   chose, in certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance
   `q`, and a sampled one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
   carries before the first detection, except with chance `δ`, and the chance of detection moving each reference.
@@ -63,7 +63,7 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
 class Incorrect:
     """The incorrect-outputs channel: `identities` identities, each ended by its first sampled incorrect step."""
 
-    #: the sampled proofs' sample rate per step (1 where every unit is proved)
+    #: SPOT's sample rate per step (1 where every unit is proved)
     q: float
     delta: float
     #: the output bits an incorrect step chooses

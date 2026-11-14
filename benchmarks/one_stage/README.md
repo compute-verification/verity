@@ -23,7 +23,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
   `window_audit.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
-  row's files the run's record holds only the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing
+  row's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
   of a request, and no file of the row's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`window_audit.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
@@ -95,7 +95,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `demos/vllm/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `adapters/vllm/tools/served_run/commit.sh` (the vLLM served run's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run) and its replay on CPU. The row dir stays on the
   node, the only copy of its bundle. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -105,7 +105,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
-  sampled proofs: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
+  SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the docket's
   pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
   Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
@@ -117,7 +117,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
+  run, credits nothing). `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), each δ of the block record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside it (the block record's `named_terms`). V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   certifier's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
@@ -161,7 +161,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
   `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its sampled
   proof blocks' proof outcomes.
-- `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
+- `v2_case.py`: SPOT v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
   file by the digest the audit staged, where the window keeps it (`case-v2.json`), and refuses a kept file with another,

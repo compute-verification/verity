@@ -1,4 +1,4 @@
-"""Replay every recorded one-stage run through sampled proofs' Lean protocol and the current Python, against the verdict the
+"""Replay every recorded one-stage run through SPOT's Lean protocol and the current Python, against the verdict the
 run recorded.
 
     python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE --out DIR [--only RUN ...]
@@ -67,7 +67,7 @@ from verity.circuits import codec, partition_object as PO
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 from verity.protocols.proofs.spot.verifier.tests import other_population as R2
 
