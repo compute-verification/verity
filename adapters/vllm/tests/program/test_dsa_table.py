@@ -11,7 +11,7 @@ import random
 import pytest
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.definitions.registry import dsa_topk_mask as M
+from verity_vllm.definitions.registry import dsa_topk_mask as M
 
 from verity_vllm.program import dsa_table as DT
 

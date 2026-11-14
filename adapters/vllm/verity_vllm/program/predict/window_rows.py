@@ -56,9 +56,9 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
 from verity.commitments.windows import interface as IF
-from verity.definitions.numerics.rows import ROWS
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry import io_shell as IO
+from verity_vllm.definitions.numerics.rows import ROWS
+from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import io_shell as IO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

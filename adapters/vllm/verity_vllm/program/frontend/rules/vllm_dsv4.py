@@ -23,15 +23,15 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics.flashmla_twin import (
+from verity_vllm.definitions.numerics.flashmla_twin import (
     num_sm_parts,
     request_splits,
     sched_meta,
 )
-from verity.definitions.registry import dsv4_compressor as C
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_qnorm_insert as Q
-from verity.definitions.registry.flashmla import FLASHMLA_DSV4
+from verity_vllm.definitions.registry import dsv4_compressor as C
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
+from verity_vllm.definitions.registry.flashmla import FLASHMLA_DSV4
 
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule

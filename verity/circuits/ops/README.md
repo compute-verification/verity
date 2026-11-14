@@ -1,7 +1,7 @@
 # verity.circuits.ops
 
 The primitive circuits' Definitions: the exact, hardware-faithful semantics of the operations ML kernels are built from,
-registered as Definitions that `verity.definitions` composes into the served kernels. Each module registers one family
+registered as Definitions that `verity_vllm.definitions` composes into the served kernels. Each module registers one family
 and its docstring lists what it registers. The terms and the front doors are [`verity.circuits`](../README.md)'s.
 
 | Module | What it registers |
@@ -39,7 +39,7 @@ are replayed against.
 
 - **Provides:** the primitive circuits' Definitions, one family a module, their Boolean versions (`ops.boolean`), and each
   module's sidecar and pins, which `circuit-check` reads.
-- **Loaded by:** the served workloads' Definitions (`verity.definitions`); `verity.commitments.windows`, whose
+- **Loaded by:** the served workloads' Definitions (`verity_vllm.definitions`); `verity.commitments.windows`, whose
   `interface` imports every module; PoUW's prover (`verity.protocols.accounting.pouw.prover`); Flock's prover (`verity_flock`), pod
   scripts and agreement with upstream's verifier (`verity/protocols/proofs/flock`); the script that writes the difftest
   vectors of the inference-only policy's check

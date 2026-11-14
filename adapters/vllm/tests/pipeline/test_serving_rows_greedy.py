@@ -32,8 +32,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.definitions.registry import b1
-from verity.definitions.registry import greedy_stages as G
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import greedy_stages as G
 
 V = 200
 SERVED_V = 154880

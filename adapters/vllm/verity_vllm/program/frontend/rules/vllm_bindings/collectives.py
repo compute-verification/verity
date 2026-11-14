@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import tp_allreduce
+from verity_vllm.definitions.registry import tp_allreduce
 
 from verity_vllm.program.frontend.derive import StaticIndex
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
