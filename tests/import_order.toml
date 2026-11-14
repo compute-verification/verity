@@ -81,13 +81,6 @@ owner = "compute-accounting"
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
 # a pair no file needs any more, which it names to delete.
 [[against]]
-loader = "verity/circuits/call_scope.py"
-loaded = "adapters"
-files = [
-    "verity/circuits/call_scope.py",
-]
-
-[[against]]
 loader = "verity/protocols/proofs/flock"
 loaded = "adapters"
 files = [
@@ -207,7 +200,6 @@ paths = [
     "verity/circuits/word.py",
 ]
 loads = [
-    "adapters/vllm",
     "verity/circuits",
 ]
 
