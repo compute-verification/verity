@@ -36,7 +36,9 @@ class _Job:
     """job.sh as `job` runs it: writes `result` under the run's out/ (none when None) and exits `rc`."""
 
     def __init__(self, out: Path, result: dict | None, rc: int):
-        self.out, self.result, self.rc, self.argv, self.signals = out, result, rc, None, []
+        self.out, self.result, self.rc = out, result, rc
+        self.argv: list[str] = []
+        self.signals: list[int] = []
 
     def __call__(self, argv):
         self.argv = argv
