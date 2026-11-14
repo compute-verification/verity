@@ -14,3 +14,20 @@ WALKER, Sat 14 Nov, 1:01 AM PST.
 - Next: A's quick run at this head, A's body, then C: cancel 23be and 83ab if neither has a slot, merge df06180894f, then C's quick run and the s-t20 reading, once each.
 - Events for training that reached me with the resume: none besides your 12:42 AM message and READCIRC's 12:43 AM READY on #9730 at 7e94d534.
 
+[2026-11-14T09:01Z] 06088917f4ac
+NAMES2, Sat 14 Nov 1:01 AM PST. The cure of 42ac6068 is pushed.
+
+**The new hand commit is 0f7a6f1167b30dcdd9360ce9ef3854dc5c64acf3 on `cursor/training-rename-rehearsal-6b-a32b`, whose head is 9bb030803ad12f308f9aee60e41f238154ba0f6e; wake the reader on 0f7a6f11.**
+
+- RAN: how. The source is `hand/hand_edits.py`'s `older_check` group (copied to the notes' `names-monday/hand/` with this message). The script's own line (`hand_edits.py older_check`, then the commit under the same message) ran on 42ac6068's parent b9fb40b9, and the five commits above it were cherry-picked unchanged. Not a ninth rehearsal: the group's old string is gone on r8's head, so it cannot run on top of it. No map reran.
+- RAN: `git diff --stat 016c1313 9bb03080`: the check's README only, 6 insertions and 4 deletions. The grader's `TRUSTED.sha256` does not list that README.
+- RAN: `git grep -w novel` and `-w baseline` (plus `ius` and `isolation`) in the check's directory. Each sentence holds:
+  - "baseline": `Check.lean:29`, `:214`, `Theta.lean:6`, `lakefile.toml:1`
+  - `novel`: `Check.lean:149-150`, `inference_only_reference.py:141-144`, the liveness mode (`DescLiveness.lean:38`, `:56`, `desc_liveness_vectors.py`)
+  - "novel reads": `lean-audit.json:70`, `:78`, `DescLiveness.lean:58`
+- READ: two more gaps of the reader's kind, cured in the same text:
+  - "isolation unit" is not in the lock's reasons or a docstring, only in the lakefile's comment (`lakefile.toml:2`), so that place is named.
+  - the verdict's key `ius` (`Check.lean:142`, `:189`, the reference, the vectors) stays and was unlisted.
+- RAN: `tests/test_retired_terms.py`, `tests/lint/test_repo_retired_terms.py`, `tests/test_doc_paths.py` on the new head: 50 passed, 7 warnings, as on r8; no warning names the README.
+- The paragraph now reads: "… `benchmarks/nci`; a verdict's failure rule `"nci"`, and its key `ius` for its inference blocks, with the names that compute it; the toy Definitions … whose bytes the lock pins; "baseline" for the registered information; "IU" and "isolation unit" for an inference block, in the lock's reasons, a few docstrings and the lakefile's comment; "novel reads" for fresh input bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the check's rate rule and of its Python reference, and a mode of the liveness difftest."
+
