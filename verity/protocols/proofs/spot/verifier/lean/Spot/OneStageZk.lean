@@ -104,6 +104,7 @@ public import CoreProtocol.Blobs
 public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
+public import Spot.PopOrder
 public import Spot.FilePart
 public import Flock
 public import Flock.JsonParse
@@ -727,7 +728,9 @@ def POPULATION_ORDER : String :=
 
 /-- The registration's population held to the verifier's program (module docstring, **population**): the record names
 a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
-(`Slots.popOk`). -/
+(`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
+(`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
+for every input gate of the root. -/
 def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
