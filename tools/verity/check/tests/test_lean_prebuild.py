@@ -50,7 +50,7 @@ def repo(tmp_path):
     return r, made
 
 
-def _launched(repo: Path, argv: list[str], urls: Path | None = None) -> tuple[int, list[list[str]], list[dict]]:
+def _launched(repo: Path, argv: list[str], urls: Path | None = None, **kw) -> tuple[int, list[list[str]], list[dict]]:
     """`main(argv)` in ``repo`` with a launcher that only records: its exit, each `research` call, and what each shipped tree
     held (its head, its files, its parents)."""
     calls, trees = [], []
@@ -61,8 +61,61 @@ def _launched(repo: Path, argv: list[str], urls: Path | None = None) -> tuple[in
                       "parents": _git(cwd, "rev-list", "--parents", "-n", "1", "HEAD").split()[1:]})
         return 0
 
-    rc = LP.main(argv, repo=repo, run=run, run_id=lambda: "r20260101-000000-abcd", signed=lambda tree, d: urls)
+    rc = LP.main(argv, **{"repo": repo, **kw}, run=run, run_id=lambda: "r20260101-000000-abcd", signed=lambda tree, d: urls)
     return rc, calls, trees
+
+
+def _mem(args: list[str]) -> str:
+    return args[args.index("--mem-gb") + 1]
+
+
+#: a shipped tree's own auditor as `ask` reads it: `warm.survey` reaches package `P` exactly when the tree holds `A.lean`, and
+#: `check.py --ask` prints its ask and the packages it was given
+STUB_WARM = "def survey(tree, base):\n    return None, None, [], ['P'] if (tree / 'A.lean').exists() else [], 0\n"
+STUB_CHECK = "import sys\nprint(258)\nprint('asked', *sys.argv[1:], file=sys.stderr)\n"
+
+
+def test_auto_asks_what_the_shipped_trees_own_check_asks_for_the_packages_its_change_reaches(repo, capsys):
+    r, c = repo
+    _commit(r, LP.WARM, STUB_WARM)
+    _commit(r, LP.LEAN_CHECK, STUB_CHECK)
+    _git(r, "update-ref", "refs/remotes/origin/main", _git(r, "rev-parse", "HEAD"))
+    tip = _git(r, "rev-parse", "HEAD")
+    rc, calls, trees = _launched(r, [tip, "a", "--base", tip, "--on", "vy-node", "--mem-gb", "auto", "--as", "ci"])
+    said = capsys.readouterr()
+    assert rc == 0 and len(calls) == 1 and _mem(calls[0]) == "258" and "A.lean" in trees[0]["files"]
+    assert "asked --ask --build P" in said.err and "--mem-gb auto: 258 GB for P" in said.out
+    rc, calls, _ = _launched(r, [tip, "b", "--base", tip, "--on", "vy-node", "--mem-gb", "auto", "--as", "ci"])
+    assert rc == 0 and calls == [] and LP.NOTHING in capsys.readouterr().out, "a change reaching no package launches nothing"
+    assert _git(r, "worktree", "list").count("\n") == 0
+
+
+def test_auto_launches_nothing_when_what_the_change_reaches_cant_be_read(repo, capsys):
+    r, _ = repo
+
+    def unread(tree, base):
+        raise LP.Refused("what the change reaches can't be read: no checkout")
+
+    rc, calls, _ = _launched(r, ["origin/main", "a", "--on", "vy-node", "--mem-gb", "auto", "--as", "ci"], asked=unread)
+    assert rc == 2 and calls == [] and "can't be read" in capsys.readouterr().err
+
+
+def test_the_ask_is_the_one_check_py_gives_the_proofs_replay():
+    """`ask`'s contract with this tree's `check.py --ask --build`: one whole number of GB on stdout, the GiB on stderr."""
+    import subprocess as sp
+    import sys
+
+    r = sp.run([sys.executable, str(ROOT / LP.LEAN_CHECK), "--ask", "--build", "security/Proofs"], cwd=ROOT, capture_output=True,
+               text=True)
+    assert r.returncode == 0 and r.stdout.strip().isdigit() and int(r.stdout) > 0
+    assert "the replay of security/Proofs" in r.stderr, r.stderr
+
+
+def test_the_commits_are_read_from_repo_wherever_this_runs(repo, tmp_path):
+    r, c = repo
+    rc, calls, trees = _launched(tmp_path / "no-checkout", ["origin/main", "a", "--repo", str(r), "--on", "vy-node", "--mem-gb",
+                                                            "200", "--as", "ci"])
+    assert rc == 0 and len(calls) == 1 and trees[0]["parents"][1] == c["a"] and _mem(calls[0]) == "200"
 
 
 def _store(*commands: list[str]) -> sqlite3.Connection:
@@ -183,6 +236,7 @@ def test_memory_and_the_lane_are_asked_for_never_assumed(repo, monkeypatch):
     r, _ = repo
     monkeypatch.delenv("RESEARCH_LANE", raising=False)
     for argv in (["a", "--on", "vy-node", "--as", "ci"], ["a", "--on", "vy-node", "--mem-gb", "64"],
+                 ["a", "--on", "vy-node", "--mem-gb", "lots", "--as", "ci"],
                  ["a", "--mem-gb", "64", "--as", "ci"], ["origin/main", "--whole", "--base", "a", "--on", "vy-node", "--mem-gb", "64", "--as", "ci"]):
         with pytest.raises(SystemExit):
             LP.main(argv, repo=r, run=lambda *a: 0)

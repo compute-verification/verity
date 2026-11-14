@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""`python tools/verity/check/lean_prebuild.py COMMIT [HEAD ...] --on MACHINE --mem-gb N [--base REV | --whole] [--pool NAME]
-[--as LANE] [--timeout S] [--dry-run]`: a Lean change built before the candidate that holds it, off the check slots.
+"""`python tools/verity/check/lean_prebuild.py COMMIT [HEAD ...] --on MACHINE --mem-gb N|auto [--base REV | --whole]
+[--repo DIR] [--pool NAME] [--as LANE] [--timeout S] [--dry-run]`: a Lean change built before the candidate that holds it,
+off the check slots.
 
 A candidate's Lean audit restores every module a run has built before and compiles the rest: the modules at or above its own
 Lean change, which no run has built while the change waits. It then replays through the kernel each module whose `.olean`
@@ -30,9 +31,12 @@ pin what was built. MACHINE must build in the sandbox (that file's `sandboxed`):
 nothing it builds, which its audit's first lines say.
 
 The change is read against BASE: `--base`, else where COMMIT left `main` (`MAIN`), and with `--whole` the history's first
-commit, from which every package is reached. The audit needs the memory `tools/verity/lean/check.py` refuses below
-(`reserve.floor`: an ArkLib replay's whole figure where the change reaches security/Proofs; `check.py --ask` prints the
-ask), so `--mem-gb` has no default: it is what the machine's steward books for one. The tree is checked out in a worktree of its own, shipped, and the worktree removed: `research run --on`
+commit, from which every package is reached. The commits are those of `--repo DIR` (default this checkout): the verified
+queue's loop names its clone, which holds every ready head (`research.vqueue_prebuild`). The audit needs the memory
+`tools/verity/lean/check.py` refuses below (`reserve.floor`: an ArkLib replay's whole figure where the change reaches
+security/Proofs), so `--mem-gb` has no default: it is what the machine's steward books for one, or `auto`, the ask of the
+shipped tree's own `check.py --ask --build` over the packages its change reaches (`warm.survey`, `ask`), with no run
+launched when it reaches none (`NOTHING`). The tree is checked out in a worktree of its own, shipped, and the worktree removed: `research run --on`
 returns once the run is launched, and this prints the run to check back on. The run takes the bundles the launcher signs
 URLs for (`lean_audit.url_file`, sent as `URLS`) before it builds, so it compiles only what neither MACHINE's caches nor
 those bundles hold. A bundle holds what its run compiled, not the modules below every change, so a machine whose caches
@@ -55,6 +59,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 WARM = "tools/verity/lean/warm.py"
 LEAN_AUDIT = "tools/verity/lean/lean_audit.py"
+LEAN_CHECK = "tools/verity/lean/check.py"
+#: what `--mem-gb auto` prints, and launches nothing, when the change reaches no audited Lean package
+NOTHING = "reaches no audited Lean package: nothing to build"
 #: the ref a change is read against when no `--base` says
 MAIN = "origin/main"
 #: `research run --pool`'s pool of any lane's runs, on cores no check slot holds
@@ -173,6 +180,23 @@ def url_file(tree: Path, dest: Path) -> Path | None:
         return None
 
 
+def ask(tree: Path, base: str) -> tuple[int, list[str]] | None:
+    """(the GB the audit of ``tree``'s change from ``base`` asks, the packages it reaches), by ``tree``'s own auditor: its
+    `warm.survey` reads the packages, its `check.py --ask --build` their ask, provers and replay included. None when it
+    reaches none. Refused when either can't say."""
+    got = _load("warm_for_lean_prebuild", tree / WARM).survey(tree, base)
+    if isinstance(got, str):
+        raise Refused(f"what the change reaches can't be read: {got}")
+    if not (pkgs := got[3]):
+        return None
+    r = subprocess.run([sys.executable, str(tree / LEAN_CHECK), "--ask", "--build", *pkgs], cwd=tree, capture_output=True,
+                       text=True)
+    if r.returncode or not r.stdout.strip().isdigit():
+        raise Refused(f"`check.py --ask --build {' '.join(pkgs)}` exited {r.returncode}: {r.stderr.strip()[-300:]}")
+    print(r.stderr.strip(), file=sys.stderr, flush=True)
+    return int(r.stdout), pkgs
+
+
 def research(args: list[str], cwd: Path) -> int:
     return subprocess.run([sys.executable, "-m", "research", *args], cwd=cwd).returncode
 
@@ -183,11 +207,25 @@ def new_run_id() -> str:
     return new()
 
 
-def main(argv: list[str] | None = None, repo: Path = ROOT, run=research, run_id=new_run_id, signed=url_file) -> int:
+def _mem_gb(s: str) -> float | None:
+    if s == "auto":
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{s!r} is no number of GB, nor auto") from None
+
+
+def main(argv: list[str] | None = None, repo: Path = ROOT, run=research, run_id=new_run_id, signed=url_file,
+         asked=ask) -> int:
     ap = argparse.ArgumentParser(prog="lean_prebuild.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("commits", nargs="+", metavar="COMMIT", help="the tree to build: the first, with each other one merged onto it")
     ap.add_argument("--on", required=True, metavar="MACHINE", help="the machine whose pool runs it and whose caches it fills")
-    ap.add_argument("--mem-gb", required=True, type=float, metavar="N", help="the memory the pool slot reserves for it")
+    ap.add_argument("--mem-gb", required=True, type=_mem_gb, metavar="N|auto",
+                    help="the memory the pool slot reserves for it; auto: what the tree's check.py asks for the packages its "
+                    "change reaches, and no run when it reaches none")
+    ap.add_argument("--repo", type=Path, default=repo, metavar="DIR", help="the repository the commits are read from "
+                    "(default this checkout)")
     ap.add_argument("--base", metavar="REV", help=f"the commit the change is read against (default: where COMMIT left {MAIN})")
     ap.add_argument("--whole", action="store_true", help="read against the history's first commit: every package")
     ap.add_argument("--pool", default=POOL, help=f"MACHINE's pool (default {POOL})")
@@ -200,6 +238,7 @@ def main(argv: list[str] | None = None, repo: Path = ROOT, run=research, run_id=
         ap.error("--base REV or --whole, not both")
     if not a.lane:
         ap.error("the pool slot names a lane: --as LANE or $RESEARCH_LANE")
+    repo = a.repo.resolve()
     try:
         commits = [commit(repo, c) for c in a.commits]
         base = base_of(repo, commits[0], a.base, a.whole)
@@ -208,9 +247,16 @@ def main(argv: list[str] | None = None, repo: Path = ROOT, run=research, run_id=
             if tip == base:
                 raise Refused(f"{tip[:12]} holds no change from {base[:12]}: give the heads to merge onto it, --base REV (the "
                               "tip before a landing) or --whole")
+            mem_gb = a.mem_gb
+            if mem_gb is None:
+                if (got := asked(tree, base)) is None:
+                    print(f"lean-prebuild: {tip[:12]}'s change from {base[:12]} {NOTHING}", flush=True)
+                    return 0
+                mem_gb = got[0]
+                print(f"lean-prebuild: --mem-gb auto: {mem_gb} GB for {', '.join(got[1])}", flush=True)
             named = heads(tree, base, tip, commits)
             rid = run_id()
-            args = launch(rid, a.on, tree, base, named, pool=a.pool, lane=a.lane, mem_gb=a.mem_gb, timeout_s=a.timeout,
+            args = launch(rid, a.on, tree, base, named, pool=a.pool, lane=a.lane, mem_gb=mem_gb, timeout_s=a.timeout,
                           urls=None if a.dry_run else signed(tree, Path(d)))
             print(f"lean-prebuild: {tip[:12]}'s change from {base[:12]} on {a.on}, pool {a.pool}"
                   + (f", naming {', '.join(h[:12] for h in named)}" if named else ""), flush=True)
