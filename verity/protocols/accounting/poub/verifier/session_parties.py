@@ -9,7 +9,7 @@ verifier -> prover     Hold {registration}; per pass Run {t, i, challenge} + the
                        session's coins disclosed once it has its outcome ({commitment, openings}, `audit.AuditRun.disclose`)
 ~~~
 
-The verifier's session is `period.session`'s, so its case is one `RemoteAudit.Protocol` replays. Its coins source gives
+The verifier's session is `period.session`'s, so its case is one `Poub.Protocol` replays. Its coins source gives
 the period's live secret and the registration's nonce, sampled once. Its clock times each event of the log:
 
 - a root's receive at the root's arrival (`Received.at`), which `audit.AuditRun.receive` holds to its window's deadline,
@@ -21,7 +21,7 @@ the period's live secret and the registration's nonce, sampled once. Its clock t
   first root made final.
 
 The verifier finishes with `{"answer", "case"}` (private: the case holds the openings) once it has recorded the answer
-(`period.answer`, as `RemoteAudit.Protocol.check` gives it): after the last window's verdict, or at the first rejection,
+(`period.answer`, as `Poub.Protocol.check` gives it): after the last window's verdict, or at the first rejection,
 with the case of the events so far. A prover that leaves, a frame the wire refuses or one out of phase ends it refused
 by name, with the answer as it stands.
 """
@@ -55,7 +55,7 @@ VERIFIER, PROVER = "verifier", "prover"
 SECRET_BYTES = 64
 """The period's live secret, which the registration's codec seed and the challenger's coins come from."""
 DRAW = struct.Struct(">IQ")
-MAX_DRAWS = 1 << 20
+MAX_SAMPLES = 1 << 20
 MAX_DISCLOSED = 1 << 24
 ROOT = Body(size=receipts.DIGEST_BYTES, max=receipts.DIGEST_BYTES)
 MANIFEST = Manifest(
@@ -67,7 +67,7 @@ MANIFEST = Manifest(
               Schema("Hold", 1, "coins", {"registration": Json()}),
               Schema("Run", 1, "coins", {"t": Int(), "i": Int(), "challenge": Json(1 << 14)}, ROOT),
               Schema("Root", 1, "commitment", {"t": Int(), "i": Int()}, ROOT),
-              Schema("Open", 1, "coins", {"t": Int()}, Body(max=MAX_DRAWS * DRAW.size, unit=DRAW.size)),
+              Schema("Open", 1, "coins", {"t": Int()}, Body(max=MAX_SAMPLES * DRAW.size, unit=DRAW.size)),
               Schema("Openings", 1, "private", {"t": Int()}, Body(max=(1 << 32) - 1)),
               Schema("End", 1, "coins", body=Body(max=MAX_DISCLOSED))))
 

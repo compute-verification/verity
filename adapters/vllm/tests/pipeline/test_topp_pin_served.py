@@ -17,7 +17,7 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
-from verity.definitions.registry.topp_geometry import registered_splits
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
 from tests import fake_vllm
 from verity_vllm.commit.committer import topp_splits

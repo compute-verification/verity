@@ -1917,8 +1917,30 @@ def test_a_path_written_from_its_import_root_follows_its_file_out_of_the_root(tm
         assert _refused(r) == {"adapters/app/allow.json": "edit beyond moved paths and module names"}
 
 
+@pytest.mark.parametrize(("init", "message", "certified"), [
+    ("lib/tests/new/__init__.py", LAYOUT_MSG, True),
+    ("lib/tests/new/__init__.py", "Move by hand\n", False),
+    ("lib/tests/else/__init__.py", LAYOUT_MSG, False),
+])
+def test_an_empty_init_the_map_creates_where_a_file_went_is_certified(tmp_path, init, message, certified):
+    """`tests/` is run by path, so the mover writes no package level there on its own: a map's `[create]` row asks for
+    it. The empty `__init__.py` it names counts in a directory a renamed file went to, and nowhere else."""
+    repo, base = _repo(tmp_path, {
+        LAYOUT_MAP: f'[paths]\n"lib/tests/old/test_x.py" = "lib/tests/new/test_x.py"\n\n[create]\n"{init}" = ""\n',
+        "lib/tests/old/test_x.py": "def test():\n    pass\n"})
+    _move(repo, "lib/tests/old/test_x.py", "lib/tests/new/test_x.py")
+    _write(repo, {init: ""})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"] == certified, r["refusals"]
+    if not certified:
+        assert _refused(r) == {init: "added"}
+
+
 SLOTS = {
-    "bench/slots/pyproject.toml": '[project]\nname = "slots"\n', "bench/slots/slots.py": "X = 1\n",
+    "bench/slots/pyproject.toml": '[project]\nname = "slots"\n\n[tool.pytest.ini_options]\npythonpath = ["."]\n',
+    "bench/slots/slots.py": "X = 1\n",
     "bench/slots/bench.py": "Y = 1\n", "other/pyproject.toml": '[project]\nname = "other"\n',
     "pyproject.toml": '[project]\nname = "root"\n\n[tool.uv.workspace]\nmembers = ["other", "bench/slots"]\n',
     "uv.lock": '[[package]]\nname = "slots"\nversion = "0.0.0"\nsource = { virtual = "bench/slots" }\n',
@@ -1929,8 +1951,9 @@ SLOTS = {
 @pytest.mark.parametrize("readme", [False, True])
 def test_a_distribution_moved_out_of_a_directory_it_splits_is_named_where_its_pyproject_went(tmp_path, readme):
     """`bench/slots/`'s distribution moves to `lib/slots/` and its bench stays: the workspace's member and the lock's source
-    name the directory its `pyproject.toml` is in, now `lib/slots`. A reference elsewhere to the directory, which stays,
-    is not the distribution's and keeps its place."""
+    name the directory its `pyproject.toml` is in, now `lib/slots`, and so does the `"."` the moved `pyproject.toml`
+    names its own directory by. A reference elsewhere to the directory, which stays, is not the distribution's and keeps
+    its place."""
     repo, base = _repo(tmp_path, SLOTS)
     for f in ("pyproject.toml", "slots.py"):
         _move(repo, f"bench/slots/{f}", f"lib/slots/{f}")

@@ -38,19 +38,19 @@ their floor.
   dimension a flag). Every op is a proof block of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
   them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and the row ops (RMSNorm, the s8
   quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
-  chunked or recomputed. The harm is incorrect ANDs, the same whatever the cut, with the incorrect proof blocks (IntegrityPeriod's W)
+  chunked or recomputed. The harm is incorrect ANDs, the same whatever the cut, with the incorrect proof blocks (IntegrityMonitoringPeriod's W)
   beside it. It writes the frontier of expected Flock cost (every serve-time commitment and the replay in it) against
   certified incorrect ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
   20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one execution
-  phase (`IntegrityPeriod`) a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the
+  phase a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the
   `work:1` sampling design. Its tests are in SPOT's prover suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
-  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session sampling
-  `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
-  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and sampled
+  one lockstep block of 31 decode steps. Each subcircuit is one execution phase of `IntegrityMonitoringPeriod`, one `--zk` session sampling
+  `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityMonitoringPeriodLog) and
+  the pooled bound over any period (IntegrityPooled) at δ = 1% and 1e-6. It prices each window's statements and sampled
   proof blocks, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
@@ -115,12 +115,12 @@ uv run python verity/protocols/proofs/spot/prover/cost/cpu_budget.py --plan PLAN
 - `recursion.py`: one recursive session's cost per monitoring period. It reads a `benchmarks/recursion_e2e` result's
   measured parts (the inner run, V*'s staging, V*'s ZK-served releases and the Lean step), with the same units'
   non-recursive `--zk` session beside them, and scales them to every machine-window of the census's datacenter
-  (`dc-12500-machines-600s`) and of the world (`benchmarks/rho`'s `world-h200` fleet, in the datacenter's windows,
+  (`dc-12500-machines-600s`) and of the world (`benchmarks/slowdown`'s `world-h200` fleet, in the datacenter's windows,
   assumed) over a week, a month and a year: sessions, node-hours and nodes kept busy, prover's and auditor's
   (`recursion-periods.json`, `recursion-periods.md`).
 
 ```text
-uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json [--sessions-per-window 1] --out DIR
+uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json --census benchmarks/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml [--sessions-per-window 1] --out DIR
 ```
 
 ## The class circuit's size and its window's commit

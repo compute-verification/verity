@@ -330,8 +330,8 @@ class Binding:
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
     at least one linked member's ``x`` table (rows of the tables' schema, `TABLE_SCHEMA`, refused otherwise: a linked row
     takes its row table row's salt, which then hides one string), under ``context`` (hex, 64 bytes known before the first
-    segment: the live coin commitment's root).  A ``work`` law
-    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
+    segment: the live coin commitment's root).  A ``work`` sampling design
+    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's sampling design is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
@@ -813,22 +813,12 @@ def port_leaves(m: Member) -> dict[str, int]:
     return {p: tables.get(p, m.n) for p, _ in m.all_rows if p not in held}
 
 
-def wired_ports(window: Binding) -> dict[str, str]:
-    """Each wired port that has no tree of its own (`Member.wired_trees`), by its reader's name for it, and the port
-    whose tree holds its rows (`Binding.held`): ``{<reader>/<wired port>: <writer>/<output port>}``."""
-    return {m.port(p): window.held(m, p) for m in window.members if not m.wired_trees for p, _o, _ws in m.wired}
-
-
 def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own period derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
-    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the period's program, partition and run.
-    A wired port with no tree of its own is named under its reader too, at the leaves and domain of the port whose
-    tree holds it (`wired_ports`), which its entry names (``wired``): one tree at two ports, whose two roots R3 holds
-    equal."""
+    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the period's program, partition and run."""
     prog, part, segs = window.partition["program"], window.partition_digest, len(window.segments)
-    own = {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
-           for m in window.members for p, n in port_leaves(m).items()}
-    return own | {a: {**own[q], "wired": q} for a, q in wired_ports(window).items()} | \
+    return {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
+            for m in window.members for p, n in port_leaves(m).items()} | \
         ({TABLE_PORT: {"leaves": segs, "domain": window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, segs, window.run)}}
          if segs else {})
 
@@ -880,8 +870,6 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
-    roots += [{"port": a, "root": c.roots[q].hex(), "leaves": c.domains[q].count, "domain": c.domains[q].domain_id.hex()}
-              for a, q in wired_ports(w).items()]
     if {o["port"] for o in outputs} & set(c.roots):
         raise ValueError(f"output values {sorted({o['port'] for o in outputs} & set(c.roots))} are named like the period's ports")
     roots += [{k: o[k] for k in ("port", "root", "leaves", "domain")} for o in outputs]

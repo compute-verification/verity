@@ -12,7 +12,7 @@ import sys
 import threading
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.runtime.stream import Side
 from verity.protocols.accounting.poub.prover import audit_prover

@@ -25,7 +25,7 @@ no encoding.
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
-`encode` samples the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin flipped after the
+`encode` samples the salt, `setup.sample_salt(source, commitment)` with `source` the auditor's coin flipped after the
 commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` through `gpu.Kernels`, one process a GPU,
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
@@ -36,7 +36,7 @@ commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` thr
 - `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory challenger's table,
   `VerifierKey.from_row_digests`);
 - `seg/<s>.json`: the segment's digests and roots, written last, so a segment that has it is done and a rerun resumes;
-- `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`setup.server_root`'s tree, computed as RFC 6962's
+- `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`responder.server_root`'s tree, computed as RFC 6962's
   tree over the segments' subtree roots, the same tree since a segment is a power of two of leaves); `w_root`, the same
   salted tree over W's blocks, each block's 2,054 payload bytes digested as `sha512/row/v2` at 16,432 bits; and `tie`,
   `tagged_sha512(TIE_TAG, canonical JSON)` of `TIE_FIELDS`, with the weights' registration digest null until it is
@@ -61,7 +61,7 @@ padding at the real shape.
 **C*.** Block `i = blocks_per_segment · s + v` is 2,056 bytes, big-endian, at byte `2056 · i` of one buffer in HBM; on
 disk, one file per segment, blocks in `v` order. Its leaf is `SHA512(0x00 ‖ tag_s ‖ u16le(v) ‖ R)`, `tag_s = salt ‖
 u64le(s)` (32 bytes) and `R` its `sha512/row/v2` digest, under nodes `SHA512(0x01 ‖ l ‖ r)` of RFC 6962's shape
-(`verifier.VerifierKey`). The commitment is `setup.commit(params, W)` and the salt `setup.draw_salt(source,
+(`verifier.VerifierKey`). The commitment is `setup.commit(params, W)` and the salt `setup.sample_salt(source,
 commitment)`.
 
 **Decode.** Layer `l`'s staging buffer holds its tensors back to back from offset 0, each at a multiple of
@@ -804,7 +804,7 @@ def encode_cmd(a: argparse.Namespace) -> int:
     params = params_of(doc["manifest"])
     if a.source is None:
         raise SystemExit("encode needs --source: the auditor's coin, drawn after the commitment")
-    salt = setup.draw_salt(a.source, bytes.fromhex(doc["commitment"]))
+    salt = setup.sample_salt(a.source, bytes.fromhex(doc["commitment"]))
     if doc.get("salt") not in (None, salt.hex()):
         raise SystemExit(f"{store} was encoded under another salt: use a fresh --store")
     doc.update(source=a.source.hex(), salt=salt.hex(), salt_domain=setup.SALT_DOMAIN)
@@ -1105,7 +1105,7 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
     plain = toy_plain(store)
     w, staging = plain["w.bin"], plain["staging.bin"]
     commitment = setup.commit(params, w)
-    salt = setup.draw_salt(TOY_SOURCE, commitment)
+    salt = setup.sample_salt(TOY_SOURCE, commitment)
     prefix = expand_prefix(params, salt)
     real = build(MQA16K).params
     real_prefix = expand_prefix(real, salt)

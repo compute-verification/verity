@@ -2,7 +2,7 @@
 the plans on the Pareto frontier of expected cost against certified harm, over every budget.
 
 Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, the work sampling design
-`work:1` over a work table carrying the credited work and floors equal to the sizes (`work_law`:
+`work:1` over a work table carrying the credited work and floors equal to the sizes (`work_sampling_design`:
 `one_stage.draw.work_k(1, w, n, W, f)` is `min(n, f)`).  A stream's rule can't state it: a fixed count per stratum falls
 against the stratum as the prover pads it, so a stream registers a rate (`work-rate:NUM/DEN`, every stratum's floor at
 the rate).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
@@ -199,7 +199,7 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a proof block's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged proof block `staged_per_and * ands + staged_per_unit`, and per
-    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityPeriod`'s
+    proved proof block `per_and * ands`.  When `shared`, a template's statements hold only its sampled proof blocks (`IntegrityMonitoringPeriod`'s
     hidden window: one session, its k sampled proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay grains that build
@@ -615,12 +615,12 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
     density = dens(objective.harm)
     if not exact:
         return PlanBounds(d, density, density, dens(lambda c: float(c.work + c.influence)), None, False)
-    law = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
-    harm = law.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
-    work = law.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
+    sampling_design = Stratified(tuple(Stratum(c.template, c.units, sizes[c.template]) for c in chosen))
+    harm = sampling_design.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
+    work = sampling_design.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
     leak = None
     if objective.bits:
-        profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, d)
+        profile = IntegrityProfile(("unit",), (sampling_design.population,), {"unit": sampling_design}, d)
         leak = exfiltration_bound(profile, {c.template: float(c.out_bits) for c in chosen})
     return PlanBounds(d, harm, density, work, leak)
 
@@ -814,7 +814,7 @@ def weigh(candidates: Sequence[Candidate], costs: CostModel, objective: Objectiv
     on the density: from equal weights, a coordinate search, each kind of the current plan in turn (costliest first) taking
     the factor of `factors` on its weight that makes `for_target` cheapest, for at most `rounds` passes.  The certificate
     is the same stratified one over every subcircuit, so the weights are parameters of the sample, chosen at the target, and
-    never of the guarantee; the plan carries them, and registers by its sizes (`work_law`) as any plan does."""
+    never of the guarantee; the plan carries them, and registers by its sizes (`work_sampling_design`) as any plan does."""
     def at(weights: Mapping[str, float]) -> Plan | None:
         return for_target(candidates, costs, objective, target, by=by, exact=exact, weights=weights, **kw)
 
@@ -940,7 +940,7 @@ def needs_benchmark(candidates: Sequence[Candidate], costs: CostModel, objective
     return sorted({r["what"] for r in rows if not r["same"]})
 
 
-def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
+def work_sampling_design(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     """The plan as a work sampling design: `work:1` over a work table carrying the credited work and floors equal to the plan's
     sizes, which `one_stage.draw.work_k` samples exactly (the ceiling is at most 1 since w n <= W). It is a fixed count
     per stratum, which a stream's rule refuses."""
@@ -1604,4 +1604,4 @@ __all__ = ["Candidate", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC",
            "registration_count", "registration_sample", "SESSIONS", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
            "touched", "two_stage_counts", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin",
            "two_stage_statements", "two_stage_strata", "weigh",
-           "work_draws", "work_law"]
+           "work_draws", "work_sampling_design"]

@@ -209,7 +209,7 @@ MEASURED: dict[str, str] = {
                 "planner's k",
     "POUW_COVERAGE": "the per-call noise run: the share of the block's static INT8 MACs its tiles cover (`range`)",
     "POUW_CERTIFIED_SHARE": "the per-call noise run: PoUW's certified share at POUW_RHO's ρ",
-    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditPeriod`",
+    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditMonitoringPeriod`",
     "PROVING_GPU_S": "the prove run: GPU-seconds of proving over every drawn unit's session",
     "BLOCK_GPU_S": "the block run: H200-seconds the block served",
     "PROVE_S_PER_AND": "the prove run, fitted by `spot.costfit`: GPU-seconds of proving per AND",

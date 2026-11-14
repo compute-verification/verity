@@ -14,21 +14,21 @@ inputs = [
   "verity/__init__.py",
   "verity/circuits",
   "security/lean-audit.json",
-  "security/Definitions/Nci/Assumptions/Layered.lean",
-  "security/Definitions/Nci/Guarantees/Layered.lean",
+  "security/Definitions/Slowdown/Assumptions/Layered.lean",
+  "security/Definitions/Slowdown/Guarantees/Layered.lean",
   "verity/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the RTX PRO 6000 Server Edition's card file, and CREDITED_CLOCK_HZ the card file's clock.sm, read
   # through verity.device (test_tiers.py)
   "verity/device.py",
   "hardware/cards/rtx-pro-6000-server.toml",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
-  "benchmarks/rho/rho/__init__.py",
-  "benchmarks/rho/rho/theorem.py",
+  "benchmarks/slowdown/slowdown/__init__.py",
+  "benchmarks/slowdown/slowdown/theorem.py",
   # a model's shape is the slowdown calculator's (kappa.py reads its models, imported by path), whose registry reads
   # core's monitoring periods and per-window delta, and the H200 servers' cards
-  "benchmarks/rho/rho/instances.py",
-  "benchmarks/rho/rho/params.py",
-  "benchmarks/rho/data",
+  "benchmarks/slowdown/slowdown/instances.py",
+  "benchmarks/slowdown/slowdown/params.py",
+  "benchmarks/slowdown/data",
   "verity/device.py",
   "hardware/cards/h200-sxm-141gb.toml",
   "hardware/cards/dgx-h200.toml",
@@ -37,4 +37,11 @@ inputs = [
   "verity/protocol.py",
   "verity/channel.py",
   "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py", "verity/circuits/ops/__init__.py", "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py", "benchmarks/rho/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/protocols/__init__.py",
+          "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
+          "verity/protocols/policy/__init__.py", "verity/circuits/ops/__init__.py",
+          "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
+          "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py",
+          "benchmarks/slowdown/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]

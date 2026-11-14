@@ -552,7 +552,8 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
-    from verity.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:
@@ -715,8 +716,8 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 #: also registers its Boolean form for M0's lowering (`ir_lower._boolean_build`), which finds no other in a fresh process.
 # TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
-LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
-        r"GatherF32x(\d+)_v2": ("verity.definitions.registry.boolean_gather", "gather_f32")}
+LAZY = {r"GatherE4m3x(\d+)_v2": ("verity_vllm.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
+        r"GatherF32x(\d+)_v2": ("verity_vllm.definitions.registry.boolean_gather", "gather_f32")}
 
 
 def live(fn, registry):
@@ -747,7 +748,7 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
     again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units
     (a kind saved with more loads only those, and says so)."""
     from verity.circuits.codec import decode_program
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
     defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
@@ -809,7 +810,7 @@ def main() -> int:
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
     # M0 lowers a word primitive by the Boolean Definition registered for it (`ir_lower._boolean_build`), some of which only
     # the integration's registry modules register (U32And_v1's); a11_kinds' decode loads them all the same way
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     summary["registry_errors"] = load_registry()[1]
 
     table = json.loads(Path(a.kinds).read_text())
@@ -866,7 +867,7 @@ def main() -> int:
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     k = a.k or len(defs)
-    law = D.parse_design(f"stratified:{k}")
+    sampling_design = D.parse_design(f"stratified:{k}")
     bound = {"partition": pd, "program": part["program"]}
 
     members, tags = [], {}
@@ -931,9 +932,9 @@ def main() -> int:
     window = {"kind": "stand-in", "of": WINDOW_OF, "link": LINK,
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]],
                                       "call": staged[m["kind"]]["name"], "step": staged[m["kind"]]["step"]} for m in members}}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a6.statement_checks(m, rec, want)
         ok = m["st"]["twin"]["agrees"] and m["st"]["twin"]["call"].get("agree") is not False
@@ -1001,16 +1002,16 @@ def main() -> int:
     # negatives: a6's, each re-deciding one input altered
     neg: dict[str, dict] = {}
     fewer = R2.program(list(zip(defs, ns)), mixed=True)
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if len(defs) > 1:
-        v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+        v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{k + 1}")),
                         ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, law, a0.SCHEME, want,
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME, want,
                 leaf_layer=hashlib.sha512(canonical_json({**publics, members[0]["name"]: "00" * 64})).hexdigest())
     neg["public-file-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check_draw({**lean_draw, "units": lean_draw["units"][:-1] + [n_all]}, rec, rec["law"])

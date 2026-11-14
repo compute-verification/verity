@@ -77,8 +77,8 @@ record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); an
 (`Core.Composition.tiedSameB`, `verity/protocols/compose/verifier/lean/README.md`). H1's development executable
 (`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
-Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
-(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+Commit record (`Core.Remote.windows`). In the vLLM served run, on that development executable
+(`adapters/vllm/tools/served_run/`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/protocols/compose/verifier/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/protocols/compose/verifier/onsite`).
@@ -166,10 +166,10 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   Blackwell (sm_120). The `-h3` forms hash with SHA-512 throughout, and h3 is the default wherever a hashing format or
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
-- **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel is
-  `verity/protocols/experimental/pearl_c4/`'s, and its scheme and circuit (`prover/circuit/pc4.py`) stay here while PoUW's
-  own circuits build on `pc4`.
+- **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/experimental/pearl_c4/prover/pearl_c4.py`): Pearl-C with the FP8 product
+  replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel, scheme, tile check
+  (`prover/pc4.py`) and vectors are `verity/protocols/experimental/pearl_c4/`'s, which registers the scheme when
+  imported; until then `schemes.get("pearl-c-nvfp4-v0")` raises `NotImplementedError`.
 - **NCP** (`ncp-v1`, `verity/protocols/accounting/pouw/prover/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
@@ -231,8 +231,8 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.WindowDelta`, and
-`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
+Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.ExecutionPhaseDelta`, and
+`Pouw.Guarantees.Window.ServiceMissProb` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
 and Dither's guarantees (`security/Definitions/Pouw/Guarantees/DitherInstance.lean`). No guarantee over the remote protocol as a whole
 is stated yet; `Properties.Composition` (`security/Properties/Composition.lean`) proves the composition's accept rule
 against its code.
@@ -241,7 +241,7 @@ The guarantees rest on named assumptions, each a hypothesis of the statement: th
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and, at the H100, `Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`
 beside the device model `Pouw.PearlC.Assumptions.W1CompleteH100`), the receipt clock (`Pouw.Assumptions.HonestClock`), and the claims
-`trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.claims`). The lemmas at device records
+`trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.commitments.claim_ids`). The lemmas at device records
 (`security/Proofs/Pouw/Lemmas/PearlCRecords.lean`) rest on further forms that no listed statement takes: Pearl-C4's
 TT_OUT at its sm_120 record (`TTOutFp4Sm120W1`), the seeded noise's forms (`RowSeedNoise`, `CodeSeedNoise`) and the
 sampled tile's proof (`TileProofSoundAll`).

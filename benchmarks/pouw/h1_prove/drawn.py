@@ -2,7 +2,8 @@
 (`verity.protocols.accounting.pouw.prover.serving.h1.drawn`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
 live challenger's model registry (`live_challenger.models`) and ``check`` credit's own verification (`credit._verified`
 with the Lean ``verity-verify-proof`` at ``--lean``, then `credit._proved`), each Lean run answered as credit asks for it
-(`verity.protocols.accounting.pouw.prover.serving.h1.answers`), one ``LEAN-ANSWER`` line a verdict.
+(`verity.protocols.accounting.pouw.prover.serving.h1.answers`), one ``LEAN-ANSWER`` line a verdict, and ``stage``'s
+stagers on Flock's Python (`stagers`).
 
     python drawn.py stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                           [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
@@ -17,6 +18,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
+import stagers as S
 
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -91,7 +93,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--lean", required=True)
     c.add_argument("--k", type=int)
     a = ap.parse_args(argv)
-    a.checkpoint_weights, a.verified = checkpoint_weights, verified
+    a.checkpoint_weights, a.verified, a.recomposed, a.file_stager = checkpoint_weights, verified, S.stager, S.FileStager
     return D.run(a.cmd, a)
 
 

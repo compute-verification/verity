@@ -23,7 +23,9 @@ session's proofs granted (R7's domains and outputs, R6's previous) and that remo
 finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
 composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite for
 their subprotocols and refuses every other set: the same two composites a configuration may list
-(`verity.config.COMPOSITES`)."""
+(`verity.config.COMPOSITES`). Onsite's development composite with the wipe's count held (`onsite-counted serve`) is held
+to the same reference with the count over the wipe's span and the counted wipe in its subprotocols
+(`test_onsite_counted_agrees`); its wipe's ties are `test_wipe_count_ties.py`'s."""
 
 from __future__ import annotations
 
@@ -44,6 +46,7 @@ from hypothesis import strategies as st
 
 import periods
 import reference as R
+import test_sampled_two_difftest as TWO
 import verity_difftest as D
 from verity_difftest import canonical
 from verity_difftest import settings as opt
@@ -153,8 +156,8 @@ V2_BREAKS = {
 }
 
 
-#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another form,
-#: the recursive form's params (refused by name), or its evidence with none of its files.
+#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or one no form's
+#: reading takes, the recursive form's params (refused by name), or its evidence with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
@@ -163,7 +166,7 @@ def _with_form(x, br: str | None, side: str):
     it."""
     if not isinstance(x, dict) or br == f"{side}-no-form":
         return x
-    return {**x, "form": {f"{side}-form-other": "two-stage", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
+    return {**x, "form": {f"{side}-form-other": "other", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
 
 
 def form_case(a: dict, br: str | None = None) -> dict:
@@ -193,6 +196,13 @@ PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "cas
 #: The inference-only policy's changes by the verdict they aim at: none, or one that rejects. It is never undecided.
 INFERENCE_CASES = {v: tuple(m for m, (x, _) in R.INFERENCE.EXPECT.items() if x == v) for v in (R.ACCEPT, R.REJECT)}
 
+#: The count over a wipe's span's changes by the verdict they aim at (`span_case.EXPECT`): on the registered hardware
+#: with the link the host's one link (`alone`) to accept; that hardware with a second link, none, or a change the count
+#: itself rejects, to reject (`case` breaks the line `serve` reads, as the period's does).
+SPAN_CASES = {R.ACCEPT: ("registered",),
+              R.REJECT: ("registered", "honest",
+                         *(m for m, x in R.SPAN_CASES.EXPECT.items() if x == R.REJECT and m != "case"))}
+
 #: A recorded subprotocol's kinds of case (`periods.build`), accepted ones first and thrice.
 KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", periods.OTHER_STORE, "broken-params", "broken-evidence"]
 
@@ -205,9 +215,9 @@ def kinds(C) -> list[str]:
         return list(INFERENCE_CASES)
     if C is R.SAMPLED_PROOFS:
         return [R.REJECT]
-    if C is R.WIPE:
+    if C in (R.WIPE, R.COUNTED_WIPE):
         return list(R.WIPE_CASES.KINDS)
-    if C is R.POUW_PERIOD:
+    if C in (R.POUW_PERIOD, R.HOST_SPAN):
         return [R.ACCEPT, R.REJECT]
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
 
@@ -228,8 +238,11 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.INFERENCE_ONLY:
         case = draw(R.INFERENCE.drawn(draw(st.sampled_from(INFERENCE_CASES[kind]))))
-    elif C is R.WIPE:
+    elif C in (R.WIPE, R.COUNTED_WIPE):
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
+    elif C is R.HOST_SPAN:
+        case = R.SPAN_CASES.build(draw(st.sampled_from(SPAN_CASES[kind])), draw(st.integers(0, 1 << 16)),
+                                  alone=kind == R.ACCEPT)
     else:
         case = draw(SAMPLED_CASES)
     return as_component(C, case)
@@ -248,7 +261,7 @@ def as_component(C, case: dict) -> dict:
 def _declaration(program: str) -> tuple[dict, dict] | None:
     """The policy's params but the log, and its evidence, for the registered circuit `program` (descriptor text) of a
     program the one-stage audit knows (`ONE_STAGE.PROGRAMS`), as the provenance difftest's declarations make them
-    (`baseline_difftest_vectors.build`): its program function's parameters, every gate in one inference block with Γ its
+    (`theta_difftest_vectors.build`): its program function's parameters, every gate in one inference block with Γ its
     gates and α over what any gate reads, and no registered information. None for another program."""
     NR = R.INFERENCE.NR
     digest = R.INFERENCE._digest(program)
@@ -454,14 +467,17 @@ def ids(product: R.Product) -> str:
     return ",".join(C.id for C in product.components)
 
 
-SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
+SEEN = {"onsite": collections.Counter(), "remote": collections.Counter(), "onsite-counted": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
+#: `onsite-counted serve`, onsite's development composite with the wipe's count held (`Core.Onsite.counted`)
+ONSITE_COUNTED = port("onsite-counted", R.ONSITE_COUNTED, SEEN["onsite-counted"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
 #: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
 #: no product)
 PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
+onsite_counted_server = D.server_fixture(ONSITE_COUNTED)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
 
@@ -669,8 +685,74 @@ def test_spot_refuses_the_recursive_form(name, request):
     assert set(seen) == {"named", "unnamed"}, dict(seen)
 
 
-#: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
-REUSING_LAW = {"k": 1, "law": "subset"}
+def _two_stage_evidence(a: dict) -> dict:
+    """Evidence under the two-stage form that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
+    the interior audit's, in the per-member form (`OneStageZk.membersEvidenceOf`) with its sessions one member's
+    statement, and the form's other keys each of its type, the first stage's coins never null (`FIRST_COINS_NULL`)."""
+    interior = {**_without(a["evidence"], "proofs"),
+                "proofs": {"statements": [{"member": "m", "sessions": a["evidence"]["proofs"]["sessions"]}]}}
+    return {"form": TWO.T.TWO_STAGE, "coins": {}, "interior": interior, "received": "", "record": {}, "source": "00",
+            "statements": []}
+
+
+def _two_stage_cases(a: dict) -> dict[str, dict]:
+    """The two-stage form's cases on v2's audit `a`, its record and evidence: the form's params missing a key
+    (``params-keys``, `TWO.CHANGES`); v2's params with the evidence under the two-stage form missing its keys
+    (``evidence-keys``); and v2's params with evidence under the two-stage form that its Lean reads in full
+    (``evidence-other``, `_two_stage_evidence`)."""
+    v2 = {**a["params"], "form": "one-stage"}
+    return {"params-keys": OS._case({"params": TWO.CHANGES["a-key-missing"](TWO.base()), "record": a["record"],
+                                     "evidence": {**a["evidence"], "form": "one-stage"}}),
+            "evidence-keys": OS._case({"params": v2, "record": a["record"],
+                                       "evidence": {**a["evidence"], "form": TWO.T.TWO_STAGE}}),
+            "evidence-other": OS._case({"params": v2, "record": a["record"], "evidence": _two_stage_evidence(a)})}
+
+
+def test_spot_reads_the_two_stage_form(remote_server):
+    """SPOT reads the two-stage form with the form's own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`)
+    and refuses evidence of another form than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every
+    other subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: the form's params missing a
+    key and v2's params with evidence under the two-stage form missing its keys, each refused by the form's reading, in
+    Lean as in Python (`_two_stage_cases`); and v2's params with evidence under the two-stage form, which the Lean
+    reads in full and refuses as a mismatch of forms, with the Python's words (`R.mismatch`): the Python reads the
+    form's evidence only up to its keys, so it decides no case past them, and an audit that passes every check is the
+    form's own difftest's to build."""
+    product = R.REMOTE
+    want = {"params-keys": "params: the keys of the parameters are not ",
+            "evidence-keys": "evidence: the keys of the evidence are not ",
+            "evidence-other": R.mismatch("one-stage", TWO.T.TWO_STAGE)}
+    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=2, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(drawn, audit):
+        for br, sampled in _two_stage_cases(audit).items():
+            if br == "evidence-other":
+                with pytest.raises(ValueError, match="outside the mirror"):
+                    R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                why = want[br]
+                component = {**as_component(R.SAMPLED_PROOFS, form_case(audit)),
+                             "evidence": bytes.fromhex(sampled["evidence"])}
+            else:
+                got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                why = got["reason"]
+                assert got["verdict"] == R.REJECT and why.startswith(want[br]), got
+                component = as_component(R.SAMPLED_PROOFS, sampled)
+            by_id = {c["id"]: c for c in (*drawn, component)}
+            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
+            if br != "evidence-other":
+                assert product.answer(case)["verdict"] == R.REJECT
+            out = remote_server.exchange(case)
+            refused = f"{R.SAMPLED_PROOFS.id} reject: {why}"
+            assert out["verdict"] == R.REJECT and refused in out["reason"], f"{br}: {out['verdict']}: {out['reason']}"
+            seen[br] += 1
+    check()
+    assert set(seen) == set(want), dict(seen)
+
+
+#: `reusing`'s R's sampling design: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
+REUSING_SAMPLING_DESIGN = {"k": 1, "law": "subset"}
 
 
 def reusing(made: list[dict]):
@@ -690,7 +772,7 @@ def reusing(made: list[dict]):
         s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
                                [{n: true[v]["words"] for n, v in named}])
         OS.PROGRAMS[s.sha512] = s.program
-        rec = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
+        rec = OS._json(OS.R.record(s.program, s.query, REUSING_SAMPLING_DESIGN, OS.SCHEME,
                                    [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
                                    registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
                                    anchors=[], previous=OS.R.digest(w),
@@ -707,13 +789,13 @@ def reusing_audit(m: dict) -> dict:
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
     file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_SAMPLING_DESIGN, rec, trees=0)
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
         for e in rec["registered"]}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
-              "law": REUSING_LAW, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
+              "law": REUSING_SAMPLING_DESIGN, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
               "parameters": s.signature, "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports,
               "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
@@ -775,8 +857,7 @@ def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
 
     assert len(digest(0)) == 64 and R.run_record(run(digest(0)), b"") == [digest(0)]
     assert strays(0, run(digest(0))) is None
-    assert strays(1, run(digest(0))) == (f"record: {R.INFERENCE_ONLY.id} committed {digest(1).hex()}, "
-                                         f"{R.PEARL_PLUS.id} committed {digest(0).hex()}")
+    assert strays(1, run(digest(0))) == f"record: {R.INFERENCE_ONLY.id} and {R.PEARL_PLUS.id} named different values"
     for undecoded in (b"", run(digest(0), x=1), run(digest(0)[:32]),
                       canonical({"manifests": [], "record": digest(0).hex()}).encode(),
                       canonical({"manifests": [{}], "record": digest(0).hex()}).encode()):
@@ -808,9 +889,9 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
     assert R.run_window(run(w), b"") == [digest(w)] == [bytes.fromhex(R.REG.digest(w))]
     assert R.policy_previous(canonical(record(0, previous=digest(w).hex())).encode(), b"") == [digest(w)]
     assert strays(record(0, previous=digest(w).hex()), run(w)) is None
-    assert strays(record(0, previous=digest(record(8)).hex()), run(w)) == (
-        f"window: {R.INFERENCE_ONLY.id} committed {digest(record(8)).hex()}, {R.PEARL_PLUS.id} committed {digest(w).hex()}")
-    assert strays(record(0), run(w)) == f"window: {R.INFERENCE_ONLY.id} committed , {R.PEARL_PLUS.id} committed {digest(w).hex()}"
+    stray = f"window: {R.INFERENCE_ONLY.id} and {R.PEARL_PLUS.id} named different values"
+    assert strays(record(0, previous=digest(record(8)).hex()), run(w)) == stray
+    assert strays(record(0), run(w)) == stray
     for undecoded in (run([]), run(w, rounds=[-1]), run(w, rounds=[True]), run(w, dropped=None), run(w, x=1)):
         assert R.run_window(undecoded, b"") is None and strays(record(0), undecoded) is None, undecoded
 
@@ -949,6 +1030,16 @@ def test_onsite_agrees_on_fewer_cases(onsite_server, recorded):
     cases the generator samples often."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], FEWER, (R.REJECT, "reject, a component undecided", "one record",
                                                          "two records", "one store", "two stores"))
+
+
+@pytest.mark.slow
+def test_onsite_counted_agrees(onsite_counted_server, recorded):
+    """`onsite-counted serve` (`Core.Onsite.counted`) against `ONSITE_COUNTED` on 50 cases. What only whole cases through
+    it hold, which `test_wipe_count_ties.py` can't: its eight subprotocols, with the count over the wipe's span on its
+    host's one link and the counted wipe, decode a case and reject it as the reference does. No case here reaches its
+    wipe's ties: SPOT's cases all reject, and a rejection stands before any tie is read."""
+    _agree(ONSITE_COUNTED, onsite_counted_server, SEEN["onsite-counted"], 50,
+           (R.REJECT, "reject, a component undecided", "one record"))
 
 
 @pytest.mark.slow

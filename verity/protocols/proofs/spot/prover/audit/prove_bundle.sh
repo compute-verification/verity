@@ -61,10 +61,10 @@ fi
 export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/benchmarks/one_stage/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
-# (prove_path/run.sh)
+# (prove_path.sh)
 export RUST_MIN_STACK=$((64 << 20))
 
-if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path/run.sh's R
+if [ -z "${PB_WINDOW:-}" ]; then   # the store CLI with the run's custody key in its environment only, as prove_path.sh's R
   PYTHONPATH=$REPO/benchmarks/proof_throughput "$PY" -c 'import os, sys
 from verity_proof_throughput.store import store_env
 os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], store_env())' data fetch-fixtures --repo "$REPO" "$BUNDLE_WINDOW" > "$O/fetch.log" 2>&1 \

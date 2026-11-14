@@ -62,7 +62,7 @@ computes, so C̃ is `pc8`'s word for word:
 FP32 values compare by value with ±0 one value (`_Cmp`): two signed integer comparisons on the encodings, with the
 sign and zero of each value computed once.
 
-**The tile** (`Pc8TileCap`) is `Pc8Tile` plus, on its passing rows R (an A row's ok word, `pc4.ok_word`) and every
+**The tile** (`Pc8TileCap`) is `Pc8Tile` plus, on its passing rows R (an A row's ok word, `U.ok_word`) and every
 column C of the tile, Lean's per-tile inert-work bound at the device's prices, ρ = 1/RHO and the unit's n = N:
 
     (32 + add/G)·atoms + fs·(|C|/N)·elems + add·zeros  <=  ρ · creditDevRev1(m, K, N) · |R|·|C| / (m·N)
@@ -108,7 +108,7 @@ and the strip's bits and bound, all through their committed rows (`PORTS`; the c
     (flags ‖ their count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests ‖
     zeros) and ``cap-sums`` (its sums ‖ good) rows, and each strip's ``cap-rows`` (admission bits ‖ bound ‖ zeros) row
     (`leaves`, which says why the cap-chunks and cap-rows rows are padded to 64 words).  The word unit returns its flags
-    padded to whole 16-bit words with zero bits fixed in gates (as `pc4.ok_word` fixes an ok word's), so no bit of the
+    padded to whole 16-bit words with zero bits fixed in gates (as `U.ok_word` fixes an ok word's), so no bit of the
     row is outside its ports at any k; the row tally reads the first k/32.  A row digest and the strip return their
     rows' zero words the same way, and the tile and the tally leave them unread.
 """
@@ -134,7 +134,8 @@ from ..schemes.pearl_c_device import DEVICES
 from . import boolean as _boolean  # noqa: F401  registers the windows' _v2 Definitions Flock's lowering falls back to
 from . import hashes as H
 from . import leaves as L
-from . import pc4, pc8
+from . import pc8
+from . import tile_units as U
 from . import words as W
 
 F32, BIT, I32, OK = pc8.F32, Value(1), Value(32), pc8.OK
@@ -142,25 +143,25 @@ SLICE = C.SLICE
 _NEG_ONE, _BELOW_ZERO, _ABOVE_ZERO, _I32_TOP = 0xFFFFFFFF, 0x80000001, 0x00000001, (1 << 31) - 1
 
 
-def _not(e: pc4._Emit, a):
+def _not(e: U._Emit, a):
     return 1 - a if isinstance(a, int) else e.call(BitNot, a)
 
 
-def _and(e: pc4._Emit, a, b):
+def _and(e: U._Emit, a, b):
     if isinstance(a, int) or isinstance(b, int):
         c, other = (a, b) if isinstance(a, int) else (b, a)
         return other if c else 0
     return e.call(BitAnd, a, b)
 
 
-def _or(e: pc4._Emit, a, b):
+def _or(e: U._Emit, a, b):
     if isinstance(a, int) or isinstance(b, int):
         c, other = (a, b) if isinstance(a, int) else (b, a)
         return 1 if c else other
     return e.call(BitOr, a, b)
 
 
-def _add(e: pc4._Emit, a, b):
+def _add(e: U._Emit, a, b):
     if isinstance(a, int) and a == 0:
         return b
     if isinstance(b, int) and b == 0:
@@ -168,7 +169,7 @@ def _add(e: pc4._Emit, a, b):
     return e.call(I32Add, a, b)
 
 
-def _mul(e: pc4._Emit, c: int, x):
+def _mul(e: U._Emit, c: int, x):
     """c·x mod 2^32 for a constant c >= 0: double and add from the top bit."""
     out = 0
     for bit in bin(c)[2:]:
@@ -178,14 +179,14 @@ def _mul(e: pc4._Emit, c: int, x):
     return out
 
 
-def _count(e: pc4._Emit, bits) -> object:
+def _count(e: U._Emit, bits) -> object:
     total = 0
     for b in bits:
         total = _add(e, total, b if isinstance(b, int) else e.call(SelectI32, b, 1, 0))
     return total
 
 
-def _wire(e: pc4._Emit, w: int, v):
+def _wire(e: U._Emit, w: int, v):
     return e.c(w, v) if isinstance(v, int) else v
 
 
@@ -193,7 +194,7 @@ class _Cmp:
     """Value order on finite FP32 words, ±0 one value: per value its sign (signed x <= −1) and zero (|x| = 0) once, then
     x <= y is y <= x on the encodings when both are negative, else x <= y on them or both zero."""
 
-    def __init__(self, e: pc4._Emit) -> None:
+    def __init__(self, e: U._Emit) -> None:
         self.e, self._memo = e, {}
 
     @staticmethod
@@ -244,7 +245,7 @@ class _Cmp:
         return e.call(SelectI32, z, _ABOVE_ZERO, e.call(SelectI32, s, e.call(I32Add, x, _NEG_ONE), e.call(I32Add, x, 1)))
 
 
-def _finite(e: pc4._Emit, ok, x):
+def _finite(e: U._Emit, ok, x):
     return _and(e, ok, e.call(F32IsFinite, x))
 
 
@@ -271,7 +272,7 @@ def _row_a_cap_sig(S_):
 
 
 def _row_a_cap_body(B, S_, x, line, fa, fb):
-    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+    e, k, dev = U._Emit(B), S_.K, S_.DEV
     outs, accs, beta = pc8._row_a(e, k, dev, x, line, fa, fb)
     dead = SALT_DEAD[DEVICES[dev].atom.name]
     cb = e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, FLAT_E))
@@ -305,7 +306,7 @@ def _word_sig(S_):
 
 
 def _word_body(B, S_, a, b, cert):
-    e, k = pc4._Emit(B), S_.K
+    e, k = U._Emit(B), S_.K
     d, ng = _promoted(S_.DEV, k)
     window, g_ = WINDOWS[d.atom.name], d.g
     full = (1 << g_) - 1
@@ -395,7 +396,7 @@ def _tile_cap_sig(S_):
     return params, Tuple(Array(tm, Array(tn, F32)), Array(tm, Array(tn, F32)), OK)
 
 
-def _peel(e: pc4._Emit, dev: str, c, pa, pb):
+def _peel(e: U._Emit, dev: str, c, pa, pb):
     """U: the device's four BF16 k16 steps from C̃ over P_A,i·P_B,j (`Pc8Tile`'s)."""
     peel = pc8.PEELS[DEVICES[dev].peel.name]
     u = c
@@ -404,7 +405,7 @@ def _peel(e: pc4._Emit, dev: str, c, pa, pb):
     return u
 
 
-def _row_elems(e: pc4._Emit, flags, sd, k: int):
+def _row_elems(e: U._Emit, flags, sd, k: int):
     """A row's forming elements: per atom block, 32 when every word of the row (``flags``, one per column) flags it, else
     its salt-dead count."""
     out = 0
@@ -416,12 +417,12 @@ def _row_elems(e: pc4._Emit, flags, sd, k: int):
     return out
 
 
-def _masked_add(e: pc4._Emit, sums, ok, row):
+def _masked_add(e: U._Emit, sums, ok, row):
     """``sums`` plus ``row``'s terms where ``ok``."""
     return tuple(_add(e, s, e.call(SelectI32, ok, r, 0)) for s, r in zip(sums, row))
 
 
-def _bound(e: pc4._Emit, table, rows):
+def _bound(e: U._Emit, table, rows):
     """⌊|R|·|C|·P/(RHO·g)⌋ at |R| = ``rows``: the table's entry (`_cap_constants`)."""
     bound = table[0]
     for r, t in enumerate(table[1:], 1):
@@ -429,7 +430,7 @@ def _bound(e: pc4._Emit, table, rows):
     return bound
 
 
-def _within(e: pc4._Emit, consts, sums, bound=None):
+def _within(e: U._Emit, consts, sums, bound=None):
     """The inert-work bound's inequality on the tile's sums (atoms, zeros, elems and, without ``bound``, rows), in its
     integer form (module docstring), as a bit."""
     atom, zero, n_g, elem_g, l_max, table = consts
@@ -454,7 +455,7 @@ def _row_capped(S_, sig):
     return sig(S_)
 
 
-def _row_over(e: pc4._Emit, row_consts: tuple[tuple, int], ok, atoms, zeros, elems):
+def _row_over(e: U._Emit, row_consts: tuple[tuple, int], ok, atoms, zeros, elems):
     """``ok``, and the row's own atoms, zeros and elements over the per-row inert-work bound (the tile's test on one
     row).  No gate reads ``ok`` alone: a strip's tallies all read its admission bits, so such a gate would be computed
     in each of them."""
@@ -471,7 +472,7 @@ def _tile_row_cap_body(B, S_, ac, bc, pa, pb, oka, sd, cert):
 
 
 def _tile_cap(B, S_, ac, bc, pa, pb, oka, sd, cert, row_consts):
-    e, k, dev = pc4._Emit(B), S_.K, S_.DEV
+    e, k, dev = U._Emit(B), S_.K, S_.DEV
     consts = _cap_constants(k, S_.TM, S_.TN, S_.N, S_.RHO, dev)
     word = templates(k, dev)["word"]
     cs, us = [], []
@@ -497,7 +498,7 @@ def _tile_cap(B, S_, ac, bc, pa, pb, oka, sd, cert, row_consts):
             good = _and(e, good, _not(e, _row_over(e, row_consts, ok, row_atoms, row_zeros, row_elems)))
         cs.append(array_of(crow))
         us.append(array_of(urow))
-    return tuple_of(array_of(cs), array_of(us), pc4.ok_word(e, _and(e, good, _within(e, consts, sums))))
+    return tuple_of(array_of(cs), array_of(us), U.ok_word(e, _and(e, good, _within(e, consts, sums))))
 
 
 Pc8TileCapDef = CompositeDefinition(
@@ -575,12 +576,12 @@ def _word_unit_sig(S_):
 
 
 def _word_unit_body(B, S_, a, pa, b, pb, cert):
-    e, k = pc4._Emit(B), S_.K
+    e, k = U._Emit(B), S_.K
     out = B.call(templates(k, S_.DEV)["word"], a, b, cert)
     flags = [out[1][t] for t in range(k // SLICE)]
     pad = [e.c(1, 0)] * (flag_bits(k) - len(flags))
     return tuple_of(out[0], _peel(e, S_.DEV, out[0], pa, pb), array_of(flags + pad), _wire(e, 32, _count(e, flags)),
-                    out[2], pc4.ok_word(e, out[3]))
+                    out[2], U.ok_word(e, out[3]))
 
 
 Pc8CapWordUnitDef = CompositeDefinition(
@@ -646,7 +647,7 @@ def _strip_sig(S_):
 
 
 def _strip_body(B, S_, oka):
-    e = pc4._Emit(B)
+    e = U._Emit(B)
     table = _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)[-1]
     oks = [e.call(Bf16GtStrict, oka[i], 0) for i in range(S_.TM)]
     pad = [e.c(1, 0)] * (STRIP_BITS - S_.TM)
@@ -670,7 +671,7 @@ def _row_tally_sig(S_):
 
 
 def _row_tally_body(B, S_, flags, atoms, zeros, good, sd):
-    e, tn = pc4._Emit(B), S_.TN
+    e, tn = U._Emit(B), S_.TN
     row_atoms = row_zeros = 0
     row_good = 1
     for w in range(tn):
@@ -678,7 +679,7 @@ def _row_tally_body(B, S_, flags, atoms, zeros, good, sd):
         row_zeros = _add(e, row_zeros, zeros[w])
         row_good = _and(e, row_good, e.call(Bf16GtStrict, good[w], 0))
     elems = _row_elems(e, [flags[w] for w in range(tn)], sd, S_.K)
-    return tuple_of(row_atoms, row_zeros, elems, pc4.ok_word(e, row_good))
+    return tuple_of(row_atoms, row_zeros, elems, U.ok_word(e, row_good))
 
 
 Pc8CapRowTallyDef = CompositeDefinition(
@@ -704,7 +705,7 @@ def _row_cap_tally_body(B, S_, atoms, zeros, elems, good, mask, bound, _tail):
 
 
 def _tally(B, S_, atoms, zeros, elems, good, mask, bound, row_consts):
-    e = pc4._Emit(B)
+    e = U._Emit(B)
     consts = _cap_constants(S_.K, S_.TM, S_.TN, S_.N, S_.RHO, S_.DEV)
     sums, bad = (0, 0, 0), 0
     for i in range(S_.TM):
@@ -713,7 +714,7 @@ def _tally(B, S_, atoms, zeros, elems, good, mask, bound, row_consts):
         bad = _or(e, bad, _and(e, ok, _not(e, e.call(Bf16GtStrict, good[i], 0))))
         if row_consts is not None:
             bad = _or(e, bad, _row_over(e, row_consts, ok, atoms[i], zeros[i], elems[i]))
-    return pc4.ok_word(e, _and(e, _not(e, bad), _within(e, consts, sums, bound)))
+    return U.ok_word(e, _and(e, _not(e, bad), _within(e, consts, sums, bound)))
 
 
 Pc8CapTallyDef = CompositeDefinition(
@@ -786,7 +787,7 @@ def _cert(S_):
 
 Pc8CallCapDef = CompositeDefinition(
     "Pc8CallCap", 1, ("M", "K", "N", "TM", "TN", "DEV"),
-    lambda S_: (pc8._call_sig(S_)[0] + (_cert(S_),), Tuple(pc4.DIGESTS(S_), _verdicts(S_), Array(S_.M, OK))),
+    lambda S_: (pc8._call_sig(S_)[0] + (_cert(S_),), Tuple(U.DIGESTS(S_), _verdicts(S_), Array(S_.M, OK))),
     lambda B, S_, *a: tuple_of(*_call_cap_units(B, S_.K, (S_.TM, S_.TN), S_.DEV, *a)),
     doc="`Pc8CallHidden` with the per-tile cap, cut into a unit per word, the tile and its tally: each tile's digest of C̃ "
         "and U and its cap verdict by tile row and column (the verifier accepts a tile only when its digest is the "
@@ -802,7 +803,7 @@ def _check_cap_body(B, S_, a, ea, b, eb, fa, fb, g, cert):
 Pc8CheckCapDef = CompositeDefinition(
     "Pc8CheckCap", 1, ("M", "K", "N", "TM", "TN", "DEV"),
     lambda S_: (pc8._check_sig(S_)[0] + (_cert(S_),),
-                Tuple(pc4.DIGESTS(S_), _verdicts(S_), Array(S_.M, OK), Array(S_.N, OK))),
+                Tuple(U.DIGESTS(S_), _verdicts(S_), Array(S_.M, OK), Array(S_.N, OK))),
     _check_cap_body, doc="`Pc8CheckHidden` with the per-tile cap: `Pc8CallCap`'s outputs, then each B row's admission.",
     conformance="protocol-defined")
 

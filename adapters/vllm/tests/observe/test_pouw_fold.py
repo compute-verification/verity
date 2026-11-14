@@ -189,23 +189,23 @@ def test_the_served_y_alone_is_the_commits(linears):
 
 
 def test_the_match_capture_installs_its_workloads_target_executors(linears, monkeypatch):
-    """`m1_capture` installs what the workload's target declares, from its `protocols_config` with the epoch's challenger
+    """`match_capture` installs what the workload's target declares, from its `protocols_config` with the epoch's challenger
     its own (`pouw.challenged`, on the Lean verifier's coins, seeded here), and records the entries in the header."""
     from types import SimpleNamespace
 
     monkeypatch.setattr(verifier, "coins", random.Random(5).randbytes)
 
-    from verity_vllm.pipeline import m1_capture
+    from verity_vllm.pipeline import match_capture
     wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:rows-sha512"]}, "protocols_config": {"pouw": {}}}
     model, args = Model(), SimpleNamespace(target=None)
-    protocols, entries = m1_capture.capture_protocols(wl, args, model)
+    protocols, entries = match_capture.capture_protocols(wl, args, model)
     try:
         model((torch.randn(M, K, generator=torch.Generator().manual_seed(5)) * 0.8).to(BF))
     finally:
         protocols.close()
     run, _sites = pouw.circuit_run("pouw:ncp-v2")
     assert entries == ["pouw:ncp-v2"] and run.commit is False and len(run.seconds) == 2
-    assert m1_capture.capture_protocols({"protocols_config": wl["protocols_config"]}, args, model) == (None, [])
+    assert match_capture.capture_protocols({"protocols_config": wl["protocols_config"]}, args, model) == (None, [])
 
 
 def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_path):

@@ -140,7 +140,7 @@ period that closed with its reserves held. ``pearlplus-period rule``, once the c
 (`pearlplus_period_rule`; exit 1 when BROKEN). ``coin``: the verifier's coin record published the moment it is
 sampled (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
-``record``: SPOT's answer from the records audit kept under ``--sampled-proofs`` (`prove_path/run.sh`'s with
+``record``: SPOT's answer from the records audit kept under ``--sampled-proofs`` (`verity/protocols/proofs/spot/prover/audit/prove_path.sh`'s with
 ``PP_RECORDS=1``, or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the docket it
 sampled against), read as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under
 ``--window-tie DIR`` where it is given, the window tied to W); each other subprotocol's from
@@ -173,7 +173,8 @@ memory, or its compose hand-off), which composes the final record on another hos
 and with ``--served-compare`` the served compare's verdict line (``served_compare``, `served_compare_line`).
 ``--steps LO,HI`` gives the window's engine steps, which the record otherwise picks from the serve dir's seals, windows
 and requests (`pick`): a compose follow-on holds no requests file. ``--off-node`` composes from the served node's compose
-hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the record's node itself. ``--sampled-lean``
+hand-off (``composed_on``'s ``from`` `HANDED_FROM`, which says that a verdict handed in is taken as given, with every
+check behind it: `TAKEN_AS_GIVEN`), and is refused on the record's node itself. ``--sampled-lean``
 takes SPOT's row from this host's own run of its Lean verifier on the records audit's v2 case, its proofs and
 public files (`lean_sampled_row`, ``--sampled-exe`` or built here), not from the summary and audit record the served node
 wrote, so an edit to those leaves the row as it is. Each row with an answer says where it came from (its
@@ -326,11 +327,14 @@ COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the 
 #: what `record` composes from off the served node (a deferral's follow-on): the prover's copy of those files
 COPIED_FROM = ("a prover-side copy of each piece's answer file as the served node wrote it, not the party that produced it: "
                "an edit to that file on the node or to its copy changes its row")
+#: What a record says of a verdict it was handed: every check behind it, a piece's whole chain of them, ran where the
+#: verdict was computed, and where the record is composed none of them is run again or held to anything.
+TAKEN_AS_GIVEN = "a verdict computed off the auditor's device and handed in is taken as given, for the whole chain"
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
 HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
-               "that produced it: an edit to such a file on the node before its hand-off changes its row")
+               f"that produced it: an edit to such a file on the node before its hand-off changes its row; {TAKEN_AS_GIVEN}")
 #: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
 AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
@@ -699,7 +703,7 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
 
 #: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
-FRONT_PUBLIC = ("rc", "run", "ended", "ended_utc", "session_s", "pinned", "leaked_removed")
+FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
 
 
 def front_line(session: Mapping[str, Any]) -> str:
@@ -1140,7 +1144,7 @@ PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
 #: why a window meets ``AcceptedLive`` (`Accounting.TS.Session`'s, ``accounting-ts-accepted-live``)
 LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
             "accepted its session (verity-verify-proof verify --zk with the --registered file credit builds)")
-#: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.Period`'s)
+#: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.MonitoringPeriod`'s)
 SALT_MET = ("core_check.salt_of_record accepted the window's salt as its live salt coin, opened after the window's open root and read "
             "through the session the auditor's ledger opened for it, under the host's pins log and main, and the record's "
             "Program salt is that coin's (manifest_reason)")

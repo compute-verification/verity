@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Core.Formalism
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 
 /-!
 # The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
 
-`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` is stated in words: except with probability
+`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` is stated in words: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the windows
 before the first refusal. `RightValues` states that bound in AND gates of the registered circuit under its
 pinned lowering (`Verity.creditSize lower D`): except with probability δ_coin + δ_crypto,
@@ -54,7 +54,7 @@ registered circuit, the unit the PoUW component's `Holds` is restated in.
 
 namespace Properties.Pouw.ServedValues
 
-open Properties.Pouw.PeriodJ10R
+open Properties.Pouw.MonitoringPeriodJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The registered circuit's proof blocks and its words' bits**, the public map from words to gates. `gates t` is proof
@@ -88,9 +88,9 @@ def liveSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live :
 
 open Classical in
 /-- **The credited size `S`**: the live size of every block of the windows before the first refusal
-(`CreditWindows.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
+(`CreditExecutionPhases.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
 noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveSize Sc Cd Np (Wp.liveAt x w) sz t : ℝ) else 0
 
@@ -120,7 +120,7 @@ noncomputable def creditFloor {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (
     (sz : Fin Np → ℕ) (a b Λ δs : ℝ) : ℝ :=
   max (1 - epsSkip Sc Cd Np j Nlive S sz a b Λ δs) 0 * S
 
-/-- **The served PoUW's values in AND gates.** Take `H1J10RCheckedCreditPeriod`'s period and premises without
+/-- **The served PoUW's values in AND gates.** Take `H1J10RCheckedCreditMonitoringPeriod`'s period and premises without
 `UnitFixed` (and without the play's `folded` words): a registered circuit `Cd` and a scheme `Sc` run as a period of at
 most `n ≥ 1` windows over the sampling block's tile stratum `s_T` of `σ`, with `Credit.window`'s inputs (`ws`) any
 function of the period's coins. Add the registered declaration `D`, the lowering `lower` pinned at registration,
@@ -141,7 +141,7 @@ def RightValues : Prop :=
     (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
     (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (_hKd : 1 ≤ k sT)
     (D : Verity.RegisteredCircuit) (lower : Verity.RegisteredCircuit → Verity.Circuit) (M : BlockMap Cd (tileCount σ sT) lower D)
-    (ledger : Finset (Fin (lower D).N)) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (ledger : Finset (Fin (lower D).N)) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
@@ -161,7 +161,7 @@ def RightValues : Prop :=
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
-    Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     prob (fun x => Pl.accepts x ∧
       rightSize Sc Cd (M.size ledger) (fun w t =>
         (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

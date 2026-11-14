@@ -185,7 +185,7 @@ def beside(batch: int, reads: int, layers: int, ctx: bytes, key: bytes, solo: di
     g = torch.Generator(device="cuda").manual_seed(3)
     x = torch.randn(batch, BUSY_H, dtype=torch.bfloat16, device="cuda", generator=g)
     w = torch.randn(BUSY_H, BUSY_N, dtype=torch.bfloat16, device="cuda", generator=g)
-    serving, side, gs = torch.cuda.current_stream(), row_table_side_stream(), torch.cuda.Stream()
+    serving, side, gs = torch.cuda.current_stream(), row_table_side_stream(torch), torch.cuda.Stream()
 
     def sleep(cycles: int) -> tuple[Any, Any]:
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)

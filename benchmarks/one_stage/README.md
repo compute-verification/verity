@@ -95,7 +95,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `adapters/vllm/tools/served_run/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `adapters/vllm/tools/served_run/commit.sh` (the vLLM served run's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run) and its replay on CPU. The row dir stays on the
   node, the only copy of its bundle. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -108,7 +108,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the docket's
   pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
-  Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
+  Then comes the records audit (`verity/protocols/proofs/spot/prover/audit/prove_path.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
   and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
@@ -210,7 +210,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   memory, or a session that ran another statement version than the row's is void: no rate, its reasons in `void`, a
   `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
-  `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
+  `verity/protocols/proofs/spot/prover/audit/prove_path.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
   spends on one sampled statement of a block's sample.
 - `phase_profile.sh` (with `phase_profile.py`): one GPU prover phase (`PHASE`, default `t.ligerito`) on a pod of its own: the

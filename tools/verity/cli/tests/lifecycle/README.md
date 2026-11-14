@@ -3,14 +3,14 @@
 A minimal worked example of onsite, `verity/onsite/v0`, and of remote's H1 development executable
 `verity/remote/v0` (H1's period as its work, which no configuration names), run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
-is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the demo writes the smallest
+is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the example writes the smallest
 version of it in `lifecycle.py`, and nothing under `verity/` or `security/` changes.
 
+It is the small workload beside `verity run`'s tests, not a demo (`demos/README.md` lists those). Its test runs both
+composites, honest and with every deviation refused, about 2 s on CPU:
+
 ```text
-uv run python demos/lifecycle/run.py                          # one monitoring period of each composite, about 2 s on CPU
-uv run python demos/lifecycle/run.py --only onsite --cheat off-node   # the developer deviating
-verity demo lifecycle                                         # the same, through the demo command
-uv run --directory demos/lifecycle pytest test_lifecycle.py     # honest, and every deviation refused
+cd tools/verity/cli && uv run pytest tests/lifecycle/test_lifecycle.py
 ```
 
 `lifecycle.py` holds the model, the site's `Layout`, the phases as functions and the two parties both composites share
@@ -79,7 +79,7 @@ chained through the state wire. The monitoring period is three execution phases 
    with the rows, and the wipe holds them to the fill. PoUW's answer is its window's remote and its period's onsite, one
    declaration at a time. Both composites run the
    inference-only policy's check (`inference_only`), which reads no coins: the record names the block's Program, and the
-   policy's Python check (`nci_reference.check_desc`, the reference `NciCheck` is held to) finds that the block divides
+   policy's Python check (`inference_only_reference.check_desc`, the reference `InferenceOnlyCheck` is held to) finds that the block divides
    into inference blocks, one per request (19,620 gates reading 48 bits of fresh input: its input and the state word),
    within Γ = 2^15 gates and α = 1/256 fresh-input bits per gate, with theta registered. Each subprotocol answers in
    `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols, after
@@ -91,7 +91,7 @@ chained through the state wire. The monitoring period is three execution phases 
    the pooled bound, each subprotocol's projection of the layout (`Layout.accounting`), and the same scaled to a week, a
    month and a year.
 
-The first registration and declaration 1, onsite, and the period, remote (`run.py` prints every phase of both):
+The first registration and declaration 1, onsite, and the period, remote (`lifecycle.summary` gives every phase of both):
 
 ```text
 1 hardware     registration: entry 4c9ea553cb07999b..., after e3d2030c65fc3ac4...
@@ -124,7 +124,7 @@ declaration 1
                1.94e+17 multiply-adds; delta 10^-6017 at eps 1/2
 ```
 
-The deviations, one or more a phase, each refused or rejected (`test_lifecycle.py`; `--cheat NAME`):
+The deviations, one or more a phase, each refused or rejected (`test_lifecycle.py`; `lifecycle.CHEATS`):
 
 | cheat | phase | caught by |
 | --- | --- | --- |
@@ -148,13 +148,13 @@ The deviations, one or more a phase, each refused or rejected (`test_lifecycle.p
 | name | caller | in | out | module |
 | --- | --- | --- | --- | --- |
 | `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | `security/Definitions/Core/Site.lean` (`Verity.Site.Sheet`, `Loc`, `Link`, `Verity.Site.Entry`, `Verity.Registration.Entry.site`) |
-| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the demo (pieces: `security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
-| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the demo doesn't check yet), decidable; no difftest yet |
-| `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the execution blocks | missing: written in the demo |
-| `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the demo |
-| `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the demo |
+| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the example (pieces: `security/Definitions/Registration/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
+| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the example doesn't check yet), decidable; no difftest yet |
+| `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the execution blocks | missing: written in the example |
+| `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the example |
+| `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the example |
 | `operate` | developer | requests, theta, state, tape | `Served` | the integration's (here the toy model) |
-| `declare`, `check_declaration` | developer, verifier | advice, served values, layout, previous record | `Declaration`, `Block` | missing: written in the demo |
+| `declare`, `check_declaration` | developer, verifier | advice, served values, layout, previous record | `Declaration`, `Block` | missing: written in the example |
 | `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/protocols/proofs/spot/verifier/one_stage/registered.py` over `verity.commitments.hm96` |
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.circuits.evaluation.evaluate_words` |
@@ -177,15 +177,15 @@ The deviations, one or more a phase, each refused or rejected (`test_lifecycle.p
   field names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
   appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
   state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
-  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are fresh input gates.
 - **State crosses execution blocks as a committed value.** A sampled proof block at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and
-  `account`, and `fork` passes every subprotocol. Nothing composes declarations into a monitoring period; the demo
+  `account`, and `fork` passes every subprotocol. Nothing composes declarations into a monitoring period; the example
   applies the composition's rule over them.
 - **Where prefix-extending B breaks.** (i) PoUW's grid pads every block (`pad(real + 1)`), so the registered circuit is
   full of filler units, and their count depends on how the work was cut into declarations. (ii) Work that straddles an
-  execution phase's boundary: a batch spanning two, or a decode whose KV cache carries into the next; the demo cuts
+  execution phase's boundary: a batch spanning two, or a decode whose KV cache carries into the next; the example cuts
   at request boundaries. (iii) A registered compiler that schedules globally isn't prefix-extending. (iv) B here is Python with a
   descriptor digest, not a registered circuit with a length cap, and its advice validation is its own code.
 - **One `Layout`, folded from a log.** The site is `Accounting.Hardware`'s shape as registered data: locations are its
@@ -203,7 +203,7 @@ The deviations, one or more a phase, each refused or rejected (`test_lifecycle.p
   certifier's boundary are each `Layout.accounting`; the challenger's round reads its link's latency and theta's
   device's rate from it, and the verifier reads the certifier's key from its registered location, checked against the
   auditor's own (`owner`). A later entry raises capacity from the next execution phase on. The toy's share of it
-  (5 × 10^-12) says only that the model is tiny; over all compute the scaling is a parameter the demo doesn't take.
+  (5 × 10^-12) says only that the model is tiny; over all compute the scaling is a parameter the example doesn't take.
 - **Remote can't see unreported work.** Without a view of the system's I/O, work left out of the advice is
   uncredited, not detected: remote's credit is a lower bound, and its projection says how many boundary bits no
   certifier sees. Onsite, the certifier's count catches it.
@@ -221,7 +221,7 @@ The deviations, one or more a phase, each refused or rejected (`test_lifecycle.p
 
 ## (d) Proposed homes
 
-In a noun-based layout, each part of the demo goes where its noun is:
+In a noun-based layout, each part of the example goes where its noun is:
 
 - `verity/registration`: `Layout`, its entries, `check_registration` and the projections; the registered information (`register`,
   `check_baseline`), B's registered descriptor and `grow`, and `placement`; `declare` and `check_declaration` too, as

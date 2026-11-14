@@ -1,4 +1,4 @@
-"""The hardware a placement runs on, in the shape of Lean's `Accounting.Hardware` (`security/Definitions/Accounting/Physical.lean`).
+"""The hardware a placement runs on, in the shape of Lean's `Accounting.Hardware` (`security/Definitions/Registration/Physical.lean`).
 
 Leaves are devices, numbered in order (`L = Nat`). A *unit* is a block: a set of leaves behind one boundary (`units`).
 Links (`E`) each join two leaves (`ends`) with a capacity `beta` in bits a tick each way. A link is certified when one of
@@ -15,7 +15,7 @@ leaf of the unit when `compute` is empty).
 switch. Every route between two blocks therefore crosses the source block's uplink and the destination block's uplink.
 
 `DeviceGraph.from_datacenter` reads a declaration of `benchmarks/datacenter` (a `datacenter.Datacenter`, as
-`datacenter.examples` declares them and `mockdc.py` stands them up): its blocks are the units and its GPUs compute.
+`datacenter.examples` declares them): its blocks are the units and its GPUs compute.
 """
 from __future__ import annotations
 

@@ -35,9 +35,9 @@ import numpy as np
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import pc4
+from verity.protocols.experimental.pearl_c4.prover import pc4
 from verity.protocols.accounting.pouw.prover.circuit.anchors import TileAnchors, public_ports
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS

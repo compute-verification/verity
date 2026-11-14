@@ -6,16 +6,18 @@ both read are `verity.protocols.accounting.poub.verifier.p2_parties`'s.
 case to the store's `case`, if it has one. `prove(reader, writer, prover, request)` runs it over a channel and returns
 the answer. It also reads a verifier that sends each challenge as the coin's whole opening and discloses no coins at
 the end, the form before `Released`: the challenge is read as its released part (`released_of`), and `end` never comes.
+The runtime starts it from a configuration and its deploy bindings (`start`, `STARTS`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
 from verity.channel import Message
 from verity.party import Finish, Identity, Received, Send
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import p2
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
@@ -84,7 +86,17 @@ class Prover:
         return out
 
 
-PROTOCOL = ProtocolDef(P2.MANIFEST, {P2.PROVER: Prover})
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The prover's start on its node (`ProtocolDef.starts`), from the configuration and its deploy bindings (`bound`,
+    its `[prover.bandwidth]`: the verifier's `address` it dials): its params the request (`P2.deployed_request`) and
+    its `store` (a `Peer`) the served C* on the card. Neither has a source the runtime gives a party (the request's
+    node is setup's, the store the served store's), so it raises `NotImplementedError(P2.GOAL)`."""
+    P2.deployed_request(configuration, bound)
+    raise NotImplementedError(P2.GOAL)
+
+
+STARTS = {P2.PROVER: start}
+PROTOCOL = ProtocolDef(P2.MANIFEST, {P2.PROVER: Prover}, STARTS)
 
 
 def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Peer, request: Mapping[str, Any],
@@ -95,4 +107,4 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Peer, request: Mapping[str, A
     return P2.drive(Prover(), dict(request), identity, f_in, f_out, peer=P2.VERIFIER).outcome
 
 
-__all__ = ["PROTOCOL", "Peer", "Prover", "prove", "released_of"]
+__all__ = ["PROTOCOL", "Peer", "Prover", "STARTS", "prove", "released_of", "start"]

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Core.Circuit
-public import Definitions.Accounting.JointLive
+public import Definitions.Compose.JointLive
 import Mathlib.Algebra.Order.Chebyshev
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 

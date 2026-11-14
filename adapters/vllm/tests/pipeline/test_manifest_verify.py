@@ -43,7 +43,7 @@ def _used(tmp_path, **changed):
     return str(path)
 
 
-def test_one_request_s_manifest_is_rebuilt_from_its_program_and_workload_under_every_policy_and_the_query_of_record(tmp_path, built, capsys):
+def test_one_request_s_manifest_is_rebuilt_from_its_program_and_workload_under_every_policy_and_the_query_of_record(tmp_path, built, capsys, caplog):
     used, out = _used(tmp_path), tmp_path / "commit" / "of" / "manifest_verify.json"
     (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0"}]}))
     assert cli.main(["manifest-verify", "--manifest", used, "--program", "D/build_request", "--workload", str(tmp_path / "wl.json"), "--out", str(out)]) == 0
@@ -55,7 +55,7 @@ def test_one_request_s_manifest_is_rebuilt_from_its_program_and_workload_under_e
     assert out.read_text() == json.dumps(rec, indent=1)                         # its directory made
     printed = capsys.readouterr()
     assert printed.out == json.dumps(rec, indent=1) + "\n[manifest] VERIFY OK: the manifest of record\n"
-    assert printed.err == "build says\n"                                        # the builder's lines, on stderr
+    assert [r.getMessage() for r in caplog.records if r.name == MV.__name__] == ["build says"]   # the builder's lines, logged
 
 
 def test_a_program_with_no_workload_named_is_rebuilt_with_none(tmp_path, built):

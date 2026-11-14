@@ -47,10 +47,10 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules import vllm_iface as vi
 
 PROF = dict(mode="profile", profile="b1-eager")

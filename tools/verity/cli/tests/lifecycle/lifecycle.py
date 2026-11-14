@@ -25,7 +25,7 @@ The phases, each a function here:
    projection of the layout (`Layout.accounting`).
 
 `prove` and `verify` are a stand-in for Flock behind the ZK server: the proof is the sampled proof block's opening, which `verify`
-checks against the commitments and re-evaluates in the clear. It is sound for the demo and not zero-knowledge.
+checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
 """
 
 from __future__ import annotations
@@ -943,13 +943,13 @@ most α bits of fresh input per gate. One request is 19,620 gates reading 48 bit
 word), theta being registered."""
 
 
-def _nci() -> Any:
-    """The inference-only policy's Python check (`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py`), the
-    reference its Lean check, `NciCheck`, is held to."""
-    name = "lifecycle_nci_reference"
+def _inference_only() -> Any:
+    """The inference-only policy's Python check (`verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py`), the
+    reference its Lean check, `InferenceOnlyCheck`, is held to."""
+    name = "lifecycle_inference_only_reference"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+            name, ROOT / "verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py")
         m = importlib.util.module_from_spec(spec)
         sys.modules[name] = m
         spec.loader.exec_module(m)
@@ -960,18 +960,18 @@ def _nci() -> Any:
 def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
     """The policy's check (`check_desc`) on an n-unit execution block: theta the root's registered input nodes (w1 and
     w2), and the division B makes, each unit (one request) an inference block of its own."""
-    nci, text = _nci(), block_program(n)
-    inputs, registered, _ = nci.root_nodes(text)
+    inference_only, text = _inference_only(), block_program(n)
+    inputs, registered, _ = inference_only.root_nodes(text)
     owner, u = [], 0
     for i in inputs:
         owner.append("input" if i else u)
         u += not i
     theta = [k for k, (i, r) in enumerate(zip(inputs, registered)) if i and r]
-    return nci.check_desc({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": list(alpha)})
+    return inference_only.check_desc({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": list(alpha)})
 
 
 def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
-    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `NciCheck.Protocol`): the
+    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `InferenceOnlyCheck.Protocol`): the
     record, the one SPOT's answer commits to, names the block's Program, and the policy's check finds that the
     block's division into inference blocks complies. It has no rounds and reads no coins. Theta's provenance is the
     registration's check (`check_baseline`: theta committed under the registered builder)."""
@@ -1436,22 +1436,22 @@ class Verifier:
         return None
 
 
-# --- the demo's inputs ----------------------------------------------------------------------------------------------
+# --- the example's inputs ----------------------------------------------------------------------------------------------
 
 def theta_of(seed: int) -> Theta:
-    """A model's weights for the demo, from a seed."""
+    """A model's weights for the example, from a seed."""
     rng = np.random.default_rng(seed)
     return Theta(tuple(int(v) for v in rng.integers(-128, 128, D * D)), tuple(int(v) for v in rng.integers(-128, 128, D * D)))
 
 
 def load_of(seed: int, sizes: Sequence[int]) -> list[list[list[int]]]:
-    """The demo's requests: one list an execution phase, each request D int8 codes."""
+    """The example's requests: one list an execution phase, each request D int8 codes."""
     rng = np.random.default_rng(seed)
     return [[[int(v) for v in rng.integers(-128, 128, D)] for _ in range(n)] for n in sizes]
 
 
 SIZES = (3, 4, 2)
-"""Requests in each execution phase of the demo's monitoring period."""
+"""Requests in each execution phase of the example's monitoring period."""
 PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
 CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")

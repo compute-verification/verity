@@ -58,7 +58,7 @@ CAP = 48
 REPO, REV = "test/fp8-moe-served", "abc"
 KEY = bytes(range(32))
 REQUEST = "r0"
-LAW = "stratified:1"
+DESIGN = "stratified:1"
 LABEL = "fp8-moe-cpu"
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
 #: a registered tensor's dtype as the weights tree names it, and a committed plane's bytes, by element width
@@ -88,7 +88,7 @@ def specs() -> SimpleNamespace:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-    from verity.definitions.registry import act, deepgemm, fp8_moe_experts, moe
+    from verity_vllm.definitions.registry import act, deepgemm, fp8_moe_experts, moe
 
     return SimpleNamespace(
         in_quant=descriptor_id(bind(deepgemm.Fp8GroupQuantUe8m0, K=H, G=G)),
@@ -147,10 +147,10 @@ def _run(parts: list[np.ndarray], lo: int, hi: int) -> np.ndarray:
 
 
 def execute(inst: dict[str, Any], logits: np.ndarray, x: np.ndarray, weights: dict[str, np.ndarray]) -> dict[int, list[np.ndarray]]:
-    """Each MoE row's output members' words by row, in the Program's order: its row kernel (`verity.definitions.numerics.rows`) on
+    """Each MoE row's output members' words by row, in the Program's order: its row kernel (`verity_vllm.definitions.numerics.rows`) on
     the words its argument runs read, a node run from its producer's members in return order and a parameter run from the
     logits, the input or the weights' fields (``weights``, by the Program's field name).  The rows after the block are not served."""
-    from verity.definitions.numerics import rows as K
+    from verity_vllm.definitions.numerics import rows as K
     from verity_vllm.query.manifest import format as RM
 
     params = [[np.asarray(logits).reshape(-1)], [np.asarray(x).reshape(-1)], [weights[name] for _key, (name, _s, _b) in fields()]]
@@ -257,7 +257,7 @@ def partition() -> dict[str, Any]:
         if len(fused) != 1:
             raise ValueError(f"{spec}: {len(fused)} fused blocks of {BLOCKS[proj]} rows bind, not one")
         tmpls += [descriptor_id(read(E, 2 * K // G)), fused[0]]
-    return {"templates": tmpls, "law": LAW, "scope": {"op_path_prefix": OP}, "chunk_cap": dict.fromkeys(tmpls, CAP)}
+    return {"templates": tmpls, "law": DESIGN, "scope": {"op_path_prefix": OP}, "chunk_cap": dict.fromkeys(tmpls, CAP)}
 
 
 def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:

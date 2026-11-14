@@ -1,6 +1,6 @@
 """One PoUB session a period on one node, at a small size: the registration, the verifier's session against the
 prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
-`RemoteAudit.Protocol` in `lean/`).
+`Poub.Protocol` in `lean/`).
 
 `session` is the verifier's side, against a prover in its process or across a socket (`Peer`), in the protocol's
 order; `verity/protocols/accounting/poub/prover/period_prover.py`'s `run` plays every party in one process:
@@ -13,17 +13,17 @@ order; `verity/protocols/accounting/poub/prover/period_prover.py`'s `run` plays 
    (`audit_prover.Prover`) under each window's challenge, sent as its value and the root it was opened after
    (`coins.Released`), each root sent before the window's boundary; the verifier waits each window out on its clock
    (`window_ns`) and each last deadline (`deadline_ns`) before it closes the window;
-3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them;
+3. the verifier samples each window's openings, the prover opens them, and the verifier verifies them;
 4. once the session has its outcome, the verifier sends the prover the coin commitment and every released coin's
    opening (`audit.AuditRun.disclose`), and the prover checks each challenge it was sent against them (`Peer.end`).
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
-the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
+the registration are the core case (`case`) that `Poub.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s `q_bytes` is the
 receipts not shown wrong, the receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a
-`BLOCK_BYTES` block each, at `eps = (2^24 + ⌈W/g⌉·s)/2^64`, the session's openings coins at its `samples` s each, as the
-Lean's `certify` computes them: at least the sample term of the bound
-`Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol` proves (`PublishedEps`), not the openings a session made,
+`BLOCK_BYTES` block each, at `eps = 2^-101 + ⌈W/g⌉·s/2^64`, the session's openings coins at its `samples` s each, as
+the Lean's `certify` computes them: at least the sample term of the bound
+`Properties.Poub.Subprotocol.LineHeldAtSubprotocol` proves (`PublishedEps`), not the openings a session made,
 min(s, U) of a sample's U receipts, which can be fewer.
 """
 
@@ -39,15 +39,14 @@ from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.protocols.accounting.pous.verifier.period import Period, Run
-from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled
 from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
-DELTA = WINDOW_DELTA
-"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`).  An accepted session's `eps` is this
+DELTA = Fraction(audit.DELTA)
+"""`audit.DELTA`'s exact value, the pooled bound's δ (`Poub.Protocol.DELTA`).  An accepted session's `eps` is this
 δ and its samples' rejected first words, and leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): it
 reads δ + Σ_t adv_t (`ledger.DELTA_FORM`)."""
 WORD_BYTES = 64
@@ -66,14 +65,14 @@ def payloads(store: bytes) -> list[bytes]:
 
 
 def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
-    """`RemoteAudit.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
+    """`Poub.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
     return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 64)
 
 
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`RemoteAudit.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
+    """`Poub.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
     if record.samples is None:
-        raise ValueError("the record states no samples, at which eps charges each draw's rejection: certify a "
+        raise ValueError("the record states no samples, at which eps charges each sample's rejection: certify a "
                          "session's record (`Session.record`)")
     windows, _ = audit.pooled_windows(record)
     us = sum(u for u, _ in windows)
@@ -89,8 +88,8 @@ def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def answer(session: audit.AuditRun) -> dict[str, Any]:
-    """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it. Like the
-    check (`RemoteAudit.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
+    """The session's answer in the core interface's canonical form, as `Poub.Protocol.check` gives it. Like the
+    check (`Poub.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
     one window in flight."""
     out = {"commitment": session.registration.digest.hex(), "profile": None, "protocol": PROTOCOL, "public": None,
            "reason": None}
@@ -186,7 +185,7 @@ def opened(reg: audit.Registration, coins: bytes, clock: Callable[[], int], *, n
 
 
 def case_of(s: audit.AuditRun, events: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """The core case `RemoteAudit.Protocol` replays: session `s`'s registration, every coin its challenger committed to
+    """The core case `Poub.Protocol` replays: session `s`'s registration, every coin its challenger committed to
     (each one it didn't release opened now), its log `events` and its parameters."""
     params, challenger = s.params, s.coins
     committed = []
@@ -206,7 +205,7 @@ def session(node: str, prover: Peer, coins: bytes, *, windows: int = 2, passes: 
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
-    registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
+    registration it samples from `coins`, its challenger's coins, its clock and its log, which are the case."""
     n, root = prover.register()
     reg = audit.register(coins, node.encode(), n, root, codec_)
     held = _Held()

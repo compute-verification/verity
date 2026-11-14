@@ -27,7 +27,7 @@
 #   takes as --kept: the honest play in 20 units, which takes no negative case's name
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
 #   verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
-#   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
+#   --gpus, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
 #   research run --gpus N sets them), else one that gpu-lease hands `second` alone, for at most SMALL_LEASE_MIN minutes
 #   (30), so the builds and the first stage hold none
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
@@ -68,7 +68,7 @@ if [ -n "${SMALL_GPU:-}" ]; then
   [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
   export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   # `second` is told its cards as whoever holds them names them: this run's, else a lease's taken for it alone
-  GPU=1; ON_CARDS=(bash -c 'echo "cards $CUDA_VISIBLE_DEVICES ${GPU_LEASE_UUID:-}" >&2; exec "$@" --devices "$CUDA_VISIBLE_DEVICES"' _)
+  GPU=1; ON_CARDS=(bash -c 'echo "cards $CUDA_VISIBLE_DEVICES ${GPU_LEASE_UUID:-}" >&2; exec "$@" --gpus "$CUDA_VISIBLE_DEVICES"' _)
   if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
     command -v gpu-lease >/dev/null || { echo "SMALL_GPU=1: the run holds no card (CUDA_VISIBLE_DEVICES) and the node has no gpu-lease" >&2; exit 8; }
     export GPU_LEASE_WHO=${GPU_LEASE_WHO:-two-stage-small/${RESEARCH_RUN_ID:-local}}
@@ -106,12 +106,12 @@ KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 [ -n "$LOGITS${SMALL_INLINE:-}${SMALL_NEGATIVE:-}" ] || { echo "the serve's record commits no logits, a play round 2 refuses (second-inputs):" \
   "give SMALL_ARGS --inline --units K --logits, or name the negative case, SMALL_NEGATIVE=second-inputs" >&2; exit 9; }
 # shellcheck disable=SC2086
-"${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
+"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${ON_CARDS[@]}" "${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${ON_CARDS[@]}" "${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"

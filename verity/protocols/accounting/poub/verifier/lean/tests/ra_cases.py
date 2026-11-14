@@ -1,8 +1,8 @@
 """The Python side of PoUB's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
-(`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
-(`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
+(`Poub`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
+(`Poub.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
-The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
+The decoders mirror `Poub.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
 `audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
 refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
 the Python's own code on the decoded objects. A session's events run through `audit.AuditRun` itself, on a clock each
@@ -36,7 +36,7 @@ from verity.protocols.proofs.spot.device.challenger import HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
-EXE = "remote-audit-difftest"
+EXE = "poub-difftest"
 #: The ports' side of record (`verity_difftest`): the Lean, the verifier `verity/protocols/accounting/poub/verifier/session/verifier.py` runs.
 OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
@@ -49,7 +49,7 @@ NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 
 
-# --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
+# --- decoding, as `Poub.Difftest` decodes ----------------------------------------------------------------------
 
 def _get(j: Any, k: str) -> Any:
     if not isinstance(j, dict) or k not in j:
@@ -631,7 +631,7 @@ class Run:
             at = self.clock.now + 1 if w is None or w.final or d is None else max(self.clock.now + 1, d + 1)
         out = self._call({"kind": "close", "t": t, "now": self.tick(at)}, lambda: self.s.close(t))
         if isinstance(out, tuple):
-            for u in self.params.draw_of(t):
+            for u in self.params.sample_of(t):
                 self.draws[u] = self.s.windows[u].draws
         return out
 
@@ -649,7 +649,7 @@ class Run:
         for t in range(len(self.s.windows)):
             if t in self.draws:
                 continue
-            group = self.params.draw_of(t)
+            group = self.params.sample_of(t)
             out = self.close(group[-1])
             if not isinstance(out, tuple):
                 return
@@ -1067,7 +1067,7 @@ def honest_paced(r: Run) -> None:
     r.finish()
 
 
-def honest_paced_drawn_at_k(r: Run) -> None:
+def honest_paced_sampled_at_k(r: Run) -> None:
     """A paced session (k = 2) sampled as each window's k-th root arrives once its boundary has left: a sample after one
     root, or after k before the boundary, is refused; window 0 is sampled before window 1's first root, and the last
     window before its deadline."""
@@ -1272,7 +1272,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
     "honest-paced": (World(), PACED, honest_paced, "accepted"),
-    "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
+    "honest-paced-drawn-at-k": (World(), PACED, honest_paced_sampled_at_k, "accepted"),
     "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
     "honest-paced-one-flight": (World(), PACED1, honest_paced, "accepted"),
     "honest-shared-paced-one-flight": (World(), dict(PACED1, windows=4, groups_per_coin=2, samples=3), honest_shared,

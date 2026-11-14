@@ -158,7 +158,7 @@ theorem checks_ok (reg receipt draw samplingDesign : Json) (units : Array Int) (
       ∀ pr ∈ roots, ∃ r, (Record.byPort reg).find? (·.1 == pr.1) = some r ∧ jeq (getD r.2 "root") pr.2 = true) ∧
     OpenedRegistered (opened.getD #[]) (Record.registeredRoots reg) := by
   unfold Record.checks
-  extract_lets o0 want opened' j3 wrong j2 registered j1 j0 o1
+  extract_lets o0 want opened' j3 incorrect j2 registered j1 j0 o1
   rcases hs : served with _ | s <;> rcases hr : sessionRoots with _ | roots
   all_goals simp (config := {failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
   all_goals simp only [j0, hs]
@@ -178,7 +178,7 @@ theorem checks_ok (reg receipt draw samplingDesign : Json) (units : Array Int) (
     not_or, sortStrings, qsort_eq_empty, Array.filterMap_eq_empty_iff,
     subDict_iff, opened', registered,
     want, reduceCtorEq, false_implies, implies_true, and_true, true_and, Option.some.injEq, forall_eq', and_assoc]
-  all_goals clear j0 j1 j2 j3 o0 o1 wrong want opened' registered
+  all_goals clear j0 j1 j2 j3 o0 o1 incorrect want opened' registered
   case some.some =>
     constructor
     · rintro ⟨h1, h2, h3, h4, h5, h6⟩
@@ -810,58 +810,6 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
     Docket.kept b c x = #[] ↔ c = #[] ∧ b = true := by
   cases b <;> simp [Docket.kept, addCode_ne_nil]
 
-/-- A `kept` term read only where `bad` is false, then an `if`: the two steps of R3's wired clause and R4. -/
-theorem step_kept_ite {P : Prop} (W Q : Prop) (j' j : Unit → Array String → Id (Array String)) (bad w b : Bool)
-    (y x : String) (hj : ∀ c, j () c = #[] ↔ c = #[] ∧ P)
-    (hdef : ∀ c, j' () c = if b = true then j () (addCode (Docket.kept (bad || w) c y) x)
-      else j () (Docket.kept (bad || w) c y))
-    (hw : w = true ↔ W) (hb : b = false ↔ Q) :
-    ∀ c, j' () c = #[] ↔ c = #[] ∧ (bad = false → W) ∧ Q ∧ P := by
-  intro c
-  rw [hdef]
-  have h := step_ite Q (fun _ c => if b = true then j () (addCode c x) else j () c) j b x hj (fun _ => rfl) hb
-    (Docket.kept (bad || w) c y)
-  refine h.trans ?_
-  rw [kept_nil, and_assoc]
-  refine and_congr Iff.rfl (and_congr ?_ Iff.rfl)
-  cases bad
-  · exact ⟨fun h _ => hw.1 h, fun h => hw.2 (h rfl)⟩
-  · exact ⟨fun _ h => absurd h (by decide), fun _ => rfl⟩
-
-/-- One port of the layout holds against the record's roots (`Docket.wiredOk`) exactly when, where it names the
-port it is wired to, the record has one root string under both names. -/
-theorem wiredOk_iff (rec : Json) (p : String) (want : Json) :
-    Docket.wiredOk (fun p => rootFor rec p) p want = true ↔ WiredIs rec p want := by
-  unfold Docket.wiredOk WiredIs
-  split
-  next q hw =>
-    constructor
-    · intro hok q' hq'
-      have hqq : q = q' := Json.str.inj (hw.symm.trans hq')
-      subst hqq
-      revert hok
-      split
-      next r h hp hq =>
-        split
-        next a b hr hh =>
-          intro hab
-          have hab' : a = b := eq_of_beq hab
-          subst hab'
-          exact ⟨r, h, a, hp, hq, hr, hh⟩
-        next => intro hf; exact absurd hf (by decide)
-      next => intro hf; exact absurd hf (by decide)
-    · intro hW
-      obtain ⟨r, h, s, hp, hq, hr, hh⟩ := hW q hw
-      simp [hp, hq, hr, hh]
-  next hne => exact ⟨fun _ q hq => absurd hq (hne q), fun _ => rfl⟩
-
-/-- R3's wired clause (`Docket.wiredHeld`) holds exactly when every port of the layout is `WiredIs`. -/
-theorem wiredHeld_iff (rec : Json) (ports : Array (String × Json)) :
-    Docket.wiredHeld (fun p => rootFor rec p) ports = true ↔ ∀ pw ∈ ports, WiredIs rec pw.1 pw.2 := by
-  unfold Docket.wiredHeld
-  rw [Array.all_eq_true']
-  exact forall_congr' fun pw => imp_congr_right fun _ => wiredOk_iff rec pw.1 pw.2
-
 /-- R8's codes (`Docket.r8Codes`) add none exactly when R8 holds. -/
 theorem r8Codes_nil (v : Docket.Verifier) (c : Array String) :
     Docket.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
@@ -972,12 +920,7 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
   have h10 := step_ite (jeq (getD rec "previous") previous = true) j10 j11 _ _ h11 (fun _ => rfl) (not_false_iff' _)
   have h9 := step_ite (jeq (getD rec "anchors") (.arr v.anchors) = true) j9 j10 _ _ h10 (fun _ => rfl)
     (not_false_iff' _)
-  have h8 := step_kept_ite (∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2) (R4 rec v) j8 j9 _ _ _ _ _ h9 (fun _ => rfl)
-    (wiredHeld_iff rec v.ports) (not_false_iff' _)
-  have hbad : (roots.isEmpty || !roots.all (keys? · == some Docket.ROOT_KEYS)) = false ↔
-      (rootsOf rec ≠ #[] ∧ ∀ r ∈ rootsOf rec, keys? r = some Docket.ROOT_KEYS) := by
-    simp only [Bool.or_eq_false_iff, Bool.not_eq_false', Array.all_eq_true', beq_iff_eq, Array.isEmpty_eq_false_iff]
-    exact Iff.rfl
+  have h8 := step_ite (R4 rec v) j8 j9 _ _ h9 (fun _ => rfl) (not_false_iff' _)
   have h7 := step_forIn (fun pw => ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) j7 j8 v.ports _ h8 (fun _ => rfl)
     (by
       intro pw c
@@ -1138,16 +1081,16 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports,
-      h7', hwd, h4', h5', h6a, h6b, h7r, h8, hrl⟩
+      h7', h4', h5', h6a, h6b, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7', hwd (hbad.2 hroots)⟩, h4', h5',
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
       ⟨h6a, h6b⟩, fun hv => ⟨(h7r hv).1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2⟩, h8, hrl⟩
   · rintro ⟨samplingDesign, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7', hwd⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b⟩, h7r, h8, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨samplingDesign, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7',
-      fun _ => hwd, h4', h5', h6a, h6b, fun hv => ⟨(h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩
+      h4', h5', h6a, h6b, fun hv => ⟨(h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

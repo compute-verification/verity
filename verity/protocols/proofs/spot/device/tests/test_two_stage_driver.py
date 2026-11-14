@@ -38,7 +38,7 @@ from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boun
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
 
@@ -164,7 +164,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
     _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
-    assert second.law == S.second_law(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
+    assert second.law == S.second_sampling_design(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
 

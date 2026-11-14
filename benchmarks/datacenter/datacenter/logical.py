@@ -114,7 +114,8 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
     memo = _census.setdefault(program, {})
     if boolean not in memo:
-        from verity.definitions.boolean import boolean_version
+        from verity.circuits.ops.boolean.versions import boolean_version
+        import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 

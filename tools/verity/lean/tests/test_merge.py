@@ -318,6 +318,17 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
 
 
+def test_a_premise_s_claim_id_merges_apart_from_its_owner_and_digest():
+    """A premise entry's `id` is written by hand, as its owner is: one side's new id and the other's new owner and digest
+    both stand."""
+    base = record(t=thm([F]))
+    def hyp(**entry):
+        return base | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "due": "2026-12-01"} | entry}}
+    merged, why = M.merge(hyp(), hyp(id="trusted-device"), hyp(owner="@proofs", digest="b" * 64), candidate := [])
+    assert why == [] and merged["open"]["P.Hyp"] == {"id": "trusted-device", "owner": "@proofs", "digest": "b" * 64,
+                                                      "due": "2026-12-01"}
+
+
 def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner_which_keeps_it():
     """A restatement is the build's, so the removal applies over it; an owner is a person's, so the side that changed it
     keeps the guarantee, named (a changed side beats a removed one)."""
@@ -425,12 +436,12 @@ def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_s
 
 def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
     """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
-    `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
+    `Definitions.Pouw.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
     after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
     readers, as locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the renaming
     branch's group, cleanly."""
     sides = json.loads((FIXTURES / "j10r-layout-renamed-onto-next.json").read_text())
-    m = "Definitions.Accounting.TS.J10R"
+    m = "Definitions.Pouw.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
     assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
     assert sides["ours"]["reads"][m]["guarantees"] != sides["base"]["reads"][m]["guarantees"]
@@ -803,7 +814,7 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
 
     def lock(h: str, *texts: str) -> dict:
         """A lock listing ``g`` with the premises ``texts``, reading ``d`` at hash ``h``."""
-        return {"guarantees": {g: rec}, "reads": {"Definitions.Accounting.Guarantees.Pouw": {"definitions": {d: h * 64}}},
+        return {"guarantees": {g: rec}, "reads": {"Definitions.Pouw.Guarantees.Pouw": {"definitions": {d: h * 64}}},
                 "shape": {"inline": {g: dict.fromkeys(texts, why)}}}
     merged, _ = M.merge(lock("1", old), lock("1", old), lock("2", new), candidate := [])
     assert merged["shape"]["inline"] == {g: {new: why}} and candidate == []
@@ -1091,7 +1102,7 @@ def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
-    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
+    gone = "import Definitions.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
     assert gone not in text
     assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(
@@ -1177,7 +1188,7 @@ path = "../../pouw/window"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Proofs.Properties.Pouw",
-  "Properties.Nci", "Proofs.Properties.Nci"]
+  "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly"]
 '''
 
 
@@ -1196,21 +1207,21 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     def req(n):
         return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
-    tail = '"Proofs.Properties.Nci"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
+    tail = '"Proofs.Properties.InferenceOnly"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
     theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
-        tail, '"Proofs.Properties.Nci", "Properties.Network"]')
+        tail, '"Proofs.Properties.InferenceOnly", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
     assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
-    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.Nci",
-                                           "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.InferenceOnly",
+                                           "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
     gone = LAKEFILE.replace(', "Proofs.Properties.Pouw"', "")
-    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
-        "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
+        "Properties.Pouw", "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"], text
     def comment(s):
         return LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
@@ -1816,7 +1827,7 @@ _uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent 
 U = importlib.util.module_from_spec(_uspec)
 _uspec.loader.exec_module(U)
 UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
-FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/Nci", "Proofs/Hash"
+FL, PW, INFERENCE_ONLY, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/InferenceOnly", "Proofs/Hash"
 
 
 def unread(**areas: tuple[int, int]) -> str:
@@ -1873,21 +1884,21 @@ def test_an_unread_area_one_side_adds_or_drops_and_a_count_below_zero(tmp_path):
     """An area the base lacks counts 0 there: one side adds is that side's, and one both add holds both. An area a side
     lacks counts 0 on that side: one the lock run dropped (its modules all read) while the other side raised it keeps only
     that raise. No count goes below 0, and an area left with no modules is dropped, as `ratchet` drops it."""
-    base = unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4))) == (
-        0, unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(1, 3))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(3, 12)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(2, 7))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 3)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))) == (
+    base = unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4))) == (
+        0, unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(1, 3))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(3, 12)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(2, 7))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 3)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))) == (
         0, unread(Proofs_Flock=(273, 2309)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(3, 10)), unread(Proofs_Nci=(2, 2)), unread(Proofs_Nci=(3, 3))) == (
-        0, unread(Proofs_Nci=(2, 0)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(2, 5)), unread(), unread(Proofs_Nci=(1, 2))) == (0, unread())
-    assert _unread(tmp_path, "", unread(Proofs_Nci=(1, 2)), unread(Proofs_Nci=(2, 3))) == (0, unread(Proofs_Nci=(3, 5)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(3, 10)), unread(Proofs_InferenceOnly=(2, 2)), unread(Proofs_InferenceOnly=(3, 3))) == (
+        0, unread(Proofs_InferenceOnly=(2, 0)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(2, 5)), unread(), unread(Proofs_InferenceOnly=(1, 2))) == (0, unread())
+    assert _unread(tmp_path, "", unread(Proofs_InferenceOnly=(1, 2)), unread(Proofs_InferenceOnly=(2, 3))) == (0, unread(Proofs_InferenceOnly=(3, 5)))
 
 
 def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict(tmp_path, capsys):

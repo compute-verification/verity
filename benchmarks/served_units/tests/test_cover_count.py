@@ -1,6 +1,7 @@
 """cover_count.py on a small hand-written request cover record: the count with and without the Boolean versions, an
 extra whose controls did not refuse never counting, `--check`, the refusals of a stored total that disagrees with the
-recount, an unknown schema and an outcome its verdicts contradict, and an `art:` id fetched with `research data fetch`."""
+recount, an unknown schema and an outcome its verdicts contradict, `--card` on a hand-written card (a matching one
+passes, one with a type more or fewer is refused naming it), and an `art:` id fetched with `research data fetch`."""
 from __future__ import annotations
 
 import copy
@@ -139,6 +140,10 @@ def _family(r):
 
 
 def _schema(r):
+    r["schema"] = "circuits/request-cover/v9"
+
+
+def _v8_without_its_card(r):
     r["schema"] = "circuits/request-cover/v8"
 
 
@@ -159,7 +164,8 @@ def _extra_off_the_card(r):
     (_totals, "bound_totals"),
     (_shares, "bound_shares['accepted']"),
     (_family, "fifth_pass.by_family"),
-    (_schema, "schema 'circuits/request-cover/v8' is not one this command knows"),
+    (_schema, "schema 'circuits/request-cover/v9' is not one this command knows"),
+    (_v8_without_its_card, "a circuits/request-cover/v8 record names its card's source under card.source"),
     (_accepted_but_control_off, "beside extra v2t003: the record says 'accepted' but a control"),
     (_earlier_without_statement, "with no accepted statement"),
     (_extra_off_the_card, "beside extra v2t004: its earlier form t006 is not that block type on the card"),
@@ -168,6 +174,39 @@ def test_a_record_that_disagrees_with_its_recount_is_refused_by_name(cc, tmp_pat
     r = copy.deepcopy(RECORD)
     change(r)
     assert cc.main([write(tmp_path, r)]) == 2
+    got = capsys.readouterr()
+    assert got.out == ""
+    assert says in got.err
+
+
+ON_CARD = [GEMM, NORM, SPLIT1, SPLIT2, LOGITS1, LOGITS2]
+CARD_SOURCE = "art:" + "ef" * 32
+
+
+def card(tmp_path, types):
+    p = tmp_path / "card.json"
+    p.write_text(json.dumps({"source": CARD_SOURCE, "definitions": {t: {"prefill": 1, "decode": 0} for t in types}}))
+    return str(p)
+
+
+def test_card_a_record_of_exactly_the_cards_types_passes(cc, tmp_path, capsys):
+    """The off-card entry is not one of the card's; the v8 record names the card it is of in its first line."""
+    v8 = {**copy.deepcopy(RECORD), "schema": "circuits/request-cover/v8",
+          "card": {"source": CARD_SOURCE, "path": "card.json", "tree": "0" * 40}}
+    assert cc.main([write(tmp_path, v8), "--card", card(tmp_path, ON_CARD)]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == f"record: circuits/request-cover/v8, tree {'0' * 40}, of the card {CARD_SOURCE}"
+    assert out[-1].startswith("3 of 6 block types")
+
+
+@pytest.mark.parametrize(("types", "says"), [
+    ([*ON_CARD, "Extra_v1{X=1}"], "1 on the card and not in the record: Extra_v1{X=1}"),
+    (ON_CARD[:-1], f"1 in the record and not on the card: {LOGITS2}"),
+    ([*ON_CARD, *(f"Extra_v1{{X={i}}}" for i in range(7))],
+     "7 on the card and not in the record: " + ", ".join(f"Extra_v1{{X={i}}}" for i in range(5)) + " and 2 more"),
+])
+def test_card_a_type_more_or_fewer_is_refused_naming_it(cc, tmp_path, capsys, types, says):
+    assert cc.main([write(tmp_path, RECORD), "--card", card(tmp_path, types)]) == 2
     got = capsys.readouterr()
     assert got.out == ""
     assert says in got.err

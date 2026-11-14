@@ -25,7 +25,7 @@ from fractions import Fraction
 
 import numpy as np
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 __all__ = ["certified_modes", "p_lower", "row_pmf", "row_units", "split_units_fast", "window_charges"]

@@ -1,4 +1,4 @@
-"""`line.py`'s memory line held to its Lean (`RemoteAudit.Line`, served by `remote-audit-difftest`'s `line`), refusals
+"""`line.py`'s memory line held to its Lean (`Poub.Line`, served by `poub-difftest`'s `line`), refusals
 as outputs so that both sides' reasons are compared word for word: sessions of zero, one and many groups at every
 stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of sampled windows, `pooled`) that
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
@@ -395,9 +395,9 @@ def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples)
         assert D.replay(record_port(), r, server) == ("output", D.canonical(want))
 
 
-def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
+def test_a_record_sampled_four_windows_a_coin_reads_its_samples(server) -> None:
     """Sampled four windows a coin (`groups_per_coin`), the record's line is `line`'s at the same groups and its three
-    samples, each four windows' receipts and samples summed (`line.draws_of`, the pooled bound's
+    samples, each four windows' receipts and samples summed (`line.samples_of`, the pooled bound's
     `audit.pooled_windows`), the Lean's and line.py's alike; a sample that sampled other than min(s, U) is refused,
     word for word, and at one window in flight the record has no line (`line.SHARED`)."""
     v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
@@ -421,10 +421,10 @@ def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
     assert line.record_run_json(r) == {"refused": why} and D.replay(record_port(), r, server) == refused(why)
 
 
-def test_a_draw_of_two_to_the_64_receipts_is_refused(server) -> None:
+def test_a_sample_of_two_to_the_64_receipts_is_refused(server) -> None:
     """Sampled four windows a coin, a sample whose windows' receipts, each below 2^64 as `receive` holds a window's, sum to
     2^64 or more is refused, the Lean's and line.py's word for word: the memory model's sample reads at most 2^64 − 1
-    (`Properties.RemoteAudit.Line.receiptMax`). One receipt fewer, the sample is read."""
+    (`Properties.Poub.Line.receiptMax`). One receipt fewer, the sample is read."""
     v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
     r = recorded(v, 37)
     r["record"]["groups_per_coin"] = 4
