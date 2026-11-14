@@ -51,6 +51,8 @@ from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
 from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _stream
 
+__all__ = ["whole_options"]
+
 #: each call step's group (`verity.protocols.accounting.pouw.verifier.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
