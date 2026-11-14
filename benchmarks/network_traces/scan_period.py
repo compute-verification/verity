@@ -64,10 +64,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
-import warden_serve as WS  # noqa: E402
+from benchmarks.network_traces import warden_serve as WS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -157,8 +158,9 @@ def circuit_of_record(path: Path) -> str:
 
 def lean_check(exe: str, case: dict, d: Path,
                run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
-    """``network-period check`` on the case's three files in ``d``: its answer (its last line). ``run`` runs it with its
-    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
+    """``EXE check`` (``network-period``'s, or ``network-rows``') on the case's three files in ``d``: its answer (its
+    last line). ``run`` runs it with its output captured as text (`subprocess.run`'s ``capture_output=True, text=True``
+    by default)."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
@@ -167,7 +169,7 @@ def lean_check(exe: str, case: dict, d: Path,
     argv = [exe, "check", *map(str, files)]
     p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
-        raise SystemExit(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
+        raise SystemExit(f"{Path(exe).name} check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 

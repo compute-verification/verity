@@ -97,7 +97,7 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
     out.mkdir()
     tau, late = PARAMS.bucket_ms / 1000, late or {}
     if process:
-        import warden_serve
+        from benchmarks.network_traces import warden_serve
 
         publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit, base_ms=0)
         release = publisher.release if release_edit is None else release_edit(publisher.release)

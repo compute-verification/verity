@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.commitments.windows.rows import SCHEME, copy_private, held_ports, own_entries, registered_header
+import numpy as np
+
+from verity.commitments.windows.rows import (BC_BYTES, SCHEME, copy_private, held_ports, own_entries,
+                                             registered_header)
 
 #: Flock's circuit prover's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
@@ -38,6 +41,31 @@ def flock_circuit(circuit: str | bytes) -> FlockCircuit:
     cls = hashlib.sha512(b[:i] + b"\nMETA " + json.dumps(cls_meta, sort_keys=True, separators=(",", ":")).encode() + b"\n")
     cls.update(memoryview(b)[j + 1:])
     return FlockCircuit(meta, hashlib.sha512(b).hexdigest(), cls.hexdigest())
+
+
+def identity_refs(n: int, ports: int) -> np.ndarray:
+    """A re-laid body's refs: each of ``n`` instances' ref to its own row of each of ``ports`` ports."""
+    return np.repeat(np.arange(n, dtype="<u4")[:, None], ports, axis=1)
+
+
+def relay(body: bytes, n: int, ports: int) -> bytes:
+    """An instance-major public body, ``n`` instances of ``ports`` rows' b || c, re-laid port-major under identity refs:
+    each port's rows in instance order, then `identity_refs`."""
+    if len(body) != n * ports * BC_BYTES:
+        raise ValueError(f"a public body of {len(body)} bytes, not {n} instances of {ports} rows' b || c")
+    rows = np.frombuffer(body, dtype=np.uint8).reshape(n, ports, BC_BYTES)
+    return b"".join(rows[:, j].tobytes() for j in range(ports)) + identity_refs(n, ports).tobytes()
+
+
+def unrelay(body: bytes, n: int) -> bytes | None:
+    """The instance-major body of ``n`` instances that `relay` re-lays to ``body``, else None: `relay` is one to one, so
+    its only candidate, read off ``body``'s port-major rows, is it exactly when `relay` gives ``body`` back."""
+    if n <= 0 or not body or len(body) % (n * (BC_BYTES + 4)):
+        return None
+    ports = len(body) // (n * (BC_BYTES + 4))
+    rows = np.frombuffer(body, dtype=np.uint8, count=n * ports * BC_BYTES).reshape(ports, n, BC_BYTES)
+    staged = rows.transpose(1, 0, 2).tobytes()
+    return staged if relay(staged, n, ports) == body else None
 
 
 def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircuit, out_dir: str | Path, *,

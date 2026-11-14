@@ -72,6 +72,11 @@ Open premises (`open`):
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
     is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
     `network/tests/period_case.py` for the third;
+  - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
+    an active network certifier's run, each record held to its certified head and its certificate to the key in the
+    session, then the certifier program's rows audit (below). The Python it is held to is `warden.py`'s `audit`.
+    `benchmarks/network_traces/certifier_piece.py` runs it in step 1 of each of its steps, on the kept network
+    certifier run (`warden_chain.rows_audit_case`);
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
   - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
@@ -80,7 +85,12 @@ Open premises (`open`):
   library `NetworkCertifier` the packages at `lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
   `INSTANCES PYTHON N`. The Lean check runs each `../device/program/lean/scripts` script, then its difftest
-  (`../device/program/lean/lean-audit.json`).
+  (`../device/program/lean/lean-audit.json`). Its `NetworkCertifier.Rows` is the active network certifier's records
+  as rows and their audit, the code form of `RecordRows` over the network certifier's lanes with `warden.py`'s `audit`
+  its reference, which `network-rows` (`lean/`) runs on a run's certified records; no proof ties it to `RecordRows`.
+  Against the reference it refuses three kinds of run the network certifier never writes and holds two things less:
+  no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
+  (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
   runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads. It also writes the
   check's parameters, whose `"keys"` list the link's network certifier's entries, each a key, its session and the

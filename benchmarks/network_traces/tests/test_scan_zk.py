@@ -40,6 +40,7 @@ PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifi
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -47,7 +48,7 @@ def _load():
 
 
 sz = _load()
-import warden_serve as WS
+from benchmarks.network_traces import warden_serve as WS
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -289,7 +290,7 @@ def test_a_group_of_two_execution_phases_scan_is_not_held_at_the_schedules_const
     each count alone: without the second execution phase's two members `ingress-0` is still at another count's
     constant (at two ticks, a port that is no member's), and with every member the schedule names at its constant
     the two are ports ending ``/o0`` that are no member's."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     K, PC = sz.scan_ok, SP.mirror(PERIOD_CASE)
     for T in (2, 3, 4, sz.TEST.params.window):
@@ -437,7 +438,7 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     R8 lets nothing through, and the answer has no such key. The period check holds both, and the same answer naming
     one lane's alone or the lanes' in another order, and refuses by name one naming another Input, the name past the
     last lane's, or a lane's name without its lane."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     cls = SimpleNamespace(NR=2, EVERY=every, KO=1, IDB=1)
@@ -486,7 +487,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
     check refuses, naming ``state`` (`period_case.tied_input_wired` and `tied_unheld`, the mirror of
     the Lean check's `tiedInputWired`), wherever ``state`` is in the list: it wires the lanes' ``prog<j>``
     alone, so nothing ties ``state``'s rows to a registration that computed them."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     cls = SimpleNamespace(NR=2, EVERY=2, KO=1, IDB=1)
@@ -520,12 +521,13 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
 
 
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
-              late: tuple[int, ...] = ()) -> Path:
+              late: tuple[int, ...] = (), change=None) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
     and salts), under a network certifier key of its own, beside its `deployment.json`, which carries the session's
     start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
-    ``fails.records``)."""
+    ``fails.records``). ``change`` (a record to the record kept) stands in for a network certifier that recorded the
+    served cells otherwise: what it gives is kept and certified, and the wire's rows stay the served record's."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -535,11 +537,13 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
                                  out.parent / f"{out.name}-signer.json")
     issuer = sz.Issuer(signer, sz.SESSION)
     start = WS.start_json(WS.certify_start(issuer, 0, setup.params))  # signed before any record, as the publisher's
-    pub = WS.Publisher(out, issuer, setup.params)
+    by = {(r.link, r.window): r for r in (*served.ingress, *served.egress)}
+    pub = WS.Publisher(out, issuer, setup.params,
+                       lambda link, d, r, *a: sz.WR.Cells.of(link, d, by[r.link, r.window], *a))
     for w in range(windows):
         for rec, grid in ((served.ingress[w], setup.params.grid), (served.egress[w], setup.params.grid),
                           (served.failed[w], setup.params.fails_grid)):
-            pub.keep(rec, grid)
+            pub.keep(change(rec) if change else rec, grid)
     dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=windows,
                                slack=0.025, run_id=bytes(32), start=start)
     (out / "deployment.json").write_text(json.dumps(dep))
@@ -766,7 +770,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     run whose deployment holds no signed start are refused by name.
     Slow (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no
     stand-in can stand for."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     run = published(tmp_path / "run", sz.TEST, windows=1)

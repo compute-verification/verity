@@ -50,6 +50,7 @@ BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/inter
 
 def _load(name: str):
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location(f"network_traces_{name}", HERE / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -361,7 +362,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     """certifier/v0 cases from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest), which
     also re-decides them here in the Lean executable's place."""
     import jsonschema
-    from block_certifier import block_leg
+    from benchmarks.network_traces.block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
     # a chain's certifier session numbers its execution phases from 0: the first case whose one entry starts there
     case = next(c for n in range(1, 64) for c in [period.case("accept", n, "clock")]

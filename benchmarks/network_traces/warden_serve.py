@@ -205,10 +205,12 @@ import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import active_replay as ar
-import certifier_serve as cs
+from benchmarks.network_traces import certifier_serve as cs
 import connection_rows_run as crr
-import load_relay as lr
+from benchmarks.network_traces import load_relay as lr
 import stall_probe
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
