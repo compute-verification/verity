@@ -7,18 +7,19 @@ Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Sp
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
-        local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
+        [--class w63|w63k4|test|test2] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
+        local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]] [--carried]
+    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test|test2]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
   network certifier's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
   egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
   link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
-  4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); and ``test``
+  4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); ``test``
   (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI 100) and 16-bucket
-  link-windows, whose units a CPU proves in minutes.
+  link-windows, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two link-windows, with a
+  fourth request admitted in the first and anchored at the second's first boundary.
 * **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
   carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
   in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
@@ -127,6 +128,30 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   to 0, so the link-window is refused. Every unit (the one) is sampled. A prover that sets the bit with n 0 and no
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
+* **The carried shape** (``--carried``, off by default; `prove_carried`): each link-window of the group a
+  registration of its own, its scan started from the state the record before it committed. **No period check reads
+  this shape yet** (`NetworkCheck.Period`'s `scanOf` reads the three templates above, a group one registration), so
+  a scan proved in it has no period: it writes no ``answers.json`` and proves no block round, and nothing but its
+  own test and run sets the flag. One Program for every link-window (`CARRIED`, `scan_program`), 2T + 1 units: the
+  start unit (`IngressScanStart`), T ingress units (`IngressScanBucket`, bucket 0's too) and T egress units. The
+  start unit's ``sin`` is one-stage's registered value `CARRY` (the Program's parameter ``0.sin``, one row/v2 row),
+  which the link-window's record, a v2 record, names with its root and domain, and its o0, ``sin`` through two NOTs,
+  is a registered read of state leaf 0, a committed row never opened, so the row bucket 0's ``sin`` and the first
+  boundary's Programs read is the carried state by gates. The run's first record holds `CARRY` at the root the
+  verifier computes and pins, the empty state's row under one-stage's registered domain and the public salt of a
+  value the verifier fills (`empty_start`). Each later record's ``previous`` is the record before it and its `CARRY`
+  entry is that record's ``last/o1`` (`CARRY_PORT`: its last ingress unit's o1, a member's own rows, `Frame`), root
+  and domain, which the verifier holds in the window-history form ``{"port": P}``, the port of its log's last record
+  (`carry_of`); the start member's statement opens its ``sin`` row there, under the salt and at the frame domain
+  the earlier statement committed it with, and the verifier's ``--registered`` port of it is one-stage's
+  (`registered.reads_file`, its ``domains``). A ``carried-<w>`` round is accepted, every unit sampled; its record's
+  changed forms are refused by the registration check (another root, `R7-held`; no earlier record in the verifier's
+  log, `R7-output`); and the start's leaf as a registered read frames it is the earlier statement's frame leaf byte
+  for byte (`frame_leaf`). The stale round, a start unit alone registered after the group's last record, is given
+  the state the last link-window started from: Lean's registered reads refuse it ("does not open"). One-stage
+  accepts a record that names an older record's port in the explicit form ``{"record": D, "port": P}``
+  (``explicit-older``, recorded, not refused): which record a carried start may name is for the check that reads the
+  records after it.
 * **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on a development challenger's coins opened after
   the round's registration (`a0.challenger_draw`: the verifier has none of its own), each template's stratum its share
   and at least one unit; only the sampled proof blocks are proved and opened, and an accepted audit carries ε at δ
@@ -257,7 +282,11 @@ TEST = Setup(
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
-SETUPS = {s.name: s for s in (W63, W63K4, TEST)}
+#: test's class and its three requests, and a fourth admitted at bucket 12 of link-window 0 and anchored at bucket 16,
+#: link-window 1's first boundary: the state link-window 1 starts from holds it live, its Program due at that boundary
+TEST2 = TEST._replace(name="test2", prompts=(*TEST.prompts, (7, 8, 9)), arrivals=(*TEST.arrivals, 12),
+                      responses=(*TEST.responses, (51, 52, 53)), windows=2)
+SETUPS = {s.name: s for s in (W63, W63K4, TEST, TEST2)}
 #: w63's: the schedule ``scan_zk.py schedule`` prints and the gate's ``warden-rehearse --scan`` serves
 CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
@@ -269,20 +298,32 @@ UNREAD = ("ingress",)
 #: the block round's: the slot entries' stand-in (`SlotEntry`), one unit a slot entry, whose o0 rows are the scan's
 #: slot entries
 BLOCK = ("block",)
-#: the templates whose o0 is a committed row the verifier never opens (the slot entries'), every other's its public word
-ROWS_O0 = frozenset(BLOCK)
+#: the carried shape's (``--carried``): the start unit (`IngressScanStart`), then every bucket's ingress unit
+#: (`IngressScanBucket`, bucket 0's too) and its egress unit, one link-window a registration
+CARRIED = ("start", "ingress", "egress")
+#: the carried shape's negative: a start unit alone
+STALE = ("start",)
+#: the carried start: the start unit's ``sin`` as the Program names it (`scan_root`'s ``<i>.<name>``; a population's
+#: too), the one-stage registered value a link-window's record names the state its scan starts from by
+CARRY = "0.sin"
+#: the port of a link-window's record the next one's carried start reads: its last ingress unit's o1, the last state
+CARRY_PORT = "last/o1"
+#: the templates whose o0 is a committed row the verifier never opens (the slot entries', the carried start's copy),
+#: every other's its public word
+ROWS_O0 = frozenset({*BLOCK, "start"})
 #: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
 #: compression before its last block at any length, as Flock's statement needs of one row (`verity_flock.circuit.
 #: compose`); at the test class every block row is shorter than a block (NE = 176 bits)
 ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
-FIXED = {"first": 1, "ingress": 2, "egress": 1}
+FIXED = {"first": 1, "start": 1, "ingress": 2, "egress": 1}
 #: each round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every read
 #: held and its unit's ok bit 0; the block first, since the scan reads its outputs
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0")}
 #: each round Program's directory, by its templates
-PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block"}
+PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block", CARRIED: "carried",
+            STALE: "stale"}
 #: Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which a block member's o0 rows
 #: are committed and so its lane's ``prog<j>`` tree (`block_binding`), and a member's own rows of a port (`Frame`;
 #: `stage` refuses a member whose frame root of such a port isn't its tree's)
@@ -292,8 +333,9 @@ FRAME_BINDING = "verity/flock-circuit/binding/v2"
 def value(kind: str) -> str:
     """A scan registration's value: a tree's, ``state``'s, ``view``'s or lane j's slot entries' (``prog<j>``), or
     ``frame``, a member's own rows of a port no tree or network certifier row registration holds (`Frame`), registered
-    as the member's frame root of the port."""
-    return f"verity/certifier/scan-{kind}/v1"
+    as the member's frame root of the port; ``start``'s is the carried start, the record's own registered value
+    (`CARRY`)."""
+    return CARRY if kind == "start" else f"verity/certifier/scan-{kind}/v1"
 
 
 def lane_kinds(cls: IS.Class) -> tuple[str, ...]:
@@ -343,7 +385,8 @@ def ports_of(cls: IS.Class) -> dict[str, tuple[tuple[tuple[str, int], ...], tupl
     outs = (("o1", IS.state_bits(cls)), ("o2", IS.view_bits(cls)))
     return {"first": ((row, *progs), outs), "ingress": ((row, ("sin", IS.state_bits(cls)), *progs), outs),
             "egress": ((("state", IS.view_bits(cls)),), (("o1", 8 * cls.egress.R * cls.B),)),
-            "block": ((("x", NE),), (("o0", NE),))}
+            "block": ((("x", NE),), (("o0", NE),)),
+            "start": ((("sin", IS.state_bits(cls)),), (("o0", IS.state_bits(cls)),))}
 
 
 def entries_of(cls: IS.Class, G: int, T: int) -> int:
@@ -375,7 +418,8 @@ def members_of(templates: tuple[str, ...], G: int, T: int, bucket: int = 1, entr
     template 0 … G·T − 1; the unread round's one unit (`UNREAD`) bucket ``bucket``; the block round's (`BLOCK`) the
     group's ``entries`` slot entries (`entries_of`) cut into ``lanes`` members of consecutive units, as one-stage cuts
     a template (``block-c<j>``, lane j's, its ``lane``), unit j·nb + b slot entry b of lane j, since its o0 rows are
-    the lane's ``prog<j>`` tree."""
+    the lane's ``prog<j>`` tree. The carried shape's start unit (`CARRIED`, `STALE`) is a member of its own, ``start``,
+    which computes no bucket: its one unit is listed as bucket 0, the bucket whose ``sin`` its o0 is."""
     if templates == UNREAD:
         return [SimpleNamespace(template="ingress", window=bucket // T, name=f"ingress-{bucket // T}", base=0,
                                 buckets=range(bucket, bucket + 1))]
@@ -388,11 +432,12 @@ def members_of(templates: tuple[str, ...], G: int, T: int, bucket: int = 1, entr
                                 buckets=range(j * nb, (j + 1) * nb), lane=j) for j in range(lanes)]
     out, at = [], 0
     for tp in templates:
+        one = tp in ("first", "start")
         lo = 1 if tp == "ingress" and "first" in templates else 0
-        for w in range(1 if tp == "first" else G):
-            bs = range(1) if tp == "first" else range(max(lo, w * T), (w + 1) * T)
+        for w in range(1 if one else G):
+            bs = range(1) if one else range(max(lo, w * T), (w + 1) * T)
             parts = ((bs[:-1], f"{tp}-{w}"), (bs[-1:], "last")) if tp == "ingress" and w == G - 1 else \
-                ((bs, "first" if tp == "first" else f"{tp}-{w}"),)
+                ((bs, tp if one else f"{tp}-{w}"),)
             out += [SimpleNamespace(template=tp, window=w, name=name, base=at + part.start - lo, buckets=part)
                     for part, name in parts if part]
         at += counts_of(out)[tp]
@@ -923,6 +968,9 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         p, leaves = f"prog{mb.lane}", [b - mb.base for b in bs]
         reads, warden = {"o0": (p, progs[p], leaves)}, {}
         outputs, made = None, {"o0": [_bits(progs[p], i) for i in leaves]}
+    elif tp == "start":
+        reads, warden = {"sin": ("start", at.start, [0]), "o0": ("state", state, [0])}, {}
+        outputs, made = None, {"o0": [at.claimed or _bits(at.start, 0)]}
     elif tp == "egress":
         side = at.tampered if name == "tampered" and at.tampered.window == w else at.sides["egress"][w]
         reads = {"state": ("view", view, bs)}
@@ -948,8 +996,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         if name == "unread":  # the read bit enters ok alone: the unit computes the honest S_t and view
             got = [(o, *ch.outputs(b)) for o, b in zip(outputs, bs)]
         made = {"o1": [s for _o, s, _v in got], "o2": [v for _o, _s, v in got]}
-    units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if r == "x" else _bits(reads[r][1], reads[r][2][k])
-                   for r, _b in ins) for k, b in enumerate(bs)]
+    units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if tp in ROWS_O0 else
+                   _bits(reads[r][1], reads[r][2][k]) for r, _b in ins) for k, b in enumerate(bs)]
     set_name = at.block_sets[mb.lane] if tp == "block" else f"unit-scan-{tp}-{name}-{mb.name}"
     sig = (*ins, *(() if tp in ROWS_O0 else (("o0", 16),)), *outs)
     own = {**{r: [u[i] for u in units] for i, (r, _b) in enumerate(ins)}, **made,
@@ -971,7 +1019,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         table, refs[p] = REG.table(ps) if p.startswith("prog") else (ps, list(range(len(ps))))
         salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(kind, reg, table)
         ports[p] = tree_port(kind, reg, ps, mb.base)
-        bcs[p] = [None if p in made and made[p][k] is None else tree_bc(reg, i, made[p][k] if p in made else None)
+        said = made.get(p) or (own[p] if tp == "start" else None)
+        bcs[p] = [None if said and said[k] is None else tree_bc(reg, i, said[k] if said else None)
                   for k, i in enumerate(ps)]
     refused = header_refusal(ports, entries)
     for p, _b in sig:
@@ -984,7 +1033,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                            changed=changed, warden={p: s.registration for p, s in warden.items()},
                            lane=mb.lane if tp == "block" else None, set_name=set_name,
                            framed=[p for p, (kind, *_r) in reads.items()
-                                   if kind == "frame" or (tp, p) == ("block", "o0")])
+                                   if kind == "frame" or (tp, p) == ("block", "o0")],
+                           frames={p: reg for p, (kind, reg, _ps) in reads.items() if kind == "frame"})
 
 
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
@@ -1029,12 +1079,15 @@ def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) ->
 def wired(members) -> list[str]:
     """Where a round's chains don't hold, on its members' b‖c (`member`'s ``bcs``, port to each proof block's): bucket b's
     o1 is bucket b + 1's ``sin`` and its o2 egress bucket b's ``state``, the one leaf of the registered roots both
-    commit to (the group's last bucket's o1 none). Empty when they hold."""
+    commit to (the group's last bucket's o1 none). A carried start's unit (`CARRIED`) stands where the bucket before
+    bucket 0 would: its o0 is bucket 0's ``sin``. Empty when they hold."""
     o1, o2, sin, state = {}, {}, {}, {}
     for m in members:
         for k, b in enumerate(m.buckets):
             if m.template == "egress":
                 state[b] = m.bcs["state"][k]
+            elif m.template == "start":
+                o1[b - 1] = m.bcs["o0"][k]
             else:
                 o2[b] = m.bcs["o2"][k]
                 for p, at in (("o1", o1), ("sin", sin)):
@@ -1061,6 +1114,131 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
     return SimpleNamespace(at=at, rounds=got, draw=draw)
 
 
+# --- the carried shape ------------------------------------------------------------------------------------------------
+
+def empty_start(program: str, cls: IS.Class) -> REG.Registered:
+    """The carried start of a run's first link-window, as the verifier computes it: the empty state's row as one-stage's
+    registered value `CARRY` of the Program with digest ``program``, a row/v2 row under the public salt of a value the
+    verifier fills (`registered.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
+    return REG.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
+                                 REG.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
+
+
+def carried_window(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
+    """Link-window w of `link`'s run as the carried shape registers it, alone: its rows of each link, the chain's
+    buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees over them, bound to the session and
+    its own ingress head: ``state``, T leaves, leaf t the state bucket t reads and leaf 0 the one it starts from;
+    each lane's slot entries at its T / EVERY boundaries; ``view``. ``start`` is the tree its start unit's ``sin``
+    opens, leaf 0: `empty_start`'s for the run's first link-window, else the link-window before's last o1 (its
+    member's `Frame`). With ``claimed`` (the stale round) the start unit is given that row for its ``sin`` in place
+    of ``start``'s, and the state tree is the one row it copies."""
+    cls, T, ch = whole.setup.cls, whole.T, whole.chain
+    lo, nb, side = w * T, T // cls.EVERY, whole.sides["ingress"][w]
+    sub = SimpleNamespace(ingress=ch.ingress[lo:lo + T], egress=ch.egress[lo:lo + T],
+                          view=lambda t: ch.view(lo + t), outputs=lambda t: ch.outputs(lo + t))
+    rows = {"state": IS.window_state(cls, ch.states[1:], lo, T),
+            **{p: e[w * nb:(w + 1) * nb] for p, e in zip(lane_kinds(cls), slot_entries(cls, ch.progs))},
+            "view": ch.views[lo:lo + T]}
+    trees = {k: tree(k, r, [side.head], whole.session) for k, r in rows.items()}
+    if claimed is not None:
+        trees["state"] = tree("state", [claimed], [s.head for s in whole.sides["ingress"]], whole.session)
+    return SimpleNamespace(setup=whole.setup, chain=sub, T=T, G=1, windows=[whole.windows[w]], params=whole.params,
+                           session=whole.session, source=whole.source, trees=trees, start=start, claimed=claimed,
+                           sides={s: [ws[w]] for s, ws in whole.sides.items()}, ordinals=whole.ordinals,
+                           block_sets=[block_set([side.head], whole.session, j) for j in range(cls.NR)])
+
+
+def carried(out: Path, run: Path | None = None, setup: Setup = TEST2, group: int = 2) -> SimpleNamespace:
+    """The carried shape's rounds as the host reads them (no lowering, no proof), ``--carried``: `link`'s run of
+    ``group`` link-windows, each a round of its own (``carried-<w>``, `CARRIED`'s members of `carried_window`), its
+    start unit's ``sin`` the first's `empty_start` and each later one's the round before's ``last`` member's o1, the
+    `Frame` that round's record names `CARRY_PORT`; each accepted, every read held, every output 1 and its chains
+    wired from the start unit's o0. Then the stale round (``stale-<group>``, `STALE`): a start unit alone, as a
+    link-window after the group's last would register it, its ``sin`` given the state the last link-window started
+    from in place of the one it ended in, which opens no leaf of the last record's port ("does not open")."""
+    whole = link(out, run, setup, group)
+    if whole.void:
+        raise SystemExit(f"--carried: the warden failed a connection in buckets {whole.void}; the carried shape is "
+                         "read on a run it didn't")
+    cls, T, ch = setup.cls, whole.T, whole.chain
+    first = empty_start(PA.program_digest(scan_program(cls, CARRIED, 1, T)), cls)
+    start = Held(first.domain, IS.state_bits(cls), (bit_row((list(first.rows[0]), 16))[0],), first.salts)
+    if start.root != first.root or _bits(start, 0) != ch.states[0]:
+        raise SystemExit("--carried: the empty state's row under one-stage's registered domain isn't the root the "
+                         "verifier pins (empty_start), or isn't the state the chain starts from")
+    rounds = []
+    for w in range(group + 1):
+        stale = w == group
+        name, templates = (f"stale-{w}", STALE) if stale else (f"carried-{w}", CARRIED)
+        claimed = ch.states[(group - 1) * T] if stale else None
+        if stale and claimed == _bits(start, 0):
+            raise SystemExit("--carried: the last link-window ends in the state it started from, so the stale round "
+                             "would claim the honest start")
+        at = carried_window(whole, min(w, group - 1), start, claimed)
+        ms = [member(at, name, mb) for mb in members_of(templates, 1, T)]
+        good = "does not open" in (ms[0].refused or "") if stale else not wired(ms) and all(
+            m.refused is None and (m.outputs is None or set(m.outputs) == {1}) for m in ms)
+        if not good:
+            raise SystemExit(f"{name}: the host's read of the round isn't {'does not open' if stale else 'accepted'}: "
+                             f"{[(m.name, m.refused, m.outputs) for m in ms]}, chains {wired(ms)}")
+        rounds.append(SimpleNamespace(name=name, templates=templates, stale=stale, at=at, members=ms, start=start,
+                                      trees={"state": at.trees["state"]} if stale else at.trees))
+        if not stale:
+            start = next(m for m in ms if m.name == "last").frames["o1"]
+    return SimpleNamespace(whole=whole, T=T, rounds=rounds)
+
+
+def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) -> SimpleNamespace:
+    """A carried round's start, on both sides, given the verifier's log of the run's earlier records and the start
+    member's ``sin`` port as the host read it (``port``, `member`).
+
+    The verifier's (``check``, `verifier.check`'s parameters beside the round's own): it expects `CARRY` registered, one
+    row/v2 row of the state's words, and holds it, with no earlier record, to the root it computes itself (`empty_start`,
+    ``pinned``), and after one to that record's `CARRY_PORT` in the window-history form, ``{"port": P}``, which names
+    the log's last record and no other (``outputs``). Its own ``--registered`` port of the start unit's ``sin`` is
+    one-stage's (`registered.reads_file` on its Program, the value's root and domain that port's, ``domains``), and
+    the start member's file must be it: SystemExit otherwise.
+
+    The prover's (``record``): the record's ``previous`` and its entry of `CARRY`.
+
+    ``negatives(rec)``: the round's record ``rec`` changed, or checked another way, as ``{name: (record, parameters,
+    code)}``, each refused with ``code``: ``another-root``, the entry at a root that isn't the held one (`R7-held`);
+    after an earlier record, ``no-earlier-record``, the verifier's log empty (`R7-output`). And, where the log holds
+    two records, ``explicit-older`` with no code: the entry at the root and domain of the record before the last's
+    `CARRY_PORT`, the verifier naming that record in the explicit form ``{"record": D, "port": P}``, which one-stage
+    accepts, so that refusing an explicit form for a carried start is left to whoever reads the records after it."""
+    values, schemas = {CARRY: IS.state_bits(cls) // 16}, {CARRY: BitRowLeaf.hiding_schema}
+    if log:
+        e = next((r for r in log[-1]["roots"] if r["port"] == CARRY_PORT), None)
+        if e is None:
+            raise SystemExit(f"--carried: the log's last record names no {CARRY_PORT}, and a carried start reads it")
+        root, dom, how = e["root"], e["domain"], {"outputs": {CARRY: {"port": CARRY_PORT}}}
+    else:
+        first = empty_start(PA.program_digest(pg.program), cls)
+        root, dom, how = first.root.hex(), first.domain.domain_id.hex(), {"pinned": {CARRY: first.root.hex()}}
+    mine = REG.reads_file(pg.program, pg.query, values, {CARRY: root}, domains={CARRY: dom}, schemas=schemas)["ports"]
+    if list(mine) != ["sin"] or {**mine["sin"], "reads": mine["sin"]["reads"][:1]} != port:
+        raise SystemExit(f"--carried: the start member's --registered port of sin isn't the verifier's own "
+                         f"(registered.reads_file at the start's root and domain): {port} != {mine}")
+    check = {"log": list(log), "registered": values, "schemas": schemas, **how}
+    entry = {"value": CARRY, "root": root, "leaves": port["leaves"], "words": port["words"], "domain": dom}
+
+    def negatives(rec: dict) -> dict[str, tuple[dict, dict, str | None]]:
+        other = hashlib.sha512(bytes.fromhex(root)).hexdigest()
+        out = {"another-root": ({**rec, "registered": [{**entry, "root": other}]}, check, "R7-held")}
+        if log:
+            out["no-earlier-record"] = (rec, {**check, "log": []}, "R7-output")
+        old = next((r for r in log[-2]["roots"] if r["port"] == CARRY_PORT), None) if len(log) > 1 else None
+        if old is not None:
+            out["explicit-older"] = (
+                {**rec, "registered": [{**entry, "root": old["root"], "domain": old["domain"]}]},
+                {**check, "outputs": {CARRY: {"record": RG.digest(log[-2]), "port": CARRY_PORT}}}, None)
+        return out
+
+    return SimpleNamespace(check=check, record={"previous": RG.digest(log[-1]) if log else None, "registered": [entry]},
+                           root=root, domain=dom, negatives=negatives)
+
+
 # --- the statements ---------------------------------------------------------------------------------------------------
 
 def _entry_signature(S):
@@ -1084,14 +1262,15 @@ def _defs(cls: IS.Class) -> dict[str, object]:
     sh = cls.egress
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D),
-            "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB)}
+            "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB), "start": bind(IS.IngressScanStart, **st)}
 
 
 def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Program:
     """The scan's root in the generator form (`NetworkCheck.Period`'s `scanOf`): each `(template, n, fixed)` of
     `members` one batch over its n units, in order, its first `fixed` parameters inputs of its own (``<i>.<name>``),
-    and each later one, lane j's ``prog<j>``, at bucket t (the first template's first unit bucket 0, each next unit the
-    next bucket) row ⌊t / every⌋ (`entry_at`) of lane j's input ``prog<j>``, its slot entries of nb boundaries."""
+    and each later one, lane j's ``prog<j>``, at bucket t (the first unit that reads slot entries bucket 0, each next
+    such unit the next bucket) row ⌊t / every⌋ (`entry_at`) of lane j's input ``prog<j>``, its slot entries of nb
+    boundaries. A template that reads none (the egress units, the carried start's) counts no bucket."""
     sigs = [t.signature() for t, _, _ in members]
     lanes = [len(ps) - fixed for (ps, _), (_, _, fixed) in zip(sigs, members)]
     entry = next(ps[fixed][1] for (ps, _), (_, _, fixed), L in zip(sigs, members, lanes) if L)
@@ -1109,13 +1288,20 @@ def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Pr
             gathered = [array_of([entries[j][(start + m) // every] for m in range(n)])
                         for j in range(len(ps) - fixed)]
             outs.append(B.batch(t, *args[at:at + fixed], *gathered, axes=(0,) * len(ps)))
-            at, start = at + fixed, start + n
+            at, start = at + fixed, start + (n if gathered else 0)
         return coll_concat(signature(S)[1], outs)
 
     defn = CompositeDefinition("ScanZkRoot", 1, ("templates", "counts", "nb", "every"), signature, body,
                                register=False)
     return Program(bind(defn, templates=tuple(PA.template_id(t) for t, _, _ in members),
                         counts=tuple(n for _, n, _ in members), nb=nb, every=every))
+
+
+def scan_program(cls: IS.Class, templates: tuple[str, ...], G: int, T: int) -> Program:
+    """The scan's Program of `templates` (`TEMPLATES`, or the carried shape's `CARRIED`) over G link-windows of T
+    buckets, in the generator form (`scan_root`)."""
+    defs, counts = _defs(cls), counts_of(members_of(templates, G, T))
+    return scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], G * T // cls.EVERY, cls.EVERY)
 
 
 def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls: IS.Class, nb: int) -> dict:
@@ -1131,7 +1317,7 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
         raise SystemExit(f"one-stage's reads refuse the scan's Program: {e}") from e
     want = {p: (p, [None] * sum(len(m.buckets) for m in members)) for p in lane_kinds(cls)}
     for m in members:
-        for k, b in enumerate(m.buckets if m.template != "egress" else ()):
+        for k, b in enumerate(m.buckets if m.template in ("first", "ingress") else ()):
             for p in lane_kinds(cls):
                 want[p][1][m.base + k] = entry_at(cls, b)
     if got != want:
@@ -1150,12 +1336,12 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
     none."""
     defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T), lanes=cls.NR)
     counts = counts_of(members)
-    nb = G * T // cls.EVERY
-    prog = scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], nb, cls.EVERY) \
-        if templates == TEMPLATES else M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
+    nb, scan = G * T // cls.EVERY, templates in (TEMPLATES, CARRIED)
+    prog = scan_program(cls, templates, G, T) if scan else \
+        M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
-    if templates == TEMPLATES:
+    if scan:
         entry_reads(prog, query, members, cls, nb)
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -1177,14 +1363,14 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json", tied=lane_kinds(cls) if templates == TEMPLATES else ())
+                           program_file=out / "program.json", tied=lane_kinds(cls) if scan else ())
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
-    """Member mr's ports' prefix in its round's registration: its name, the slot entries' (`ROWS_O0`) their lane's
+    """Member mr's ports' prefix in its round's registration: its name, the slot entries' (`BLOCK`) their lane's
     chunk's, ``<descriptor id>/c<j>``, so lane j's o0 is the port `NetworkCheck.Period`'s `wired` holds lane j's
     ``scan/prog<j>`` to (`entries_port`)."""
-    return f"{PA.template_id(defn)}/c{mr.lane}" if mr.template in ROWS_O0 else mr.name
+    return f"{PA.template_id(defn)}/c{mr.lane}" if mr.template in BLOCK else mr.name
 
 
 def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
@@ -1435,7 +1621,8 @@ def _free_port() -> int:
 
 
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
-          port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
+          port: int, k: int | None = None, coins: SimpleNamespace | None = None,
+          carry: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
     warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
@@ -1447,7 +1634,11 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An accepted audit carries its
     charge terms (`charge_terms`) and each member's cost per sampled proof block; on the challenger's coins, the outcome
     of record is the stream's (`coins_outcome`). Every outcome carries the tied values R8 let through
-    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests."""
+    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests. A carried
+    round's (``carry``, `carry_of`) record is a v2 record, its ``previous`` the log's last record and its one
+    registered value the carried start, checked with the verifier's log and its hold of that value; its outcome carries
+    the record's changed forms' codes (``registration_negatives``) and the root the verdicts of record opened the
+    start unit's ``sin`` against (``carried_start``, `audit.session_registered`)."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1481,15 +1672,23 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
+    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
+                   **(carry.record if carry else {}))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
-                                      work_table=table, tied=pg.tied or None).to_json()}
+
+    def registration(r: dict, given: dict) -> dict:
+        return V.check(r, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
+                       tied=pg.tied or None, **given).to_json()
+
+    checks = {"registration": registration(rec, carry.check if carry else {})}
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
     res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()},
                  "rests_on_period_check": checks["registration"].get("rests_on_period_check", [])}
+    if carry:
+        res["registration_negatives"] = {x: {"codes": registration(r, given)["codes"], "expected": code}
+                                         for x, (r, given, code) in carry.negatives(rec).items()}
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
     if not all(v["ok"] for v in checks.values()):
@@ -1613,6 +1812,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
             "draw": {"law": rule, "coins": source, "units": lean_draw["units"], "of": rec["population"]},
             **({"coins": told, "coin_negatives": {x: y["refused"] for x, y in neg.items()}} if told else {}),
+            **({"carried_start": AU.session_registered(verdicts, rec)} if carry else {}),
             "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
             "failed": {c: v.get("codes") for c, v in (result.get("checks") or {}).items() if not v.get("ok")},
             "charge": charge_terms(M, result, members, a.delta),
@@ -1916,6 +2116,105 @@ def prove(a) -> int:
     return 0 if ok else 1
 
 
+def frame_leaf(earlier: dict, start: dict) -> dict:
+    """A carried start's leaf on the staged files of two rounds: ``earlier``, the round before's staged ``last``
+    member, whose statement commits its o1 as a frame port of one leaf, so that port's root is that leaf as Flock's
+    statement frames it; ``start``, this round's staged start member, whose ``sin`` row's b‖c one-stage's registered
+    read frames at leaf 0 of that port's domain (`registered.leaf`, the leaf Lean's registered reads open). The two
+    leaves, and whether they and the two rows' b‖c are the same bytes."""
+    fv, dom = earlier["header"]["frame_v3"], ADV.domain(frame_binding(earlier["set"], 1, "o1"), 1)
+    read = REG.leaf(dom, 0, start["bcs"][0]["sin"], BitRowLeaf.hiding_schema).hex()
+    return {"statement": fv["roots"]["o1"], "registered_read": read,
+            "same": (read == fv["roots"]["o1"] and dom.domain_id.hex() == fv["domain_ids"]["o1"]
+                     and start["bcs"][0]["sin"] == earlier["bcs"][0]["o1"])}
+
+
+def prove_carried(a) -> int:
+    """``prove --carried``: the carried shape's rounds (`carried`) proved in order on one verifier's log, each
+    link-window's record after the first naming the record before it: every unit sampled, each member proved --zk and
+    held by Lean, the start member's ``sin`` against the root and domain the verifier took from its log (`carry_of`).
+    A ``carried-<w>`` round is as expected when it is accepted with every output 1, the verdicts of record opened its
+    start against that root, its record's changed forms are refused as named, and, after the first, its start's leaf
+    is the round before's frame leaf byte for byte (`frame_leaf`); the stale round when Lean's registered reads refuse
+    its start ("does not open"). What the verifier received is scanned as every round's is (`received`)."""
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    setup = SETUPS[a.setup]
+    h = carried(out / "warden", a.warden_run, setup, a.group)
+    whole, T, cls = h.whole, h.T, setup.cls
+    summary: dict = {"source": whole.source, "warden_run": whole.run_id, "setup": setup.name, "class": asdict(cls),
+                     "params": asdict(whole.params), "T": T, "group": a.group, "shape": "carried",
+                     "admitted": whole.admitted,
+                     "anchors": {q: cls.anchor(s, s % cls.EVERY) for q, s in whole.admitted.items()},
+                     "members": {r.name: [{"name": m.name, "base": m.base, "n": m.n} for m in r.members]
+                                 for r in h.rounds},
+                     "start": {r.name: {x: r.members[0].ports["sin"][x] for x in ("value", "root", "domain")}
+                               for r in h.rounds},
+                     "host": {r.name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs}
+                                       for m in r.members] for r in h.rounds}}
+    log(f"run: {whole.source}; {setup.name}'s class, the carried shape, link-windows {whole.windows} of {T} buckets "
+        f"each a registration, admitted {whole.admitted}, anchors {summary['anchors']}; host reads as expected "
+        f"({whole.run_s} s)")
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    if a.dry:
+        log("dry: done")
+        return 0
+    M = WZ._one_stage()
+    pgs = {t: program(M, cls, t, 1, T, out / PROGRAMS[t]) for t in (CARRIED, STALE)}
+    summary["stagers"] = {f"{PROGRAMS[k]}/{tp}": {
+        "unit": g.defn.id, "lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "vus_per_block": g.st.meta["vus_per_block"],
+        "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
+    log(f"stagers: {summary['stagers']}")
+    ok, records, before = True, [], None
+    for j, r in enumerate(h.rounds):
+        pg = pgs[r.templates]
+        members = [stage(M, pg, mr, out / r.name / f"stage-{mr.name}") for mr in r.members]
+        if not r.stale and staged_wires(members):
+            raise SystemExit(f"{r.name}'s chains don't hold on its public files: {staged_wires(members)}")
+        summary.setdefault("rounds", {})[r.name] = {
+            m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
+                        "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
+        log(f"staged {r.name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}"
+                                             for m in members))
+        carry = carry_of(pg, cls, records, r.members[0].ports["sin"])
+        av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
+        res = audit(M, av, r.at, pg, r.name, members, r.trees, out / r.name, a.port and a.port + 8 * j, carry=carry)
+        if res["checks_before_draw"]["registration"]:
+            records.append(json.loads((out / r.name / "registration.json").read_text()))
+        inst = out / r.name / "instances.bin"
+        inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
+        rec = res["received"] = received(M.a8, out / r.name / "verifier", inst, *blobs_of(members), known(members, r.at))
+        inst.unlink()
+        lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
+        negatives = res.get("registration_negatives") or {}
+        good = unseen(rec) and bool(negatives) and all(
+            x["expected"] in x["codes"] if x["expected"] else not x["codes"] for x in negatives.values())
+        if r.stale:
+            why = res["why"].get("lean-verify/start") or ""
+            good = good and not res["accepted"] and lean == {"start": False} and "registered reads" in why \
+                and "does not open" in why
+        else:
+            leaf = res["frame_leaf"] = frame_leaf(before, members[0]) if before else None
+            good = good and res["window_accepted"] and bool(lean) and all(lean.values()) \
+                and res.get("carried_start") == {CARRY: carry.root} and (leaf is None or leaf["same"])
+            before = next(m for m in members if m["name"] == "last")
+        ok &= good
+        summary["rounds"][r.name]["audit"] = res
+        held = "pinned, the empty state's" if "pinned" in carry.check else f"{CARRY_PORT} of the record before"
+        log(f"round {r.name}: start {CARRY} at {carry.root[:16]}… ({held}), registration "
+            f"{res['checks_before_draw']}, changed forms { {x: y['codes'] for x, y in negatives.items()} }, proofs "
+            f"{res['verdicts']}, audit {res.get('audit')}, the verdicts of record opened "
+            f"{ {k: (v or '')[:16] for k, v in (res.get('carried_start') or {}).items()} }, frame leaf "
+            f"{res.get('frame_leaf')}, Lean {res['why']}, verifier received {rec['verifier_bytes']} bytes, witness "
+            f"pieces found there: {rec['verifier_found'] or 'none'}, control {rec['control']['blobs_found']}; "
+            f"{'as expected' if good else 'UNEXPECTED'}")
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    summary["ok"] = ok
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log("done: " + ("ok" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -1951,6 +2250,10 @@ def main(argv=None) -> int:
     p.add_argument("--v3c", type=Path, metavar="WINDOW",
                    help="V3c's window directory (prove_path.py window-commit's): the scan reads its SCAN_STATE and "
                         "its SelectEntry_v1 chunks' o0 as its state and prog<j> trees, and proves no block round")
+    p.add_argument("--carried", action="store_true",
+                   help="the carried shape: each of the group's link-windows a registration of its own, its scan "
+                        "started from the state the record before it committed; no period check reads this shape, "
+                        "so a scan proved in it has no period")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
                                         "flags (serve, rehearse): the network certifier runs --warden-run reads, in "
                                         "the id egress form, serve's and rehearse --ids's")
@@ -1974,7 +2277,9 @@ def main(argv=None) -> int:
                     "the commit the session's host pins")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    return prove(a)
+    if a.carried and (a.draw is not None or a.v3c is not None):
+        p.error("--carried samples every unit of its own trees: give neither --draw nor --v3c")
+    return prove_carried(a) if a.carried else prove(a)
 
 
 if __name__ == "__main__":
