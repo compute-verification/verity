@@ -3,19 +3,23 @@ of its own, so the value goes on as it is and the line that reads it decides.  A
 run without graphs has no driver, a kernel file is a Python file, a manifest's schema is a string, a whole step's sets are
 keyed by a pass kind's key and a committed linear's weight has two dimensions; a call with side steps took a side lane, and
 one whose A tree is aside a tree lane; a retained call's pass has a directory, and so has a retained pass's end, whose run
-has a salt key; a retained capture has its stages, a capture holds its calls and its side steps not yet joined, and a
-replayed forward has the slots its replay uploaded; each test hands the other value."""
+has a salt key; a retained capture has its stages, a capture holds its calls and its side steps not yet joined, a
+replayed forward has the slots its replay uploaded, and a Pearl-C scheme's settings name its kernel; each test hands the
+other value."""
 from __future__ import annotations
 
 import contextlib
+import random
 import re
 import sys
 from types import SimpleNamespace
 
 import pytest
 from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
 
+from verity_vllm import protocols as PO
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
@@ -365,3 +369,33 @@ def test_h1_hands_each_layers_weight_shape_on_whole(monkeypatch):
     with pytest.raises(Refused):
         P._install_h1("entry", settings, target)
     assert served.shapes == [[(8, 16), (2, 3, 4)]]
+
+
+def test_a_pearl_c_scheme_whose_settings_name_no_kernel_hands_the_kernels_load_none(monkeypatch):
+    """`refusals` refuses a Pearl-C scheme whose settings name no ``kernel``.  `commit_weights` and `install` check nothing
+    of it: each hands the kernel's load the setting as it is, None, beside the setting ``cubin``, and the load fails at
+    its directory's path before it reads a file."""
+    scheme, seen = "pearl-c-sm120-v1-h3", []
+    entry, kernels = f"{P.NAME}:{scheme}", dict(PK._KERNELS)
+    ctx = PO.Context(stage="serve", enabled=(entry,),
+                     settings={P.NAME: {"coins": Challenger(0, random.Random(0).randbytes), "device": "cuda", "cubin": "c"}})
+    assert [r for r in P.refusals(scheme, ctx) if "'kernel'" in r] == [
+        f"{scheme}: runs on the device only, so it needs the pouw settings 'device': 'cuda' and 'kernel'"]
+    with pytest.raises(TypeError, match="NoneType"):
+        PPD.Kernel.load(None)
+    assert kernels == PK._KERNELS
+
+    def load(*a):
+        seen.append(a)
+        raise Refused
+
+    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(load))
+    monkeypatch.setattr(P, "_SALT_KEYS", {})
+    monkeypatch.setattr(P, "_layers",
+                        lambda scheme, target: (PPD.scheme_of(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
+    committed = {entry: {"weight_roots": {"0": "05" * 64}, "shapes": {"0": [128, 1024]}}}
+    for call, target in ((P.commit_weights, SimpleNamespace(model=None, context=ctx)),
+                         (P.install, SimpleNamespace(model=None, context=ctx, weight_commitments=committed))):
+        with pytest.raises(Refused):
+            call(scheme, target)
+    assert seen == [(None, "c"), (None, "c")]
