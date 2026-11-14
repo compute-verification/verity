@@ -10,7 +10,7 @@ the proofs themselves (`OneStageZk`). The verifier holds one set of parameters f
 parameters that the check does not hold to the ledger or to the registration.
 
 **This registration's circuit** (`registration`) is the SHA-512 a period of the lane commits as its circuit when the
-ledger opens it (`Challenger.MonitoringPeriod.circuit`), the verifier's own and never read from the ledger. A session
+ledger opens it (`Challenger.PeriodRecord.circuit`), the verifier's own and never read from the ledger. A session
 is this registration's when the period that lists it committed that digest, and another registration's when it
 committed another one (`registrationOf`). The check does not hold the digest to `audit`: one-stage v2 reads no
 period's circuit.
