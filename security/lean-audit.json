@@ -4511,7 +4511,7 @@
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
-   "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"
+   "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal"
   },
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
@@ -16561,24 +16561,8 @@
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
   },
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :",
-    "  Not",
-    "    (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKMal.Masked.dataE Claims.ZKServer.Loop.finS.honestVals",
-    "      (((Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.Tp).withLink Claims.ZKServer.Loop.leakSrc).withFiles",
-    "        Claims.ZKServer.Loop.leakSrc)",
-    "      (Claims.ZKServer.Loop.realOf Claims.ZKServer.Loop.leakSrc) Claims.ZKServer.Loop.leakWk (fun x x_1 => True) 2)"
-   ],
-   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
-    "reads": ["FlockSoundness.Assumptions.HashDerivedKey"]
-   },
-   "type_hash": "e8d629c873126ca93cebe89b070e311e2dd76d6303c1a410979a9635685bdd9c"
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",

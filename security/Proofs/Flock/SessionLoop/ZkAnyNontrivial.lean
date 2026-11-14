@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.SessionLoop.Leak
 public import Proofs.Flock.SessionLoop.LeafCap
+public import Proofs.Flock.SessionLoop.Honest
 public import Proofs.Flock.SessionLoop.AnyErrBound
 public import Proofs.Flock.SessionLoop.RepSrcSat
 public import Proofs.Flock.SessionLoop.FinPiopRet
@@ -37,6 +38,8 @@ session's leaves within 64 times the per-table leaf limit (`Loop.nLeaves_dataE_l
 * `Loop.length_linkOf_leak_nil`, `Loop.length_linkOf_leak_true`: the link is short at `⟨[]⟩` and long at `⟨[true]⟩`.
 * `Loop.anyErr_leak_lt`: at `t = 2` the error at each witness is `24·n_L·δ₁ + 2·3^{-2}`, and the two sum below `1`.
 * `Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial`: `ZkAnyAt` fails.
+* `Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal`: it fails at values `UnCausal` admits, the honest
+  values (`Loop.finS_unCausal`).
 -/
 
 @[expose] public section
@@ -316,5 +319,16 @@ theorem SessionLoopZKAnyDeployed_nontrivial (hKey : FlockSoundness.Assumptions.Z
       (FlockDeploy.concreteStmt_setupOf _root_.Properties.Flock.Nets.fixedNetsBuild) Loop.concrete_tables.1
       Loop.concrete_tables.2 (by rw [FlockDeploy.concreteStmt_jOf]; norm_num) ρ.1 ρ.2))
     (fun _ _ => True) trivial trivial _ _ (Loop.anyErr_leak_lt hKey _ _) h.1
+
+/-- **`SessionLoopZKAnyDeployed`'s conclusion fails at values its premise `UnCausal` admits**: the honest values'
+unswitched round encoding is causal (`Loop.finS_unCausal`), and at them `ZkAnyAt` fails
+(`SessionLoopZKAnyDeployed_nontrivial`). -/
+theorem SessionLoopZKAnyDeployed_nontrivial_unCausal (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
+    ∃ vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals,
+      ∃ _ : (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal vs,
+        ¬ Loop.ZkAnyAt Masked.dataE vs
+          (LeanRelease.withFiles (LeanRelease.withLink (Loop.constRel Loop.Tp) Loop.leakSrc) Loop.leakSrc)
+          (Loop.realOf Loop.leakSrc) Loop.leakWk (fun _ _ => True) 2 :=
+  ⟨Loop.finS.honestVals, Loop.finS_unCausal, SessionLoopZKAnyDeployed_nontrivial hKey⟩
 
 end Flock.SecurityProofs
