@@ -1,0 +1,7 @@
+tag	kind	staged_as	card_k_log	staged_k_log	ands	circuit_gib	verify_held	no_program	other_def	seconds	peak_gb	peak_in	run
+kw-min	SparseMlaHeadKeysWire_v1{NVIS=1,W=64,C=0}	listed	20	22	0	0.05	accepted	refused	refused	100	1.04	stage	r20261114-190904-9c25
+hv-min	SparseMlaHeadValues_v1{NVIS=1,FIRST=true,...,C=0}	listed	22	22	58304	0.06	accepted	refused	refused	100	1.07	stage	r20261114-190904-9c25
+sc-min	SparseMlaHeadScoresCols_v1{...,NVIS=1,FIRST=true,...}	listed	23	23	329235	0.73	accepted	refused	refused	170	3.89	lean	r20261114-190904-9c25
+kw-max	SparseMlaHeadKeysWire_v1{NVIS=64,W=64,C=8}	listed	24	24	0	0.05	accepted	refused	refused	100	3.07	prove	r20261114-190941-9f78
+hv-max	SparseMlaHeadValues_v1{NVIS=64,FIRST=false,...,C=7}	listed	24	24	2269440	0.57	accepted	refused	refused	190	3.75	prove	r20261114-190941-9f78
+sc-max	SparseMlaHeadScoresCols_v1{...,NVIS=64,FIRST=false,...}	boolean v2 (listed refused under --zk: ProvedScope.scopeOkH)	27	27	16724332	4.89	accepted	refused	refused	1270	29.49	prove	r20261114-191038-8f83
