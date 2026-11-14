@@ -407,7 +407,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
              "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "definition": r.cost.definition, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "lean_verifier_seconds": r.cost.lean_seconds, "lean_source": r.cost.lean_source,
-             "lean_mark": LEAN_MARKS.get(r.cost.lean_source), **_lean_statement(r.cost.lean_statement),
+             "lean_mark": LEAN_MARKS.get(r.cost.lean_source or ""), **_lean_statement(r.cost.lean_statement),
              "proof_bytes_source": r.cost.proof_bytes_source,
              "sizes": [{"blocks": n, "statement_seconds": g, "record": rec} for n, g, rec in r.cost.sizes] or None,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
