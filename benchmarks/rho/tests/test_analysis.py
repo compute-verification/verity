@@ -225,6 +225,29 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
     assert "hi" not in record and "lo" not in record
 
 
+def test_run_lists_omega_max_and_mu_where_the_serving_cut_sets_the_bound(tmp_path, monkeypatch, capsys):
+    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose cap the
+    serving cut sets, `fanout-priced` and `fanout-split`, each cite a `draft:` statement of their own) rests on its
+    structure's `ω_max` and `μ`, its boundary term's: `rho.md` names both declarations and `rho.json`'s structure record
+    holds both values. A remote bound has no serving cut, so its text names neither."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "onsite-h200-kimi",
+                                      "--scenario", "reference-remote-h200", "--set", "bounds.lock_only=false"])
+    run.main()
+    out = capsys.readouterr().out
+    onsite, remote = (out.split(f"\n## {n}\n", 1)[1].split("\n## ", 1)[0]
+                      for n in ("onsite-h200-kimi", "reference-remote-h200"))
+    for text in ((tmp_path / "rho.md").read_text(), onsite):
+        assert "`structure.reference.omega_max`" in text and "`structure.reference.mu`" in text
+    assert "`structure.reference.mu`" not in remote
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["onsite-h200-kimi"]["structure"]
+    assert (record["omega_max"], record["mu"]) == (REG["structure.reference.omega_max"], REG["structure.reference.mu"])
+
+
 def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
     """The per-server bound at W63 (`onsite-w63`): 91.1 kbit/s a server over a 32-bucket link-window, intake 0.0282 at
     the reference policy, labelled the honest-δ form with an incorrect ingress unit's 356,592 bits excluded (and 0 when

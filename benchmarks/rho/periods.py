@@ -20,7 +20,9 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
 * **what is scaled**: a server block's local minimum is a per-server-window bound (one server between two wipes,
   onsite; one server over the period, remote), its cuts' statements are per server block, and the bound sums them over
   every server and window; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
-  each server's capacity, neither a per-window bound;
+  each server's capacity, neither a per-window bound; on a remote row both are `DampenerRemotePeriod`'s terms over the
+  period, which a row cites with the premises it takes, each one's section of the lock's record and the terms it is on
+  (`PERIOD_PREMISES`), the escape's tail and the windows' knowledge errors (`pooled`);
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
   assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
@@ -50,7 +52,7 @@ from pathlib import Path
 import run
 from rho import analysis, circuits, lean, operating, params
 from rho.classes import CLASSES, premise_status, premises
-from rho.envelopes import ROUTES
+from rho.envelopes import ROUTES, Onsite, Remote
 from rho.params import Param, Registry
 from rho.scenario import Result, _binding_k, draft
 
@@ -67,6 +69,17 @@ FIXED = ("datasheet", "measured", "declared", "ruled")
 #: the parameters whose range is a limit `verity` sets, not a premise, by the kind their row shows: a proof block's
 #: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
 LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
+#: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
+#: fleet's capacity over the period, and the premises it takes in place of `DampenerRemote`'s per-window ones, each
+#: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
+PERIOD_BOUND = "Nci.Guarantees.DampenerRemotePeriod"
+#: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
+PER_BLOCK_BOUND = Remote.CITES[0]
+PERIOD_PREMISES = {"Nci.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
+                   "Nci.Assumptions.SampledPerWindow": "the escape share and its tail",
+                   "Nci.Assumptions.IdentitySchedule": "same",
+                   "Nci.Assumptions.UnmonitoredAtMost": "`s`",
+                   "Nci.Assumptions.CheatingAtMost": "`χ`"}
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
@@ -129,6 +142,43 @@ def parts(r: Result, reg: Registry) -> dict:
             "standings": {c: premise_status([c], k, table=table) for c in named}}
 
 
+def pooled(r: Result) -> dict | None:
+    """A remote row's period statement (`PERIOD_BOUND`): its premises with their sections of the lock's record of it,
+    the escape's tail against `p_evade`, and the windows' knowledge errors over each monitoring period. None onsite:
+    no onsite period statement exists."""
+    inner = operating._inner(r.scenario.regime)
+    if not isinstance(inner, Remote) or isinstance(inner, Onsite):
+        return None
+    record, shared = lean.premises(PERIOD_BOUND), lean.premises(PER_BLOCK_BOUND)
+    missing = [p for p in PERIOD_PREMISES if p not in record]
+    if missing:
+        raise ValueError(f"the lock's record of {PERIOD_BOUND} takes no {missing}: PERIOD_PREMISES names its premises")
+    stray = sorted(p for p in record if p not in PERIOD_PREMISES and p not in shared)
+    if stray:
+        raise ValueError(f"the lock's record of {PERIOD_BOUND} takes {stray}, which neither PERIOD_PREMISES nor the "
+                         f"record of {PER_BLOCK_BOUND} names: add each to PERIOD_PREMISES with the terms it is on")
+    d = inner.detection
+    windows = {name: math.ceil(seconds / inner.window_s) for name, seconds in params.PERIODS.items()}
+    return {"bound": PERIOD_BOUND, "premises": {p: [record[p], term] for p, term in PERIOD_PREMISES.items()},
+            "per_block": PER_BLOCK_BOUND, "shared": len(record) - len(PERIOD_PREMISES), "recorded": len(record),
+            "tail": d.tail(), "p_evade": d.p_evade if d.sampled else 0.0, "window_s": inner.window_s,
+            "window_ks": inner.window_ks, "windows": {k: [n, n * inner.window_ks] for k, n in windows.items()}}
+
+
+def pooled_md(p: dict) -> str:
+    fmt = run.fmt
+    premises = ", ".join(f"`{n.rsplit('.', 1)[-1]}` ({kind}; {term})" for n, (kind, term) in p["premises"].items())
+    sums = "; ".join(f"{k} {fmt(n)}{' windows' if i == 0 else ''}, {fmt(s)}"
+                     for i, (k, (n, s)) in enumerate(p["windows"].items()))
+    return (f": the terms of `{p['bound']}`, one statement pooled over the period, the premises it takes beyond "
+            f"`{p['per_block']}`'s, whose other {p['shared']} it shares ({p['recorded']} in the lock's record), on "
+            f"them {premises}; "
+            f"the escape's tail `J (1 − q)^(K+1)` {fmt(p['tail'])}, within δ's `p_evade` {fmt(p['p_evade'])}; the "
+            f"windows' knowledge errors `Σ_t ks_t`, in δ_crypto, at `window_ks` {fmt(p['window_ks'])} a window of "
+            f"{operating.human(p['window_s'])}, the deployment's rounds of live coins (both assumed, for knowledge "
+            f"errors with no value yet; the world read as one deployment): {sums}")
+
+
 def scaled(r: Result) -> dict:
     """The server blocks the bound sums a per-server-window bound over, and the share of the bound that isn't one."""
     s, part = r.scenario, r.scenario.regime.partition(r.scenario.context)
@@ -136,7 +186,7 @@ def scaled(r: Result) -> dict:
     blocks = [{"name": b.name, "count": b.count, "seconds": b.gates / phi,
                "cuts": {c.name: list(c.cites) for c in b.cuts}} for b in part.serving]
     terms = analysis.attribution(r)
-    return {"blocks": blocks,
+    return {"blocks": blocks, "period": pooled(r),
             "per_window_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ("serving", "inference")),
             "unreg_share": math.fsum(t.share for t in terms if t.name == "unregistered"),
             "routes_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ROUTES)}
@@ -292,7 +342,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                  else "; ".join(f"{g['where']}, {g['period']}" for g in group))
         out += [f"### {x['scenario']} ({where})", "",
                 (f"Set by **{p['setter']}** ({p.get('status')}; premises {p.get('premise') or '—'}), binding at "
-                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."), "", "| kind | parts |", "|---|---|"]
+                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."
+                + (f" The kinds are the per-block cuts' citations; the period statement, `{sc['period']['bound']}`, "
+                   "is the \"not scaled\" line's." if sc["period"] else "")), "", "| kind | parts |", "|---|---|"]
         for kind, names in p["kinds"].items():
             cells = [f"`{n}`" + (f" ({p['standings'][n]})" if n in p["standings"] else "") for n in names]
             out.append(f"| {kind} | {', '.join(cells) or '—'} |")
@@ -304,7 +356,8 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
         out += [(f"| scaled | {sc['per_window_share']:.1%} of the slowdown's rate: each server block's local minimum is a "
                 f"per-server-window bound ({blocks}), summed over the blocks ({counts}) |"),
                 (f"| not scaled | the unregistered pool {sc['unreg_share']:.1%} (`ε_unreg` of the fleet, one pool), the "
-                f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`) |"),
+                f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`)"
+                + (pooled_md(sc["period"]) if sc["period"] else "") + " |"),
                 "| what sets it | " + ", ".join(f"{t['name']} {t['share']:.1%}" for t in x["attribution"]) + " |", ""]
     out += ["## The premises, ranked", "",
             ("How far each alone moves the lower bound, the rest at reference, in decades: each ranged parameter "

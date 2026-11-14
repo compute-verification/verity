@@ -1036,6 +1036,8 @@ SESSION_GATE = r'''#!PYTHON
 import io, json, os, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+if any("${" in w for w in sys.argv[1:-1]):
+    sys.exit(f"stub ssh: an unfilled destination in {sys.argv[1:-1]!r}")
 with open(d / "asked", "a") as f:
     f.write(cmd + "\n")
 if cmd.startswith("relay-session "):
@@ -1181,6 +1183,23 @@ def test_a_session_this_trees_gate_refuses_is_refused_before_the_gate_is_asked(t
     assert CP.main(_front(tmp_path, *flags)) == 2
     assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(why)
     assert _asked(tmp_path) == [] and list((tmp_path / "serve" / CP.PRIVATE).iterdir()) == []
+
+
+def test_a_sessions_front_at_the_default_gate_reaches_the_address_the_environment_holds_and_unset_is_refused(
+        tmp_path, monkeypatch):
+    """``front --session`` at `SS.GATE` fills its host from the environment before the gate is asked, so the kept
+    relay, which ``close`` reads its gate from, names the address; unset, the front is refused by the variable's name
+    and asks nothing."""
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    monkeypatch.delenv("VY_CHALLENGER_1_HOST")
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, gate=CP.SS.GATE)) == 2
+    assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(
+        "VY_CHALLENGER_1_HOST is unset: the gate is ")
+    assert _asked(tmp_path) == [] and not (tmp_path / "serve" / CP.PRIVATE / RUN).exists()
+    monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, gate=CP.SS.GATE)) == 0
+    assert json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / CP.RELAY).read_text())["gate"] == LIVE_GATE
+    assert len(_asked(tmp_path)) == 2
 
 
 def test_a_session_the_gate_doesnt_start_opens_none(tmp_path, monkeypatch):

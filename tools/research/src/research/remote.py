@@ -55,8 +55,11 @@
                     reach or a package that predates it.  Python bytecode goes to <root>/cache/pycache (PYTHONPYCACHEPREFIX), not
                     into the tree; a clone's goes beside the clone.  A tree whose own research package predates this runs its workloads
                     in the tree; the launcher says so (remote.json workload_cwd).
-    claim           `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the claim, then starts the detached
-                    runner.  Re-delivering the same request finds the directory and reports its state; it never starts a second workload.
+    claim           The launcher stages its request with mkdir(<root>/requests/<run-id>), so a request dir another launch staged is
+                    never overwritten (RunIdTaken).  `research launch-request` on the machine does mkdir(<root>/runs/<run-id>) as the
+                    claim, marks the request it claimed from (.claimed), then starts the detached runner.  Re-delivering the same request
+                    finds the directory and reports its state; it never starts a second workload.  A run dir that request did not claim
+                    is another launch's: the launcher refuses it (RunIdTaken), removes what it staged, and never says launched.
                     Each delivery holds flock(<root>/requests/<run-id>/.launch.lock) until it has answered, so a re-delivery (an ssh drop,
                     or the launcher's deadline, mid-wait) reports the first one's settled answer, never a run still starting.
     first record    launch-request answers only once the runner has parsed its arguments and written job.json: the runner says so on
@@ -178,6 +181,8 @@ CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody
 STORE_READ_DIR = "store-read"                 # --store-read's read-only key, put in the workload's environment (store.custody.READ_DIR_NAME)
 LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch-ack: the FIFO the runner names its first record on
 LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
+CLAIM_MARK = ".claimed"                       # <root>/requests/<run-id>/.claimed: the run dir was claimed from this request
+STAGE_TAKEN_RC = 17                           # `stage_request`'s exit when the request dir is there already
 FIRST_RECORD = "job.json"
 RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFailed reason (refused.json keeps PREFLIGHT_TAIL)
 CANCEL_GRACE_S = 20                           # research cancel: SIGTERM, then the runner SIGKILLs what of the run is left this long after
@@ -249,6 +254,11 @@ class PreflightFailed(Refused):
 class RunnerFailed(Refused):
     """The machine-side runner, or a wrapper ahead of it, exited before writing the run's first record (job.json): an argv it
     rejected, a store preparation that failed, a CPU scope that would not start.  No workload ran."""
+
+
+class RunIdTaken(Refused):
+    """The run id names another launch's request or run dir on the machine.  Nothing of this launch started, and what it staged
+    there is removed; a launch that picked its id itself picks another (cli._run_placed)."""
 
 
 class CannotStart(Refused):
@@ -1442,8 +1452,9 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
 
 def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path],
                   private: list[tuple[str, bytes]] | None = None) -> str:
-    """Write request.json and any --send files under <root>/requests/<run-id>/ (unique per id; no claim involved).  `private` files
-    (the --custody-r2 key) are extracted under umask 077 and chmod 600: readable by the machine's user only."""
+    """Write request.json and any --send files under <root>/requests/<run-id>/, made here by one mkdir: RunIdTaken when it is there
+    already, another launch's, whose request and keys stay as they are.  `private` files (the --custody-r2 key) are extracted under
+    umask 077 and chmod 600: readable by the machine's user only."""
     stage_dir = f"{root}/requests/{run_id}"
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
@@ -1460,10 +1471,14 @@ def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any
             ti.size, ti.mode = len(data), 0o600
             tf.addfile(ti, io.BytesIO(data))
     q = shlex.quote(stage_dir)
-    cmd = f"mkdir -p {q} && tar -xf - -C {q}"
+    cmd = (f"mkdir -p {shlex.quote(f'{root}/requests')} && {{ mkdir {q} || {{ test -e {q} && exit {STAGE_TAKEN_RC}; exit 1; }}; }} && "
+           f"tar -xf - -C {q}")
     if private:
         cmd = f"umask 077 && {cmd} && chmod 600 " + " ".join(shlex.quote(f"{stage_dir}/{n}") for n, _ in private)
     r = ssh_run(ssh, ["sh", "-c", cmd], stdin=buf.getvalue(), timeout=600)
+    if r.returncode == STAGE_TAKEN_RC:
+        raise RunIdTaken(f"run id {run_id} is another launch's on the machine ({stage_dir} is staged already), so nothing was staged "
+                         "or started; launch again: a launch without --id picks a new id")
     if r.returncode != 0:
         raise Refused(f"staging the request failed: {r.stderr.decode(errors='replace')[-400:]}")
     return f"{stage_dir}/request.json"
@@ -1731,7 +1746,9 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         st = _read_json(run_dir / "status.json") or {}
         refused = _read_json(run_dir / "refused.json")
         return {"claimed": False, "run_id": run_id, "run_dir": str(run_dir), "existing": True, "state": st.get("state"),
-                "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason"), "fault": (refused or {}).get("fault")}
+                "runner_pid": launch.get("runner_pid"), "refused": (refused or {}).get("reason"), "fault": (refused or {}).get("fault"),
+                "this_request": (request_path.parent / CLAIM_MARK).is_file()}
+    (request_path.parent / CLAIM_MARK).write_text(f"{run_id}\n")
     concurrent = active_runs(runs_root, exclude=run_id)
     src_dir = None
     mem_rec: dict[str, Any] | None = None
@@ -2352,6 +2369,12 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                 continue
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
+                # a package that predates the mark: only a delivery after one that may have reached the machine can be this one's
+                if out.get("existing") and not out.get("this_request", attempt > 0):
+                    _rm_rf(ssh, str(Path(req_path).parent))
+                    raise RunIdTaken(f"run id {run_id} is another launch's on {machine_name} (its run dir {rec['remote_run_dir']} was "
+                                     f"not claimed from this launch's request), so nothing of this launch started and what it staged "
+                                     f"is removed; launch again: a launch without --id picks a new id")
                 break
             last_err = r.stderr.decode(errors="replace")[-400:]
             if r.returncode != 255:            # 255 = ssh transport failure: re-deliver the SAME request (idempotent claim)

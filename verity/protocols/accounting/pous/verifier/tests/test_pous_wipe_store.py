@@ -225,7 +225,8 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     """The leg on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
     more by NVML's: the tier declared is NVML's total, so `R`, and `M` with it, counts the reserve (on Demo B's H200,
     the 5,159,518,208 bits CUDA's count leaves out), and none of the device is undeclared. Without NVML the tier is
-    CUDA's, and the record names the reserve uncertified, with the reason."""
+    CUDA's, and the placement names the reserve uncertified by its tier; the prover's own record keeps the device's
+    name, uuid and bus id and the reason, and the published answer names none of them."""
     cuda = 64 << 20
     tier = cuda + RESERVE if nvml else cuda
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
@@ -243,14 +244,15 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     assert answer["verdict"] == "accept" and record["prover"]["gate"]["passed"], answer
     assert answer["profile"]["tiers"] == [["gpu-hbm", tier]] and answer["public"]["memory_bits"] == 8 * tier
     assert answer["profile"]["certificate"]["outside_bits"] == record["wipe"]["outside_bits"] == 8 * (tier - (1 << 25))
-    store = record["placement"]["prover_store"]
+    store = record["prover"]["store"]
     assert _totals(store) == ((cuda, tier, tier, "nvml") if nvml else (cuda, None, cuda, "cuda"))
+    assert record["placement"] == answer["profile"]["placement"] and "prover_store" not in record["placement"]
+    assert not any(store[k] in json.dumps(answer) for k in ("device", "uuid", "pci_bus_id")) and store["pci_bus_id"] == BUS
     assert [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "gpu-hbm"] == []
     reserve = [g for g in record["uncertified"] if "driver reserves" in g]
-    assert reserve == ([] if nvml else [(
-        f"tier gpu-hbm: the memory NVIDIA H200's driver reserves is undeclared: the tier is CUDA's total ({cuda} bytes), "
-        f"which leaves it out, since NVML gave none ({store['nvml_error']}); the fill doesn't cover it and M doesn't "
-        "count it")])
+    assert reserve == record["placement"]["store_gaps"] == ([] if nvml else [(
+        f"tier gpu-hbm: the memory the GPU's driver reserves is undeclared: the tier is CUDA's total ({cuda} bytes), "
+        "which leaves it out, since NVML gave none; the fill doesn't cover it and M doesn't count it")])
     assert W.summary(record)["uncertified"] == record["uncertified"]
 
 
@@ -292,7 +294,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     """The leg whole as the H200's will run: period.json's wipe on a `wipe_store` prover (host memory standing in for
     the device) gated first, against a challenger side of its own host (`wipe_side.py`) streaming natively. The record
     holds the prover's fill and device reads, the signed session's fill and round trips, and the streamer's gate and
-    figures; the placement names the store."""
+    figures; the prover's record names its store, and the placement doesn't."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
@@ -306,8 +308,9 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["profile"]["tiers"] == [["host-dram", 1 << 25]]
-    assert answer["profile"]["placement"]["prover_store"]["tier"] == "host-dram"
+    assert answer["profile"]["placement"]["store_gaps"] == [] and "prover_store" not in answer["profile"]["placement"]
     record = json.loads((out / "wipe.json").read_text())
+    assert record["prover"]["store"]["tier"] == "host-dram"
     assert record["prover"]["gate"]["passed"] and record["prover"]["fill"]["bytes"] == 1 << 25
     assert record["prover"]["reads"]["n"] == W.READS and record["session"]["reads"]["n"] == W.READS
     assert record["session"]["fill"]["bytes"] == 1 << 25

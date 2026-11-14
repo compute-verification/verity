@@ -85,6 +85,25 @@ def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys)
     assert S.main(["--list"]) == 2 and "is not a git checkout" in capsys.readouterr().err
 
 
+def test_a_tmpdir_in_the_runs_shared_scratch_is_refused_before_any_suite_with_the_cure(tmp_path, monkeypatch, capsys):
+    """A job that exports TMPDIR into the shared scratch for its own files fails tests that are right to refuse it (custody's
+    directory another user can change, a Unix socket's path too long): the runner stops first and says how to run instead."""
+    S = _suites(monkeypatch, tmp_path)
+    research = tmp_path / "research"
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(research / "runs" / "r1"))
+    monkeypatch.setenv("TMPDIR", str(research / "scratch" / "r1" / "tmp"))
+    assert S.main([]) == 2
+    err = capsys.readouterr().err
+    assert f"is inside {research / 'scratch'}, the runs' shared scratch" in err
+    assert f"unset TMPDIR, or point it at a directory outside {research / 'scratch'}" in err
+    for tmp in (research / "tmp", tmp_path / "elsewhere"):
+        monkeypatch.setenv("TMPDIR", str(tmp))
+        assert S.scratch_tmp() is None
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.setenv("TMPDIR", str(research / "scratch" / "r1" / "tmp"))
+    assert S.scratch_tmp() is None, "outside a run there is no runs root to place the scratch by"
+
+
 def test_the_tests_get_the_callers_pythonpath_entries_inside_the_tree_only(tmp_path, monkeypatch):
     """An `export PYTHONPATH=...` naming another checkout, left in a shell, would run this tree's tests against that checkout."""
     S = _suites(monkeypatch, tmp_path)

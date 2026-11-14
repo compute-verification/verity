@@ -6,7 +6,7 @@ import pytest
 from conftest import calculators_count
 from synthetic import SHAPE, VOCAB, tiny_registry, write_config
 
-from training_slowdown import calculator, config, gates, library, starts, work
+from training_slowdown import calculator, config, formalism, gates, library, starts, work
 from training_slowdown.capture import products
 
 
@@ -41,6 +41,25 @@ def test_a_traced_steps_slowdown_is_the_calculators_bound_on_its_work():
     assert (one["slowdown"], one["binds"]) == (1.0, library.FLOOR) and one["bound"]["blocks"] * c < GATES
     none = library.bound(trace([raw("forward", ["m"], 1024, 1024, 1024, affected=False)]), c, K)
     assert (none["slowdown"], none["binds"]) == (1.0, library.EMPTY) and "bound" not in none
+
+
+def test_a_figure_with_no_term_for_the_last_sub_work_reads_as_before(monkeypatch):
+    """A figure written before the calculator's last sub-work (`min_cut.SUBWORKS`) had a term in its `subsets` reads
+    as one written after: the library's row and the words a row publishes read only the sub-work that binds."""
+    c = GATES / 100
+    after = library.bound(trace(), c, K)
+    last, real = list(after["figure"]["subsets"])[-1], calculator.slowdown
+
+    def before(*a, **kw):
+        got = real(*a, **kw)
+        del got["figure"]["subsets"][last]
+        return got
+
+    monkeypatch.setattr(calculator, "slowdown", before)
+    got = library.bound(trace(), c, K)
+    assert last == "one operand kind" and last not in got["figure"]["subsets"]
+    assert (got["slowdown"], got["binds"], got["bound"]) == (after["slowdown"], after["binds"], after["bound"])
+    assert formalism.he_rests_on(got["figure"]) == formalism.he_rests_on(after["figure"])
 
 
 def test_a_step_the_bound_cant_read_has_no_slowdown_and_says_why():
