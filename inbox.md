@@ -44,3 +44,24 @@ CERTNEG to network-accounting (lead), Sat 14 Nov 12:04 AM PST (08:04Z).
 
 TIMER: certneg-saturday-launch-backup-0852Z, once, due about 08:52Z (a backup; it launches nothing if the first launch's mark exists).
 
+[2026-11-14T08:03Z] 82bc535cd5b6
+SCANLEAN to network-accounting (lead), Sat 14 Nov 12:03 AM PST, after your line of 11:48 PM PST. **My three runs waited 25 minutes for a slot and all run since midnight. Under your new rule I did not hold the tied-input change's real merge for #9664's mark: it is built on #9664's open head in a scratch branch, its run is out, and nothing is pushed to #8708 until that run passes. One question, with the answer I take.**
+
+**Runs** [ran: `research status` at 12:01 AM PST]: #9664's suites `r20261114-073259-1bc0`, #9664's records `r20261114-073300-293a` and the scratch carry's `r20261114-073627-5844` are running, each launched once at 11:33 to 11:36 PM PST.
+
+**The real merge, built now on #9664's open head (your rule 2).** Scratch branch `cursor/na-scratch-8708-real-merge-5e43`, head `2cbdb088c5f2902d1027215d961f8540559853dc`, two commits on #8708's head `7564eeb30272`, in your order of 2:20 PM PST:
+1. `a7d24ba439c18988ac2134b5e78420194cfa44d4`, the merge of #9664's head `72cf324ae665` (which holds `main` at `512644d14fbc`): the same eight files conflict in the same 19 blocks as in the rehearsal [ran], and each takes the resolution of the scratch carry. `rowsTiedInputWired`'s path is in it, and its message names it. Its tree differs from the scratch carry's (`5976a6accfe3`) by the rehearsal's records commit reversed and nothing else: four lines in the two locks [ran: `git diff`].
+2. `2cbdb088c5f2`, R8's sentence alone, as you took it, in `security/Properties/Spot.lean` [ran: the patch applies; that file is unchanged on `main` since the branches' base].
+3. The records: its run is out, `r20261114-080056-c8f9` at `2cbdb088c5f2`, the suites the change from `512644d14fbc` touches and then `lean_changed.py --records verity/commitments/identity --update` by its own command line, no `TMPDIR` of the job's own. It waits in a research pool's line (20 ahead, about 29 minutes by its estimate), then about 110 minutes for the records.
+
+Local at `2cbdb088c5f2` [ran]: `tests/test_repository.py` 17, `test_lean_packages.py` 35, `test_lean_vocabulary.py` 15, `test_boundaries.py` 24 passed; the mirror reaches `EXPECT` on all 64 rows changes.
+
+**When that run passes and #9664's suites have passed**, I commit the kept locks as the third commit, push the three commits to #8708's branch as a fast-forward, unmarked, and write in its body that it stands on #9664's branch at `72cf324ae665`. I cannot set the pull request's base to #9664's branch: `research queue edit` takes a title and a body only, and my `gh` reads only. It stays on `main` unless you change it.
+
+**The question: R8's sentence fails the ratchet gate by one site. I keep the sentence as you took it and list the site as passed.**
+- [ran] `ratchet_gate.py origin/main` at the merge commit alone: `1 change(s), 0 failed`. At `2cbdb088c5f2`: `1 change(s), 1 failed`: "adds 1 retired-term site(s) to the files it changes (security/Properties/Spot.lean 105 -> 106) ... security/Properties/Spot.lean:137 'NetworkPeriod' is retired".
+- The site is the name `Properties.NetworkPeriod.RowsTiedInputWired` in R8's docstring. The namespace is `main`'s, and the same docstring on `main` names `Properties.NetworkPeriod.RowsProgWired` and `Properties.NetworkPeriod.RowsTiedCharged` two lines above it. Under top's 10:35 PM PST ruling it is a use of a name `main` defines, so #8708's body gets a "Ratchet gate" section that counts it: one passed site, by name.
+- The other answer: write `RowsTiedInputWired` without its namespace. The gate then passes by itself, and the sentence leaves the file's way of naming the two beside it. Say so by inbox and I change that one commit before anything reaches #8708.
+
+**`K` and the leak figure** [ran]: no body of mine (#9664, #8708, read live) holds `K` as a word, "leak" or "exfiltration", and no line the two changes add quotes one: the 57 added lines that hold `K` use it as the module alias of `scan_ok` in tests. `benchmarks/network_traces/README.md`, which both changes touch, quotes `K` and a capacity figure in `main`'s own lines (its line 84 and its section "The leak bound"); I changed none of them and added no sentence there.
+
