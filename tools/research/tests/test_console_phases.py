@@ -3,18 +3,18 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location("verity_console", Path(__file__).parents[1] / "console" / "verity_console.py")
 vc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vc)
 
-T0 = datetime(2026, 10, 2, 23, tzinfo=timezone.utc).timestamp()
+T0 = datetime(2026, 10, 2, 23, tzinfo=UTC).timestamp()
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def row(root: Path, name: str, events: list[tuple], started: float | None = None, released: dict | None = None) -> Path:

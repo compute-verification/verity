@@ -15,7 +15,7 @@ import shutil
 import stat
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -35,7 +35,7 @@ CALLER, CALLER_GID = (ME, MY_GID) if ME else (1000, 1000)   # vy-sudo refuses ro
 T0 = 1_600_000_000.0                     # every file's mtime: quiet, and before VERIFIED_FROM
 VERIFIED_FROM = 4102444800.0
 ART = "art:" + "a" * 64
-NOW = datetime(2026, 10, 1, 19, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 19, 30, tzinfo=UTC)
 not_root = pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only directory")
 
 

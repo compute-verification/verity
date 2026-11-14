@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -75,7 +75,7 @@ class Fake:
 
 
 def stamp(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%MZ")
 
 
 def health(out: list[str]) -> list[str]:

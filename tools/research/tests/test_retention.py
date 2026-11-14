@@ -10,7 +10,7 @@ import importlib.util
 import json
 import os
 import socket
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,7 +24,7 @@ from research.store import withdraw as W
 from research.store.local import LocalStore
 
 REPO = Path(__file__).resolve().parents[3]
-NOW = datetime(2026, 10, 1, 19, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 19, 30, tzinfo=UTC)
 PAST, FUTURE = "2026-09-25T00:00:00Z", "2026-10-08T00:00:00Z"
 NODE = "vy-test"
 ART = "art:" + "a" * 64
@@ -114,7 +114,7 @@ def test_a_record_round_trips_through_its_sidecar_and_an_update_keeps_created(tm
                    "preserved": None, "regenerate": "research run ... at abc", "why": "job B's passes"}
     assert R.load(d) == rec and json.loads((d / R.SIDECAR).read_text()) == rec
 
-    later = datetime(2026, 10, 2, tzinfo=timezone.utc)
+    later = datetime(2026, 10, 2, tzinfo=UTC)
     upd = R.keep(d, root=tmp_path, owner="@infra", expires=None, priority="keep", preserved=ART, regenerate="", now=lambda: later, node=NODE)
     assert upd["created"] == "2026-10-01T19:30:00Z", "an update keeps created"
     assert (upd["owner"], upd["expires"], upd["priority"], upd["preserved"]) == ("@infra", None, "keep", ART)
@@ -968,7 +968,7 @@ def test_a_lean_records_tree_is_in_use_exactly_when_lean_audits_prune_keeps_it(t
 
 def test_expires_now_is_what_rm_tells_an_owner_to_record():
     """rm's refusal tells the owner to record `--expires now`, so keep takes that word."""
-    now = datetime(2026, 10, 17, 14, 20, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 17, 14, 20, tzinfo=UTC)
     assert R.parse_expires("now", now) == R.fmt_utc(now) == R.parse_expires("0h", now)
     with pytest.raises(R.RecordError, match="never, now, a date"):
         R.parse_expires("soon", now)

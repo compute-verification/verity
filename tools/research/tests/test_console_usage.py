@@ -8,7 +8,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -18,8 +18,8 @@ vc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vc)
 usage = vc.usage_module()
 
-H0 = datetime(2026, 10, 3, 8, tzinfo=timezone.utc).timestamp()
-NOW = datetime(2026, 10, 3, 9, 10, tzinfo=timezone.utc)
+H0 = datetime(2026, 10, 3, 8, tzinfo=UTC).timestamp()
+NOW = datetime(2026, 10, 3, 9, 10, tzinfo=UTC)
 
 
 def test_the_console_and_the_module_share_their_labels_and_the_record():

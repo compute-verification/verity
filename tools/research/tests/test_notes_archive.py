@@ -143,7 +143,7 @@ def test_archive_keeps_mail_the_lane_has_not_been_shown(machines, capsys, monkey
     assert notes.main(["archive", "x", "--apply", "--root", str(a)]) == 0
     out = capsys.readouterr().out
     assert f"this clone has no lanes/x/{notes.SEEN}, so none of its 2 mail files moves" in out and "nothing stamped before" in out
-    t = dt.datetime(2026, 9, 27, tzinfo=dt.timezone.utc).timestamp()
+    t = dt.datetime(2026, 9, 27, tzinfo=dt.UTC).timestamp()
     os.utime(a / shown, (t - 60, t - 60))
     os.utime(a / unseen, (t + 60, t + 60))
     (a / "lanes" / "x" / notes.SEEN).write_text(f"{t}\n")

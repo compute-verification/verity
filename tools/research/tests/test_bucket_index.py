@@ -7,7 +7,7 @@ import json
 import os
 import threading
 import urllib.parse
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -17,7 +17,7 @@ from research.store.model import Label
 from research.store.remote import FsRemote
 from research.store.remote_s3 import S3Remote
 
-T0 = datetime(2026, 10, 11, 18, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 11, 18, 0, tzinfo=UTC)
 
 
 def _put(root, key: str, doc) -> None:

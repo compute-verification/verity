@@ -8,7 +8,7 @@ import pytest
 
 from research.timefmt import both, slack_dates
 
-UTC = dt.timezone.utc
+UTC = dt.UTC
 NOW = dt.datetime(2026, 9, 30, 20, 41, tzinfo=UTC)
 
 

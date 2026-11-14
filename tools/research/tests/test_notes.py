@@ -12,7 +12,7 @@ import pytest
 
 from research import notes
 
-NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.UTC)
 FRONT = "---\nlane: {lane}\nkind: report\ncreated: 2026-09-23T17:00Z\nstatus: {status}\n---\n\n"
 
 
@@ -1005,7 +1005,7 @@ def test_overdue_fires_once_thirty_minutes_after_the_bindings_final_unless_the_l
     _set_mtime(tmp_path / "lanes" / "late" / "binding.json", NOW + dt.timedelta(minutes=10))
     assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=89), state) == []
     assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=91), state)[0].startswith("22:31Z OVERDUE late FINAL 22:00Z passed 31m")
-    assert notes.final_deadline(tmp_path, "overnight", "06:30Z") == dt.datetime(2026, 9, 24, 6, 30, tzinfo=dt.timezone.utc)
+    assert notes.final_deadline(tmp_path, "overnight", "06:30Z") == dt.datetime(2026, 9, 24, 6, 30, tzinfo=dt.UTC)
 
 
 def test_budget_accumulates_each_lanes_pod_dollars_per_pass_and_alerts_once_over_the_binding(tmp_path):

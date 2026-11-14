@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from research.store.local import LocalStore
@@ -23,7 +23,7 @@ def test_a_check_shows_the_commit_it_landed_as_from_its_landed_label_and_an_old_
     idx.db.commit()
     st.add_label("r20261011-100000-aaaa", "landed", "cd" * 20, "research-merge")
     st.add_label("r20261011-110000-bbbb", "landed", "ef" * 20, "someone-else")
-    p = vc.check_panel(idx, datetime(2026, 10, 11, 12, tzinfo=timezone.utc))
+    p = vc.check_panel(idx, datetime(2026, 10, 11, 12, tzinfo=UTC))
     assert vc.problems(p) == []
     assert [(r[0], r[3], r[5], r[6]) for r in p["rows"]] == [
         ("r20261011-110000-bbbb", "fail (rc 1)", None, "vy-nebius-1"),
