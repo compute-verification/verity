@@ -35,7 +35,7 @@ store up once at `point_for`'s certified point and audits it every period, the c
 challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
 at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the
 verifier run on the node.
-`trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
+`trusted-device`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
 still sampled on the node.
 """
@@ -557,7 +557,7 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     and session log are beside the periods) and the prover is here. With `pous-run-protocol` and `pous-setup` among the
     period's tools, the Lean verifier answers and must agree with the Python; it writes `out/pous.case.json` (onsite's
     PoUS case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each
-    party, and whether `trusted-host`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an
+    party, and whether `trusted-device`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an
     accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
