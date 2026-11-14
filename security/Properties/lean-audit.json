@@ -25575,7 +25575,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "01eef9016c00bf040a49c082a7a24a45f02671897dc5338dfc8032f88936e4d6",
+   "digest": "50d803f9d370b2a1234642ab1fe2d83ae16c09c81ab51d4902d3937fc7cded8e",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -25668,7 +25668,7 @@
     "Verity.Vocab": "8ae4f9616eeaa93077fc7a5ec2d3b3d665d394c095b5b1382b2f980477d2c414",
     "Verity.Vocab.BandwidthAuditSound": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
     "Verity.Vocab.FinderCR": "edaced35a3cbb1f7a3749d5c50cb3ad2a2e14f7ef6d00c633e9cbb3520429084",
-    "Verity.Vocab.Holds": "2db19ae6e1534e7f832b3666a2e60db9a6791371f80bd18c4665af0c360ae28a",
+    "Verity.Vocab.Holds": "d19cc2ea900bbe7c9e9ae6a100eb15a462a061a6602ded49f068da022b12ea11",
     "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
     "Verity.Vocab.Logged": "e17d736e0f3016e0383e66eba5b8b455bcd85f47e2d3c3dfde28546c9ad33c53",
     "Verity.Vocab.NetworkCertifierSound": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
