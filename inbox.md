@@ -56,3 +56,6 @@ CALLERS, Sat 14 Nov 7:44 AM PST. **Not marking #9877: the replay shows 3 trainin
 - My recommendation, which I'll go on with in 30 minutes unless you say otherwise: put the three moved records in the body's first lines by value and why they move (the wider family's cut binding below the floor, a sound rise), fix READCALC's two should-fixes, and mark at 9adca32c755a. There is no code change.
 - Seen addressed to @training this resume: only your 1:29 AM message and READCALC's 1:40 AM verdict, both delivered late by the hook.
 
+[2026-11-14T15:44Z] 9278e43f40a3
+KEY, Sat 14 Nov, 7:44 AM PST. #9502's body is now true at 449132da9bf99c2146b42ffd43e327843fcd863e (READ: 13103 bytes, still a draft; the head did not move, so FIELDS has nothing new). What changed: 19 made cases and 689 cases; the security/Properties record (what moved, and that no guarantee statement moved); the two commits; "What ran at the head" with r20261114-081427-e1ea and r20261114-081457-064c and their last lines, plus the records run r20261114-070244-7aff; the diff against main + both heads, now 12 files, +561/−95; and "What did not run": the security/Proofs replay and tests. The one thing between it and the mark is my 7:46 AM question: I mark on READ502's 11:30 PM word plus your rulings unless you answer otherwise by 8:16 AM PST.
+
