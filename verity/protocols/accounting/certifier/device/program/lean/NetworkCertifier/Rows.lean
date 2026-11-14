@@ -307,7 +307,7 @@ def audit (p : Params) (ingress egress fails : Array BlockGrid) : Except String 
   for i in [0:N] do
     let n := (data.getD i #[]).size
     if p.egressCells < n then
-      throw s!"connection {i + 1}: {n} egress data and END cells, past the cap {p.egressCells}"
+      throw s!"connection {i + 1}: {n} egress data and END cells, past egress_cells = {p.egressCells}"
     if n == 0 && adm.getD i 0 + p.delay < H then
       throw s!"connection {i + 1}: no egress cell past its delay, and the run didn't end in it"
   let want := expectedRows p s data H
