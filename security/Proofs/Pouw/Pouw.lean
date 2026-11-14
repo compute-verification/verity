@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.Guarantees.Pouw
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Accounting.Device
+import Proofs.Registration.Device
 import Proofs.Pouw.Game
 import Proofs.Pouw.Prob
 

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Actual
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Slowdown.Assumptions.Fit
 
 /-!

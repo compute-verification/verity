@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Registration.Assumptions.Sheet
 public import Definitions.Pouw.HeadlineDc.Sm100Measured
 public import Definitions.Pouw.HeadlineDc.Sm90MeasuredI3
 import Mathlib.Algebra.Order.Floor.Extended

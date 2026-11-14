@@ -17,7 +17,7 @@ public import Proofs.Slowdown.FitRate
 public import Proofs.Slowdown.FitWitness
 public import Proofs.Slowdown.Slowdown
 public import Proofs.Slowdown.Remote
-public import Proofs.Slowdown.RemotePeriod
+public import Proofs.Slowdown.RemoteMonitoringPeriod
 public import Proofs.Slowdown.Capability
 public import Proofs.InferenceOnly.Verdict
 public import Proofs.InferenceOnly.DescVerdict

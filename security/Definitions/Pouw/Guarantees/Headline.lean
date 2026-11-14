@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Registration.Assumptions.Sheet
 public import Definitions.Pouw.Headline
 public import Definitions.Pouw.Headline.Sm120Measured
 import Mathlib.Algebra.Order.Floor.Extended
@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 
 One statement per family and reading: the family's credited work is at least `1 − ε` of its credit, `ε` the reading's
 headline, on one device's machine, one design's TS model on it and its floor program ♭, all exact data
-(`Definitions.Pouw.Headline`). Each is `Definitions.Accounting.Guarantees.Sheet`'s `SheetDIdealFloor` at that data
+(`Definitions.Pouw.Headline`). Each is `Definitions.Registration.Guarantees.Sheet`'s `SheetDIdealFloor` at that data
 with fold skippers charged (below), its parameters fixed (`π*`, `p`, `p₀`, `S`, `δ`), with every hypothesis that the
 data discharge gone and the rest left as they are: the named assumptions of `Definitions.Accounting.Assumptions` and the
 proof layer's pieces. A measured reading is `Definitions.Pouw.Guarantees.TS`'s `DIdealFloor` at its data the same
