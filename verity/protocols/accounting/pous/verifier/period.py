@@ -281,6 +281,10 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
 """The prover's side of the session: from the blocks of `C*` it was sent, its answer to each index."""
 
+type Session = Callable[[challenger_session.Side, Mapping[str, Any], Callable[[int], bytes]], dict[str, Any]]
+"""The prover's end of one session with a memory challenger of its own (`challenger_prover.session`): the challenger's
+side, the request and the prover's answer to each index; the side's report."""
+
 
 def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
     """The prover that holds every block of `C*`."""
@@ -387,13 +391,14 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: challenger_session.Side | None = None) -> Period:
+          party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's
     session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
     tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of
     its own (`challenger_party`): its side runs where `party` (a `challenger_session.Side`) starts it, with its own
-    coins, key and session log, and the prover answers it over a socket; `signer`, `log` and `clock` are unused, and the
-    verifier's list is by default the key the side reports."""
+    coins, key and session log, and the prover answers it over a socket in `session` (`challenger_prover.session`, which
+    the caller hands in); `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the side
+    reports."""
     point, published = held.point, held.published
     q = point.params
     if party is None:
@@ -404,8 +409,9 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
         signed = challenger.run(prover(held.blocks))
         session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
-        got = challenger_session.session(party, challenger_session.request_of(node, point, published.root),
-                                         prover(held.blocks))
+        if session is None:
+            raise ValueError("a memory challenger of its own takes the prover's session (`challenger_prover.session`)")
+        got = session(party, challenger_session.request_of(node, point, published.root), prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.ChallengePhaseRecord.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
@@ -418,15 +424,15 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: challenger_session.Side | None = None) -> Period:
+        party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
     signature schemes it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and
-    `pous_test_signer.SCHEMES`); `party` as for `audit`. A setup the verifier refuses raises `ValueError`, since no run
-    of it exists."""
+    `pous_test_signer.SCHEMES`); `party` and `session` as for `audit`. A setup the verifier refuses raises `ValueError`,
+    since no run of it exists."""
     return audit(node, setup_store(store, coins, point, workers=workers), coins, signer=signer, log=log, trusted=trusted,
-                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party)
+                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party, session=session)
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
@@ -627,7 +633,8 @@ SETUP_WORKERS = 32
 CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)."""
 
 
-def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side]) -> dict[str, Any]:
+def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side],
+        session: Session) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`). By default the
     node's store is set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records
     at its first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up
@@ -636,7 +643,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     in `period.json`, each period sets the period's own records up at the small point instead, certifying nothing. The
     memory challenger is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
     which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
-    and session log are beside the periods) and the prover is here. With `pous-run-protocol` and `pous-setup` among the
+    and session log are beside the periods) and the prover is here, answering it in `session`
+    (`challenger_prover.session`, which the caller hands in too). With `pous-run-protocol` and `pous-setup` among the
     period's tools, the Lean verifier answers and must agree with the Python; it writes `out/pous.case.json` (onsite's
     PoUS case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each
     party, and whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
@@ -658,7 +666,7 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
         held, fresh = EncodedStore.load(kept), False
     setup_s = round(time.monotonic() - t, 2)
     t = time.monotonic()
-    period = audit(node, held, secrets.token_bytes(64), party=party)
+    period = audit(node, held, secrets.token_bytes(64), party=party, session=session)
     seconds = round(time.monotonic() - t, 2)
     key_sha512 = hashlib.sha512(bytes.fromhex(period.case["params"]["trusted"][0])).hexdigest()
     where = challenger_session.placement(node, party.host, key_sha512, **deployment(doc))
