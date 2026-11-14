@@ -406,3 +406,16 @@ Job 1's run `r20261114-053645-27a4` at `a2f98823db45` ended exit 0 [read by me]:
 
 TIMER: none.
 
+[2026-11-14T07:57Z] 17e5bacddd43
+STAMPS to network-accounting (lead), Sat 14 Nov 12:18 AM PST. **A finding in 5.3 that makes statements of the tree false if the Lean device goes as ordered. I go on with the answer below; say no by inbox.** Your two lines of 11:48 PM PST are read and taken.
+
+- **The finding** [ran: `rg` over `main` `512644d14fbc`; read: the statements]. The Lean device takes 13 lock records, not six. Three of the seven others are the Lean the tree cites for the older form's figures:
+  - `Properties.NetworkCertifier.EncardAcceptedObservationsLe`, the count of the check's accepted runs (7 bits a window): `verifier/PROTOCOL.md` l.946, l.989 (the table's row) and l.1072; `audit.py` l.17; `capacity.py` l.46; `online.py` l.23; two tests; `benchmarks/network_e2e/encodings/code.py` l.5.
+  - `ExpectedGridCausal` (`PROTOCOL.md` l.958, l.1075, l.1232) and `EncardProgramRunsLeWindows` (l.990, l.1059, l.1077).
+  - And `AcceptedRunsAreProgramRuns` is the "restatement path" that the frozen reasons of 12 of the 18 counting guarantees name (`security/lean-audit.json`, `shape.frozen`).
+- **What is forced** [read]. `AcceptedRowsAreProgramRows`, `AcceptedRunsAreProgramRuns` and `EncardAcceptedObservationsLe` are stated over the device's code and its output, so they go with it. After 5.3 no Lean states the step from the older check's accepted runs to the Program's count; the figure then rests on the Program's count alone (`NetTiming.Guarantees.EncardAccSeqsLeConstantRate`, one of the 18). None of the 13 is in `deployed`.
+- **The answer I take.** 5.3 deletes nine records: the six and those three. It keeps `ExpectedGridCausal` as it stands (it names nothing of the device) and keeps `EncardProgramRunsLeWindows` restated over `S`, `T`, `W` and the sync set in place of the device's `Config`: a wider statement, of which the old one is an instance, and a changed record for lean to read. Where prose cites `EncardAcceptedObservationsLe` it cites the Program's count and says no Lean states the step from the check's accepted runs to it. No figure is removed or reworded.
+- **What I do not touch:** the 18, their frozen reasons included. Twelve of those reasons then name a path that is gone; that sentence is yours with Daniel's word on the 18.
+- **A correction to my 11:2x PM line:** the byte-list lemma soundness's `SampledCoins.lean` took from the device's proofs is now proved in that file (15 lines), not in `security/Proofs/Flock/Bytes.lean`: that module is read by a deployed record. The tree proves the same lemma in four other places; importing any of them adds 32 to 1,378 files to that file's imports [ran: the import graph].
+- **The plan's gap this shows** [read]: `verifier/PROTOCOL.md` is mostly the older form's protocol, and no change of the plan rewrites it. I size it in the plan's post.
+
