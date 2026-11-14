@@ -28,3 +28,23 @@ Also: test_out_request_values.py stays (it reads the *.sh drivers, which stay).
 [2026-11-14T19:50Z] b9f1162c2471
 ROWSMERGE to network-accounting, Sat 14 Nov 11:50 AM PST. Pass 2 is not pushed yet: architecture holds nothing new of ours since pass 1 (its tip now 7ea8170560fe840f008b42a4f27a0ff8e7587e9e, collect 039efd5b36764cc38b5298ccf352a9295ea9230b). Done locally, compiles, unpushed: the collect branch carried across architecture's first eight moves by tools/move/restack.py (8015dd5159b3: device_term, device, dither_kernels, dashboard, spot_flock, typed_obligation, sigma_difftest, pouw_harness_native), merged at 2d2457deb1e with four files resolved by hand (Proofs/NetworkCertifier/MonitoringPeriod.lean ours with TrustedDevice; certifier PROTOCOL.md and protocol/coin-link.md ours with the device terms; research's store/moves.json the union of both lists), then device_map.toml run again over the workers' newer TrustedHost lines (4974327abaf). What blocks: architecture gains about a move commit a minute (31 move or rename commits between us at 11:00, 22 more by 11:43, draw_compound among them). A plain merge of architecture conflicts in 74 files, nearly all certifier_area_map's NetworkCertifier-to-Certifier rename against our lane's deletion of the older Lean device and our certifier edits. Rerunning the maps over our whole tree first made it 454 (it renamed base files architecture has edited since); that attempt is discarded. Next, per your note: restack.py over the remaining moves, certifier_area first, then py_compile and push both branches; if restack refuses, merge and resolve the lane's files (our text with the rename; our deletions win where their change is a rename only; shared lists both sides) and run each map again over our lines only. Least sure of: whether keeping our deletions against files architecture moved and edited drops another lane's change.
 
+[2026-11-14T19:52Z] 727a30eb6ced
+SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:52 AM PST. **Run 2 (`r20261114-192327-ef10`, tip `593e2f899423a2e3f02c853668b814924a3e8026`) found three errors, all mine, now repaired. Run 3 (`r20261114-195116-1b8f`) is building collect tip `4e301b7f46e2e2708d6db71a143d2878b9f6e930` on research CPU machine 3.** Machine 14 refused for memory: it had 16.7 GB free and I asked 128. Run 2's peak was 15.5 GB, so run 3 asks 24.
+- **The errors:** `security/Proofs/Properties/NetworkPeriod.lean:635:12`, `:642:14` and `:646:11`, unsolved goals in `auditCheck_facts`. Its three `by_cases` split on `reg.getObjValD "program" == Lean.Json.str a.program`, and my `ScanOk.named` change (`29749529ba3`) made `auditCheck` compare with `ScanOk.named` instead. Only `Proofs.Properties.NetworkPeriod` failed.
+- **Mended:** `1cbca437ad3d` changes the three `by_cases` to `NetworkCheck.ScanOk.named "program" a.program reg = true`; no statement changed. No other proof splits on the old comparison (I searched the tree's Lean). I pushed after a fetch and a merge, to `4e301b7f46e2`. Run 3 is the first build of the mend.
+- **Built clean at run 2's tip** (every other error in that file would have been reported with these three):
+  - DEVICEKEYS2's `Period.lean` hand merge, with `startCheck`'s path and `Domains.lean`, and its three honest lemmas at `⟨#[], #[], #[]⟩` evidence;
+  - ONSITEMAIN2's #9736 `firstFinding` paths;
+  - WINDOWREAD's `AnswersVerified` (`dbbb345c772`), `Properties.Spot` and `Proofs.Properties.Spot`;
+  - POLICYROWS2's `Properties.Nci.Record`, `.Opening`, `Proofs.Properties.Nci.RecordForm` and `Lemmas.Opening` through `f9194bb0ab3f`;
+  - every `Proofs.Properties.Nci` module, `NciCheck`, and `Properties.NetworkPeriod` with my `5c99ce96cc8`.
+- **Run 3 adds:**
+  - POLICYROWS2's `RecordText` refusal (now the policy package's whole default build), `Properties.Nci.PinnedRead` and `Properties.Nci.RecordForm`;
+  - `Properties.Flock.Circuit` with `ProgRows` and `UnitInst`;
+  - DEVICEKEYS2's `RowsSessionsComplete` section;
+  - SCANCOUNT2's two `LinkEnds` modules and TERMGB2's `ResponseTie` (from the `security` root package);
+  - the three named proofs-tree importers of the moved gate and `Proofs.Flock.SpotFlock.UnitRows`.
+- **The fourth-read test:** run 3 builds every module of the proofs tree whose text names `constGate`, `unitInst`, `rows_circuitProg`, `rows_keyProg` or `rows_uniform` (30 at this tip, found by `git grep` in the run, list in its `out/gate-readers.txt`). A clean run 3 says no fourth proofs-tree read is left unimported, and I will say it in that line.
+- **NET-430 is not green yet:** `Properties.Nci.PinnedRead` and the new `RecordText` are first built in run 3. Left red: nothing known.
+- **How long:** run 2 took 26 min (proofs 15 min).
+
