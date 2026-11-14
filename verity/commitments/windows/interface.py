@@ -383,7 +383,7 @@ def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
     return w.astype(np.uint16)
 
 
-def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
+def leaves_of_rows(rows: np.ndarray, ty: Any) -> np.ndarray:
     """A port's ``(n, words)`` u16 rows as its ``(n, leaves)`` leaves of type ``ty``, as `evaluate_batch` takes them: a row
     is the little-endian bit concatenation of the leaves, so a 16-bit leaf is one word, and a 1-bit leaf (a Boolean-profile
     port's, whose rows are its `boolean.word_type` words) one bit."""
@@ -398,8 +398,8 @@ def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
                      for lo, hi in zip(at, at[1:])], axis=1)
 
 
-def _port_rows(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
-    """`_port_leaves`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
+def rows_of_leaves(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
+    """`leaves_of_rows`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
     w = ty.homogeneous_width()
     if w is not None and w % 8 == 0:
         b = np.ascontiguousarray(leaves.astype(f"<u{w // 8}")).view(np.uint8)
@@ -2333,7 +2333,7 @@ class Window:
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
         """Per template, the units whose recorded outputs are not its Definition's outputs on their recorded inputs
         (`evaluate_batch` under ``kernel``): what the proof of a sampled one would refuse. The Definition reads each input row
-        by its leaves' width (`_port_leaves`: a Boolean-profile port bit by bit), and each output row it gives is held to
+        by its leaves' width (`leaves_of_rows`: a Boolean-profile port bit by bit), and each output row it gives is held to
         the committed row whole, its zero padding too."""
         out = {}
         for fn, _n in self.circuit.templates:
@@ -2341,11 +2341,11 @@ class Window:
             (params, ret), lay = fn.signature(), layout(fn)
             for b in self._recorded.get(tid, ()):
                 given = self.input_words(tid, at, b.n) if any(x is None for x in b.inputs) else b.words[:len(params)]
-                want = np.asarray(evaluate_batch(fn, *(_port_leaves(r, ty) for r, (_, ty) in zip(given, params)),
+                want = np.asarray(evaluate_batch(fn, *(leaves_of_rows(r, ty) for r, (_, ty) in zip(given, params)),
                                                  kernel=kernel)).reshape(b.n, -1)
                 wrong, k = np.zeros(b.n, dtype=bool), 0
                 for ty, (_, count), got in zip(_fields(ret), lay.outs, b.words[len(params):]):
-                    wrong |= (_port_rows(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
+                    wrong |= (rows_of_leaves(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
                     k += ty.leaves
                 bad += [at + int(i) for i in np.flatnonzero(wrong)]
                 at += b.n
