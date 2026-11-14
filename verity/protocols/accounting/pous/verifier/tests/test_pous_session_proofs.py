@@ -44,7 +44,7 @@ def _staged(k: int = K):
     key = _rand(16 + 64)
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": k}, sort_keys=True, separators=(",", ":")).encode()
     m = R.memory_challenger_message(key[:16], session, mc.message(c, mc.COMPLETE, rounds))
-    st = P.session_statements(head, mc._domain(mc.RECORD_BINDING, session, k).domain_id, session,
+    st = P.session_statements(head, session,
                               [r.value() for r in rounds], m, key, _rand(R.DEPLOYED.signature_bytes()), tree.indices,
                               [blocks[i] for i in tree.indices], limit_ns=c.limit_ns)
     return c, [tree.opening(j) for j in range(k)], key, st, lambda i: _commit(blocks[i])
