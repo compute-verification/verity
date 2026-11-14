@@ -907,7 +907,12 @@ def test_the_gates_forms_are_the_verifiers_constants_and_hold_a_runs_own_lines(t
     given = A.deployment_forms(run / "deployment.json")
     dep = json.loads((run / "deployment.json").read_text())
     assert given["link"] == (ws.LINK,) and given["parameters"] == (dep["digest"],)
-    assert "unruled" not in A.warden_outcome(out, run)
+    assert not list(out.iterdir()) and A.warden_outcome(out, run)["verdict"] is None
+    assert {p.name for p in out.iterdir()} == {"deployment.json"}, "a run with no accepted check publishes no line"
+    check = ws.check(run)
+    (run / "check.json").write_text(json.dumps(check))
+    outcome = A.warden_outcome(out, run)
+    assert check["accepted"] is True and outcome["verdict"]["accepted"] is True and "unruled" not in outcome
     for name, public in (("certified.jsonl", "certificates.jsonl"), ("cells.jsonl", "cells-certificates.jsonl"),
                          ("cells.jsonl", "cells-registrations.jsonl")):
         lines = (run / name).read_text().splitlines()

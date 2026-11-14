@@ -195,8 +195,7 @@ DEPLOYMENT = {"session": "00" * 32, "link": LINK, "digest": "31" * 64, "params":
               "key": {"params": [64, 8, 1], "key_id": "0c" * 16}}
 #: the forms the stand-in deployment gives, and a signature's hex digits under its key
 GIVEN = {"link": (LINK,), "links": (LINK, f"{LINK}-fails"), "parameters": ("31" * 64,), "cell_bytes": (512,),
-         "buckets": (600,), "signature": re.compile("[0-9a-f]{%d}" % (2 * A.lms.Params(64, 8, 1).signature_bytes())),
-         "refused": [(LINK, f"{LINK}-fails"), ("ingress", "egress"), int]}
+         "buckets": (600,), "signature": re.compile("[0-9a-f]{%d}" % (2 * A.lms.Params(64, 8, 1).signature_bytes()))}
 SIGNED = 2 * A.lms.Params(64, 8, 1).signature_bytes()
 #: the registration of an execution phase's egress cells, with `warden_rows.registration`'s keys
 REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": f"{LINK}/egress/0", "link": LINK,
@@ -237,21 +236,33 @@ LAST_LINE = ("ACCEPTED: 100/100 ended, 0 refused, failed []; cell rows 4/4 regis
              "commit ms {'n': 4, 'max': 41.375}, sign ms {'n': 4, 'max': 7.125}")
 #: what the rehearsal says on its stderr: free text
 STDERR = "the endpoint closed connection 3 early"
-#: a stand-in for `warden_serve.py rehearse`'s files: public, then witness, then what it prints
+#: a stand-in for `warden_serve.py rehearse`'s files, of a run whose every execution phase was certified: public,
+#: then witness, then what it prints
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({DEPLOYMENT!r} | {{"upstream": url}}))\n'
-    f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
-    f' + json.dumps({{"refused": [{LINK!r}, "ingress", 1], "withheld": True, "cost": {COST!r}}}) + "\\n")\n'
-    f'(out / "rows.jsonl").write_text(json.dumps({{"registration": {ROWS_REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
-    f' + json.dumps({{"refused": [{LINK!r}, "egress", 1], "cost": {COST!r}}}) + "\\n")\n'
+    f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {COST!r}}}) + "\\n")\n'
+    f'(out / "rows.jsonl").write_text(json.dumps({{"registration": {ROWS_REGISTRATION!r}, "cost": {COST!r}}}) + "\\n")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT_C!r}, "head": {{"root": "77" * 64}}, '
-    f'"certificate": {CERTIFICATE!r}}}) + "\\n" + json.dumps({{"refused": ["warden-fails", '
-    f'"egress", 1]}}) + "\\n")\n'
+    f'"certificate": {CERTIFICATE!r}}}) + "\\n")\n'
     f'(out / "cells.salts").write_bytes({CELL_SALTS!r})\n'
     '(out / "requests.records").write_bytes(b"GET / prompt")\n'
     '(out / "client.json").write_text("{}")\n'
     f'(out / "check.json").write_text(json.dumps({CHECK!r}))\n'
     f'print({STDERR!r}, file=sys.stderr)\nprint({LAST_LINE!r})\n')
+#: the lines a run writes for an execution phase the signer refused, one in each of its three lines' files
+REFUSED_LINES = {"cells.jsonl": {"refused": [LINK, "ingress", 1], "withheld": True, "cost": COST},
+                 "rows.jsonl": {"refused": [LINK, "egress", 1], "cost": COST},
+                 "certified.jsonl": {"refused": [f"{LINK}-fails", "egress", 1]}}
+#: after `WARDEN_FILES`, the same run with one execution phase the signer refused
+REFUSED_PHASE = "".join(f'with (out / {name!r}).open("a") as f:\n    f.write({json.dumps(line) + chr(10)!r})\n'
+                        for name, line in REFUSED_LINES.items())
+#: the check of such a run: it does not accept, and each of its counts of the certified is one fewer
+REFUSED_CHECK = CHECK | {"accepted": False, "problems": ["egress window 1's cells aren't registered"],
+                         "summary": CHECK["summary"] | {
+                             "certified_windows": 5, "certificates": 5, "signer_refused": [[LINK, "ingress", 1]],
+                             "cell_rows": CHECK["summary"]["cell_rows"] | {"registered": 3}}}
+#: the names of a run's lines' files in `out/`
+LINE_FILES = {"certificates.jsonl", "cells-certificates.jsonl", "rows-certificates.jsonl", "cells-registrations.jsonl"}
 
 
 def rehearsal(source: str, seen: list | None = None):
@@ -333,7 +344,7 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     assert json.loads((out / "deployment.json").read_text()) == DEPLOYMENT
     assert A.deployment_forms(d / A.WITNESS / "deployment.json") == GIVEN
     assert [json.loads(x) for x in (out / "certificates.jsonl").read_text().splitlines()] == [
-        {"certificate": CERTIFICATE}, {"refused": ["warden-fails", "egress", 1]}]
+        {"certificate": CERTIFICATE}]
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     for secret in (SALT_C.encode(), b"77" * 64, CELL_SALTS[:16], CELL_SALTS[:16].hex().encode(), b"prompt",
                    b"completion_tokens", b"data_bytes", b"text_bytes", STDERR.encode(), LAST_LINE.encode(),
@@ -350,6 +361,7 @@ def test_an_accepted_end_served_the_requests_its_request_asked_for(host, tmp_pat
     run, end = run_warden(host, WARDEN_FILES.replace(repr(CHECK), repr(check)))
     assert json.loads((host.certifier / run / "request.json").read_text())["requests"] == 100
     assert (end["rc"], end["ended"], end["verdict"]["accepted"]) == (2, "miscounted", False)
+    assert set(end["files"]) == {"deployment.json"}, "a run that isn't accepted publishes none of its lines"
     assert ended_why(host, end) == "check.json accepts and counts 4 requests where the request asked for 100"
     assert "requests" not in end["verdict"] and "counts 4" not in end_text(host.certifier / run)
 
@@ -391,9 +403,9 @@ def test_the_ends_failed_list_holds_the_gates_fixed_words_and_none_of_a_clients(
 
 
 def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothing_else(host):
-    """Each line of `cells.jsonl` and of `rows.jsonl` stays whole in `witness/`. `out/` holds, line for line, its
-    certificate under the link, direction and window its registration names (a connection rows' the link's egress),
-    or the execution phase it was refused for; and of `cells.jsonl`, each line as the witness writes it less the
+    """Each line of `cells.jsonl` and of `rows.jsonl` stays whole in `witness/`. Of an accepted run `out/` holds,
+    line for line, its certificate under the link, direction and window its registration names (a connection
+    rows' the link's egress); and of `cells.jsonl`, each line as the witness writes it less the
     registration's wiring and the line's cost: the same bytes but for those two, so its root, domain, layout and
     certificate are public. No wiring is in `out/` or the end, nor a line's cost, nor the check's summary of the
     costs, nor the line the rehearsal prints them in, nor a root, domain, layout or value of a connection rows'
@@ -401,28 +413,23 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     run, end = run_warden(host)
     d = host.certifier / run
     out = d / "out"
-    whole = [{"registration": REGISTRATION, "cost": COST}, {"refused": [LINK, "ingress", 1], "withheld": True,
-                                                            "cost": COST}]
+    whole = [{"registration": REGISTRATION, "cost": COST}]
     witness = (d / A.WITNESS / "cells.jsonl").read_text().splitlines()
     assert [json.loads(x) for x in witness] == whole
     assert not (out / "cells.jsonl").exists() and not (out / "rows.jsonl").exists()
     assert [json.loads(x) for x in (out / "cells-certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"key_id": "0c" * 16, "link": LINK, "direction": "egress", "window": 0,
-                         "digest": "9d" * 64, "signature": "e5" * (SIGNED // 2)}},
-        {"refused": [LINK, "ingress", 1]}]
+                         "digest": "9d" * 64, "signature": "e5" * (SIGNED // 2)}}]
     assert [json.loads(x) for x in (out / "rows-certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"key_id": "0c" * 16, "link": LINK, "direction": "egress", "window": 0,
-                         "digest": "9e" * 64, "signature": "e6" * (SIGNED // 2)}},
-        {"refused": [LINK, "egress", 1]}]
+                         "digest": "9e" * 64, "signature": "e6" * (SIGNED // 2)}}]
     published = (out / "cells-registrations.jsonl").read_text().splitlines()
     assert [json.loads(x) for x in published] == [
-        {"registration": {k: v for k, v in REGISTRATION.items() if k != "wiring"}}, {"refused": [LINK, "ingress", 1]}]
-    assert [list(json.loads(x).get("registration", {})) for x in published] == [
-        [k for k in REGISTRATION if k != "wiring"], []]
+        {"registration": {k: v for k, v in REGISTRATION.items() if k != "wiring"}}]
+    assert [list(json.loads(x)["registration"]) for x in published] == [[k for k in REGISTRATION if k != "wiring"]]
     wiring, cost = f'"wiring": "{REGISTRATION["wiring"]}", ', f', "cost": {json.dumps(COST)}'
     assert witness[0].count(wiring) == witness[0].count(cost) == 1
-    assert published == [witness[0].replace(wiring, "").replace(cost, ""),
-                         witness[1].replace(', "withheld": true', "").replace(cost, "")]
+    assert published == [witness[0].replace(wiring, "").replace(cost, "")]
     assert not (out / "rows-registrations.jsonl").exists()
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     for shown in (REGISTRATION[k] for k in ("value", "parameters", "domain", "root", "row_schema")):
@@ -481,22 +488,23 @@ FORM = "isn't in the form ROW_LINE"
     (_of(certificate_digest="9d" * 32), f"registration's certificate's digest {FORM}"),
     (_of(certificate_signature="e5" * (SIGNED // 2 + 1)), f"registration's certificate's signature {FORM}"),
     (_of(certificate_signature="a word the peer chose"), f"registration's certificate's signature {FORM}"),
-    (json.dumps({"refused": ["another", "ingress", 1], "cost": COST}), f"the line's refused {FORM}"),
-    (json.dumps({"refused": [LINK, "ingress", 1, "more"], "cost": COST}), f"the line's refused {FORM}"),
-    (json.dumps({"refused": f"{LINK}/ingress/1", "cost": COST}), f"the line's refused {FORM}"),
+    (json.dumps(REFUSED_LINES["cells.jsonl"]), "the line says the signer refused its execution phase"),
+    (json.dumps({"registration": REGISTRATION, "refused": [LINK, "ingress", 1], "cost": COST}),
+     "the line says the signer refused its execution phase"),
 ], ids=["a registration's key", "a layout's key", "a line's key", "an object under a key", "a float", "no object",
         "other separators", "another format", "another schema", "other word bits", "another link", "another's name",
         "no direction", "another schedule", "other cell bytes", "other buckets", "a negative", "a boolean", "2^63",
         "a number's text", "upper case", "a longer root", "a longer key id", "a shorter digest", "a longer signature",
-        "a sentence for a signature", "a refused link", "a longer refused", "a refused's text"])
+        "a sentence for a signature", "a refused execution phase", "a registration that says refused"])
 def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line, why):
     """The keys `out/` publishes of a cells' registration are the one list `ROW_LINE`, each in its form. A line with
     a key the list names neither as published nor as left out, at any depth, a published value out of its key's
     form (another constant, a value the run's deployment doesn't give, hex of another length or case, a number
     that is no count), or a line that isn't the writer's own form, which the gate couldn't cut to the same bytes,
-    is not published, nor is any line of its file or a file after it: the rehearsal's end is nonzero and says
+    is not published, nor is any line of the run: the rehearsal's end is nonzero and says
     `unruled`, and the line and what to change are the sentence in its `witness/`, of which the end and `out/`
-    hold no word. The deployment and the files before it are published as before."""
+    hold no word. So is a line that says its execution phase was refused, which a check that accepted can't
+    hold. The deployment is published as before."""
     with pytest.raises(A.Unruled, match=why):
         A.row_registration(line, GIVEN)
     for torn, said in ((_line()[:-1], "the line isn't JSON"), (json.dumps([_line()]), "the line isn't one JSON object")):
@@ -507,6 +515,8 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
         f', "cost": {json.dumps(COST)}', "")
     with pytest.raises(A.Unruled, match="held to what the run's deployment.json gives, which gives none"):
         A.row_registration(good, {})
+    with pytest.raises(A.Unruled, match="the line holds the key 'withheld'"):
+        A.row_registration(json.dumps({"withheld": True, "cost": COST}), GIVEN)
     bad = WARDEN_FILES.replace("(out / \"rows.jsonl\")", f"(out / \"cells.jsonl\").write_text({good + chr(10)!r} + "
                                f"{line + chr(10)!r})\n(out / \"rows.jsonl\")", 1)
     assert bad != WARDEN_FILES
@@ -515,17 +525,14 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
     said = ended_why(host, end)
     assert end["rc"] == 2 and end["ended"] == "unruled" and said.startswith("cells.jsonl line 2: ")
     # a value the line's certificate holds too (its link, direction, execution phase and the certificate's own
-    # fields, or the refused execution phase) fails the certificates' file, which is written first
-    first = "cells-certificates.jsonl" if "CERTIFICATE_LINE" in said else "cells-registrations.jsonl"
-    assert why in said or (first == "cells-certificates.jsonl" and FORM in why)
-    assert said.endswith(f"; out/{first} is not written, nor a file after it")
+    # fields) is out of the certificate's form first: the line's certificate is read before its registration
+    assert why in said or ("CERTIFICATE_LINE" in said and FORM in why)
+    assert said.endswith("; out/ holds none of the run's lines")
     assert "unruled" not in end and end["verdict"]["accepted"] is True
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
-    assert b"line 2" not in public and b"is not written" not in public and b"ROW_LINE" not in public
-    assert b"a word the peer chose" not in public and b"another" not in public
-    written = {"deployment.json", "certificates.jsonl"} | (
-        set() if first == "cells-certificates.jsonl" else {"cells-certificates.jsonl", "rows-certificates.jsonl"})
-    assert set(end["files"]) == written == {p.name for p in (d / "out").iterdir()}
+    assert b"line 2" not in public and b"none of the run" not in public and b"ROW_LINE" not in public
+    assert b"a word the peer chose" not in public and b"another" not in public and b"refused" not in public
+    assert set(end["files"]) == {"deployment.json"} == {p.name for p in (d / "out").iterdir()}
     if "ROW_LINE names neither" in said or "holds the key" in said:
         assert "Rule whether it is public, and write it there (auditor.py) with its form, or as WITHHELD" in said
 
@@ -536,7 +543,9 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
     ("certified.jsonl", {"certificate": CERTIFICATE | {"signature": "a word the peer chose"}},
      "certificate's signature isn't in the form CERTIFICATE_LINE"),
     ("certified.jsonl", {"certificate": CERTIFICATE | {"window": "0"}}, "certificate's window isn't in the form"),
-    ("certified.jsonl", {"refused": ["another", "egress", 1]}, "the line's refused isn't in the form"),
+    ("certified.jsonl", REFUSED_LINES["certified.jsonl"], "the line says the signer refused its execution phase"),
+    ("certified.jsonl", {"salt_c": SALT_C}, "the line holds no certificate"),
+    ("rows.jsonl", REFUSED_LINES["rows.jsonl"], "the line says the signer refused its execution phase"),
     ("certified.jsonl", ["a list"], "the line isn't a JSON object"),
     ("rows.jsonl", {"registration": ROWS_REGISTRATION | {"link": "another"}, "cost": COST},
      "certificate's link isn't in the form"),
@@ -544,13 +553,14 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
      "the line's registration doesn't hold a certificate's fields"),
     ("rows.jsonl", {A.ROWS_NO_HEAD: NO_HEAD | {"window": 1.5}, "cost": WORD_COST},
      "certificate's window isn't in the form"),
-], ids=["a certificate's key", "another link", "a sentence for a signature", "a number's text", "a refused link",
-        "no object", "a rows' link", "no certificate", "a word's window"])
-def test_a_certificates_line_out_of_form_is_not_published_nor_a_file_after_it(host, name, line, why):
+], ids=["a certificate's key", "another link", "a sentence for a signature", "a number's text",
+        "a refused execution phase", "no record's certificate", "a rows' refused execution phase", "no object",
+        "a rows' link", "no certificate", "a word's window"])
+def test_a_certificates_line_out_of_form_publishes_none_of_the_runs_lines(host, name, line, why):
     """A certificate goes to `out/` only by `CERTIFICATE_LINE`'s keys, each in its form, from a record's line of
-    `certified.jsonl` and from a row registration's alike. A line with another key or a value out of form ends the
-    rehearsal nonzero as `unruled`; its file and every file after it are not written, and neither the end nor
-    `out/` holds a word of the line."""
+    `certified.jsonl` and from a row registration's alike. A line with another key or a value out of form, or one
+    that says its execution phase was refused, ends the rehearsal nonzero as `unruled`; none of the run's lines'
+    files is written, and neither the end nor `out/` holds a word of the line."""
     with pytest.raises(A.Unruled, match=why):
         (A.certified_certificate if name == "certified.jsonl" else A.row_certificate)(line, GIVEN)
     assert A.certified_certificate({"salt_c": SALT_C, "certificate": CERTIFICATE}, GIVEN) == {"certificate": CERTIFICATE}
@@ -558,12 +568,52 @@ def test_a_certificates_line_out_of_form_is_not_published_nor_a_file_after_it(ho
     run, end = run_warden(host, bad)
     d = host.certifier / run
     said = ended_why(host, end)
-    assert end["rc"] == 2 and end["ended"] == "unruled" and f"{name} line 3: " in said and why in said
+    assert end["rc"] == 2 and end["ended"] == "unruled" and f"{name} line 2: " in said and why in said
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
-    assert b"a word the peer chose" not in public and b"another" not in public and b"line 3" not in public
-    written = {"certified.jsonl": {"deployment.json"},
-               "rows.jsonl": {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl"}}[name]
-    assert set(end["files"]) == written == {p.name for p in (d / "out").iterdir()}
+    assert b"a word the peer chose" not in public and b"another" not in public and b"line 2" not in public
+    assert b"refused" not in public
+    assert set(end["files"]) == {"deployment.json"} == {p.name for p in (d / "out").iterdir()}
+
+
+def test_a_run_that_is_not_accepted_publishes_no_line_and_no_count_a_refused_execution_phase_lowers(host):
+    """Which execution phases the signer refused is the traffic's. A run with one is not accepted, and of it the
+    gate publishes none of the four lines' files, which would say it by a line or by a certificate that is
+    missing, and none of the counts that are one fewer for it: how many execution phases were certified, by how
+    many certificates, and how many cells' registrations the check accepted. Its end holds that it was not
+    accepted, how its connections failed and what the schedule fixes. The lines stay whole in the witness.
+
+    The same run without the refused execution phase, under a check that accepts, publishes all four files and
+    the counts. The verdict decides and not the lines: the certified lines alone under a check that does not accept
+    publish nothing either. A refused line under a check that accepts is a witness no run writes, and ends the run
+    `unruled`."""
+    refused = WARDEN_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)) + REFUSED_PHASE
+    assert refused.count(repr(REFUSED_CHECK)) == 1
+    run, end = run_warden(host, refused, token="a001")
+    d = host.certifier / run
+    assert (end["rc"], end["ended"]) == (0, "ended") and ended_why(host, end) == "the rehearsal ended"
+    assert end["verdict"] == {"accepted": False, "failed": [], "windows": 2, "cell_rows": {"of": 4}}
+    assert set(end["files"]) == {"deployment.json"} == {p.name for p in (d / "out").iterdir()}
+    for name, line in REFUSED_LINES.items():
+        assert json.loads((d / A.WITNESS / name).read_text().splitlines()[-1]) == line
+    public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+    for said in (b"refused", b"certified_windows", b"certificates", b"registered", b"withheld", b"aren't registered"):
+        assert said not in public, said
+    rc, blob = A.gate(["--ssh", f"fetch {run}"], host)
+    assert rc == 0 and not {n.rsplit("/", 1)[-1] for n in tar_names(blob)} & LINE_FILES
+
+    run, end = run_warden(host, token="a002")
+    assert end["verdict"] == {"accepted": True, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
+                              "cell_rows": {"registered": 4, "of": 4}}
+    assert set(end["files"]) == {"deployment.json"} | LINE_FILES
+
+    run, end = run_warden(host, WARDEN_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)), token="a003")
+    assert end["verdict"]["accepted"] is False and set(end["files"]) == {"deployment.json"}
+
+    run, end = run_warden(host, WARDEN_FILES + REFUSED_PHASE, token="a004")
+    assert (end["rc"], end["ended"], end["verdict"]["accepted"]) == (2, "unruled", True)
+    assert set(end["files"]) == {"deployment.json"}
+    assert ended_why(host, end) == f"certified.jsonl line 2: {A.REFUSED_LINE}; out/ holds none of the run's lines"
+    assert b"refused" not in (host.certifier / run / "end.json").read_bytes()
 
 
 def test_no_line_is_published_beside_a_deployment_that_doesnt_fix_its_forms(host):
@@ -659,12 +709,12 @@ def test_of_the_word_that_an_execution_phase_has_no_head_the_rehearsal_publishes
     d = host.certifier / run
     out = d / "out"
     line = {A.ROWS_NO_HEAD: NO_HEAD, "cost": WORD_COST}
-    assert json.loads((d / A.WITNESS / "rows.jsonl").read_text().splitlines()[2]) == line
+    assert json.loads((d / A.WITNESS / "rows.jsonl").read_text().splitlines()[1]) == line
     word = NO_HEAD["certificate"]
     published = {"certificate": {"key_id": word["key"], "link": NO_HEAD["link"], "direction": "egress",
                                  "window": NO_HEAD["window"], "digest": word["digest"],
                                  "signature": word["signature"]}}
-    assert [json.loads(x) for x in (out / "rows-certificates.jsonl").read_text().splitlines()][2:] == [published]
+    assert [json.loads(x) for x in (out / "rows-certificates.jsonl").read_text().splitlines()][1:] == [published]
     assert A.row_certificate(line, GIVEN) == published
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     for held in (A.ROWS_NO_HEAD, "cost", "sign_ms", "3.625"):

@@ -46,11 +46,12 @@ def test_the_declared_lists_load_and_each_names_its_writer_in_the_tree():
 
 
 def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
-    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a certified line
-    (those `ROW_LINE` gives a form), so a key the gate starts publishing fails a record until the list gives it a
+    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a line (those
+    `ROW_LINE` gives a form), so a key the gate starts publishing fails a record until the list gives it a
     kind, and the list holds none the gate leaves out. The certificates' list names exactly a certificate's fields
     as the gate writes them (`CERTIFICATE_LINE`, `row_certificate`). Neither names the execution phase a line was
-    refused for: which ones the signer refused is the traffic's, so a line that says it is not declared."""
+    refused for: which ones the signer refused is the traffic's, so the gate writes no line that says it, and a
+    line that does is not declared."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
 
@@ -65,7 +66,7 @@ def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
 
     lists = RK.load()
     listing = lists.listing(f"gates/c0/r0/out/{A.ROW_REGISTRATIONS['cells.jsonl']}")
-    assert declared(listing) == public(A.ROW_LINE) - {"refused"}
+    assert declared(listing) == public(A.ROW_LINE)
     signed = re.compile("[0-9a-f]{4}")
     given = {"link": ("l",), "links": ("l",), "parameters": ("31" * 64,), "cell_bytes": (64,), "buckets": (1,),
              "signature": signed, "refused": [("l",), A.DIRECTIONS, int]}
@@ -76,17 +77,20 @@ def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
     refused = {"refused": ["l", "ingress", 3], "withheld": True}
     assert listing.undeclared(A.row_registration(json.dumps(line), given).encode()) == {}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration/wiring", "cost"}
-    assert listing.undeclared(A.row_registration(json.dumps(refused), given).encode()) == {"refused": 1}
+    assert listing.undeclared(json.dumps({"refused": refused["refused"]}).encode()) == {"refused": 1}
+    for write in (lambda: A.row_registration(json.dumps(refused), given), lambda: A.row_certificate(refused, given),
+                  lambda: A.certified_certificate(refused, given)):
+        with pytest.raises(A.Unruled, match="the line says the signer refused its execution phase"):
+            write()
     certificates = {lists.listing(f"gates/c0/r0/out/{f}").name
                     for f in ("certificates.jsonl", *A.ROW_CERTIFICATES.values())}
     assert len(certificates) == 1
     listing = lists.listing("gates/c0/r0/out/certificates.jsonl")
     written = A.row_certificate(line, given)
-    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} == public(
-        A.CERTIFICATE_LINE) - {"refused"}
+    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} == public(A.CERTIFICATE_LINE)
     for doc in (written, A.row_certificate({A.ROWS_NO_HEAD: line["registration"]}, given)):
         assert listing.undeclared(json.dumps(doc).encode()) == {}
-    assert listing.undeclared(json.dumps(A.row_certificate(refused, given)).encode()) == {"refused": 1}
+    assert listing.undeclared(json.dumps({"refused": refused["refused"]}).encode()) == {"refused": 1}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration", "cost"}
 
 

@@ -1019,8 +1019,10 @@ elif cmd == "status RUN":
 elif cmd == "fetch RUN" and not (d / "no-fetch").exists():
     status = json.loads((d / "statuses.json").read_text())[0]
     files = {"request.json": json.dumps(status["request"]).encode(), "end.json": json.dumps(status["end"]).encode(),
-             "out/deployment.json": json.dumps(DEPLOYMENT).encode(), "out/certificates.jsonl": b"",
+             "out/deployment.json": json.dumps(DEPLOYMENT).encode(),
              "witness/certified.jsonl": b"a certified line, which only the run's own lane fetches\n"}
+    if ((status["end"] or {}).get("verdict") or {}).get("accepted"):   # the gate publishes only an accepted run's
+        files["out/certificates.jsonl"] = b""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, data in files.items():

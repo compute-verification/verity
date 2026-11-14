@@ -15,9 +15,11 @@ certifier path none of its records enters the chain.
 * `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order. Of the check it writes
-  what the gate's end publishes and no more (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of
-  counts.
+  `auditor.warden_outcome`, which writes it only of a run its check accepted) exactly the certified lines'
+  certificates, in order: a witness line that says the signer refused its execution phase has no public line, so a
+  public file beside one isn't the gate's. Of the check it writes what the gate's end publishes and no more
+  (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of counts, less those only an accepted check's
+  end holds (`ACCEPTED_COUNTS`).
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
@@ -62,6 +64,9 @@ UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: A key is added here only after the gate's list has it
 COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
 CELL_ROWS = ("registered", "of")
+#: of those, the counts that are one fewer for each execution phase the signer refused, which only an accepted
+#: check's verdict holds (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`)
+ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
@@ -121,12 +126,15 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 def verdict(check: dict) -> dict:
     """What `certificates` writes of the network certifier's own check, the gate's end's verdict
     (`auditor.warden_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
-    words (`warden_serve.FAILED`, the gate's `FAILED`). The problems, their number and their words, are made from the
-    witness, as the summary's other keys are, so none is written."""
-    summary = check.get("summary") or {}
-    out = {"accepted": check["accepted"] is True, **{k: summary[k] for k in COUNTS if k in summary}}
+    words (`warden_serve.FAILED`, the gate's `FAILED`). A check that didn't accept gives none of `ACCEPTED_COUNTS`:
+    how many execution phases the signer refused is the traffic's. The problems, their number and their words, are
+    made from the witness, as the summary's other keys are, so none is written."""
+    summary, accepted = check.get("summary") or {}, check["accepted"] is True
+    out = {"accepted": accepted,
+           **{k: summary[k] for k in COUNTS if k in summary and (accepted or k not in ACCEPTED_COUNTS)}}
     if isinstance(out.get("cell_rows"), dict):
-        out["cell_rows"] = {k: out["cell_rows"][k] for k in CELL_ROWS if k in out["cell_rows"]}
+        out["cell_rows"] = {k: out["cell_rows"][k] for k in CELL_ROWS
+                            if k in out["cell_rows"] and (accepted or k not in ACCEPTED_CELL_ROWS)}
     if "failed" in out:
         out["failed"] = WS.failed_words(out["failed"])
     return out

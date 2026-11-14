@@ -46,12 +46,15 @@ cr, n2, LG = _load("chain_record"), _load("n2_zk"), _load("leak_guard")
 
 
 def gate_run(d: Path) -> Path:
-    """The synthetic network certifier run in the gate's layout: its files under ``witness/``, and under ``out/``
-    what the gate publishes of them (`auditor.warden_outcome`)."""
+    """The synthetic network certifier run in the gate's layout: its files under ``witness/`` with the check the
+    runner writes there, which accepts it, and under ``out/`` what the gate publishes of them
+    (`auditor.warden_outcome`), its lines among them."""
     run = published(d / "flat")
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
+    (d / "gate" / "witness" / "check.json").write_text(json.dumps(WC.WS.check(d / "gate" / "witness")))
     outcome = G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
+    assert outcome["verdict"]["accepted"] is True, "the gate publishes a run's lines only when its check accepted"
     assert "unruled" not in outcome, "a run's own lines are in the forms the gate publishes them in"
     return d / "gate"
 
@@ -176,6 +179,8 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     assert (WC.COUNTS, WC.CELL_ROWS) == (G.WARDEN_COUNTS, G.CELL_ROWS), (
         "warden_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.WARDEN_COUNTS "
         "first, then write it here")
+    assert (WC.ACCEPTED_COUNTS, WC.ACCEPTED_CELL_ROWS) == (G.ACCEPTED_COUNTS, G.ACCEPTED_CELL_ROWS), (
+        "the counts only an accepted check's verdict holds are the gate's (auditor.ACCEPTED_COUNTS)")
     run = gate_run(tmp_path)
     check = WC.WS.check(run / "witness")
     got = WC.certificates(run)["warden_check"]
@@ -189,6 +194,13 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     later = {"accepted": True, "problems": ["connection 3: its words"],
              "summary": {"requests": 1, "a_later_key": 2, "cell_rows": {"registered": 1, "of": 2, "cost": {"ms": 3}}}}
     assert WC.verdict(later) == {"accepted": True, "cell_rows": {"registered": 1, "of": 2}}
+    refused = {"accepted": False, "problems": ["egress window 1's cells aren't registered"],
+               "summary": check["summary"] | {"certified_windows": 1, "certificates": 5,
+                                              "cell_rows": {"registered": 3, "of": 4, "rows": [600]}}}
+    (run / "witness" / "check.json").write_text(json.dumps(refused))
+    assert WC.verdict(refused) == G.warden_outcome(tmp_path / "end", run / "witness")["verdict"]
+    assert set(WC.verdict(refused)) == {"accepted", "failed", "windows", "cell_rows"}
+    assert WC.verdict(refused)["cell_rows"] == {"of": 4}
     assert WC.WS.FAILED == G.FAILED, (
         "warden_serve.FAILED is the gate's list of the words its end's `failed` holds (auditor.FAILED): rule a word "
         "there first, then write it here")

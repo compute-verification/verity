@@ -258,7 +258,8 @@ RELAY_PUBLIC = {k: RELAY[k] for k in ("shape", "model", "values", "rows", "link_
 LOAD_FILES = (
     '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
     '(out / "cells.jsonl").write_text("")\n'
-    f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT!r}}}) + "\\n")\n'
+    '(out / "certified.jsonl").write_text("")\n'
+    f'(out / "cells.salts").write_text({SALT!r})\n'
     f'(out / "load.json").write_text(json.dumps({LOAD_DOC!r}))\n'
     f'(out / "load-relay.json").write_text(json.dumps({RELAY!r}))\n'
     f'(out / "load-heads.json").write_text(json.dumps({{"heads": [{{"root": {ROOT!r}}}]}}))\n'
@@ -296,6 +297,7 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
     assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "cells-registrations.jsonl",
                                  "certificates.jsonl", "load-relay.json"}
     assert (d / "out" / "cells-registrations.jsonl").read_text() == ""
+    assert (d / A.WITNESS / "cells.salts").read_text() == SALT
     assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
     assert {"load.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= {
         p.name for p in (d / A.WITNESS).iterdir()} and "witness" not in end
