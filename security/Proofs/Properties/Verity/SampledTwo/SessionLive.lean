@@ -60,7 +60,7 @@ theorem mapM_some_of {α β : Type} {f : α → Option β} :
   | a :: l, h => by
     obtain ⟨b, hb⟩ := h a List.mem_cons_self
     obtain ⟨bs, hbs⟩ := mapM_some_of (l := l) fun a' ha' => h a' (List.mem_cons_of_mem a ha')
-    exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs]⟩
+    exact ⟨b :: bs, by rw [List.mapM_cons, hb, hbs]; rfl⟩
 
 /-! ## What the live session reads, of what the decoder read -/
 
