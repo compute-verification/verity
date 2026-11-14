@@ -117,7 +117,7 @@ WINDOW = "every request of the load's rep, a window the command names: no audit'
 #: pass (``span``), as a trace (``load_step_trace``), and the bits its two classes of advice cost (``draft_table``)
 ENCODINGS = ROOT / "benchmarks/network_e2e/encodings/replay.py"
 #: what the kept count costs where it is not sent, and what that rests on
-DERIVED = "the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet"
+DERIVED = "the kept count is 0 where the audited block derives it, and no served Program calls the accept test yet"
 NO_CIRCUIT = "no: nothing in this job compiles the settings' circuit"
 ON, OFF, UNCONFIRMED = "on", "off", "not confirmed"
 #: why a cost is not shown under its target where stock and ours did not serve at the same settings: the figure is
