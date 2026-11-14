@@ -376,9 +376,10 @@ class _Sched:
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
-def committer(mp, *, retain: str = "none", bounded: bool | None = None) -> NC.NativeCollectCommitter:
+def committer(mp, *, retain: str = "none", bounded: bool | None = None, staging: str = "arena") -> NC.NativeCollectCommitter:
     """The served committer of the network traces (the windowed worker: wrap, gather, the native worker and the window ring, under
-    rows-sha512) over the fakes; `bounded` None leaves the staging's default (bounded, since it is windowed)."""
+    rows-sha512) over the fakes; `bounded` None leaves the staging's default (bounded, since it is windowed). A `staging` other
+    than "arena" leaves it no device arena."""
     for k in ENV:
         mp.delenv(k, raising=False)
     mp.setenv("VERITY_RETAIN", retain)
@@ -393,7 +394,7 @@ def committer(mp, *, retain: str = "none", bounded: bool | None = None) -> NC.Na
     mp.setattr(NC, "ext", lambda *a, **k: ext)
     eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
     com = NC.NativeCollectCommitter(eng, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, retain_values=False, arena_bytes=None,
-                                    fast_copy=False, gather=True, native_worker=True)
+                                    fast_copy=False, gather=True, native_worker=True, staging=staging)
     com.enable_windows(None)
     com._nc.slots = com.win_tensors
     com.pool = _HostPool(block_bytes=4096, exact=False, populate_threads=0)
@@ -659,6 +660,20 @@ def test_a_footprints_step_begin_holds_the_device_arenas_bytes_and_its_free_bloc
     run(com, schedule(40, 2))
     begins = [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "begin_step"]
     assert [(e["arena_block_bytes"], e["arena_total_bytes"], e["arena_free_blocks"]) for e in begins] == [(0, 5632, [4096, 1024])] * 2
+
+
+def test_a_committer_with_no_device_arena_begins_its_footprints_steps_with_none_and_commits_them(monkeypatch, tmp_path):
+    """A committer staged other than into a device arena has none. Its `begin_step` events say 0 arena bytes and no free block,
+    as they say 0 for the step's own block, and its steps commit what the arena's committer commits."""
+    com = committer(monkeypatch, staging="direct")
+    assert com.arena is None
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    sched = schedule(40, 2)
+    rc, keys = run(com, sched)
+    begins = [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "begin_step"]
+    assert [(e["arena_block_bytes"], e["arena_total_bytes"], e["arena_free_blocks"]) for e in begins] == [(0, 0, [])] * 2
+    assert [s.root for s in rc.steps] == reference(sched, keys)
 
 
 def test_a_footprints_step_end_holds_the_resident_set_or_says_why_it_has_none(monkeypatch, tmp_path):
