@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 # run.py is loaded here by path, not by the suite's `conftest.load`: test_pearl_c_vllm.py runs this file by path, and
 # the suites of benchmarks/one_stage and benchmarks/pouw/pearlplus_lean run that test, where `conftest` is not this
 # suite's.

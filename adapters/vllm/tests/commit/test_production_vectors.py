@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from typing import Any
 
 import numpy as np
 import pytest
 
+from tests.commit import hidden_stream as hs
 from tests.commitments import vectors as V
-from verity_vllm.commit import hidden_stream as hs
 from verity_vllm.commit import scheme
 from verity_vllm.commitments import leaves as hashing
 from verity_vllm.commitments import vllm_v1 as ref
@@ -148,7 +149,8 @@ def test_names_digest_is_the_compact_json() -> None:
 
 def test_integer_like_fields_are_coerced() -> None:
     f = VECTORS["chunk_leaf"][0]["fields"]
-    layout = hs.StreamLayout(np.int64(f["HB"]), np.int32(f["M"]), np.uint16(f["NB"]))
+    integer_like: tuple[Any, Any, Any] = (np.int64(f["HB"]), np.int32(f["M"]), np.uint16(f["NB"]))
+    layout = hs.StreamLayout(*integer_like)
     header = scheme.chunk_header(layout, np.int64(f["launch_tag"]), np.int64(f["chunk_index"]), np.int32(f["chunk_words"]), np.uint8(f["src_mask"]))
     assert header.hex() == VECTORS["chunk_leaf"][0]["header"]
     i = next(c["inputs"] for c in VECTORS["roots"] if c["kind"] == "step")

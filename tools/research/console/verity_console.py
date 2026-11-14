@@ -135,10 +135,10 @@ def fit(p: dict) -> dict:
     """A table over 64 KiB: its long strings cut shorter, then its rows cut, saying so in `note`."""
     if p["kind"] != "table":
         return p
-    for cap in (200, 140, 100, 70):
+    for width in (200, 140, 100, 70):
         if len(json.dumps(p).encode()) <= MAX_BODY:
             return p
-        p["rows"] = [[c[:cap - 1] + "…" if isinstance(c, str) and len(c) > cap else c for c in r] for r in p["rows"]]
+        p["rows"] = [[c[:width - 1] + "…" if isinstance(c, str) and len(c) > width else c for c in r] for r in p["rows"]]
     n, note = len(p["rows"]), p.get("note", "")
     while len(json.dumps(p).encode()) > MAX_BODY and p["rows"]:
         p["rows"] = p["rows"][:int(len(p["rows"]) * 0.9)]

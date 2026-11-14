@@ -142,7 +142,7 @@ def registration_record(program, partition: Mapping, entries: Sequence[Mapping])
     """The circuit registration over ``program`` (a core ``Program``) and its ``verity/partition/v1`` object ``partition``,
     registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the sampling design ``stratified`` over the
     population, the statement's scheme, no served roots and the `WINDOW` (the module docstring)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
     query = partition["query"]
     return R.record(program, query, {"law": "stratified", "k": P.units(program, query)}, FC.SCHEME, [], WINDOW,
@@ -169,7 +169,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
     every value an earlier `bind` registered; a value is registered once) written to `REGISTRATION`, its digest bound into
     META (`REGISTRATION_KEY`), and ``private`` (``{value: {"nodes", "salts"}}``, the prover's openings) added to `PRIVATE`.
     Refused unless META names ``partition`` and its program. Returns the record."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
     stage = Path(stage)
     m = meta(stage)
@@ -192,7 +192,7 @@ def bind(stage: Path, program, partition: Mapping, entries: Sequence[Mapping], p
 
 def bound(stage: Path) -> dict:
     """The staged statement's circuit registration, refused unless its digest is the one META carries."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     stage = Path(stage)
     want = meta(stage).get(REGISTRATION_KEY)

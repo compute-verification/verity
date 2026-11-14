@@ -33,7 +33,7 @@ or `BlackwellE4m3QmmaDot32_v1` (the sm_120 records); ``G`` is the device's promo
 is +0 and the total starts at +0, so the reference's −0 → +0 after a promotion never fires.  K is a multiple of 32 and G at
 least 1 (the chain's own G = 0, the unpromoted record, is refused here); the scheme's own domain (128 | K) is narrower.
 
-**The served y** is the Pearl-C kernels' epilogue (`store_y` in ``benchmarks/pouw/pearl_c_sm90`` and ``pearl_c_sm120``): each
+**The served y** is the Pearl-C kernels' epilogue (`store_y` in ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90`` and ``pearl_c_sm120``): each
 output word ``__float2bfloat16_rn(__fmul_rn(__fmul_rn(u, ia_i), ib_j))``, where ia = ``__frcp_rn(α)``, a correctly rounded
 reciprocal (RN_f32(1/α), F32Div_v2 of 1.0), is what the stats kernel writes for each row of A and of the weight.  Its final
 BF16 store rounds to nearest even (NaN 0x7FFF, F2FP's).  The vLLM integration takes the first m of the call's 16-aligned rows

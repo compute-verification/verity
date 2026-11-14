@@ -114,7 +114,7 @@ def test_a_bias_case_reports_the_epilogue_that_holds(tmp_path):
 def test_the_cli_parses_both_phases_and_requires_a_seed():
     opts = cli.parse("gemm-correspondence", ["check", "--dir", "d", "--out", "o"])
     assert isinstance(opts, G.CheckOptions) and opts.crosscheck == 256
-    cap = cli.parse("gemm-correspondence", ["capture", "--configs", "a.json", "--seed", "13", "--dir", "d"])
-    assert cap.cmd == "capture" and cap.tp == "1" and cap.max_cols == 4096
+    capture = cli.parse("gemm-correspondence", ["capture", "--configs", "a.json", "--seed", "13", "--dir", "d"])
+    assert capture.cmd == "capture" and capture.tp == "1" and capture.max_cols == 4096
     with pytest.raises(SystemExit):
         cli.parse("gemm-correspondence", ["capture", "--configs", "a.json", "--dir", "d"])

@@ -50,5 +50,5 @@ on that buffer.
   with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished encoded
   store in place, read only. Each script's header gives its command line.
 
-The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the
+The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/kernels/s8_linear/int_mm.py`, the
 exact W8A8 linear's int_mm backend): `layer.py`'s with its eager epilogue, `full.py`'s with its fused one.

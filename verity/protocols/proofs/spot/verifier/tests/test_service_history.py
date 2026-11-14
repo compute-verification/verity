@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
 from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
                              _record as _registered_record, _seeded_case)

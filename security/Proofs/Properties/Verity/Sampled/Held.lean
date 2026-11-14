@@ -10,6 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Properties.Spot
+public import Proofs.Properties.Spot.Credited
 public import Proofs.Core.QSort
 public import Std.Data.String.ToInt
 public import Mathlib.Data.List.Find
@@ -742,25 +743,6 @@ theorem qsort_pairwise {xs : Array ℕ} (h : xs.toList.Pairwise (· < ·)) : xs.
   · simp only [Nat.lt_irrefl, decide_false]
   · have := hl j i hj hi hij
     simp only [show ¬ xs[i] < xs[j] by omega, show ¬ i < j by omega, decide_false]
-
-theorem ascending_lt {xs : Array Int} (h : _root_.Properties.Spot.Ascending xs) :
-    ∀ i j (hi : i < xs.size) (hj : j < xs.size), i < j → xs[i] < xs[j] := by
-  intro i j hi hj hij
-  induction j with
-  | zero => omega
-  | succ j ih =>
-    rcases Nat.lt_succ_iff_lt_or_eq.1 hij with hlt | rfl
-    · exact Int.lt_trans (ih (by omega) hlt) (h j hj)
-    · exact h i hj
-
-theorem qsort_ascending {xs : Array Int} (h : _root_.Properties.Spot.Ascending xs) :
-    xs.qsort (· < ·) = xs := by
-  refine Verity.QSort.qsort_sorted _ _ fun i hi j hj => ?_
-  rcases Nat.lt_trichotomy i j with hij | rfl | hij
-  · simp only [ascending_lt h i j hi hj hij, hij, decide_true]
-  · simp only [Int.lt_irrefl, Nat.lt_irrefl, decide_false]
-  · have := ascending_lt h j i hj hi hij
-    simp only [show ¬ xs[i] < xs[j] from Int.not_lt.2 (Int.le_of_lt this), show ¬ i < j by omega, decide_false]
 
 theorem list_filterMap_int : ∀ {us : List Json} {is : List Int},
     us.mapM _root_.Spot.int? = some is → us.filterMap _root_.Spot.int? = is

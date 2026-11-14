@@ -1,7 +1,7 @@
 """Layout 1.1 (`verity_vllm.pipeline.layout`): a `vllm-build/v1` tree built at one path resolves its components after being moved.
 
-r20 fetched Builds had to be symlinked back to `/workspace/cp/<sweep>/<row>/...` because `workload_program.json` carried only the build
-machine's absolute paths.  GP-01 now writes a `layout` block with artifact-root-relative paths beside them; readers resolve through
+A fetched Build could not be read away from where it was built while `workload_program.json` carried only the build
+machine's absolute paths.  GP-01 writes a `layout` block with artifact-root-relative paths beside them; readers resolve through
 `build_paths.component_dir` / `manifest_path` (relative under the record dir, else the legacy absolute, else its basename under the
 record dir).  A layout-1.0 record (no block) keeps working through the last two rules."""
 from __future__ import annotations
@@ -98,7 +98,7 @@ def test_relative_to_root_refuses_paths_outside_the_root():
 
 @pytest.mark.parametrize("via", ["relative", "legacy"])
 def test_lifted_record_cli_resolution_matches_build_paths(tmp_path, via):
-    """The `--build-workload` request list (lifting/record.py) resolves each component through build_paths: after a move, a 1.1 record
+    """Each request of a Build's workload resolves its component through build_paths: after a move, a 1.1 record
     finds its dirs by the layout block and a 1.0 record by basename -- the same dir either way."""
     row, art = _synthetic_build(tmp_path)
     moved = tmp_path / "moved-row"
@@ -109,5 +109,5 @@ def test_lifted_record_cli_resolution_matches_build_paths(tmp_path, via):
     for r in wp["requests"]:
         lp, cap = int(r["prompt_len"]), int(r["cap"])
         src = BP.declared_component(wp, lp, cap - 1)
-        comp = BP.component_dir(wp, lp, cap - 1, moved) or moved / Path(src).name          # record.py's expression
+        comp = BP.component_dir(wp, lp, cap - 1, moved) or moved / Path(src).name          # else the declared path's name beside the record
         assert comp == moved / f"build_request_LP{lp}_T{cap - 1}" and (comp / "descriptor.json.gz").exists()

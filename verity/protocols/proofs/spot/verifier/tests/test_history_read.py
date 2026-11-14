@@ -18,7 +18,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
 from verity.commitments import history as HT
 from verity.commitments.gates.rowleaf import digest_bits
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R, verifier as V
 
 from test_registered import LAW, MIX, POS, Q, SCHEME, SERVED, TABLE
 

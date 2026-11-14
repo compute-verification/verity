@@ -12,10 +12,10 @@ public import Definitions.Pouw.PearlC.Sm120
 `pearlCProtocol` is Pearl-C on the H100: the ticket chain is `hopperStep` promoted every 4 atoms, U is `PeelExact`'s
 Hopper BF16 order, the debit's flags are `Skip`'s, the salt-dead predicate is P3's at the Hopper atom-mix, and the costs
 are H100 W1 prices. A device record makes each of them a parameter, as the scheme's device record does:
-- `PearlCDevice`: the promotion period `G` (0: no promotion, one chain over all of k), the W1 prices, and the device's
-  maps (the ticket chain, U, the debit's flags, and P3's salt-dead predicate). The FP8 lane's parametric twins over a
-  `Pipeline` supply the maps for a captured step: the chain, `Skip`'s flags, `PeelExact`, and `SaltDead` at the device's
-  atom-mix.
+- `PearlCDevice`: the promotion period `G` (0: no promotion, one chain over all of k), the W1 prices, the device's
+  maps (the ticket chain, U, the debit's flags, and P3's salt-dead predicate), and its FP8 step (`pipe`, which rev1's
+  debit replays at the noise support's ends, `DeviceRev1`). The FP8 lane's parametric twins over a `Pipeline` supply the
+  maps for a captured step: the chain, `Skip`'s flags, `PeelExact`, and `SaltDead` at the device's atom-mix.
 - `pearlCProtocolDev` and `pearlCTilesDev`: the named protocol and its audit tiles at a device record. The domain rules
   (`PearlCSem.OperandOK`) are E4M3's, and `sem` still carries the noise, the forming chain and the scales.
 - `devH100`: today's H100 record, here because `devH100Tensor` is built on it; `pearl-c-sm120` v2's (`devSm120v2`) and
@@ -75,7 +75,7 @@ def Prices.h100Tensor : Prices := ⟨32 * h100TensorMHz / h100SmMHz, 2, ⟨62, 4
 
 /-- **A device record** for Pearl-C: the promotion period `G` (0: none), the prices, and the device's maps on a unit's
 noisy codes (A′, B̃): the ticket words C̃, the useful words U from the codes, F's codes and the peel's noise rows, the
-debit's flags per word and atom, and P3's salt-dead predicate at the rows' scales. -/
+debit's flags per word and atom, P3's salt-dead predicate at the rows' scales, and the FP8 step the maps are of. -/
 structure PearlCDevice where
   G : ℕ
   prices : Prices
@@ -84,6 +84,7 @@ structure PearlCDevice where
     Matrix (Fin k) (Fin 32) Code → Matrix (Fin m) (Fin 32) ℕ → Matrix (Fin n) (Fin 32) ℕ → Matrix (Fin m) (Fin n) (Option ℚ)
   flags : ∀ {m n k : ℕ}, Matrix (Fin m) (Fin k) Code → Matrix (Fin n) (Fin k) Code → Fin m → Fin n → ℕ → Bool
   saltDead : ((k : ℕ) → (Fin k → ℚ) → ℚ) → ((k : ℕ) → (Fin k → ℚ) → ℚ) → (k : ℕ) → (Fin k → ℚ) → Fin k → Prop
+  pipe : Pipeline
 
 /-- The H100 record: `ctChain` promoted every 4 atoms, `PeelExact`'s U, `Skip`'s flags and P3's `SaltDead`. -/
 def devH100 : PearlCDevice where
@@ -93,6 +94,7 @@ def devH100 : PearlCDevice where
   useful := fun A B FA FB beA beB => PeelExact.peelExactVal A B FA FB beA beB
   flags := fun A B => Skip.unitFlags A B
   saltDead := SaltDead.saltDead
+  pipe := hopperE4m3K32
 
 /-- **The H100 record per second at the tensor clock**: `devH100`'s maps at `Prices.h100Tensor`. -/
 def devH100Tensor : PearlCDevice := { devH100 with prices := Prices.h100Tensor }
@@ -105,6 +107,7 @@ def devAt (p : Pipeline) (G : ℕ) (pr : Prices) : PearlCDevice where
   useful := fun A B FA FB beA beB => PeelExactP.peelExactValP p G A B FA FB beA beB
   flags := fun A B => SkipP.unitFlagsAt p G A B
   saltDead := FormingP.saltDeadP p
+  pipe := p
 
 /-- **`pearl-c-sm120` v1's record**: the RTX PRO 6000's E4M3 `mma.sync` step `sm120E4m3 = ⟨[32], 26, −133⟩`, promoted
 every 4 atoms, at prices `pr`; the served record takes `Prices.sm120Loop` (`Proofs.Pouw.PearlC.Records`). A tensor-core

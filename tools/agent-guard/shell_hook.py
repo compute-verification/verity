@@ -75,9 +75,9 @@ the check's suites and `verity check`. The same command through `research run`, 
 `AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
 No tool call may block more than 20 minutes: an agent blocked in one long call looks silent and misses its wake-ups. So it
-refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
+refuses a command that plainly would: a `sleep` past BLOCK_LIMIT_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
 there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the background (`&`), and
-`research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+`research run --wait-max S` past the limit. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
@@ -1145,7 +1145,7 @@ def local_work_reason(command: str) -> str | None:
 
 
 #: no tool call may block longer: an agent blocked in one long call looks silent and misses its wake-ups
-BLOCK_CAP_S = 1200
+BLOCK_LIMIT_S = 1200
 DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
 UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
@@ -1197,13 +1197,13 @@ def blocks_text(text: str) -> float:
 
 
 def block_reason(command: str) -> str | None:
-    """Why this command may not run as one tool call (it would block past BLOCK_CAP_S), or None."""
+    """Why this command may not run as one tool call (it would block past BLOCK_LIMIT_S), or None."""
     s = blocks_text(command)
-    if s <= BLOCK_CAP_S:
+    if s <= BLOCK_LIMIT_S:
         return None
-    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_CAP_S} s: no tool call may block "
+    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_LIMIT_S} s: no tool call may block "
             "more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer subscription wake you. "
-            f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
+            f"`research run --wait` stops after {BLOCK_LIMIT_S} s on its own and names the command to check back with.")
 
 
 def flattened(text: str) -> list[list[str]]:

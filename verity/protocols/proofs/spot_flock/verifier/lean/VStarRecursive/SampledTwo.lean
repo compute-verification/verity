@@ -5,7 +5,9 @@ over the sampled replay blocks' proof blocks sampled once more on a challenger s
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
 refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
-refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). Nothing reads this module: `VStar.Recursive.Sampled` refuses the form by name.
+refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). No command of a party's
+dispatches to this module: `VStar.Recursive.Sampled` refuses the form by name. The package's root imports it, so the
+package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
@@ -23,7 +25,12 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
     `Run.templateCircuits`); the replay block's program object; the Spec's interior values; and the interior audit's
     members (one-stage v2's `proofs.members`, `OneStageZk.membersOf`), each member's circuit one a template names
     (`MEMBER_CIRCUIT`). The interior audit's parameters are the interior's with `proofs` its members
-    (`OneStageZk.membersParamsOfJson`).
+    (`OneStageZk.membersParamsOfJson`);
+  * the two stages are on two windows (`windowsApart`, `ONE_WINDOW`): the interior audit's window root is not the
+    boundary registration's. Of the two windows the run of record lets an interior registration name
+    (`Run.interiorWindowOk`), the form reads only the one the verifier computes, a challenger session of the second
+    stage's own: on one window one session releases both stages' coins, and nothing the form checks holds the
+    first stage's to be released before a coin tree's round is opened.
 * **commitment**: the boundary registration's record (`OneStage.commitmentOf`).
 * **evidence**: exactly `{"coins", "interior", "received", "record", "source", "statements"}`: the first stage's coins'
   evidence, its receipt's place in the log and the bytes it read (hex); the interior audit's evidence in v2's
@@ -34,8 +41,17 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   its registration's parameters name. The copy of main's first-parent history they are read under is the first
   stage's evidence's own, as one-stage v2 reads its evidence's, and the second stage's must be the same copy
   (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix. The first stage's coin
-  evidence is never `null`, on one window as on two (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins.
+  evidence is never `null` (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins. The statements are
+  fewer than `2^64` (`stmtsFit`, `STMTS_COUNT`), the most a list's 8-byte length word counts.
 * **check** (`checkBlobsAt`), in order:
+  0. each second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, `STMT_BYTES`): the sum of the
+     lengths a session's statement holds, which v2 holds each under `2^64` (`OneStageZk.fitsWhy`,
+     `OneStageZk.drawFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
+     and each statement is the one the session at its position makes, the sessions as many as the statements
+     (`stmtsSessions`, `STMT_COUNT`, `STMT_SESSION`): at each position the verifier rebuilds the statement the
+     session there makes (`stmtOwnAt`), refuses where the counts differ or a position's rebuilt statement is none or
+     not the evidence's canonical text, and hands round 2 those rebuilt statements (`stmtsOwn`), so they are the
+     ones the sessions make, on those templates' circuits;
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
   2. the second stage's sessions, as v2's per-member form runs them (`OneStageZk.membersRun`: the statements held as
@@ -50,7 +66,9 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
      statement check, at the rest; it reads each registration's record as the verifier's own parser reads the
-     record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`);
+     record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`), and the boundary's
+     so read has the digest the commitment names (`digestIs`, `RECORD_DIGEST`), and the interior's, as the evidence
+     carries it and so read, the interior commitment's (`interiorDigestIs`, `INTERIOR_DIGEST`);
      the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
@@ -60,22 +78,29 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      than the second stage's session's `reserve` line (`STAGES_ORDER`); and on two windows no line of the first
      session's log is a coin tree's (`firstTreeless`, `FIRST_TREE`): the first stage's session only samples its
      sample, so every coin tree of the play is on the second stage's session, where the interior audit reads them
-     in order from its log's first;
+     in order from its log's first; and the second stage's session's log opens each coin tree's rounds stream by
+     stream, in the order the tree's spec lists its streams (`repStreamsOrdered`, `Challenger.REP_STREAM_ORDER`):
+     a session's link points, then each rep's rounds, rep 0's before rep 1's, so no round's challenges are opened
+     before the message of an earlier round is fixed;
   5. the interior audit's verdict at its coins under the second stage's sampling design (`secondCheck`), which gives
      the public output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
 
 **The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
-registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks
-(`subsetDesign`), which R1 holds it to as the run of record does, and the second stage's, which its sample is sampled
-under. It reads the sample the coins `ξ₂` give under the second stage's design, every coin opened read
-(`OneStage.coinsReason`), then R1–R8 at the subset design, the evidence's sample held to the second stage's design
-(`Draw.checkDraw`), the record's checks over its proved units (`OneStage.recordChecks`), the verdicts
-(`OneStage.verdictOf`), and the bound under the second stage's design. That design is computed, never read from the
-evidence (`secondDesignOf`): `Select.secondLaw` of the first stage's sample (the proved units of the sample the run of
-record decided) over the replay block's cells under the interior's query (`Select.replayCells`) at the rule's counts,
-the function and the arguments the run of record's second stage samples by. Its refusals carry `OneStage.check`'s
-step prefixes, so a reason names the same step in both forms.
+registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks (`subsetDesign`), which R1
+holds it to as the run of record does, and the second stage's, which its sample is sampled under. It reads the sample the
+coins `ξ₂` give under the second stage's sampling design, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the
+subset design, the evidence's sample held to the second stage's sampling design (`Draw.checkDraw`), the record's checks over its proved
+units (`Record.checks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's sampling design. The record's
+checks are the function the run of record of step 4 calls for the interior's record (`Record.record`'s
+`Record.checks`), at the reads it hands it under a two-stage rule (`own_reads`): a session's read of one of the
+registration's own ports at that port's own root is no registered read of the record (`Record.lessOwnReads`), its
+rows being the second-stage statement check's to hold, and a read of one of its ports at any other root is opened and
+not registered, which refuses. A member of an interior that reads another member's port reads it so.
+That design is computed, never read from the evidence (`secondDesignOf`): `Select.secondLaw` of the first stage's sample (the
+proved units of the sample the run of record decided) over the replay block's cells under the interior's query
+(`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage samples by.
+Its refusals carry `OneStage.check`'s step prefixes, so a reason names the same step in both forms.
 -/
 module
 
@@ -180,8 +205,9 @@ def split (j : Json) (what : String) : V Json := do
   if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
   pure (Json.mkObj (without j "form"))
 
-/-- The parameters (module docstring, **params**). -/
-def paramsOfJson (j : Json) : V Params := do
+/-- The parameters' parse (module docstring, **params**), before the two stages' windows are held apart
+(`paramsOfJson`). -/
+def paramsParsed (j : Json) : V Params := do
   let j ← split j "parameters"
   keysAre j #["boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"] "the parameters"
   let .arr os := getD j "outputs" | throw "outputs is not a list"
@@ -213,12 +239,73 @@ def paramsOfJson (j : Json) : V Params := do
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
-def FIRST_COINS_NULL : String :=
-  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins, on one " ++
-    "window as on two"
+/-- The refusal of an interior audit on the boundary registration's window (`windowsApart`). -/
+def ONE_WINDOW : String :=
+  "the interior audit's window is the boundary registration's: the two-stage form reads a two-stage audit on two " ++
+    "windows, each stage's coins a challenger session's of its own, and nothing it checks on one window holds the " ++
+    "first stage's coins to be released before a coin tree's round is opened"
 
-/-- The evidence (module docstring, **evidence**). -/
-def evidenceOf (b : ByteArray) : V Evidence := do
+/-- **The two stages are on two windows** (`ONE_WINDOW`): the interior audit's window root `interior` is not the
+boundary registration's `boundary`. The run of record lets the interior registration's window be the boundary's or
+the one the verifier computes from the boundary registration's digest and its replay sample
+(`Run.interiorWindowOk`); the form refuses the first, and with it a boundary and an interior that name no window. -/
+def windowsApart (boundary interior : Option String) : V Unit :=
+  if boundary = interior then .error ONE_WINDOW else .ok ()
+
+#guard (windowsApart (some "aa") (some "bb")).toOption.isSome
+#guard (windowsApart (some "aa") none).toOption.isSome
+#guard (windowsApart none (some "bb")).toOption.isSome
+#guard (windowsApart (some "aa") (some "aa")).toOption.isNone
+#guard (windowsApart none none).toOption.isNone
+
+/-- The parameters (module docstring, **params**): `paramsParsed`'s, the boundary registration's window and the
+interior audit's held apart (`windowsApart`). -/
+def paramsOfJson (j : Json) : V Params :=
+  match paramsParsed j with
+  | .error err => .error err
+  | .ok p =>
+    match windowsApart p.boundary.verifier.windowRoot p.audit.base.verifier.windowRoot with
+    | .error err => .error err
+    | .ok () => .ok p
+
+theorem windowsApart_ok {boundary interior : Option String} (h : windowsApart boundary interior = .ok ()) :
+    boundary ≠ interior := by
+  unfold windowsApart at h
+  split at h
+  · cases h
+  · assumption
+
+/-- **Parameters the form reads are `paramsParsed`'s, on two windows.** -/
+theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
+    paramsParsed j = .ok p ∧ p.boundary.verifier.windowRoot ≠ p.audit.base.verifier.windowRoot := by
+  unfold paramsOfJson at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, windowsApart_ok hw⟩
+
+def FIRST_COINS_NULL : String :=
+  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins"
+
+/-- The refusal of evidence whose statements are too many for the word a list's length is written in
+(`stmtsFit`). -/
+def STMTS_COUNT : String :=
+  "the evidence holds 2^64 statements or more, past the 8-byte word a list of statements holds its length in"
+
+/-- **The statements' count fits a word** (`STMTS_COUNT`): `n` statements are fewer than `limit`. -/
+def stmtsFit (limit n : Nat) : V Unit :=
+  if limit ≤ n then .error STMTS_COUNT else .ok ()
+
+#guard (stmtsFit 2 1).toOption.isSome
+#guard (stmtsFit 2 2).toOption.isNone
+#guard (stmtsFit OneStageZk.WORD 0).toOption.isSome
+
+/-- The evidence's parse (module docstring, **evidence**), before its statements are counted (`evidenceOf`). -/
+def evidenceParsed (b : ByteArray) : V Evidence := do
   let j ← split (← Core.canonicalJson b) "evidence"
   keysAre j #["coins", "interior", "received", "record", "source", "statements"] "the evidence"
   if getD j "coins" matches .null then throw FIRST_COINS_NULL
@@ -231,6 +318,35 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let some statements := interior.statements | throw "the interior audit's evidence names no statements"
   pure { received, source, coins := getD j "coins", interior, statements, record := getD j "record",
          stmts }
+
+/-- The evidence (module docstring, **evidence**): `evidenceParsed`'s, its statements fewer than `2^64`
+(`stmtsFit` at `OneStageZk.WORD`). -/
+def evidenceOf (b : ByteArray) : V Evidence :=
+  match evidenceParsed b with
+  | .error err => .error err
+  | .ok e =>
+    match stmtsFit OneStageZk.WORD e.stmts.size with
+    | .error err => .error err
+    | .ok () => .ok e
+
+theorem stmtsFit_ok {limit n : Nat} (h : stmtsFit limit n = .ok ()) : n < limit := by
+  unfold stmtsFit at h
+  split at h
+  · cases h
+  · next hn => exact Nat.lt_of_not_le hn
+
+/-- **Evidence the form reads is `evidenceParsed`'s, of fewer than `2^64` statements.** -/
+theorem evidenceOf_ok {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) :
+    evidenceParsed b = .ok e ∧ e.stmts.size < 2 ^ 64 := by
+  unfold evidenceOf at h
+  split at h
+  · cases h
+  · next q hq =>
+    split at h
+    · cases h
+    · next hw =>
+      cases h
+      exact ⟨hq, stmtsFit_ok hw⟩
 
 /-- The ports of the registration `record`'s roots. -/
 def portsOf (record : Json) : Array String :=
@@ -271,6 +387,96 @@ def stamped (p : Params) (e : Evidence) (bs : Core.Blobs) (out : Array (String �
     let fields := [("sessions", sessions), ("public_header_sha512", Json.str (← canonSha512 header)),
       ("session_tables", Lean.toJson (1 : Nat))] ++ reads ++ sample
     pure (k, fields.foldl (fun acc (f, x) => acc.setObjVal! f x) v)
+
+/-- The refusal of a statement other than the one the session at its position makes (`stmtsSessions`). -/
+def STMT_SESSION (t : Nat) : String :=
+  s!"statement {t} is not the one the {t}-th of the statements' sessions makes: round 2 reads the statements by " ++
+    "position, each its template's session's, on that template's circuit"
+
+/-- The refusal of a count of sessions other than the count of statements (`stmtsSessions`): a session past the last
+statement, or a statement with no session, must not pass unread. -/
+def STMT_COUNT : String :=
+  "the sessions are not as many as the statements: round 2 reads one statement a session, in order, so a session " ++
+    "past the last statement or a statement with no session is refused"
+
+/-- A file read as JSON, as `flock-verify verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
+def jsonOfBytes (b : ByteArray) : Option Json :=
+  (String.fromUTF8? b).bind fun s => (Flock.JsonParse.parse s).toOption
+
+/-- A public file's header: its first line's JSON (`a0.public_header`, `Spot.FilePart.header` but for the norm its
+own reader applies), none where it has no line or doesn't parse. -/
+def headerLine (file : ByteArray) : Option Json := do
+  let nl ← Flock.findByte file 10
+  (Flock.JsonParse.parse (← String.fromUTF8? (file.extract 0 nl))).toOption
+
+/-- **A session's statement as round 2 reads one**, of the template `name`, at the public file `pub`, the sample's
+text `drawB` and the registered reads' text `registeredB`: the template's name, the public file's header, the sample
+and the registered reads (null where there are none), each read as `flock-verify verify` reads JSON. None where a
+field doesn't read or there is no sample. -/
+def stmtOf (name : String) (pub : ByteArray) (drawB registeredB : Option ByteArray) : Option Json := do
+  let header ← headerLine pub
+  let draw ← jsonOfBytes (← drawB)
+  let registered ← match registeredB with
+    | some b => jsonOfBytes b
+    | none => some .null
+  pure (Json.mkObj [("draw", draw), ("header", header), ("registered", registered), ("template", .str name)])
+
+/-- **The statement the `t`-th of the statements' sessions makes** (`stmtOf`): template `t`'s, at the public file of
+the member the session's statement names, the sample in the session's record and the member's registered reads, each
+as `Flock.RecordText.printT` prints it. None where the member's circuit is not template `t`'s, or the session's
+record or the member's circuit or public file is on no blob, or a field doesn't read. -/
+def stmtOwnAt (p : Params) (e : Evidence) (bs : Core.Blobs) (t : Nat) : Option Json := do
+  let st ← (e.statements.toList.flatMap fun st => st.sessions.toList.map fun _ => st)[t]?
+  let s ← (e.statements.toList.flatMap (·.sessions.toList))[t]?
+  let name ← st.member
+  let m ← p.members.find? (·.name == name)
+  let c ← p.circuits[t]?
+  let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
+  let _ ← (bs.get m.own.circuit "circuit").toOption
+  let pub ← (bs.get m.own.pub "public file").toOption
+  if m.own.circuit == c.2.1 then
+    stmtOf c.1 pub ((Flock.Witness.recordDraw record).map fun j => (Flock.RecordText.printT j).toUTF8)
+      (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)
+  else none
+
+/-- **The statements round 2 reads** (check, 4): at each position of the evidence's, the statement its session makes
+(`stmtOwnAt`). `stmtsSessions` refuses a play where the counts differ, or one is none or not the evidence's. -/
+def stmtsOwn (p : Params) (e : Evidence) (bs : Core.Blobs) : Array Json :=
+  (Array.range e.stmts.size).map fun t => (stmtOwnAt p e bs t).getD .null
+
+/-- **Each statement is its session's, and the counts agree** (check, 0; `STMT_COUNT`, `STMT_SESSION`): the sessions
+are as many as the statements, and at each position `t` the statement the `t`-th of the statements' sessions makes
+(`stmtOwnAt`) is there and has the evidence's `t`-th statement's canonical text. -/
+def stmtsSessions (p : Params) (e : Evidence) (bs : Core.Blobs) : V Unit :=
+  if (e.statements.toList.flatMap (·.sessions.toList)).length != e.stmts.size then
+    .error STMT_COUNT
+  else (List.range e.stmts.size).forM fun t =>
+    match stmtOwnAt p e bs t with
+    | some j => if jeq j (e.stmts.toList.getD t .null) then .ok () else .error (STMT_SESSION t)
+    | none => .error (STMT_SESSION t)
+
+theorem stmtsOwn_size (p : Params) (e : Evidence) (bs : Core.Blobs) : (stmtsOwn p e bs).size = e.stmts.size := by
+  simp [stmtsOwn]
+
+theorem stmtsOwn_getD (p : Params) (e : Evidence) (bs : Core.Blobs) {t : Nat} (ht : t < e.stmts.size) :
+    (stmtsOwn p e bs).toList.getD t .null = (stmtOwnAt p e bs t).getD .null := by
+  simp [stmtsOwn, List.getD_eq_getElem?_getD, ht]
+
+/-- **Where each statement is its session's, every position below the count has a session statement** (`stmtOwnAt`). -/
+theorem stmtsSessions_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmtsSessions p e bs = .ok ())
+    {t : Nat} (ht : t < e.stmts.size) : ∃ j, stmtOwnAt p e bs t = some j := by
+  unfold stmtsSessions at h
+  split at h
+  · cases h
+  · have h' := Flock.RecCompose.forM_ok h t (List.mem_range.2 ht)
+    cases hc : stmtOwnAt p e bs t with
+    | none => rw [hc] at h'; cases h'
+    | some j => exact ⟨j, hc⟩
+
+#guard (jsonOfBytes "{\"a\":1}".toUTF8).isSome
+#guard (jsonOfBytes "{".toUTF8).isNone
+#guard (headerLine "{\"a\":1}\nrest".toUTF8).isSome
+#guard (headerLine "{\"a\":1}".toUTF8).isNone
 
 /-- **The stream's run of record over both stages** (check, 4), the input `Run.run` reads: the boundary's parameters,
 record, rule, values, declared items, challenger, receipt `received₁`'s place and the bytes `ξ` it read, no closure, the
@@ -313,9 +519,36 @@ def readBack (record : Json) : V Json := do
   let s' ← Flock.canon j
   if s' == s then pure j else throw RECORD_READ
 
+def RECORD_DIGEST : String :=
+  "the boundary registration's record, as the verifier's parser reads it, does not have the commitment's digest: " ++
+    "the run of record reads the first stage's challenges after the digest of the record it is given"
+
+/-- **The record `j` has the digest `digest`** (check, 4; `RECORD_DIGEST`): the run of record takes a registration's
+digest from the record it is given (`Registration.digest`), and the check's commitment names one (`digest`), so the
+boundary's read-back record is held to the commitment's. -/
+def digestIs (j : Json) (digest : ByteArray) : V Unit := do
+  let d ← Registration.digest j
+  if d = digest then pure () else throw RECORD_DIGEST
+
+def INTERIOR_DIGEST : String :=
+  "the interior registration's record, as the evidence carries it or as the verifier's parser reads it, does not " ++
+    "have the interior commitment's digest: the second stage's challenges are drawn after the commitment's digest, " ++
+    "the check reads the first session after the evidence's record's and the run of record reads the second stage's " ++
+    "challenges after the read-back record's"
+
+/-- **The interior's records have the interior commitment's digest** (check, 4; `INTERIOR_DIGEST`): the evidence's
+interior record (`record`), which `interiorUnshown` reads the digest of, and its read-back (`j`), which the run of
+record reads it of, are each held to the digest of the interior commitment (`digest`), which the second stage's
+challenges are sampled after. -/
+def interiorDigestIs (record j : Json) (digest : ByteArray) : V Unit := do
+  let d ← Registration.digest record
+  let d' ← Registration.digest j
+  if d = digest ∧ d' = digest then pure () else throw INTERIOR_DIGEST
+
 /-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
 session accepting, and the run of record's input over the stamped verdicts, each registration's record as the
-verifier's parser reads it (`readBack`). -/
+verifier's parser reads it (`readBack`), the boundary's with the commitment's digest (`digestIs`) and the interior's,
+as given and as read back, with the interior commitment's (`interiorDigestIs`). -/
 def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (OneStage.Commitment × ByteArray × OneStageZk.Run × Spot.Run.Input) := do
   let c₂ ← OneStage.commitmentOf (← Flock.canon e.record).toUTF8
@@ -325,8 +558,11 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let vs ← stamped p e bs r.out
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
   let j₁ ← readBack c.record
+  digestIs j₁ c.digest
   let j₂ ← readBack e.record
-  pure (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs)
+  interiorDigestIs e.record j₂ c₂.digest
+  pure (c₂, ξ₂, r,
+    inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂, stmts := stmtsOwn p e bs } received₂ vs)
 
 def SOURCE_READ : String :=
   "the evidence's first-stage bytes run past what the first stage read: the run holds only the bytes it read to the " ++
@@ -444,6 +680,25 @@ def firstTreeless (p : Params) (e : Evidence) : V Unit :=
       if treeShown ls then .error FIRST_TREE else .ok ()
   | none => .ok ()
 
+/-- Whether the release log opens each of the coin trees `ts`' rounds stream by stream
+(`Challenger.repStreamOrder`); the refusal `Challenger.REP_STREAM_ORDER` where it does not open one's so. -/
+def treesOrdered (ts : Array Challenger.LoggedTree) : V Unit :=
+  if ts.all Challenger.repStreamOrder then .ok () else .error Challenger.REP_STREAM_ORDER
+
+/-- **The second stage's session's log opens each coin tree's rounds stream by stream** (check, 4): of each coin tree
+the interior audit reads from its session's signed release log (`OneStageZk.treesOf`, the trees `membersRun` holds
+the second stage's sessions to), the log opens the rounds in the order `Challenger.repStreamOrder` holds it to: the
+tree's last opening aside, each round is of a stream the tree's spec lists after the stream of the round opened
+before it, or a later round of that same stream (`Challenger.REP_STREAM_ORDER`). `membersRun` holds each round to be
+its stream's next, the trees to be opened one after another and each tree's last opening to be its session's closing
+round, and each session's verdict holds its tree's spec to list the session's link stream, then each table's rep
+streams, rep 0's before rep 1's; none of them holds a rep 1 round to be opened after rep 0's last. With this, the
+log opens each second-stage session's link points, then rep 0's rounds, then rep 1's, then its closing round: the
+order the session's messages are read in, so no round's challenges are opened before the message of an earlier
+round is fixed. An honest challenger opens them so. -/
+def repStreamsOrdered (p : Params) (e : Evidence) : V Unit :=
+  OneStageZk.treesOf p.audit.base e.interior.base >>= treesOrdered
+
 /-- **The second stage's sampling design** (check, 5), computed and never read: `Select.secondLaw` of the first stage's
 sample, the proved units of the sample the run of record `run` decided, over the cells the replay block's program has
 under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
@@ -459,7 +714,11 @@ def secondDesignOf (p : Params) (run : Json) : V Json := do
 def subsetDesign (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
 
 /-- `secondCheck` past the coins: R1–R8 at the verifier `v`, the sample held to the second stage's sampling design
-`design`, the record's checks, the verdicts, and the bound under `design` at δ `delta`, as `OneStage.check` has them. -/
+`design`, the record's checks, the verdicts, and the bound under `design` at δ `delta`, as `OneStage.check` has them but for the reads
+the record's checks are handed. Those checks are `Record.checks`, which the run of record calls for this record, the
+`draw` entry aside (the sample is held to `design` above), at the reads the run of record hands it under a two-stage rule:
+the verdicts' own for the registration's own values (`Record.ownRegistered`), less the reads of the registration's
+own ports at their own roots (`Record.lessOwnReads`). -/
 def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (design : Json)
     (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   let rec_ := c.record
@@ -467,7 +726,12 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
   let sampleCodes := Draw.checkDraw e.draw (getD rec_ "population") design
   if !sampleCodes.isEmpty then .reject s!"draw: {", ".intercalate sampleCodes.toList}" else
-  let failed := OneStage.recordChecks rec_ (Flock.hexOf c.digest) e
+  let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
+  let cs := Record.checks rec_ e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson)
+    (Lean.toJson e.instances) (Flock.hexOf c.digest) (e.served.map (·.map fun (n : Nat) => (n : Int)))
+    (e.sessionRoots.map entries)
+    (Record.lessOwnReads rec_ (Record.ownRegistered rec_ (Record.sessionRegistered e.verdicts)))
+  let failed := (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
   if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
   match OneStage.verdictOf e.verdicts with
   | .reject r => .reject r
@@ -499,11 +763,69 @@ def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.C
     | some why => .reject s!"draw: coins: {why}"
     | none => secondChecked { v with law := subsetDesign m } delta c m design e
 
+/-- The refusal of a second-stage session whose statement is `2^64` bytes or more (`stmtsBytesFit`). -/
+def STMT_BYTES (session : String) : String :=
+  s!"session {session}'s statement is 2^64 bytes or more, past the 8-byte word a list of statements holds each " ++
+    "statement's length in"
+
+/-- A bound on the bytes of a session's statement that are no file's or printed value's: its format and statement
+names, its flags and count, each optional field's tag, and the 8-byte length word of each field but a lookup table's. -/
+def STMT_HEAD : Nat := 256
+
+/-- The lookup tables' bytes in a session's statement: each table's name (in UTF-8) and bytes, each after its 8-byte
+length word. -/
+def tablesSize (tables : List (String × ByteArray)) : Nat :=
+  (tables.map fun t => 16 + t.1.utf8ByteSize + t.2.size).sum
+
+/-- **A bound on the bytes of a member's session statement** at its record's sample `draw` and lookup tables of
+`tables` bytes (`tablesSize`): `STMT_HEAD`, the circuit and public files, the tables, the program, and the
+partition object, the registered reads and the sample as `Flock.RecordText.printT` prints them
+(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.drawFitsWhy` hold each under
+`2^64`; this is their sum. -/
+def stmtSize (o : OneStageZk.Own) (circuit pub : ByteArray) (tables : Nat) (draw : Option Json) : Nat :=
+  STMT_HEAD + circuit.size + pub.size + tables + o.program.size + OneStageZk.printedSize o.partition +
+    (o.registered.map OneStageZk.printedSize).getD 0 + (draw.map OneStageZk.printedSize).getD 0
+
+/-- `stmtSize` of the session `s` of the statement `st` on the blobs: its member's (the member of the parameters
+the statement names), at the member's circuit and public files and the session's record's sample. None where the
+statement names no member of the parameters, or the blobs hold no such record, circuit or public file: the sessions'
+run refuses each (`inputAt`). -/
+def stmtSizeAt (p : Params) (bs : Core.Blobs) (tables : Nat) (st : OneStageZk.StatementFiles)
+    (s : OneStageZk.RunFiles) : Option Nat := do
+  let name ← st.member
+  let m ← p.members.find? (·.name == name)
+  let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
+  let circuit ← (bs.get m.own.circuit "circuit").toOption
+  let pub ← (bs.get m.own.pub "public file").toOption
+  pure (stmtSize m.own circuit pub tables (Flock.Witness.recordDraw record))
+
+/-- **A statement's bytes fit a word** (`STMT_BYTES`): the size `n`, where there is one, is under `limit`. -/
+def bytesFit (limit : Nat) (session : String) : Option Nat → V Unit
+  | some n => if limit ≤ n then .error (STMT_BYTES session) else .ok ()
+  | none => .ok ()
+
+#guard (bytesFit 300 "s" (some 299)).toOption.isSome
+#guard (bytesFit 300 "s" (some 300)).toOption.isNone
+#guard (bytesFit 300 "s" none).toOption.isSome
+#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", "", none⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
+#guard stmtSize ⟨.null, .empty, .null, "", "", some (.str "ab")⟩ .empty .empty 0 (some .null) ==
+  STMT_HEAD + 4 + 4 + 4
+#guard tablesSize [("ab", ⟨#[1, 2, 3]⟩), ("", .empty)] == 16 + 2 + 3 + 16
+
+/-- **Every second-stage session's statement fits a word** (check, 0): each statement's sessions, in the statements'
+order, their statements' bytes under `2^64` (`bytesFit` of `stmtSizeAt`, at `OneStageZk.WORD`). A list of
+the sessions' statements holds each after its length in an 8-byte word, as a statement holds each of its fields. -/
+def stmtsBytesFit (p : Params) (e : Evidence) (bs : Core.Blobs) : V Unit :=
+  let tables := tablesSize (OneStageZk.tablesOf bs)
+  (e.statements.toList.flatMap fun st => st.sessions.toList.map fun s => (st, s)).forM fun (st, s) =>
+    bytesFit OneStageZk.WORD s.name (stmtSizeAt p bs tables st s)
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
 `ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger, the
-first session's log holding no coin tree's line. -/
-def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+first session's log holding no coin tree's line, the second session's log opening each coin tree's rounds stream by
+stream. -/
+def prepareRun (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
   stagesFit ξ ξ₂
@@ -512,8 +834,59 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   interiorUnshown p e
   stagesOrdered p e
   firstTreeless p e
+  repStreamsOrdered p e
   let design ← secondDesignOf p run
   pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ design ξ₂ { e.interior.base with verdicts := r.out }, run)
+
+/-- Check steps 0 to 5: the sessions' statements' bytes (`stmtsBytesFit`), that each statement is its session's and
+the counts agree (`stmtsSessions`), then `prepareRun`. -/
+def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    V (Core.Outcome OneStage.Public Core.Integrity × Json) :=
+  match stmtsBytesFit p e bs with
+  | .error err => .error err
+  | .ok () =>
+    match stmtsSessions p e bs with
+    | .error err => .error err
+    | .ok () => prepareRun form p c ξ e bs
+
+theorem bytesFit_ok {limit : Nat} {session : String} {n : Nat}
+    (h : bytesFit limit session (some n) = .ok ()) : n < limit := by
+  by_cases hn : limit ≤ n
+  · simp [bytesFit, hn] at h
+  · exact Nat.lt_of_not_le hn
+
+/-- **Where every session's statement fits, each session's statement's size is under `2^64`.** -/
+theorem stmtsBytesFit_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmtsBytesFit p e bs = .ok ())
+    {st : OneStageZk.StatementFiles} {s : OneStageZk.RunFiles} {n : Nat}
+    (hm : (st, s) ∈ e.statements.toList.flatMap fun st => st.sessions.toList.map fun s => (st, s))
+    (hn : stmtSizeAt p bs (tablesSize (OneStageZk.tablesOf bs)) st s = some n) : n < 2 ^ 64 := by
+  have h' := Flock.RecCompose.forM_ok h (st, s) hm
+  dsimp only at h'
+  rw [hn] at h'
+  exact bytesFit_ok h'
+
+/-- **Steps 0 to 5 return only where `prepareRun` returns the same and every session's statement fits.** -/
+theorem prepare_ok {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
+    (h : prepare form p c ξ e bs = .ok r) : prepareRun form p c ξ e bs = .ok r ∧ stmtsBytesFit p e bs = .ok () := by
+  unfold prepare at h
+  split at h
+  · cases h
+  · next hw =>
+    split at h
+    · cases h
+    · exact ⟨h, hw⟩
+
+/-- **Steps 0 to 5 return only where each statement is its session's and the counts agree** (`stmtsSessions`). -/
+theorem prepare_sessions {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
+    (h : prepare form p c ξ e bs = .ok r) : stmtsSessions p e bs = .ok () := by
+  unfold prepare at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · next hw _ => exact hw
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/
@@ -634,6 +1007,19 @@ def protocol : Core.BlobProtocol where
 #guard treeShown ["{\"event\":\"tree-open\"}"]
 #guard !treeShown ["{\"event\":\"root\"}", "{\"event\":\"release\"}", "coin-tree"]
 #guard !treeShown []
+private def orderT (opened : Array Challenger.TreeOpening) : Challenger.LoggedTree :=
+  { key := "", nonce := "", root := "", opened,
+    spec := Json.mkObj [("streams", Json.arr #["session", "circuit/rep0", "circuit/rep1"])] }
+#guard (treesOrdered #[]).toOption.isSome
+#guard (treesOrdered #[orderT #[⟨"session", 0, 2, "", ""⟩, ⟨"circuit/rep0", 0, 1, "", ""⟩,
+  ⟨"circuit/rep0", 1, 1, "", ""⟩, ⟨"circuit/rep1", 0, 1, "", ""⟩, ⟨"circuit/rep1", 1, 1, "", ""⟩,
+  ⟨"session", 1, 0, "", ""⟩]]).toOption.isSome
+/-! A rep 1 challenge opened before rep 0's last message is fixed, on the second of two trees. -/
+#guard match treesOrdered #[orderT #[⟨"session", 0, 2, "", ""⟩, ⟨"session", 1, 0, "", ""⟩],
+    orderT #[⟨"session", 0, 2, "", ""⟩, ⟨"circuit/rep0", 0, 1, "", ""⟩, ⟨"circuit/rep1", 0, 1, "", ""⟩,
+      ⟨"circuit/rep0", 1, 1, "", ""⟩, ⟨"circuit/rep1", 1, 1, "", ""⟩, ⟨"session", 1, 0, "", ""⟩]] with
+  | .error why => why == Challenger.REP_STREAM_ORDER
+  | .ok _ => false
 #guard (readBack (Json.mkObj [("b", Json.arr #[Json.str "x"]), ("a", Json.null)])).toOption ==
   some (Json.mkObj [("a", Json.null), ("b", Json.arr #[Json.str "x"])])
 #guard (readBack (Json.num ⟨1, 1⟩)).toOption.isNone
@@ -641,6 +1027,32 @@ def protocol : Core.BlobProtocol where
 #guard match readBack (Json.obj ⟨⟨.inner 2 "a" (Json.num 1) (.inner 1 "a" (Json.num 2) .leaf .leaf) .leaf⟩⟩) with
   | .error why => why == RECORD_READ
   | .ok _ => false
+#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+  | .ok d => (digestIs (Json.mkObj [("a", Json.null)]) d).toOption.isSome
+  | .error _ => false
+#guard match digestIs (Json.mkObj [("a", Json.null)]) ByteArray.empty with
+  | .error why => why == RECORD_DIGEST
+  | .ok _ => false
+#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+  | .ok d => (interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) d).toOption.isSome
+  | .error _ => false
+#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+  | .ok d => match interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.num 1)]) d with
+    | .error why => why == INTERIOR_DIGEST
+    | .ok _ => false
+  | .error _ => false
+#guard match interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) ByteArray.empty with
+  | .error why => why == INTERIOR_DIGEST
+  | .ok _ => false
+-- the record's checks at the reads the last step hands them: a read of one of the record's own ports at that port's
+-- own root is left out, and at another root it stays among the reads opened, where `registered` fails
+#guard
+  let rec_ := Json.mkObj [("roots", Json.arr #[Json.mkObj [("port", "t/p"), ("root", "aa")]])]
+  let failedAt := fun (root : String) =>
+    ((Record.checks rec_ Json.null Json.null Json.null #[] #[] Json.null "" none none
+      (Record.lessOwnReads rec_ (Record.ownRegistered rec_ (some #[("t/p", Json.str root)])))).filter
+        fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
+  !(failedAt "aa").contains "registered" && (failedAt "bb").contains "registered"
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
 #guard !interiorShown [("interior", [ByteArray.mk #[1]])] "interior" (ByteArray.mk #[7])

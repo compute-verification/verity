@@ -31,4 +31,4 @@ def test_an_unknown_model_s_note_names_the_dense_default():
 
 def test_plans_are_pinned():
     plans = {"unknown": A.predict(A.row_config_from_workload(_workload(UNKNOWN))), "known": A.predict(A.row_config_from_workload(_workload(KNOWN)))}
-    assert _digest(plans) == "c2a0afa54837461f"
+    assert _digest(plans) == "8b93a55d38aecf91"

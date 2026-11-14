@@ -18,7 +18,13 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinit
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+)
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -250,6 +256,32 @@ def test_registration_refusals():
     ports = _ports(prog, q, P.units(prog, q))
     codes = {_check({**rec, **both}, prog, q, ports=dict(order)).codes for order in (ports.items(), reversed(ports.items()))}
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
+
+
+def test_a_wired_port_has_the_root_of_the_port_that_holds_it():
+    """A port the layout wires to another's tree (`"wired"`) is registered at that port's root: R3 refuses a record
+    whose roots under the two names differ, whichever was changed, one with no root under either name, and a root that
+    is not a string (`R3-wired`), reads the last root of a name as it does elsewhere, and reads none of it where the
+    roots are not well formed."""
+    prog, q, rec = _registration(6)
+    ports = _ports(prog, q, P.units(prog, q))
+    ports = {**ports, "in": {**ports["x"], "wired": "x"}}
+    x = next(r for r in rec["roots"] if r["port"] == "x")
+    named = {**x, "port": "in"}
+
+    def codes(roots, **wired):
+        return _check({**rec, "roots": roots}, prog, q, ports={**ports, "in": {**ports["in"], **wired}}).codes
+
+    honest = [*rec["roots"], named]
+    assert codes(honest) == () and codes(honest, wired="in") == ()
+    assert codes([*rec["roots"], {**named, "root": "ef" * 64}]) == ("R3-wired",)
+    assert codes([{**r, "root": "ef" * 64} if r is x else r for r in rec["roots"]] + [named]) == ("R3-wired",)
+    assert codes(honest, wired="nowhere") == ("R3-wired",)
+    assert codes(rec["roots"]) == ("R3-ports", "R3-wired")
+    assert codes([*rec["roots"], {**named, "root": 5}]) == ("R3-root", "R3-wired")
+    assert codes([{**named, "root": "ef" * 64}, *honest]) == ("R3-ports",)
+    assert codes([{k: v for k, v in honest[0].items() if k != "domain"}, *honest[1:]]) == ("R3-roots",)
+    assert _check(rec, prog, q).ok
 
 
 def test_the_window_runs_its_days_declared_circuit():

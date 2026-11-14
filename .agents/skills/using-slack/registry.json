@@ -500,6 +500,7 @@
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "demos/onsite_served/",
+        "demos/configurations.toml",
         "adapters/vllm/verity_vllm/protocols/pous.py",
         "verity/protocols/accounting/pous/device/",
         "verity/protocols/accounting/pous/",
@@ -934,6 +935,7 @@
       "linear": "HASH",
       "owns": [
         "benchmarks/hash/",
+        "benchmarks/kernels/",
         "benchmarks/moe_align/",
         "benchmarks/torch_gpu/"
       ],

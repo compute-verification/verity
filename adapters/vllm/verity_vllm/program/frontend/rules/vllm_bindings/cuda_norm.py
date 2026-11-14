@@ -70,7 +70,7 @@ class CudaRmsNormRule(InPlaceRule):
         if not isinstance(ctx.val(out), (Alloc, Coll)):
             return "out is not an allocation/value"
         if shape(ctx, w) != (known(shape(ctx, x))[-1],):
-            return f"weight {shape(ctx, w)} vs hidden {shape(ctx, x)[-1]}"
+            return f"weight {shape(ctx, w)} vs hidden {known(shape(ctx, x))[-1]}"
         if shape(ctx, out) != shape(ctx, x):
             return "out shape differs from x"
         if not isinstance(eps, float):

@@ -31,7 +31,7 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVIC
 
 # the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
-import clear_work as CW  # noqa: E402
+import clear_work as CW
 
 SM120_ATOM = BLACKWELL_SM120_E4M3_M16N8K32
 
@@ -179,8 +179,9 @@ def test_the_cap_is_the_records(monkeypatch):
     tile_credit = 16 * 16 * CW.cell_credit(sm, records[0])
     atoms = int(Fraction(1, 1000) * tile_credit / D.atom_units(SM120)) + 1
     assert Fraction(1, 1000) * tile_credit < atoms * D.atom_units(SM120) <= Fraction(1, 400) * tile_credit
-    monkeypatch.setattr(D, "tile_debit", lambda a, b, formed, device=None: (atoms, 0, 0))
-    assert CW.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16, [None] * 16) == (atoms * 34, Fraction(1, 1000) * tile_credit)
+    monkeypatch.setattr(D, "tile_debit", lambda a, b, formed, formed_b, device=None: (atoms, 0, 0, 0))
+    assert CW.tile_cap(sm, records[0], [[0] * k] * 16, [[0] * k] * 16, [None] * 16, [None] * 16) == (
+        atoms * 34, Fraction(1, 1000) * tile_credit)
     out = CW.audit(sm, epoch, prover, tr, splits, records, E.challenger(), 2)
     assert not out.audit.accepted and all("exceeds the cap" in v.reason for v in out.audit.verdicts if not v.ok)
     assert CW.audit(at400, epoch, prover, tr, splits, records, E.challenger(), 2).audit.accepted

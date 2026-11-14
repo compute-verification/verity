@@ -25,7 +25,7 @@ GPU = ["/pod/py311", "-m", cli.__name__]
 CPU = ["/pod/py312", "-m", cli.__name__]
 CPU_STAGES = ["resolve", "census_reconcile", "nonint_compare", "compare", "fold", "fold_2", "root_policy", "golden", "wiring", "replay_a",
               "replay_chain", "gates"]
-NO_COMMAND = ("root_policy", "wiring", "replay_a", "replay_chain", "gates")
+NO_COMMAND = ("census", "nonint", "census_reconcile", "nonint_compare", "golden", "root_policy", "wiring", "replay_a", "replay_chain", "gates")
 
 
 def _workload(tmp_path, **engine):
@@ -47,21 +47,14 @@ def test_each_stage_s_command_is_its_python_the_door_one_of_its_commands_and_the
     commands = {
         "capture": [*GPU, "m1-capture", *served, "--out", f"{RUN}/capture", "--snapshot-steps", "0,1,2", "--verify-weights"],
         "control": [*GPU, "m1-capture", *served, "--out", f"{RUN}/control", "--no-observer"],
-        "census": [*GPU, "census", *served, "--out", f"{RUN}/census", "--no-traces"],
-        "nonint": [*GPU, "noninterference", *served, "--out", f"{RUN}/nonint", "--python", GPU[0], "--accepted-ctl", f"{RUN}/control/tokens.json"],
         "resolve": [*CPU, "resolve-log", LOG, "--profile", "prof", "--out", f"{RUN}/resolution", "--quiet"],
-        "census_reconcile": [*CPU, "census", "--reconcile", f"{RUN}/census/census.json", "--log", LOG, "--profile", "prof",
-                             "--report", f"{RUN}/census_reconcile"],
-        "nonint_compare": [*CPU, "noninterference", "--compare", "--out", f"{RUN}/nonint", "--workload", wl, "--case", "B1",
-                           "--accepted-ctl", f"{RUN}/control/tokens.json"],
         "compare": [*CPU, "fold-compare", "--log", LOG, "--snapshots", f"{RUN}/capture", "--profile", "prof", "--out", f"{RUN}/compare.json"],
         "fold": [*fold, f"{RUN}/fold_summary.json", "--persist-dir", RUN],
         "fold_2": [*fold, f"{RUN}/fold_summary_2.json"],
-        "golden": [*CPU, "golden", "--check", "--out", f"{RUN}/golden.json"],
     }
     assert RC.DEFAULT_CHECKPOINTS == "manifests/checkpoints.json" and set(commands) == {*RC.GPU_STAGES, *CPU_STAGES} - set(NO_COMMAND)
     assert {st: plan.cmd(st) for st in commands} == commands
-    assert [plan.cmd(st) for st in (*NO_COMMAND, "fold_other", "no-such-stage")] == [None] * 7      # no second capture: no fold of one
+    assert [plan.cmd(st) for st in (*NO_COMMAND, "fold_other", "no-such-stage")] == [None] * 12     # no second capture: no fold of one
     for cmd in commands.values():                                               # the door parses each as it is written
         assert cmd[3] in cli.COMMANDS and cli.parse(cmd[3], cmd[4:], {}) is not None
 
@@ -80,10 +73,7 @@ def test_a_run_s_options_reach_the_stages_that_read_them(tmp_path, monkeypatch):
     assert plan.cmd("capture") == [*GPU, "m1-capture", *served, "--out", f"{RUN}/capture", "--snapshot-steps", "0,1,2,3,4,5",
                                    "--snapshot-max-bytes", "777", "--snapshot-max-bytes-op", "55"]
     assert plan.cmd("control") == [*GPU, "m1-capture", *served, "--out", f"{RUN}/control", "--no-observer"]
-    assert plan.cmd("census") == [*GPU, "census", *served, "--out", f"{RUN}/census"]
-    assert plan.cmd("nonint") == [*GPU, "noninterference", *served, "--out", f"{RUN}/nonint", "--python", GPU[0], "--accepted-ctl", str(ctl)]
-    assert plan.cmd("nonint_compare")[-2:] == ["--accepted-ctl", str(ctl)]
-    assert plan.cmd("resolve")[:5] == [*CPU, "resolve-log", str(log)] and plan.cmd("census_reconcile")[6:8] == ["--log", str(log)]
+    assert plan.cmd("resolve")[:5] == [*CPU, "resolve-log", str(log)] and plan.artifacts_override()["control_tokens"] == str(ctl)
     assert plan.cmd("compare") == [*CPU, "fold-compare", "--log", str(log), "--snapshots", str(log.parent), "--profile", "prof",
                                    "--out", f"{RUN}/compare.json", "--safetensors", "/ck/snap/model*.safetensors"]
     fold, declared = [*CPU, "match", "--worker", "fold", "--log", str(log), "--profile", "prof", "--out"], ["--moe-construction", "padded"]
@@ -165,12 +155,12 @@ def test_a_dry_run_prints_each_stage_s_line_in_the_phase_s_order_and_writes_noth
     def line(stage):
         return f"[{stage}] {shlex.join(plan.cmd(stage))}"
 
-    cpu = [line("resolve"), line("census_reconcile"), "[nonint_compare] SKIP (--skip)", line("compare"), line("fold"), line("fold_2"),
+    cpu = [line("resolve"), "[nonint_compare] SKIP (--skip)", line("compare"), line("fold"), line("fold_2"),
            line("fold_other"), "[golden] SKIP (--skip)", "[wiring] SKIP (--skip)",
            f"[gates] in-process: gates.evaluate_gates({run}) -> {run}/gates.json; card -> {run}/card.json, {run}/CARD.md, cards/cid.json"]
     assert capsys.readouterr().out.splitlines() == [
         f"# run_config --dry-run  RUN_DIR={run}  phase=all  snapshot_steps=[0, 1, 2, 3]  laptop=False",
-        line("capture"), line("control"), line("census"), "[nonint] SKIP (--skip)", *cpu,
+        line("capture"), line("control"), "[nonint] SKIP (--skip)", *cpu,
         f"[gpu_done] write {run}/gpu_done.json with per-stage timings"]
     # the capture's line carries the limit of one tensor's snapshot that the driver derived (with no checkpoint to read, the least
     # one, 32 MiB), and a word a shell would split or unquote is quoted
@@ -182,7 +172,7 @@ def test_a_dry_run_prints_each_stage_s_line_in_the_phase_s_order_and_writes_noth
     assert RC.main(_options(wl, *given, "--phase", "gpu", out=str(run))) == 0
     assert capsys.readouterr().out.splitlines() == [
         f"# run_config --dry-run  RUN_DIR={run}  phase=gpu  snapshot_steps=[0, 1, 2, 3]  laptop=False",
-        line("capture"), line("control"), line("census"), "[nonint] SKIP (--skip)", f"[gpu_done] write {run}/gpu_done.json with per-stage timings"]
+        line("capture"), line("control"), "[nonint] SKIP (--skip)", f"[gpu_done] write {run}/gpu_done.json with per-stage timings"]
     assert not run.exists()
 
 
@@ -237,7 +227,7 @@ def test_each_stage_runs_its_command_under_the_limits_given_a_laptop_s_when_none
     a = _options(_workload(tmp_path), "--phase", "gpu", *given, out=str(run))
     assert RC.main(a) == 0
     plan = RC.Plan(a)
-    assert events == ["lease", *((st, plan.cmd(st), run / "logs" / f"{st}.log", *limits) for st in RC.GPU_STAGES)]
+    assert events == ["lease", *((st, plan.cmd(st), run / "logs" / f"{st}.log", *limits) for st in ("capture", "control"))]
     assert (RC.LAPTOP_MAX_RSS_GB, RC.LAPTOP_STAGE_TIMEOUT_S) == (1.5, 180.0)
 
 
@@ -246,18 +236,18 @@ def test_a_whole_run_takes_the_lease_times_the_gpu_s_stages_alone_and_records_a_
     _stages_stood_in(monkeypatch, events)
     run = tmp_path / "run"
     assert RC.main(_options(_workload(tmp_path), "--skip", "census,golden,replay_a", out=str(run))) == 0
-    ran = ["capture", "control", "nonint", "resolve", "nonint_compare", "compare", "fold", "fold_2", "gates"]      # `census` names two stages
+    ran = ["capture", "control", "resolve", "compare", "fold", "fold_2", "gates"]      # `census` names two stages
     assert [e if isinstance(e, str) else e[0] for e in events] == ["lease", *ran]
     stages = json.loads((run / "stages.json").read_text())["stages"]
     assert [(s["stage"], s["status"]) for s in stages] == [
-        ("capture", "ok"), ("control", "ok"), ("census", "skipped"), ("nonint", "ok"), ("resolve", "ok"), ("census_reconcile", "skipped"),
-        ("nonint_compare", "ok"), ("compare", "ok"), ("fold", "ok"), ("fold_2", "ok"), ("golden", "skipped"), ("replay_a", "skipped"), ("gates", "ok")]
+        ("capture", "ok"), ("control", "ok"), ("census", "skipped"), ("resolve", "ok"), ("census_reconcile", "skipped"),
+        ("compare", "ok"), ("fold", "ok"), ("fold_2", "ok"), ("golden", "skipped"), ("replay_a", "skipped"), ("gates", "ok")]
     assert [s for s in stages if s["status"] == "skipped"] == [
         {"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"}
         for st in ("census", "census_reconcile", "golden", "replay_a")]
     done = json.loads((run / "gpu_done.json").read_text())
     assert done["stages"] == {"capture": {"status": "ok", "seconds": 0.25}, "control": {"status": "ok", "seconds": 0.25},
-                              "census": {"status": "skipped", "seconds": 0.0}, "nonint": {"status": "ok", "seconds": 0.25}}
+                              "census": {"status": "skipped", "seconds": 0.0}}
 
 
 def test_a_stage_name_without_a_command_leaves_no_record_and_a_gates_stage_that_raises_is_a_failed_stage(tmp_path, monkeypatch):
