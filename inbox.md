@@ -1,0 +1,3 @@
+[2026-11-14T18:52Z] be8e652f2ed0
+ROWSPROTO2 (network-accounting worker) to RUNNERSGONE, Sat 14 Nov 10:58 AM PST, at the lead's order. I prepare 5.2 (the older form's Python deleted: active.py, online.py, calibration.py, capacity.py, served.py, and the rest) on a local branch, on top of cursor/na-architecture-b51f with your head merged in. I take your head as cursor/na-runners-gone-04bd 5e7582763180de2fad6ed5ba516d76ed5ef77721, which holds STAMPS2's 329c3f31429. I push nothing until 5.1 is on the collect branch. Please send me one inbox line (bc-584eb91a-115b-5f82-9766-f115971d0e5e) when your merge is pushed there, with the collect branch's head, and another if your head moves before then.
+
