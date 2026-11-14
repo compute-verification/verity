@@ -1,5 +1,6 @@
 import json
 import tomllib
+from pathlib import Path
 
 import pytest
 from conftest import calculators_count
@@ -110,6 +111,46 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
     for fleet in fleets:
         assert f"as a share of {fleet['over']}'s compute over each period" in out
     assert all(f"{part}: " in out for part in got["parts"])
+
+
+def test_a_run_of_every_entry_writes_its_least_slowdown_under_the_metrics_id(tmp_path, monkeypatch, capsys):
+    """A run of every entry at the registered starts writes the least slowdown of the entries that have one into the
+    run's result, under the id `metrics.toml` declares: partial while the coded entry has none, measured once every
+    entry has one. A run of named entries, or at other starts, is not the library's and writes none."""
+    from verity_bench import kit
+
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"commit": None})
+    attacks = tmp_path / "attacks"
+    adapted = write_config(attacks / "adapted.toml", route="lora", dials={"rank": 2, "lr": 1e-2})
+    write_config(attacks / "coded.toml", dials={"trainable": "blocks.0.w_*", "store": "q8"})
+    monkeypatch.setattr(library, "ENTRIES", attacks)
+    monkeypatch.setattr(starts, "REGISTRY", tiny_registry(tmp_path / "reg"))
+    # each entry traced once over the four runs: what is written turns on the arguments and the rows' slowdowns
+    rows, trace = {}, library.row
+
+    def once(cfg):
+        if cfg.path.name not in rows:
+            rows[cfg.path.name] = trace(cfg)
+        return rows[cfg.path.name]
+
+    monkeypatch.setattr(library, "row", once)
+    (row,) = tomllib.loads((Path(library.__file__).parents[1] / "metrics.toml").read_text())["metric"]
+    assert library.main(["--out", str(tmp_path / "every")]) == 0
+    a, b = json.loads((tmp_path / "every" / "library.json").read_text())["rows"]
+    (m,) = json.loads((tmp_path / "every" / "result.json").read_text())["measurements"]
+    assert row["id"] == library.METRIC and a["slowdown"] is not None and b["slowdown"] is None
+    assert (m["name"], m["value"], m["unit"], m["mark"]) == (row["id"], a["slowdown"], row["unit"], "partial")
+    assert library.main([str(adapted), "--out", str(tmp_path / "named")]) == 0
+    assert library.main(["--starts", str(tiny_registry(tmp_path / "other")), "--out", str(tmp_path / "other")]) == 0
+    for part in ("named", "other"):
+        assert (tmp_path / part / "library.json").is_file() and not (tmp_path / part / "result.json").exists()
+    (attacks / "coded.toml").unlink()
+    assert library.main(["--out", str(tmp_path / "priced")]) == 0
+    (m,) = json.loads((tmp_path / "priced" / "result.json").read_text())["measurements"]
+    assert (m["name"], m["value"], m["mark"]) == (row["id"], a["slowdown"], "measured")
+    capsys.readouterr()
 
 
 def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture_approximates(tmp_path):
