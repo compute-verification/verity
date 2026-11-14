@@ -477,7 +477,7 @@ EOF
 import json, subprocess, sys
 from pathlib import Path
 from verity import device as S
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 from verity_vllm.pipeline import serve_day as SD
 prof, d, settings, out = json.load(open(sys.argv[1])), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
 day, params = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n%s\\n" "$DAY" "$DAY_PARAMS"', settings],
