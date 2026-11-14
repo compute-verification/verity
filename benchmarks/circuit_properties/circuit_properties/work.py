@@ -96,8 +96,9 @@ valued word by word, as `Reader(structure=False)` values every one, to the same 
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
-The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens, so it shows a
-specific operand's rows are not equal by an identity of the circuit (the attention's output plus -1 times itself is 0
+The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens wherever a batch
+holds no more positions than the least table has rows, so it shows a specific operand's rows are not equal by an
+identity of the circuit (the attention's output plus -1 times itself is 0
 for every input). That the served data meets `P_BATCH` stays the premise it is today, and with it that a specific
 operand's rows the second draw shows differing are not equal only at values a submitter found by trying circuits
 against its public seed.
@@ -226,30 +227,39 @@ STATED = THETA._replace(stated=True, distinct=False)
 
 
 class RepeatedRows(ValueError):
-    """A charged operand whose rows the reading shows distinct holds two equal rows at the point (`points.check`),
-    reads values a scan the point doesn't run whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n,
-    rows) of its rows there, which leaves them uncompared."""
+    """A charged operand whose rows the reading shows distinct, or specific alone (``by_words``: tested at the
+    word-by-word point), holds two equal rows at the point (`points.check`), reads values a scan the point doesn't run
+    whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n, rows) of its rows there, which leaves them
+    uncompared. ``member`` is the activation that holds them, or the two whose rows are equal."""
 
     def __init__(self, definition: str, node: int, operand: str, rows: tuple[int, int] | None,
-                 member: int | None = None, scan=None, nan: tuple[int, int] | None = None) -> None:
-        self.definition, self.node, self.operand, self.rows, self.member, self.scan, self.nan = \
-            definition, node, operand, rows, member, scan, nan
+                 member: int | tuple[int, int] | None = None, scan=None, nan: tuple[int, int] | None = None,
+                 by_words: bool = False) -> None:
+        self.definition, self.node, self.operand, self.rows, self.member, self.scan, self.nan, self.by_words = \
+            definition, node, operand, rows, member, scan, nan, by_words
+        point = "the word-by-word point" if by_words else "the point"
+        at = ("" if member is None else f" in member {member}" if isinstance(member, int)
+              else f" of members {member[0]} and {member[1]}")
         if scan is not None:
-            what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which the point runs {scan.ran} of its "
+            what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which {point} runs {scan.ran} of its "
                     f"{scan.n} iterations; fix: carry the weight through the outer scan rather than out of a scan "
                     "whose contexts repeat")
         elif nan is not None:
-            what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at the point"
-                    + (f" in member {member}" if member is not None else "")
-                    + ", which leaves them uncompared; fix: keep its values finite at the point, whose weights and "
-                    "registered values take every sign and whose inputs are positive: square a weight or a registered "
-                    "value before a square root or a logarithm reads it, or carry it in as an input")
+            what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at {point}{at}, which leaves them uncompared; fix: "
+                    "keep its values finite at the point, whose weights and registered values take every sign and "
+                    "whose inputs are positive: square a weight or a registered value before a square root or a "
+                    "logarithm reads it, or carry it in as an input")
+        elif by_words:
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at {point}{at}, whose positions hold different "
+                    "tokens; fix: compute it so that its rows follow its positions' tokens (an identity such as O1 "
+                    "plus -1 times O1 is equal for every input), or let it read the inputs as gathered, which leaves "
+                    "its product out")
         else:
-            what = (f"holds rows {rows[0]} and {rows[1]} equal at the point"
-                    + (f" in member {member}" if member is not None else "")
-                    + "; fix: compute it from a weight one to one (a shift, a rounding, a multiply by a word no input "
-                    "reaches) or let it read the inputs, which leaves its product out as gathered")
-        super().__init__(f"{definition} node {node}: operand {operand!r}, whose rows the reading shows distinct, {what}")
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at {point}{at}; fix: compute it from a weight one to "
+                    "one (a shift, a rounding, a multiply by a word no input reaches) or let it read the inputs, "
+                    "which leaves its product out as gathered")
+        shows = "specific" if by_words else "distinct"
+        super().__init__(f"{definition} node {node}: operand {operand!r}, whose rows the reading shows {shows}, {what}")
 
 
 def unknown(st: Status) -> bool:

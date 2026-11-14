@@ -42,6 +42,7 @@ F32, I32 = P.F32, P.I32
 W_T, X_T, Y_T = Array(N, Array(K, F32)), Array(K, F32), Array(N, F32)
 TABLE_T = Array(V, Array(K, F32))
 LIN = bind(RP.LinearRef, K=K, N=N, DT="f32", BIAS=False)
+LIN16 = bind(RP.LinearRef, K=K, N=N, DT="bf16", BIAS=False)
 DOT = bind(RP.DotRef, K=K)
 EMB = bind(RP.EmbeddingRef, V=V, H=K, DT="f32")
 #: a ternary code's row: one bit a value in each of two plane words
@@ -693,10 +694,10 @@ def test_rows_of_one_value_that_are_inf_at_the_point_are_refused_as_equal():
     assert (e.value.definition, e.value.operand, e.value.rows) == ("SelfCancelInfStep_v1", "x", (0, 1))
 
 
-def _zero_signs(signs: bool) -> Program:
+def _zero_signs(signs: bool, width: int = 32) -> Program:
     """W plus -1 times W, 0 in every word, times a stated S, ±1: with ``signs`` S is -1 at one word of each row past
     the first, another word a row, so the rows are zeros whose signs differ; else S is 1 everywhere. W′ = W plus z;
-    u W′′^T, W′′ the product."""
+    u W′′^T, W′′ the product, at ``width`` 16 both rounded to bf16 and the product a bf16 `LinearRef`."""
     one, neg = 0x3F800000, 0xBF800000
 
     def step(B, c, z):
@@ -705,19 +706,25 @@ def _zero_signs(signs: bool) -> Program:
         s = concat([B.call(const(32, neg if signs and i >= 1 and j == i - 1 else one)).refs
                     for i in range(N) for j in range(K)])
         flat = Array(N * K, F32)
-        wp = B.batch(P.F32Mul, Coll(flat, zero.refs), Coll(flat, s), axes=(0, 0)).reshape(W_T)
-        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, wp)
+        wp = B.batch(P.F32Mul, Coll(flat, zero.refs), Coll(flat, s), axes=(0, 0))
+        new = (_add(B, w, z), _add(B, u, z))
+        if width == 32:
+            return new, B.call(LIN, u, wp.reshape(W_T))
+        w16 = B.batch(P.F32ToBf16Rn, wp, axes=(0,)).reshape(Array(N, Array(K, P.BF16)))
+        u16 = B.batch(P.F32ToBf16Rn, u, axes=(0,)).reshape(Array(K, P.BF16))
+        return new, B.call(LIN16, u16, w16)
 
-    return _loop("ZeroSigns" if signs else "ZeroOnes", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+    name = ("ZeroSigns" if signs else "ZeroOnes") + ("" if width == 32 else str(width))
+    return _loop(name, (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T if width == 32 else Array(N, P.BF16), step)
 
 
-@pytest.mark.parametrize("signs", [True, False], ids=["signs", "ones"])
-def test_rows_of_zeros_whose_signs_differ_are_refused_as_equal(signs):
+@pytest.mark.parametrize("signs,width", [(True, 32), (False, 32), (True, 16)], ids=["signs", "ones", "bf16"])
+def test_rows_of_zeros_whose_signs_differ_are_refused_as_equal(signs, width):
     """W plus -1 times W times a stated ±1 is 0 in every word, whatever W, which the reading's rules take as distinct
-    rows: compared as words with the two zeros one word, rows 0 and 1 are equal, the signs as S states them or not,
-    and the Program is refused."""
+    rows: compared as words with the two zeros one word at every width, rows 0 and 1 are equal, the signs as S states
+    them or not, at f32 and rounded to bf16, and the Program is refused. Without the point u W′′^T is charged."""
     with pytest.raises(WK.RepeatedRows) as e:
-        WK.read(_zero_signs(signs), KB)
+        WK.read(_zero_signs(signs, width), KB)
     assert (e.value.operand, e.value.rows) == ("w", (0, 1))
 
 
@@ -1226,6 +1233,74 @@ def test_specific_rows_cancelled_against_themselves_are_refused_at_the_word_by_w
     assert g.weight == (True, False) and w.N == (T - 1) * K * PN
 
 
+def test_the_word_by_word_points_refusal_says_specific_and_names_that_point():
+    """A specific-alone operand's refusal says the reading shows its rows specific, names the word-by-word point and
+    gives a fix about its positions, not a weight's."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_alone("cancel"), KB)
+    assert e.value.by_words and "shows specific" in str(e.value) and "at the word-by-word point" in str(e.value)
+    assert "from a weight one to one" not in str(e.value)
+
+
+def _specific_members() -> Program:
+    """`_attention_loop`'s O1 cancelled against itself, Q = O1 plus -1 times O1, 0 for every input and specific alone,
+    one row a member of a composite batched over the positions, each Q's row times a carried W the members share."""
+    neg = const(32, 0xBF800000)
+    per = _def("PerRow", ((("q", X_T), ("w", W_T)), Y_T), lambda B, S, q, w: B.call(LIN, q, w))
+
+    def step(B, c, tok, z, zn):
+        table, w1, v1, w = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
+        q = _add(B, o1, _mul(B, o1, B.call(neg)))
+        y = Coll(Array(PN * N, F32), B.batch(bind(per), q, w, axes=(0, None)).refs)
+        return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, w, z)), y
+
+    carry = (("table", TABLE_T), ("w1", Array(D, X_T)), ("v1", V_T), ("w", W_T))
+    return _loop("SpecificMembers", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * N, F32),
+                 step)
+
+
+def test_a_specific_row_repeated_across_members_is_refused_at_the_word_by_word_point(monkeypatch):
+    """Q's rows are 0 for every input, one a member, each times the W the members share: one activation holds one row,
+    so rows are compared across the members whose other operand is the same at the word-by-word point, and Q is refused,
+    row 0 of two members. Without the point Q W^T is charged, the work repeated a member."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_members(), KB)
+    assert (e.value.operand, e.value.rows, e.value.by_words) == ("x", (0, 0), True)
+    assert isinstance(e.value.member, tuple) and e.value.member[0] != e.value.member[1]
+    monkeypatch.setattr(PT, "check", lambda *a: None)
+    assert WK.read(_specific_members(), KB).N == (T - 1) * PN * N * K
+
+
+def test_the_word_by_word_points_token_input_is_a_permutation_of_the_least_tables_rows(monkeypatch):
+    """The token input, 32 bits wide like an f32, is found by its use as a lookup's token and drawn at the
+    word-by-word point's lanes as a permutation of the least table's rows, repeated, not as a float."""
+    seen = {}
+    inputs = PT.Walk.inputs
+
+    def spy(walk):
+        seen["walk"], seen["env"] = walk, inputs(walk)
+        return seen["env"]
+
+    monkeypatch.setattr(PT.Walk, "inputs", spy)
+    PT._MEMO.clear()
+    with pytest.raises(WK.RepeatedRows):
+        WK.read(_specific_alone("cancel"), KB)
+    walk, env = seen["walk"], seen["env"]
+    (k,) = walk.token_inputs()
+    assert PT._leaf_width(walk.program.root.body.nodes[k]) == 32
+    rows, lanes = walk.table_rows(), env["n", k][walk.P:]
+    n = lanes.shape[1]
+    assert rows == V and n >= rows
+    for lane in lanes:
+        assert sorted(lane[:rows].tolist()) == list(range(rows)) and (lane == lane[np.arange(n) % rows]).all()
+
+
 def test_the_word_by_word_point_refuses_a_nan_and_an_unrun_scan_as_the_one_word_point_does():
     """A specific-alone operand that holds a NaN in every word, or reads the outputs of a scan the point runs 1 of its
     PN iterations, is refused at the word-by-word point, by the same refusals a distinct one gets at the one-word
@@ -1241,13 +1316,11 @@ def test_the_word_by_word_point_refuses_a_nan_and_an_unrun_scan_as_the_one_word_
 
 def test_the_word_by_word_points_tokens_are_distinct_rows_of_every_table():
     """Each lane's tokens are a permutation of the least table's rows, repeated, so any that many positions running
-    pick distinct rows of every table at least as long; with no table, distinct words a narrowing to i32 keeps."""
+    pick distinct rows of every table at least as long."""
     rng = np.random.default_rng(0)
     t = PT.tokens(rng, (3, 40), 16)
     assert all(len(set(row[i:i + 16].tolist())) == 16 for row in t for i in range(40 - 16 + 1))
     assert all(len({int(x) % 24 for x in row[:16]}) == 16 for row in t)
-    free = PT.tokens(rng, (2, 50), None)
-    assert all(len(set(row.tolist())) == 50 for row in free) and 0 < free.min() and free.max() < 1 << 31
 
 
 #: a chain longer than Python's default recursion limit
