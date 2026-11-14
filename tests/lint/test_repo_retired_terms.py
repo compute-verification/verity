@@ -213,6 +213,22 @@ OWN_NAMES = {
          "the certification period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
          ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryChallenger/Attest.lean")),
+        (r"_PeriodAuditor",
+         "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which GLOSSARY.md's row "
+         "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
+         ("adapters/vllm/tests/pipeline/test_serve_h1.py", "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
+    ),
+    "row of record": (
+        (r"row[\s_]+of[\s_]+record",
+         "vLLM's workload of record: GLOSSARY.md's row of \"row\" for a workload keeps \"row of record\" "
+         "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
+         tuple(f"adapters/vllm/{p}" for p in (
+             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
+             "tests/pipeline/test_row_chain.py", "tests/program/test_compact.py", "verity_vllm/config.py",
+             "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
+             "verity_vllm/pipeline/neutrality.py", "verity_vllm/pipeline/research.py", "verity_vllm/pipeline/row.py",
+             "verity_vllm/pipeline/row_config.py", "verity_vllm/pipeline/workload.py",
+             "verity_vllm/program/gemm_target_correspondence.py"))),
     ),
 }
 OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in names)
@@ -1024,6 +1040,17 @@ def test_the_responder_s_and_a_party_s_periods_keep_the_word_and_attest_s_names_
         assert [w.split("'")[1] for _, w in sites(text, f)] == []
     assert [w.split("'")[1] for _, w in sites(text, "security/Definitions/Compose/JointPeriod.lean")] == [
         "PeriodSigned", "PeriodSound", "PeriodRun"]
+
+
+def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_only_in_their_files() -> None:
+    """vLLM's "row of record" and H1's ``_PeriodAuditor`` aren't sites in the adapter's files that name them, and are
+    elsewhere."""
+    text = "the row of record, row_of_record and _PeriodAuditor"
+    for term, (_, _, files) in (("row of record", OWN_NAMES["row of record"][0]), ("*Period*", OWN_NAMES["*Period*"][4])):
+        for f in files:
+            assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
+            assert [w.split("'")[1] for _, w in sites(text, f) if (term == "*Period*") == ("Period" in w)] == []
+    assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
