@@ -40,6 +40,7 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import argparse
 import json
+import logging
 import multiprocessing
 import sys
 import tempfile
@@ -62,6 +63,7 @@ RECORD = "glm53_index_share_capture.json"
 ROPE_DEFINITION = "RoPEHeadGptJ_v2"
 TOPK_SENTINEL = 7
 E4M3 = "cvt.rn.satfinite.e4m3x2.f32"
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- gpu
@@ -173,9 +175,10 @@ def gpu(work: Path, doc: dict[str, Any]) -> list[dict[str, Any]]:
     def step(name: str, fn):
         try:
             return fn()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             doc["errors"][name] = DS._error(e)
             print(f"[glm53-index-share] {name} ERROR {doc['errors'][name][:600]}", flush=True)
+            logger.error("step %s raised", name, exc_info=True)
             return None
 
     doc["triton"] = triton.__version__
@@ -225,8 +228,9 @@ def bind_check() -> dict[str, Any]:
     name = f"{ROPE_DEFINITION}{{D={DS.DR}}}"
     try:
         rec["bindings"][name] = bool(bind(BR.RoPEHeadGptJV2, D=DS.DR).signature())
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         rec["bindings"][name] = DS._error(e)
+        logger.error("binding %s raised", name, exc_info=True)
     rec["ok"] = bool(rec["ok"] and rec["bindings"][name] is True)
     return rec
 
@@ -260,15 +264,17 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     jobs: list[dict[str, Any]] = []
     try:
         jobs = gpu(work, doc)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         doc["errors"]["gpu"] = DS._error(e)
         print(f"[glm53-index-share] gpu ERROR {doc['errors']['gpu']}", flush=True)
+        logger.error("the GPU phase raised", exc_info=True)
     for name, fn in (("ptx", lambda: ptx(work / "triton_cache", outdir)), ("bind", bind_check)):
         try:
             doc[name] = fn()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             doc["errors"][name] = DS._error(e)
             doc[name] = {"ok": False}
+            logger.error("%s raised", name, exc_info=True)
     rope = doc.get("rope", {})
     print(f"[glm53-index-share] rope {json.dumps({k: v for k, v in rope.items() if k != 'ok'})[:2000]}", flush=True)
     print(f"[glm53-index-share] ptx {json.dumps(doc['ptx'])[:2000]}", flush=True)
