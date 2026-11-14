@@ -25,7 +25,7 @@ from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-i
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program import prune as P
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.export_compat import dsa_leaves
+from verity_vllm.program.frontend.dsa_leaves import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset

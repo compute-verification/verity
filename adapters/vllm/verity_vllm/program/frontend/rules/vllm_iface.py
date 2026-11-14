@@ -119,7 +119,7 @@ _define_once("dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor w
              lambda input, weight, weight_scale, group_size, use_deep_gemm_e8m0:
                  input.new_empty((*input.shape[:-1], weight.shape[0]), dtype=torch.bfloat16))
 
-# [GLM-5.3] DeepSeek sparse attention (vllm/models/deepseek_v32/attention.py) as three ops, the leaves `export_compat.dsa_ops_leaf`
+# [GLM-5.3] DeepSeek sparse attention (vllm/models/deepseek_v32/attention.py) as three ops, the leaves `dsa_leaves.dsa_ops_leaf`
 # puts in place of `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` while exporting.  The served kernels write the MLA and
 # indexer caches through a slot mapping and read them back through the forward context; here the cache rows are the first op's outputs
 # and the third op's operands, and each layer's history is the derive's state keyed by `layer_name` (as `unified_attention_with_output`'s).
@@ -158,6 +158,33 @@ _define_once("dsa_indexer_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Te
 _define_once("dsa_dense_mha(Tensor positions, Tensor q_nope, Tensor q_pe, Tensor k_nope, Tensor v, Tensor kv_c, Tensor k_pe, "
              "Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
              "dsa_dense_mha", lambda positions, q_nope, q_pe, k_nope, v, kv_c, k_pe, index_k, index_k_scale, layer_name, topk, scale:
+                 v.new_empty((q_nope.shape[0], q_nope.shape[1], v.shape[-1])))
+# The same layer over an `fp8_ds_mla` KV cache (`--kv-cache-dtype fp8` on FLASHMLA_SPARSE): the cache row is the NoPE values in e4m3,
+# their f32 scales (one per `tile`) and k_pe, which the attention ops take in kv_c's place:
+#   dsa_norm_rope_ds_mla -> dsa_norm_rope's three, then the row's NoPE e4m3 [T, L] and its scales f32 [T, L / tile]
+#   dsa_flashmla_attn    -> dsa_indexer_attn's rows, by FlashMLA's sparse fp8 decode over the cache rows
+#   dsa_dense_mha_ds_mla -> dsa_dense_mha's rows; the call's cache rows are kv_nope, kv_scale and k_pe
+def _dsa_norm_rope_ds_mla_fake(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k, index_k_w, index_k_b,
+                               index_k_eps, index_cos_sin, index_rope_interleave, tile, kv_c_out, k_pe_out):
+    T, L = kv_c.shape
+    return (*_dsa_norm_rope_fake(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k, index_k_w, index_k_b,
+                                 index_k_eps, index_cos_sin, index_rope_interleave, kv_c_out, k_pe_out),
+            q_c.new_empty((T, L), dtype=torch.float8_e4m3fn), q_c.new_empty((T, L // tile), dtype=torch.float32))
+
+
+_define_once("dsa_norm_rope_ds_mla(Tensor positions, Tensor q_c, Tensor q_w, float q_eps, Tensor kv_c, Tensor kv_w, float kv_eps, "
+             "Tensor k_pe, Tensor cos_sin, Tensor? index_k, Tensor? index_k_w, Tensor? index_k_b, float index_k_eps, "
+             "Tensor? index_cos_sin, bool index_rope_interleave, int tile, Tensor(a!) kv_c_out, Tensor(b!) k_pe_out) "
+             "-> (Tensor, Tensor, Tensor, Tensor, Tensor)", "dsa_norm_rope_ds_mla", _dsa_norm_rope_ds_mla_fake)
+_define_once("dsa_flashmla_attn(Tensor positions, Tensor ql_nope, Tensor q_pe, Tensor kv_nope, Tensor kv_scale, Tensor k_pe, "
+             "Tensor? index_q, Tensor? index_weights, Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) "
+             "-> Tensor", "dsa_flashmla_attn",
+             lambda positions, ql_nope, q_pe, kv_nope, kv_scale, k_pe, index_q, index_weights, index_k, index_k_scale, layer_name, topk,
+             scale: ql_nope.new_empty(ql_nope.shape))
+_define_once("dsa_dense_mha_ds_mla(Tensor positions, Tensor q_nope, Tensor q_pe, Tensor k_nope, Tensor v, Tensor kv_nope, "
+             "Tensor kv_scale, Tensor k_pe, Tensor? index_k, Tensor? index_k_scale, str layer_name, int topk, float scale) -> Tensor",
+             "dsa_dense_mha_ds_mla",
+             lambda positions, q_nope, q_pe, k_nope, v, kv_nope, kv_scale, k_pe, index_k, index_k_scale, layer_name, topk, scale:
                  v.new_empty((q_nope.shape[0], q_nope.shape[1], v.shape[-1])))
 # [GLM-5.3] vLLM's cuteDSL router GEMM `ll_bf16_gemm(x [M, K] bf16, w [N, K] bf16) -> [M, N] f32` (`GateLinear` tier 1, M <= 16 on
 # sm_90+), the leaf `export_compat.moe_gate_leaf` puts in its place while exporting: a CUTLASS DSL kernel that is no dispatcher op
