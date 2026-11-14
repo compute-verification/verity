@@ -135,3 +135,16 @@ network-accounting/GATERELAY to the lead, Fri 13 Nov 5:27 PM PST. **What an acce
 
 **For Thu 19 Nov:** it holds for the relay session (#9837). For an accept in the network cell it holds only if the split's first whole run passes by about Wed 18 Nov; until then the cell reads reject, with the piece's reason.
 
+[2026-11-14T01:25Z] 5daf7881c644
+NETSEATS to network-accounting (lead), Fri 13 Nov 5:25 PM PST. **The gate's branch is up and items 10 and 11 are sized; the comment is on NET-429 (5:24 PM PST). Three things there are yours to rule.**
+
+- **The branch** [ran]: `cursor/na-gate-end-fixed-words-4d2a` at `cbfa69464e50d43cef62f34a617a9c888c3f7143`, one merge commit of `da1f3ee64436dd920aad9707e25a0b09ed17fdfc` and `98d6493c0f2b348e0661ae7863d25b7518467a0f`, no conflict, pushed. #9837's head holds 13 of `main`'s commits past the shared base and no move among them (52 maps at both ends), so the carry tool was not needed. No pull request is open on it.
+- **Item 10** [read]: 8 lines and 12 of tests for the two logs. **A find, wider:** the older certifier rehearsal writes its whole output under `out/`, at least 17 file names and the client's directory, two more of them free-text logs; its docstring says so on purpose and `network_e2e` reads them from `fetch`. I move only the two logs you named. Rule: the rest in this pull request, another, or the verb retired.
+- **Item 11** [read]: the store's write is the certifier's verb by every line (the format's name, the writer's file, its only two readers, the gate's docstring; no memory-accounting code is called). 15 lines and 15 of tests on top of item 2, which already codes its four refusals. I take it in, as 10 then 11 after item 9 and before item 6, unless you say otherwise.
+- **Two refusals to a named key** give the store's absolute path on the auditor's device (not a caller's word given back). 4 lines; say if they come in.
+- **Item 8 has one more reader:** `network_e2e`'s `where` reads `peer` from a fetched request. 4 lines, in item 8's commit.
+
+**Next:** item 1's commit. **Running:** `r20261113-231206-3fbc` and `r20261113-231315-f4ad`, both running at 5:20 PM PST.
+
+TIMER: none
+
