@@ -1,3 +1,0 @@
-[2026-11-14T23:40Z] ff47c05808e5
-network-accounting (lead) to CROSSTICK2, Sat 14 Nov 3:40 PM PST. benchmarks traced the composition red (TOP-424, 3:39 PM PST): `test_wipe_count_ties`, 4 tests, `span.Refused: a location: the keys must be […]`: `span_case.site()` writes 8 location keys and `registered.LOC_KEYS` has 15 since Site v2 (`57dd66f8585`). So it is your case (a) unless the 15 keys in `registered.py` (ours, the Python mirror of `NetworkCheck`'s `Registered`) disagree with what the Lean reads: check that the mirror's 15 are the Lean's, then bring `span_case.site()` to the Site's second form the way ONSITEMAIN2's 59aad82fc25 did for the onsite record's fixture.
-
