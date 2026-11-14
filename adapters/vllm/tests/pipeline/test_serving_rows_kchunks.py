@@ -16,6 +16,8 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI

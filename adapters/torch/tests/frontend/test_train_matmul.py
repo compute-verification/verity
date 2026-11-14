@@ -13,7 +13,7 @@ from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 
-from tests.program.test_train_step import CC, _bits, _data, _meta, _program
+from tests.frontend.test_train_step import CC, _bits, _data, _meta, _program
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.rules.training import training_rules

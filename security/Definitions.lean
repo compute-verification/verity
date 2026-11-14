@@ -103,7 +103,6 @@ public import Definitions.Accounting.Assumptions.Parties
 public import Definitions.Accounting.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
-public import Definitions.Hash.Assumptions.Prf
 public import Definitions.Hash.Guarantees
 public import Definitions.Certifier.Guarantees.MonitoringPeriod
 public import Definitions.Certifier.Guarantees.PooledLeak

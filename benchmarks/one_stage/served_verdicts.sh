@@ -621,7 +621,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   shift 2
   # off the GPU, which none leases here or the engine holds under the tie: the weights hashed by h1.registered's NumPy
   # path, the reference
-  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py window-commit --serve-run "$D" \
+  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/one_stage/window_commit.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
     --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --law "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?

@@ -158,7 +158,7 @@ Lean to:
   the protocol's decoders, on θ's provenance difftest's declarations with at most one change, from its `drawn`, or on
   the one-stage audit's own registered circuit and record (`policy_on`);
 - the wipe: its mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`;
-- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period.audit`
+- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period_prover.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
   those verifiers (`../../../accounting/pous/verifier/check/tests/test_run_protocol.py`, `../../../accounting/poub/verifier/lean/tests/test_p2_case.py`).
