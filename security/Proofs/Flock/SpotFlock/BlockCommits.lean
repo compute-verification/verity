@@ -164,7 +164,7 @@ theorem length_ends_unitGates_le (u : ℕ) :
           rw [Bool.and_eq_true]
           exact ⟨hpu, hgo⟩
         rw [if_pos hp1]
-        exact length_le_of_window (a := Spot.Bits.off (Spot.Bits.keyProg c n) g + 2)
+        exact length_le_of_executionPhase (a := Spot.Bits.off (Spot.Bits.keyProg c n) g + 2)
           ((List.nodup_range.map (fun _ _ h => Nat.add_left_cancel h)).filter _)
           fun q hq => by rw [(hpc q hq).2]; omega
       · have hp0 : ¬ (Spot.Bits.unitOf (Spot.Bits.keyProg c n) g == some u &&

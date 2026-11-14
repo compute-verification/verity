@@ -150,7 +150,7 @@ theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Ve
       (reg ((w.extend S).memberSim τ k)) (cont ((w.extend S).memberSim τ k))
       ((w.extend S).ms.get k).k ((w.extend S).ms.get k).Rw ((w.extend S).ms.get k).M ((w.extend S).ms.get k).t')
     (W : Finset (Fin w.nJ)) :
-    prob (fun o => (w.extend S).Accepts o ∧ W ⊆ (w.extend S).wrongSet τ) (w.extend S).game τ ≤
+    prob (fun o => (w.extend S).Accepts o ∧ W ⊆ (w.extend S).incorrectSet τ) (w.extend S).game τ ≤
       ENNReal.ofReal (w.pa W) + w.eps :=
   (Flock.SecurityProofs.JointSampledV5 (w.extend S) (w.uniform_extend hA3 S) τ (fun _ => hCR) (fun _ => hA2)
     W).trans_eq

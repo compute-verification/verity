@@ -3343,6 +3343,15 @@
       "paths": {
         "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Pouw/EndToEndWindow/": "security/Proofs/Pouw/EndToEndExecutionPhase/",
+        "security/Proofs/Properties/Verity/Sampled/MemberForm/WindowPasses.lean": "security/Proofs/Properties/Verity/Sampled/MemberForm/ExecutionPhasePasses.lean",
+        "security/Proofs/Properties/Verity/WindowFiles.lean": "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
+        "security/Properties/Verity/WindowFiles.lean": "security/Properties/Verity/ExecutionPhaseFiles.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/PeriodRecord.lean"
+      }
     }
   ]
 }

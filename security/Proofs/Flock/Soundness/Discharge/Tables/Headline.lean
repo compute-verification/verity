@@ -81,7 +81,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
       (batchStratL H512 enc512 leaf512 plan
         (cont (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm)
               (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ))
@@ -140,7 +140,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset
       (batchStratL H512 enc512 leaf512 plan
         (cont (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm)
               (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ))
@@ -200,7 +200,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_miss
       (batchStratL H512 enc512 leaf512 plan
         (cont (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm)
               (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ))
@@ -258,7 +258,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_missX
       (batchStratL H512 enc512 leaf512 plan
         (cont (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm)
               (reg (simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ))

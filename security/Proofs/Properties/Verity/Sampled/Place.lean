@@ -77,7 +77,7 @@ noncomputable def placeOfWith : (r : Verity.FileRead) → (rs : List Verity.File
 /-- **The place a window's committed files register for a gate**: the gate's member's own (`placeOfRead`, under that
 member's public file's roots), each member at its own gates of the window's circuit. No root is the window's own. At a
 window of one member it is that member's, by definition. -/
-noncomputable def placeOfFiles (R : Verity.WindowFiles) : Fin R.circuit.N → Option Place :=
+noncomputable def placeOfFiles (R : Verity.ExecutionPhaseFiles) : Fin R.circuit.N → Option Place :=
   placeOfWith R.first R.rest
 
 end Verity.Sampled

@@ -298,10 +298,10 @@ variable {N b h ρ : ℕ} {α : Type}
 
 /-- The provenance's step answers at store `E`, stream `R` and oracle `O`, one after another: bit `i` of the run's
 bits, and `false` past them. -/
-def transcript (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ → Bool
+def trace (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvenance N b h ρ α → ℕ → Bool
   | done _, _ => false
-  | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).transcript E R O (i - x)
-  | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).transcript E R O (i - x)
+  | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).trace E R O (i - x)
+  | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).trace E R O (i - x)
 
 /-- **A gate budget bounds the encoded bits**: under the encode bound at `E` nonlinear units a word of `8·bytes` bits,
 the encoded bits times `E` are at most `8·bytes` times the encodes' nonlinear units. -/
@@ -392,11 +392,11 @@ def walk (dflt : α) (k : β → PIChip N b h ρ α) : ℕ → ℕ → PassProve
   | B, o, .encode _ x _ _ k' =>
     if x ≤ B then readOdd x o (fun z => walk dflt k (B - x) (o + x) (k' z)) else done dflt
 
-/-- Where the side sources answer the provenance's transcript from `2·o + 1` on, within its budget, the rerun program
+/-- Where the side sources answer the provenance's trace from `2·o + 1` on, within its budget, the rerun program
 returns and reads what `k` does at the provenance's values. -/
 theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : ℕ → Fin τ) (t : Fin τ) (w : IWorld N b h ρ)
     (v : List Bool) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
-    ∀ (c : PassProvenance N b h ρ β) (B o : ℕ), (∀ i, w.side v (2 * (o + i) + 1) = c.transcript E R O i) →
+    ∀ (c : PassProvenance N b h ρ β) (B o : ℕ), (∀ i, w.side v (2 * (o + i) + 1) = c.trace E R O i) →
       c.inputs E R O + c.encoded E R O ≤ B →
       (walk dflt k B o c).run w v = (k (c.run E R O)).run w v ∧
         (walk dflt k B o c).tierBits tier t w v = (k (c.run E R O)).tierBits tier t w v := by
@@ -410,11 +410,11 @@ theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : �
     have hz : (fun i : Fin x => w.side v (2 * (o + i) + 1)) = f E R O := by
       funext i
       rw [hw i]
-      simp [PassProvenance.transcript, i.2]
-    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f E R O)).transcript E R O i := by
+      simp [PassProvenance.trace, i.2]
+    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f E R O)).trace E R O i := by
       intro i
       rw [show o + x + i = o + (x + i) by omega, hw (x + i)]
-      simp [PassProvenance.transcript]
+      simp [PassProvenance.trace]
     obtain ⟨h₁, h₂⟩ := ih (f E R O) (B - x) (o + x) hw' (by omega)
     simp only [walk, hx, ↓reduceIte, readOdd_run, readOdd_tierBits, hz, PassProvenance.run]
     exact ⟨h₁, h₂⟩
@@ -425,11 +425,11 @@ theorem walk_eq {τ : ℕ} (dflt : α) (k : β → PIChip N b h ρ α) (tier : �
     have hz : (fun i : Fin x => w.side v (2 * (o + i) + 1)) = f (E j) := by
       funext i
       rw [hw i]
-      simp [PassProvenance.transcript, i.2]
-    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f (E j))).transcript E R O i := by
+      simp [PassProvenance.trace, i.2]
+    have hw' : ∀ i, w.side v (2 * (o + x + i) + 1) = (k' (f (E j))).trace E R O i := by
       intro i
       rw [show o + x + i = o + (x + i) by omega, hw (x + i)]
-      simp [PassProvenance.transcript]
+      simp [PassProvenance.trace]
     obtain ⟨h₁, h₂⟩ := ih (f (E j)) (B - x) (o + x) hw' (by omega)
     simp only [walk, hx, ↓reduceIte, readOdd_run, readOdd_tierBits, hz, PassProvenance.run]
     exact ⟨h₁, h₂⟩
@@ -592,12 +592,12 @@ variable {N b h ρ S L' q : ℕ}
 
 /-- The device that reruns its carrier's circuit `K` over the side link and answers the carrier's reads, `B`'s side
 reads at odd addresses, from the circuit's values on chip: its side sources are `B`'s at even addresses and `K`'s
-transcript at odd ones, of which it reads at most `C` bits. -/
+trace at odd ones, of which it reads at most `C` bits. -/
 def stack (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool))
     (hL : ∀ st w, (B.chip st).linkBitsEven w [] ≤ L) : PIDevice N b h ρ S (L + C) q where
   state := B.state
   mem := B.mem
-  side E R O v a := if a % 2 = 0 then B.side E R O v a else K.transcript E R O (a / 2)
+  side E R O v a := if a % 2 = 0 then B.side E R O v a else K.trace E R O (a / 2)
   chip st := PIChip.walk (fun _ _ => false) (fun κ => (B.chip st).answer κ) C 0 K
   bounded st w := PIChip.walk_bounded _ _ w [] (fun κ =>
     ⟨(PIChip.answer_linkBits κ w (B.chip st) []).trans_le (hL st _),
@@ -605,7 +605,7 @@ def stack (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h �
 
 theorem stack_side_odd (B : PIDevice N b h ρ S L' q) (L C : ℕ) (K : PassProvenance N b h ρ (ℕ → Bool)) (hL)
     (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (v : List Bool) (i : ℕ) :
-    (B.stack L C K hL).side E R O v (2 * (0 + i) + 1) = K.transcript E R O i := by
+    (B.stack L C K hL).side E R O v (2 * (0 + i) + 1) = K.trace E R O i := by
   simp only [stack, show (2 * (0 + i) + 1) % 2 ≠ 0 by omega, ↓reduceIte, show (2 * (0 + i) + 1) / 2 = i by omega]
 
 /-- Where `B`'s odd side reads answer `K`'s values, the stacked device's world with them answered on chip is `B`'s. -/
