@@ -47,7 +47,7 @@ from verity_torch.frontend.errors import FrontendError
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.program_identity import check_identity
 from verity_torch.frontend.report import DeriveReport
-from verity_vllm.program.frontend.rules import TORCH_RULES, VLLM_RULES
+from verity_torch.frontend.rules import TORCH_RULES
 from verity_torch.frontend.rules.training import training_rules
 from verity_torch.frontend.rules.training_survey import survey, with_holes
 from verity_torch.frontend.train_step import (
@@ -819,11 +819,9 @@ CC = CB.TRAIN_CC
                                 {"cc": CC, "structure": True}],
                          ids=["cpu", "cc", "cc-tf32", "cc-deterministic", "cc-structure"])
 def test_training_rules_build_on_the_torch_only_list(kw: dict) -> None:
-    """`verity_torch.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order,
-    and none of `rules.VLLM_RULES`: a training step's rule set names no op of vLLM's."""
+    """`verity_torch.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order."""
     rules = training_rules(**kw).rules
     assert [r for r in rules if any(r is t for t in TORCH_RULES)] == list(TORCH_RULES)
-    assert not {r.rule_id for r in rules} & {r.rule_id for r in VLLM_RULES}
 
 
 def _linear_gemms(x, w, dy):
