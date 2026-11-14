@@ -127,7 +127,11 @@ literature index and the training algorithms' traits.
 
 ## Names
 
-The directory, the namespaces `InferenceOnly` and `InferenceOnlyCheck`, the `inference-only-*` executables, `benchmarks/nci` and the Lean's
-docstrings keep the older names until they are renamed: "NCI" and "novel communication intensity" for the policy,
-"isolation unit" and "IU" for an inference block, "novel information" and `novelReads` for fresh input, and
-"baseline" for the registered information (`GLOSSARY.md`, Older names).
+A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names): `benchmarks/nci`;
+a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
+refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
+(`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
+for the registered information, also the θ difftest's name in its printed messages; "IU" and "isolation unit" for
+an inference block, in the lock's reasons, a few docstrings and the lakefile's comment; "novel reads" for fresh input
+bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
+check's rate rule and of its Python reference, and a mode of the liveness difftest.
