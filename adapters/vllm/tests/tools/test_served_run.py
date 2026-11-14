@@ -14,19 +14,21 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
+HERE = Path(__file__).resolve().parents[2] / "tools" / "served_run"
+#: where the served run's scripts sit in the tree
+SERVED_RUN = Path("adapters/vllm/tools/served_run")
 #: the challenger host's address as a launch's environment holds it, here a documentation address
 CHALLENGER_HOST = "192.0.2.21"
 
 
 def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
-    """`run.sh ARGS` in a copy of the demo's tree whose workload is a stand-in (the real one is a fetched fixture), in
+    """`run.sh ARGS` in a copy of the tree whose workload is a stand-in (the real one is a fetched fixture), in
     this environment less the address's variable, with ``env`` over it: the completed run."""
     tree = tmp_path / "tree"
     if not tree.exists():
-        (tree / "demos" / "vllm").mkdir(parents=True)
+        (tree / SERVED_RUN).mkdir(parents=True)
         for name in ("run.sh", "placement.toml"):
-            shutil.copy(HERE / name, tree / "demos" / "vllm" / name)
+            shutil.copy(HERE / name, tree / SERVED_RUN / name)
         row = tomllib.loads((HERE / "placement.toml").read_text())["row"]
         workload = json.dumps({"model": "some/model", "case": "served", "engine": {"revision": "ab12"}}).encode()
         (tree / "adapters" / "vllm" / "workloads").mkdir(parents=True)
@@ -34,8 +36,8 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
         (tree / "adapters" / "vllm" / "workloads" / "SHA256SUMS").write_text(
             f"{hashlib.sha256(workload).hexdigest()}  {row}.json\n")
     held = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
-    return subprocess.run(["bash", str(tree / "demos" / "vllm" / "run.sh"), *args], capture_output=True, text=True,
-                          check=False, env={**held, "HOME": str(tmp_path), **env})
+    return subprocess.run(["bash", str(tree / SERVED_RUN / "run.sh"), *args], capture_output=True, text=True, check=False,
+                          env={**held, "HOME": str(tmp_path), **env})
 
 
 def envs(got: subprocess.CompletedProcess) -> list[str]:
