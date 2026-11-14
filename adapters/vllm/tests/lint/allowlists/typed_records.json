@@ -60,7 +60,6 @@
     {"file": "verity_vllm/definitions/boolean.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/boolean-purity/v1"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/gemm-correspondence/v1"},
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/twins/v1"},
-    {"file": "verity_vllm/program/mla_capture.py", "kind": "schema-literal", "symbol": "produce", "detail": "verity-vllm/mla-capture/v1"},
     {"file": "verity_vllm/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v0"},
     {"file": "verity_vllm/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/encoding.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
@@ -70,6 +69,7 @@
     {"file": "adapters/vllm/verity_vllm/definitions/boolean.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/boolean-purity/v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/numerics/twins.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/twins/v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v0"},
-    {"file": "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"}
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"},
+    {"file": "tests/program/mla_inputs.py", "kind": "schema-literal", "symbol": "produce", "detail": "verity-vllm/mla-capture/v1"}
   ]
 }

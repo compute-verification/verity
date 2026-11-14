@@ -22,7 +22,7 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity_vllm.definitions.registry import mla as M
 from verity_vllm.definitions.registry import mla_check as MK
 
-from verity_vllm.program import mla_capture as MC
+from tests.program import mla_inputs as MC
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
