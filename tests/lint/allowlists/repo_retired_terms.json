@@ -5271,7 +5271,7 @@
     {"file": "tools/research/src/research/vqueue_records.py", "count": 1},
     {"file": "tools/research/src/research/vqueue_slim.py", "count": 2},
     {"file": "tools/research/tests/test_vqueue_records.py", "count": 2},
-    {"file": "tools/research/tests/test_vqueue_slim.py", "count": 2},
+    {"file": "tools/research/tests/test_vqueue_slim.py", "count": 1},
     {"file": "security/Definitions/Accounting/Guarantees/JointBridge/CommOfPooledLeakAccepted.lean", "count": 2},
     {"file": "security/Definitions/Accounting/JointBridge/CommOfPooledLeakAccepted.lean", "count": 4},
     {"file": "security/Definitions/Accounting/JointBridge/CommOfPooledLeakAcceptedWitness.lean", "count": 1},
