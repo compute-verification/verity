@@ -4298,7 +4298,7 @@
     {"file": "verity/core/protocols/__init__.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/PROTOCOL.md", "count": 120},
     {"file": "verity/protocols/accounting/certifier/verifier/README.md", "count": 49},
-    {"file": "verity/protocols/accounting/certifier/verifier/active.py", "count": 10},
+    {"file": "verity/protocols/accounting/certifier/verifier/active.py", "count": 9},
     {"file": "verity/protocols/accounting/certifier/verifier/advice.py", "count": 2},
     {"file": "verity/protocols/accounting/certifier/verifier/arith_encode.py", "count": 9},
     {"file": "verity/protocols/accounting/certifier/verifier/audit.py", "count": 6},
