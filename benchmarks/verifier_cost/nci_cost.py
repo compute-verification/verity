@@ -178,6 +178,7 @@ def glm(args) -> int:
     from verity.circuits import codec
     from verity.circuits.program import Program
     from verity_vllm.definitions import boolean as BB
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     import lift
 

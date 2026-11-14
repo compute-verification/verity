@@ -116,6 +116,7 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     from verity_vllm.program.predict import block_counts as BC
 
     from verity_vllm.definitions.boolean import gate_table
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     fn, m, steps = BC.session(doc)
     table, unpriced = gate_table([fn])
