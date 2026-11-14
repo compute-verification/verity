@@ -67,7 +67,7 @@ RANGES = {
     "K": (2.2e6, 9.1e7, "calibrations kimi-k2-1m-coded, kimi-k2-1m-raw, kimi-k2-11mb-raw"),
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
     "d": (1.0, 17.0, "a run that trains its embedding; ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 under the "
-                     "open conjecture ReferenceLayered; a Dot16 step's 17 legs, no lookup read"),
+                     "open conjecture ReferenceLayered; a Dot16 step's 17 terms, no lookup read"),
     "e": (12288.0, 1.65e5, "low a guess; Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),

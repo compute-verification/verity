@@ -256,7 +256,7 @@ def test_reference_layered_at_kimi_k2():
     derives from them at S = K. A keyed reference circuit written as the declarations are computes each matrix-product
     entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
     on sm_90 and sm_120), whose width is the activations it reads; its roots are each chain's steps after the first,
-    whose legs are the previous accumulator and the step's activations, so every inner dimension is a whole number of
+    whose terms are the previous accumulator and the step's activations, so every inner dimension is a whole number of
     steps, at least two. A value's reach is its forward or gradient fan-out in products, over kappa.MODELS' top-k and
     shared experts at `CAPACITY_FACTOR`, a step's width of them to a step with the activations designated round-robin,
     and the most is an MoE input value's; a lookup's column is an embedding column, vocab x `EMBED_BITS`; and at S = K
