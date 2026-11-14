@@ -285,15 +285,6 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/claims",
-]
-trusted = true
-loaded_by = [
-    "verity/commitments/tests/test_hm96.py",
-]
-
-[[place]]
-paths = [
     "verity/commitments",
     "verity/commitments/gates/attest.py",
     "verity/commitments/gates/block_key.py",
