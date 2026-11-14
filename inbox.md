@@ -39,3 +39,28 @@ LAYOUTREAD to network-accounting (lead), Fri 13 Nov 11:34 PM PST. **Your three l
 
 **Next, in your order.** The ahead change merged onto today's `main` and opened with its section; the maps' change cut from today's `main` and opened the same; then every suite on the trial's head, launched when the changed run has ended. `main` gained two layout moves and the export's deletion in `tools/move/` since the trial's base, so I check the three maps on today's `main` before I say which tree the whole run takes. I run at most two jobs at once: one of the trial's and one of a pull request's. Say if that is one too many.
 
+[2026-11-14T07:38Z] fb77f30e29b1
+SCANLEAN to network-accounting (lead), Fri 13 Nov 11:38 PM PST. **#9664 holds `main`: the merge is pushed, the gate passes, and its runs wait for a slot. Not marked.**
+
+**Head.** `72cf324ae6654a29c652f6a6f8461385e2f9a4b9` on `cursor/network-accounting-okbit-onmain-4e7a`, a merge commit with parents `b5a49641edb6` and `main` at `512644d14fbc`, pushed as a fast-forward [ran]. GitHub says the pull request is mergeable at that head [ran: `gh pr view`].
+
+**The one resolution.** `tools/verity/check/public_boundary.toml`, edited here and deleted on `main`: `main`'s deletion stands, and this change's hunk in it (the three lines that listed `NetworkCheck/ScanOk.lean` and `test_network_period_ok_cost.py` for the export) goes with the file [ran].
+
+**Nothing else of the change names the deleted files** [ran: `rg` for `public_boundary`, `public_export`, `public_lock` over the change's 20 other files in the merged tree, and for "public tree / public export / withheld" over the lines the change adds: no match]. In the whole merged tree three sites still say `public_export`, all on `main` itself and none in this change: `adapters/vllm/tests/lint/README.md:150` (names the deleted `tools/verity/check/public_export.py`) and two test names in `tools/verity/check/tests/test_check.py` and `tools/research/tests/test_monitors.py`. I changed none.
+
+**What git merged by itself** [ran]. Of the change's 21 files `main` had changed 8 since the branch's base. Besides the deleted one: `verity/commitments/identity/Identity/Domains.lean` and `verity/commitments/domains.py` (`main` reworked three streamed-wipe separators; the change's two added separators stand beside them), `benchmarks/network_traces/scan_zk.py` (`main` renamed `draws` to `turns` and gave `stream_of` a `held` argument; none of the change's 37 added lines uses either), the two READMEs, and the two locks `security/lean-audit.json` and `security/Properties/lean-audit.json` through the lock's driver. In each lock I compared every entry three ways: none was changed on both sides, and none lost a side's value. Against `main` the merge's tree differs in the change's 20 files and nothing else.
+
+**The gate** [ran, from the merged tree, whose `ratchet_gate.py` is `main`'s]: `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`, exit 0:
+`ratchet gate 512644d14fbc..72cf324ae665: 1 change(s), 0 failed`
+`512644d14fbc..72cf324ae665 (72cf324ae665): passed: ruff finds nothing new in the 8 Python file(s) it changes; no direct environment read is new in the 8 Python file(s) it changes; no silent except handler is new in the 8 Python file(s) it changes; no lane-text site is new in the 17 file(s) it changes; no retired-term site is new in the 17 file(s) it changes`
+
+**Local, at the merge** [ran]: `tests/test_repository.py` 17 passed, `test_lean_packages.py` 35, `test_lean_vocabulary.py` 15, `test_boundaries.py` 24. The certifier verifier's README is 49,061 bytes under its 49,152 cap: `main` took 442 bytes of its room, and 91 are left.
+
+**Runs out, both through `research run --on auto`, both waiting in a research pool's line (about 17 minutes by its own estimate):**
+- suites, `suites.py --changed 512644d14fbc --quick --fresh`: `r20261114-073259-1bc0`;
+- records, `lean_changed.py --records verity/commitments/identity --update`: `r20261114-073300-293a`. I launched it because the merge moved one Lean file of the change (`Identity/Domains.lean`, by `main`'s lines alone) and two locks. I expect it to regenerate nothing [argued: no lock entry changed on both sides]. It took about 110 minutes on its slot at the rehearsal.
+
+The body's section and the head "for marking" follow when the suites' verdict is in; the records' verdict follows that, unless you want both before you mark.
+
+**Job B is out too.** The scratch meeting merge carried onto this head: `5976a6accfe3e12182ed4c0f8c20b3e6c768ab49` on `cursor/na-scratch-meeting-tied-okbit-37ad`, one merge commit on top of `b713d4754e63` (commits only), no conflict [ran]. Its run, the suites and then the three `lean try`s in one slot: `r20261114-073627-5844`, waiting.
+
