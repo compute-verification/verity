@@ -107,10 +107,12 @@ LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
 #: the auditor's record of its network certifier's key, as `record_files.public_json` writes one, and session; and
-#: the period's params stating them, as `scan_period.rows_case` does
+#: the period's params stating them, as `scan_period.rows_case` does: one listed entry, whose stretch holds the
+#: period's execution phase
 CERT_KEY = {"params": [64, 8, 10], "public": "c3" * 64, "key_id": "1d" * 16}
 SESSION = "5e" * 32
-CERTIFIER = {"key": CERT_KEY["public"], "lms": {"H": 10, "N": 64, "W": 8, "toy": False}, "session": SESSION}
+ENTRY = {"key": CERT_KEY["public"], "session": SESSION, "start": 0}
+CERTIFIER = {"first": 0, "keys": [ENTRY], "lms": {"H": 10, "N": 64, "W": 8, "toy": False}}
 
 
 def key_record(key: dict = CERT_KEY, session: str = SESSION) -> dict:
@@ -1704,7 +1706,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
         auditor_args(out)["site_registration"].unlink()
     else:
         case = json.loads((out / OR.CASE).read_text())
-        (out / OR.CASE).write_text(json.dumps(case | {"params": case["params"] | {"key": ANOTHER}}))
+        (out / OR.CASE).write_text(json.dumps(case | {"params": case["params"] | {"keys": [dict(ENTRY, key=ANOTHER)]}}))
         auditor_files(out, key=key_record(dict(CERT_KEY, public=ANOTHER)), site=site_registration(ANOTHER))
     assert main([str(out)]) == 0
     rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.CERTIFIER_KEY]
@@ -1754,10 +1756,13 @@ REFUSED_INPUTS = {
                   "the period's lms isn't the auditor's record's"),
     "another key and session": (key_record(dict(CERT_KEY, public=ANOTHER), "6f" * 32), site_registration(ANOTHER),
                                 CERTIFIER, "the period's key and session aren't the auditor's record's"),
-    "no key in the period": (key_record(), site_registration(), {k: v for k, v in CERTIFIER.items() if k != "key"},
-                             f"the period's parameters ({OR.CASE}'s params) state no LMS parameters, key and session"),
-    "no period": (key_record(), site_registration(), None,
-                  f"the period's parameters ({OR.CASE}'s params) state no LMS parameters, key and session"),
+    "no keys in the period": (key_record(), site_registration(), {k: v for k, v in CERTIFIER.items() if k != "keys"},
+                              OR.NO_KEYS),
+    "the single key's form": (key_record(), site_registration(),
+                              {"key": CERT_KEY["public"], "lms": CERTIFIER["lms"], "session": SESSION}, OR.NO_KEYS),
+    "no period": (key_record(), site_registration(), None, OR.NO_KEYS),
+    "no entry holds the phase": (key_record(), site_registration(), dict(CERTIFIER, keys=[dict(ENTRY, start=1)]),
+                                 OR.NO_ENTRY),
     "a log its check refuses": (key_record(), site_registration(placed=ANOTHER), CERTIFIER,
                                 "the auditor's registration log doesn't check: entry 0: owner"),
     "another composite": (key_record(), site_registration() | {"params": site_registration(composite="remote")["params"]},
@@ -1787,7 +1792,8 @@ def test_auditor_record_holds_where_the_auditors_record_and_registration_hold_th
 def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_periods_and_says_why(tmp_path, how):
     """auditor-record doesn't hold, saying why, where the run gives no record or registration of the auditor's or one
     can't be read, where the record isn't a certifier-key/v1 record or its key, LMS parameters or session aren't the
-    period's (a toy LMS included), where the period states none, where the registration log is one its check refuses or
+    period's (a toy LMS included), where the period lists none readable or no listed entry's stretch holds its
+    execution phase, where the registration log is one its check refuses or
     of another composite than its params', or isn't a registration's params and log, and where its auditor holds the
     record's key for no network certifier its log places."""
     key, site, params, why = REFUSED_INPUTS[how]
@@ -1799,6 +1805,22 @@ def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_period
     got = OR.auditor_record(params, sha512_of(params), *files)
     assert (got["is"], got["holds"], got["why"]) == (OR.CHECKED[OR.AUDITOR_RECORD], False, why)
     assert "certifier" not in got
+
+
+def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_holds_the_periods_execution_phase(tmp_path):
+    """A rows-form period's parameters list each session of the network certifier from its start on (the period
+    check's accepted case with two sessions is this shape): with two listed and the period's execution phase in the
+    second's stretch, auditor-record holds the second's key and session to the auditor's record, the entry
+    NetworkCheck.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
+    first = {"key": ANOTHER, "session": "6f" * 32, "start": 0}
+    params = dict(CERTIFIER, first=4, keys=[first, dict(ENTRY, start=3)])
+    a = auditor_files(tmp_path / "second")
+    got = OR.auditor_record(params, sha512_of(params), a["certifier_key"], a["site_registration"])
+    assert (got["holds"], got["certifier"]) == (True, "cert0"), got
+    b = auditor_files(tmp_path / "first", key=key_record(dict(CERT_KEY, public=ANOTHER), first["session"]),
+                      site=site_registration(ANOTHER))
+    got = OR.auditor_record(params, sha512_of(params), b["certifier_key"], b["site_registration"])
+    assert (got["holds"], got["why"]) == (False, "the period's key and session aren't the auditor's record's"), got
 
 
 @pytest.mark.parametrize("composed, why", [

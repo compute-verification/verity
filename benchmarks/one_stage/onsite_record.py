@@ -59,7 +59,8 @@ answer's, which host ran each party.
 **Checked on the run** (``checked``, `CHECKED`): the auditor's configuration of the run, each an obligation the record
 checks on the auditor's inputs, never a named assumption and never charged, each with ``holds`` and, where it doesn't,
 ``why``. `auditor-record` (`auditor_record`): PeriodLeakRegistered's hA, hr and hkey, that the period's LMS parameters,
-key and session are the auditor's record of its network certifier (``--certifier-key``) and that the auditor's
+and the key and session of the listed entry whose stretch holds its one execution phase, are the auditor's record of
+its network certifier (``--certifier-key``) and that the auditor's
 registration (``--site-registration``) holds that key for a network certifier its log places, read from those two
 inputs, each named by its SHA-512 (``from``), and the period's parameters, held by SHA-512 to those its check read
 (the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
@@ -460,6 +461,13 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
 #: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
 PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
 AUDITOR_RECORD, AUDITOR_LISTING, SCAN_STATE_PINNED = "auditor-record", "auditor-listing", "scan-state-pinned"
+#: why auditor-record doesn't hold where the period's parameters list no readable keys, or no first execution phase
+NO_KEYS = (f"the period's parameters ({CASE}'s params) state no LMS parameters, listed keys (each a key, a session and "
+           "a start) and first execution phase")
+#: why auditor-record doesn't hold where no listed entry's stretch holds the period's execution phase
+NO_ENTRY = (f"no listed entry's stretch holds the period's execution phase ({CASE}'s params' first is below every "
+            "entry's start), so it has no key and session to hold to the auditor's record; the period check refuses "
+            "such a period (NetworkCheck.Period.entryAt, rowsCheck)")
 #: remote's SPOT case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
@@ -474,8 +482,10 @@ REGISTERED_FILES = "registered-files"
 CHECKED = {
     AUDITOR_RECORD: ("PeriodLeakRegistered's hA, hr and hkey, an obligation on the auditor's configuration that the run "
                      "checks: the auditor's registration A parses from its record (Core.Site.Registration.Auditor.ofJson "
-                     "of the registration's params' auditor), the period's LMS parameters, key and session are the "
-                     "auditor's record of its network certifier (certifier-key/v1), and A holds that key for a network "
+                     "of the registration's params' auditor), the period's LMS parameters, and the key and session of "
+                     "the listed entry whose stretch holds its one execution phase (its params' first, the entry "
+                     "NetworkCheck.Period.entryAt picks), are the auditor's record of its network certifier "
+                     "(certifier-key/v1), and A holds that key for a network "
                      "certifier its log places (A.key cert.id = some (hexOf key)). It reads only the auditor's inputs, "
                      "its certifier-key record (--certifier-key) and its registration (--site-registration: the "
                      "registration log's params and the log, which the log's check accepts, "
@@ -1487,7 +1497,10 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
 def auditor_record(params: Any, composed: str | None, key: Path | None, site: Path | None) -> dict[str, Any]:
     """`CHECKED`'s auditor-record on the run: the period's ``params``, its case's, held to those its check read by their
     SHA-512, ``composed``, the composite of record's for its network certifier's case (`composite.canonical`, None
-    where it has none), against the auditor's record of its network certifier at ``key`` (certifier-key/v1,
+    where it has none), their LMS parameters and the key and session of the listed entry whose stretch holds their
+    execution phase ``first`` (the last listed whose ``start`` is at most it, as `NetworkCheck.Period.entryAt` picks;
+    `NO_KEYS` where they list none readable, `NO_ENTRY` where none holds it), against the auditor's record of its
+    network certifier at ``key`` (certifier-key/v1,
     `warden_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
     ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
     `Core.Registration` by difftest), whose auditor holds the record's key for a network certifier the log places.
@@ -1515,9 +1528,14 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     except (KeyError, TypeError, ValueError):
         return out | {"why": f"--certifier-key isn't a {WC.RECORD} record of a key and a session"}
     try:
-        p = {"lms": params["lms"], "key": bytes.fromhex(params["key"]), "session": bytes.fromhex(params["session"])}
-    except (KeyError, TypeError, ValueError):
-        return out | {"why": f"the period's parameters ({CASE}'s params) state no LMS parameters, key and session"}
+        entries = [(bytes.fromhex(e["key"]), bytes.fromhex(e["session"]), int(e["start"])) for e in params["keys"]]
+        first, lms = int(params["first"]), params["lms"]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return out | {"why": NO_KEYS}
+    held = [e for e in entries if e[2] <= first]
+    if not held:
+        return out | {"why": NO_ENTRY}
+    p = {"lms": lms, "key": held[-1][0], "session": held[-1][1]}
     if composed is None:
         return out | {"why": f"the composite of record has no {NETWORK} case stating the SHA-512 of the parameters the "
                              "period's check read"}
