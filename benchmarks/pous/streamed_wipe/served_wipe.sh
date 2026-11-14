@@ -33,7 +33,8 @@
 # the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The leg's case, which holds the challenger's signed session, goes to
 # SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the composite's
 # piece beside it: case.json and the leg's own answer.json. Its last line is `WIPE {...}`.
-# Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build.
+# Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build or verity/
+# doesn't copy for its build.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF=$HERE/$(basename "$0")
@@ -68,7 +69,10 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
     L=verity/protocols/accounting/pous/device/lean
-    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
+    # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes __pycache__
+    # beside it meanwhile, as a check's other suites do; 2 or more is a copy that failed
+    { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
+      | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
     (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \
