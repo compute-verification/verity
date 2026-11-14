@@ -91,15 +91,15 @@ name() {
 # Lean source under $FW/tmpl-unit (its log $O/build-tmpl-unit.log)
 tmpl_unit() {
   [ -n "${PT_TMPL_UNIT:-}" ] && { echo "$PT_TMPL_UNIT"; return 0; }
-  local L=$FW/tmpl-unit LC=$REPO/verity/protocols/flock/pod/lake_closure.py TU=$REPO/verity/protocols/flock/prover/tests/lean/TmplUnit.lean
-  local lsha; lsha=$(python3 $LC key $REPO/verity/protocols/flock/verifier $TU) || return 1
+  local L=$FW/tmpl-unit LC=$REPO/verity/protocols/proofs/flock/prover/pod/lake_closure.py TU=$REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean
+  local lsha; lsha=$(python3 $LC key $REPO/verity/protocols/proofs/flock/verifier $TU) || return 1
   local bin=$L/lean-$lsha/flock-tmpl-unit; mkdir -p $L
   (
     flock 8
     [ -x $bin ] && exit 0
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
-    rm -rf $L/lean-src && src=$(python3 $LC copy $REPO/verity/protocols/flock/verifier $L/lean-src) && cp $TU $src/ \
+    rm -rf $L/lean-src && src=$(python3 $LC copy $REPO/verity/protocols/proofs/flock/verifier $L/lean-src) && cp $TU $src/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $src/lakefile.toml \
       && (cd $src && lake build flock-tmpl-unit) && mkdir -p $L/lean-$lsha && cp $src/.lake/build/bin/flock-tmpl-unit $bin
   ) 8> $L/.lock >> $O/build-tmpl-unit.log 2>&1 || { echo "flock-tmpl-unit not built: $O/build-tmpl-unit.log" >&2; return 1; }

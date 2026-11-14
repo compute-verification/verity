@@ -41,7 +41,8 @@ got=$(sha256sum "$kf" 2>/dev/null | cut -d' ' -f1)
 mkdir -p "$S/kit" && tar -xzf "$kf" -C "$S/kit" && rm -rf "$S/kitdl" || { log "kit not unpacked"; exit 2; }
 REPO=$(ls -d "$S"/kit/*/ | head -1); REPO=${REPO%/}; cd "$REPO" || exit 2
 log "kit $KIT_ART, sha256 ${got:0:16}, unpacked as $(basename "$REPO")"
-L=$REPO/verity/protocols/flock/verifier
+# Flock is under verity/protocols/proofs/flock in a kit of main, under verity/protocols/flock in a kit from before that move
+F=$REPO/verity/protocols/proofs/flock; [ -d "$F" ] || F=$REPO/verity/protocols/flock; L=$F/verifier
 IFS=';' read -r -a recs <<< "${RECORDS:?}"
 for rr in "${recs[@]}"; do rs data fetch "${rr#*=}" --list --json > "$S/list-${rr%%=*}.json" 2>> "$O/fetch.log" || { log "record ${rr#*=} (${rr%%=*}) not listed"; exit 2; }; done
 printf 'name\trun\trecord\tfiles\tbytes\tvs_record\n' > "$O/kept.tsv"
@@ -77,7 +78,7 @@ t0=$(date +%s); (cd "$L" && lake build "$exe" "$rt") > "$O/build.log" 2>&1 || { 
 EXE=$L/.lake/build/bin/$exe; sha256sum "$EXE" > "$O/verifier.sha256"; log "verifier $exe and $rt built in $(( $(date +%s) - t0 )) s, sha256 $(cut -c1-16 "$O/verifier.sha256")"
 export PATH=$L/.lake/build/bin:$PATH
 PY=$S/py/bin/python; uv venv -q --python 3.12 "$S/py" && uv pip install -q --python "$PY" numpy blake3 || exit 3
-SP=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
+SP=$REPO:$F/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
 
 nm() { "$PY" -c 'import importlib.util as u, sys; s = u.spec_from_file_location("w", "benchmarks/served_units/window.py"); m = u.module_from_spec(s); sys.modules["w"] = m; s.loader.exec_module(m); print(m.name(sys.argv[1], sys.argv[2]))' "$1" "$2"; }
 restage() {   # restage UNIT N NAME: $S/st/NAME holds the statement and its program-word.json, held to kept/NAME; 0 or why not

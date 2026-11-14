@@ -60,7 +60,7 @@ def job(tmp_path):
         (bin_ / name).write_text(text)
         (bin_ / name).chmod(0o755)
     (tmp_path / "units").write_text("census:EmbeddingRead_v1{V=256,H=4}@full\t4.8\t1.5\t197\t30\n")
-    (tmp_path / "verity/protocols/flock/verifier").mkdir(parents=True)
+    (tmp_path / "verity/protocols/proofs/flock/verifier").mkdir(parents=True)
     (tmp_path / "benchmarks/served_units").mkdir(parents=True)
     (tmp_path / "benchmarks/served_units/window.py").write_text(WINDOW)
     run_dir, calls = tmp_path / "run", tmp_path / "calls"
