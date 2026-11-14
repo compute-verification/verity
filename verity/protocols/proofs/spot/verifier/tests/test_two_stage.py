@@ -28,8 +28,7 @@ from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
-from verity.protocols.proofs.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
-                                                            verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.commitments.window import window_binding
 
 import fake_challenger as FC

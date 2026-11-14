@@ -66,7 +66,7 @@ import a7  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC  # noqa: E402

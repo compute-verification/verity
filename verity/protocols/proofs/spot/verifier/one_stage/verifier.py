@@ -51,7 +51,7 @@ from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import audit, draw as D, hello as H, link_points as LP, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, hello as H, link_points as LP, docket as R
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"

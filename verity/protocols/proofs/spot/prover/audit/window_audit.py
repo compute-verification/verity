@@ -222,8 +222,13 @@ from verity_flock.proof_server import ProofServer, ProofServerError, Session, St
 from verity.commitments import row_table as RT  # noqa: E402
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as MB, partition as P, registration as R, \
-    verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    draw as D,
+    members as MB,
+    partition as P,
+    docket as R,
+    verifier as V,
+)  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.commitments.windows import wiring as WI  # noqa: E402

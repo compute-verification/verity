@@ -53,7 +53,7 @@ from verity_difftest import protocol as P
 
 from verity.protocols.accounting.pouw.verifier import core_check, credit, period_check
 from verity.protocols.proofs.spot.device import challenger as CH
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 

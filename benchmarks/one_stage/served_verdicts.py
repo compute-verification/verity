@@ -1485,7 +1485,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`)."""
     import served_shares as SS
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []

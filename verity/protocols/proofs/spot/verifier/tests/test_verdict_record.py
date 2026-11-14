@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE))

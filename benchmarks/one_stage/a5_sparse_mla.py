@@ -46,7 +46,7 @@ sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
 

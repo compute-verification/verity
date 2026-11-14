@@ -44,7 +44,7 @@ import numpy as np
 import pytest
 import settings
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
@@ -1640,7 +1640,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)

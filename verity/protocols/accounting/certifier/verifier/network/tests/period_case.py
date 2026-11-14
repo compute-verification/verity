@@ -80,7 +80,7 @@ from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIG
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.circuits import boolean as BL, codec, population
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind

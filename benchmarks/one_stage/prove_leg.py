@@ -85,7 +85,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402

@@ -239,7 +239,7 @@ def _one_stage():
     import a0
     import a7
     import a8
-    from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
 
     return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
 
