@@ -27,7 +27,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open RecordText (Row)
+open Spot.RecordText (Row)
 
 /-! ## A finite set of gates, numbered by a key -/
 

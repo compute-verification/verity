@@ -11,7 +11,7 @@ public import Definitions.Core.TC.Gadgets
 The step relation (`Verity.Protocol.TC.Relation`, `verity.ml.tc.relation`) against the step semantics
 (`Verity.Protocol.TC.Spec`, `verity.ml.tc.total.tc_dot_total`) on the Hopper pipeline (`HOPPER_BF16_WGMMA_K16`, whose
 parameters `HOPPER_BF16_M16N8K16` shares) and the Ampere/Ada pipeline (`AMPERE_BF16_M16N8K16`, whose parameters
-`ADA_BF16_M16N8K16` shares), in either alignment mode, over the integers: each step, each verification unit and the BF16
+`ADA_BF16_M16N8K16` shares), in either alignment mode, over the integers: each step, each proof block and the BF16
 word it commits, and the range and is-zero gadgets. Under `gemm-hopper-step` and `gemm-ampere-step`
 (`Verity.Assumptions`), the semantics is the device's.
 -/
@@ -64,7 +64,7 @@ def AmpereStepSound : Prop :=
     stepOut (decodeState acc AMPERE_BF16_M16N8K16) w.groups =
       decodeState (tcDotTotal AMPERE_BF16_M16N8K16 acc a b) AMPERE_BF16_M16N8K16
 
-/-- A verification unit on the Ampere/Ada pipeline, from `zero_state` to the committed BF16 word: the relation's steps
+/-- A proof block on the Ampere/Ada pipeline, from `zero_state` to the committed BF16 word: the relation's steps
 and boundary accept only `cvt_rn_bf16_f32` of the semantics' accumulator, whose FP32 word is the accumulator itself. -/
 def AmpereUnitBf16 : Prop :=
   ∀ (align : Align) (steps : List (List Nat × List Nat × Witness)),
@@ -74,7 +74,7 @@ def AmpereUnitBf16 : Prop :=
     c.word = (tcDotChainTotal AMPERE_BF16_M16N8K16 0 (steps.map (fun s => (s.1, s.2.1))) : Int) ∧
       c.bf16 = (cvtRnBf16F32 (tcDotChainTotal AMPERE_BF16_M16N8K16 0 (steps.map (fun s => (s.1, s.2.1)))) : Int)
 
-/-- A verification unit on the Ampere pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
+/-- A proof block on the Ampere pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
 the decode of the semantics' accumulator after the unit's steps. -/
 def AmpereUnitSound : Prop :=
   ∀ (align : Align) (acc : Nat), acc < 2 ^ 32 →
@@ -121,7 +121,7 @@ def HopperStepSound : Prop :=
     stepOut (decodeState acc HOPPER_BF16_WGMMA_K16) w.groups =
       decodeState (tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b) HOPPER_BF16_WGMMA_K16
 
-/-- A verification unit on the Hopper pipeline, from `zero_state` to the committed BF16 word: the relation's steps and
+/-- A proof block on the Hopper pipeline, from `zero_state` to the committed BF16 word: the relation's steps and
 boundary accept only `cvt_rn_bf16_f32` of the semantics' accumulator, whose FP32 word is the accumulator itself. -/
 def HopperUnitBf16 : Prop :=
   ∀ (align : Align) (steps : List (List Nat × List Nat × Witness)),
@@ -131,7 +131,7 @@ def HopperUnitBf16 : Prop :=
     c.word = (tcDotChainTotal HOPPER_BF16_WGMMA_K16 0 (steps.map (fun s => (s.1, s.2.1))) : Int) ∧
       c.bf16 = (cvtRnBf16F32 (tcDotChainTotal HOPPER_BF16_WGMMA_K16 0 (steps.map (fun s => (s.1, s.2.1)))) : Int)
 
-/-- A verification unit on the Hopper pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
+/-- A proof block on the Hopper pipeline: every witness chain the relation accepts from `decode_state(acc)` outputs
 the decode of the semantics' accumulator after the unit's steps. -/
 def HopperUnitSound : Prop :=
   ∀ (align : Align) (acc : Nat), acc < 2 ^ 32 →

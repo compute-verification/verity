@@ -77,7 +77,7 @@ def class_lanes(w: Workload, n: int | None = None) -> dict[str, Any]:
     us = units(w)
     classes = us.classes()
     if len(classes) != 1:
-        raise ValueError(f"{w.name}: {len(classes)} unit classes, not one")
+        raise ValueError(f"{w.name}: {len(classes)} proof-block classes, not one")
     (shape, cl), = classes.items()
     pdig = program_digest(us.program)
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": pdig, "seed": SEED})

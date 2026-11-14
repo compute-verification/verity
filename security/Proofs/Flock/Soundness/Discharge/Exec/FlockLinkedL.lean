@@ -5,11 +5,11 @@ public import Proofs.Flock.Soundness.Audit.FlockLinked
 import Mathlib.Combinatorics.Matroid.Init
 
 /-!
-# The compiled-layer audit with `δ_link` discharged
+# The compiled-layer audit with `ε_bind` discharged
 
 The batched Flock audit with the expected-time extractor (`flock_batched_countEL`), composed with the link theorem
 (`flock_batched_linkSoundEL`) at the plurality value layer (`XplurL`). The count curve and the drawn-unit bound no longer
-carry `δ_link` as a hypothesis:
+carry `ε_bind` as a hypothesis:
 $$\Pr[\text{accept} \wedge \text{at least } K \text{ incorrect}] \le \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) +
 \frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}} + \frac{1}{eM} + \frac{k}{eR_w}\Big).$$
 
@@ -50,7 +50,7 @@ theorem linkBoundCR_eqL {k Rw M : ℕ} {ρ t' : ℝ} {R : Reg} {τ : Cont L Reg 
   simp only [hCR, ↓reduceIte]
   rfl
 
-/-- **The compiled-layer count curve, with `δ_link` discharged**: at the plurality value layer,
+/-- **The compiled-layer count curve, with `ε_bind` discharged**: at the plurality value layer,
 `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + linkBoundE`, given A2 for the link finders, `ValueBinding`
 and the lowering. -/
 theorem flock_batched_count_linkedL (hlow : P.LoweringSoundB plan tab decode)
@@ -66,7 +66,7 @@ theorem flock_batched_count_linkedL (hlow : P.LoweringSoundB plan tab decode)
     (flock_batched_linkSoundEL P H E Lf plan tab vb hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])
 
-/-- **Sampled proof blocks of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
+/-- **Sampled proof blocks of the compiled-layer audit, with `ε_bind` discharged**, are correct at the plurality value layer
 up to `ε_ks(σ) + linkBoundE`. -/
 theorem flock_batched_sampled_linkedL (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

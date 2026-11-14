@@ -45,6 +45,9 @@ theorem ofOwner_owner (o : Core.Site.Owner) : ofOwner (owner o) = o := by cases 
 /-- The spec's remote is the code's. -/
 @[simp] theorem remote_eq : Verity.Registration.Composite.remote = Composite.remote := rfl
 
+/-- The spec's plain sibling of remote is the code's. -/
+@[simp] theorem plain_eq : Verity.Registration.Composite.plain = Composite.plain := rfl
+
 @[simp] theorem ofOperandClass_operandClass (c : Core.Site.OperandClass) : ofOperandClass (operandClass c) = c := by
   cases c <;> rfl
 
@@ -703,13 +706,21 @@ theorem refuses_nontrivial :
   rw [← refuses, staleEntry_refusal]
   simp [acceptAllRefusal]
 
+/-- The honest log's uplink, from its host to the outside, is a boundary link of its Site. -/
+theorem honestLog_boundary :
+    (site (Core.Site.ofLog honestLog)).Boundary
+      (link { id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }) :=
+  (boundary_site _ _).mpr (by decide +kernel)
+
 /-- `EntryValid`'s honest witness: the code accepts `honestEntry` against the empty Site at the genesis, and it is
-valid there. -/
+valid there, with a boundary link (`honestLog_boundary`), so the domain hypothesis `Verity.Site.Boundary` holds at it. -/
 theorem entryValid_honest :
     honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none ∧
       Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote
-        (site emptySite) "genesis" (regEntry honestEntry) :=
-  ⟨honestEntry_refusal, (entryValid _ _ _ _ _ _).mp honestEntry_refusal⟩
+        (site emptySite) "genesis" (regEntry honestEntry) ∧
+      (site (Core.Site.ofLog honestLog)).Boundary
+        (link { id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }) :=
+  ⟨honestEntry_refusal, (entryValid _ _ _ _ _ _).mp honestEntry_refusal, honestLog_boundary⟩
 
 /-- `EntryValid`'s nontrivial witness: an entry check that accepts everything accepts `staleEntry`, which is not
 valid. -/
@@ -743,11 +754,13 @@ theorem checks_nontrivial :
   simp [acceptAllCheck, Except.toOption]
 
 /-- `RefusedAt`'s honest witness: the code's check accepts `honestLog` and refuses `staleLog` at its second entry, as
-not following the head. -/
+not following the head; `honestLog`'s Site has a boundary link (`honestLog_boundary`). -/
 theorem refusedAt_honest :
     Core.Site.Registration.check witnessDigests witnessAuditor .remote honestLog = .ok (Core.Site.ofLog honestLog) ∧
-      Core.Site.Registration.check witnessDigests witnessAuditor .remote staleLog = .error (1, .previous) :=
-  ⟨check_honestLog, check_staleLog⟩
+      Core.Site.Registration.check witnessDigests witnessAuditor .remote staleLog = .error (1, .previous) ∧
+      (site (Core.Site.ofLog honestLog)).Boundary
+        (link { id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }) :=
+  ⟨check_honestLog, check_staleLog, honestLog_boundary⟩
 
 /-- `RefusedAt`'s nontrivial witness: a log check that refuses everything at its first entry, as not following the
 head, fails `RefusedAt` on `honestLog`. What `RefusedAt` concludes of that refusal is false: the spec doesn't give

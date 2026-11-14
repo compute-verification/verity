@@ -324,6 +324,13 @@ def install_tiles(scheme: Any) -> Callable[[], None]:
     raise NotImplementedError(NEEDS_BENCHMARK.format("fast_tile.install", "benchmarks/pouw/served_zk/served_commit_run.py"))
 
 
+def lean_record(lean: bool | None = None) -> OR.Record:
+    """The checks of record with their Lean side (`benchmarks/pouw/served_zk/of_record_lean.py`'s `Record`), which
+    `main` takes as `record`: `of_record.Record` alone refuses its first check."""
+    raise NotImplementedError(NEEDS_BENCHMARK.format("of_record_lean.Record",
+                                                     "benchmarks/pouw/served_zk/served_commit_run.py"))
+
+
 def pinned_challenger_key(record: Path) -> Ch.ChallengerKey:
     """The verifier's challenger key, read from `record`, the file of infra's published pin (`CHALLENGER_KEY_PIN`), which
     the caller fetches from the evidence store and hands in: verity reads no store. Refused (ValueError) unless the record
@@ -661,8 +668,8 @@ def core_params(params: dict) -> dict:
     return OR.core_params(params, check_item(params), R.query_digest(PT.template_instance_query(template(params["k"]))))
 
 
-def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
-          record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
+def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True, *,
+          record: OR.Record, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
     rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`: an
     `of_record.Record`, whose Lean side `of_record_lean.Record` supplies), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
@@ -678,12 +685,12 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         roots = {r["port"]: r for r in rec["roots"]}
         pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
             "the registered window domain is not the window's served domain"
-    r = OR.Record() if record is None else record
-    x = {"params": core_params(params), "commitment": r.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
-         "unit": unit, "pub": pub.hex(), "opening": op, **({} if salt is None else {"salt": salt.hex()})}
+    x = {"params": core_params(params), "commitment": record.hexed(rec),
+         "units": list(draw.get("units", ())) if drawn else None, "unit": unit, "pub": pub.hex(), "opening": op,
+         **({} if salt is None else {"salt": salt.hex()})}
     try:
-        out = r.opening(x)
-        return r.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
+        out = record.opening(x)
+        return record.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
     except OR.Disagree as e:
         return e.code
 
@@ -892,7 +899,7 @@ class Challenger:
     (`salts`), and `check` opens its sampled proof blocks under it."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
-                 clock: Callable[[], float] | None = None, record: OR.Record | None = None,
+                 clock: Callable[[], float] | None = None, *, record: OR.Record,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
                  opens: PS.WindowOpens | None = None) -> None:
@@ -929,7 +936,7 @@ class Challenger:
         self.opens = PS.WindowOpens() if opens is None else opens
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
-        self.record = OR.Record() if record is None else record
+        self.record = record
         self.core = core_params(params)
         self.witness: dict[str, list[dict]] = {}
         self.recorded: dict[str, bool] = {}
@@ -1156,8 +1163,8 @@ class Challenger:
         """`check` of execution phase `name`'s unit `unit` against its registration and sample, of record (`record`), under the salt
         its pass was checked against when it is certified (`salts`)."""
         _, reg = self._held(name)
-        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, self.record,
-                     self.salts.get(name))
+        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
+                     salt=self.salts.get(name))
 
     def select(self, name: str) -> S.Draw:
         """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `draw_key`;
@@ -1475,6 +1482,7 @@ def cmd_challenger(a) -> int:
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
     Python's, to LOG/witness.jsonl (an execution phase that ends before its outcome keeps them there); it ends at end of input or
     ``{"op": "quit"}``."""
+    record = a.record(lean=False if a.python_record else None)
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
     if a.state:
@@ -1490,7 +1498,7 @@ def cmd_challenger(a) -> int:
     coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=a.record(lean=False if a.python_record else None))
+                    record=record)
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1516,8 +1524,7 @@ def _files(p: Path) -> dict[str, bytes]:
     return {q.relative_to(p).as_posix(): q.read_bytes() for q in sorted(p.rglob("*")) if q.is_file()} if p.is_dir() else {}
 
 
-def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, record: OR.Record | None = None
-           ) -> list[str]:
+def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, *, record: OR.Record) -> list[str]:
     """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
     coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
     a request wrote; empty when the replay is byte-identical.  A record whose parameters predate the registration
@@ -1548,7 +1555,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   a.record(lean=False if a.python_record else None))
+                   record=a.record(lean=False if a.python_record else None))
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1655,11 +1662,11 @@ PYTHON_RECORD = ("PoUW's checks by their Python references alone, undoing the sw
                  "(`of_record`)")
 
 
-def main(argv=None, *, record: type[OR.Record] = OR.Record, tiles: Callable[[Any], Callable[[], None]] = install_tiles
-         ) -> int:
-    """The commands below; `record` is the checks of record the challenger, `replay` and `check` take (`of_record.Record`,
-    whose Lean side `of_record_lean.Record` supplies), and `tiles` installs a commit's batch tile checks
-    (`install_tiles`): `benchmarks/pouw/served_zk/served_commit_run.py` passes both."""
+def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
+         tiles: Callable[[Any], Callable[[], None]] = install_tiles) -> int:
+    """The commands below; `record` makes the checks of record the challenger, `replay` and `check` take (`lean_record`:
+    `of_record_lean.Record`), and `tiles` installs a commit's batch tile checks (`install_tiles`):
+    `benchmarks/pouw/served_zk/served_commit_run.py` passes both."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("params")

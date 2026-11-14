@@ -37,7 +37,7 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   strata, slot `u` unit `u`'s lowered gates, then one slot per input gate of the lowered program, sampled `all`.
   `slotPartition` of the layout itself numbers the descriptor's gates, not the lowered program's, so it covers none of a
   unit's lowered gates. `PartSlotsTarget` states that `partSlots` partitions the lowered program where each unit has a
-  gate and commits at most `unitClassMax` bits; `ScopeSlotsOk` is `ScopeOk` at these slots.
+  gate and commits at most `sizeClassMax` bits; `ScopeSlotsOk` is `ScopeOk` at these slots.
 -/
 
 @[expose] public section
@@ -195,11 +195,11 @@ def designSlots (A : Live) : Claims.Sampling.Design :=
 noncomputable def stmtSlots (A : Live) : AuditStatement := { stmtA A with design := designSlots A }
 
 /-- **`partSlots` partitions the lowered program** where every unit has a lowered gate and commits at most
-`unitClassMax` bits. No unit reads another's gates, so a unit commits only its returned bits, and an input slot commits
+`sizeClassMax` bits. No unit reads another's gates, so a unit commits only its returned bits, and an input slot commits
 its one input. -/
 def PartSlotsTarget : Prop :=
   ∀ A : Live, (∀ u, Flock.Bridge.unitGates A.P u ≠ []) →
-    (∀ u, Claims.Sampling.committed (stmtSlots A).prog (Flock.Bridge.unitGates A.P u) ≤ Claims.Sampling.unitClassMax) →
+    (∀ u, Claims.Sampling.committed (stmtSlots A).prog (Flock.Bridge.unitGates A.P u) ≤ Claims.Sampling.sizeClassMax) →
       (partSlots A).Partitions (stmtSlots A).prog
 
 /-- **The statement is in scope at v2's slots** (`ScopeOk` at `partSlots` and `designSlots`): `partSlots` partitions

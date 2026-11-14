@@ -1,5 +1,5 @@
 """drawn.py: the CLI of a served H1 window's sampled proof blocks staged as Flock statements and checked as credit does
-(`verity.protocols.accounting.pouw.prover.serving.h1.drawn`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
+(`verity.protocols.accounting.pouw.prover.serving.h1.sampled`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
 live challenger's model registry (`live_challenger.models`) and ``check`` credit's own verification (`credit._verified`
 with the Lean ``verity-verify-proof`` at ``--lean``, then `credit._proved`), each Lean run answered as credit asks for it
 (`verity.protocols.accounting.pouw.prover.serving.h1.answers`), one ``LEAN-ANSWER`` line a verdict, and ``stage``'s
@@ -23,7 +23,7 @@ import stagers as S
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.accounting.pouw.prover.serving.h1 import answers as A
-from verity.protocols.accounting.pouw.prover.serving.h1 import drawn as D
+from verity.protocols.accounting.pouw.prover.serving.h1 import sampled as D
 
 MODELS = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "models.py"
 

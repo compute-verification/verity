@@ -20,6 +20,9 @@ and its verifier. These are the facts about those functions, at every list and a
   and lists beside it (`verifier_mem`), with the code's components (`componentsOf_onsite`, `componentsOf_remote`) and
   ties (`ties_onsite`, `ties_remote`). The spec's two lists are the code's components' ids (`ids_onsite`,
   `ids_remote`).
+* **At remote's plain sibling.** Its subprotocols are remote's with the rows check in v0's place
+  (`componentsOf_plain`), and the code builds no verifier from its list: `Core.Composites.ofIds` refuses it by name
+  (`ofIds_plain`).
 -/
 
 @[expose] public section
@@ -34,8 +37,9 @@ theorem mem_all (a : Subprotocol) : a ∈ Subprotocol.all := by cases a <;> deci
 
 /-- At every composite, the subprotocols' ids are distinct. -/
 theorem ids_nodup (k : Verity.Registration.Composite) : (Subprotocol.all.map (·.idAt k)).Nodup := by
-  by_cases h : PouwCheck.PearlPlus.Protocol.protocolId ∈ k <;>
-    simp only [Subprotocol.all, List.map_cons, List.map_nil, idAt, protocolAt, h, ↓reduceIte] <;> decide
+  by_cases h : PouwCheck.PearlPlus.Protocol.protocolId ∈ k <;> by_cases hr : rowsId ∈ k <;>
+    simp only [Subprotocol.all, List.map_cons, List.map_nil, idAt, protocolAt, h, hr, ↓reduceIte, rowsCheck] <;>
+    decide
 
 /-- At every composite, a protocol id names at most one subprotocol. -/
 theorem id_injective {k : Verity.Registration.Composite} {a b : Subprotocol} (h : a.idAt k = b.idAt k) : a = b := by
@@ -130,5 +134,15 @@ theorem verifier_mem (hk : k = .onsite ∨ k = .remote) : (verifier k, k) ∈ Co
   rcases hk with rfl | rfl
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
+
+/-! ## Remote's plain sibling -/
+
+/-- **The plain sibling's subprotocols** are remote's but for the inference-only policy's check: the rows check in v0's
+place. -/
+theorem componentsOf_plain :
+    componentsOf .plain = [rowsCheck, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol] := rfl
+
+/-- **The code refuses the plain sibling's list**, by name: no verifier the code builds is the plain sibling's. -/
+theorem ofIds_plain : Composites.ofIds Verity.Registration.Composite.plain = .error Composites.plainRefusal := rfl
 
 end Verity

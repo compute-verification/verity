@@ -51,7 +51,7 @@ STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "
 #: core's monitoring periods (`verity.protocol`), seconds by name
 PERIODS = dict(MONITORING_PERIODS)
 #: the keys that hold the output bits an accepted incorrect proof block injects: a block's outputs fit its Definition's
-#: public size class, so the widest class (`partition_v2.UNIT_CLASS_MAX`), over the classes down to the smallest
+#: public size class, so the widest class (`partition_v2.SIZE_CLASS_MAX`), over the classes down to the smallest
 BLOCK_OUTPUT_BITS = ("regime.remote-sampled.step_bits", "incorrect.step_bits")
 #: the census entries whose numbers the layers state, for the tests that hold them equal: the reference datacenter and
 #: the fleets that are it, a machine a location; and the adversary, the world's inference, with the registry's model it
@@ -193,10 +193,10 @@ def sourced() -> list[Param]:
     key set twice). The census's numbers are not among them (module docstring)."""
     periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.protocol MONITORING_PERIODS",
                      status="declared") for name, s in PERIODS.items()]
-    widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
+    widest, smallest = partition_v2.SIZE_CLASS_MAX, partition_v2.SIZE_CLASSES[0]
     bits = [Param(key, widest, "bit", low=smallest, high=widest,
-                  source="verity.circuits.partition_v2 UNIT_CLASS_MAX: a proof block's outputs fit its Definition's "
-                         "public size class, and an incorrect block injects the widest; low: UNIT_CLASSES' smallest",
+                  source="verity.circuits.partition_v2 SIZE_CLASS_MAX: a proof block's outputs fit its Definition's "
+                         "public size class, and an incorrect block injects the widest; low: SIZE_CLASSES' smallest",
                   status="derived") for key in BLOCK_OUTPUT_BITS]
     return periods + bits + _deltas() + _policies()
 

@@ -423,8 +423,8 @@ theorem rowsTiedInputWired : RowsTiedInputWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))))
     unfold tiedInputCheck at h0
     split at h0
     · assumption
@@ -936,7 +936,7 @@ theorem rowsStartCharged : RowsStartCharged := by
   split at h
   · cases h
   cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;>
-    simp [StartCharged, hf, rowsPublic, rowsTerms, terms]
+    simp [StartCharged, hf, rowsPublic, rowsTerms]
 
 /-- **`RowsStartCharged`'s honest lemma**: the period check accepts a period that does not begin the run,
 `chargedPeriod` with nothing registered. -/

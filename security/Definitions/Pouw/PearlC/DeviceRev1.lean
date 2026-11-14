@@ -17,7 +17,7 @@ program can skip it. rev1 takes every promotion into a +0 total out of the credi
   without a per-word test that costs as much as the add.
 
 The maps, the domain and the cap's form are the device record's. The debit gains the later +0 promotions and is
-otherwise `debitDev`, which still gives each flagged atom-word `add/G` of its group's promotion, the first group's
+otherwise `inertWorkDev`, which still gives each flagged atom-word `add/G` of its group's promotion, the first group's
 included. That over-debits by at most `firstAddDev` per unit, so it only lowers the credit and tightens the cap.
 
 The debit also gains, at one MAC each, the products of a word that no salt of the support makes count (`wordMend`), so
@@ -34,7 +34,7 @@ that stay uncut at some salt are not charged here.
 
 * `firstAddDev`, `creditDevRev1`, `wrefDevRev1`: the first add of every word at the device's add price, and the credit
   and `W_ref` without it. `creditOfRev1` and `wrefOfRev1` are the same at `Params` and `Costs` (H100 prices).
-* `laterZeroPromos`, `wordMend`, `PearlCSem.unitDebitRev1`, `PearlCSem.tileDebitRev1`: the later +0 promotions of a
+* `laterZeroPromos`, `wordMend`, `PearlCSem.unitInertWorkRev1`, `PearlCSem.tileInertWorkRev1`: the later +0 promotions of a
   word, read off the record's own ticket map on column prefixes (`T_g` is the chain over the first `32·G·g` columns), a
   word's dead pairs and forced zeros, and the unit and tile debits with them.
 * `pearlCProtocolDevRev1`, `pearlCTilesDevRev1`: `pearlCProtocolDev` and `pearlCTilesDev` with rev1's credit, debit and
@@ -90,24 +90,24 @@ noncomputable def wordMend (d : PearlCDevice) (alpha beta : (k : ℕ) → (Fin k
 
 variable {Q R S : Type}
 
-/-- rev1's replayed debit of a unit: `debitDev` of `unitDebitDev`, plus its later promotions into a +0 total at the
+/-- rev1's replayed debit of a unit: `inertWorkDev` of `unitInertWorkDev`, plus its later promotions into a +0 total at the
 add price and its words' `wordMend` at one MAC each. -/
-noncomputable def PearlCSem.unitDebitRev1 (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
+noncomputable def PearlCSem.unitInertWorkRev1 (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let AB := sem.unitChain H s U u act
-  debitDev d (sem.unitDebitDev d H s U u act) + d.prices.add * ∑ i, ∑ j, (laterZeroPromos d AB.1 AB.2 i j : ℚ) +
+  inertWorkDev d (sem.unitInertWorkDev d H s U u act) + d.prices.add * ∑ i, ∑ j, (laterZeroPromos d AB.1 AB.2 i j : ℚ) +
     ∑ i, ∑ j, (wordMend d sem.alpha sem.beta (wordsVal sh.m sh.k act i)
       (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) j) : ℚ)
 
 open Classical in
-/-- rev1's replayed debit of a tile: `tileDebitDev`, plus the later promotions into a +0 total of the tile's words and
+/-- rev1's replayed debit of a tile: `tileInertWorkDev`, plus the later promotions into a +0 total of the tile's words and
 their `wordMend` at one MAC each. -/
-noncomputable def PearlCSem.tileDebitRev1 (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
+noncomputable def PearlCSem.tileInertWorkRev1 (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let AB := sem.unitChain H s U u act
-  sem.tileDebitDev d H s U u rows cols act + d.prices.add *
+  sem.tileInertWorkDev d H s U u rows cols act + d.prices.add *
     ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
       (laterZeroPromos d AB.1 AB.2 e.1 e.2 : ℚ) +
     ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
@@ -115,18 +115,18 @@ noncomputable def PearlCSem.tileDebitRev1 (sem : PearlCSem Q R S) (d : PearlCDev
         (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) e.2) : ℚ)
 
 /-- **Pearl-C's protocol at a device record under rev1**, with the debit cap `ρ`: `pearlCProtocolDev` with
-`creditDevRev1`, `unitDebitRev1` and `wrefDevRev1`. -/
+`creditDevRev1`, `unitInertWorkRev1` and `wrefDevRev1`. -/
 noncomputable def pearlCProtocolDevRev1 (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Protocol Q R S where
   ticket := fun H s U u act => atNat (d.ticket (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUsefulDev d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
   fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
-    ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s U u act : ℚ) : ℝ)
-  capOK := fun H s U u act => sem.unitDebitRev1 d H s U u act ≤ ρ * creditDevRev1 d (U.layout.shape u)
+    ((creditDevRev1 d (U.layout.shape u) - sem.unitInertWorkRev1 d H s U u act : ℚ) : ℝ)
+  inertBoundOK := fun H s U u act => sem.unitInertWorkRev1 d H s U u act ≤ ρ * creditDevRev1 d (U.layout.shape u)
   Wref := fun L u => (wrefDevRev1 d (L.shape u) : ℝ)
 
-/-- **Pearl-C's audit tiles at a device record under rev1**: `pearlCTilesDev` with `creditDevRev1`, `tileDebitRev1` and
+/-- **Pearl-C's audit tiles at a device record under rev1**: `pearlCTilesDev` with `creditDevRev1`, `tileInertWorkRev1` and
 `wrefDevRev1`. -/
 noncomputable def pearlCTilesDevRev1 (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : TileRules Q R S where
   tiling := auditTiling 64 64
@@ -135,10 +135,10 @@ noncomputable def pearlCTilesDevRev1 (d : PearlCDevice) (sem : PearlCSem Q R S) 
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
     (((1 - ρ) * creditDevRev1 d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ)
-  capOK := fun H s U g act =>
+  inertBoundOK := fun H s U g act =>
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
-    sem.tileDebitRev1 d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
+    sem.tileInertWorkRev1 d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
       ρ * creditDevRev1 d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g)
   Wref := fun L g =>
     let tl := auditTiling 64 64 L

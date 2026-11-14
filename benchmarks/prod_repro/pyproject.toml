@@ -49,7 +49,7 @@ inputs = [
     "verity/protocols/accounting/certifier/verifier/__init__.py",
     "verity/protocols/accounting/certifier/verifier/arith_encode.py",
     "verity/protocols/accounting/certifier/verifier/charge_chain.py",
-    "verity/protocols/accounting/certifier/verifier/replay_chain.py",
+    "adapters/vllm/verity_vllm/compiler/replay_chain.py",
     "verity/protocols/accounting/certifier/verifier/head_check.py",
     "verity/protocols/accounting/certifier/verifier/certificate.py",
     "verity/protocols/accounting/certifier/verifier/grid.py",

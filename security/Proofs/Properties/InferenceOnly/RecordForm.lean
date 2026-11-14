@@ -25,7 +25,7 @@ Two of the four statements `Properties.Record.Complies` follows from, of this fo
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 
 /-- On a record's summary, the form's rate rule is the check's. -/
