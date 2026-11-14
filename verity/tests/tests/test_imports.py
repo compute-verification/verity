@@ -1,13 +1,10 @@
-"""The package file holds nothing: importing the wire, which holds the record entry, or the Site reads no sheet."""
+"""Importing the wire, which holds the record entry, or the Site reads no sheet."""
 
 from __future__ import annotations
 
-import ast
 import subprocess
 import sys
-from pathlib import Path
 
-PACKAGE = Path(__file__).resolve().parents[1] / "__init__.py"
 READS = """
 import os, sys
 seen = []
@@ -20,15 +17,6 @@ sys.exit("\\n".join(read) or None)
 """
 """What a fresh interpreter runs: the two imported under an audit hook, then each card or node file, or directory of
 them, that the imports opened or listed, printed as the exit's message."""
-
-
-def test_the_package_file_is_a_docstring_alone() -> None:
-    """Whatever ``verity/hardware/__init__.py`` holds runs on every import of a module under it, a verifier's included:
-    it re-exports nothing, and the readers of the card and node files are the Site's (``verity.device``)."""
-    body = ast.parse(PACKAGE.read_text(encoding="utf-8")).body
-    assert len(body) == 1 and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0].value, "value", None), str), (
-        "verity/hardware/__init__.py holds more than its docstring; put the code in the module that owns it "
-        "(the card and node files' readers are verity/device.py's) and import it from there")
 
 
 def test_the_record_and_the_site_read_no_sheet_on_import() -> None:

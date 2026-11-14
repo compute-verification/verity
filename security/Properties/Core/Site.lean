@@ -2,12 +2,14 @@ module
 
 public import Definitions.Core.Site
 public import CoreProtocol.Site
+public import RegistrationLog.SiteCheck
 
 /-!
 # The Site's code: its fold and its check are the spec's
 
-`Core.Site` (`verity/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) is code, so it
-requires nothing of `Security/`: it copies `Verity.Site` and `Verity.Registration` (`Definitions.Core.Site`) over types
+`Core.Site` (`verity/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) and registration's check on
+it (`verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteCheck.lean`, package
+`core_registration`) are code, so they require nothing of `Security/`: they copy `Verity.Site` and `Verity.Registration` (`Definitions.Core.Site`) over types
 of its own. These are its properties, each a `Prop` stated against the code's functions and the spec's definitions, on
 the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests`, `auditor`), and
 `Proofs.Properties.Core.Site` proves every one:

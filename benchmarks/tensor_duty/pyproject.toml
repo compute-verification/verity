@@ -8,5 +8,5 @@ pythonpath = ["."]
 [tool.verity.tests]
 # summarize.py reads the bound from the card (the Site's reader, `verity.device`, which imports `verity.errors` and
 # the wire, `verity.channel`).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "hardware/cards", "verity/device.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "hardware/cards", "verity/device.py",
           "verity/channel.py"]

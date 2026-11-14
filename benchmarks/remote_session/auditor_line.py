@@ -154,7 +154,7 @@ from verity.protocols.accounting.poub.verifier.session import lean_verifier as l
 from verity.protocols.accounting.poub.verifier.session import verifier as V  # noqa: E402
 from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
@@ -486,10 +486,15 @@ def session_error(session: dict) -> dict:
     total = Fraction(totals.pop())
     hiding = binding = rejection = None
     if (d := lg.get("delta")) is not None:
-        added = 0.0
-        for n in ledger.DELTA_PARTS:
-            added += d.get(n, 0.0)
-        if added != float(total):
+        parts = [d.get(n, 0.0) for n in ledger.DELTA_PARTS]
+        if all(type(x) is str for x in parts):
+            agree = sum(map(Fraction, parts), Fraction(0)) == total
+        else:
+            added = 0.0
+            for x in parts:
+                added += x
+            agree = added == float(total)
+        if not agree:
             raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
         profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
         if "hiding" in d:

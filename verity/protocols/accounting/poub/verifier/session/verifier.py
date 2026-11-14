@@ -133,6 +133,7 @@ import sys
 import threading
 import time
 from collections.abc import Sequence
+from fractions import Fraction
 from pathlib import Path
 
 from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, timing
@@ -378,7 +379,7 @@ def memory_error(ledgers: dict) -> float | None:
         if "error" in ledgers.get(name, {}):
             d = ledgers.get("delta", {})
             return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
-                    + d.get("hiding", 0.0) + d.get("binding", 0.0) + d.get("rejection", 0.0))
+                    + sum(float(Fraction(d.get(k, 0))) for k in ("hiding", "binding", "rejection")))
     return None
 
 
@@ -963,6 +964,13 @@ class Pair:
                      str(failure["failure"]))
 
 
+def node_refused(node: ledger.Node) -> str | None:
+    """Why the session's ledger can't take `node` handed in, or None: its tiers must be the two the ledger reads."""
+    if sorted(node.tiers) != ["dram", "hbm"]:
+        return "a node handed in states its tiers, every GPU's HBM (hbm) and the host's DRAM (dram)"
+    return None
+
+
 class Verifier:
     def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
                  jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
@@ -979,8 +987,8 @@ class Verifier:
         if node is not None and (disk_bytes_per_s or link_bytes_per_s or disk_burst_bytes is not None
                                  or link_burst_bytes is not None):
             raise ValueError("a node handed in states its own disk and link ceilings and bursts: give them in it")
-        if node is not None and sorted(node.tiers) != ["dram", "hbm"]:
-            raise ValueError("a node handed in states its tiers, every GPU's HBM (hbm) and the host's DRAM (dram)")
+        if node is not None and (why := node_refused(node)) is not None:
+            raise ValueError(why)
         self.node = node
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
@@ -1486,7 +1494,8 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
-        `delta` is the memory line's δ in its six parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
+        `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
+        forms carry.
         No δ or error here holds the windows' PRF advantages: each reads `ledger.DELTA_FORM`, and `named`
         (`ledger.NAMED_TERMS`) is that term, beside `delta` and in each object that carries a δ or an error.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
@@ -1547,7 +1556,7 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
-        out["delta"] = ledger.delta_parts(record)
+        out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
@@ -1708,7 +1717,12 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     if a.node is not None:
         if a.disk_bytes_per_s or a.link_bytes_per_s or a.disk_burst_bytes is not None or a.link_burst_bytes is not None:
             ap.error("--node states the disk and link ceilings and bursts: drop --disk-* and --link-*")
-        capacities = ledger.Node.of_json(json.loads(a.node.read_text()))
+        try:
+            capacities = ledger.Node.of_json(json.loads(a.node.read_text()))
+        except (OSError, TypeError, ValueError) as e:
+            ap.error(f"--node {a.node}: {e}")
+        if (why := node_refused(capacities)) is not None:
+            ap.error(f"--node {a.node}: {why}")
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
@@ -1867,6 +1881,6 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
 __all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
            "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
            "memory_error",
-           "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
+           "node_line", "node_refused", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
            "recorded_paced", "recorded_queries", "recorded_rates", "recorded_windows", "regions_of", "save_registry",
            "sketch_at", "timing_parts"]

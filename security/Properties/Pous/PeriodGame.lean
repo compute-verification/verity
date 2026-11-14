@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.PeriodAt
-public import Definitions.Hash.Assumptions.Prf
+public import Definitions.Assumptions.Hash
 public import Definitions.Pous.Guarantees.Obligation
 
 /-!

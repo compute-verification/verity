@@ -13,7 +13,7 @@ from torch.fx.experimental.proxy_tensor import make_fx
 from verity_vllm.definitions.numerics import torch_kernels as TK
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 
-from tests.program.test_train_step import (
+from tests.frontend.test_train_step import (
     _bits,
     _data,
     _f32_of,

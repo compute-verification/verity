@@ -7,12 +7,14 @@ beside it, and the two must agree at every event, window verdict and record fiel
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import queue
 import random
 import socket
 import sys
 import threading
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -288,6 +290,53 @@ def test_a_node_handed_in_is_the_ledgers_and_a_report_still_only_raises_it(monke
         verifier.Verifier(None, **kw, node=ledger.Node.stated(FIGURES), disk_bytes_per_s=4.4e9)
     with pytest.raises(ValueError, match="states its tiers"):
         verifier.Verifier(None, **kw, node=dataclasses.replace(ledger.Node.stated(FIGURES), tiers={}))
+
+
+def test_the_process_hands_its_node_file_to_the_verifier_and_refuses_a_bad_one_before_it_listens(
+        tmp_path, monkeypatch, capsys):
+    """`main`'s `--node FILE` reaches `Verifier(node=...)` as `ledger.Node.of_json` reads it.  A file that holds no
+    node, a node without the HBM and DRAM tiers, or a node beside a disk or link flag is an argument error before the
+    process listens, not a traceback once the prover has connected."""
+    class Listened(Exception):
+        pass
+
+    def refuse(host, port):
+        raise Listened
+
+    def main(node: object, *flags: str) -> None:
+        f = tmp_path / "node.json"
+        f.write_text(json.dumps(node))
+        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f), *flags],
+                      figures=FIGURES)
+
+    monkeypatch.setattr(verifier.wire, "listen", refuse)
+    fast = dataclasses.replace(ledger.Node.stated(FIGURES), read_bytes_per_s=2 * timing.READ_BYTES_PER_S)
+    one_tier = fast.to_json()
+    del one_tier["tiers"]["dram"]
+    for node, flags, why in (({"tiers": {}}, (), "a node's capacities are an object of exactly"),
+                             (one_tier, (), "states its tiers"),
+                             (fast.to_json(), ("--disk-bytes-per-s", "4.4e9"), "drop --disk-* and --link-*"),
+                             (fast.to_json(), ("--link-burst-bytes", "1"), "drop --disk-* and --link-*")):
+        with pytest.raises(SystemExit) as e:
+            main(node, *flags)
+        assert e.value.code == 2 and why in capsys.readouterr().err
+    handed = {}
+
+    class Server:
+        def accept(self):
+            return None, ("prover", 0)
+
+    def made(conn, **kw):
+        handed.update(kw)
+        raise Listened
+
+    monkeypatch.setattr(verifier.wire, "listen", lambda host, port: Server())
+    monkeypatch.setattr(verifier.wire, "Conn", lambda sock: None)
+    monkeypatch.setattr(verifier, "Verifier", made)
+    monkeypatch.setattr(verifier.sys, "setswitchinterval", lambda s: None)
+    with pytest.raises(Listened):
+        main(fast.to_json())
+    assert handed["node"] == fast and handed["disk_bytes_per_s"] == 0.0
 
 
 def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
@@ -873,12 +922,13 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
 
     lg = r["ledger"]
     reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
+    d = {k: Fraction(v) for k, v in lg["delta"].items()}
     assert lg["memory"]["error"] == verifier.memory_error(lg) == (
-        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"] + lg["delta"]["hiding"]
-        + lg["delta"]["binding"] + lg["delta"]["rejection"])
-    assert lg["delta"]["hiding"] == ledger.hiding_over(len(record.windows)) > 0
-    assert lg["delta"]["binding"] > 0
-    assert lg["delta"]["rejection"] == len(record.windows) * record.samples / 2 ** 64 > 0
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"]
+        + sum(float(d[k]) for k in ("hiding", "binding", "rejection")))
+    assert d["hiding"] == ledger.hiding_over(len(record.windows)) > 0
+    assert d["binding"] > 0
+    assert d["rejection"] == Fraction(len(record.windows) * record.samples, 2 ** 64) > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
     assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (

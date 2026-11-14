@@ -53,6 +53,8 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           # the scripts under `benchmarks/` the window's audit from its records (`prover/audit/records_audit.py`), which
           # two tests here load, still loads off `sys.path`
           "benchmarks/one_stage", "benchmarks/prove_path", "benchmarks/network_traces",
+          # the vLLM adapter, which test_pearltie and test_remotetie load, and the PyTorch adapter it loads
+          "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

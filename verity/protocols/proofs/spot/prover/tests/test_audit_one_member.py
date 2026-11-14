@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, draw as D, proofs as PF
 
 import test_audit_two_members as T
