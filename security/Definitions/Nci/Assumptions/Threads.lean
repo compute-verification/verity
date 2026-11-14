@@ -32,7 +32,7 @@ where they are committed in `θ`; under a low-rank update (LoRA), whose factors 
 update; or when the subcircuit computes the weights' updates itself from fewer bits of activations and gradients. -/
 def WeightsIncompressible (r : RegisteredCircuit) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R, Small r c k R →
-    b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads r R
+    b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ freshInput r R
 
 /-- **Weights are incompressible per parameter slot**: every small subcircuit of the reference circuit `r` (at most `c`
 computed gates, at most `S` fresh input bits read) that uses weights of `p` parameter slots of `σ` reads at least `b_w`
@@ -55,6 +55,6 @@ on more than a small subcircuit computes; under a low-rank update (LoRA), whose 
 they update; or when it computes that version itself from fewer bits of activations and gradients. -/
 def WeightsIncompressibleSlots (r : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R, Small r c k R →
-    b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads r R
+    b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ freshInput r R
 
 end Nci.Assumptions

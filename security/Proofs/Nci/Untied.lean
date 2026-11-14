@@ -9,7 +9,7 @@ public import Mathlib.Logic.Function.Basic
 /-!
 # Untied words: what a block reads once a word is no longer tied
 
-A block's fresh input is what it reads outside `θ` (`RegisteredCircuit.unregistered`, `Nci.novelReads`). These lemmas
+A block's fresh input is what it reads outside `θ` (`RegisteredCircuit.unregistered`, `Nci.freshInput`). These lemmas
 bound it once the gates of a set `E` of words are no longer tied to registered data, the circuit **untied at `E`**.
 They are stated per block and hold for every `E`, with no threshold in them.
 
@@ -28,9 +28,9 @@ gate a tied word can be:
   it says nothing about a word the circuit computes.
 
 In either reading a set `R` of gates reads, outside `θ`, at most what it read before and the gates of `E` it reads
-(`unregistered_asInputs_subset`, `unregistered_untie_subset`; in bits, `novelReads_asInputs_le`,
-`novelReads_untie_le`). When `E` is a union of words of at most `b` gates, that is at most `b` for each word `R`
-reads (`card_unregistered_untie_union_le`; in bits, `novelReads_asInputs_words_le`, `novelReads_untie_union_le`). So
+(`unregistered_asInputs_subset`, `unregistered_untie_subset`; in bits, `freshInput_asInputs_le`,
+`freshInput_untie_le`). When `E` is a union of words of at most `b` gates, that is at most `b` for each word `R`
+reads (`card_unregistered_untie_union_le`; in bits, `freshInput_asInputs_words_le`, `freshInput_untie_union_le`). So
 blocks that read at most `k` gates outside `θ` and at most `w` words of `E` read at most `k + b w`
 (`readsAtMost_asInputs`; `readsAtMost_untie`, `readsAtMost_untie_union`, and `isCK_untie` for a `(c, k)`-partition;
 `b = 32` for a word of 32 gates, `readsAtMost_untie_32`). Each lemma holds on every registered circuit, so the step
@@ -40,7 +40,7 @@ The two readings differ in who pays for what leaves `θ`:
 
 * **A computed gate is paid for by the block that held it**, gate by gate. Another block that read it read a computed
   gate outside itself, which its `k` counted already. So with computed gates `T` as inputs a block newly reads only
-  the gates of `T` it held (`unregistered_asInputs_subset_held`; in bits, `novelReads_asInputs_held_le`), at most
+  the gates of `T` it held (`unregistered_asInputs_subset_held`; in bits, `freshInput_asInputs_held_le`), at most
   `k + |T ∩ block|` (`card_unregistered_asInputs_held_le`, `readsAtMost_asInputs_held`), and all the blocks together
   read at most `m k + |T|`, whichever blocks read those gates (`sum_card_unregistered_asInputs_held_le`). Where two
   blocks hold gates of one word, each pays for the gates it held and neither for the word.
@@ -377,8 +377,8 @@ theorem width_into_inter_biUnion_le (C : Circuit) {b : ℕ} (𝒲 : Finset (Fins
 
 /-- **Bits.** Untied at `E`, `R` reads at most the fresh input bits it read and the width of the gates of `E` it
 reads. -/
-theorem novelReads_untie_le (d : RegisteredCircuit) (E R : Finset (Fin d.D.N)) :
-    novelReads (d.untie E) R ≤ novelReads d R + d.D.width (d.D.into R ∩ E) := by
+theorem freshInput_untie_le (d : RegisteredCircuit) (E R : Finset (Fin d.D.N)) :
+    freshInput (d.untie E) R ≤ freshInput d R + d.D.width (d.D.into R ∩ E) := by
   show ∑ g ∈ (d.untie E).unregistered R, d.D.w g ≤
     ∑ g ∈ d.unregistered R, d.D.w g + ∑ g ∈ d.D.into R ∩ E, d.D.w g
   calc ∑ g ∈ (d.untie E).unregistered R, d.D.w g
@@ -387,15 +387,15 @@ theorem novelReads_untie_le (d : RegisteredCircuit) (E R : Finset (Fin d.D.N)) :
 
 /-- **The per-block lemma, in bits.** Untied at `U` and the words `𝒲`, each of at most `b` bits, `R` reads at most the
 fresh input bits it read untied at `U`, and `b` bits for each word of `𝒲` it reads. -/
-theorem novelReads_untie_union_le (d : RegisteredCircuit) {b : ℕ} (U : Finset (Fin d.D.N))
+theorem freshInput_untie_union_le (d : RegisteredCircuit) {b : ℕ} (U : Finset (Fin d.D.N))
     (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, d.D.width W ≤ b) (R : Finset (Fin d.D.N)) :
-    novelReads (d.untie (U ∪ 𝒲.biUnion id)) R ≤ novelReads (d.untie U) R + b * (wordsRead d.D 𝒲 R).card :=
-  calc novelReads (d.untie (U ∪ 𝒲.biUnion id)) R
-      = novelReads ((d.untie U).untie (𝒲.biUnion id)) R :=
+    freshInput (d.untie (U ∪ 𝒲.biUnion id)) R ≤ freshInput (d.untie U) R + b * (wordsRead d.D 𝒲 R).card :=
+  calc freshInput (d.untie (U ∪ 𝒲.biUnion id)) R
+      = freshInput ((d.untie U).untie (𝒲.biUnion id)) R :=
         congrArg d.D.width (d.unregistered_untie_untie U (𝒲.biUnion id) R).symm
-    _ ≤ novelReads (d.untie U) R + d.D.width (d.D.into R ∩ 𝒲.biUnion id) :=
-        novelReads_untie_le (d.untie U) (𝒲.biUnion id) R
-    _ ≤ novelReads (d.untie U) R + b * (wordsRead d.D 𝒲 R).card :=
+    _ ≤ freshInput (d.untie U) R + d.D.width (d.D.into R ∩ 𝒲.biUnion id) :=
+        freshInput_untie_le (d.untie U) (𝒲.biUnion id) R
+    _ ≤ freshInput (d.untie U) R + b * (wordsRead d.D 𝒲 R).card :=
         Nat.add_le_add_left (width_into_inter_biUnion_le d.D 𝒲 h𝒲 R) _
 
 /-- **The per-block lemma, in words.** Untied at the words `𝒲`, each of at most `b` gates, `R` reads outside `θ` at
@@ -652,8 +652,8 @@ theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq 
 
 /-- **Bits, with `T` as inputs.** With `T`'s gates as inputs outside `θ`, what is left of `R` reads at most the fresh
 input bits `R` read and the width of the gates of `T` it reads. -/
-theorem novelReads_asInputs_le (d : RegisteredCircuit) (T R : Finset (Fin d.D.N)) :
-    novelReads (d.asInputs T) (R \ T) ≤ novelReads d R + d.D.width ((d.D.asInputs T).into (R \ T) ∩ T) := by
+theorem freshInput_asInputs_le (d : RegisteredCircuit) (T R : Finset (Fin d.D.N)) :
+    freshInput (d.asInputs T) (R \ T) ≤ freshInput d R + d.D.width ((d.D.asInputs T).into (R \ T) ∩ T) := by
   show ∑ g ∈ (d.asInputs T).unregistered (R \ T), d.D.w g ≤
     ∑ g ∈ d.unregistered R, d.D.w g + ∑ g ∈ (d.D.asInputs T).into (R \ T) ∩ T, d.D.w g
   calc ∑ g ∈ (d.asInputs T).unregistered (R \ T), d.D.w g
@@ -665,14 +665,14 @@ theorem novelReads_asInputs_le (d : RegisteredCircuit) (T R : Finset (Fin d.D.N)
 /-- **The per-block lemma, in bits, with the words as inputs.** With the gates of the words `𝒲`, each of at most `b`
 bits, as inputs outside `θ`, what is left of `R` reads at most the fresh input bits `R` read, and `b` bits for each
 word of `𝒲` it now reads. -/
-theorem novelReads_asInputs_words_le (d : RegisteredCircuit) {b : ℕ} (𝒲 : Finset (Finset (Fin d.D.N)))
+theorem freshInput_asInputs_words_le (d : RegisteredCircuit) {b : ℕ} (𝒲 : Finset (Finset (Fin d.D.N)))
     (h𝒲 : ∀ W ∈ 𝒲, d.D.width W ≤ b) (R : Finset (Fin d.D.N)) :
-    novelReads (d.asInputs (𝒲.biUnion id)) (R \ 𝒲.biUnion id) ≤
-      novelReads d R + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (R \ 𝒲.biUnion id)).card := by
+    freshInput (d.asInputs (𝒲.biUnion id)) (R \ 𝒲.biUnion id) ≤
+      freshInput d R + b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (R \ 𝒲.biUnion id)).card := by
   have h : d.D.width ((d.D.asInputs (𝒲.biUnion id)).into (R \ 𝒲.biUnion id) ∩ 𝒲.biUnion id) ≤
       b * (wordsRead (d.D.asInputs (𝒲.biUnion id)) 𝒲 (R \ 𝒲.biUnion id)).card :=
     width_into_inter_biUnion_le (d.D.asInputs (𝒲.biUnion id)) 𝒲 h𝒲 (R \ 𝒲.biUnion id)
-  exact (novelReads_asInputs_le d (𝒲.biUnion id) R).trans (Nat.add_le_add_left h _)
+  exact (freshInput_asInputs_le d (𝒲.biUnion id) R).trans (Nat.add_le_add_left h _)
 
 /-- **`ReadsAtMost`, with the words as inputs.** With `𝒲`'s gates as inputs outside `θ`, a block that read at most `k`
 gates outside `θ` and now reads at most `w` words of `𝒲` reads at most `k + b w`. -/
@@ -721,9 +721,9 @@ theorem unregistered_asInputs_subset_held (d : RegisteredCircuit) (T R : Finset 
 
 /-- **Bits, computed gates as inputs.** With computed gates `T` as inputs, what is left of `R` reads at most the fresh
 input bits `R` read and the width of the gates of `T` that `R` held. -/
-theorem novelReads_asInputs_held_le (d : RegisteredCircuit) (T R : Finset (Fin d.D.N))
+theorem freshInput_asInputs_held_le (d : RegisteredCircuit) (T R : Finset (Fin d.D.N))
     (hT : ∀ g ∈ T, d.D.isInput g = false) :
-    novelReads (d.asInputs T) (R \ T) ≤ novelReads d R + d.D.width (R ∩ T) := by
+    freshInput (d.asInputs T) (R \ T) ≤ freshInput d R + d.D.width (R ∩ T) := by
   show ∑ g ∈ (d.asInputs T).unregistered (R \ T), d.D.w g ≤
     ∑ g ∈ d.unregistered R, d.D.w g + ∑ g ∈ R ∩ T, d.D.w g
   calc ∑ g ∈ (d.asInputs T).unregistered (R \ T), d.D.w g
