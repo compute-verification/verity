@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.check.replay.stoch_recompute import sample_accounting, record_lag_rows
 from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
+from verity_vllm.check.replay.stoch_recompute import record_lag_rows, sample_accounting
 from verity_vllm.program.lifting import continuation as CT
 from verity_vllm.records.workload import SCHEMA
 

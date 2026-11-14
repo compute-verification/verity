@@ -33,10 +33,11 @@ def test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_t
     for r in rows:
         d.setdefault(r["request_id"], []).append({"step": r["step"], "row": r["row"], "pos": r["pos"], "served": r["served"]})
     wl = Path(__file__).resolve().parents[2] / "workloads" / f"{row}.json"
-    gp = json.loads(gzip.open(att_dir / "build_workload_program.json.gz", "rt").read())
+    with gzip.open(att_dir / "build_workload_program.json.gz", "rt") as fh:
+        gp = json.load(fh)
     lag_decl = (gp.get("stop_rule") or {}).get("eos_lag_rows")
-    out = sample_accounting(d, wl, att_dir, lag_attested=(1, "RunHeader.profile.engine_kwargs.async_scheduling=True (the row_pod's vLLM v1 default; "
-                                                                 "GM-01 G6 read the same, verified_eos_steps [])"))
+    out = sample_accounting(d, wl, att_dir, lag_attested=(1, ("RunHeader.profile.engine_kwargs.async_scheduling=True (the row_pod's vLLM v1 default; "
+                                                                   "GM-01 G6 read the same, verified_eos_steps [])")))
     assert out["problems"] == [], out["problems"]
     assert out["stop_rule"]["eos_token_ids"] and out["stop_rule"]["eos_lag_rows_declared"] == lag_decl
     assert len(out["requests"]) == 8 and out["requests_at_cap"] == 8 and out["lag_slot_exercised"] is False
