@@ -11,9 +11,9 @@
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's runs)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's releases)
 #      OPROVE_JOBS=1 (V* statements proved at once; 85's own default is 4)
-#      MODES=ZK server (oprove's prover sides; the last one's releases are what oreplay and lean read)
+#      MODES=zk_server (oprove's prover sides; the last one's releases are what oreplay and lean read)
 #      GPU_MAX_MIN=75 (each prove's lease, minutes)  LEAN_JOBS=4 (Lean verifies this many V* releases at once)
-#      OPROVE_GPU=0 under MODES=ZK server, else GPU (V*'s prover: 85's CPU prover, or the GPU one under a lease)
+#      OPROVE_GPU=0 under MODES=zk_server, else GPU (V*'s prover: 85's CPU prover, or the GPU one under a lease)
 #      NEG=challenge,query (negative: the inner coins of rep 0 flipped, each verified under every V* statement; empty: none)
 #      FORGE= (85's forgeries, staged by vstage and proved by oprove, comma separated: message,sum,comb,top,top-salt,coef,dirs;
 #      empty: none)  forge-after: coef, dirs and message made on the honest L0 and alg-p0 releases after proving
@@ -47,10 +47,10 @@ export GPU_PREEMPTIBLE=${GPU_PREEMPTIBLE-} GPU_MAX_MIN=${GPU_MAX_MIN:-75}
 export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM=${WARM:-1} RUNS=${RUNS:-3}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}; FORGE=${FORGE:-}
-MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
+MODES=${MODES:-zk_server}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
 # OPROVE_GPU=0 (the default under the ZK server): V*'s statements proved by 85's CPU prover, no lease. A lease pool stops a
 # lease whose GPU computes nothing for about 10 min, and during a release through the ZK server the GPU waits on its Lean session loop for minutes
-[[ ,$MODES, == *,firewall,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
+[[ ,$MODES, == *,zk_server,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
 # V*'s statements one at a time, as the ZK server proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
@@ -120,7 +120,7 @@ for s in ${STEPS//,/ }; do
       # 85 builds the ZK server's Lean session loop (its build step, else oprove's) beside the Lean verifier, from this tree's
       # Lean sources
       step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1
-      loop=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $loop ] || sha256sum $loop >> "$O/params.txt" ;;
+      loop=$L/lean-$LSHA/flock-zk-server; [[ ,$M, != *,zk_server,* ]] || [ ! -x $loop ] || sha256sum $loop >> "$O/params.txt" ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i "FORGE=${FORGE//,/ }" || { rc=1; break; }; done ;;
     lean) for i in $(reps lean); do step lean $i JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
