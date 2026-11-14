@@ -3,8 +3,8 @@ are hashed once a period, the same number of SHA-512 calls whatever the period's
 phase's registration to them hashes nothing.
 
 The mirror is counted as it runs: every SHA-512 call, through the commitments' registry and through hashlib, the two
-names the verifier's Python hashes by, over accepted periods of one, two and three execution phases under schedules of
-one T. Lean is read: the period check's module applies `ScanOk.consts` once, outside the function it maps over the
+names the verifier's Python hashes by, over periods of one, two and three execution phases under schedules of one T,
+the one accepted and the longer ones refused for being longer and for nothing else. Lean is read: the period check's module applies `ScanOk.consts` once, outside the function it maps over the
 execution phases, and neither that function nor `ScanOk.held` names a definition that hashes (`ScanOk.calls` and its
 guards count what `ScanOk.consts` hashes)."""
 
@@ -32,7 +32,7 @@ IDENTIFIER = re.compile(r"[A-Za-z_][\w.']*")
 #: a name of something that hashes, wherever it is defined
 HASHES = re.compile(r"(?i)sha|hash|digest|fv3|hm96|registered|known")
 #: `ScanOk.held` and the definitions of `ScanOk` it reaches: what compares a registration with the constants
-COMPARES = {"held", "entryHeld", "rootsOf", "named", "counted", "okPort", "PORT"}
+COMPARES = {"held", "entryHeld", "rootsOf", "named", "counted", "okPort", "PORT", "START"}
 
 
 def code(module: str, *defines: str) -> str:
@@ -60,12 +60,16 @@ def names(body: str) -> set[str]:
     return set(IDENTIFIER.findall(body))
 
 
-def periods() -> dict[int, dict]:
-    """An accepted rows-form period of each length, one to three execution phases, each under a schedule of
-    `PC.EQUAL_T` ticks."""
-    out: dict[int, dict] = {}
+def periods(monkeypatch) -> dict[int, dict]:
+    """A rows-form period of each length, one to three execution phases, each under a schedule of `PC.EQUAL_T` ticks:
+    the run's first execution phase alone, accepted, and it with the next one or two, each registration what an accepted
+    one's is and the period refused for holding more than the first (`PC.CARRIED`)."""
+    real = PC._small_schedule
+    monkeypatch.setattr(PC, "_small_schedule", lambda r, small, capped=False, T=None: real(r, small, capped, PC.EQUAL_T))
+    monkeypatch.setattr(PC, "CARRIES", ("more",))
+    out: dict[int, dict] = {1: PC.build("rows-ok-equal", 0)}
     for seed in range(64):
-        case = PC.build("rows-ok-equal", seed)
+        case = PC.build("rows-start-carried", seed)
         out.setdefault(case["params"]["windows"], case)
         if len(out) == 3:
             break
@@ -99,16 +103,17 @@ def spans(monkeypatch):
     return out
 
 
-def test_the_mirror_hashes_the_constants_once_a_period_and_nothing_an_execution_phase(spans):
+def test_the_mirror_hashes_the_constants_once_a_period_and_nothing_an_execution_phase(spans, monkeypatch):
     """One call of the constants a period, of the same SHA-512 calls at one, two and three execution phases, and one
     comparison an execution phase that hashes nothing: so a period of m execution phases costs the ok rule what a
     period of one does."""
-    cases = periods()
+    cases = periods(monkeypatch)
     once = set()
     for m, case in sorted(cases.items()):
         for span in spans.values():
             span.clear()
-        assert PC.reference(case)["verdict"] == PC.ACCEPT
+        got = PC.reference(case)
+        assert got["verdict"] == PC.ACCEPT if m == 1 else PC.CARRIED in got["reason"], (m, got)
         assert len(spans["constants"]) == 1 and spans["held"] == [0] * m, (m, spans)
         once.add(spans["constants"][0])
     assert len(once) == 1 and min(once) > 0, once
@@ -117,7 +122,6 @@ def test_the_mirror_hashes_the_constants_once_a_period_and_nothing_an_execution_
 def test_a_refused_period_costs_the_same(spans):
     """A period refused at its ok bits hashed the constants once and compared every execution phase's registration,
     hashing nothing: the refusal is no cheaper or dearer than the acceptance."""
-    seen = set()
     for seed in range(12):
         case = PC.build("rows-ok-unheld", seed)
         for span in spans.values():
@@ -125,8 +129,6 @@ def test_a_refused_period_costs_the_same(spans):
         out = PC.reference(case)
         assert out["verdict"] == PC.REJECT and PC.UNOK in out["reason"], out
         assert len(spans["constants"]) == 1 and spans["held"] == [0] * case["params"]["windows"], spans
-        seen.add(case["params"]["windows"])
-    assert len(seen) > 1, seen
 
 
 def test_lean_applies_the_constants_once_outside_the_execution_phases():

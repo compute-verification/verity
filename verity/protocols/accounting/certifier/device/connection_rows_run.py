@@ -120,22 +120,19 @@ import argparse
 import json
 import math
 import pickle
-import sys
 import tempfile
 import threading
 import time
 from collections.abc import Sequence
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-import certifier_key as ck
+from verity.protocols.accounting.certifier.device import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
-from runner_parts import _class, hand, head_flags
+from verity.protocols.accounting.certifier.device.runner_parts import _class, hand, head_flags
 from verity.protocols.accounting.certifier.verifier.connection_rows_check import ROWS, _spread
 
 #: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
