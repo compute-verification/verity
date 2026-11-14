@@ -32,7 +32,7 @@
 
 # The policy's own files, then the files that cite its names: the remote protocol's statements and proofs, the Lake
 # packages' module lists, the proofs package's lock, the verifier-cost benchmark, vLLM's registration log, the lints'
-# allowlists and two READMEs.
+# allowlists, two READMEs and the auditor host's challenger, whose docstrings cite the check's module.
 [[words_in]]
 files = ["security/Definitions/Nci*", "security/Properties/Nci*", "security/Proofs/Nci*", "security/Proofs/Properties/Nci*",
          "verity/protocols/policy/inference_only/verifier/nci/**", "verity/protocols/accounting/certifier/verifier/network/tests/**",
@@ -41,7 +41,8 @@ files = ["security/Definitions/Nci*", "security/Properties/Nci*", "security/Proo
          "security/Proofs/lakefile.toml", "security/Proofs/lean-audit.json", "benchmarks/verifier_cost/README.md",
          "benchmarks/verifier_cost/nci_glm.py", "adapters/vllm/tests/pipeline/test_registration_log.py",
          "adapters/vllm/verity_vllm/pipeline/registration_log.py", "tests/lint/allowlists/*.json",
-         "verity/protocols/compose/verifier/lean/README.md", "verity/protocols/compose/verifier/remote/README.md"]
+         "verity/protocols/compose/verifier/lean/README.md", "verity/protocols/compose/verifier/remote/README.md",
+         "verity/protocols/compose/device/live_challenger/auditor.py"]
 words = { "Baseline" = "Theta", "BaselineSteps" = "ThetaSteps", "BaselineProvenance" = "ThetaProvenance", "baseline_desc" = "theta_desc" }
 
 # The two locks whose records read Core's `Verity.Registration.Theta`: there the names are spelled with what they stand
