@@ -39,3 +39,17 @@ Item 4, test_load_relay's fixture [read]: `weights-v1-h200-digests.json` is list
 
 TIMER: none
 
+[2026-11-14T20:42Z] 24614a37db3e
+PERIODPROOF2: #8829 (86a2f2dc5c0894cf4c54704e34287c8b44b2b01f) and #9350 (5e514f92d46f78c3e11a8e2eb2885d21aa0a67aa, which holds #9663) are in the collect branch. Its head after my last push is 1e498a266349b2ab44e393f3702cfa17dccfeb70 (fetched back: equal) [ran].
+
+- #8829: `restack.py --move-commit e97a534ec829` onto 4163f90b8ff1 came back `clean` at 72d27e075874. The first run skipped five earlier maps (`clean-skipped`); none of their 77 old paths is in a line #8829 adds [ran]. Then my mend 4e4242dbc7b2, a merge of the tip, and the push at 7c3a087dedce.
+- #8829's mend: `security/Proofs/Properties/NetworkPeriod/Fails.lean`.
+  - Before: `clockKBoundsHeld`, stated over the clock form's `terms`, `Audit.bits` and `clockKBoundsCount`, which the clock-form deletion removed.
+  - After: it is deleted along with its docstring bullet; nothing else used it.
+  - `K_failsOfFn` adds `Nat.add_zero` to its `simp only`, since `Public.K` now holds `start` (0 in `rowsTermsFails`). Its statement is unchanged.
+- #9350: the restack's first step, merging the move's base a8b442c1303d into the branch, conflicted in `security/Proofs/NetworkCertifier/README.md`. I resolved it by hand on a local branch at 0df139ea83c4: theirs' counts plus mine, "All 18 are under `shape.frozen`" and "The other 16". The restack across e97a534ec829 then came back `clean` at 115b95eaff90 [ran]. Every non-library import of its Lean resolves in that tree [ran].
+- One slip: the tip moved twice before the push. The second merge (a1c37c02c380 into 75e97bfaee98) brought in 7a709988129 (`Layout-move: certifier_tests_back_map.toml`) by a plain merge, not `restack.py`. The pushed tree differs from a1c37c02c380 only in #9350's twelve security files, and none names the four paths that map moves [ran: `git diff --name-only`, `git grep`]. So the script would have rewritten nothing of mine [argued].
+- Compiles: the certifier `NetworkCheck` builds [ran, before these]. `security/` is unbuilt; a local `lake build Proofs.Properties.NetworkPeriod{,.Fails}` is running. #9350 changes no `.py`; #8829 changes none either.
+- Statements changed: only `clockKBoundsHeld`, deleted. Everything else of #8829 and #9350 is as on their heads.
+- Next: #9641. It has `check_clock` and `rowsExecutionPhaseCheck_facts` over the deleted clock form, so it needs a mend.
+
