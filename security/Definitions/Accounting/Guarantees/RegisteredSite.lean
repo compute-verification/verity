@@ -40,10 +40,10 @@ namespace Accounting.Guarantees
 circuit `A` placed on the Site's places, a device or a memory leaf as much as a host:
 
 * **The wires run on the registered links** (`Placed.Links` at the Site's links, the one physical premise). It is
-  taken of `A`'s image under `Site.linkPlace`, which sends each location to its host and every other place to
-  itself, since a registered link ends at a host, a certifier, a challenger or the outside: a wire between two
-  places of one host needs no link, and every other wire between two places runs on a registered link between the
-  places a link may end at for them, within the link's capacity.
+  taken of `A`'s image under `Site.linkPlace`, which sends each device and each memory leaf to its host (the Site's
+  own `host?`) and every other place to itself, since a registered link ends at a host, a certifier, a challenger or
+  the outside: a wire between two places of one host needs no link, and every other wire between two places runs on
+  a registered link between the places a link may end at for them, within the link's capacity.
 * **The subtree holds each host whole** (`Site.HostsWhole`), so that what leaves it crosses a link. A subtree at a
   device or a memory leaf does not, and the statement says nothing of it.
 * **The bound.** The subtree's egress during `[a, b)` (`Placed.egress`, of `A` as placed: the width of its gates that

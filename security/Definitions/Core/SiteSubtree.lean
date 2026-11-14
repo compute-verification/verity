@@ -21,7 +21,7 @@ the model at these is a bound read off the registration.
 
 A registered link ends at a host, a certifier, a challenger or the outside, never at a device, a memory leaf or a site
 (`Site.Kind.links`). So a wire between two places is held to the links through the place a link may end at for each
-(`Site.linkEnd`): a host for itself and every location in it, and each other place for itself. A subtree that holds
+(`Site.linkEnd`): its host for a device and a memory leaf, and each other place for itself. A subtree that holds
 each host with all its locations or not at all (`Site.HostsWhole`) is one whose egress the links bound.
 
 * `Site.Child`: the tree's parent relation, which the Site holds as each location's `parent`.
@@ -29,7 +29,7 @@ each host with all its locations or not at all (`Site.HostsWhole`) is one whose 
 * `Site.Place`, `Site.place`, `Site.placesIn`: the places as a type, the place an id names, and the places whose id
   is in a set.
 * `Site.placeEnds`, `Site.linkβ`: the registered links as the model's.
-* `Site.host`, `Site.linkEnd`, `Site.linkPlace`: the host a place is in, and the place a link may end at for a place.
+* `Site.linkEnd`, `Site.linkPlace`: the place a link may end at for a place, read through the Site's own `host?`.
 * `Site.HostsWhole`: a subtree holds each host whole.
 -/
 
@@ -73,15 +73,11 @@ def placeEnds (e : Fin S.links.length) : S.Place × S.Place :=
 /-- The registered links as the model's: link `e`'s capacity each way, in bits a tick. -/
 def linkβ (e : Fin S.links.length) : ℕ := (S.links.get e).β
 
-/-- **The host a location is in**: itself when it is a host, and `none` for a location in no host and for an id that
-names no location. The definitions' twin of the code's `Core.Site.host`. -/
-def host (i : String) : Option String :=
-  (S.loc? i).bind fun x => if x.kind = .host then some x.id else S.host? x
-
-/-- **The place a link may end at** for the place `i`: the host `i` is in, and `i` itself where it is in none. On a
-valid registration's Site that is a host for itself, its devices and the memory leaves in it, and each site,
-certifier and challenger and the outside for itself. -/
-def linkEnd (i : String) : String := (S.host i).getD i
+/-- **The place a link may end at** for the place `i`: the host the location `i` is in, as the Site reads it off the
+location's parent (`host?`: the parent when that is a host, else the parent's parent), and `i` itself where that
+names none or `i` names no location. On a valid registration's Site that is its host for a device and for a memory
+leaf, and itself for a host, a site, a certifier, a challenger and the outside. -/
+def linkEnd (i : String) : String := ((S.loc? i).bind S.host?).getD i
 
 /-- The place a link may end at for a leaf of the model. -/
 def linkPlace (p : S.Place) : S.Place := S.place (S.linkEnd p.1)
