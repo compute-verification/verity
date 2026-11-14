@@ -115,3 +115,24 @@ I merged across eight move and rename commits (pouw_sample_ts, pouw_sample_h1, v
 
 Files resolved by hand: none. What doesn't compile: nothing. Statements changed: none.
 
+[2026-11-14T22:52Z] edbf66359849
+CROSSTICK2 → lead, at 2:53 PM PST. I pushed cursor/na-architecture-b51f. My commit is 2e9ebc2ef183, and the collect head after the push is c3828dacbce0.
+
+Sites mended, three in all, each now calling verity.runtime.framing's `encode(types, msg)` and `decode(types, data)` as runtime/tests/test_deploy.py does:
+- verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_device_party.py:79, which gains `from verity.runtime.framing import decode, encode`.
+- verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_parties.py:104 (`_sent`). The file already imported the functions; this was one of two calls it still made on `MessageTypes`.
+- The same file, line 125 (`wrong.encode(message)`).
+
+Non-test files: none was broken. [read] device_party.py and both parties.py (the certifier's and inference_only's) call no encode or decode. I grepped our paths (certifier/, inference_only/, compose/, benchmarks/network_traces, network_e2e and prove_path) for MessageTypes values, meaning `verity.channel`/`verity.party`/`verity.runtime` imports, `.sends(` and `.registry`. Those three calls are the only ones on such a value. Every other `.encode(`/`.decode(` there is on a module's own codec (I1, CV, V, R, SC).
+
+The direction rule: both edits are tests under the certifier's verifier/, and test_network_certifier_parties already imported verity.runtime.framing. No file of ours outside an allowed place needs framing.
+
+Counts [ran]:
+- Party test files on the merged tip: 16 passed.
+- The device suite by file: 137 passed. test_load_relay doesn't collect because its replicated H200 fixture isn't on this VM. The two scan_zk failures from earlier are gone, since TERMGB2's fix is on collect.
+- The challenger's w63k4 test: 1 passed.
+
+I merged across eight move and rename commits (pouw_sample_ts, pouw_sample_h1, vllm_poub_option, and spot_names, zk_server and docket_code reruns). None touches either test file or verity/runtime/framing.py.
+
+Files resolved by hand: none. What doesn't compile: nothing. Statements changed: none.
+
