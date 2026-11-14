@@ -522,7 +522,7 @@ def test_the_producer_sizes_each_j10r_workspace_through_dither_j10r_ws():
     hits = [f"{p.name}:{i}" for p in sorted(SERVED_H1.glob("*.py"))
             for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]
     assert hits == []
-    assert Path(PR.WS.__file__) == SERVED_H1.parents[1] / "hash" / "dither" / "j10r_ws.py"
+    assert Path(PR.WS.__file__) == Path(__file__).resolve().parents[2] / "hash" / "dither" / "j10r_ws.py"
 
 
 def test_the_units_kernels_j10r_receipts_are_h1tile_j10r_reference_at_llama_8b_shapes():
