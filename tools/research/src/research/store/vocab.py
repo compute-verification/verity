@@ -246,6 +246,9 @@ READY_VERDICT = "ready_verdict"
 #: of `main` said; the label's ref is its run.
 NIGHTLY_CHECK = "nightly_check"
 NIGHTLY_CHECK_OUTCOMES = ("passed", "contradicted", "failed", "error")
+#: On the derivation of `research goals show --json`, by `research velocity`'s save: the art: id of one goals-dump/v1, the
+#: label's ts the minute it was taken, so one listing of that target's labels finds every dump (`research.velocity`).
+GOALS_DUMP = "goals_dump"
 
 
 def canonical_key(name: str) -> str:
@@ -460,6 +463,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "it failed; failed, and it named none; error, no verdict (it never started, timed out or was lost)",
        NIGHTLY_CHECK_OUTCOMES),
     # evidence
+    _k(GOALS_DUMP, GROUP_EVIDENCE, TEXT, "on the drv: of `research goals show --json`, by `research velocity`'s save: the art: "
+       "id of one goals-dump/v1 (a copy of the Goals page), the label's ts the minute it was taken; `research velocity` finds "
+       "every dump from this target's labels where the store's index can't be asked", pattern=r"art:[0-9a-f]{64}"),
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
     _k(MODEL_AGREES, GROUP_EVIDENCE, BOOL, "whether the capture agrees with `model` on every tile"),

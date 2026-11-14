@@ -12,6 +12,7 @@ inputs = [
     "tools/research/src/research/__init__.py",
     "tools/research/src/research/auto.py",
     "tools/research/src/research/queue_table.py",
+    "tools/research/src/research/reds.py",
     "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",

@@ -21,11 +21,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from circuit_type_agree import flat, toy_table, tree, _width  # noqa: E402
+from circuit_type_agree import flat, toy_table, tree, _width
 
-from verity.circuits import library  # noqa: E402
-from verity_flock import circuit_types as CT  # noqa: E402
-from verity_flock import layouts as LY  # noqa: E402
+from verity.circuits import library
+from verity_flock import circuit_types as CT
+from verity_flock import layouts as LY
 
 
 def words_of(rng, ib, vb):

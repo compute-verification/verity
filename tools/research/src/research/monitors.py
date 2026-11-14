@@ -1339,18 +1339,36 @@ def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     return [(p["number"], p.get("headRefName") or "") for p in got]
 
 
-def _jobs(ctx: Ctx, sha: str | None) -> list:
-    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
-    import tomllib
-
-    def at(ref: str) -> list:
-        return tomllib.loads(ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw",
-                                     f"repos/{REPO_SLUG}/contents/{CI_TOML}?ref={ref}"], timeout=30)).get("job") or []
+def _raw(ctx: Ctx, path: str, sha: str | None) -> str:
+    """The file ``path`` at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    def at(ref: str) -> str:
+        return ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw", f"repos/{REPO_SLUG}/contents/{path}?ref={ref}"],
+                      timeout=30)
 
     try:
         return at(sha or "main")
     except RuntimeError:
         return at("main")
+
+
+def _jobs(ctx: Ctx, sha: str | None) -> list:
+    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    import tomllib
+
+    return tomllib.loads(_raw(ctx, CI_TOML, sha)).get("job") or []
+
+
+def step_job(step: str) -> str:
+    """The ci.toml job of a check step's name (check.py's `steps.jsonl`): the job itself, or `JOB:PART` for a part of a split job."""
+    return step.partition(":")[0]
+
+
+def _off_gate(ctx: Ctx, sha: str | None) -> tuple[str, ...]:
+    """policy.toml's `off_gate` at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's;
+    RuntimeError or `policy.PolicyError` when it can't be read."""
+    from . import policy
+
+    return policy.parse(_raw(ctx, policy.PATH, sha), f"{policy.PATH} at {(sha or 'main')[:12]}").off_gate
 
 
 def _hm(utc: str | None) -> str:
@@ -1419,13 +1437,22 @@ def on_main(ctx: Ctx, sha: str | None) -> bool:
 
 
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
-    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (running on to find more
-    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
-    run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
-    (a suite can fail for its machine's sake while the run's other steps are worth keeping)."""
+    """Cancel a check whose step on the merge gate failed while a ticket waits for a check slot on its machine (running on to
+    find more failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled.
+    A step whose job policy.toml's `off_gate` lists at the run's commit (`_off_gate`) holds no candidate, so its failure cancels
+    nothing; when the policy can't be read, nothing is cancelled and the post says so. A suites.py run's failed suite only
+    rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's (a suite can fail for
+    its machine's sake while the run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
         return None
     if on_main(ctx, row.get("sha")):
+        return None
+    try:
+        off = _off_gate(ctx, row.get("sha"))
+    except Exception as e:  # noqa: BLE001  (an unread policy cancels nothing)
+        why = f"{type(e).__name__}: {str(e)[:120]}".replace("`", "'")
+        return f"Not cancelled, though a ticket waits for its slot: policy.toml's `off_gate` is unread ({why})."
+    if step_job(row["step"]) in off:
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
@@ -1438,8 +1465,9 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
     """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
     PR it checks (the handle its branch suffix names in the registry), of each merge a failed ratchet gate fails, the owner of
-    the failed job and the lander (`failed_check`). One still running whose step failed is
-    cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
+    the failed job and the lander (`failed_check`). One still running whose step on the merge gate failed (not policy.toml's
+    `off_gate`) is cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it
+    comes later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
         script = failed_reader(ctx.now)

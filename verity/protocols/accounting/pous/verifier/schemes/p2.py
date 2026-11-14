@@ -154,6 +154,19 @@ RTT_ALLOWANCE_CAP_NS = 354_000
 The certificate refuses every whole µs past it, and the verifier any RTT past it or any Δ but `DELTA_NS`
 (`P2.deadline_refusals`), which the certificate's sum alone admits up to `ROOT_CALL_NS − 1`."""
 
+CAPACITY_KEYS = ("root_call_ns",)
+
+
+def capacities(j: object) -> int:
+    """The capacity a P2 run's verifier is handed, `{root_call_ns}`: half the fastest root on the allowed hardware, which
+    the certificate publishes as its `call_ns`.  The certificate is proved at `ROOT_CALL_NS` alone, so any other value
+    is refused, as is any other key set."""
+    if type(j) is not dict or sorted(j) != list(CAPACITY_KEYS):
+        raise ValueError(f"P2's capacities are an object of exactly {', '.join(CAPACITY_KEYS)}")
+    if type(j["root_call_ns"]) is not int or j["root_call_ns"] != ROOT_CALL_NS:
+        raise ValueError(f"root_call_ns is {j['root_call_ns']!r}; P2's certificate is proved at {ROOT_CALL_NS} ns alone")
+    return j["root_call_ns"]
+
 
 @dataclass(frozen=True, slots=True)
 class P2Params:
@@ -530,8 +543,8 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
                          segments=None, claims=WIDE320_CLAIMS)
 
 
-__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+__all__ = ["CAPACITY_KEYS", "CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "WIDE320_CLAIMS", "P2", "P2ChaCha", "P2Params",
-           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
+           "below", "block_keys", "capacities", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
            "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
            "wide_certificate"]

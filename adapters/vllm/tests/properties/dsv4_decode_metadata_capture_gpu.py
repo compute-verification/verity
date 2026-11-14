@@ -254,8 +254,8 @@ def c128_edge_positions(case: str, n: int, rng) -> np.ndarray:
     qs = [0, 1, BS - 1, BS, BS + 1, top - 1, top] + ([W + 1, 2 * W] if held else [])
     ends = [-1, -2, -R, -R - 1, I64_MIN, I64_MIN + 1, I64_MAX] + ([I64_MAX - 1, 1 << 40] if held else [])
     kinds = [q * R + off - 1 for q in qs for off in (0, R - 1)] + ends
-    draws = rng.integers(0, top + 1, n - len(kinds)) * R + rng.integers(0, R, n - len(kinds)) - 1
-    return rng.permutation(np.concatenate([np.asarray(kinds, dtype=np.int64), draws]))
+    sampled = rng.integers(0, top + 1, n - len(kinds)) * R + rng.integers(0, R, n - len(kinds)) - 1
+    return rng.permutation(np.concatenate([np.asarray(kinds, dtype=np.int64), sampled]))
 
 
 def c128_requests(case: str, kind: str, seed: int) -> dict[str, Any]:

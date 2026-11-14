@@ -1,5 +1,6 @@
 """`wipe_monitoring`: one accepted wipe over a week, a month and a year of a deployment. The pooled count is the least M
-with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
+with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and no device, and
+leaves out what the prover's store leaves out, every wipe
 meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
 egress record is refused, a covered one over the session's own real-time window too; a run's own answer stays vacuous
@@ -23,8 +24,8 @@ from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
-STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
-         "cuda_total_bytes": 64 * 64, "total_bytes": 64 * 64}
+STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "pci_bus_id": "0000:9A:00.0",
+         "nvml_total_bytes": None, "cuda_total_bytes": 64 * 64, "total_bytes": 64 * 64}
 LINK = WP.link("control", "n0", "outside", "eth0")
 
 
@@ -34,7 +35,7 @@ def _answer(egress_mib: int | None) -> dict:
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
-    where = WP.placement("n0", "auditor", w.report["key_sha512"], store=STORE, links=[LINK])
+    where = WP.placement("n0", "auditor", w.report["key_sha512"], store_gaps=W.store_gaps(STORE), links=[LINK])
     return w.answer | {"profile": w.answer["profile"] | {"placement": where}}
 
 
@@ -75,8 +76,9 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
     assert public["certified"] and public["eps"] == str(W.EPS) and public["egress_mib"] == 2
     r = WM.table(counted, 3, deployment="three H200 nodes")
     assert r["format"] == WM.FORMAT and r["deployment"] == {"id": "three H200 nodes", "machines": 3, "cadence_s": 86400}
-    assert r["memory"] == {"tiers": [{"tier": "gpu-hbm", "bytes": 64 * 64}], "tier": "gpu-hbm", "hbm_only": True,
-                           "devices": [{"tier": "gpu-hbm", "device": "NVIDIA H200", "uuid": "GPU-test"}]}
+    assert r["memory"] == {"tiers": [{"tier": "gpu-hbm", "bytes": 64 * 64}], "tier": "gpu-hbm", "hbm_only": True}
+    assert not any(STORE[k] in json.dumps(r) for k in ("device", "uuid", "pci_bus_id"))
+    assert any(s.startswith("tier gpu-hbm: the memory the GPU's driver reserves") for s in r["leaves_out"])
     f, m = public["foreign_bits"], public["memory_bits"]
     assert m == 64 * 512 and r["each"] | {"eps_float": None} == {
         "foreign_bits": f, "memory_bits": m, "wiped_bits": m - f, "wiped_share": f"{(m - f) / m:.4g}", "eps": str(W.EPS),

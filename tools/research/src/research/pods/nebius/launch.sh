@@ -8,8 +8,9 @@
 #                                                /etc/research/deadline, a hard cap no lease extension or restart passes (vm_setup.sh)
 #
 # Idempotent: every resource is looked up by name first, so a rerun after a failure (or on a stopped VM) resumes; nothing is
-# ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (default-project-uk-south2; set it empty to look up or
-# create NEBIUS_PROJECT_NAME, which needs tenant rights the launching service account doesn't have):
+# ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (the environment's, the id of the region's default
+# project: without it nothing is looked up or created; set it empty to look up or create NEBIUS_PROJECT_NAME, which needs tenant
+# rights the launching service account doesn't have):
 #   network + subnet   the project's first subnet, else vy-net / vy-subnet
 #   security group     <vm>-ssh: ingress TCP 22 from NEBIUS_SSH_CIDRS (default any), egress any.  The VM has a static public IP:
 #                      the research tooling reaches machines over ssh from agent VMs, the laptop and the control pod, and with no

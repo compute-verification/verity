@@ -1126,6 +1126,20 @@ def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
                                                 (1, "", f"gh: No commit found for the ref {ref}")))
 
 
+#: policy.toml's jobs off the merge gate, as GitHub gives the file (`monitors._off_gate`)
+POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'
+
+
+def policy_toml(argv, text: str | None = POLICY_TOML, reads: list | None = None) -> subprocess.CompletedProcess | None:
+    """GitHub's answer to `monitors._off_gate`'s read of policy.toml at a commit (``text``; None: GitHub answers nothing at any
+    ref), each ref read appended to ``reads``; None for another command."""
+    if argv[:2] != ["gh", "api"] or "/contents/tools/verity/check/policy.toml?ref=" not in argv[-1]:
+        return None
+    if reads is not None:
+        reads.append(argv[-1].rpartition("?ref=")[2])
+    return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else (1, "", "gh: HTTP 502: Bad Gateway")))
+
+
 def write_run(root: Path, rid: str, *, command, state="failed", rc=1, steps=(), logs=None, failure=None, by=""):
     d, req = root / "runs" / rid, root / "requests" / rid
     d.mkdir(parents=True)
@@ -1662,7 +1676,7 @@ def test_an_after_landing_run_of_main_runs_on_though_a_ticket_waits_for_its_slot
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
-        if toml := ci_toml(argv):
+        if toml := ci_toml(argv) or policy_toml(argv):
             return toml
         if argv[0] == "ssh":
             return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
@@ -1686,7 +1700,7 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
-        if toml := ci_toml(argv):
+        if toml := ci_toml(argv) or policy_toml(argv):
             return toml
         if argv[0] == "ssh":
             return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row] if argv[-2] == "n1" else [],
@@ -1714,6 +1728,75 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     row["suite"], calls[:] = True, []                     # a suites.py run's failed suite rings, and the lander decides
     (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
+
+
+def test_a_check_step_is_named_by_its_job_or_its_job_and_part():
+    assert [M.step_job(s) for s in ("ratchet-gate", "circuit-check:defs-3", "lean-audit:security", "pytest")] == [
+        "ratchet-gate", "circuit-check", "lean-audit", "pytest"]
+
+
+@pytest.mark.parametrize("step,cancelled", [("ratchet-gate", False), ("circuit-check", False), ("circuit-check:defs-3", False),
+                                            ("lean-audit", True), ("lean-audit:security", True)])
+def test_a_check_whose_failed_step_is_off_the_merge_gate_runs_on_though_a_ticket_waits_and_the_post_still_rings(
+        monkeypatch, step, cancelled):
+    """A job policy.toml's `off_gate` lists (ratchet-gate, circuit-check) holds no candidate, so cancelling a candidate's check
+    for its red throws away the gating steps still running: the queue then waits on a check it must start again.  The off-gate
+    list is policy.toml's at the run's commit, and the post still says the step failed and whose merge it fails."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    row = {"run": "r1", "state": "running", "step": step, "step_ended": "2026-10-03T20:20:00Z", "line": RATCHET_LINES[0].strip(),
+           "ratchet": RATCHET_LINES, "subjects": ["Merge #1466 (ea2f79691)"], "sha": "705ca7269313", "by": LANDER_ID}
+    calls, reads = [], []
+
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        if toml := ci_toml(argv) or policy_toml(argv, reads=reads):
+            return toml
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
+        if argv[:2] == ["gh", "-R"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"state": "OPEN", "headRefName": "cursor/x-558b"}), "")
+        if argv[:2] == ["gh", "api"]:
+            return subprocess.CompletedProcess(argv, 0, "diverged\n", "")
+        assert argv[3:5] == ["cancel", "r1"]
+        return subprocess.CompletedProcess(argv, 0, "research cancel: r1: SIGTERM", "")
+
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
+    assert any("cancel" in c for c in calls) == cancelled and ("Cancelled" in f.text) == cancelled
+    assert reads == ["705ca7269313"]
+    assert f.text.startswith(f"*Check `r1` failed step `{step}` on vy-nebius-cpu-1* at 20:20Z (the run goes on)")
+    assert "`ratchet-gate` fails #12 `cursor/x-558b`, #14 `cursor/x-558b`." in f.text
+
+
+@pytest.mark.parametrize("policy", [None, 'schema = "policy/v1"\n'])
+def test_a_check_is_cancelled_for_no_step_while_policy_toml_is_unread_and_the_post_says_so_once(monkeypatch, policy):
+    """Without the off-gate list the monitor can't tell a red that holds a candidate from one that holds nothing; cancelling a
+    check for the second costs the queue a check, so it cancels nothing, and says why once rather than on every pass."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    row = {"run": "r1", "state": "running", "step": "lean-audit", "step_ended": "2026-10-03T20:20:00Z", "line": "error: x",
+           "subjects": ["Merge #1466 (ea2f79691)"], "sha": "705ca7269313", "by": LANDER_ID}
+    calls, reads = [], []
+
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        if toml := ci_toml(argv) or policy_toml(argv, policy, reads):
+            return toml
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
+        if argv[:2] == ["gh", "-R"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"state": "OPEN", "headRefName": "cursor/x-558b"}), "")
+        if argv[:2] == ["gh", "api"]:
+            return subprocess.CompletedProcess(argv, 0, "diverged\n", "")
+        raise AssertionError(f"cancelled: {argv}")
+
+    memo: dict = {}
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer, act=True))
+    assert "Cancelled" not in f.text and f.text.count("Not cancelled, though a ticket waits for its slot: policy.toml's "
+                                                      "`off_gate` is unread (") == 1
+    assert reads == (["705ca7269313", "main"] if policy is None else ["705ca7269313"])
+    reads[:] = []
+    assert [g.text for g in M.failed_checks(M.Ctx(now=T0 + 60, memo=memo, run=answer, act=True))] == [f.text] and reads == []
 
 
 def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queue_decides_nothing(tmp_path):

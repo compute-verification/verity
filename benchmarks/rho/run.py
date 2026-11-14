@@ -230,6 +230,9 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     s_times = (f"the reference's gates per counted product (`2G / κ`, {gates} for {best.family if best else '—'})"
                if st.s_times == REFERENCE else f"{gates} gates")
     premise = f", under {', '.join(st.cites())}." if st.cites() else ", which needs no straddling premise."
+    if best and any(v.cut == "serving" for v in best.combined.overhead.serving.values()):
+        premise += (f" The serving cut adds its boundary term `ω_max μ k_S` at `ω_max` = {fmt(st.omega_max)} "
+                    f"(`structure.{st.name}.omega_max`) and `μ` = {fmt(st.mu)} (`structure.{st.name}.mu`).")
     sets = setter(best) if best else None
     claim = (f"**Slowdown ≥ {fmt(r.lo)}** ({best.combined.status}; premises {best.combined.premise or '—'}), "
              f"the hardware multiple over the reference training algorithm at MFU₀ = {fmt(s.mfu)}: every bound met at "
@@ -395,8 +398,8 @@ def main() -> None:
                        "rho": attack[1].rho, "padded": attack[1].padded, "seconds": s.seconds(attack[1].rho)}
             if attack else None,
             "contradictions": contradictions,
-            "structure": {"name": s.structure.name, "s_times": s.structure.s_times, "basis": s.structure.basis,
-                          "cites": s.structure.cites()},
+            "structure": {"name": s.structure.name, "s_times": s.structure.s_times, "omega_max": s.structure.omega_max,
+                          "mu": s.structure.mu, "basis": s.structure.basis, "cites": s.structure.cites()},
             "units": {"gates_per_flop": s.context.units.gates_per_flop, "basis": s.context.units.basis},
             "delta": s.regime.delta(s.context).json(),
             "certified": certified(s),

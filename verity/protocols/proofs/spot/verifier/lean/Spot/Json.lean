@@ -70,6 +70,15 @@ example : jsonStrIs (getD (Json.mkObj [("label", .null)]) "label") "" = false :=
 example : jsonStrIs (getD (Json.mkObj [("after", .str "draw")]) "label") "draw" = false := by decide
 example : jsonStrIs (getD (Json.str "draw") "label") "draw" = false := by decide
 
+/-- `j == .bool b`, by a match the kernel reduces, as `jsonStrIs` is `j == .str s`. -/
+def jsonBoolIs (j : Json) (b : Bool) : Bool := match j with | .bool c => c == b | _ => false
+
+example : jsonBoolIs (getD (Json.mkObj [("complete", .bool true)]) "complete") true = true := by decide
+example : jsonBoolIs (getD (Json.mkObj [("complete", .bool true)]) "complete") false = false := by decide
+example : jsonBoolIs (getD (Json.mkObj [("complete", .bool false)]) "complete") false = true := by decide
+example : jsonBoolIs (getD (Json.mkObj [("complete", .num 0)]) "complete") false = false := by decide
+example : jsonBoolIs (getD (Json.mkObj [("windows", .bool true)]) "complete") true = false := by decide
+
 def entries : Json → Array (String × Json)
   | .obj kvs => kvs.toArray
   | _ => #[]

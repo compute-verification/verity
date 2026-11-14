@@ -330,8 +330,10 @@ def tmux_command(unit_text: str, unit: str) -> str:
     name = unit.rsplit(".", 1)[0]
     inst = name.partition("@")[2]
     lines = [ln.strip() for ln in unit_text.splitlines()]
-    get = lambda k: [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
-    res = lambda s: s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
+    def get(k):
+        return [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
+    def res(s):
+        return s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
     envs = [res(e.lstrip("-")) for e in get("EnvironmentFile")]
     start = res(get("ExecStart")[0].lstrip("-@+!"))
     wd = res((get("WorkingDirectory") or ["/"])[0])
@@ -424,7 +426,8 @@ ACCEPTED = re.compile(r"^(\d+(?:\.\d+)?) .*Accepted publickey for vy-admin ")
 
 def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Callable[[], int | None] = login_uid) -> list[Check]:
     """What the sudoers step needs, each as a Check."""
-    at = lambda p: root / str(p).lstrip("/")
+    def at(p):
+        return root / str(p).lstrip("/")
     out: list[Check] = []
     keys = at("/home/vy-admin/.ssh/authorized_keys")
     admin_sudo = at(SUDOERS_D / ADMIN)

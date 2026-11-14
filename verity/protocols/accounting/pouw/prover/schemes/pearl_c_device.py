@@ -103,8 +103,8 @@ SM120 = Device(
     standins=(
         ("peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800) and exact in the "
          "vLLM lanes' RTX PRO 6000 cuBLASLt and MoE correspondences; mma.sync m16n8k16 not probed on the RTX PRO 6000 itself"),
-        ("g: 4, the H100 statement's promotion period (it answers Hopper's 14-bit adder); P1 and the debit not yet re-derived "
-         "for the 26-bit atom"),
+        ("g: 4, the H100 statement's promotion period (it answers Hopper's 14-bit adder); P1 and the count of inert "
+         "work not yet re-derived for the 26-bit atom"),
         "k_max: 2^16, the H100's pure-chain freezing bound, until re-derived on the captured atom",
     ),
     cap=Fraction(1, 1000),
@@ -113,8 +113,8 @@ SM120 = Device(
 SM120_UNPROMOTED = replace(
     SM120, name="sm120-unpromoted", g=None,
     standins=tuple(s for s in SM120.standins if not s.startswith("g:")) + (
-        ("g: none, the panel's pearl-c-sm120 v2; Pearl-C's statement (P1, the debit, TT_OUT) is not restated without "
-         "promotion"),),
+        ("g: none, the panel's pearl-c-sm120 v2; Pearl-C's statement (P1, the count of inert work, TT_OUT) is not "
+         "restated without promotion"),),
 )
 
 DEVICES = {d.name: d for d in (H100, SM120, SM120_UNPROMOTED)}

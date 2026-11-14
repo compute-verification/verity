@@ -6,17 +6,18 @@ import math
 import os
 import signal
 import sys
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import JOBS, KIND_DIALS, KINDS, LORA, OTHER_DIALS, kind_of, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from training_slowdown import VERSION, config, flops, formalism, gates, grade, policy, run, starts, work
+from training_slowdown import VERSION, config, flops, formalism, gates, grade, library, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
@@ -606,9 +607,18 @@ def counted_and_traced(root: Path, steps: int, **over):
     return rec, *traced_step(cfg, route, model, optimizers, "cpu"), model
 
 
-#: the dtype a job's optimizer computes its products in, and their kind: Muon casts its Newton-Schulz to bf16, and
+#: the dtype an optimizer computes its products in, and their kind: Muon casts its Newton-Schulz to bf16, and
 #: Shampoo's factors and roots stay in the weights' f32
-OPTIMIZER_PRODUCTS = {"muon": ("bfloat16", "gemm/bf16"), "shampoo": ("float32", "gemm/f32")}
+PRODUCTS = {"Muon": ("bfloat16", "gemm/bf16"), "Shampoo": ("float32", "gemm/f32")}
+#: each job's kind of step (`synthetic.kind_of`)
+JOB_KINDS = {job: kind_of(over.get("route", "subset"), over["dials"], over.get("blocks", 1)) for job, over in JOBS.items()}
+#: each job's, where an optimizer its route builds is one of those (QAT's Muon on its latents, grow's on its blocks)
+OPTIMIZER_PRODUCTS = {job: PRODUCTS[opt] for job, kind in JOB_KINDS.items()
+                      for opt, *_ in dict(kind)["optimizers (class, fused, decayed, low state, stack, groups, trains)"]
+                      if opt in PRODUCTS}
+#: the kinds whose case takes over about 5 s
+SLOW_KINDS = {"depthshare", "depthshare-top", "strideshare", "ema-fullmuon", "ema-fullmuon-fe", "qat", "qat-grad4",
+              "qat-grad4-lowstate"}
 #: attention's ops, as the counter writes them for a fused kernel (`flops.Counter._attention`), and the dtype each
 #: side computes them in under the routes' bf16 autocast: a fused kernel in its operands', and torch's math kernel,
 #: which a trace is taken under, from operands it casts to float32
@@ -650,7 +660,9 @@ def in_dtype(log: list, rows: dict, dtype: str) -> list:
 
 
 @pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 2),
-                                        ("shampoo", 3), ("grow", 3)])
+                                        ("shampoo", 3), ("grow", 3),
+                                        *(pytest.param(job, 3, marks=pytest.mark.slow) if job in SLOW_KINDS
+                                          else (job, 3) for job in KINDS)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`traced.traced_step`: the capture's graph of it, from shapes alone) against
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
@@ -675,6 +687,13 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     As a job runs on a GPU: under torch's fused attention kernel, which the counter counts as the ops the math kernel
     computes attention by (`flops.Counter._attention`), the ones the trace holds.
 
+    Beside the seven jobs, every kind of step the library's configs take that none of them takes
+    (`synthetic.KINDS`): each runs code no other case runs, where the two counts could part (an optimizer's rule, a
+    decay's branch, torch's fused AdamW beside Muon, a trained embedding's gradient summed over micro-batches, a
+    frozen block below or between trained ones that the backward does or doesn't pass through, QAT's step on its
+    latents, its coded gradients and its low-width state), so a slowdown of that kind divides by a count held to its
+    traced circuit. The test below fails on a config of a kind no job takes.
+
     The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
     cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
     with attention_rows() as kernel:
@@ -688,13 +707,14 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     assert {(key[2], key[4]) for key in attention} == {(op, FUSED) for op in ATTENTION}
     assert all(ops[gates.op_key([*key[:4], *n, key[4]])] == n for key, n in attention.items())
     assert counted["assumed"] == {} and counted["gates"] == tr["circuit"]["gates"]
+    approximated = library.approximated(g)
+    assert step["approx_macs"] == approximated["macs"] and (approximated["macs"] > 0) == (approximated["gates"] > 0)
     if job in OPTIMIZER_PRODUCTS:
         dtype, kind = OPTIMIZER_PRODUCTS[job]
         products = {k: v for k, v in ops.items() if k.startswith("other param mm ")}
         macs = sum(m for _, m in products.values())
         assert macs and {gates.split_key(k)[4] for k in products} == {dtype}
         assert gates.of_log({"ops": products})["kinds"] == {kind: {"macs": macs, "gates": macs * gates.per_mac(kind)}}
-        assert (step["approx_macs"] > 0) == (job == "shampoo")
     rows = work.priced(tr)["rows"]
     assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
     log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
@@ -705,6 +725,31 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
         r[5] for r in log if not gemm_like(r[2]))
     assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
+
+
+def test_every_config_of_the_library_takes_a_kind_of_step_a_job_takes():
+    """Every config of the library (`attacks/`) takes a kind of step (`synthetic.kind_of`, at its start's blocks) one
+    of `JOBS` takes, so the test above holds its count to its traced circuit; and no two jobs take one kind. A config
+    whose kind no job takes fails here by name, with the kind its job would take, and so does a route's dial that
+    `kind_of` doesn't read and no set states takes no branch of the step."""
+    assert not KIND_DIALS & OTHER_DIALS
+    unread = {route: sorted((set(mod.DIALS) | set(getattr(mod, "FIXED", {}))) - KIND_DIALS - OTHER_DIALS)
+              for route in sorted(p.stem for p in config.ROUTES.glob("*.py") if not p.stem.startswith("_"))
+              for mod in [config.route(route)]}
+    assert not any(unread.values()), "".join(
+        f"\n{route}: dials {dials} are in neither synthetic.KIND_DIALS nor OTHER_DIALS; add each to OTHER_DIALS if it "
+        "takes no branch of the step, else read its branch in synthetic.kind_of and add it to KIND_DIALS"
+        for route, dials in unread.items() if dials)
+    assert len(set(JOB_KINDS.values())) == len(JOBS), "two jobs of synthetic.JOBS take one kind of step"
+    have = set(JOB_KINDS.values())
+    missing = {}
+    for path in library.entries():
+        raw = tomllib.loads(path.read_text())
+        kind = kind_of(raw["route"], raw.get("dials", {}), starts.start(raw["start"]).shape["n_layer"])
+        if kind not in have:
+            missing[path.stem] = dict(kind)
+    assert not missing, "".join(f"\n{name}: no job of synthetic.JOBS takes its kind of step; add one to "
+                                f"synthetic.KINDS that takes {kind}" for name, kind in missing.items())
 
 
 @pytest.mark.parametrize("job", JOBS)

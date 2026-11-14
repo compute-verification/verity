@@ -13,8 +13,8 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
 `../edited_gemm/egemm_depthr_check.py`.
 
 **What it never does.** It imports nothing of Verity and nothing of `research`: the standard library, numpy and pysat
-alone. It reads the environment in one place, `Checks.finish`, for where the verdict and the run's result go, and writes
-no other file.
+alone. It reads the environment in one place, `exact_kit.settings` (`OUT` and the three variables `research run` sets),
+which only `Checks.finish` asks, for where the verdict and the run's result go, and writes no other file.
 
 ## API
 

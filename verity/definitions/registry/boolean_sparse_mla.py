@@ -7,7 +7,9 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaHeadBlock_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}
     SparseMlaHeadBlock_v3{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   the same function written as Calls; ``opt_in``
     SparseMlaHeadScores_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  the block up to P, written as Calls
-    SparseMlaHeadValues_v2{NVIS,FIRST,BN,DOT,G}            the block's P V steps on G columns of O, written as Calls
+    SparseMlaHeadScoresCols_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE,G}  the same on its key rows' column blocks side by side
+    SparseMlaHeadKeysWire_v2{NVIS,W,C}                     its input, each bit XORed with a constant 0: no AND
+    SparseMlaHeadValues_v2{NVIS,FIRST,BN,DOT,G,C}          the block's P V steps on G columns of O, written as Calls
     SparseMlaHeadEnd_v2{DV,INV}
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
 
@@ -188,29 +190,72 @@ def _dot_row(B, c: _Bits, DOT, a: Coll, b: Coll, bd: Coll, acc: Coll | None, n: 
     return B.batch(bind(SparseMlaDotStep, DOT=DOT), a, b, acc, B.call(own_a, a), bd, axes=(None, axis, 0, None, axis))
 
 
-def _head_scores_calls(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None):
-    """`SparseMlaHeadScores_v1`'s body on bits as Calls, `SparseMlaHeadBlock_v3`'s up to P: each key word's own gates once
-    (`SparseMlaDotStepB`), S[c] by rows of `SparseMlaDotStep` that share the query's 16 words of a step, and the online softmax
-    `boolean_attention`'s, guarded only in the first visited block."""
+def _scores_calls(B, S, q_nope, q_rope, cols: tuple, m_prev=None, l_prev=None):
+    """`SparseMlaHeadScores_v1`'s body on bits as Calls, its key rows given as ``cols``, column blocks of equal width side by
+    side (one block: the rows whole), each a multiple of 16 columns: each key word's own gates once (`SparseMlaDotStepB`, a
+    batch a block), S[c] by rows of `SparseMlaDotStep` that share the query's 16 words of a step, each row's words read from
+    the one block that holds them, and the online softmax `boolean_attention`'s, guarded only in the first visited block."""
     DR, DV, NVIS, FIRST, DOT = S.DR, S.DV, S.NVIS, S.FIRST, S.DOT
     M.check_block_statics(DR, DV, NVIS, S.BN)
     M._whole_or_first("SparseMlaHeadScores", S)
     c, KW = _Bits(B), DR + DV
-    kd = B.batch(bind(SparseMlaDotStepB, DOT=DOT), Coll(Array(NVIS * KW, BF16), kv.refs), axes=(0,))
+    G = KW // len(cols)
+    kd = [B.batch(bind(SparseMlaDotStepB, DOT=DOT), Coll(Array(NVIS * G, BF16), kv.refs), axes=(0,)) for kv in cols]
     q = Coll(Array(KW, BF16), concat([q_rope.refs, q_nope.refs]))
     scores = None
     for t in range(KW // 16):
         at = DV + 16 * t if 16 * t < DR else 16 * t - DR  # a key row is [kv_c | k_pe], the chain reads [k_pe | kv_c]
-        scores = _dot_row(B, c, DOT, q[16 * t:16 * t + 16], _words(kv, BF16, NVIS, 16, at, KW),
-                          _words(kd, kd.type.elem, NVIS, 16, at, KW), scores, NVIS, 0)
+        b, at = divmod(at, G)
+        scores = _dot_row(B, c, DOT, q[16 * t:16 * t + 16], _words(cols[b], BF16, NVIS, 16, at, G),
+                          _words(kd[b], kd[b].type.elem, NVIS, 16, at, G), scores, NVIS, 0)
     m_new, lanes, pb, rescale = _softmax(B, c, NVIS, FIRST, scores, m_prev, l_prev, FIRST, FIRST, None,
                                          M.scale_log2_bits(S.SCALE))
     return tuple_of(m_new, array_of(lanes), array_of(pb), *(() if FIRST else (rescale,)))
 
 
+def _head_scores_calls(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None):
+    """`SparseMlaHeadScores_v1`'s body on bits as Calls, `SparseMlaHeadBlock_v3`'s up to P (`_scores_calls` on its key rows
+    whole)."""
+    return _scores_calls(B, S, q_nope, q_rope, (kv,), m_prev, l_prev)
+
+
 SparseMlaHeadScoresV2 = EW.on_bits("SparseMlaHeadScores", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"],
                                    lambda S: M._head_scores_type(S, BF16, F32), _head_scores_calls, M.SparseMlaHeadScores,
                                    lifted=_LIFTED)
+
+
+def _head_scores_cols_calls(B, S, q_nope, q_rope, *rest):
+    """`SparseMlaHeadScoresCols_v1`'s body on bits, `SparseMlaHeadScores_v2`'s Calls each reading its words from the column
+    block that holds them (`_scores_calls`): a Call that read the blocks side by side (`sparse_mla.key_rows`) would name each
+    of its key bits apart, which multiplies the description.  At a G no 16 divides, a step's 16 words span two blocks, and
+    the body reads them side by side."""
+    n = M.key_blocks(S.DR, S.DV, S.G)
+    if S.G % 16:
+        return _head_scores_calls(B, S, q_nope, q_rope, M.key_rows(S, rest[:n], BF16), *rest[n:])
+    return _scores_calls(B, S, q_nope, q_rope, tuple(rest[:n]), *rest[n:])
+
+
+SparseMlaHeadScoresColsV2 = EW.on_bits("SparseMlaHeadScoresCols", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE", "G"],
+                                       lambda S: M._head_scores_cols_type(S, BF16, F32), _head_scores_cols_calls,
+                                       M.SparseMlaHeadScoresCols, lifted=_LIFTED)
+
+
+def _head_keys_wire(B, S, kv):
+    """`SparseMlaHeadKeysWire_v1`'s function on bits, not its body: each input bit XORed with one constant 0, so each bit it
+    returns is a gate of its own activation (16 NVIS W XORs and the constant, no AND), as each word `SparseMlaHeadKeysWire_v1`
+    returns is its own `U32Hi16_v1`'s.  Casts that are wires would return its input bits themselves, and a template's
+    returned bits are the gates of its own it returns (`partition._template_bits`)."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.refs import broadcast
+
+    n = 16 * S.NVIS * S.W
+    zero = B.call(BL.constant(0))
+    pairs = Coll(Array(2, Array(n, BL.BIT)), concat([kv.refs, broadcast(*zero.refs[0], n)]))
+    return B.batch(BL.XOR, pairs, axes=(1,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
+
+
+SparseMlaHeadKeysWireV2 = EW.on_bits("SparseMlaHeadKeysWire", 2, ["NVIS", "W", "C"], lambda S: M._head_keys_type(S, BF16),
+                                     _head_keys_wire, M.SparseMlaHeadKeysWire)
 
 
 def _head_values_calls(B, S, pb, kv, rescale=None, o_prev=None):
@@ -237,7 +282,7 @@ def _head_values_calls(B, S, pb, kv, rescale=None, o_prev=None):
     return o
 
 
-SparseMlaHeadValuesV2 = EW.on_bits("SparseMlaHeadValues", 2, ["NVIS", "FIRST", "BN", "DOT", "G"],
+SparseMlaHeadValuesV2 = EW.on_bits("SparseMlaHeadValues", 2, ["NVIS", "FIRST", "BN", "DOT", "G", "C"],
                                    lambda S: M._head_values_type(S, BF16, F32), _head_values_calls, M.SparseMlaHeadValues,
                                    lifted=_LIFTED)
 
@@ -261,4 +306,5 @@ SparseMlaV2 = flat("SparseMla", 2, ["T", "NH", "DR", "DV", "BN", "DOT", "INV", "
                    M.SparseMla, lifted=_LIFTED)
 
 BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaDotStepB, SparseMlaDotStep,
-                      SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaV2]
+                      SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadScoresColsV2, SparseMlaHeadKeysWireV2,
+                      SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaV2]

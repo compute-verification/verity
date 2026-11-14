@@ -8,6 +8,10 @@
    "and": 2581289,
    "type": "659a2b6e69bb56f02bc87199b2b3ad55ff09e7495bc2281378a4b853cfc0b678b663f7f44dfba5481df28b7b9296ee1395fc0ed987abeb666aba265a4b6b2e3a"
   },
+  "BlockOpeningCheck_v2{N=32,C=5,K=2,MASKED=1,BYTES=64,ROWS=64,LEAF=3,DR=1,DP=2,DV=1}": {
+   "and": 2799519,
+   "type": "f016acfd17dff76b11290f0de2afb78b541499b12f9b658584660ab1b6a45f10f42536d0ae84a45333c2ca6f61846bedbc8039c82a9f8e730b4f7601a10b909a"
+  },
   "BlockVerdict_v1{W=16}": {
    "and": 21,
    "type": "350b956a19ff31f720fadaa26b49acc24ba19267754c77254d6015dab1702ce8e85760c71679a1107579f9f9ce922b78aeaa8130bf7a54441a3478f0edc14cec"

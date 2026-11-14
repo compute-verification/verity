@@ -57,7 +57,7 @@ there stops the session, and every call on the challenger's live-coin part is on
 with the salts Lean drew. The proxy handles the request too, for the prover's side (the answers, the session record,
 ``private.json``), and stops the session unless it sends the same messages and samples the same salts. Under the coin tree
 Lean is given the tree's spec and holds the prover's ``Hello`` to it (`Flock.Firewall.treeHello`); the challenger's live-coin part's
-messages are the live-coin session's. Lean's firewall refuses a binding round of a registered top, so
+messages are the live-coin session's. Lean's ZK server refuses a binding round of a registered top, so
 `verity_flock.rec_session.serve`'s sessions keep the Python send check, held to Lean's by ``test_firewall_agreement``.
 
 **Live coins.** Each round's coins are flipped by the challenger's live-coin part when the round's commitments reach it, never before
@@ -547,7 +547,7 @@ def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None
 def full_draw(program, query: dict) -> dict:
     """The verifier's sample for an inner session over its own program and partition query: the stratified sampling design at K = the
     population (`one_stage.draw.derive`), whose every stratum samples all its units (`stratum_k(N, size, N) = size`), so the
-    sample is every unit, ascending. ``verify --stratified N --program --partition`` derives the same law."""
+    sample is every unit, ascending. ``verify --stratified N --program --partition`` derives the same sampling design."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
@@ -618,7 +618,7 @@ def check_schedule(s) -> dict:
     """``s``, if it is a schedule a session can be held to (every field of the type `schedule_of` gives it, a plain
     ``Hello`` naming no ``coins``, each round just its six fields, and each stream's rounds, at least one, numbered 0, 1, …
     in the schedule's order, as many as its ``rounds``: `Flock.Firewall.Schedule.canonical`); else ValueError. Lean's
-    firewall, which holds no registered top, also refuses a schedule with a stream or a copy of level 0's top whose
+    ZK server, which holds no registered top, also refuses a schedule with a stream or a copy of level 0's top whose
     table has no root."""
     nat = lambda v: type(v) is int and v >= 0
     try:
@@ -1089,7 +1089,7 @@ class Proxy:
     ``lean``: the send check is Lean's (`LeanFirewall`, on this session's ``schedule``). Each request goes to it first, and
     its refusal stops the session; the challenger's live-coin part gets the messages it sent, in its order, and the salts are the ones it
     drew. The proxy's own handling of the request must send the same messages and sample the same salts, or the session stops:
-    it keeps the prover's side (the session record, ``private.json``, the answers) and relays. Lean's firewall holds no
+    it keeps the prover's side (the session record, ``private.json``, the answers) and relays. Lean's ZK server holds no
     registered top."""
 
     def __init__(self, coins: CoinServer, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt, *, schedule: dict,

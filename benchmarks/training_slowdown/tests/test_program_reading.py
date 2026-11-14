@@ -273,9 +273,12 @@ def trace_blocks(got: dict) -> float:
     return got["bound"]["blocks"] if got["bound"]["available"] else 0.0
 
 
-def blocks(work: WK.Work, F_: float | None = None) -> float:
-    b = WK.bound(work, C, F=F_)
-    return b.bound.blocks if b else 0.0
+def blocks(work: WK.Work, F_: float) -> float:
+    """The blocks of the calculator's choice on ``work``'s products at F = ``F_`` on every sub-work; 0 where the
+    reading gives no bound."""
+    if WK.bound(work, C) is None:
+        return 0.0
+    return MC.slowdown_of(C, work.k, size=work.gates, work=WK.products(work), F=F_).bound.blocks
 
 
 def trace_work(r: Reading, k: float) -> WK.Work:

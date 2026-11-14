@@ -278,17 +278,16 @@ def compare(t: str, items: list[Item], shadow: list[dict], before: frozenset[str
 
 def last_disagree(out: Path) -> frozenset[str]:
     """The keys the record's last tick disagreed on (none without a record, or after a failed tick)."""
-    try:
-        with out.open("rb") as f:
-            f.seek(max(0, f.seek(0, os.SEEK_END) - (1 << 20)))
-            lines = f.read().decode(errors="replace").splitlines()
-    except FileNotFoundError:
+    if not out.exists():
         return frozenset()
+    with out.open("rb") as f:
+        f.seek(max(0, f.seek(0, os.SEEK_END) - (1 << 20)))
+        lines = f.read().decode(errors="replace").splitlines()
     for line in reversed(lines):
         try:
             return frozenset(json.loads(line).get("disagree") or ())
-        except ValueError:
-            continue
+        except ValueError as e:
+            print(f"kueue shadow: a line of {out} is not JSON, skipped ({e})", file=sys.stderr)
     return frozenset()
 
 

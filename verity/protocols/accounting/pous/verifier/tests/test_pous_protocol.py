@@ -568,6 +568,18 @@ def test_p2_is_experimental_and_says_so():
         P2Params(128, 173, 8, 1, "chacha20")
 
 
+def test_p2s_capacity_is_handed_in_at_the_proved_value_alone():
+    """`p2.capacities` reads `{root_call_ns}` at `ROOT_CALL_NS`, the certificate's `call_ns`, and refuses another value
+    of it, a value that isn't an integer and any other key set."""
+    assert p2.capacities({"root_call_ns": ROOT_CALL_NS}) == ROOT_CALL_NS == schemes.get("p2-16448/v4").certificate.call_ns
+    for bad in (ROOT_CALL_NS - 1, ROOT_CALL_NS + 1, float(ROOT_CALL_NS), str(ROOT_CALL_NS)):
+        with pytest.raises(ValueError, match="proved at 854029 ns alone"):
+            p2.capacities({"root_call_ns": bad})
+    for bad in ({}, {"root_call_ns": ROOT_CALL_NS, "delta_ns": 500_000}, [ROOT_CALL_NS]):
+        with pytest.raises(ValueError, match="exactly root_call_ns"):
+            p2.capacities(bad)
+
+
 def test_p2_family_certificate_is_the_proved_block_range():
     """`p2.family_certificate` is `P2SlackFamilyUncond`'s `λ = 128` row at k = 105, the registered certificate's every
     field but its segment pin, for a v4 store of 2^8 to 2^23 blocks at the registered width and prime in any number of

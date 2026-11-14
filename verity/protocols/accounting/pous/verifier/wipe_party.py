@@ -204,16 +204,17 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
 
 
 def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
-              store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
+              store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
     machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
     session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
     `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
     `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
-    `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
-    `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
-    declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
+    `prover-node`. `store_gaps` is what the memory the prover kept the fill in leaves outside the bound
+    (`wipe_period.store_gaps`), by tier and never by device: the placement names no device. `links` are the links
+    leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's declared tiers
+    (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
     if simulated and host != node:
         raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
     kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
@@ -223,9 +224,9 @@ def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | N
              "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
     premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
                if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
-    out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
-    return out if store is None else out | {"prover_store": dict(store)}
+    return {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
+            PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
+            "store_gaps": list(store_gaps)}
 
 
 def holds(where: Mapping[str, Any]) -> bool:

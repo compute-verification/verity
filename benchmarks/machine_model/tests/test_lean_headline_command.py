@@ -25,6 +25,7 @@ def out(tmp_path, monkeypatch):
     return out
 
 
+@pytest.mark.slow
 def test_check_passes_on_what_the_command_writes_and_names_a_file_that_is_not(out, capsys):
     not_written = "is not what `machine-model lean-headline` writes"
     assert main(["lean-headline", "--check"]) == 1 and not out.exists()

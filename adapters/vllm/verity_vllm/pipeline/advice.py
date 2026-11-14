@@ -108,8 +108,9 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
-    """B's item in the deployment's registration log (`verity.protocols.accounting.registration.verifier.registration`, kind ``builder``): the inner
-    compiler's digest, the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
+    """B's item in the deployment's registration log
+    (`verity.protocols.accounting.registration.verifier.registration`, kind ``builder``): the inner compiler's digest,
+    the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
     return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
 
 

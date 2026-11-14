@@ -201,6 +201,9 @@ def _deltas() -> list[Param]:
               source=f"twice {core}: {credit}: delta_bind + delta_ks, commitment binding (SHA-512) and the proof "
                      "system's knowledge soundness, each assumed at delta_s: PoUW's binding has no deployed bound "
                      "and ProofSystemSound is undischarged"),
+        Param("regime.remote.window_ks", 2 * window, status="assumed",
+              source=f"twice {core}: a window's sampled-proofs knowledge error ks_t = eps_ks + delta_link "
+                     "(Nci.Guarantees.DampenerRemotePeriod), each assumed at delta_s: the statement gives it no value"),
         Param("regime.remote-sampled.p_evade", window, low=1e-15, high=2.0 ** -20, status="declared",
               source=f"{core}, the planner's (benchmarks/nci/tiers.py DEFAULTS p_evade); high: 2^-20"),
         Param("incorrect.delta", min(report), low=min(report), high=max(report), status="ruled",

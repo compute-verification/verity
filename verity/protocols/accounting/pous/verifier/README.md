@@ -37,7 +37,7 @@ What code outside this directory may use. Everything else here is internal.
 | `streamed_wipe` (`streamed_wipe.py`) and `wipe_period.run(node: str, params: sw.WipeParams \| None = None, *, ...) -> Wipe` (`wipe_period.py`) | The streamed-label wipe. `streamed_wipe` is its Python, the reference its Lean verdict is held to: the memory challenger's side (`WipeMemoryChallenger`, which holds a start mark before the fill when given a `mark_source`), the honest server (`Prover`), the records (`WipeParams`, `WipeCommitment`, `SignedWipe`), the two marks' messages (`start_message(commitment: WipeCommitment) -> bytes`, `end_message(signed: SignedWipe) -> bytes`) and `verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. `wipe_period.run` is one wipe of one node with the verifier's answer as `verity/wipe/v0` (`wipe_period.PROTOCOL`) and the case the Lean replays to it. |
 | `python -m verity.protocols.accounting.pous.verifier.wipe_period --period DIR --out DIR [--node NAME] [--expect VERDICT]` | One wipe of this node as `period.json`'s `wipe` says. It writes `wipe.json` and `wipe.case.json` under `--out`, prints a summary, and exits 0 when the verdict is the expected one. |
 | `python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It takes no egress count and signs none. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`). |
-| `verity.protocols.accounting.pous.prover` (`verity/protocols/accounting/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block) and `circuit.PousModSquare` (a square modulo P2's prime). |
+| `verity.protocols.accounting.pous.prover` (`verity/protocols/accounting/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `setup_circuit.PousP2SetupCheck` (the setup's unit: one block of the store decoded and held to the registered row of W at its slot, one bit), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block) and `circuit.PousModSquare` (a square modulo P2's prime). |
 
 ## The lifecycle in code
 
@@ -162,7 +162,8 @@ publish once it ties `E` to the certifier's count between the session's marks. `
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
-meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
+meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers by label and
+bytes; it names no device).
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.runtime`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
 `wipe_party.serve` signs.
@@ -179,8 +180,11 @@ not the auditor's pinned key, no bound", whatever the host names say; the placem
 `prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
-declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger
-of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an uncounted egress (the check given no count). It
+declares whole, the host's DRAM, its disks), what the prover's store leaves out (the placement's `store_gaps`, by
+tier: a GPU's driver reserve when NVML gave no total, as the wipe declares the larger of CUDA's and NVML's totals and
+NVML's counts the reserve, `wipe_store.Cuda.info`; what its disks leave outside the boundary) and an uncounted egress
+(the check given no count). The placement names no device: the store as the prover measured it (the GPU's name, uuid
+and bus id among it) stays in the prover's own record, `wipe.json`'s `prover`. The record
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by

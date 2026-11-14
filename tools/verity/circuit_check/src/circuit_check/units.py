@@ -25,8 +25,8 @@ the ones its name digests (a cache may hold records another run built, copied in
 binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families,
-`targets.CALLEE_CALLS`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
-holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
+`targets.callee_calls`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
+holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (``WidgetStep_v1`` with its DOT bound, from `boolean_version`, and
 unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
 binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
 lists, and its descriptor computed again: one that differs from its record's is `Stale`, and the run builds the whole
@@ -114,6 +114,9 @@ from . import targets as TG
 
 REQUEST = "catalog-unit"
 REGISTERED = ("<registered>",)
+#: the module whose registry `registered_entries` cuts into the ``<registered>`` bindings: their peaks are in its unkeyed
+#: file (`cli.heavy`)
+REGISTRY_MODULE = "verity.circuits.defs"
 #: the catalog's roots record (`store_roots`), beside the bindings'
 ROOTS = ("<roots>",)
 #: the version of what `write_slices` writes
@@ -368,7 +371,7 @@ def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_uni
 
 def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_unit: bool = True) -> set[str]:
     """The families of `targets.call_families` the suite's Definitions are of: the word Call families (`targets.
-    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.CALLEE_CALLS`, the Boolean version of each
+    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.callee_calls`, the Boolean version of each
     one made on demand (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one
     (`targets.boolean_family`) that are of a suite family: each from its object, made (`_materialize`) only where it could be of
     a suite family no other one gave (`targets.boolean_links`)."""
@@ -387,7 +390,7 @@ def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_
             if fid not in objects and (n.get("di", fid) in keys or n.get("n") in names):
                 if (f := TG.boolean_family(_materialize(entries, objects, fid, in_unit, d.via.get(fid)))) is not None:
                     found.add(f)
-    return words | found | set(TG.CALLEE_CALLS)
+    return words | found | set(TG.callee_calls())
 
 
 def _sited(v: Any) -> Any:
@@ -638,7 +641,8 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
             over = sorted(((gb, n) for n, gb in grew.items() if gb > apart[2].get(n, APART_GB)), reverse=True)
             log(f"circuit-check: {len(kept)} of {len(todo)} bindings built apart, their results at most {scratch} bytes on "
                 "disk at once" + (
-                f"; {len(over)} grew past their heavy.json GiB: " + ", ".join(f"{n} {gb}" for gb, n in over) if over else ""))
+                f"; {len(over)} grew past the GiB their owner's unkeyed file lists: "
+                + ", ".join(f"{n} {gb} ({peak_file(n)})" for gb, n in over) if over else ""))
         gone = {id(e) for e in todo} - {id(e) for e in kept}
         effects["raised"].update((e.label, e.effects) for e in todo if id(e) in gone)
         entries = [e for e in entries if id(e) not in gone]
@@ -1281,9 +1285,19 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
         os._exit(code)
 
 
-#: the GiB a binding's process is counted at in `built_apart` when `heavy.json` (`cache.HEAVY`) lists none for it: most bindings
-#: grow less than 1.5 GiB past the process they were forked from, and it lists those that grow past 3 GiB
+#: the GiB a binding's process is counted at in `built_apart` when no unkeyed file lists one for it (`cli.heavy`): most bindings
+#: grow less than 1.5 GiB past the process they were forked from, and those files list the ones that grow past 3 GiB
 APART_GB = 2.0
+
+
+def peak_file(name: str) -> str:
+    """Where the peak of binding ``name`` goes (`cli.heavy`): the unkeyed file of its first unit's module, or of
+    `REGISTRY_MODULE` for a ``<registered>`` binding, by its path."""
+    from . import sidecars as SC
+
+    head, sep, _unit = name.partition(SC.SUFFIX + "#")
+    p = SC.unkeyed_file(head if sep else REGISTRY_MODULE)
+    return SC.rel(p) if p is not None else f"the unkeyed file of {head if sep else REGISTRY_MODULE}"
 
 
 def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), weights: dict[str, float] | None = None, *,
@@ -1454,7 +1468,7 @@ def built_entries() -> list[Entry] | None:
     return entries
 
 
-__all__ = ["APART_GB", "REGISTERED_RECORDS", "REQUEST", "ROOTS", "SLICE", "Derived", "Entry", "Plan", "Stale", "built_apart",
+__all__ = ["APART_GB", "REGISTERED_RECORDS", "REGISTRY_MODULE", "REQUEST", "ROOTS", "SLICE", "Derived", "Entry", "Plan", "Stale", "built_apart",
            "built_entries", "built_here", "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest",
-           "merged", "plan", "planned", "read_slice", "registered_entries", "sliced", "slices", "store", "store_roots",
+           "merged", "peak_file", "plan", "planned", "read_slice", "registered_entries", "sliced", "slices", "store", "store_roots",
            "write_slices"]

@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import config as K
+from verity.commitments.domains import LMS_SHA512_N64_W1_H20
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
@@ -151,19 +152,29 @@ PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host
 PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
-          "machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the deploy",
-          "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
+#: the memory challenger's keys the auditor pinned, one for each subprotocol whose sessions it signs: the SHA-512 of
+#: each public key
+PINS = {"pous": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb",
+        "wipe": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
+          "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
+          "FILE` (demos/onsite_served/README.md); the deploy bindings hold every host and address, this file none.",
+          "`verity run THIS --dry-run` resolves it all.")
 
 
 def configuration(commit: str) -> dict[str, Any]:
     """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated."""
+    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and the memory challenger's
+    `PINS`."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
         p["machine"] = PLACEMENT[p["name"]]
+    cfg["pin"] = [{"party": MEMORY_CHALLENGER, "protocol": c, "scheme": LMS_SHA512_N64_W1_H20, "key-sha512": h}
+                  for c, h in sorted(PINS.items())]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
     return cfg
 
@@ -263,10 +274,22 @@ def _poub_session(cfg, params, bound):
     return {"SERVE_ARGS": shlex.join(["--remote-verifier", bound["address"]])}
 
 
+#: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
+#: 503-byte payload of the front's 512-byte cells; every other request is answered as before
+ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
+
+
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
-    return {"CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+    return {"SERVE_ARGS": ID_FORM,
+            "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -319,8 +342,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
-                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
                                  "warden in front of serve-openai before the requests"),
@@ -361,12 +385,18 @@ def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
 
 
+#: the runner's variables that are serve-openai's flags, which each piece adds its own to
+JOINED = ("SERVE_ARGS",)
+
+
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
     """The served window's runner's variables: every listed piece's hooks, whichever party's they are, since the
-    prover's pieces reach the auditor's sides through their bindings."""
+    prover's pieces reach the auditor's sides through their bindings. A variable of `JOINED` is every piece's flags,
+    in the pieces' order; any other is one piece's."""
     out: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
-        out.update(p.variables(cfg, bindings))
+        for k, v in p.variables(cfg, bindings).items():
+            out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
 
 
@@ -375,10 +405,19 @@ def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
             for k in p.unbound(bindings)]
 
 
+def composite(env: Mapping[str, str]) -> dict[str, str]:
+    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
+    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
+    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
+    on the node) keeps what it named."""
+    return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
+
+
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks, its public record in ``state/out``; its serve dir
-    stays where the runner keeps it on the node (its ``D`` and ``SERVE_ROOT``, from the environment)."""
-    env = {**os.environ, **variables(cfg, bindings), "OUT": str(state / "out")}
+    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
+    (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
+    ``D`` and ``SERVE_ROOT``, from the environment)."""
+    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,

@@ -25,7 +25,7 @@ execution phase's side A of m slots).
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, or_reduce, sub

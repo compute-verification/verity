@@ -176,10 +176,12 @@ def test_train_sh_launches_the_check_from_a_fresh_worktree(shipped, tmp_path):
                RESEARCH_STORE=str(tmp_path / "store"), RESEARCH_STORE_CONFIG=str(tmp_path / "store.toml"))
     sha = tree.name
     p = subprocess.run(["bash", "tools/verity/check/train.sh", sha, "vy-cold-start"], cwd=tree, env=env, capture_output=True, text=True)
-    log = tmp_path / "root" / "trains" / f"train-{sha[:12]}.log"
-    shown = _tail(p.stdout + p.stderr + (log.read_text() if log.is_file() else ""))
-    assert p.returncode == 0, shown
+    named = re.search(r"; log (\S+)$", p.stdout, re.M)
+    log = Path(named[1]) if named else None
+    shown = _tail(p.stdout + p.stderr + (log.read_text() if log and log.is_file() else ""))
+    assert p.returncode == 0 and log is not None, shown
     assert "RUN r20991231-000000-c01d" in p.stdout, shown
     argv = json.loads(launch.read_text())
     assert argv[:3] == ["run", "--tool", "check"] and argv[argv.index("--on") + 1] == "vy-cold-start", argv
-    assert (tmp_path / "root" / "trains" / f"train-{sha[:12]}" / ".venv").is_dir(), shown
+    assert log.parent == tmp_path / "root" / "trains" and log.name.startswith(f"train-{sha[:12]}."), shown
+    assert (log.with_suffix("") / ".venv").is_dir(), shown

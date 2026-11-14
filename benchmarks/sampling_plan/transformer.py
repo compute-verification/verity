@@ -49,19 +49,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import CARDS, I, cap, observations  # noqa: E402
+from inputs import CARDS, I, cap, observations
 
 from verity import protocol
-from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.protocols.proofs.spot.prover.costfit import Fitted, fit  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.protocols.proofs.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, shape_of
+from verity.protocols.proofs.spot.prover.costfit import Fitted, fit
+from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k, work_table
+from verity.protocols.proofs.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
-from verity.circuits.codec import descriptor_id  # noqa: E402
-from verity.circuits.defs import bind  # noqa: E402
-from verity.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.ops import fp32 as F, gemm as G, prims as P
 
 #: core's reporting deltas (`verity.protocol`), as floats
 DELTAS = tuple(map(float, protocol.DELTAS))

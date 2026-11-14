@@ -120,7 +120,7 @@ def main() -> None:
     state = State(shlex.split(a.kubectl), a.ready)
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             if self.path.split("?")[0] != "/metrics":
                 self.send_error(404)
                 return

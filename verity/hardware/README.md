@@ -84,9 +84,8 @@ else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as a
 `CARD_KINDS` (a card's kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit
 word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
 imports the standard library, the wire and `verity.errors` only. The package file, `verity/hardware/__init__.py`,
-holds a docstring and nothing else: no import and no re-export. The registration log (`verity.protocols.accounting.registration.verifier.registration`)
-shares the package, and importing it or the Site, in a verifier too, reads no card file and no node file: the readers
-run only when called. `tests/test_package.py` holds both.
+holds a docstring and nothing else: no import and no re-export. Importing the Site or the wire, in a verifier too,
+reads no card file and no node file: the readers run only when called. `tests/test_package.py` holds both.
 
 `load_card(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
@@ -95,7 +94,9 @@ its kind. `skus(kind=None)` lists the cards, or those of one kind.
 Lean's `card.ρ`, the SMs times the resource's rate times its clock (for the tensor `clock.tensor` where the card has one
 and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` names), in MACs of operand format `fmt` when
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
-the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
+the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table. `readings(card, *, fmt=None) -> dict`
+is the tensor peak under each reading of its clock the card states (`READINGS`: `clock.tensor`, the card's own, then
+`clock.sm`), so a figure quoted under every reading names no clock itself.
 
 **The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
 that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,

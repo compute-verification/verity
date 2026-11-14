@@ -1,5 +1,5 @@
 [Unit]
-Description=cap the Lean check cache (lean_audit.py --prune: the records trees, replays, builds, deps and artifacts its caps keep)
+Description=bound the Lean check cache (lean_audit.py --prune: the records trees, replays, builds, deps and artifacts its limits keep)
 
 [Service]
 Type=oneshot

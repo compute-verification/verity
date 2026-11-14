@@ -31,7 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -48,7 +48,7 @@ QUEUES = Path("/workspace/usage/queues.jsonl")
 
 
 def iso(t: datetime) -> str:
-    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def isoz(s: str | None) -> str | None:
@@ -57,7 +57,8 @@ def isoz(s: str | None) -> str | None:
         return None
     try:
         return iso(datetime.fromisoformat(s.replace("Z", "+00:00")))
-    except ValueError:
+    except ValueError as e:
+        print(f"verity_console: store time {s[:40]!r} does not parse, so it is shown as none ({e})", file=sys.stderr)
         return None
 
 
@@ -146,11 +147,14 @@ def fit(p: dict) -> dict:
 
 
 def publish(p: dict, url: str, key: str) -> str:
-    req = urllib.request.Request(f"{url}/api/panels/{p['id']}", data=json.dumps(p).encode(), method="PUT",
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        return f"refused: --url is not an http or https URL (scheme {scheme!r}): nothing sent"
+    req = urllib.request.Request(  # noqa: S310 (http or https, checked above)
+        f"{url}/api/panels/{p['id']}", data=json.dumps(p).encode(), method="PUT",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 (http or https, checked above)
                 return str(r.status)
         except urllib.error.HTTPError as e:
             if e.code != 503 or attempt == 2:
@@ -173,7 +177,7 @@ def write(out: Path, p: dict) -> None:
 
 def store_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     sys.path[:0] = [str(ns.research_src)]
-    from research.store.local import LocalStore  # noqa: PLC0415
+    from research.store.local import LocalStore
 
     store = LocalStore(ns.store) if ns.store else LocalStore()
     info = {"refresh": "skipped (--no-refresh)"}
@@ -234,7 +238,7 @@ def prom_now(query: str) -> list[dict]:
 
 def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     sys.path.insert(0, str(HERE))
-    import util_collect as uc  # noqa: PLC0415  the utilization definitions
+    import util_collect as uc  # the utilization definitions
 
     end = now.timestamp()
     start = (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)).timestamp()
@@ -288,7 +292,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
             gpus = sum(q.get("usage", {}).get("nvidia.com/gpu", 0.0) for q in d.get("queues", {}).values())
             buckets[int(d["t"]) // 300 * 300]["alloc"].append(100 * gpus / GPUS)
     mean = lambda xs: sig(sum(xs) / len(xs), 3) if xs else None  # noqa: E731
-    urows = [[iso(datetime.fromtimestamp(t, timezone.utc)), mean(v["busy"]), mean(v["util"]), mean(v["held"]), mean(v["alloc"]),
+    urows = [[iso(datetime.fromtimestamp(t, UTC)), mean(v["busy"]), mean(v["util"]), mean(v["held"]), mean(v["alloc"]),
               mean(v["cpu"]), GPU_TARGET, CPU_TARGET] for t, v in sorted(buckets.items())]
     out.append(panel("node1-utilization", "vy-nebius-1 utilization, last 24 hours", "line",
                      ["time", "GPU busy %", "GPU util %", "GPU held %", "Kueue-allocated %", "CPU busy %", "GPU busy target %",
@@ -308,7 +312,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
         out.append(panel("node1-queues", "vy-nebius-1 Kueue queues now", "table",
                          ["Queue", "GPUs used", "GPUs nominal", "GPUs borrowed", "CPUs used", "CPUs nominal", "Memory used GiB",
                           "Memory nominal GiB", "Admitted", "Pending", "Oldest pending (min)", "Pods' mean GPU util %"], qrows,
-                         updated_at=iso(datetime.fromtimestamp(last["t"], timezone.utc)), source=src,
+                         updated_at=iso(datetime.fromtimestamp(last["t"], UTC)), source=src,
                          note="Each ClusterQueue's quota and use from vy-usage's latest sample (every 5 minutes)."))
     else:
         errors.append(f"node1-queues: no samples in {QUEUES}")
@@ -550,7 +554,7 @@ def owner_panels(name: str, host: str, minutes: list[tuple], now: datetime, src:
 
 
 def uc_hour(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:00Z")
 
 
 # ---------------------------------------------------------------------------------------------------------------- held idle (infra/*)
@@ -619,7 +623,7 @@ def usage_module():
         raise ModuleNotFoundError(f"no cluster/usage.py beside the console or in a checkout: install deploy.toml's tree "
                                   f"{HERE / 'cluster'} (research deploy install vy-nebius-1 --by WHO {HERE / 'cluster'})",
                                   name="cluster")
-    from cluster import usage  # noqa: PLC0415  node 1's python3 has no cluster installed
+    from cluster import usage  # node 1's python3 has no cluster installed
     return usage
 
 
@@ -673,13 +677,13 @@ def n1_pool_idle(pool: str, loops: dict[str, set[tuple[str, str]]]) -> int:
 
 
 def _utc(s: str) -> float:
-    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
 
 
 def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEASE_USAGE) -> list[tuple]:
     """(GPU, start, end, who) for each lease node 1's gpu-lease granted: since to end of each finished one's
     `gpu-lease/usage/v1` record in usage_log, and since to now of each live one in a pool's n1-lease.json that no record has."""
-    out = []
+    out, skipped = [], 0
     for ln in usage_log.read_text().splitlines() if usage_log.exists() else ():
         try:
             d = json.loads(ln)
@@ -687,7 +691,9 @@ def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEA
                 a, b = _utc(d["since"]), _utc(d["end"])
                 out += [(int(g["index"]), a, b, d["who"]) for g in d["gpus"]]
         except (ValueError, KeyError, TypeError, AttributeError):
-            continue
+            skipped += 1
+    if skipped:
+        print(f"verity_console: {skipped} line(s) of {usage_log} unread, so their leases are not counted", file=sys.stderr)
     done = {(g, a, who) for g, a, _, who in out}
     for d in pools:
         f = Path(d) / "n1-lease.json"
@@ -695,7 +701,9 @@ def n1_leases(now: float, pools: dict = N1_LEASE_POOLS, usage_log: Path = N1_LEA
             lease = g.get("lease") or {}
             try:
                 a = _utc(lease["since"])
-            except (ValueError, KeyError, TypeError):
+            except (ValueError, KeyError, TypeError) as e:
+                print(f"verity_console: {f}: GPU {g.get('index')}'s lease has no readable `since`, so it is not counted "
+                      f"({type(e).__name__}: {e})", file=sys.stderr)
                 continue
             if lease.get("who") and (g["index"], a, lease["who"]) not in done:
                 out.append((g["index"], a, max(a, now), lease["who"]))
@@ -736,11 +744,13 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
         else:
             idle_s = idle[d]
         start: dict[int, float] = {}
+        skipped = 0
         for ln in log.read_text().splitlines():
             try:
                 e = json.loads(ln)
-                t, g = datetime.strptime(e["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp(), e.get("gpu")
+                t, g = datetime.strptime(e["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp(), e.get("gpu")
             except (ValueError, KeyError, TypeError):
+                skipped += 1
                 continue
             if g is None:
                 continue
@@ -751,8 +761,10 @@ def n1_lease_spans(now: float, pools: dict = N1_LEASE_POOLS, idle: dict | None =
                 b = t - idle_s if e["ev"] == "shrink" else t
                 if b > a:
                     spans.append((g, a, b, lane))
+        if skipped:
+            print(f"verity_console: {skipped} line(s) of {log} unread, so their events are not counted", file=sys.stderr)
         state = json.loads((Path(d) / "n1-lease.json").read_text()) if start and (Path(d) / "n1-lease.json").exists() else {}
-        st = datetime.strptime(state["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if state else now
+        st = datetime.strptime(state["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() if state else now
         leased = {g["index"] for g in state.get("gpus") or [] if g.get("lease")}
         for g, a in start.items():
             b = now if g in leased else st - idle_s
@@ -802,16 +814,22 @@ def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float,
     the files gpu-lease writes in the row as it goes: `gpu_lease.started` to `gpu_lease.released`'s `t`, on one GPU per rank it
     released. A lease still open runs to the window's end, or to `now` up to LEASE_OPEN_MAX_S, on the
     row's `__tpN__` GPUs. Files an earlier attempt left in the row start before the window and don't count."""
+    if not (row / "gpu_lease.started").exists():
+        return None
     try:
         a = datetime.strptime((row / "gpu_lease.started").read_text().strip(), "%Y-%m-%dT%H:%M:%SZ")
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"verity_console: {row / 'gpu_lease.started'} unread, so its lease is not counted ({type(e).__name__}: {e})",
+              file=sys.stderr)
         return None
-    a = a.replace(tzinfo=timezone.utc).timestamp()
+    a = a.replace(tzinfo=UTC).timestamp()
     if a < w0 or (w1 is not None and a > w1):
         return None
     try:
-        rel = json.loads((row / "gpu_lease.released").read_text())
-    except (OSError, ValueError):
+        rel = json.loads((row / "gpu_lease.released").read_text()) if (row / "gpu_lease.released").exists() else None
+    except (OSError, ValueError) as e:
+        print(f"verity_console: {row / 'gpu_lease.released'} unread, so its lease is read as open ({type(e).__name__}: {e})",
+              file=sys.stderr)
         rel = None
     if isinstance(rel, dict) and isinstance(rel.get("t"), (int, float)) and rel["t"] >= a:
         return (a, rel["t"] if w1 is None else min(rel["t"], w1), [], max(1, len(rel.get("ranks") or [])))
@@ -833,7 +851,9 @@ def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str,
     for p in paths:
         try:
             evs = [json.loads(ln) for ln in Path(p).read_text().splitlines() if ln.strip()]
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"verity_console: timeline {p} unread, so its Commits' leases are not counted ({type(e).__name__}: {e})",
+                  file=sys.stderr)
             continue
         opened: dict = {}
         spans: dict = {}
@@ -1090,7 +1110,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--research-src", type=Path, default=HERE / "research-src", help="a directory holding the `research` package")
     ap.add_argument("--no-refresh", action="store_true", help="read the store's catalog as it is")
     ns = ap.parse_args(argv)
-    t0, now, errors = time.time(), datetime.now(timezone.utc).replace(microsecond=0), []
+    t0, now, errors = time.time(), datetime.now(UTC).replace(microsecond=0), []
     ns.out.mkdir(parents=True, exist_ok=True)
     try:
         panels, info = (store_panels if ns.group == "store" else node1_panels)(ns, now, errors)

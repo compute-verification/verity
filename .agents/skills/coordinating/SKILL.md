@@ -100,7 +100,8 @@ using-slack skill).
   Daniel as it arrives.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
-  - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the team's handle and any names the text starts with;
+  - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the issue's lane (its `lane:` label, else its team's
+    handle) and any names the text starts with, never you;
   - `research msg linear state ISSUE STATE`;
   - `research msg linear place ISSUE PROJECT --milestone M`;
   - `research msg linear edit ISSUE --title T --due D`;

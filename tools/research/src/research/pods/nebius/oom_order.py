@@ -36,7 +36,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 RUNS = (Path("/workspace/research/runs"), Path("/workspace/jobs/runs"))
@@ -54,7 +54,7 @@ RUNNER = b"-m\0research\0run\0"
 
 
 def clock() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _json(p: Path) -> dict:

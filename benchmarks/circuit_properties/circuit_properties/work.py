@@ -5,7 +5,7 @@ language, trace, model or optimizer. It is computed once per specialized Definit
 batches and scans, so it never walks the unrolled circuit. Its rules are the training benchmark's reading of a trace
 (`training_slowdown.capture.products`' `_rates`, `_gemm_rate` and `_gathered`, `training_slowdown.work`'s
 `he_of_rows`), each resolved on the side of the smaller bound wherever a Program doesn't state what the rule reads.
-For `min_cut.bound`'s inputs it reads:
+For the inputs of `min_cut.slowdown_of` it reads:
 
 * `|C|` (`Work.gates`, `boolean_gates`): Boolean gates, each primitive at its Boolean version's AND, XOR and NOT
   gates and an input node at none; a primitive with no Boolean version is refused by name.
@@ -112,9 +112,8 @@ Two limits follow. A Program with no scan has no carried word, so no θ′ and n
 specific stays a gather's rows: a model whose first op is a table lookup by its tokens is charged only downstream of a
 softmax over a constant that differs between its rows.
 
-`bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
-contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,
-through the calculator's `min_cut`.
+`bound` hands the charged products, priced so (`products`), to the calculator's `min_cut.slowdown_of`, which chooses
+the sub-work and takes `F` from the ω of the arrays its products multiply.
 """
 
 from __future__ import annotations
@@ -1401,32 +1400,6 @@ def _read(program, k: float, products, lookups):
     return Work(k, gates, out, r_step, keep), R, root, reasons
 
 
-def clique(edges) -> int:
-    """The most vertices pairwise joined by ``edges`` (pairs), at least 2 where there is an edge."""
-    adj: dict = {}
-    for e in edges:
-        a, b = tuple(e)
-        adj.setdefault(a, set()).add(b)
-        adj.setdefault(b, set()).add(a)
-    best = 0
-
-    def grow(r: int, p: set, x: set) -> None:
-        nonlocal best
-        if not p and not x:
-            best = max(best, r)
-            return
-        if r + len(p) <= best:
-            return
-        u = max(p | x, key=lambda v: len(adj[v] & p))
-        for v in list(p - adj[u]):
-            grow(r + 1, p & adj[v], x & adj[v])
-            p.discard(v)
-            x.add(v)
-
-    grow(0, set(adj), set())
-    return best
-
-
 def min_cut():
     """The calculator's `min_cut`: its directory, one path from the repository's root, goes on `sys.path`, and
     `rho.min_cut` is imported from it."""
@@ -1439,46 +1412,34 @@ def min_cut():
 
 @dataclass(frozen=True)
 class Priced:
-    """The bound at a policy on a sub-work: which groups, their ω, and `min_cut.bound`'s result."""
+    """The bound at a policy on the sub-work the calculator chose: which groups, their ω, and the calculator's
+    `Bound`."""
 
     bound: object
     groups: tuple[Group, ...]
     omega: int
     N: float
-    O: int
+    O: float
 
 
-def betas(g: Group) -> tuple[float, float]:
-    """A group's (β_w, β_x): the weight's first, and where both are of one kind, the larger."""
-    b = g.beta
-    if g.weight[0] != g.weight[1]:
-        return (b[1], b[0]) if g.weight[1] else (b[0], b[1])
-    return tuple(sorted(b, reverse=True))
-
-
-def bound(work: Work, c: float, n: float | None = None, F: float | None = None) -> Priced | None:
-    """The best bound at the policy (c, the work's k, n) over ``work``'s sub-works (module docstring), each at ``F``
-    where given, else its own share; None where it charges no product, (H) states no activation's β at k, or k is
-    `HEAD_K` or more."""
+def products(work: Work) -> list:
+    """``work``'s charged groups as the calculator's products (`min_cut.Product`), priced as this reading charges them:
+    a token-indexed group's MACs at the work's `keep`, an output at most bf16's 16 bits, each operand at its `β` with
+    which is a weight, its contraction, and the pairs of arrays it multiplies. A Program doesn't say which products are
+    forward ones or weight gradients."""
     mc = min_cut()
-    k = work.k
-    if mc.beta(k) is None or k >= HEAD_K or not work.groups:
+    return [mc.Product(g.macs * (1.0 if all(g.weight) else work.keep), g.wires, g.beta, g.weight,
+                       min(mc.BF16, g.out_width), g.k_dim, pairs=g.edges) for g in work.groups]
+
+
+def bound(work: Work, c: float, n: float | None = None) -> Priced | None:
+    """The calculator's bound at the policy (c, the work's k, n) on ``work``'s products (`products`,
+    `min_cut.slowdown_of`, which chooses the sub-work); None where it charges no product, (H) states no activation's β
+    at k, or k is `HEAD_K` or more."""
+    mc = min_cut()
+    if mc.beta(work.k) is None or work.k >= HEAD_K or not work.groups:
         return None
-    priced = [(math.prod(g.beta), g) for g in work.groups]
-    best = None
-    for P in sorted({q for q, _ in priced if q > 0}):
-        for K0 in sorted({g.k_dim for g in work.groups}):
-            for kinds in ("both", "weights", "activations"):
-                M = [(q, g) for q, g in priced if q >= P and g.k_dim >= K0 and
-                     (kinds == "both" or any(g.weight) == (kinds == "weights"))]
-                if not M:
-                    continue
-                bw, bx = betas(min(M, key=lambda x: x[0])[1])
-                omega = max(2, clique(e for _, g in M for e in g.edges))
-                N = sum(g.macs * (1.0 if all(g.weight) else work.keep) for _, g in M)
-                O = sum(g.wires for _, g in M)
-                b = mc.bound(c, k, n, N=N, O=O, size=work.gates, beta_w=bw, beta_x=bx,
-                             b=min(mc.BF16, *(g.out_width for _, g in M)), F=mc.share(omega) if F is None else F)
-                if best is None or b.blocks > best.bound.blocks:
-                    best = Priced(b, tuple(g for _, g in M), omega, N, O)
-    return best
+    got = mc.slowdown_of(c, work.k, n, size=work.gates, work=products(work))
+    if got.bound is None:
+        return None
+    return Priced(got.bound, tuple(work.groups[i] for i in got.products), got.omega, got.N, got.O)

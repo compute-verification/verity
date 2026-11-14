@@ -7,7 +7,7 @@ sequential Ampere `mma.sync.m16n8k16 bf16` transitions from `c_0 = +0` in ascend
 pipeline `AMPERE_BF16_M16N8K16`). Expected words come from `silicon`, cross-checked step by step against
 `verity_numerical.reference.hawkeye_close` (saturating steps excepted: the discrepancy log's D8,
 `verity/circuits/silicon/discrepancy_log.json`), and — where `manifest.json` records a hardware run — replayed on an
-RTX 4090 (sm_89) by `tools/tc_probe --replay-instances`.
+RTX 4090 (sm_89) by `benchmarks/tc_probe/tc_probe.py --replay-instances`.
 
 ## Files
 

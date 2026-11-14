@@ -34,6 +34,7 @@ Each is started by `h200.sh` or by its own command, which its docstring gives.
 | Script | Runs on | What it does |
 | --- | --- | --- |
 | `glm53.py` | a CPU | GLM-5.3's linears as one rank serves them, each with the kernels' domain verdict; the other scripts read their shapes from it |
+| `llama32_1b.py` | a CPU | Llama-3.2-1B's linears as one H200 serves them, each with the kernels' domain verdict, as `glm53.py` has GLM-5.3's |
 | `glm53_timing.py` | the card | the served call against the stock FP8 block GEMMs, interleaved rep by rep, at decode's and prefill's rows |
 | `glm53_passes.py capture` | the card | the gate and three retained passes (prefill, decode and a control) over poisoned outputs |
 | `glm53_passes.py verify`, `full` | CPUs | the reference replay of those passes: the sampled tiles, or every tile and every served row |

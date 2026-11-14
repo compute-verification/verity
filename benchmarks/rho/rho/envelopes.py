@@ -208,7 +208,20 @@ class Detection:
             out["exfil.incorrect"] = min(1.0, cheat)
         return out
 
+    def tail(self) -> float:
+        """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
+        (`DampenerRemotePeriod`'s escape term); 0 where every unit is proved."""
+        if not self.sampled:
+            return 0.0
+        k = self.luck * math.log(1 / self.p_evade) / self.q()
+        return self.identities * math.exp((k + 1) * math.log1p(-self.q()))
+
     def delta(self, ctx: Context) -> tuple[float, float]:
+        tail = self.tail()
+        if self.sampled and tail > self.p_evade:
+            cure = 1 + math.log(self.identities) / math.log(1 / self.p_evade)
+            raise ValueError(f"the escape's tail J (1 - q)^(K+1) = {tail:.3g} exceeds p_evade = {self.p_evade:.3g}: "
+                             f"set luck to at least {cure:.3g}, or fewer identities")
         return (self.p_evade if self.sampled else 0.0), 0.0
 
 
@@ -314,8 +327,8 @@ class Certifier:
         r_in ≤ windowBits / (T τ_b) = (lanes ⌈T / (D + 1)⌉ requestBits + T lanes ⌈log₂(r + 2)⌉) / (T τ_b)
         r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
 
-    (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the Lean statement
-    `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
+    (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the draft statement
+    `draft:per-server-ingress`, not yet in Lean; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
     `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
@@ -480,10 +493,16 @@ class Remote:
     name: str
     pouw: Pouw
     detection: Detection
+    #: a window, one round of the deployment's live coins, in seconds, and its sampled proofs' knowledge error
+    #: `ks_t = ε_ks + δ_link`: `DampenerRemotePeriod`'s `δ` sums it over the period's windows
+    window_s: float = math.nan
+    window_ks: float = 0.0
 
     #: the inference cut: the remote composition, `Nci.Guarantees.DampenerRemote`, term for term, its envelopes'
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.ThetaRegistered",)
+    #: the server-block bound each of its cuts is an argument of: the inference cap alone
+    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
@@ -507,7 +526,7 @@ class Remote:
     def inference(self, ctx: Context, gates: float) -> Cut:
         """`n_S q_T(c, k) + q_U(U_S)`: the inference blocks and the uncertified gates by route."""
         return Cut("inference", (self.blocks(ctx, gates),), {k: v * gates for k, v in self.slack(ctx).items()},
-                   self.CITES)
+                   self.CITES + self.BOUND)
 
     def abiding(self, ctx: Context, gates: float) -> dict[str, float]:
         """The uncertified gates a strategy that never cheats trains with in `gates` of a location, at the training
@@ -515,8 +534,16 @@ class Remote:
         used = gates * ctx.fleet.mfu_train
         return {k: v * used for k, v in self.slack(ctx).items() if k in self.ABIDING}
 
+    def windows(self, ctx: Context) -> int:
+        """`T`: the period's windows, `⌈period / window_s⌉`."""
+        return math.ceil(ctx.period.seconds / self.window_s)
+
+    def knowledge(self, ctx: Context) -> dict[str, tuple[float, float]]:
+        """`Σ_t ks_t`, the windows' knowledge errors, in `δ`'s cryptography (`DampenerRemotePeriod`)."""
+        return {"windows": (0.0, self.windows(ctx) * self.window_ks)}
+
     def delta(self, ctx: Context) -> Delta:
-        return Delta({name: e.delta(ctx) for name, e in self.envelopes().items()})
+        return Delta({name: e.delta(ctx) for name, e in self.envelopes().items()} | self.knowledge(ctx))
 
     def partition(self, ctx: Context) -> Partition:
         gates = ctx.location.phi * ctx.period.seconds
@@ -532,7 +559,10 @@ FORMS = ("certified", "links")
 @dataclass(frozen=True)
 class Onsite(Remote):
     """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
-    gets the serving cut `q_T(c_S, k_S)` as well, and contributes the lesser."""
+    gets the serving cut `q_T(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
+
+    #: the server-block bound, both its cuts' minimum
+    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()
@@ -573,6 +603,10 @@ class Onsite(Remote):
         """Bit/s into a server block: its line rate (`links`), or `r_in + r_side` (`certified`)."""
         return ctx.location.links if self.form == "links" else self.certifier.rate_in(ctx)
 
+    def knowledge(self, ctx: Context) -> dict[str, tuple[float, float]]:
+        """None: no onsite period statement sums the windows' knowledge errors."""
+        return {}
+
     def budget(self, ctx: Context) -> Budget:
         """`(c_S, k_S)`: `⌊Φ_s Δ_wipe⌋` gates and `k_wipe + (r_in + r_side) Δ_wipe` bits."""
         w = self.wipe.wipe_s
@@ -580,7 +614,7 @@ class Onsite(Remote):
 
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
-        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
+        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites() + self.BOUND, budget.inputs)
         # The uncertified block may take the whole server block's input: generous to the adversary, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)

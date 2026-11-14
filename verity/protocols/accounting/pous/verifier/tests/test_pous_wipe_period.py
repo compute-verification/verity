@@ -487,7 +487,7 @@ def test_a_pin_is_a_sha512_in_lowercase_hex(pin) -> None:
 def test_what_the_bound_does_not_cover() -> None:
     """The memory outside the declared tier, a placement off its own host, and a counted link left out."""
     gpu = W.undeclared("gpu-hbm", 100, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
-    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "NVIDIA H200's memory outside the declared tier"}
+    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "the device's memory outside the declared tier"}
     assert gpu[1]["tier"] == "host-dram" and gpu[1]["what"] == "the host's DRAM"
     whole = W.undeclared("gpu-hbm", 1000, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
     assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
@@ -498,8 +498,13 @@ def test_what_the_bound_does_not_cover() -> None:
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)
     assert gaps[0] == f"key custody: {where[WP.PREMISE]}" and len(gaps) == 3
-    assert gaps[1] == ("tier gpu-hbm: NVIDIA H200's memory outside the declared tier (900 bytes) is undeclared: the fill "
+    assert gaps[1] == ("tier gpu-hbm: the device's memory outside the declared tier (900 bytes) is undeclared: the fill "
                        "doesn't cover it and M doesn't count it")
+    assert where["store_gaps"] == [] and "prover_store" not in where
+    for old in (where | {"prover_store": {"tier": "gpu-hbm", "device": "NVIDIA H200"}},
+                {k: v for k, v in where.items() if k != "store_gaps"}):
+        with pytest.raises(ValueError, match="before the placement named no device"):
+            W.uncertified(old, None)
     assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network certifier, so what leaves on it is "
                        "outside E")
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
@@ -523,7 +528,8 @@ def test_what_a_joint_store_and_its_disks_leave_out() -> None:
         "of it is outside the boundary, which Covered assumes away"]
     assert W.disk_gaps(disk | {"spare_bytes": 7, "direct": False}) == [gaps[1], (
         "disk: buffered I/O, not O_DIRECT: the page cache can answer a read the disk doesn't keep")]
-    where = WP.placement("n0", "auditor", OTHER, store=joint, links=[])
+    assert W.store_gaps(joint) == gaps and W.store_gaps(None) == []
+    where = WP.placement("n0", "auditor", OTHER, store_gaps=W.store_gaps(joint), links=[])
     assert W.uncertified(where, None)[-2:] == gaps and W.disk_gaps(None) == []
 
 
@@ -548,7 +554,7 @@ def test_an_unmounted_block_device_no_target_is_on_is_undeclared_whole(tmp_path,
     got = [u for u in W.undeclared("disk+host-dram", 0, joint) if u["tier"] == "disk"]
     assert got == [{"tier": "disk", "bytes": 1 << 30, "what": "the host's block device nvme0n1, outside the declared disks"},
                    {"tier": "disk", "bytes": 1 << 20, "what": "the host's block device vdb, outside the declared disks"}]
-    where = WP.placement("n0", "auditor", OTHER, store=joint, links=[], undeclared=got)
+    where = WP.placement("n0", "auditor", OTHER, store_gaps=W.store_gaps(joint), links=[], undeclared=got)
     assert ("tier disk: the host's block device vdb, outside the declared disks (1048576 bytes) is undeclared: the fill "
             "doesn't cover it and M doesn't count it") in W.uncertified(where, None)
 

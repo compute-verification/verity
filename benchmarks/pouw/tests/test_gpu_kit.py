@@ -57,20 +57,20 @@ def r7_off(slot: int, lane: int, warp: int, it: int = 0) -> int:
 def test_ring_rows_are_conflict_free_and_round7_is_8_way():
     for op in ("LDSM.16.M88", "LDSM.16.M88.2", "LDSM.16.M88.4", "STSM.16.M88.4", "LDS.128", "STS.128"):
         for w, it in ((0, 0), (1, 1), (31, 7)):
-            assert all(banks.degree(op, [lm_off(s, l, w, it) for l in range(32)]) == 1 for s in range(8)), op
+            assert all(banks.degree(op, [lm_off(s, lane, w, it) for lane in range(32)]) == 1 for s in range(8)), op
     for op in ("LDSM.16.M88", "STSM.16.M88"):
-        d, phase = banks.worst(op, [r7_off(0, l, 0) for l in range(32)])
+        d, phase = banks.worst(op, [r7_off(0, lane, 0) for lane in range(32)])
         assert d == 8 and phase == [128 * i for i in range(8)]
 
 
 def test_word_accesses_by_width():
-    assert banks.degree("LDS", [4 * l for l in range(32)]) == 1
-    assert banks.degree("LDS", [8 * l for l in range(32)]) == 2
+    assert banks.degree("LDS", [4 * lane for lane in range(32)]) == 1
+    assert banks.degree("LDS", [8 * lane for lane in range(32)]) == 2
     assert banks.degree("LDS", [0] * 32) == 1  # one word: a broadcast
-    assert banks.degree("LDS.64", [8 * l for l in range(32)]) == 1  # 16 lanes a phase
-    assert banks.degree("LDS.128", [16 * l for l in range(32)]) == 1  # 8 lanes a phase
-    assert banks.degree("LDS.128", [32 * l for l in range(32)]) == 2
-    assert banks.degree("ATOMS.ADD", [128 * l for l in range(32)]) == 32
+    assert banks.degree("LDS.64", [8 * lane for lane in range(32)]) == 1  # 16 lanes a phase
+    assert banks.degree("LDS.128", [16 * lane for lane in range(32)]) == 1  # 8 lanes a phase
+    assert banks.degree("LDS.128", [32 * lane for lane in range(32)]) == 2
+    assert banks.degree("ATOMS.ADD", [128 * lane for lane in range(32)]) == 32
     assert banks.degree("LDS", [None] * 31 + [4]) == 1
 
 
@@ -149,7 +149,7 @@ def test_compare_dumps(tmp_path):
 
 
 def r7_smem(op: str) -> list[dict]:
-    return [{"sample": s, "op": op, "lanes": [r7_off(slot, l, w) for l in range(32)]}
+    return [{"sample": s, "op": op, "lanes": [r7_off(slot, lane, w) for lane in range(32)]}
             for s, w in enumerate((0, 1, 31)) for slot in range(8)]
 
 
