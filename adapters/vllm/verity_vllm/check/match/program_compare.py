@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import collections
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -41,6 +42,7 @@ from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
+from verity_vllm.program.compact import expand, first_runs
 from verity_vllm.program.compact import expand_mixed as _expand_mixed
 from verity_vllm.program.compact import hash_operand as _hash_operand
 from verity_vllm.program.compact import n_crosses_step as _n_crosses_step
@@ -163,7 +165,6 @@ def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_ste
 def _canonical_hash(P: RootView, seqs: list[list[int]], unfold: bool, canon_step_relative=None) -> str:
     """sha256 of the expanded instance sequence in canonical form: (spec, form, canonical operand sources, out type) per
     instance, producers as (step, index-within-step) — independent of input layout, node numbering and root naming."""
-    import hashlib
     canon_step_relative = canon_step_relative or _canon_step_relative
     h = hashlib.sha256()
     compact = getattr(P, "compact", False)
@@ -240,7 +241,6 @@ def audit_padding(P: RootView) -> dict:
             r = P.inst[i]
             kinds[r["spec"]] += 1
             if getattr(P, "compact", False):
-                from verity_vllm.program.compact import expand, first_runs
                 lives[str(expand(r["args"][0]))] += 1
                 if len(r["args"]) > 2 and "SelectBf16" in r["spec"]:
                     zeros[str(first_runs(r["args"][2], 1))] += 1
