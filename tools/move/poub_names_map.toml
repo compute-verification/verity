@@ -1,0 +1,28 @@
+# PoUB's names in code (MEM-152's second half), by `python3 tools/move/rename.py --map tools/move/poub_names_map.toml`:
+# the subprotocol over a node's registered store is PoUB and only PoUB. Its verifier's Lean package
+# (`verity/protocols/accounting/poub/verifier/lean/`) becomes `Poub`: its library, modules and namespace `RemoteAudit`
+# with `Properties.RemoteAudit`, its Lake package `remote_audit` and the executables `remote-audit-*`. The Python names
+# that carry `remote_bandwidth` as the protocol's name follow, with their test modules.
+# Kept bytes ([keep]): the wire and hash constants are bytes, not names: the protocol id `verity/remote-bandwidth/v0`,
+# its domain tags and format ids (every `.../vN`) and the circuit string `verity/remote-bandwidth/v0 verifier tree`.
+# Not PoUB's names here: the vLLM adapter's package `verity_vllm.protocols.remote_bandwidth`, which is the vllm lane's
+# (`adapters/**`, and its name wherever it is written), and `remote_session`, which names a session, not the protocol.
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
+# --moved` takes when the locks are regenerated.
+
+[words]
+"RemoteAudit" = "Poub"
+"remote_audit" = "poub"
+"remote-audit" = "poub"
+"RemoteBandwidth" = "Poub"
+"REMOTE_BANDWIDTH" = "POUB"
+"remote_bandwidth" = "poub"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch", "uv.lock",
+           "**/*.lock", "tools/research/src/research/store/moves.json", "adapters/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'verity/remote-bandwidth/v0 verifier tree',
+            'verity_vllm[./]protocols[./]remote_bandwidth[\w.]*', 'adapters/vllm/[\w./-]*',
+            'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
