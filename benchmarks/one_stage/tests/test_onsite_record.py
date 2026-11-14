@@ -1047,13 +1047,14 @@ def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_it
     assert rec["periods"] == {"missing": f"no figure of record: {OR.STATE_UNCOVERED}"}
 
 
-def test_at_the_trees_locks_the_charge_is_state_free(monkeypatch):
-    """`STATE_PINS` are the digests the tree's Properties lock records for RowsStateHeld's statement and the stateHeldIn,
-    auditStateEntries and stateEntries it reads: a change to any of them fails here, rather than every figure's charge
-    turning free unremarked."""
+def test_at_the_trees_locks_the_charge_is_the_whole_free_inputs(monkeypatch):
+    """`STATE_PINS` are the digests RowsStateHeld's statement and the stateHeldIn, auditStateEntries and stateEntries it
+    reads would be recorded at. The tree's period check charges each tied audit its whole free inputs and refuses a
+    scan state that is not its wired audit's (RowsStateTied), so its locks hold no RowsStateHeld and the charge is
+    free."""
     monkeypatch.undo()
     got = OR.state_charge({"params": {}}, {"scans": []}, 0, OR.LOCKS)
-    assert got["charge"] == "stateFree", f"the tree's locks give {got.get('unpinned')}, {got.get('unread')}"
+    assert got["charge"] == "free" and got["unpinned"][OR.STATE_HELD] is None and "unread" not in got, got
 
 
 def test_the_tied_audits_the_charge_reads_are_the_ones_each_scan_names(tmp_path):
