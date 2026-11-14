@@ -222,18 +222,14 @@ class NodeWindow:
         return self
 
     def _meta(self, j: int, node: Any) -> None:
-        """Node ``j``'s members, a member's leaves and words, and its return fields' spans (`_spans`; a return of one bit
-        is one u16 word, its bit low, as `interface.layout` lays out the unit's; None where they aren't whole u16 words,
-        which only an unlowered node may have)."""
+        """Node ``j``'s members, a member's leaves and words, and its return fields' spans (`_spans`; None where they aren't
+        whole u16 words, which only an unlowered node may have)."""
         n = node.n if node.form == "batch" else 1
         leaves = node.out_leaves // n if n else 0
         try:
             ret = node.fn.signature()[1]
             fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
-            if len(fields) == 1 and fields[0].leaves == 1 and fields[0].width_set() == {1}:
-                spans = [(0, 0, 16), (1, 1, 0)]
-            else:
-                spans = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
+            spans = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
             words = spans[-1][1]
         except (Unexpressible, AttributeError, TypeError):
             spans, words = None, 0

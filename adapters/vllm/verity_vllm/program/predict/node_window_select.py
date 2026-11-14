@@ -17,9 +17,6 @@ and every boundary between the parts, so each row is one rank's: the rank's own 
 whole where no chunk holds it), another rank's a free input under its peer's name (`NodeWindow.feed_rows`). A combine
 parameter is wired to its chunk's output row.
 
-The request's length check (`StopCheck_v1`, after the last select) is a unit of its own Definition (`stop_check`): its ids
-are the selects' tokens, read whole, and its bit is the check the Program returns.
-
 Refused by name (`Unexpressible`): a select row other than `TokenSelect_v4` or `_v1`, a stage template the row's
 `serving_templates.unit_templates` doesn't list, and a cut past a proof block's rows (`interface.MAX_ROWS`)."""
 from __future__ import annotations
@@ -140,18 +137,7 @@ def token_select(w: NodeWindow, j: int, node: Any) -> None:
     w.out(j, node, [Piece(0, 2, Row(t, a, "o0", 2), 1, 1)])
 
 
-def stop_check(w: NodeWindow, j: int, node: Any) -> None:
-    """`StopCheck_v1` (`registry.stop_check`), the request's length check over its outputs' ids, as a unit of itself a
-    member: it reads the ids whole (the selects' tokens, gathered) and returns the check's bit, one u16 word, which the
-    Program returns and no unit reads."""
-    M = w.members(node)
-    ids = w.take(node, 0, whole=True)
-    t, a = w.unit(_family(node), node.fn, M)
-    w.feed(t, "ids", a, ids, (M,))
-    w.out(j, node, [Piece(0, 1, Row(t, a, "o0", 1))])
+#: the select's lowering by family, beside `node_window.FAMILIES`
+FAMILIES: dict[str, Lowering] = {"TokenSelect": token_select}
 
-
-#: the select's and the stop check's lowerings by family, beside `node_window.FAMILIES`
-FAMILIES: dict[str, Lowering] = {"TokenSelect": token_select, "StopCheck": stop_check}
-
-__all__ = ["FAMILIES", "ROWS", "stages", "stop_check", "through", "token_select", "width"]
+__all__ = ["FAMILIES", "ROWS", "stages", "through", "token_select", "width"]
