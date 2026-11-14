@@ -81,14 +81,6 @@ def code_versions_stood_in(monkeypatch):
 
 
 @pytest.fixture
-def outside_a_checkout(monkeypatch):
-    """A tree a test builds under its tmp_path is no git checkout. With no git to find (`shutil.which`), the code identity's file
-    listing walks it as it walks any tree outside a checkout, and starts no git, which the suite's read guard can't trace."""
-    which = shutil.which
-    monkeypatch.setattr(shutil, "which", lambda cmd, *a, **k: None if cmd == "git" else which(cmd, *a, **k))
-
-
-@pytest.fixture
 def gnu_timeout() -> None:
     """Skips where the machine has no GNU timeout, for a test that starts one. A fixture, not a check at import, so a test file
     that doesn't ask for it starts no program the suite's read guard can't trace."""

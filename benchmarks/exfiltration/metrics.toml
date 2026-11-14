@@ -9,6 +9,7 @@ unit = "GB a world year at 10% of compute"
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
 every = "7d"
+goal = "accounting/network-glm53"
 
 [[metric]]
 id = "benchmarks/exfiltration-compute-audit-gb"
@@ -18,6 +19,7 @@ unit = "GB a world year at 10% of compute"
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
 every = "7d"
+goal = "accounting/network-glm53"
 
 [[metric]]
 id = "benchmarks/exfiltration-network-certifier-gb"
@@ -27,3 +29,4 @@ unit = "GB a world year at 10% of compute"
 better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py"
 every = "7d"
+goal = "accounting/network-glm53"

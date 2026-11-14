@@ -8,8 +8,9 @@ from __future__ import annotations
 import pytest
 
 from verity.protocols.accounting.certifier.verifier.release import (BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_END,
-                                                     WATERMARK_PATH, read_watermark, release_head, release_of,
-                                                     to_watermark, watermark_chunk, watermark_head, with_release)
+                                                     WATERMARK_PATH, one_request, read_watermark, release_head,
+                                                     release_of, to_watermark, watermark_chunk, watermark_head,
+                                                     with_release)
 
 BODY = b'{"prompt":"a\\r\\n\\r\\nb","max_tokens":4}'
 REQUEST = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
@@ -174,15 +175,92 @@ def test_a_request_to_another_path_is_not_read_as_one_to_the_watermarks(name):
 def test_the_watermarks_path_is_read_on_a_line_the_release_headers_pass_unchanged_and_only_in_the_bytes_given():
     """A line with a fourth word is no request line to `with_release`, which passes it with the client's own release
     headers, and one a server still routes by its second word; `to_watermark` reads it. It reads the bytes it is given
-    and no further: the path cut a byte short isn't the watermark's, and a second request after the first's body isn't
-    read."""
+    and no further: the path cut a byte short isn't the watermark's, and a second request after the first's body is
+    `one_request`'s to read."""
     forged = TO_WATERMARK["a fourth word"] + b"\r\nx-verity-release: 0\r\nx-verity-release-run: 00\r\n\r\n0 1 0\n"
     assert with_release(forged, 5, RUN, 2) == forged and release_of(forged) is None and to_watermark(forged)
     assert to_watermark(watermark_head(RUN)) and to_watermark(with_release(watermark_head(RUN), 5, RUN, 2))
     own = TO_WATERMARK["the stream's own"]
     assert own.endswith(WATERMARK_PATH + b" HTTP/1.1")
     assert to_watermark(own[:-9]) and not to_watermark(own[:-10])
-    assert not to_watermark(REQUEST + own + b"\r\n\r\n")
+    assert not to_watermark(REQUEST + own + b"\r\n\r\n") and not one_request(REQUEST + own + b"\r\n\r\n")
+
+
+#: a second request as its sender writes it: to the watermark's path, with release headers of its own
+SECOND = b"POST /verity/watermark HTTP/1.1\r\nx-verity-release: 0\r\nx-verity-release-run: 00\r\n\r\n"
+
+
+def framed(head: bytes, body: bytes = b"{}") -> bytes:
+    """A request to the completions path with the fields `head` after its first, then `body`."""
+    return b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n" + head + b"\r\n" + body
+
+
+#: bytes that are at most one request to a server
+ONE_REQUEST = {
+    "a request and its body": REQUEST,
+    "a body cut short": REQUEST[:-1],
+    "no body and no length": framed(b"", b""),
+    "a length of zero": framed(b"content-length: 0\r\n", b""),
+    "zeros before the length": framed(b"content-length: 0002\r\n"),
+    "blanks around the length": framed(b"Content-Length:\t 2 \r\n"),
+    "a length past any request": framed(b"content-length: " + b"9" * 5000 + b"\r\n"),
+    "a second request in the body": framed(b"content-length: %d\r\n" % (4 + len(SECOND)), b"{}\r\n" + SECOND),
+    "nothing": b"",
+    "one word, then a request": b"x\r\n\r\n" + SECOND,
+    "two words and no head's end": b"POST /v1/completions\r\nhost: s\r\n" + SECOND[:-2],
+    "bytes of every value": bytes(range(256)) * 2,
+}
+#: bytes a server reads a second request in, or whose head servers end differently
+NOT_ONE_REQUEST = {
+    "a second request behind the body": REQUEST + SECOND,
+    "a second request behind a head with no length": framed(b"", SECOND),
+    "one byte past the body": REQUEST + b"x",
+    "a line break past the body": REQUEST + b"\r\n",
+    "line feeds for line breaks": framed(b"content-length: 2\r\n").replace(b"\r\n", b"\n"),
+    "a line feed in a field": framed(b"x: y\ncontent-length: 2\r\n"),
+    "a carriage return in a field": framed(b"x: y\rcontent-length: 2\r\n"),
+    "line breaks before the request line": b"\r\n" + REQUEST,
+    "a folded field": framed(b"x: y\r\n content-length: 2\r\n"),
+    "a space before the colon": framed(b"content-length : 2\r\n"),
+    "a field with no colon": framed(b"content-length 2\r\n"),
+    "a chunked body": framed(b"transfer-encoding: chunked\r\n", b"2\r\n{}\r\n0\r\n\r\n"),
+    "a length and a transfer coding": framed(b"content-length: 2\r\nTransfer-Encoding: chunked\r\n"),
+    "two lengths": framed(b"content-length: 2\r\ncontent-length: 2\r\n"),
+    "a length with a sign": framed(b"content-length: +2\r\n"),
+    "a length with no digits": framed(b"content-length:\r\n", b""),
+    "a list of lengths": framed(b"content-length: 2, 2\r\n"),
+    "a fourth word on the request line": REQUEST.replace(b"HTTP/1.1", b"HTTP/1.1 x", 1),
+    "two blanks on the request line": REQUEST.replace(b"POST ", b"POST  ", 1),
+    "another version": b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n",
+    "no version": REQUEST.replace(b" HTTP/1.1", b"", 1),
+}
+
+
+@pytest.mark.parametrize("name", sorted(ONE_REQUEST))
+def test_bytes_that_are_at_most_one_request_to_a_server_are_read_as_one(name):
+    """A request whose head `with_release` reads, with no byte past the body its one length gives it: the length is
+    counted, so a second request inside the body is the body's, and one longer than any request is never converted.
+    And bytes that open no request: a first line of one word, or no head's end."""
+    assert one_request(ONE_REQUEST[name])
+
+
+@pytest.mark.parametrize("name", sorted(NOT_ONE_REQUEST))
+def test_bytes_a_server_may_read_a_second_request_in_are_not_one_request(name):
+    """A byte past the first request's body, with a length or without, and every head `with_release` doesn't read or
+    servers end differently: line breaks that aren't CRLF or come first, a field folded or with no colon right after
+    its name, a transfer coding, more than one length or one that is no decimal count, a request line of another
+    form. Each is read on bytes that open a request: a first line of two words or more and a head's end."""
+    assert not one_request(NOT_ONE_REQUEST[name])
+
+
+def test_a_request_read_as_one_gets_the_release_headers_and_none_of_its_senders():
+    """Each request `one_request` takes is one `with_release` puts the headers in, dropping the client's own: none
+    reaches a server with a release header its sender wrote in its head."""
+    requests = [name for name, data in ONE_REQUEST.items() if data.startswith(b"POST /v1/completions HTTP/1.1\r\n")]
+    assert len(requests) == 8
+    for name in requests:
+        forged = ONE_REQUEST[name].replace(b"\r\nhost:", b"\r\nX-Verity-Release: 9\r\nhost:", 1)
+        assert one_request(forged) and release_of(with_release(forged, 5, RUN, 2)) == (5, RUN, 2), name
 
 
 def test_a_watermark_line_is_read_only_when_it_advances():

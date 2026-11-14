@@ -64,10 +64,11 @@ If the challenger never signed the message the signature verifies over, that is 
 its PoUS sessions, then under no SHA-512 collision among the run's strings the two signed inputs are one, so the two
 records, so the two session inputs, whose tags differ (`WipeInputs.tags_differ`): a collision. If it signed it for one
 of its wipes, the two session inputs are one, so the headers and the records roots, so the commitments, the endings, the
-fill's readings, the egress (`WipeHeader.header_inj`) and (through `WipeTree.tree_bind`) the batches (`same_run`). That
-run's record keeps each batch's answer and whether it is the read's label (`WipeRuns.inv_recorded`), so the batches the
-verdict accepted make it the streamed wipe's accepted session (`accepted_run`). A collision among the run's strings is
-one the collision finder outputs (`collisionIn_finds`); a forgery is the forger's output.
+start marks, the fill's readings (`WipeHeader.header_inj`) and (through `WipeTree.tree_bind`) the batches
+(`same_run`). That run's record keeps each batch's answer and whether it is the read's label
+(`WipeRuns.inv_recorded`), so the batches the verdict accepted make it the streamed wipe's accepted session
+(`accepted_run`). A collision among the run's strings is one the collision finder outputs (`collisionIn_finds`); a
+forgery is the forger's output.
 
 `wipeSigned_honest` is its honest lemma: at the deployed LMS parameters a key `Lms.keygen` derives signs the honest
 session at the wipe of record's parameters and clock readings, and the compiled check accepts it
@@ -134,8 +135,7 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return (MemoryChallenger.StreamedWipe.Findings.mk reasons (StreamedWipe.egressUnits s.egressBits),
-    MemoryChallenger.acceptIf reasons.isEmpty)
+  return (MemoryChallenger.StreamedWipe.Findings.mk reasons, MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) :
@@ -239,6 +239,8 @@ theorem accepted_of {p : WipeProtocol.Params} {c : StreamedWipe.Commitment} {e :
   unfold WipeProtocol.check at h'
   split at h'
   · cases h'
+  split at h'
+  · cases h'
   cases hse : e.signed with
   | none => simp [hse] at h'
   | some s =>
@@ -259,37 +261,38 @@ theorem accepted_of {p : WipeProtocol.Params} {c : StreamedWipe.Commitment} {e :
 
 /-! ## The strings the run hashes -/
 
-theorem tree_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {fs fe : Int}
-    {batches : Array StreamedWipe.Batch} {eg : Int} {vs : Array ByteArray}
+theorem tree_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+    {batches : Array StreamedWipe.Batch} {vs : Array ByteArray}
     (hv : batches.mapM StreamedWipe.Batch.value = .ok vs) {x : ByteArray}
     (hx : x ∈ wipeTreeStrings (domain StreamedWipe.RECORD_BINDING c.session batches.size) vs) :
-    x ∈ wipeSessionStrings pk c e fs fe batches eg := by
+    x ∈ wipeSessionStrings pk c e sm fs fe batches := by
   simp only [wipeSessionStrings, hv, List.mem_append]
   exact Or.inl (Or.inl hx)
 
-theorem session_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {fs fe : Int}
-    {batches : Array StreamedWipe.Batch} {eg : Int} {root : ByteArray}
+theorem session_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+    {batches : Array StreamedWipe.Batch} {root : ByteArray}
     (hr : StreamedWipe.recordsRoot c.session batches = .ok root) :
-    StreamedWipe.SESSION_TAG ++ be64 (StreamedWipe.header c e fs fe batches.size eg).toUTF8.size.toUInt64 ++
-        (StreamedWipe.header c e fs fe batches.size eg).toUTF8 ++ root ∈
-      wipeSessionStrings pk c e fs fe batches eg := by
+    StreamedWipe.SESSION_TAG ++ be64 (StreamedWipe.header c e sm fs fe batches.size).toUTF8.size.toUInt64 ++
+        (StreamedWipe.header c e sm fs fe batches.size).toUTF8 ++ root ∈
+      wipeSessionStrings pk c e sm fs fe batches := by
   simp [wipeSessionStrings, hr]
 
-theorem signed_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {fs fe : Int}
-    {batches : Array StreamedWipe.Batch} {eg : Int} {rec : ByteArray}
-    (hm : StreamedWipe.message c e fs fe batches eg = .ok rec) (hI : (pk.extract 0 16).size = 16) :
+theorem signed_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+    {batches : Array StreamedWipe.Batch} {rec : ByteArray}
+    (hm : StreamedWipe.message c e sm fs fe batches = .ok rec) (hI : (pk.extract 0 16).size = 16) :
     field MEMORY_CHALLENGER_TAG.toUTF8 ++ pk.extract 0 16 ++ field (field c.session) ++ field rec ∈
-      wipeSessionStrings pk c e fs fe batches eg := by
+      wipeSessionStrings pk c e sm fs fe batches := by
   simp [wipeSessionStrings, hm, hI]
 
 theorem own_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {x : ByteArray}
-    (hx : x ∈ wipeSessionStrings s.publicKey s.commitment s.ended s.fillStartNs s.fillEndNs s.batches s.egressBits) :
+    (hx : x ∈ wipeSessionStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches) :
     x ∈ wipeRunStrings s dev :=
   List.mem_append_left _ (List.mem_append_left _ hx)
 
 theorem wipe_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : WipeRun} (hr : r ∈ dev.wipes s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
-    (hx : x ∈ wipeSessionStrings s.publicKey r.commitment e r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits) :
+    (hx : x ∈ wipeSessionStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs
+      r.recorded.batches) :
     x ∈ wipeRunStrings s dev := by
   refine List.mem_append_left _ (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩))
   simpa only [he] using hx
@@ -303,15 +306,15 @@ theorem pous_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : Run} (hr
 /-! ## The argument -/
 
 /-- Under no collision among the run's strings, a wipe whose message the challenger signed is one of its wipes, with
-that wipe's commitment, ending, fill readings, batches and egress. -/
+that wipe's commitment, ending, start mark, fill readings and batches. -/
 theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wipeRunStrings s dev)) {m M : ByteArray}
     (hm : s.message = .ok m)
     (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
     (hsig : dev.Signed s.publicKey M) :
     ∃ r ∈ dev.wipes s.publicKey, r.commitment = s.commitment ∧ r.recorded.ended = some s.ended ∧
-      r.fillStartNs = s.fillStartNs ∧ r.fillEndNs = s.fillEndNs ∧ r.recorded.batches = s.batches ∧
-      (r.egressBits : Int) = s.egressBits := by
-  have hm' : StreamedWipe.message s.commitment s.ended s.fillStartNs s.fillEndNs s.batches s.egressBits = .ok m := hm
+      r.startMark = s.startMark ∧ r.fillStartNs = s.fillStartNs ∧ r.fillEndNs = s.fillEndNs ∧
+      r.recorded.batches = s.batches := by
+  have hm' : StreamedWipe.message s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches = .ok m := hm
   obtain ⟨root, hroot, rfl⟩ := WipeInputs.message_ok hm'
   obtain ⟨vs, hvs, rfl⟩ := WipeInputs.recordsRoot_ok hroot
   obtain ⟨hI, rfl⟩ := Inputs.signedMessage_ok hM
@@ -323,7 +326,7 @@ theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wip
     have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
     have e3 := cf _ (own_mem (session_mem hroot)) _ (pous_mem hr hend (Device.session_mem hroot')) e2
     exact WipeInputs.tags_differ _ _ _ _ _ _ e3.symm
-  · have hmsg' : StreamedWipe.message r.commitment ended r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits =
+  · have hmsg' : StreamedWipe.message r.commitment ended r.startMark r.fillStartNs r.fillEndNs r.recorded.batches =
         .ok rec := hmsg
     obtain ⟨root', hroot', rfl⟩ := WipeInputs.message_ok hmsg'
     obtain ⟨vs', hvs', rfl⟩ := WipeInputs.recordsRoot_ok hroot'
@@ -332,13 +335,13 @@ theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wip
     have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
     have e3 := cf _ (own_mem (session_mem hroot)) _ (wipe_mem hr hend (session_mem hroot')) e2
     obtain ⟨e4, e5⟩ := WipeInputs.session_split (by rw [WipeTree.root_width, WipeTree.root_width]) e3
-    obtain ⟨hc, hen, hfs, hfe, hn, heg⟩ := WipeHeader.header_inj (String.toByteArray_inj.mp e4)
+    obtain ⟨hc, hen, hsm, hfs, hfe, hn⟩ := WipeHeader.header_inj (String.toByteArray_inj.mp e4)
     rw [hc, hn] at e5
     have hsz : vs.size = vs'.size := by rw [WipeInputs.mapM_size hvs, WipeInputs.mapM_size hvs', hn]
     have hvv := WipeTree.tree_bind hsz (fun x hx => own_mem (tree_mem hvs (by rwa [hc, hn])))
       (fun x hx => wipe_mem hr hend (tree_mem hvs' hx)) cf e5
     subst hvv
-    exact ⟨r, hr, hc.symm, by rw [hend, hen], hfs.symm, hfe.symm, (WipeInputs.batches_inj hvs hvs').symm, heg.symm⟩
+    exact ⟨r, hr, hc.symm, by rw [hend, hen], hsm.symm, hfs.symm, hfe.symm, (WipeInputs.batches_inj hvs hvs').symm⟩
 
 /-- **The run is the streamed wipe's accepted session**: a run the challenger ended `complete`, whose batches the verdict
 accepted at batch size 1. -/
@@ -425,8 +428,7 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
 /-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
-    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0 (StreamedWipe.egressUnits s.egressBits),
-      MemoryChallenger.acceptIf r0.isEmpty) := by
+    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0, MemoryChallenger.acceptIf r0.isEmpty) := by
   unfold wtail
   simp only [Id.run]
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
@@ -466,9 +468,11 @@ private theorem wpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : Str
   exact ite_eq_left ht
 
 /-- The compiled check accepts a signed session that passes each of the verdict's checks, on the period's server and
-session. -/
-private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (s : StreamedWipe.Signed)
-    (hsv : c.server = p.server) (hss : c.session = p.session)
+session, with an egress count in the evidence within 0 to `EGRESS_MAX_UNITS`, publishing `certify` at
+`EGRESS_MAX_UNITS`. -/
+private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
+    (s : StreamedWipe.Signed) (hsv : c.server = p.server) (hss : c.session = p.session) (hse : e.signed = some s)
+    (he0 : 0 ≤ e.egress) (he1 : e.egress ≤ StreamedWipe.EGRESS_MAX_UNITS)
     (hk : ∃ q, SCHEMES.lookup s.scheme = some q ∧ s.publicKey ∈ p.trusted.toList ∧
       ∃ m, s.message = .ok m ∧ lmsVerify q s.publicKey s.commitment.session m s.signature = .ok true)
     (hcm : s.commitment = c) (hcov : c.params.batch = 1) (hend : s.ended = StreamedWipe.COMPLETE)
@@ -478,16 +482,19 @@ private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commit
         s.batches[b].count = min (c.params.batch : Int) ((c.params.k : Int) - s.batches[b].first) ∧
         s.batches[b].wrong = 0 ∧ 0 ≤ s.batches[b].elapsedNs ∧ s.batches[b].elapsedNs ≤ (c.params.limitNs : Int) ∧
         (b = 0 → s.fillEndNs ≤ s.batches[b].sendNs)) :
-    WipeProtocol.protocol.check p c ⟨some s⟩ =
-      .accept (WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits))
-        (c.params, StreamedWipe.egressUnits s.egressBits) := by
+    WipeProtocol.protocol.check p c e =
+      .accept (WipeProtocol.certify c.params StreamedWipe.EGRESS_MAX_UNITS) (c.params, e.egress) := by
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
-      (MemoryChallenger.StreamedWipe.Findings.mk #[] (StreamedWipe.egressUnits s.egressBits), Core.Verdict.accept) := by
+      (MemoryChallenger.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
       wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
-  show WipeProtocol.check SCHEMES p c ⟨some s⟩ = _
+  have hs : ¬ ((c.server != p.server || c.session != p.session) = true) := by simp [hsv, hss]
+  have hr : ¬ ((decide (e.egress < 0) || decide (e.egress > StreamedWipe.EGRESS_MAX_UNITS)) = true) := by
+    simp only [Bool.or_eq_true, decide_eq_true_eq]
+    omega
+  show WipeProtocol.check SCHEMES p c e = _
   unfold WipeProtocol.check
-  simp [hsv, hss, hv]
+  simp only [hs, hr, hse, hv]
   rfl
 
 private theorem beInt_of {n : Nat} {x : Int} (w : String) (h0 : 0 ≤ x) (hx : x.toNat < 2 ^ (8 * n)) :
@@ -572,13 +579,13 @@ private theorem measured_batch (digest : Nat → ByteArray) (pk sig : ByteArray)
 /-- **The compiled check accepts the measured honest wipe**: for every key `Lms.key` derives at S1's deployed LMS
 parameters and every digest of the batches' answers, the session at the wipe of record's parameters and clock
 readings, each read taking the slowest round trip measured, signed at leaf 0 with `Lms.signAt` on its message, is
-accepted by the wipe's compiled check of a period that trusts that key. The signature verifies by LMS's correctness
-(`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
+accepted by the wipe's compiled check of a period that trusts that key, the evidence giving no egress count beside it.
+The signature verifies by LMS's correctness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
 theorem measured_accepts (digest : Nat → ByteArray) {I seed : ByteArray} {k : Lms.PrivateKey}
     (hk : Lms.key Lms.deployed I seed = .ok k) :
     ∃ (sig : ByteArray) (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int),
       WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
-        ⟨some (measuredSession digest k.publicKey sig)⟩ = .accept out prof := by
+        ⟨some (measuredSession digest k.publicKey sig), none⟩ = .accept out prof := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
   subst hIk
   have hroot : (k.tree[1]!).size = Lms.deployed.N :=
@@ -598,7 +605,9 @@ theorem measured_accepts (digest : Nat → ByteArray) {I seed : ByteArray} {k : 
   have hlms : lmsVerify Lms.deployed k.publicKey MEASURED_SESSION m sig.encode = .ok true := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind] <;> rfl
-  exact ⟨sig.encode, _, _, check_accepts _ _ (measuredSession digest k.publicKey sig.encode) rfl rfl
+  exact ⟨sig.encode, _, _, check_accepts _ _ ⟨some (measuredSession digest k.publicKey sig.encode), none⟩
+    (measuredSession digest k.publicKey sig.encode) rfl rfl rfl
+    (show (0 : Int) ≤ StreamedWipe.EGRESS_MAX_UNITS by decide) (Int.le_refl _)
     ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ rfl rfl rfl (measured_size digest _ _)
     (measured_batch digest _ _)⟩
 
@@ -640,8 +649,8 @@ theorem unencoded_finder : wipeFinder unencoded idleChallenger = none := by
   obtain ⟨e1, h1⟩ := unencoded_values
   obtain ⟨e2, h2⟩ := unencoded_root
   obtain ⟨e3, h3⟩ := unencoded_message
-  have h3' : StreamedWipe.message unencoded.commitment unencoded.ended unencoded.fillStartNs unencoded.fillEndNs
-      unencoded.batches unencoded.egressBits = .error e3 := h3
+  have h3' : StreamedWipe.message unencoded.commitment unencoded.ended unencoded.startMark unencoded.fillStartNs
+      unencoded.fillEndNs unencoded.batches = .error e3 := h3
   have hs : wipeRunStrings unencoded idleChallenger = [] := by
     unfold wipeRunStrings wipeSessionStrings
     rw [h1, h2, h3'] <;> rfl
@@ -676,9 +685,9 @@ theorem wipeSigned : WipeSigned := by
       have cf : CF (wipeRunStrings s dev) := fun x hx y hy hxy =>
         Classical.byContradiction fun hne => hcol ⟨x, hx, y, hy, hne, hxy⟩
       by_cases hsig : dev.Signed s.publicKey M
-      · obtain ⟨r, hr, hc, hen, hfs, hfe, hb, heg⟩ := Wipe.same_run cf hm hM hsig
+      · obtain ⟨r, hr, hc, hen, hsm, hfs, hfe, hb⟩ := Wipe.same_run cf hm hM hsig
         have hrc : r.commitment = c := hc.trans hsc
-        refine Or.inl ⟨r, hr, hrc, hfs, hfe, hb, heg, ?_⟩
+        refine Or.inl ⟨r, hr, hrc, hsm, hfs, hfe, hb, ?_⟩
         subst hrc
         exact Wipe.accepted_run (by rw [hen, hend]) hb hfe hb1 hsize hg
       · refine Or.inr (Or.inr ⟨M, s.signature, ?_, q, hq, ht, ⟨σ, hd, hv⟩, hsig⟩)
@@ -688,13 +697,15 @@ theorem wipeSigned : WipeSigned := by
 S1's deployed LMS parameters (`Lms.deployed`, the one scheme `SCHEMES` accepts) signs the honest session at
 the wipe of record's parameters (`2^24` labels, `k = 2152` reads one at a time, 20 ms each) and clock readings (the
 fill's 2.95 s, the first read revealed 7.6 ms after it, each read taking the slowest round trip measured, 1.40 ms),
-each read answered with its label, and the wipe's compiled check of the period that trusts that key accepts it. -/
+each read answered with its label, and the wipe's compiled check of the period that trusts that key accepts it, with
+no egress count in the evidence (the check then reads `EGRESS_MAX_UNITS`, and the wipe is accepted and not
+certified). -/
 theorem wipeSigned_honest :
     ∃ (seed K : ByteArray) (c : Nat → Nat) (k : Lms.PrivateKey) (sig : ByteArray) (out : WipeProtocol.Public)
       (prof : StreamedWipe.Params × Int),
       Lms.keygen Lms.deployed seed = .ok k ∧
         WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
-          ⟨some (measuredSession (measuredDigest K c) k.publicKey sig)⟩ = .accept out prof := by
+          ⟨some (measuredSession (measuredDigest K c) k.publicKey sig), none⟩ = .accept out prof := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
   obtain ⟨sig, out, prof, h⟩ := Wipe.measured_accepts (measuredDigest .empty id) hk
   exact ⟨_, .empty, id, k, sig, out, prof, hkg, h⟩
@@ -703,7 +714,7 @@ theorem wipeSigned_honest :
 challengers that ran nothing. No wipe of theirs is it, the collision finder outputs nothing (the run hashes no
 string), and the forger outputs nothing (the signature signs no message). -/
 theorem wipeSigned_nontrivial :
-    ¬ WipeRanAccepted idleChallenger unencodedParams measuredCommitment ⟨some unencoded⟩ := by
+    ¬ WipeRanAccepted idleChallenger unencodedParams measuredCommitment ⟨some unencoded, none⟩ := by
   unfold WipeRanAccepted
   rintro ⟨s, hs, -, ⟨r, hr, -⟩ | hbr⟩
   · exact absurd hr (by simp [idleChallenger])
@@ -725,7 +736,7 @@ theorem wipeSigned_acceptAll
       (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int) (dev : SignedWipeParty),
       check p c e = .accept out prof → WipeRanAccepted dev p c e := by
   intro h
-  obtain ⟨out, prof, hc⟩ := hall unencodedParams measuredCommitment ⟨some unencoded⟩
+  obtain ⟨out, prof, hc⟩ := hall unencodedParams measuredCommitment ⟨some unencoded, none⟩
   exact wipeSigned_nontrivial (h _ _ _ out prof idleChallenger hc)
 
 end MemoryChallenger.Properties.SecurityProofs

@@ -330,8 +330,12 @@ Limits of the model:
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, the sets' form on
   `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
-- The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
-  batched or routed block that several requests read needs the planner changed.
+- The patterns' form takes no proof block to be shared across requests and each request to serve exactly S bits.
+  Replay blocks that read one another's values (a batched or routed block that several requests read, a value
+  another replay block committed) are one request there, priced at the replay grain's fan-out F as serving F S bits
+  (`optimize.two_stage_exfil`'s `fanout`). Lean certifies that point only for a window whose groups each hold F replay
+  blocks, and `plancheck.two` writes it only for a caller that says they do (`whole_groups`). Every figure here is at
+  F = 1 (`figure1.FANOUT`).
 - A verification phase's statements are sized for the first stage's count alone: a Definition's blocks in a sampled
   replay block are its own count, and its sessions' padding to one size within a statement, not to one size across
   Definitions. A pod-wide or datacenter-wide verification phase needs one committer over its machines' boundary rows.

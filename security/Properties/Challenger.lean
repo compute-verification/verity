@@ -19,7 +19,8 @@ what that record shows, for every input: the coins the challenger device drew, o
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 * `FamilyOneCommitment`: that run's own log shows every coin of the family released after `after`, so the coins read
   are every coin the family released, from its first, and no other root stands in the family.
-  `FamilyOneCommitmentRead` is the same of the bytes `Challenger.coinsReason` passes, the reader of a stream's run.
+  `FamilyOneCommitmentRead` is the same of the bytes `Challenger.coinsReason` passes, the reader of a stream's run,
+  under the key and the copy of main's first-parent history its caller hands it.
   Their nontrivial lemmas (security_proofs) are stated at the device that ran nothing (`idle`) and a key with no
   public key bytes (`noKey`).
 
@@ -423,22 +424,22 @@ def FamilyOneCommitment : Prop :=
         Break dev key label coins
 
 /-- **`FamilyOneCommitment` of the bytes a stream's run read.** `Spot.Run.run` holds a sample's coins through
-`Challenger.coinsReason`, whose evidence carries the key beside what `drawCoins` reads
-(`{key, ledger, main, pins, segment, session}`). For every challenger device, if `coinsReason coins w label after read`
-gives no reason, then `coins`' `key` is a challenger key, and a run of the device under it, which its own ledger opens
-withheld on `w`, released coins of `label` after `after` that `read` is the start of, with every coin read (`read`
-ends inside the last), and every root that run's own log shows a coin of `label` released after is `after`; or the
-fixed finder outputs a break from the run. The key is the one the evidence names: this reader takes none from the
-verifier, and what holds the evidence's to the verifier's is its caller. -/
+`Challenger.coinsReason`, under the challenger key `key` and the copy `main` of main's first-parent history its caller
+hands it, over the evidence `drawCoins` reads (`{ledger, main, pins, segment, session}`, its `main` held to the
+caller's). For every challenger device, every key and every such copy, if `coinsReason key main coins w label after
+read` gives no reason, then a run of the device under `key`, which its own ledger opens withheld on `w`, released coins
+of `label` after `after` that `read` is the start of, with every coin read (`read` ends inside the last), and every
+root that run's own log shows a coin of `label` released after is `after`; or the fixed finder outputs a break from
+the run. The key is the reader's argument, as `drawCoins`'s is: nothing in the evidence names one, so the run is the
+device's under the key the verifier holds, whoever wrote the evidence. -/
 def FamilyOneCommitmentRead : Prop :=
-  ∀ (dev : History) (w label : String) (after read : ByteArray) (coins : Json),
-    coinsReason coins w label after read = none →
-      ∃ key, ChallengerKey.ofJson (getD coins "key") = .ok key ∧
-        ((∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧
-            (s.released label after).extract 0 read.size = read ∧
-            (read.size + COIN_BYTES - 1) / COIN_BYTES = (s.released label after).size / COIN_BYTES ∧
-            ∀ r ∈ s.roots label, r = after) ∨
-          Break dev key label coins)
+  ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after read : ByteArray) (coins : Json),
+    coinsReason key main coins w label after read = none →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧
+          (s.released label after).extract 0 read.size = read ∧
+          (read.size + COIN_BYTES - 1) / COIN_BYTES = (s.released label after).size / COIN_BYTES ∧
+          ∀ r ∈ s.roots label, r = after) ∨
+        Break dev key label coins
 
 /-! ## The target: a component's coins, from the device's log -/
 

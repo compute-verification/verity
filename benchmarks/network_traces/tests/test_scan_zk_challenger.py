@@ -79,7 +79,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     monkeypatch.setattr(M.a8, "session", session)
     monkeypatch.setattr(M.a0, "lean_verify", lambda *a, **kw: {"accepted": False, "why": "not proved here"})
     monkeypatch.setattr(sz.WZ, "firewall", lambda M, m: {})
-    monkeypatch.setattr(AC, "negatives", lambda ev, pre: {})
+    monkeypatch.setattr(AC, "negatives", lambda ev, pre, key, main: {})
 
     a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None)
     av = SimpleNamespace(bin=None, lean=None, lease=[], gpu=False, delta=2.0 ** -20)

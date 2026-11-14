@@ -9,12 +9,15 @@ The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for t
 
 The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
-engine's weights arena the store, the verifier on the auditor's verifier host bound to that role's pinned checkpoint,
-the coins from the challenger host. PACED is the session (default seven credited stretches of a second, each pass
+engine's weights arena the store, the verifier on the auditor's verifier host, the coins from the challenger host.
+BIND (default 0) is whether the verifier binds the store to the role's pinned checkpoint: with 0 it holds no
+checkpoint and the store is the developer's choice, which the text and the JSON (`bound`) say; with 1 it binds it, as
+`gate_run.sh`'s BIND. PACED is the session (default seven credited stretches of a second, each pass
 under a live coin of its own); UNPACED asks for a session of one coin a window in its place, as
 WINDOWS:WINDOW_MS:SAMPLES (`7:60000:33273` is seven windows of a minute with 33,273 openings each). `gate_run.sh`'s
-own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the store holds
-that many GiB of the node's host memory beside the arenas. It waits for the fire run to reach the evidence store and
+own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEAF_CTAS, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the
+store holds that many GiB of the node's host memory beside the arenas, and with LEAF_CTAS the node's passes are the
+leaf pass on that many reading CTAs. It waits for the fire run to reach the evidence store and
 prints from it as `--from` does; `--dry-run` sends nothing to either gate and prints no number.
 
 `--from RUN` reads the verifier's record of a run in the store: a gate run's fire run (its host run's `verifier.json`)
@@ -36,8 +39,11 @@ prints afterwards, since that document is how `--from` knows the run's session f
 Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
-alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), `verified` (the bytes
-the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each reading the
+alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
+`METRIC`, the id this directory's `metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
+`"bound": false` and the premise in its verdict, which also names an error above 2^`ERROR_BOUND_LOG2`), `verified`
+(the bytes the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each
+reading the
 ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and `error` (the probability the verified
 amount doesn't hold). A reading's rate is the verifier's own figure for the node (`timing.py`), not the registered
 hardware's, and the capacity's unit says so. The references are other runs' numbers and are not in the result; a
@@ -64,12 +70,14 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RS = ROOT / "benchmarks" / "remote_session"
 
-#: this directory's registry: PACED, UNPACED, and the variables a research run sets
+#: this directory's registry: PACED, UNPACED, BIND, and the variables a research run sets
 SETTINGS = of(__file__)
 #: UNPACED's word: the windows, a window's milliseconds (to three places, as the verifier host takes them) and the
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
+#: the number's row on the console's Metrics tab (this directory's `metrics.toml`), and the goal's target for it
+METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
 ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
@@ -82,6 +90,14 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
+#: what an unbound session's number rests on, in its Metrics row's verdict
+HELD_NONE = "the verifier held no checkpoint"
+#: a node's store that its verifier bound to no model, in the store's line
+UNBOUND = f"{HELD_NONE}: the store's bytes are the developer's choice"
+#: the goal's bound on the number's error, as log2: a Metrics row whose error the record holds above it, or holds
+#: none of, names that premise in its verdict
+ERROR_BOUND_LOG2 = -100
+ABOVE_BOUND = f"its error is above 2^{ERROR_BOUND_LOG2}"
 #: the readings of the verifier's ledger, each the key it holds one under and the read rate it takes for the node: the
 #: number is printed at the first
 READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured read rate"}
@@ -191,7 +207,7 @@ def session(record: Path, k: int | None) -> dict:
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
             "model": binding.get("name") if binding.get("bound") is True else None,
-            "ledger": ledger}
+            "bound": binding.get("bound") is True, "ledger": ledger}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None) -> dict:
@@ -282,6 +298,14 @@ def loopback(run: Callable = subprocess.run) -> dict:
 
 
 def form() -> dict[str, str]:
+    """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
+    set, else PACED's paced one, and BIND, whether its verifier binds the store."""
+    if (bind := SETTINGS.BIND) not in ("0", "1"):
+        raise Unreadable(f"BIND is {bind!r}: 0 binds the node's store to no model, 1 to {ROLE}'s pinned checkpoint")
+    return {"BIND": bind, **session_form()}
+
+
+def session_form() -> dict[str, str]:
     """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
     set, else PACED's paced one."""
     unpaced = SETTINGS.UNPACED
@@ -395,6 +419,11 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     run and the keys of the session's entry in that record it was read from.
 
     - `metric`: the printed number in its unit.
+    - `METRIC`: the same number, the Metrics tab's row (this directory's `metrics.toml`), with `TARGET` and where the number
+      stands against it. A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
+      its verdict naming that premise (`HELD_NONE`); a bound session's row holds neither. Where the number's error is
+      above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first
+      reading where it holds one, else the ledger's own, and above it where the record holds neither.
     - `verified`: the bytes the verifier certified read over the session's span, its own `certified_bytes` at the
       reading the number is printed at; none at a share of 1 or more, which certifies nothing.
     - `capacity at READING`, for each reading the ledger holds (`READINGS`): the reading's read rate times the
@@ -411,7 +440,16 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     A measurement whose keys the record doesn't hold as numbers is left out."""
     run = [doc["run"]] if doc["run"] else []
     first = next(iter(READINGS))
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}]
+    error = _at(ledger, "declared", "gamma", first, "error", "windows")
+    error = _at(ledger, first, "error", "windows") if error is None else error
+    premises = [*([] if doc.get("bound") is True else [HELD_NONE]),
+                *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else [])]
+    row = {"name": METRIC, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
+           "target": TARGET,
+           "verdict": "; ".join(["within target" if doc["value"] <= TARGET else "past target", *premises])}
+    if doc.get("bound") is not True:
+        row["extra"] = {"bound": False}
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}, row]
     if (verified := _at(ledger, first, "certified_bytes")) is not None:
         out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
                     "inputs": [*run, f"ledger.{first}.certified_bytes"]})
@@ -441,7 +479,7 @@ def result(held: Path, measured: list[dict]) -> None:
     try:
         writer = kit.writer(held)
         for m in measured:
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     except ValueError as e:
         print(f"memory: the result ({names}) is not written: {e}", file=sys.stderr)
 
@@ -466,7 +504,8 @@ def text(doc: dict) -> str:
     whole = None if doc["loopback"] else doc.get("node_gpu_bytes")
     lines.append("  store: " + (f"{doc['store_bytes']:,} bytes, a test store" if doc["loopback"] else _gb(doc["store_bytes"]))
                  + (f", {doc['store_bytes'] / whole:.3f} of the node's {_gb(whole)} of GPU memory" if whole else "")
-                 + (f", bound to {doc['model']}'s pinned checkpoint" if doc.get("model") else ", bound to no checkpoint"))
+                 + (f", bound to {doc['model']}'s pinned checkpoint" if doc.get("model")
+                    else ", bound to no checkpoint" if doc["loopback"] else f"; {UNBOUND}"))
     for r in doc["beside"]:
         where = f"{r['run']}, {r.get('date') or 'no date'}, {r.get('card') or 'no card'}"
         lines.append(f"  beside it, {r['name']}: "

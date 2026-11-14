@@ -1,0 +1,25 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# `record.py run` launches `run.py run`'s job as one recorded run on a CPU node (the firewalled default: 85's CPU prover,
+# no GPU), a few hours at K = 4096, with record.py around job.sh, which writes both numbers from job.sh's result. Recursion
+# is parked (top/parked), so it is rerun monthly.
+[[metric]]
+id = "benchmarks/recursion-run-seconds"
+title = "One recursive run behind the ZK server as an auditor waits for it: the inner proof, V*'s staging, V*'s statements proved one at a time and Lean's checks"
+owner = "benchmarks"
+unit = "s"
+better = "lower"
+command = "python3 benchmarks/recursion_e2e/record.py run"
+every = "30d"
+goal = "top/parked"
+
+[[metric]]
+id = "benchmarks/recursion-lean-verifier-seconds"
+title = "The auditor's Lean verifier on one recursive run: every V* release, the inner run and its statement, as the lean step runs them"
+owner = "benchmarks"
+unit = "s"
+better = "lower"
+command = "python3 benchmarks/recursion_e2e/record.py run"
+every = "30d"
+goal = "top/parked"

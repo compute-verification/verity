@@ -139,8 +139,7 @@ theorem sm100_isCert : IsCert Sm100.lamStar := by
 theorem sm100_wf : Sm100.model.Wf Sm100.flat := by
   refine ⟨sm100_a_nonneg, ?_, ?_, ?_, fun t => ?_, ?_, ?_, le_rfl, fun u => u.elim, fun φ r => ?_, fun _ _ => le_rfl,
     le_rfl, ?_, le_rfl, ?_⟩
-  · show (0 : ℝ) < ((1965 : ℕ) : ℝ)
-    norm_num
+  · exact Nat.cast_pos.mpr (by decide)
   · rw [sm100_Nw]
     norm_num
   · rw [sm100_bnd]

@@ -53,6 +53,17 @@ def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
         TG.launch_seqlen_q(8, 0, TG.parse_launch_context("conflict"))
 
 
+NO_TABLE = object()
+
+
+@pytest.mark.parametrize("table", [NO_TABLE, None, {}, [], 0, ""], ids=["left out", "null", "no step", "an empty list", "zero", "an empty string"])
+def test_a_declared_context_whose_step_table_is_left_out_or_empty_names_no_step(table):
+    # a table left out, null or empty is a table of no steps: the refusal of a step the context does not name, which lists the steps it has
+    ctx = {"declared": True} if table is NO_TABLE else {"declared": True, "max_seqlen_q_by_step": table}
+    with pytest.raises(TG.LaunchContextInvalid, match=r"names steps \[\] but the request runs step 3"):
+        TG.launch_seqlen_q(8, 3, ctx)
+
+
 def test_fa3_tile_flips_with_the_launch_context_fa2_does_not():
     h100 = _prof((9, 0))
     assert h100.effective_flash_attn_version() == 3
@@ -124,3 +135,12 @@ def test_unreadable_manifest_is_an_error_not_no_context():
         LC.shape_contexts({"sweep": {"input_lengths": [8, 1024]}})
     # a shape the workload does not have is genuinely "no context" (the row's default build_request of the longest prompt / largest cap)
     assert LC.spec_for({"sweep": {"input_lengths": [8, 1024], "output_caps": [15, 69]}}, 1024, 127) == ""
+
+
+@pytest.mark.parametrize("requests", [None, [], [{"foo": 1}]])
+def test_a_workload_of_no_declared_request_and_no_sweep_is_refused_by_name(requests):
+    # the workload `common.launch_batch` reads off a φ that declares no request (a class's Program, off batch invariance)
+    w = {"requests": requests, "engine": {"target": {"batch_invariant": False}}}
+    for read in (LC.batch_dispatch, LC.shape_contexts):
+        with pytest.raises(ValueError, match=r"declares no requests with their prompt_len and no sweep .* The fix: .* its launch"):
+            read(w)

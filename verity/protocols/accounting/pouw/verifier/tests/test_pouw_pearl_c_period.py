@@ -54,7 +54,7 @@ class Lane:
         self._ledger = None
 
     def open(self, name: str, circuit: str = CIRCUIT, **fields: Any) -> None:
-        """Period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
+        """Pearl-C period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
         self._push(("period-open", None, {"period": name, "lane": rc.LANE, "by": rc.LANE, "cap": 4, "circuit": circuit,
                                           "key_sha512": hashlib.sha512(self.pub).hexdigest(), **fields}))
         self.name, self.members = name, []
@@ -133,8 +133,8 @@ def _base(rng: random.Random) -> tuple[dict, bytes, int]:
 
 
 def _two_periods(seed: str) -> tuple[Lane, list[dict], list[dict], list[bytes]]:
-    """Period A: epoch 0 over W (two passes, the second's calls numbered on from the first's) and epoch 1 over W;
-    period B: epoch 2 over W and epoch 0 over a second weights' root W2."""
+    """Pearl-C period A: epoch 0 over W (two passes, the second's calls numbered on from the first's) and epoch 1 over
+    W; period B: epoch 2 over W and epoch 0 over a second weights' root W2."""
     lane = Lane(seed)
     (b1, w, n), (b2, w2, _) = _base(lane.rng), _base(lane.rng)
     lane.open("p-a")

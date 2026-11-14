@@ -13,7 +13,7 @@ import pytest
 from tests.properties import glm53_flashmla_fp8_capture_gpu as X
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics import flashmla_dsv32_twin as V
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
 
 #: a row width the twin runs in a fraction of a second: two blocks a token
 SMALL_TOPK = 128
@@ -41,7 +41,7 @@ def _fabricate(root, lay, cases: dict[str, dict[str, np.ndarray]], topk: int) ->
         g = X.global_indices(lay, o)
         out = np.zeros((t, X.H_Q, X.DV), dtype=np.uint16)
         for i in range(t):
-            q = np.zeros((X.NH + 1, X.DK), dtype=np.uint16)
+            q: np.ndarray = np.zeros((X.NH + 1, X.DK), dtype=np.uint16)
             q[:X.NH] = o["q"][i]
             y = V.decode(q, *X.rows_at(cache, g[i]), g[i], SPLITS=splits, QT=X.QT, BN=X.BN, DV=X.DV, SCALE=X.SCALE)
             out[i, :X.NH + 1], out[i, X.NH + 1:] = y, y[X.NH]
@@ -93,8 +93,8 @@ def test_the_row_is_flashmlas_656_bytes() -> None:
 def test_the_hand_example_reads_two_ways() -> None:
     """Scale 1 + 2^-8 + 2^-20 on 1.75: the sparse kernel rounds the scale to bf16 first (1.0078125) and stages 1.765625; the
     read-back multiplies by the f32 scale and stages 1.7578125."""
-    nope = np.full((1, X.DN), X.HAND_BYTE, dtype=np.uint8)
-    scale = np.full((1, 4), X.HAND_SCALE, dtype=np.uint32)
+    nope: np.ndarray = np.full((1, X.DN), X.HAND_BYTE, dtype=np.uint8)
+    scale: np.ndarray = np.full((1, 4), X.HAND_SCALE, dtype=np.uint32)
     sparse = V.kv_rows(nope, scale, np.zeros((1, X.DR), np.uint16), [True], X.QT)
     assert sparse[0, 0] == 0x3FE2 and X.dense_rows(nope, scale)[0, 0] == 0x3FE1
     assert not V.kv_rows(nope, scale, np.ones((1, X.DR), np.uint16), [False], X.QT).any()

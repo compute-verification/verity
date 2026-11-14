@@ -187,8 +187,7 @@ theorem honestRunM_ceilings : FacetCeilings Sm120Measured.machine honestRunM.run
   refine ⟨fun k => Rat.cast_nonneg.mpr (coeff_nonneg _ _), ?_, ?_, le_rfl, fun r => ⟨fun _ => ?_, fun h => ?_⟩⟩
   · show (0 : ℝ) ≤ (BqM : ℝ)
     exact_mod_cast sm120m_Bpos.le
-  · show (0 : ℝ) < ((2430 : ℕ) : ℝ)
-    norm_num
+  · exact Nat.cast_pos.mpr (by decide)
   · show Sm120Measured.model.G.load (Sparse.counts flatAllM) r ≤ (BqM : ℝ)
     rw [load_counts _ vfRow sm120m_hG]
     exact Rat.cast_le.mpr (sm120m_max r.val r.isLt)
@@ -254,8 +253,7 @@ theorem honestRunM_foldOpt (Ω : Type) (n : ℕ) (x : Paths Ω n) :
 theorem honestRunM_time : honestRunM.run.time / Sm120Measured.model.credit Sm120Measured.flat = 1 := by
   have hB : (0 : ℝ) < BqM := by exact_mod_cast sm120m_Bpos
   have hf : (0 : ℝ) < Sm120Measured.model.G.fmax := by
-    show (0 : ℝ) < ((2430 : ℕ) : ℝ)
-    norm_num
+    exact Nat.cast_pos.mpr (by decide)
   unfold Model.credit Run.time
   rw [sm120m_bnd]
   show (BqM : ℝ) / Sm120Measured.model.G.fmax / ((BqM : ℝ) / Sm120Measured.model.G.fmax) = 1

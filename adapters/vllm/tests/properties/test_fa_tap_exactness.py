@@ -3,7 +3,11 @@ every geometry the hidden sources declare (the GPU run is `tests/properties/fa_t
 from __future__ import annotations
 
 import copy
+import functools
 import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -12,11 +16,46 @@ from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 from verity.definitions.registry import attention_vocab
 
+from tests.properties import fa_tap_exactness as X
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
-from verity_vllm.properties import fa_tap_exactness as X
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
+
+ADAPTER = Path(__file__).parents[2]
+
+#: argv[1], the property's module, is imported alone, then `ir_guard` is called: the modules of the reference evaluator and of the
+#: Definitions that are loaded after each, and the Definitions the call brings to the table
+CHILD = ("import importlib, json, sys\n"
+         "from verity.circuits.defs import REGISTRY\n"
+         "def loaded():\n"
+         "    return sorted(m for m in sys.modules if m.startswith(('verity.circuits.evaluation', 'verity.definitions')))\n"
+         "X = importlib.import_module(sys.argv[1])\n"
+         "at_import, held = loaded(), set(REGISTRY.defs)\n"
+         "X.ir_guard(0x3F800000)\n"
+         "print(json.dumps({'at_import': at_import, 'after_a_call': loaded(), 'entered_with_a_call': sorted(set(REGISTRY.defs) - held)}))\n")
+
+
+@functools.cache
+def _loaded() -> dict[str, Any]:
+    """A process of its own that imports the property's module and then calls `ir_guard`: what is loaded after each, and the
+    Definitions that enter the table with the call."""
+    child = subprocess.run([sys.executable, "-c", CHILD, X.__name__], capture_output=True, text=True, check=True, cwd=ADAPTER)
+    return json.loads(child.stdout.splitlines()[-1])
+
+
+def test_importing_the_property_loads_no_definition_and_no_evaluator():
+    """A Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
+    (`verity.commitments.windows.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
+    at the module's head they are in the table from the import on, in a process that has checked no word.  The import runs in a
+    process of its own: this one has loaded the Definitions for its other tests."""
+    assert _loaded()["at_import"] == []
+
+
+def test_the_definitions_enter_the_table_with_the_first_ir_call():
+    """`ir_guard` is what loads them, so the test above holds something."""
+    got = _loaded()
+    assert "verity.definitions.registry.prims" in got["after_a_call"] and got["entered_with_a_call"]
 
 
 def _record(**fields):
@@ -115,7 +154,7 @@ def test_quick_is_a_subset():
 def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
     layout = StreamLayout(1, len(rows), 2, 128, 64)
-    w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
+    w: np.ndarray = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
     R = X._row_plane(w, layout)
     it = iter(row_max)
     for slab, r, nbm in rows:
@@ -174,7 +213,7 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
 def _ms_stream(rows, row_max, scale_log2):
     """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
-    w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
+    w: np.ndarray = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
     R, o = X._row_plane(w, layout), layout.offsets
     MS = w[o["MS"]:o["total"]].reshape(1, len(rows), 2)
     it = iter(row_max)
@@ -207,7 +246,7 @@ def test_the_ms_build_writes_its_class_at_every_visited_block_and_the_masked_dig
     assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(six, 59, iter(rows)).sum() == 5
     assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(layout, 59, iter(rows)).sum() == 5
     assert not X.expected_written(layout, 123, iter(rows))[layout.total_words:].any()
-    base = np.full(six.padded_words(), X.FILL, dtype=np.uint32)
+    base: np.ndarray = np.full(six.padded_words(), X.FILL, dtype=np.uint32)
     base[:six.total_words] = w[:six.total_words]
     assert X.masked_digest(w, layout) == X.masked_digest(base, six)
     base[six.offsets["FIN"]] = 3

@@ -5,7 +5,9 @@ computed whatever the others say:
 
 * `logged`: the later registration's `previous` is the digest of a record of the earlier stream's log (`loggedAt`), the
   registrations that stream received, in order;
-* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedChallengePhaseOf`), the bytes the later
+* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedChallengePhaseOf`, under the
+  verifier's challenger key and its copy of main's first-parent history, `key` and `main`, which the caller holds and
+  the evidence does not name), the bytes the later
   stream's sample read are exactly the coins of the later stream's family (`family`, which the caller names and the
   evidence does not) that the challenger's signed log shows released after the later registration
   (`Challenger.coinsReason`), and that log shows a coin released after the earlier registration, the last of those before
@@ -30,9 +32,10 @@ family's than the later sample's, and no one family's roots show both receipts.
 module
 
 public import Spot.Record
-public import Spot.ChallengerCoins
+public import Spot.ChallengerDraw
 meta import Spot.Record
 meta import Spot.ChallengerCoins
+meta import Spot.ChallengerDraw
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -99,32 +102,37 @@ def rootLines (log : Json) : List ByteArray :=
   | _ => []
 
 /-- The roots the challenger received, one for each coin it released, over every family's lines in its signed log's own
-order (`rootLines`), from the session the auditor's ledger opens on `window`, once that session's files hold
-(`Challenger.trustedChallengePhaseOf`, as `Challenger.coinsReason` reads them). -/
-def receivedOf (coins : Json) (window : String) : V (List ByteArray) := do
+order (`rootLines`), from the session the auditor's ledger opens on `window` under the verifier's key `key`, once that
+session's files hold (`Challenger.trustedChallengePhaseOf`, as `Challenger.coinsReason` reads them, `main` the verifier's copy
+of main's first-parent history). -/
+def receivedOf (key : Challenger.ChallengerKey) (main coins : Json) (window : String) : V (List ByteArray) := do
   let session := getD coins "session"
-  let _ ← Challenger.trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
-    (← Challenger.ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") session
+  let _ ← Challenger.trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+    (getD coins "pins") main session
   return rootLines (getD session "log")
 
 def NO_LOG : String := "the challenger's session published no signed log to read the order from"
 
 def NO_FAMILY : String := "the later sample read no coins of a challenger's family"
 
+def NO_KEY : String := "the verifier holds no challenger key to read the later sample's coins under"
+
 /-- Why the later stream's sample does not hold the order its registration rests on: it has no coin evidence (`coins`
-null), the caller names no family it read (`family` none), its coins are not the ones of that family the challenger's
-signed log shows released after `later` (`Challenger.coinsReason` on the bytes `read`), or that log does not show
-`earlier` received first (`receiptReason`, over every family's lines). -/
-def orderReason (window : String) (family : Option String) (earlier later : ByteArray) (coins : Json)
-    (read : ByteArray) : Option String :=
-  match coins, family with
-  | .null, _ => some NO_LOG
-  | _, none => some NO_FAMILY
-  | _, some label =>
-    match Challenger.coinsReason coins window label later read with
+null), the caller names no family it read (`family` none) or holds no challenger key (`key` none), its coins are not the
+ones of that family the challenger's signed log shows released after `later` (`Challenger.coinsReason` on the bytes
+`read`, under `key` and `main`), or that log does not show `earlier` received first (`receiptReason`, over every
+family's lines). -/
+def orderReason (key : Option Challenger.ChallengerKey) (main : Json) (window : String) (family : Option String)
+    (earlier later : ByteArray) (coins : Json) (read : ByteArray) : Option String :=
+  match coins, family, key with
+  | .null, _, _ => some NO_LOG
+  | _, none, _ => some NO_FAMILY
+  | _, some _, none => some NO_KEY
+  | _, some label, some key =>
+    match Challenger.coinsReason key main coins window label later read with
     | some why => some s!"the later sample's coins: {why}"
     | none =>
-      match receivedOf coins window with
+      match receivedOf key main coins window with
       | .error why => some why
       | .ok received => receiptReason received earlier later
 
@@ -180,7 +188,9 @@ def auditVerdict (audit : Json) (previous : String) : AuditVerdict :=
 
 /-- What `across` reads: the window's open root the verifier holds, the earlier stream's log, its audit record (null:
 none), the later stream's registration, and the later stream's sample's coin evidence, the challenger's family the
-later stream read those coins from as the caller names it (none: it read none of a family), and the bytes it read. -/
+later stream read those coins from as the caller names it (none: it read none of a family), the bytes it read, and the
+challenger key and the copy of main's first-parent history the verifier holds that evidence to (`key` none: it holds
+none). -/
 structure Across where
   window : String
   log : Array Json
@@ -189,6 +199,8 @@ structure Across where
   coins : Json
   family : Option String
   read : ByteArray
+  key : Option Challenger.ChallengerKey := none
+  main : Json := Json.null
 
 /-- 2 when `logged` or `order` does not accept; else 3 when `audit` does not; else 4 when it does and is not complete;
 else 1: all three accept and the audit record is complete. -/
@@ -223,7 +235,7 @@ def acrossFound (i : Across) : V AcrossFound := do
   let later ← Flock.WindowRecord.digest i.later
   let received := loggedAt i.log previous
   return { logged := .ofReason (if received.isSome then none else some UNLOGGED), received,
-           order := .ofReason (orderReason i.window i.family earlier later i.coins i.read),
+           order := .ofReason (orderReason i.key i.main i.window i.family earlier later i.coins i.read),
            audit := auditVerdict i.audit previous, earlier := previous, later := Flock.hexOf later }
 
 /-- The verdicts on one read across streams (`acrossFound`): `{"logged", "received", "order", "audit", "case",
@@ -249,9 +261,11 @@ private def root (n : Nat) : ByteArray := ByteArray.mk #[n.toUInt8]
 -- one registration named on both sides is not before itself
 #guard (receiptReason [root 1, root 1] (root 1) (root 1)).isSome
 -- a sample with no coin evidence holds no order, and neither does one of no family
-#guard orderReason "" (some "draw/1") (root 1) (root 2) .null (root 0) == some NO_LOG
-#guard orderReason "" none (root 1) (root 2) .null (root 0) == some NO_LOG
-#guard orderReason "" none (root 1) (root 2) (Json.mkObj []) (root 0) == some NO_FAMILY
+#guard orderReason none .null "" (some "draw/1") (root 1) (root 2) .null (root 0) == some NO_LOG
+#guard orderReason none .null "" none (root 1) (root 2) .null (root 0) == some NO_LOG
+#guard orderReason none .null "" none (root 1) (root 2) (Json.mkObj []) (root 0) == some NO_FAMILY
+-- and neither does one whose verifier holds no key
+#guard orderReason none .null "" (some "draw/1") (root 1) (root 2) (Json.mkObj []) (root 0) == some NO_KEY
 
 private def wide (n : Nat) : ByteArray := ByteArray.mk (List.replicate 64 n.toUInt8).toArray
 

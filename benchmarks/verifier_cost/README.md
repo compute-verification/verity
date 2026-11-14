@@ -257,6 +257,37 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/table_root/table_root.sh [--tables T] [--lengths 4096,40960,131072]
 ~~~
 
+`ledger_replay/ledger_replay.sh S...` times one replay of the auditor's ledger against its sessions:
+`ledger_replay/ledger_replay.py` writes, per S, a ledger of S sessions as the challenger's writer signs one (two-step:
+a reserve, an open and an end a session, a declaration a day, the sessions in one period, or in periods of `PERIOD`)
+under a key at the deployed LMS parameters, with what the `challenger_ledger` piece's reference
+(`challenger.audited_session`) answers on it, and times the reference's replay. `ledger_replay/Main.lean`, built in a
+scratch Lake package against the checkout's verifier, times the compiled replay (`Spot.Challenger.checked`), the
+difftest's piece around it, and the replay's parts made apart from it: each entry's parse, its line's SHA-512, its
+message, its LMS verification, and the loop's searches over what it has read so far. It refuses a ledger on which the
+piece's answer is not the reference's. A period's close lists its sessions, so one period's sessions stop where the
+close passes a ledger line's cap (`MAX_LEDGER_LINE`): both refuse that size, and its row says so. `$OUT` gets
+inputs.jsonl (one row per S: entries, bytes, the longest line, the reference's seconds and signature checks),
+ledger_replay.jsonl (one row per S and phase: microseconds, the least of `REPEAT`, and peak RSS), table.jsonl
+(`ledger_replay.py --table`: one row per S, the split, each part's share, and a least-squares fit of what the parts
+leave to `c + a S + b S²`), cpu.txt and the logs.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
+  --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/ledger_replay.sh 10 30 100 300 1000
+~~~
+
+`ledger_replay/replays.sh W...` counts the replays one PoUW period check makes: `ledger_replay/replays.py` writes, per
+W, an honest period of W windows as PoUW's period difftest generates one and counts the replays its reference
+(`period_check.case`) makes, and the compiled check (`pouw-period serve`) answers the same case under
+`ledger_replay/calls.py`, which counts its entries into `Spot.Challenger.checked` by a breakpoint it holds with ptrace
+(x86-64 Linux; the nodes have no debugger). `$OUT` gets replays.jsonl, one row per W: each side's verdict and replays.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
+  --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/replays.sh 1 2 3
+~~~
+
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
 config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
@@ -274,6 +305,7 @@ Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a
 this benchmark's constructions, and nothing outside this directory reads them.
 
 The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
-verifier it times: each must still elaborate in the checkout's package, and `whole_run.py toy 146 --check` must still
-accept the run it writes. It builds no executable and runs no benchmark; a main in a new directory is held without being
-listed.
+verifier it times: each must still elaborate in the checkout's package, `whole_run.py toy 146 --check` must still
+accept the run it writes, and the ledger replay's generators must still write a ledger the challenger accepts and a
+period PoUW's period check accepts. It builds no executable and runs no benchmark; a main in a new directory is held
+without being listed.

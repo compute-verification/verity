@@ -159,7 +159,7 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
-_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
+_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is the HEAD and `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
 SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (a laptop -> pod link can run at 130-220 KB/s)
@@ -938,14 +938,14 @@ def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
     return _manifest_of(io.BytesIO(tar_bytes))
 
 
-# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these caps give
+# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these limits give
 # the same bytes at the same speed in ~70 MiB (what remains is about the largest blob, which git holds whole)
-GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
+GIT_ARCHIVE_LIMITS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
     err = tempfile.TemporaryFile()
-    proc = subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc = subprocess.Popen(["git", *GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
     proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
     return proc
 
@@ -1039,20 +1039,28 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
     doc = read_ready(Path(path))
     if doc["identity"] != identity:
         raise SourceNotReady(f"{path}/{READY_FILE} names identity {doc['identity']}, the run asked for {identity}; refusing to execute")
-    if dirt := tracked_dirt(Path(path)):
+    if dirt := tracked_dirt(Path(path), identity):
         raise SourceNotReady(f"{path} is shared by every run of {identity}, and an earlier run edited its tracked files ({', '.join(dirt[:3])}); "
                              f"refusing to execute from it: relaunch (the launcher sets it aside and ships the commit afresh), or use --cwd clone")
     return doc
 
 
-def tracked_dirt(path: Path) -> list[str]:
-    """The tracked paths of a shipped checkout that differ from its commit (one run's edit to the shared per-commit tree would
-    otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
-    no .git, has nothing to compare and gives none."""
+def _head_dirt(head: str, identity: str) -> list[str]:
+    """The dirt of a shipped checkout whose HEAD (`git rev-parse --verify -q HEAD`, empty when it names no commit) is not the commit
+    the tree is named for: `git status` compares the files with whatever HEAD names, so a run's `git checkout OTHER` there leaves it
+    silent over OTHER's files.  A detached HEAD or a branch at `identity` is the commit."""
+    return [] if head == identity else [f"HEAD is at {head or 'no commit'}, not at {identity}"]
+
+
+def tracked_dirt(path: Path, identity: str) -> list[str]:
+    """What makes a shipped checkout no longer `identity`'s (one run's change to the shared per-commit tree would otherwise reach
+    every later run of that commit): a HEAD that is not `identity` (`_head_dirt`), then the tracked paths that differ from HEAD.
+    Untracked and ignored build output is not dirt; a tree shipped as an archive, with no .git, has nothing to compare and gives none."""
     if not (Path(path) / ".git").exists():
         return []
+    head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=path, capture_output=True, text=True).stdout.strip()
     r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=path, capture_output=True, text=True)
-    return [line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else []
+    return _head_dirt(head, identity) + ([line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else [])
 
 
 def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: str) -> dict[str, Any]:
@@ -1061,11 +1069,13 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
-    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
-    no longer match its commit; the doc then carries the first such paths under `dirt`."""
+    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout that is no longer
+    its commit's: its HEAD is not the identity READY.json names, or its tracked files don't match HEAD; the doc then carries what
+    was found, as `tracked_dirt` lists it (HEAD, then the first such paths), under `dirt`."""
     q = shlex.quote(dest)
     r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
-                                  f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
+                                  f"if [ -e {q}/.git ]; then echo \"HEAD $(git -C {q} rev-parse --verify -q HEAD 2>/dev/null)\"; "
+                                  f"git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
                                   f"elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
     out, _, dirt = r.stdout.decode(errors="replace").partition(_DIRT_MARK)
     out = out.strip()
@@ -1079,8 +1089,9 @@ def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None
         doc = json.loads(out)
     except ValueError:
         raise SourceNotReady(f"{dest}/{READY_FILE} is not JSON; inspect the machine") from None
-    if paths := [line[3:] for line in dirt.splitlines() if line.strip()]:
-        return "dirty", {**doc, "dirt": paths}
+    lines = [line for line in dirt.splitlines() if line.strip()]          # of a checkout: `HEAD <commit>`, then `git status`
+    if lines and (found := _head_dirt(lines[0][5:], doc.get("identity")) + [line[3:] for line in lines[1:]]):
+        return "dirty", {**doc, "dirt": found}
     return "ready", doc
 
 
@@ -1228,16 +1239,16 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
     return partial, None, True
 
 
-_RC_DIRT = 77                                  # _add_git: the tree's tracked files are not the commit's (its .git stays, so the probe sees dirt)
+_RC_DIRT = 77                                  # _add_git: the tree's HEAD or tracked files are not the commit's (its .git stays, so the probe sees dirt)
 
 
 def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> str | None:
     """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, so every later run of the commit finds
     one (a `--cwd clone` run clones it; `suites.py` keys from git's view of it): the commit is pushed as `_ship_git` pushes it, and a
     `--no-checkout` shared clone's .git, detached at `sha` with its index, is renamed into the tree whole, so runs of the commit
-    sharing it are never moved and no file of theirs is written.  Its tracked files must then be the commit's
-    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree whose
-    files differ keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
+    sharing it are never moved and no file of theirs is written.  Its HEAD and its tracked files must then be the commit's
+    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree where
+    either differs keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
     else why not."""
     repo = f"{root}/{POD_GIT_REPO}"
     if not tree:
@@ -1308,8 +1319,9 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
-      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
-         run edited, which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
+      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout an earlier run left at another
+         commit (its HEAD is not the identity) or whose tracked files it edited, which is moved to <root>/src/.quarantine/ and shipped
+         afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -1803,7 +1815,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
-        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup limit
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -2500,7 +2512,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
     unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
-    time left under its cap (research.waitcap)."""
+    time left under its limit (research.waitcap)."""
 
     def within(s: float) -> float:
         return s if timeout is None else max(1.0, min(s, timeout))

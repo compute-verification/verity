@@ -1,6 +1,6 @@
 """Node 1's Commit pacer (sky/release.py) holds the deployments-gpu LocalQueue itself, because Kueue admits a leased Commit (no GPU
-request) before a tick can deactivate it, and a few such Commits project far past the cap. The hold stays while
-the admitted Commits' projection plus the next Commit's would pass the cap, or the disk is at DISK_PAUSE_PCT; with nothing
+request) before a tick can deactivate it, and a few such Commits project far past the limit. The hold stays while
+the admitted Commits' projection plus the next Commit's would pass the limit, or the disk is at DISK_PAUSE_PCT; with nothing
 admitted it lets one through, so a big Commit can't starve. It releases only a hold it set, and it never touches the
 ClusterQueue (the quiet hour's and the disk guard's) or the lease pools' holders, which n1_lease.py submits to their own
 LocalQueue: holding them would leave admitted Commits waiting for a GPU."""
@@ -55,7 +55,7 @@ def pacer(tmp_path, monkeypatch):
     mod.disk = {"bundles": 0.0, "pct": 50.0, "room": 1200}
     monkeypatch.setattr(mod, "bundles_gb", lambda: mod.disk["bundles"])
     monkeypatch.setattr(mod, "disk_pct", lambda: mod.disk["pct"])
-    monkeypatch.setattr(mod, "room_cap", lambda gb: mod.disk["room"])
+    monkeypatch.setattr(mod, "room_limit", lambda gb: mod.disk["room"])
     return mod
 
 
@@ -70,7 +70,7 @@ def commit(mod, name: str, row: str, admitted: bool = False, active: bool = True
                                           "status": {}}
 
 
-def test_it_holds_while_the_admitted_projection_passes_the_cap_and_lets_its_own_hold_go_under_it(pacer):
+def test_it_holds_while_the_admitted_projection_passes_the_limit_and_lets_its_own_hold_go_under_it(pacer):
     commit(pacer, "cov-a", B8, admitted=True)
     pacer.disk["bundles"] = 1100                     # 1100 + 120 > 1200
     pacer.tick()
@@ -85,7 +85,7 @@ def test_it_holds_while_the_admitted_projection_passes_the_cap_and_lets_its_own_
 def test_it_opens_only_when_the_next_waiting_commit_fits_too(pacer):
     commit(pacer, "cov-a", B8, admitted=True)
     commit(pacer, "cov-b", B32, active=False)
-    pacer.disk["bundles"] = 800                      # 920 is under the cap, 920 + 480 isn't
+    pacer.disk["bundles"] = 800                      # 920 is under the limit, 920 + 480 isn't
     pacer.tick()
     assert pacer.cluster["policy"] == "Hold" and pacer.cluster["wls"]["cov-b"]["spec"]["active"] is False
     pacer.disk["bundles"] = 500                      # 620 + 480 fits: cov-b is released, and the gate opens for it
@@ -97,12 +97,12 @@ def test_with_nothing_in_flight_a_big_commit_is_let_through(pacer):
     commit(pacer, "cov-b", B32, active=False)
     pacer.cluster["policy"] = "Hold"
     pacer.GATE.write_text("held\n")
-    pacer.disk["bundles"] = 1100                     # 1100 + 480 is over the cap, but nothing is in flight
+    pacer.disk["bundles"] = 1100                     # 1100 + 480 is over the limit, but nothing is in flight
     pacer.tick()
     assert pacer.cluster["wls"]["cov-b"]["spec"]["active"] is True and pacer.cluster["policy"] == "None"
 
 
-def test_at_80_percent_disk_it_holds_even_under_the_cap(pacer):
+def test_at_80_percent_disk_it_holds_even_under_the_limit(pacer):
     pacer.disk.update(bundles=10, pct=80.0)
     pacer.tick()
     assert pacer.cluster["policy"] == "Hold" and pacer.GATE.exists()
@@ -160,7 +160,7 @@ def test_six_commits_of_a_model_with_no_size_go_one_at_a_time_until_the_first_ha
         commit(pacer, f"cov-u{n}", YI.format(n), active=False)
     commit(pacer, "cov-p", B8, active=False)                 # a model the pacer has a size for isn't held back by them
     pacer.tick()
-    assert active(pacer) == ["cov-p", "cov-u0"]              # all seven would fit the 1200 GB cap at the formula's 120 GB
+    assert active(pacer) == ["cov-p", "cov-u0"]              # all seven would fit the 1200 GB limit at the formula's 120 GB
     for n in ("cov-u0", "cov-p"):
         pacer.cluster["wls"][n]["status"] = {"admission": {"clusterQueue": "deployments-gpu"}}
     pacer.written[YI.format(0)] = 30.0

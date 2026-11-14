@@ -24,7 +24,7 @@ from verity.definitions.registry import dsa
 
 from tests import fake_vllm
 from tests.properties import dsv4_indexer_capture_gpu as D4
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 IDX, X = D4.I, D4.X
 SPECIAL = (0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x3F800000, 0xBF800000, 0x3F000000, 0x7F7FFFFF,

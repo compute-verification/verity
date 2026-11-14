@@ -27,12 +27,13 @@ from verity_vllm.config import option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import source_identity as SI
 from verity_vllm.query.manifest import format as MF
+from verity_vllm.records.schema_ids import COMMIT_PLAN_SCHEMA
 
 __all__ = ["Options", "key", "keyed", "main", "write"]
 
 logger = init_logger(__name__)
 
-SCHEMA = "verity-vllm/commit-plan/v1"
+SCHEMA = COMMIT_PLAN_SCHEMA
 
 
 def digests_of_record(args: Any, required_manifest: dict[str, Any] | None) -> set[str]:

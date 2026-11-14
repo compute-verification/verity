@@ -6,11 +6,15 @@ import struct
 
 import numpy as np
 import pytest
-from verity.circuits.types import Array, RecordType
+from verity.circuits.types import Array, RecordType, Tuple, Type
 from verity.definitions.registry.prims import BF16, F32
 
 from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
-from verity_vllm.check.fold_compare import WeightSource
+from verity_vllm.check.fold_compare import (
+    _WEIGHT_FIELDS,
+    WeightSource,
+    _layernorm_family_fields,
+)
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
 H, V, NL, FD, NH, QL, L, DN, DR, DV, INTER, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
@@ -80,15 +84,35 @@ def test_only_a_record_with_dense_layers_and_an_array_of_layers_has_mla_sources(
     assert mla_moe_sources(RecordType(*((k, t) for k, t in wt.fields if k != "layers"))) is None
     assert mla_moe_sources(RecordType(*((k, BF16 if k == "layers" else t) for k, t in wt.fields))) is None
     assert mla_moe_sources(Array(FD, BF16)) is None
-    with pytest.raises(ValueError, match="an array w13 in each of its layers"):
-        mla_moe_sources(RecordType(*((k, Array(2, BF16) if k == "layers" else t) for k, t in wt.fields)))
+    assert mla_moe_sources(Tuple(BF16)) is None
 
 
-def test_a_name_that_is_no_layer_field_is_refused_by_name():
+@pytest.mark.parametrize(("fields", "raised"), [
+    ({"layers": Array(2, BF16)}, AttributeError),                                             # layers that are no Records
+    ({"layers": Array(2, Array(2, BF16))}, AttributeError),
+    ({"layers": Array(2, Tuple(BF16))}, AttributeError),
+    ({"layers": Array(2, RecordType(("gate_w", BF16)))}, KeyError),                           # Records with no w13
+    ({"layers": Array(2, RecordType(("w13", BF16)))}, AttributeError),                        # a w13 that is no array
+    ({"layers": Array(2, RecordType(("w13", Tuple(BF16))))}, AttributeError),
+    ({"layers": Array(2, RecordType(("w13", RecordType(("x", BF16)))))}, AttributeError),
+    ({"dense_layers": BF16}, AttributeError),                                                 # dense_layers that is no array
+    ({"dense_layers": Tuple(BF16)}, AttributeError),
+    ({"dense_layers": RecordType(("ln1", BF16))}, AttributeError),
+    ({"dense_layers": BF16, "layers": Array(2, RecordType(("gate_w", BF16)))}, KeyError),     # the layers are read before dense_layers
+    ({"dense_layers": BF16, "layers": Array(2, BF16)}, AttributeError),
+])
+def test_a_record_with_dense_layers_and_an_array_of_layers_that_is_no_mla_moe_record_raises_by_what_it_lacks(fields: dict[str, Type], raised: type[Exception]):
+    wt = _mla_weights_type()
+    with pytest.raises(raised, match="^'w13'$" if raised is KeyError else None):
+        mla_moe_sources(RecordType(*((k, fields.get(k, t)) for k, t in wt.fields)))
+
+
+@pytest.mark.parametrize("name", ["norm", "embed", "cos_sin", "", "layers[0]", "layers[x].ln1", "prefix.layers[0].ln1", "layers[0].ln1.more"])
+def test_a_name_that_is_no_layer_field_is_a_type_error(name: str):
     sources = mla_moe_sources(_mla_weights_type())
     assert sources is not None
-    with pytest.raises(ValueError, match="^norm: not a layer field of an MLA Program$"):
-        mla_field_words(sources, "norm", lambda tensor, field: np.zeros(0, dtype=np.uint16))
+    with pytest.raises(TypeError):
+        mla_field_words(sources, name, lambda tensor, field: np.zeros(0, dtype=np.uint16))
 
 
 def test_mla_moe_fields_read_their_own_layer(tmp_path):
@@ -118,3 +142,42 @@ def test_mla_moe_fields_read_their_own_layer(tmp_path):
     for lo, hi, name in _field_intervals(wt, ""):
         if name.startswith(("dense_layers[", "layers[")):
             assert ws.words(lo, hi).size == hi - lo, name
+
+
+def test_a_top_field_is_its_checkpoint_tensors_and_cos_sin_is_the_fixture(tmp_path):
+    """`embed`, `norm` and `lm_head` are their checkpoint tensors' words. `cos_sin` names no checkpoint tensor: it is the fixture's
+    words, under the base tables and under the GPT-NeoX family's (a `config` whose `NORM` is `layernorm`), whose `norm_b` is read too."""
+    cos_sin = tmp_path / "cos_sin.npy"
+    fixture: np.ndarray = np.arange(MAX_POS * DR, dtype=np.uint16) + 7
+    np.save(cos_sin, fixture)
+    wt = _mla_weights_type()
+    words = _write(tmp_path / "base.safetensors", _tensors())
+    ws = WeightSource(wt, [tmp_path / "base.safetensors"], cos_sin)
+    for field, tensor in (("embed", "model.embed_tokens.weight"), ("norm", "model.norm.weight"), ("lm_head", "lm_head.weight")):
+        np.testing.assert_array_equal(ws._field_words(field), words[tensor], err_msg=field)
+    np.testing.assert_array_equal(ws._field_words("cos_sin"), fixture)
+    with pytest.raises(KeyError, match="^'norm_b'$"):
+        ws._field_words("norm_b")
+
+    neox = {"gpt_neox.embed_in.weight": ("BF16", [V, H]), "gpt_neox.final_layer_norm.weight": ("BF16", [H]),
+            "gpt_neox.final_layer_norm.bias": ("BF16", [H]), "embed_out.weight": ("BF16", [V, H])}
+    words = _write(tmp_path / "neox.safetensors", neox)
+    ws = WeightSource(wt, [tmp_path / "neox.safetensors"], cos_sin, config={"NORM": "layernorm"})
+    for field, tensor in (("embed", "gpt_neox.embed_in.weight"), ("norm", "gpt_neox.final_layer_norm.weight"),
+                          ("norm_b", "gpt_neox.final_layer_norm.bias"), ("lm_head", "embed_out.weight")):
+        np.testing.assert_array_equal(ws._field_words(field), words[tensor], err_msg=field)
+    np.testing.assert_array_equal(ws._field_words("cos_sin"), fixture)
+
+
+def test_the_cos_sin_rows_hold_none_for_their_checkpoint_tensors_and_a_row_of_none_read_through_the_table_is_a_type_error(tmp_path):
+    """Both tables of top-level fields, the base one and the GPT-NeoX family's, hold None where `cos_sin`'s checkpoint tensors would
+    be named. No read reaches it, since `cos_sin` is the fixture's; a field whose row holds None and is read through the table raises
+    `TypeError`."""
+    assert _WEIGHT_FIELDS["cos_sin"] == ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None)
+    family = _layernorm_family_fields({"NORM": "layernorm"})
+    assert family is not None and family[0]["cos_sin"] == ("w=layers.0.attention.rotary_emb.cos_sin_cache", None)
+    _write(tmp_path / "base.safetensors", _tensors())
+    ws = WeightSource(_mla_weights_type(), [tmp_path / "base.safetensors"], tmp_path / "cos_sin.npy")
+    ws._weight_fields["embed"] = ("w=embed_tokens.weight", None)
+    with pytest.raises(TypeError):
+        ws._field_words("embed")

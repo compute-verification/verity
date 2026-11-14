@@ -9,7 +9,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.records.fields import RecordError, objects, only, optional, present, required
+from verity_vllm.records.fields import (
+    RecordError,
+    objects,
+    only,
+    optional,
+    present,
+    required,
+)
+
+__all__ = ["ASSIGN", "ROOTS", "TableAssignment", "TableRoots"]
 
 ASSIGN = "verity-vllm/boundary-tables/assign/v1"
 ROOTS = "verity-vllm/boundary-tables/roots/v1"

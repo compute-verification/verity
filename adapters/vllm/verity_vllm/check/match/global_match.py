@@ -374,6 +374,8 @@ class Options:
     gprog: str | None = option("--gprog", default=None, help="the Build's workload_program.json (GP-01) -> converted with from_gprog")
     workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (for the mock global Program)")
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
+    log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
+    tokens: str | None = option("--tokens", default=None, help="tokens file (default <oracle>/capture/tokens.json)")
     tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
     no_x09: bool = option("--no-x09", default=False, action="store_true")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
@@ -385,7 +387,7 @@ class Options:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     if a.decomp_out and a.no_x09:
         raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")
@@ -401,8 +403,8 @@ def main(a: Options) -> int:
         gp = mock_global_program(a.workload, a.component)
     mod = impl_module()   # MATCH_IMPL: fast (default, the Match of record) | record (the audit checker) -- never a silent fallback
     logger.info("%s", impl_banner(mod, gp))   # what is about to run, BEFORE the hours it may take (not after)
-    res = mod.check(gp, a.oracle, run_x09=not a.no_x09, within_step=a.within_step, record_alternate=not a.no_alternate,
-                    tokens_optional=a.tokens_optional, _loaded=loaded)
+    res = mod.check(gp, a.oracle, log_path=a.log, tokens_path=a.tokens, run_x09=not a.no_x09, within_step=a.within_step,
+                    record_alternate=not a.no_alternate, tokens_optional=a.tokens_optional, _loaded=loaded)
     res["impl"] = impl_info(mod)
     if (a.decomp_out or a.derived) and isinstance(res.get("x09"), dict) and loaded.get(X09_DOCUMENT) is not None:
         # a document produced under the shared pipeline (P1) states what its X-09 ran over (batch_decomp's own keys) and

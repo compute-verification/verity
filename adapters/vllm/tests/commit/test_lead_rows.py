@@ -11,9 +11,9 @@ import random
 
 import numpy as np
 import pytest
-
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.errors import Refused
 
@@ -83,7 +83,7 @@ def test_each_stream_tile_is_leans_tile(m, n, S, bn):
     """Tile k of the stream holds Lean's tileOf (row block rb, column block cb, step t): row 16 rb + r and column 8 cb + c at
     fragment position 16 g + 4 q + 2 eh + el, r = 8 eh + g and c = 2 q + el."""
     W = _random_words(np.random.default_rng(7 + m + n), m, n, S, bn)
-    words = np.frombuffer(L.stream(_export(W, S, bn), m, n, S, bn), dtype="<i4").reshape(-1, 128)
+    words: np.ndarray = np.frombuffer(L.stream(_export(W, S, bn), m, n, S, bn), dtype="<i4").reshape(-1, 128)
     M, N = _computed(m, n, bn)
     k = 0
     for rt in range(M // 64):
@@ -106,11 +106,11 @@ def test_padding_rows_are_committed_and_the_rest_are_not():
     columns past pad_cols are computed and not committed."""
     m, n, S, bn = 1, 132, 2, 128
     M, N = _computed(m, n, bn)
-    W = np.full((M, N, S), 3, dtype=np.int32)
+    W: np.ndarray = np.full((M, N, S), 3, dtype=np.int32)
     W[1:16] = 5
     W[16:] = 7
     W[:, 136:] = 7
-    words = np.frombuffer(L.stream(_export(W, S, bn), m, n, S, bn), dtype="<i4")
+    words: np.ndarray = np.frombuffer(L.stream(_export(W, S, bn), m, n, S, bn), dtype="<i4")
     assert (words == 7).sum() == 0
     assert (words == 5).sum() == 15 * 136 * S
     assert (words == 3).sum() == 136 * S

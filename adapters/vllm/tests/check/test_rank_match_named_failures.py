@@ -92,6 +92,24 @@ def test_an_own_partial_of_a_class_that_produces_no_partial_fails_producer():
     _only(res, "producer", "rank 0 (step 0, k 0): own partial produced by ['Softmax_v1{N=8}'], not an admitted partial producer")
 
 
+def _links(rank: int, world: int, classes: tuple[str, str]) -> list[dict]:
+    """One rank's Program links to the two collectives of `_colls`, each module path ending in its issuing module's class."""
+    return [{"k": k, "peer_collective_k": k, "kind": kind, "shape": [1, 8], "module": site, "module_path": f"{site} ({cls})",
+             "peers": [{"rank": p, "collective_k": k} for p in range(world) if p != rank]} for (k, kind, site), cls in zip(SITES, classes)]
+
+
+def test_an_own_partial_the_lm_heads_class_does_not_admit_fails_links():
+    """A link's module path names the class, and the class decides the producer: the LM head's all-gather takes a Gemm's rows.  An
+    embedding shard is a partial producer in general, so only the links check refuses it there."""
+    colls, _ = _world()
+    links: dict[int, list[dict] | dict[str, list[dict]]] = {r: _links(r, 2, ("RowParallelLinear", "ParallelLMHead")) for r in colls}
+    res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["Gemm_v1{K=8}"]} for r in colls})
+    assert res["verdict"] == "PASS" and res["failed"] == [], res
+    res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["EmbeddingShard_v1{V=8}"]} for r in colls})
+    _only(res, "links", "rank 0 link 1 (ParallelLMHead): own partial produced by ['EmbeddingShard_v1{V=8}'], "
+                        "the site class admits ('Gemm_v1', 'Gemm_v2', 'batch:Gemm') (wrong producer)")
+
+
 def test_a_recorder_with_one_row_twice_fails_recorder():
     colls, recorder = _world()
     recorder[0].append(dict(recorder[0][0]))

@@ -16,7 +16,7 @@ window-steps = 16
 load = "varied"
 
 [service]
-law = "subset:1"
+law = "rate:1/3481648"
 
 [program]
 commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"

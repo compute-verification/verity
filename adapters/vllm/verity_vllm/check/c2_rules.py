@@ -7,6 +7,7 @@ The rules decide from the structured codes the sampled replay stamps on its reco
 every not-evaluable reason, the classes of every unevaluated stratum, the seed form), never from its message texts."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from verity_vllm.check.commit_rules import (
@@ -38,6 +39,26 @@ _PLANE_FED_NEITHER_FORM = ("have committed moe/ plane members value-checked by N
                            "[oracle_compare.NO_ORACLE_FAMILY_PREFIXES]; form (A) has no row->plane mapping in this replay)")
 
 
+def _table(record: Mapping[Any, Any], key: Any) -> Any:
+    """What `record` has under `key`, or an empty table where it leaves the key out or states null or nothing under it: a section
+    that is not there counts nothing and names nothing.  A record is a section of the Commit record, the replay's codes by reason,
+    or the context a caller hands the rules."""
+    stated = record.get(key)
+    return stated if stated else {}
+
+
+def _listed(record: Mapping[Any, Any], key: Any) -> Any:
+    """What `record` has under `key`, or an empty list where it leaves the key out or states null or nothing under it: a list
+    that is not there lists nothing."""
+    stated = record.get(key)
+    return stated if stated else []
+
+
+def _count_of(stated: Any) -> Any:
+    """The length of a list or a table, and any other value as it is: a scope states a count where the record lists what was counted."""
+    return len(stated) if isinstance(stated, (list, dict)) else stated
+
+
 def _form_b_complete_over_values(oc: dict | None) -> str | None:
     """None when form (B) -- the Match-oracle compare -- is COMPLETE over the values: result True, 0
     mismatch, complete (every step snapshotted), compared > 0, attribution complete, and the module outputs (`instance_outputs`, the family
@@ -55,7 +76,7 @@ def _form_b_complete_over_values(oc: dict | None) -> str | None:
         return f"form (B) not complete ({oc.get('grade') or 'partial'}: steps not snapshotted {oc.get('steps_not_snapshotted') or '?'} -- Match with MATCH_SNAP_STEPS=all)"
     if int(oc.get("compared") or 0) <= 0:
         return "form (B) compared 0"
-    if (oc.get("attribution") or {}).get("complete", True) is False:
+    if _table(oc, "attribution").get("complete", True) is False:
         return "form (B) request attribution not complete"
     cbf, ncf = oc.get("compared_by_family"), oc.get("not_compared_by_family")
     if isinstance(cbf, dict) and (int(cbf.get("instance_outputs") or 0) <= 0 or int((ncf or {}).get("instance_outputs") or 0) > 0):
@@ -63,11 +84,16 @@ def _form_b_complete_over_values(oc: dict | None) -> str | None:
     return None
 
 
+def _form_b_compared(oc: dict | None) -> tuple[Any, Any]:
+    """Form (B)'s `compared` and `compared_by_family`; None each where the record has no form (B)."""
+    return (oc.get("compared"), oc.get("compared_by_family")) if isinstance(oc, dict) else (None, None)
+
+
 def _no_evaluator_reasons(not_ev: dict, codes: dict[str, dict]) -> list[tuple[str, str, int]]:
     """(reason, family, n) for every counted `no-evaluator` reason whose family is outside the replay's stated domain (NOT_YET)."""
     out = []
     for k, v in not_ev.items():
-        c, n = codes.get(str(k)) or {}, int(v or 0)
+        c, n = _table(codes, str(k)), int(v or 0)       # a reason the replay stamped no code for is in no class
         if n > 0 and c.get("class") == "no-evaluator" and not c.get("domain") and c.get("family"):
             out.append((str(k), str(c["family"]), n))
     return out
@@ -103,10 +129,10 @@ def _form_b_selector_coverage(oc: dict | None, n_sel: int) -> tuple[str | None, 
         return f"form (B) result False ({oc.get('grade') or 'no grade'})" + (f": {str(oc.get('why'))[:120]}" if oc.get("why") else ""), ""
     if int(oc.get("mismatch_n") or 0) != 0:
         return f"form (B) {oc.get('mismatch_n')} mismatch", ""
-    att = oc.get("attribution") or {}
+    att = _table(oc, "attribution")
     if att.get("complete") is not True:
         return "form (B) request attribution not complete", ""
-    cbf, ncf = oc.get("compared_by_family") or {}, oc.get("not_compared_by_family") or {}
+    cbf, ncf = _table(oc, "compared_by_family"), _table(oc, "not_compared_by_family")
     n_cmp, n_not, pairs = int(cbf.get("sampled_token_ids") or 0), int(ncf.get("sampled_token_ids") or 0), int(att.get("pairs") or 0)
     detail = f"sampled_token_ids compared {n_cmp}/{pairs or n_sel} (step, request) pairs, not compared {n_not}, 0 mismatch"
     if n_cmp <= 0 or n_not > 0 or n_cmp < n_sel or (pairs > 0 and n_cmp != pairs):
@@ -126,7 +152,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     field (`records.query_checks`).  The grade rules above stand either way."""
     if not isinstance(sr, dict):
         return None, None
-    pop = sr.get("population") if isinstance(sr.get("population"), dict) else {}
+    pop = _d(sr.get("population"))
     qt, chk = pop.get("query_total"), pop.get("query_checks")
     if not isinstance(qt, dict) or not isinstance(chk, dict):
         return None, None
@@ -233,14 +259,14 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     (no --match-dir) PASSes with the sampled ids value-checked by NEITHER form (C1 / C3 bind them; nothing computes them)."""
     if not (isinstance(sr, dict) and sr.get("result") is True):
         return None, None
-    pop = sr.get("population") or {}
-    not_ev = pop.get("not_evaluable") or {}
+    pop = _table(sr, "population")
+    not_ev = _table(pop, "not_evaluable")
     if not isinstance(not_ev, dict):
         return None, None
     codes = RC.not_evaluable_codes(pop)
 
     def cls_of(k: str) -> str | None:
-        return (codes.get(k) or {}).get("class")
+        return _table(codes, k).get("class")
 
     gaps = {str(k): int(v) for k, v in not_ev.items() if int(v or 0) > 0 and cls_of(str(k)) in _POPULATION_GAP_CLASSES}
     sel = _no_evaluator_gaps(not_ev, codes)[0]
@@ -252,8 +278,8 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     if not gaps and not sel:
         return None, None
     n = sum(gaps.values())
-    cls = sorted({cls_of(k) for k in gaps})
-    tags = sorted({t for k in gaps for t in (codes.get(k) or {}).get("tags") or ()})
+    cls = sorted({_table(codes, k).get("class") for k in gaps})
+    tags = sorted({t for k in gaps for t in _table(codes, k).get("tags") or ()})
     reasons = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(gaps.items(), key=lambda kv: -kv[1]))
     missing = _form_b_complete_over_values(oc)
     # plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
@@ -264,7 +290,8 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
         reasons_p = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(plane.items(), key=lambda kv: -kv[1]))
         tail = ""
         if rest:
-            tail = (f"; the other {sum(rest.values())} VUs not evaluable by name ({', '.join(sorted({cls_of(k) for k in rest}))}) "
+            rest_cls = sorted({_table(codes, k).get("class") for k in rest})
+            tail = (f"; the other {sum(rest.values())} VUs not evaluable by name ({', '.join(rest_cls)}) "
                     + ("are covered by the complete form (B)" if missing is None else f"are not covered either: {missing}"))
         return None, (f"C2 of record not established: {n_p} plane-fed VUs {_PLANE_FED_NEITHER_FORM} -- {reasons_p}{tail}; "
                       "C1 + C3 hold on those planes, C2 needs form (A) over the planes (a row->plane mapping) or a bit-exact plane xcheck on record")
@@ -284,8 +311,8 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     if missing is not None:
         return None, (f"C2 of record not established: {n} VUs not evaluable by name ({', '.join(cls)}{'; ' + ', '.join(tags) if tags else ''}) "
                       f"have committed members the complete sampled replay did not check and {missing} -- {reasons}")
-    cbf = oc.get("compared_by_family") if isinstance(oc, dict) else None
-    return (f"C2 of record by form (B) [oracle compare complete: {oc.get('compared')} compared, 0 mismatch"
+    compared, cbf = _form_b_compared(oc)
+    return (f"C2 of record by form (B) [oracle compare complete: {compared} compared, 0 mismatch"
             f"{', instance outputs ' + str(cbf.get('instance_outputs')) if isinstance(cbf, dict) else ''}] over {n} VUs not evaluable by name "
             f"({', '.join(cls)}{'; ' + ', '.join(tags) if tags else ''}): {reasons}" + (f"; {sel_note}" if sel_note else "")), None
 
@@ -297,7 +324,7 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
     again, in about the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults).  The challenge form is True when the seed
     recomputes from the recorded challenge (sha256(challenge|root)[:8]); who issued that challenge is not checked.  A `--replay-seed` seed
     is PROVER-CHOSEN before the run -> a MECHANISM run, not a C2 of record: False.  A record with no seed source is None (not graded here)."""
-    smp = sr.get("sample") if isinstance(sr.get("sample"), dict) else {}
+    smp = _d(sr.get("sample"))
     src = str(sr.get("seed_source") if sr.get("seed_source") is not None else smp.get("seed_source"))
     seed = sr.get("seed") if sr.get("seed") is not None else smp.get("seed")
     form = RC.seed_form(sr)
@@ -347,15 +374,15 @@ def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | N
     unevaluated count with no strata / reasons) never qualifies: that is what O1 forbids."""
     if not (isinstance(sr, dict) and sr.get("result") is None and str(sr.get("grade") or "") == "partial"):
         return None, None
-    samp = sr.get("sample") or {}
+    samp = _table(sr, "sample")
     if int(samp.get("mismatch_n") or sr.get("mismatch_n") or 0) != 0 or int(samp.get("evaluated") or 0) <= 0:
         return None, None
-    unev = sr.get("strata_unevaluated") or []
+    unev = _listed(sr, "strata_unevaluated")
     if not unev or int(samp.get("not_evaluated_n") or 0) <= 0:
         return None, None
     # decide PER STRATUM from the uncapped `unevaluated_strata` (never from the capped not_evaluated[:12] sample): every
     # stratum in strata_unevaluated must carry an entry with spec, op_path and a reason; a stratum without one is an unnamed gap -> None
-    by = {str(u.get("stratum")): u for u in (sr.get("unevaluated_strata") or []) if isinstance(u, dict)}
+    by = {str(u.get("stratum")): u for u in _listed(sr, "unevaluated_strata") if isinstance(u, dict)}
     if any(k not in by or not (by[k].get("spec") and by[k].get("op_path") and by[k].get("why")) for k in unev):
         return None, None
     # only BY-NAME classes qualify (no evaluator for the family / state-linked / plane-fed / interior-composed v2); an
@@ -377,11 +404,11 @@ def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | N
                       "or a bit-exact plane xcheck on record")
     if _form_b_complete_over_values(oc) is not None:
         return None, None
-    cbf = oc.get("compared_by_family")
+    compared, cbf = _form_b_compared(oc)
     fams = sorted({str(by[k].get("spec") or "").split("{", 1)[0] for k in unev})
     whys = sorted({str(by[k].get("why") or "").split(" [", 1)[0][:90] for k in unev})[:3]
     cls = sorted({x for c in classes.values() for x in c})
-    return (f"C2 of record by form (B) [oracle compare complete: {oc.get('compared')} compared, 0 mismatch"
+    return (f"C2 of record by form (B) [oracle compare complete: {compared} compared, 0 mismatch"
             f"{', instance outputs ' + str(cbf.get('instance_outputs')) if isinstance(cbf, dict) else ''}]; sampled replay partial "
             f"[{samp.get('evaluated')} evaluated, 0 mismatch, {len(unev)} strata named not evaluated ({', '.join(cls)}): {', '.join(fams)} -- "
             f"{' | '.join(whys)}]"), None
@@ -408,11 +435,11 @@ def _batch_attribution_note(n_req: int, oc) -> str | None:
     if not isinstance(oc, dict):
         why = "form (B) not armed on this attempt (no --match-dir oracle compare: no Match record)"
     else:
-        att = oc.get("attribution") if isinstance(oc.get("attribution"), dict) else {}
+        att = _d(oc.get("attribution"))
         if att.get("complete") is True:
             return None
         why = (f"form (B) request attribution not complete (pairs {att.get('pairs')}, unverified {att.get('unverified_n')}, "
-               f"ambiguous steps {len(att.get('ambiguous_steps') or [])})")
+               f"ambiguous steps {len(_listed(att, 'ambiguous_steps'))})")
     return (f"B={n_req}: per-(step,request) attribution not verified on this record -- {why}; the sampled replay + linkage cannot see a "
             "whole-step equal-shape request swap in general -- a gap by name, not a verified attribution")
 
@@ -427,8 +454,8 @@ def _replay_scope(sr: dict | None) -> dict[str, Any]:
     qt, qc = _d(pop.get("query_total")), _query_checks(sr)
     return {"result": sr.get("result"), "grade": sr.get("grade"), "sample_size": smp.get("evaluated"), "picked": smp.get("picked"), "equal": smp.get("equal"),
             "mismatch_n": smp.get("mismatch_n", sr.get("mismatch_n")), "not_evaluated_n": smp.get("not_evaluated_n"), "per_stratum": smp.get("per_stratum"),
-            "positions": positions, "requests": len(picks) if picks else (len(pop.get("requests") or []) if isinstance(pop.get("requests"), (list, dict)) else None),
-            "strata": len(sr.get("strata") or []) or sr.get("strata_n") or pop.get("strata_n"), "strata_unevaluated": len(sr.get("strata_unevaluated") or []),
+            "positions": positions, "requests": len(picks) if picks else (len(_listed(pop, "requests")) if isinstance(pop.get("requests"), (list, dict)) else None),
+            "strata": len(_listed(sr, "strata")) or sr.get("strata_n") or pop.get("strata_n"), "strata_unevaluated": len(_listed(sr, "strata_unevaluated")),
             "population_vus": pop.get("vus"), "population_by_family": pop.get("by_family"), "not_evaluable": pop.get("not_evaluable") or None,
             "query_total": qt.get("identities") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": qc.ok if qc is not None else None}
 
@@ -439,7 +466,7 @@ def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:
     smp = _d(sr.get("sample"))
     out = {"sample_seed": sr.get("seed") if sr.get("seed") is not None else smp.get("seed"), "seed_source": sr.get("seed_source") if sr.get("seed_source") is not None else smp.get("seed_source"),
            "artifact": sr.get("artifact")}
-    for k, v in (ctx.get("file_digests") or {}).items():
+    for k, v in _table(ctx, "file_digests").items():
         if "sampled_replay" in k:
             out[k] = v
     return {k: v for k, v in out.items() if v is not None}
@@ -491,7 +518,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     if isinstance(lk, dict):
         lk_scope["requests"] = len(_d(lk.get("horizon"))) or None
         lk_scope["prompt_linked_n"] = sum(1 for v in _d(lk.get("prompt_linked")).values() if v) or None
-    wp_scope = {k: (len(_d(wp).get(k)) if isinstance(_d(wp).get(k), (list, dict)) else _d(wp).get(k)) for k in ("compared", "mismatched", "missing", "unresolved", "unpinned", "shards", "all_shards_pinned", "shards_ok")} if isinstance(wp, dict) else {}
+    wp_scope = {k: _count_of(_d(wp).get(k)) for k in ("compared", "mismatched", "missing", "unresolved", "unpinned", "shards", "all_shards_pinned", "shards_ok")} if isinstance(wp, dict) else {}
     wp_inputs = {"weights_program_digest": _d(wp).get("program_digest"), "root_of_record": _d(wp).get("root_of_record"), "committed_weights_root": _d(wp).get("committed_weights_root"),
                  "checkpoint_entry": (str(_d(wp).get("checkpoint_entry"))[:120] if _d(wp).get("checkpoint_entry") else None)} if isinstance(wp, dict) else {}
     wp_inputs = {k: v for k, v in wp_inputs.items() if v is not None}
@@ -508,7 +535,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             differences=[{"name": "boundaries_unlinked", "n": lk.get("unlinked_n"), "first": _first(lk.get("unlinked"))}])
     if isinstance(wp, dict) and wp.get("result") is False:
         put(C_WP, FAIL, reason=f"weights of record: {wp.get('why') or 'served weights differ from the checkpoint of record'}", scope=wp_scope, inputs=wp_inputs, notes=wp_notes,
-            differences=[{"name": "weights_differ", "mismatched": (wp.get("mismatched") or [])[:8], "missing": (wp.get("missing") or [])[:8], "unresolved": (wp.get("unresolved") or [])[:8]}])
+            differences=[{"name": "weights_differ", "mismatched": _listed(wp, "mismatched")[:8], "missing": _listed(wp, "missing")[:8], "unresolved": _listed(wp, "unresolved")[:8]}])
 
     if row_proc:
         _oc = oc
@@ -584,7 +611,7 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             put(C_ATT, NOT_RUN, scope={"requests": n_req})
         scope_note, scope_fail = _query_population_scope(sr)
         if scope_fail is not None:
-            acct = _scope_fail_account_missing(sr)
+            acct = isinstance(sr, dict) and _scope_fail_account_missing(sr)
             put(C_SCOPE, INSUFFICIENT if acct else FAIL, reason=scope_fail, scope={k: sr_scope.get(k) for k in ("query_total", "query_id", "query_checks_ok")},
                 differences=[{"name": "account_missing" if acct else "population_not_reconciled", "why": scope_fail[:400]}])
         elif scope_note is not None:
@@ -623,7 +650,7 @@ def rule_route_pin(commit: dict, ctx: dict) -> CheckResult:
     if rp.get("ok") is not False:
         return _mk(*C_ROUTE, commit, ctx, outcome=PASS, scope=scope)
     return _mk(*C_ROUTE, commit, ctx, outcome=FAIL, reason=rp.get("why") or "cuBLAS route pin: served off the pin's scan's conditions", scope=scope,
-               differences=[{"name": "served_off_route_pin", "departures": rp.get("departures") or []}])
+               differences=[{"name": "served_off_route_pin", "departures": _listed(rp, "departures")}])
 
 
 def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
@@ -636,15 +663,15 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
                               (cov.executed_prefix_of_record, cov.match_account_link, cov.commit_account_link, cov.rows_past_the_stop))
     # no Match record beside the Commit (a config run): the Commit's token record is the account; with both, both hold where it places a prefix
     by_commit = clink is not None and link is not None and not link.match_dir
-    with_commit = clink is not None and (by_commit or clink.required)
+    commit_link = clink if clink is not None and (by_commit or clink.required) else None
     sr = _replay_of(commit) or {}
     facts = _d(_d(sr.get("executed_prefix_of_record")).get("facts_of_record"))
     C_EPR = ("execution_extent/executed_prefix_of_record", "executed prefix of record",
              "Each request's executed prefix is the cap on a length stop, or served + the Program's declared LAG on an EOS stop whose last served token is a declared EOS id; never defaulted.",
              ["binding.coverage.executed_prefix_of_record", "sampled_replay.executed_prefix_of_record", "executed_prefix_facts", "coverage.executed_prefix_of_record"])
     C_LINK = ("execution_extent/match_account_link", "executed-prefix conditions (a), (b)",
-              "The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt -- or, with no Match stage, every served "
-              "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested on every leg.",
+              ("The Commit's served lengths equal the Match record's (tokens.json) and GM-01's G6 account of the same attempt -- or, with no Match stage, every served "
+               "token of the Commit's token record opens from the run root to the committed sampled id -- and the LAG is attested on every leg."),
               ["binding.coverage.match_account_link", "binding.coverage.commit_account_link", "executed_prefix_facts.linked", "executed_prefix_facts.lag_attested",
                "account_missing"])
     C_PAST = ("execution_extent/rows_past_the_stop", "executed-prefix condition (c)",
@@ -657,21 +684,21 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         inputs_extra["tokens_json_sha256"] = tj.sha256
     if g6 is not None and g6.sha256:
         inputs_extra["global_match_sha256"] = g6.sha256
-    if with_commit and clink.record_sha256:
-        inputs_extra["commit_tokens_sha256"] = clink.record_sha256
+    if commit_link is not None and commit_link.record_sha256:
+        inputs_extra["commit_tokens_sha256"] = commit_link.record_sha256
     if epr is None:
         out.append(_mk(*C_EPR, commit, ctx, outcome=NOT_RUN))
     else:
-        scope = {"requests": len(epr.requests), "lag": epr.lag, "eos_of_record": None if epr.eos_of_record is None else list(epr.eos_of_record),
-                 "served_known": epr.served_known, "any_eos_stop": epr.any_eos_stop,
-                 "lengths": {r: [v.served_output_len, v.executed_prefix_len, v.cap] for r, v in epr.requests.items()}}
+        scope: dict[str, Any] = {"requests": len(epr.requests), "lag": epr.lag, "eos_of_record": None if epr.eos_of_record is None else list(epr.eos_of_record),
+                                 "served_known": epr.served_known, "any_eos_stop": epr.any_eos_stop,
+                                 "lengths": {r: [v.served_output_len, v.executed_prefix_len, v.cap] for r, v in epr.requests.items()}}
         if epr.ok:
             out.append(_mk(*C_EPR, commit, ctx, outcome=PASS, scope=scope))
         else:
             probs = list(epr.problems)
             out.append(_mk(*C_EPR, commit, ctx, outcome=FAIL, scope=scope, differences=[{"name": "executed_prefix_problems", "n": len(probs), "first": probs[:4]}],
                            reason=f"executed prefix of record: {probs[0] if probs else 'not ok'}"))
-    account_missing = sorted({leg for f in facts.values() if isinstance(f, dict) for leg in (f.get("account_missing") or [])})
+    account_missing = sorted({leg for f in facts.values() if isinstance(f, dict) for leg in _listed(f, "account_missing")})
     if not account_missing and link is not None and not by_commit:
         account_missing = [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     # v1 gated the link THROUGH the replay's not-executed class: it faults (-> population_scope FAIL) only when applied, i.e. when a request's
@@ -685,11 +712,11 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
                  "global_match_verdict": None if g6 is None else g6.verdict, "g6_status": None if g6 is None else g6.g6_status,
                  "requests_linked": (len(g6.requests_linked) if g6 is not None and g6.requests_linked else None),
                  "facts_linked": {r: f.get("linked") for r, f in facts.items() if isinstance(f, dict)} or None, "account_missing": account_missing or None}
-        if with_commit:
-            scope |= {"account": "commit token record" if by_commit else "Match record + commit token record", "commit_tokens": clink.record_path,
-                      "commit_required": clink.required, "commit_lag_attested": clink.lag_attested}
-        probs = ([] if by_commit else list(link.problems)) + (list(clink.problems) if with_commit else [])
-        linked = (by_commit or link.ok) and (not with_commit or clink.ok is True)
+        if commit_link is not None:
+            scope |= {"account": "commit token record" if by_commit else "Match record + commit token record", "commit_tokens": commit_link.record_path,
+                      "commit_required": commit_link.required, "commit_lag_attested": commit_link.lag_attested}
+        probs = ([] if by_commit else list(link.problems)) + (list(commit_link.problems) if commit_link is not None else [])
+        linked = (by_commit or link.ok) and (commit_link is None or commit_link.ok is True)
         if account_missing and gating:
             out.append(_mk(*C_LINK, commit, ctx, outcome=INSUFFICIENT, scope=scope, inputs=inputs_extra,
                            differences=[{"name": "account_missing", "legs": account_missing}],

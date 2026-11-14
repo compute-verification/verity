@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import RowEngine, workload_file
+from verity_vllm.config import RowEngine, row_execution, workload_file
 
 # prefill-chunk / token-step attribution (torch-free, unit-tested)
 from verity_vllm.engine import chunks as _chunks
@@ -172,9 +172,7 @@ def execution_of_workload(workload: dict | None) -> str | None:
         if isinstance(v, str) and v:
             return v
     rid = sw.get("row_id") or workload.get("row_id")
-    if isinstance(rid, str) and "__" in rid:
-        return rid.rsplit("__", 1)[1]
-    return None
+    return row_execution(rid) if isinstance(rid, str) else None
 
 
 def sampling_params(req: dict, sampling: dict) -> Any:

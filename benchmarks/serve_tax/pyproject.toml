@@ -12,9 +12,26 @@ untraced = ["tests/test_serve_tax.py"]
 # `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
-# serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's
+# serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's; the client's shim to the
+# network certifier (cell_shim, tests/test_cell_shim.py) is run against the certifier itself on a
+# virtual clock, whose package imports the circuit language, the commitments and SPOT's verifier; the arm
+# behind the certifier names the certifier's program by its file in this tree, which its test (tests/test_certified.py,
+# both sides on stand-ins for the processes they start) checks is there
 inputs = [
+    "verity/errors.py",
+    "verity/circuits",
+    "verity/claims",
+    "verity/commitments",
+    "verity/hardware",
+    # the record entry (`Record`): SPOT's challenger imports it, and the certifier's `active` imports SPOT's verifier
+    "verity/channel.py",
+    "verity/protocols/__init__.py",
+    "verity/protocols/accounting/__init__.py",
+    "verity/protocols/accounting/certifier",
+    "verity/protocols/proofs/__init__.py",
+    "verity/protocols/proofs/spot",
     "benchmarks/dsa_topk/dsa_topk.py",
+    "benchmarks/network_traces/warden_serve.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/nsys.py",
     "benchmarks/harness/verity_bench/overhead.py",

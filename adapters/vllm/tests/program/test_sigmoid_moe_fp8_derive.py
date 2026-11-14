@@ -54,7 +54,6 @@ MMAV2_DOT = "HopperE4m3MmaV2Dot32_v1"
 #: GLM-5.3's tuned H200 tile from M = 8 (BLOCK_SIZE_M 16 under SWAP_AB) and its block-FP8 numeric constexprs
 TUNED = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128, "GROUP_SIZE_M": 32}
 E, M, TOPK, H, INTER, G, RSF = 8, 2, 2, 128, 128, 128, 2.5
-I = INTER  # the name `tests/query/test_glm53_moe_planes.py` reads
 NV = M * TOPK
 
 

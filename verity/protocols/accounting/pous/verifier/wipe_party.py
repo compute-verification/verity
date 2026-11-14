@@ -6,16 +6,16 @@ labels` and ends it with `D`, which the prover acknowledges with `A` once it hol
 includes the fill still in flight. Then it sends each batch as `C ‖ u32 count ‖ u64 index …` (reading the send time),
 and the prover answers with the batch's labels, 64 bytes an index (the challenger reads the receipt time); `E` ends the
 session, after its last batch or a late or wrong one. The challenger samples the labels' secret, the session id and its coins on its own host, claims the
-id in its own session log, and signs under its own key with the egress its host was given (`--egress-bits`, the network
-certifier's count over the session; `UNCOUNTED`, which bounds nothing, when it has none): never a count the prover
-sends. It times the number of reads its own command names (`--reads`, `READS` by default), which the commitment
+id in its own session log, and signs under its own key. It signs no egress count and is given none: the wipe's check
+takes the count as evidence beside the signed session (`wipe_period`). It times the number of reads its own command
+names (`--reads`, `READS` by default), which the commitment
 publishes and the certificate is computed at: a request that names `k` is refused, so the prover never chooses it. A
 prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
 "host", "public_key", "reads", "signed", "window"}`, `signed` null when unsigned, and `window` the session's `t0` (the
 prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
 interval a network certifier counts the session's egress over.
 
-`python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N]
+`python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K]
 [--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
@@ -48,11 +48,15 @@ from . import streamed_wipe as sw
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
 logger = logging.getLogger(__name__)
 PREMISE = "trusted-host"
+AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+                                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+"""Each auditor host's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
+`placement` says `trusted-host` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
+which session the verifier accepts, never this."""
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
-UNCOUNTED = sw.EGRESS_MAX_UNITS * sw.EGRESS_UNIT_BITS
-"""The egress a session signs when no network certifier counted it: saturated, so it bounds nothing."""
 READS = 2152
 """The timed spot reads a challenger runs when its command doesn't name them (`--reads`)."""
 REQUEST_KEYS = {"labels", "limit_ns", "node", "tiers"}
@@ -74,13 +78,14 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
     return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tuple((t, b) for t, b in request["tiers"]))
 
 
-def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
-          reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
+def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
+          reads: int = READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = CHUNK,
           fill: Callable[[bytes, int], Any] | None = None) -> sw.WipeMemoryChallenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
-    `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` with
-    `egress_bits` once it ends. A prover that closes first leaves it unsigned."""
+    `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
+    `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
+    leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
     c = sw.WipeMemoryChallenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
                                 params_of(request, reads), signer, log=log, clock=clock)
     try:
@@ -104,7 +109,7 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     except (ConnectionError, BrokenPipeError) as e:
         logger.warning("the prover left before the wipe ended, so its session stays unsigned: %s", e)
         return c
-    c.close(egress_bits)
+    c.close()
     return c
 
 
@@ -163,11 +168,18 @@ def commitment_of(j: Mapping[str, Any]) -> sw.WipeCommitment:
 
 
 def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
-    """`SignedWipe.to_json()`'s inverse, on the challenger's own report."""
+    """`SignedWipe.to_json()`'s inverse, on the challenger's own report. A session of another format (`sw.PROTOCOL`),
+    one whose header names another clock than the raw one (`sw.CLOCK`), or one with a start mark that is not one
+    (`sw.mark_of`) is refused."""
+    if j["commitment"].get("protocol") != sw.PROTOCOL:
+        raise ValueError(f"a signed wipe is {sw.PROTOCOL}, not {j['commitment'].get('protocol')!r}")
+    if j["commitment"].get("clock") != sw.CLOCK:
+        raise ValueError(f"a signed wipe's times are on {sw.CLOCK}, not {j['commitment'].get('clock')!r}")
     batches = tuple(sw.BatchRecord(r["b"], r["first"], r["count"], r["send_ns"], r["receipt_ns"], r["wrong"],
                                    bytes.fromhex(r["digest"])) for r in j["batches"])
-    return sw.SignedWipe(commitment_of(j["commitment"]), j["ended"], j["fill_start_ns"], j["fill_end_ns"], batches,
-                         j["egress_bits"], j["scheme"], bytes.fromhex(j["public_key"]), bytes.fromhex(j["signature"]))
+    return sw.SignedWipe(commitment_of(j["commitment"]), j["ended"], sw.mark_of(j["start_mark"]), j["fill_start_ns"],
+                         j["fill_end_ns"], batches, j["scheme"], bytes.fromhex(j["public_key"]),
+                         bytes.fromhex(j["signature"]))
 
 
 def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
@@ -191,26 +203,34 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 
 
-def placement(node: str, host: str, *, verifier: str | None = None, store: Mapping[str, Any] | None = None,
-              simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
+def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
+              store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control, which is never the developer's node. `kind` names the placement: `own-host`,
-    `simulated` (the challenger a process of its own on the developer's node, standing in for its own host, the premise
-    assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
+    machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
+    session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
+    `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
+    `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
     `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
     declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
-    held = host != node
-    if simulated and held:
+    if simulated and host != node:
         raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
-    kind = "own-host" if held else "simulated" if simulated else "prover-node"
+    kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
+    names = {"own-host": f"the memory challenger ran on {host}, not the developer's {node}",
+             "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
+                          "in for a host the developer doesn't control",
+             "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
+    premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
+               if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
     out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: {"own-host": f"holds: the memory challenger ran on {host}, not the developer's {node}",
-                     "simulated": f"simulated: the memory challenger ran as a process of its own on the developer's node "
-                                  f"{node}, its key in its own scratch, standing in for a host the developer doesn't control",
-                     "prover-node": f"unmet: the memory challenger ran on the developer's node {node}"}[kind],
-           "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
+           PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
     return out if store is None else out | {"prover_store": dict(store)}
+
+
+def holds(where: Mapping[str, Any]) -> bool:
+    """Whether a placement's `trusted-host` holds: the session signed under the challenger host's pinned key."""
+    return where[PREMISE].startswith("holds: ")
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
@@ -242,8 +262,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     ap.add_argument("--reads", type=int, default=READS,
                     help=f"the timed spot reads, which the certificate is computed at (default {READS})")
-    ap.add_argument("--egress-bits", type=int, default=UNCOUNTED,
-                    help="the network certifier's egress count over the session, in bits (default: uncounted)")
     ap.add_argument("--streamer", help="stream the fill natively (`wipe_stream`): a built wipe_stream, or `build` to "
                     "compile it into --device; gated before the side listens")
     ap.add_argument("--threads", type=int, help="the streamer's threads (default: every CPU of this host)")
@@ -272,14 +290,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 extra["fill"] = streamer.stream(key, n, conn.fileno())
 
             with conn.makefile("rwb") as f:
-                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=a.egress_bits,
-                          reads=a.reads, fill=None if streamer is None else native)
+                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), reads=a.reads,
+                          fill=None if streamer is None else native)
             t1 = time.time_ns()
     print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "UNCOUNTED", "answer", "command", "commitment_of", "link",
+__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "answer", "command", "commitment_of", "link",
            "main", "params_of", "placement", "report", "request_of", "serve", "session", "side_of", "signed_of", "utc"]
 
 if __name__ == "__main__":

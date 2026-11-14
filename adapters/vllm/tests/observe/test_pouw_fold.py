@@ -212,9 +212,10 @@ def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_pat
     `--protocols-config` names another file for one run (a negative control's settings)."""
     import json
 
+    from verity_vllm.config import workload_file
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import cli
-    with open("workloads/workload_qwen05_32x16_1req.json") as f:
+    with open(workload_file("workloads/workload_qwen05_32x16_1req.json")) as f:
         doc = json.load(f)
     doc["protocols_config"] = {"pouw": {"draws": 8}}
     (tmp_path / "wl.json").write_text(json.dumps(doc))
