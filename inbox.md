@@ -51,3 +51,37 @@ training to every worker and reader, Sat 14 Nov 8:06 AM PST. No reply needed.
 - If a picker offers neither model, do not launch: do the work yourself or send it to me.
 - A plan, a design or a judgment no check catches comes to me, in your next message, with what you recommend.
 
+[2026-11-14T16:11Z] a490ee6a17d4
+
+READCIRC to training and WALKER, TRN-162 read of #9730's merged head, Sat 14 Nov 8:12 AM PST (16:12Z, from `date`). Note: training/20261114T1612Z-report-trn162-readcirc-c5.
+
+READY 203a62ad7e16bc15f50043db52af127bf4f20ddb
+
+The delta is one merge, 203a62ad, of A's 91d8c6b7748 into 9155c1dc. It adds nothing of its own, A's two must-fixes are cured here, and C's own checks hold.
+
+## MUST FIX
+
+None.
+
+## SHOULD FIX
+
+- A's S1 and S2 (the body's line 52 in A, and the `anti` test's docstring) come with A's next head; nothing of C's own.
+
+## NOTE
+
+- **The merge.** RAN:
+  - `git show --remerge-diff 203a62ad`: 0 lines.
+  - C's own diff, `git diff 91d8c6b7 203a62ad` against `git diff 9767b09f 9155c1dc`: the same 4 files, 5,654 in and 48 out, every added and removed line identical.
+  - `work.py` is unchanged between 9155c1dc and 203a62ad.
+- **My probes at 203a62ad.** RAN: `xzero` N 0, `anti` N 0, `one` 32, `two` 16, `word` 16, `all` 0; `eq` and `plus1` refused; `lr` not charged.
+- **M-C1 and M-C2.** RAN at 203a62ad: M-C1 (`_nth(vals, 0)`) fails `[first-masked]` alone, and M-C2 (the `uniform(...) is _MIXED` guard dropped) fails `[computed-mask]` alone. Each gives 1 failed and 135 passed.
+- **No reading rises, and no refusal is lost.** RAN: every `WK.read` in `test_work.py`, `test_value_reading.py` and `test_program_reading.py`, logged per test at 9155c1dc and at 203a62ad (177/181 and 36/36). The only difference is A's two new tests, at N 0.
+- **The quick suites.** RAN at 203a62ad: `suites.py circuit_properties benchmarks/training_slowdown --quick --changed 3d62f5507b01 --fresh` gave `2 suites: 2 passed`, circuit-properties 153 and training_slowdown 686, as the body says.
+- **The body.** READ: it cites the same 33 `work.py` lines, which at 9155c1dc I matched to their claims, and `work.py` hasn't changed. Its head and merge account, its "RAN at this head" figures and its 5,654/48 count match what I ran.
+
+## For the lead to read
+
+- Both heads are READY: A at 91d8c6b7748d34db4a0935b37fc6474e48c95bf0 and C at 203a62ad7e16bc15f50043db52af127bf4f20ddb.
+- WALKER's marks wait on the quick runs it names (6673 at A, 9b6e at C), which I haven't read.
+- Events addressed to @training that I saw, and acted on none of: WALKER's 8:00 AM status message. Launched: nothing. Posted: nothing.
+
