@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.FormDraw
+public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Flock.SpotFlock.ParamsWf
+public import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
 # The member each statement names, from the stage coins
@@ -11,8 +14,8 @@ no name is read off the log. What the two plays share is the units: the model's 
 each statement's public file's header to the template's part of the second stage's population at the stage coins
 (`Spot.SecondStage.populationOk`), and the form's check holds every member's public file to exactly the member's
 units, in order (`Spot.OneStageZk.Member.population`). Here `MemberAtFixed` is a theorem where the two plays'
-statements pass the model's check at one pair of stage coins (`StageCoinsOne`) and no two members of the parameters
-have the same units (`MembersApart`).
+statements pass the model's check at one pair of stage coins (`StageCoinsOne`): no two members of the parameters
+have the same units (`MembersApart`, a theorem at any case).
 
 * **The model's check holds the header to the part** (`SpotFlock.population_of_stmtOk`): where round `stage + 1`'s
   check passes, template `t`'s statement decodes, its public file has a header, and the header's `units.indices` are
@@ -28,10 +31,13 @@ have the same units (`MembersApart`).
   `units.indices` read the same numbers.
 * **`MemberAtFixed`** (`memberAtFixed_of_coins`), from the four, `StageCoinsOne` and `MembersApart`: the two plays'
   members at template `t` have the units of one part, so they are one member.
+* **`MembersApart`** (`membersApart`), with no hypothesis: the parameters' reading (`Spot.OneStageZk.membersOf`)
+  refuses a member with no range, a range with no unit and a range that starts before another member's ends, so two
+  members it returns have no unit in common and a member has one (`FormMember.membersOf_apart`). The reader is
+  walked join point by join point (`SpotFlock.DoWalk`).
 
-**Not established here**: `MembersApart`, a hypothesis. The parameters' reading refuses a member with no unit and a
-unit in two members' ranges (`Spot.OneStageZk.membersOf`); that two members it returns with the same units are one
-member is not shown.
+**Not established here**: `StageCoinsOne`, a hypothesis, which `stageCoinsOne_of_play` (`FormDraw.lean`) gives from
+`PlayCoinsOne`.
 -/
 
 @[expose] public section
@@ -237,5 +243,254 @@ theorem memberAtFixed_of_coins {A : Live₂} {C : CaseOf} {S : SessionReading} {
   rw [hm, hm']
   exact congrArg some
     (hapart o k p e hk hf m (memberAt_mem hm) m' (memberAt_mem hm') (Array.toList_inj.1 (hi.trans hi'.symm)))
+
+/-! ## No two members of the parameters have the same units -/
+
+namespace FormMember
+
+open Lean (Json)
+
+/-- Two ranges `[lo, hi)` with no unit in both: one ends at or before the other's start. -/
+def Apart (x y : ℕ × ℕ) : Prop := x.2 ≤ y.1 ∨ y.2 ≤ x.1
+
+/-- Two different members of a list pairwise in a symmetric relation are in it. -/
+theorem pairwise_ne {α : Type} {R : α → α → Prop} (hs : ∀ a b, R a b → R b a) :
+    ∀ {l : List α}, l.Pairwise R → ∀ a ∈ l, ∀ b ∈ l, a ≠ b → R a b
+  | [], _, a, ha, _, _, _ => by cases ha
+  | x :: l, h, a, ha, b, hb, hne => by
+    rw [List.pairwise_cons] at h
+    rcases List.mem_cons.1 ha with rfl | ha' <;> rcases List.mem_cons.1 hb with rfl | hb'
+    · exact absurd rfl hne
+    · exact h.1 b hb'
+    · exact hs _ _ (h.1 a ha')
+    · exact pairwise_ne hs h.2 a ha' b hb' hne
+
+/-- The members' ranges, appended member by member, are each member's ranges in the members' order. -/
+theorem units_toList (l : List Spot.OneStageZk.Member) (init : Array (ℕ × ℕ)) :
+    (l.foldl (fun acc m => acc ++ m.units) init).toList = init.toList ++ l.flatMap (·.units.toList) := by
+  induction l generalizing init with
+  | nil => simp
+  | cons m l ih => rw [List.foldl_cons, ih]; simp [List.flatMap_cons, List.append_assoc]
+
+/-- Each of ascending ranges holds a unit. -/
+theorem ascending_lt : ∀ (at_ : ℕ) (rs : List (ℕ × ℕ)), Spot.OneStageZk.ascending at_ rs = true →
+    ∀ r ∈ rs, r.1 < r.2
+  | _, [], _, r, hr => by cases hr
+  | at_, (lo, hi) :: rs, h, r, hr => by
+    simp only [Spot.OneStageZk.ascending, Bool.and_eq_true, decide_eq_true_eq] at h
+    rcases List.mem_cons.1 hr with rfl | hr'
+    · exact h.1.2
+    · exact ascending_lt hi rs h.2 r hr'
+
+/-- **Ranges that each hold a unit and each start at or after the end of the one before are pairwise apart.** -/
+theorem apart_of_adjacent {rs : Array (ℕ × ℕ)} (hlt : ∀ r ∈ rs, r.1 < r.2)
+    (hadj : ∀ i, 1 ≤ i → i < rs.size → rs[i - 1]!.2 ≤ rs[i]!.1) : rs.toList.Pairwise Apart := by
+  rw [List.pairwise_iff_getElem]
+  intro i j hi hj hij
+  have hj' : j < rs.size := by simpa using hj
+  have key : ∀ d, ∀ (h : i + 1 + d < rs.size), rs[i].2 ≤ rs[i + 1 + d].1 := by
+    intro d
+    induction d with
+    | zero =>
+      intro h
+      have h1 := hadj (i + 1) (by omega) h
+      rw [getElem!_pos rs (i + 1) h, getElem!_pos rs (i + 1 - 1) (by omega)] at h1
+      exact h1
+    | succ d ih =>
+      intro h
+      have h1 := ih (by omega)
+      have h2 := hadj (i + 1 + (d + 1)) (by omega) h
+      rw [getElem!_pos rs (i + 1 + (d + 1)) h, getElem!_pos rs (i + 1 + (d + 1) - 1) (by omega)] at h2
+      have h3 := hlt rs[i + 1 + d] (Array.getElem_mem _)
+      have e : rs[i + 1 + (d + 1) - 1]'(by omega) = rs[i + 1 + d]'(by omega) := by congr 1
+      rw [e] at h2
+      omega
+  left
+  have h := key (j - (i + 1)) (by omega)
+  have e : rs[i + 1 + (j - (i + 1))]'(by omega) = rs[j] := by congr 1; omega
+  rw [e] at h
+  simpa using h
+
+/-- **A member's units are the units of its ranges.** -/
+theorem mem_indices {m : Spot.OneStageZk.Member} {u : ℕ} :
+    u ∈ m.indices ↔ ∃ r ∈ m.units, r.1 ≤ u ∧ u < r.2 := by
+  unfold Spot.OneStageZk.Member.indices
+  simp only [Array.mem_flatMap, Array.mem_map, Array.mem_range]
+  constructor
+  · rintro ⟨r, hr, i, hi, rfl⟩
+    exact ⟨r, hr, by omega, by omega⟩
+  · rintro ⟨r, hr, h1, h2⟩
+    exact ⟨r, hr, u - r.1, by omega, by omega⟩
+
+theorem list_mapM_some_length {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = some r → r.length = l.length
+  | [], r, h => by
+    simp at h
+    subst h
+    rfl
+  | a :: l, r, h => by
+    rw [List.mapM_cons] at h
+    cases hfa : f a with
+    | none => simp [hfa] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [hfa, hl] at h
+      | some bs =>
+        simp [hfa, hl] at h
+        subst h
+        simp [list_mapM_some_length hl]
+
+/-- An array mapped in `Option` keeps its size. -/
+theorem array_mapM_some_size {α β : Type} {f : α → Option β} {xs : Array α} {r : Array β}
+    (h : xs.mapM f = some r) : r.size = xs.size := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hl : xs.toList.mapM f with
+  | none => simp [hl] at h
+  | some l =>
+    simp [hl] at h
+    subst h
+    simpa using list_mapM_some_length hl
+
+/-- The ranges `Spot.Draw.ranges?` reads are not empty. -/
+theorem ranges_size {j : Json} {rs : Array (Int × Int)} (h : Spot.Draw.ranges? j = some rs) : 0 < rs.size := by
+  unfold Spot.Draw.ranges? at h
+  split at h
+  · split at h
+    · cases h
+    · rename_i a hne
+      have := array_mapM_some_size h
+      have : 0 < a.size := by
+        rcases Nat.eq_zero_or_pos a.size with h0 | h0
+        · exact absurd (by simpa using h0) hne
+        · exact h0
+      omega
+  · cases h
+
+/-- **A member `membersOf` returns has a range, and each of its ranges holds a unit**: its units read as a nonempty
+list of ranges (`Spot.Draw.ranges?`), ascending (`Spot.OneStageZk.ascending`). -/
+theorem membersOf_units {shared : Spot.OneStageZk.Own} {j : Json} {ms : Array Spot.OneStageZk.Member}
+    (h : Spot.OneStageZk.membersOf shared j = .ok ms) :
+    ∀ m ∈ ms, 0 < m.units.size ∧ ∀ r ∈ m.units, r.1 < r.2 := by
+  unfold Spot.OneStageZk.membersOf at h
+  do_walk h to ms
+  all_goals
+    cases h
+    intro m hm
+    obtain ⟨⟨name, mj⟩, hx, hf⟩ := SpotFlock.ParamsWf.array_mapM_mem (by assumption) m hm
+    dsimp -zeta only at hf
+    jp_step hf to m with (fun _ => True) by trivial
+    have h' := Properties.Spot.SecurityProofs.bind_eq_ok.1 hf
+    clear hf
+    obtain ⟨_, _, hf⟩ := h'
+    have h' := Properties.Spot.SecurityProofs.bind_eq_ok.1 hf
+    clear hf
+    obtain ⟨_, _, hf⟩ := h'
+    split at hf
+    · rename_i units hu
+      jp_step hf to m with (fun _ => Spot.OneStageZk.ascending 0 units.toList = true) by
+        first
+          | (rename_i hasc; simp only [Bool.not_eq_true', Bool.not_eq_false] at hasc; exact hasc)
+          | (rename_i hthrow; cases hthrow)
+      have hasc : Spot.OneStageZk.ascending 0 units.toList = true := by assumption
+      do_walk hf to m
+      all_goals
+        cases hf
+        obtain ⟨rs, hrs, hmap⟩ := Option.bind_eq_some_iff.1 hu
+        refine ⟨?_, fun r hr => ascending_lt 0 _ hasc r (Array.mem_toList_iff.2 hr)⟩
+        have h1 := ranges_size hrs
+        have h2 := array_mapM_some_size hmap
+        show 0 < units.size
+        omega
+    · cases hf
+
+/-- **No two members `membersOf` returns have the same units**: two with the same units, each range's in order
+(`Spot.OneStageZk.Member.indices`), are one member. Each member has a range and each range holds a unit
+(`membersOf_units`). The reading sorts every member's ranges by their starts and refuses one that starts before
+the one before it ends, so the sorted ranges are pairwise apart (`apart_of_adjacent`), and so are the members'
+ranges in the members' order, a permutation of them (`FlockSoundness.Audit.StrataExec.qsort_perm`): two different
+members have no unit in common, and a member has one. -/
+theorem membersOf_apart {shared : Spot.OneStageZk.Own} {j : Json} {ms : Array Spot.OneStageZk.Member}
+    (h : Spot.OneStageZk.membersOf shared j = .ok ms) :
+    ∀ m ∈ ms, ∀ m' ∈ ms, m.indices = m'.indices → m = m' := by
+  have hun := membersOf_units h
+  unfold Spot.OneStageZk.membersOf at h
+  do_walk h to ms
+  all_goals
+    cases h
+    have hloop := ‹forIn _ _ _ = Except.ok _›
+    rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
+    have hstep := Verity.Recursive.BaseSetup.forIn_list_mem (fun a s hs => by
+      split at hs
+      · cases hs
+      · cases hs; rfl) hloop
+    generalize hU : Array.foldl (fun acc m => acc ++ m.units) #[] ms = U at hstep
+    have hperm := FlockSoundness.Audit.StrataExec.qsort_perm (fun x1 x2 : ℕ × ℕ => decide (x1.fst < x2.fst)) U
+    have hUl : U.toList = ms.toList.flatMap (·.units.toList) := by
+      rw [← hU, ← Array.foldl_toList, units_toList]
+      rfl
+    have hlt : ∀ r ∈ U.qsort (fun x1 x2 => decide (x1.fst < x2.fst)), r.1 < r.2 := by
+      intro r hr
+      have hr' : r ∈ ms.toList.flatMap (·.units.toList) := by
+        rw [← hUl]
+        exact hperm.mem_iff.1 (Array.mem_toList_iff.2 hr)
+      obtain ⟨m, hm, hrm⟩ := List.mem_flatMap.1 hr'
+      exact (hun m (Array.mem_toList_iff.1 hm)).2 r (Array.mem_toList_iff.1 hrm)
+    have hadj : ∀ i, 1 ≤ i → i < (U.qsort (fun x1 x2 => decide (x1.fst < x2.fst))).size →
+        (U.qsort (fun x1 x2 => decide (x1.fst < x2.fst)))[i - 1]!.2 ≤
+          (U.qsort (fun x1 x2 => decide (x1.fst < x2.fst)))[i]!.1 := by
+      intro i h1 h2
+      have hi := hstep i (List.mem_range'_1.2 ⟨h1, by simp only [Std.Legacy.Range.size]; omega⟩)
+      split at hi
+      · cases hi
+      · omega
+    have hap : (ms.toList.flatMap (·.units.toList)).Pairwise Apart := by
+      rw [← hUl]
+      exact (List.Perm.pairwise_iff (fun {x y} h => Or.symm h) hperm).1 (apart_of_adjacent hlt hadj)
+    have hms := (List.pairwise_flatMap.1 hap).2
+    intro m hm m' hm' hi
+    refine Classical.byContradiction fun hne => ?_
+    have hq := pairwise_ne (fun a b hab x hx y hy => Or.symm (hab y hy x hx)) hms m (Array.mem_toList_iff.2 hm) m'
+      (Array.mem_toList_iff.2 hm') hne
+    obtain ⟨h0, hl⟩ := hun m hm
+    have hx := hl m.units[0] (Array.getElem_mem _)
+    have hu : m.units[0].1 ∈ m'.indices := by
+      rw [← hi]
+      exact mem_indices.2 ⟨_, Array.getElem_mem _, Nat.le_refl _, hx⟩
+    obtain ⟨y, hy, hy1, hy2⟩ := mem_indices.1 hu
+    rcases hq m.units[0] (Array.mem_toList_iff.2 (Array.getElem_mem _)) y (Array.mem_toList_iff.2 hy) with h | h
+    · omega
+    · omega
+
+/-- No two members of the per-member form's parameters have the same units (`membersOf_apart`). -/
+theorem membersParams_apart {J : Json} {a : Spot.OneStageZk.Params}
+    (h : Spot.OneStageZk.membersParamsOfJson J = .ok a) :
+    ∀ ms, a.members = some ms → ∀ m ∈ ms, ∀ m' ∈ ms, m.indices = m'.indices → m = m' := by
+  unfold Spot.OneStageZk.membersParamsOfJson at h
+  do_walk h to a
+  all_goals
+    cases h
+    intro ms hms
+    obtain rfl := Option.some.inj hms
+    exact membersOf_apart (by assumption)
+
+/-- No two members of the form's parameters have the same units (`membersParams_apart`). -/
+theorem members_apart {j : Json} {p : VStar.Recursive.SampledTwo.Params}
+    (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
+    ∀ m ∈ p.members, ∀ m' ∈ p.members, m.indices = m'.indices → m = m' := by
+  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  do_walk h to p
+  all_goals
+    cases h
+    exact membersParams_apart (by assumption) _ (by assumption)
+
+end FormMember
+
+/-- **`MembersApart`**, at any case: the form's parameters of a case are read from the tree `Core.canonicalJson`
+returns of its parameters' bytes (`FormPrint.formOf_params`), and the reading returns no two members with the same
+units (`FormMember.members_apart`). -/
+theorem membersApart (C : CaseOf) : MembersApart C := by
+  intro o k p e _ hf
+  obtain ⟨j, -, hp⟩ := FormPrint.formOf_params hf
+  exact FormMember.members_apart hp
 
 end Verity.SampledTwo
