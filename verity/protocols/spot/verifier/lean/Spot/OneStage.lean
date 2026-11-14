@@ -151,7 +151,7 @@ def rule (law : Json) : V Json := do
   | _ => throw "the law is not subset, bernoulli, stratified or work"
   return law
 
-/-- The agreed sampling design and the work table it is expanded over: a law object (`rule`) with the verifier's own work
+/-- The agreed sampling design and the work table it is expanded over: a sampling design object (`rule`) with the verifier's own work
 `table`, or a rate stated as a selection rule's law text (`Select.parseRate`, `Select.parseStrataRate`), which names its
 sampling design over the population of `program` under `query` and its strata as a stream's rule does (`Select.Rule.over`,
 `Select.strataSizes`, `Select.Rule.lawOver`) and its work table (`Select.Rule.tableOver`). -/

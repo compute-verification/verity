@@ -7,8 +7,8 @@ at each weight size, per scope) and a path, the steps in order, each adding one 
 its status (measured, modeled or assumed), its basis (`cards.BASES`: the served cut measured, the served cut at card
 prices, or a design not served) and the surface case that prices it in each series. A step whose case no
 surface has is pending: it has no number yet, and the steps after it leave it out. A lever off the path (`off`, with
-its owner, or none) is drawn in grey beside the step it would follow. A term no step's total includes (`unpriced`) is
-drawn as a named line at its share of serving compute (`total`), or as an arrow while it has none; one whose status is
+its owner, or none) is sampled in grey beside the step it would follow. A term no step's total includes (`unpriced`) is
+sampled as a named line at its share of serving compute (`total`), or as an arrow while it has none; one whose status is
 `charged` is stated in the caption as a condition every total holds under. The bound at `GOAL` is interpolated on
 log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count binds. The
 caption calls the first step today's measured system only when its basis is `served-measured`, names where the path
@@ -209,7 +209,7 @@ def caption(out: dict) -> str:
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
-    """Draw the figure into `outdir` as figure5.png and .svg; returns their paths."""
+    """Sample the figure into `outdir` as figure5.png and .svg; returns their paths."""
     import matplotlib
 
     matplotlib.use("Agg")
