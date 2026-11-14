@@ -73,12 +73,12 @@ def ReadsX.Clash (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') : Prop :=
     (Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
       Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')))
 
-/-- **Two registrant records' candidates**: at each two positions `p` of `rd` and `p'` of `rd'`, the openings' pair
-(`TwoOpenings.pair`, under `p`'s root and position) and the hm96 leaves' pair (`hm96Pair`), each with the test that
-both are registered reads and the pair collides. -/
-noncomputable def ReadsX.clashCands (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') :
-    List (Prop × (List UInt8 × List UInt8)) :=
-  (Finset.univ : Finset lay.Pos).toList.flatMap fun p => (Finset.univ : Finset lay'.Pos).toList.flatMap fun p' =>
+/-- **Two registrant records' candidates**: at each two positions `p` of `rd` and `p'` of `rd'`, in the order of the
+lists `ps` and `ps'`, the openings' pair (`TwoOpenings.pair`, under `p`'s root and position) and the hm96 leaves' pair
+(`hm96Pair`), each with the test that both are registered reads and the pair collides. -/
+noncomputable def ReadsX.clashCands (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') (ps : List lay.Pos)
+    (ps' : List lay'.Pos) : List (Prop × (List UInt8 × List UInt8)) :=
+  ps.flatMap fun p => ps'.flatMap fun p' =>
     [(rd.isRead p ∧ rd'.isRead p' ∧
         Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair,
         (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair),
@@ -87,8 +87,8 @@ noncomputable def ReadsX.clashCands (rd : ReadsX lay rs) (rd' : ReadsX lay' rs')
         hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p'))]
 
 /-- **A clash is a collision**: a candidate whose test passes is one. -/
-theorem ReadsX.clashCands_spec {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'}
-    {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.clashCands rd') (h : c.1) :
+theorem ReadsX.clashCands_spec {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} {ps : List lay.Pos}
+    {ps' : List lay'.Pos} {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.clashCands rd' ps ps') (h : c.1) :
     Hash.Collision H512 c.2.1 c.2.2 := by
   obtain ⟨p, -, hc⟩ := List.mem_flatMap.1 hc
   obtain ⟨p', -, hc⟩ := List.mem_flatMap.1 hc
@@ -101,15 +101,14 @@ theorem ReadsX.clashCands_spec {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'}
         Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')) := h
     exact hw.2.2
 
-/-- Two records that clash have a candidate whose test passes. -/
-theorem ReadsX.Clash.cand {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (h : rd.Clash rd') :
-    ∃ c ∈ rd.clashCands rd', c.1 := by
+/-- Two records that clash have a candidate whose test passes, at lists that hold every position. -/
+theorem ReadsX.Clash.cand {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} {ps : List lay.Pos} {ps' : List lay'.Pos}
+    (h : rd.Clash rd') (hps : ∀ p, p ∈ ps) (hps' : ∀ p, p ∈ ps') : ∃ c ∈ rd.clashCands rd' ps ps', c.1 := by
   obtain ⟨p, p', hp, hp', h | h⟩ := h
-  · exact ⟨_, List.mem_flatMap.2 ⟨p, Finset.mem_toList.2 (Finset.mem_univ p),
-      List.mem_flatMap.2 ⟨p', Finset.mem_toList.2 (Finset.mem_univ p'), List.mem_cons_self⟩⟩, hp, hp', h⟩
-  · exact ⟨_, List.mem_flatMap.2 ⟨p, Finset.mem_toList.2 (Finset.mem_univ p),
-      List.mem_flatMap.2 ⟨p', Finset.mem_toList.2 (Finset.mem_univ p'),
-        List.mem_cons_of_mem _ List.mem_cons_self⟩⟩, hp, hp', h⟩
+  · exact ⟨_, List.mem_flatMap.2 ⟨p, hps p, List.mem_flatMap.2 ⟨p', hps' p', List.mem_cons_self⟩⟩,
+      hp, hp', h⟩
+  · exact ⟨_, List.mem_flatMap.2 ⟨p, hps p,
+      List.mem_flatMap.2 ⟨p', hps' p', List.mem_cons_of_mem _ List.mem_cons_self⟩⟩, hp, hp', h⟩
 
 end Clash
 
@@ -130,11 +129,12 @@ def RegColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S
     (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
   ∃ j j', (zs R ω t R₂ j).rd.Clash (zs R ω t R₂ j').rd
 
-/-- **A history's candidates**: each two sessions' registrant records' (`ReadsX.clashCands`). -/
+/-- **A history's candidates**: each two sessions' registrant records' (`ReadsX.clashCands`), at the sessions' commit
+strings in their written-out order (`ZkOuterD.posList`). -/
 noncomputable def regCands (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg)
     (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂) : List (Prop × (List UInt8 × List UInt8)) :=
   (List.finRange S).flatMap fun j => (List.finRange S).flatMap fun j' =>
-    (zs R ω t R₂ j).rd.clashCands (zs R ω t R₂ j').rd
+    (zs R ω t R₂ j).rd.clashCands (zs R ω t R₂ j').rd (zs R ω t R₂ j).posList (zs R ω t R₂ j').posList
 
 /-- **Two sessions' clash is a collision**: a candidate whose test passes is one. -/
 theorem regCands_spec {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
@@ -149,7 +149,7 @@ theorem RegColl.cand {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (
     {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : RegColl zs R ω t R₂) :
     ∃ c ∈ regCands zs R ω t R₂, c.1 := by
   obtain ⟨j, j', h⟩ := h
-  obtain ⟨c, hc, hp⟩ := h.cand
+  obtain ⟨c, hc, hp⟩ := h.cand (zs R ω t R₂ j).mem_posList (zs R ω t R₂ j').mem_posList
   exact ⟨c, List.mem_flatMap.2 ⟨j, List.mem_finRange j, List.mem_flatMap.2 ⟨j', List.mem_finRange j', hc⟩⟩, hp⟩
 
 /-- **The registrant records' finder**: one run of the recursive audit against the prover `σ`, output the pair of the
