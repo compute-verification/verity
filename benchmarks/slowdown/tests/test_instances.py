@@ -20,7 +20,7 @@ def test_the_matrices_add_up_to_the_stated_sizes(model):
 
 
 @pytest.mark.parametrize("m", shaped(), ids=lambda m: m.name)
-def test_legs_and_fanout_are_derived_from_the_matrices(m):
+def test_fanin_and_fanout_are_derived_from_the_matrices(m):
     assert m.fanin == instances.derived_fanin(m)
     assert m.fanout == instances.derived_fanout(m)
 
