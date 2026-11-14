@@ -666,7 +666,7 @@ def test_bw_party_holds_the_store_the_block_challenger_kept_for_a_pous_session_o
     (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
     (["challenger_party", "--minutes", "181"], "--minutes takes one integer"),
     (["wipe_party", "--minutes"], "--minutes takes one integer"),
-    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes --pous-session SID | --fixture; got '--registration'"),
+    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes (--pous-session SID | --fixture) [--session SID]; got '--registration'"),
     (["bw_party", "--pous-record", "/tmp"], "got '--pous-record'"),
     (["bw_party", "--pous-session", "../" + "a" * 61], "64 lowercase hex digits"),
     (["bw_party", "--pous-session", "A" * 64], "64 lowercase hex digits"),
@@ -781,8 +781,20 @@ def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
     assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_party", "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
-                                       "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
-    assert "bw_party takes --pous-session SID | --fixture" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
+                                       "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
+    assert "bw_party takes (--pous-session SID | --fixture) [--session SID]" in refused(
+        party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
+
+
+def test_bw_party_signs_its_close_with_the_block_challengers_key_under_the_session_id_the_lane_names(svc):
+    sid = "ab" * 32
+    (rc, _), ran = party(svc, ["bw_party", "--session", sid, "--fixture"])
+    assert rc == 0 and ran[0][-9:-1] == ["--listen", "0.0.0.0:47612", "--challenger", str(svc.parties / "pous"),
+                                         "--session", sid, "--registration",
+                                         "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]
+    assert "64 lowercase hex" in refused(party(svc, ["bw_party", "--fixture", "--session", "../x"])[0])
+    assert "names no store" in refused(party(svc, ["bw_party", "--session", sid])[0])
+    assert "bw_party takes" in refused(party(svc, ["bw_party", "--fixture", "--session", sid, "--session", sid])[0])
 
 
 # --- the compose gate ---------------------------------------------------------------------------------------------------------
