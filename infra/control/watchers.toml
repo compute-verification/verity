@@ -135,3 +135,16 @@ name = "labels-pack"
 argv = ["python3.12", "-s", "-m", "research", "data", "labels-pack", "--every", "3600"]
 env_files = ["/root/.config/verity/r2.env"]
 env = { RESEARCH_STORE = "/root/watchers-labels-pack-store" }
+
+# each number a metrics.toml on main declares, launched again as a `research run` once its newest reading is older than its
+# `every` (metrics_rerun.py): a pass every --every seconds, from its own clone of main on the pod's own disk, at most --max
+# launches a pass, a CPU command on --on in its row's pool else --pool, a command asking for GPUs or naming a machine only on a
+# machine the lead's plan ({dir}/gpu-plan.toml) lists for it; nothing while {dir}/metrics-rerun.stop exists. It reads the door
+# with the site key in {dir}/metrics-rerun.env (JOBS_TOKEN, events:read)
+[[loop]]
+name = "metrics-rerun"
+argv = ["python3.12", "-s", "{src}/infra/control/metrics_rerun.py", "--tree", "/root/fast/metrics-rerun-tree",
+        "--state", "{dir}/metrics-rerun.json", "--stop", "{dir}/metrics-rerun.stop", "--plan", "{dir}/gpu-plan.toml",
+        "--on", "vy-nebius-cpu-12", "--pool", "research", "--every", "900", "--max", "2"]
+env_files = ["/root/.config/verity/r2.env", "{dir}/metrics-rerun.env"]
+env = { RESEARCH_STORE = "/root/watchers-metrics-rerun-store", RESEARCH_LANE = "infra" }
