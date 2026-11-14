@@ -43,7 +43,8 @@ configuration states; until those are read they raise `NotImplementedError(ONSIT
 `Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
 `command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
 `challenger_prover.session(side, request, respond)` is one session with the side, each index answered with
-`respond(index)`. `placement` says which host ran each party and whether `trusted-device`'s premise holds.
+`respond(index)`. `placement` says which host ran each party, whether `trusted-device`'s premise holds, and that
+setup was checked by the developer, not the auditor (`SETUP`).
 """
 
 from __future__ import annotations
@@ -71,6 +72,9 @@ END = 2 ** 64 - 1
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.protocols.accounting.pous.device.challenger_party"
 PREMISE = mc.PREMISE
+#: what every PoUS verdict rests on until setup's check is a proof: that the store decodes to the registered weights is
+#: checked on the developer's node, and no auditor's machine checks it
+SETUP = "setup checked by the developer, not the auditor"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
@@ -272,13 +276,13 @@ def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequ
     ``prover-node``), and `trusted-device`'s premise, `memory_challenger.trusted_device`'s for the session's key: the
     names are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key
     the session was signed under, when the configuration whose hash is `configuration`, one of `committed`, pins it
-    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries)."""
+    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries); and `SETUP` under ``setup``."""
     kind = "own-host" if host != node else "prover-node"
     names = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
              f"the memory challenger ran on the prover's node {node}")
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
             PREMISE: mc.trusted_device(pins, CHALLENGER, "pous", key_sha512, names, configuration=configuration,
-                                       committed=committed)}
+                                       committed=committed), "setup": SETUP}
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:

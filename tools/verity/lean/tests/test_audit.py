@@ -3882,7 +3882,7 @@ BOUNDED = "theorem bounded : Guarantees.Bounded := by\n  unfold Guarantees.Bound
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_bound_a_definition_hides_holds_its_guarantee_to_exclusion_witnesses(tmp_path):
     """On a real build: `Control.bounded : Guarantees.Bounded`, `∀ n, Fits n → Bound n 5` with `Bound x y := x ≤ y` in
-    `Control.Partition`, concludes a bound of a partition module two definitions deep (as `Nci.Products.Guarantees.Bound`
+    `Control.Partition`, concludes a bound of a partition module two definitions deep (as `InferenceOnly.Products.Guarantees.Bound`
     concludes `PartitionBound`, whose `≤` is under its `∀`): `lifted` unfolds `Guarantees.Bounded` to `Bound`, and the
     `≤` is `Bound`'s. `--update` fails it with `witnesses.missing` of the `exclusion` kind until its honest and
     nontrivial witnesses are listed. A `chain` that recorded only the definitions it unfolds saw no bound head, and held
@@ -5017,8 +5017,8 @@ def test_a_grandfathered_inline_premise_follows_its_declarations_renames_and_upd
 #: the move of `Verity.Circuit.Transcript` to `Verity.Circuit.Trace`, as `rename.py --moves` printed it
 TRACE_MOVES = {"Claims.Recursion.abortTrace": "Claims.Recursion.abortTranscript", "Claims.Trace": "Claims.Transcript",
                "Verity.Circuit.Transcript": "Verity.Circuit.Trace"}
-NCI_CONSTS = ["Eq", "Exists", "Membership.mem", "Nci.admissible", "Nci.values", "SetLike", "SetLike.instMembership"]
-NCI_CONSTANTS = {"Nci.admissible": ("def", "admissible"), "Nci.values": ("def", "values"), "Eq": "inductive"}
+INFERENCE_ONLY_CONSTS = ["Eq", "Exists", "Membership.mem", "InferenceOnly.admissible", "InferenceOnly.values", "SetLike", "SetLike.instMembership"]
+INFERENCE_ONLY_CONSTANTS = {"InferenceOnly.admissible": ("def", "admissible"), "InferenceOnly.values": ("def", "values"), "Eq": "inductive"}
 
 
 def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_says_it_names():
@@ -5028,16 +5028,16 @@ def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_say
     and `--update` keys them as printed. Without the move, or with no constant the build reports for the field, each
     fails and `--update` drops it."""
     for d in "Dd":
-        was = f"∀ (a : {d}.D.Transcript), SetLike.instMembership.mem (Nci.admissible {d} θv) a → Exists fun s => Eq " \
-            "(Nci.values Sst a) (f s)"
+        was = f"∀ (a : {d}.D.Transcript), SetLike.instMembership.mem (InferenceOnly.admissible {d} θv) a → Exists fun s => Eq " \
+            "(InferenceOnly.values Sst a) (f s)"
         now = was.replace(f"{d}.D.Transcript", f"{d}.D.Trace")
         fields = [[d, "D", "Verity.RegisteredCircuit.D"], [f"{d}.D", "Trace", "Verity.Circuit.Trace"]]
-        pol, f = renamed_inline(was, now, NCI_CONSTS, NCI_CONSTANTS, TRACE_MOVES, fields)
+        pol, f = renamed_inline(was, now, INFERENCE_ONLY_CONSTS, INFERENCE_ONLY_CONSTANTS, TRACE_MOVES, fields)
         assert inline_codes(pol, f) == [], was
         assert A.inline_failures(pol, f)[1:] == ({"P.t": {now: WHY}}, {"P.t": [now]})
         assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
         for moves, shown in [(None, fields), (TRACE_MOVES, fields[:1]), (TRACE_MOVES, [])]:
-            pol, f = renamed_inline(was, now, NCI_CONSTS, NCI_CONSTANTS, moves, shown)
+            pol, f = renamed_inline(was, now, INFERENCE_ONLY_CONSTS, INFERENCE_ONLY_CONSTANTS, moves, shown)
             assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, moves, shown)
             assert A.inline_failures(pol, f)[1] == {}, (was, moves, shown)
 
@@ -5302,7 +5302,7 @@ def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
 
 
 def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beating_its_bound():
-    """A guarantee concluding a bound over a partition or a covering and reading no acceptance (NCI's
+    """A guarantee concluding a bound over a partition or a covering and reading no acceptance (the inference-only policy's
     exclusion, training's serving-block bound) is of the `exclusion` kind: its honest witnesses conclude its premises at
     the deployed partition and parameters, and its nontrivial one states, at an explicit circuit, (each other premise
     holds) ∧ ¬ (a named premise) ∧ ¬ (the bound), its conjuncts in any order; a bare
@@ -8012,7 +8012,7 @@ def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_importe
 
 #: a package under the module system. `k.eq_1` is realized in `T`'s proof, which leaves it a theorem in `T`'s public
 #: part, and in the bodies of `E`'s and `F`'s exposed definitions, which leave it an axiom in theirs (as
-#: `Circuit.computed.eq_1` in `Definitions.Nci.Dark` and `Proofs.Core.Circuit`). `W1` and `W2` each declare `w`, on a
+#: `Circuit.computed.eq_1` in `Definitions.InferenceOnly.Dark` and `Proofs.Core.Circuit`). `W1` and `W2` each declare `w`, on a
 #: `sorry` and on an axiom hidden in their private parts. `P` and `Q` declare `t` with different statements, `G1` and
 #: `G2` the definition `g : Nat` with different bodies, `O1` and `O2` the opaque `o : Nat`, `X` the axiom `u` and `Y`
 #: the theorem `u`.

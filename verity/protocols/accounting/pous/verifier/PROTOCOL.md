@@ -585,7 +585,8 @@ keeping `z` means `M + E` bits held `z` and `g + 1` labels, which happens for a 
 egress and a counting term. `z` survives when a function of what is held inside and outside returns it, so the bound
 covers prior content moved out of the boundary too.
 
-At the deployed fill, `N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half of it for sampling:
+At the reference fill (`DEPLOYED_FILL_BYTES`, every tier of one server; a run's fill is its own `WipeParams`'),
+`N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half of it for sampling:
 
 - `k = 72,074` is the fewest challenges for which a server short of 1 GB of labels passes with probability at most
   `2^-40` (`challenges_for`, sampling alone);
@@ -1100,7 +1101,10 @@ Two gaps stood between these statements and the deployed verifier:
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
   `trusted-device` (`verity.claims`): "the auditor's device runs its stated code, timing
   included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
-  host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
+  host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
+  says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]`
+  entries give the memory challenger (`memory_challenger.trusted_device`), never from the host names, which are the
+  run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
