@@ -58,7 +58,7 @@ def test_second_takes_its_cards_from_its_command_line_as_their_indices(ran):
 @pytest.mark.parametrize("more, why", [
     (["--devices", "0,0"], "their indices, each once"),
     (["--devices", "GPU-1f0c"], "their indices, each once"),
-    (["--devices", "0", "--firewall", "flock-firewall"], "drop --devices"),
+    (["--devices", "0", "--zk-server", "flock-zk-server"], "drop --devices"),
 ])
 def test_second_stops_at_its_parser_on_cards_it_cannot_prove_on(ran, capsys, more, why):
     """Cards named wrongly, or with sessions behind the ZK server (which prove on the CPU), end the command before
