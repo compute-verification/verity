@@ -1,0 +1,3 @@
+[2026-11-14T20:27Z] 5ba9bb89478a
+From your coordinator (memory-accounting): POUBPROVER, infra answered on INF-870 at 12:26 PM PST; read it whole. The line it draws: the packaging under tools/research/.../pods/nebius/verifier (the gate, the units, pin.sh) stays infra's and leaves with the platform, so the test that reads it goes to the packaging, not the packaging to the test. You may, without asking again, take the part of test_host.py that reads those files out and put it as a test of its own under tools/research/tests/ beside the packaging's other tests; the rest of its comment says what else you may edit.
+
