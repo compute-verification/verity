@@ -4,17 +4,21 @@ on its standard input (`member LEN`, then the member's flags as a JSON array). W
 statement (`session`) is what an accepted session means: each session is of one member's statement from its start to its end, the one
 current when it started, whatever `member` arrives while it is open; its `Hello` is the one a loop of that member's own
 sends (`test_lean_hello.py`'s recorded `Hello` at the loop's nonce), and its plan is `session --schedule`'s on the
-member's flags. A session before any member is refused without reaching the auditor, and a member's flags never name
-the window's files or the loop's own flags."""
+member's flags. A session while it has no member is refused without reaching the auditor, and a member's flags never
+name the window's files or the loop's own flags. Between two members it holds only the window as read: the next member
+starts on no frame, level 0 or setup of the one before, and each member's sessions take their own coins after their own
+statement leaves."""
 from __future__ import annotations
 
 import json
+import re
 import socket
 import subprocess
 
 import pytest
 from test_lean_hello import BIN, NONCE, _args, _record, built  # noqa: F401
-from test_lean_session import REGISTER, STOP, Auditor, _answer, call, coins, hello, plain, reason, zk  # noqa: F401
+from test_lean_session import (COMMIT, REGISTER, STOP, Auditor, _answer, _bytes, _name, _statement_m, _streams, _zeros, call,
+                               coins, commit, hello, level0, open_, plain, reason, zk)  # noqa: F401
 
 
 class Kept:
@@ -27,7 +31,10 @@ class Kept:
         assert line.startswith("LISTENING "), (line, self.p.stderr.read().decode() if self.p.poll() is not None else "")
         host, port = line.split()[1].split(":")
         self.addr = (host, int(port))
-        assert self.p.stdout.readline().decode().startswith("FRAMES ")
+        line = self.p.stdout.readline().decode()
+        assert line.startswith("FRAMES "), line
+        host, port = line.split()[1].split(":")
+        self.frames = (host, int(port))
 
     def send(self, verb: str, body: bytes) -> None:
         self.p.stdin.write(f"{verb} {len(body)}\n".encode() + body)
@@ -44,6 +51,19 @@ class Kept:
         self.send("schedule", sample.encode())
         first = self.line()
         return [first, *(self.line() for _ in range(int(first.split()[1]) if first.startswith("ok ") else 0))]
+
+    def state(self) -> dict:
+        """What the loop holds (`keptState`)."""
+        self.send("state", b"")
+        line = self.line()
+        assert line.startswith("state "), line
+        return json.loads(line.removeprefix("state "))
+
+    def said(self, prefix: str) -> str:
+        """The loop's next line on its standard error that starts with `prefix`."""
+        while not (line := self.p.stderr.readline().decode()).startswith(prefix):
+            assert line, "the loop's standard error closed"
+        return line.rstrip("\n")
 
     def connect(self) -> socket.socket:
         return socket.create_connection(self.addr)
@@ -69,7 +89,7 @@ def test_its_start_takes_the_windows_flags_alone(flags):
 def test_a_session_before_the_first_member_is_refused():
     k = Kept()
     s = k.connect()
-    assert reason(call(s, REGISTER)) == STOP + "a session before the kept loop's first member"
+    assert reason(call(s, REGISTER)) == STOP + "a session while the kept loop has no member"
     s.close()
     k.close()
 
@@ -157,3 +177,61 @@ def test_each_session_is_of_the_member_current_at_its_start(zk):
     for i, (want, nonce) in enumerate([(first, n16), (first, n16), (second, n32)]):
         got = _sent_hello(auditor, i)
         assert got == want.replace(nonce, NONCE.search(got)[1]), i
+
+
+EMPTY = {"frames": {"sessions": 0, "reps": 0, "salts": 0, "files": 0, "inner": 0},
+         "level0": {"slots": 0, "sessions": 0, "tables": 0}}
+
+
+@pytest.mark.slow
+def test_between_two_members_it_holds_only_the_window_and_each_takes_its_own_coins(zk):
+    """Two members, the fixture's statement over its 16-unit and its 32-unit population, each with a session that has its
+    level 0 sampled and its `Commit` sent. When the second member is answered `ok`, the loop holds the window as read and
+    the second member's flags, and nothing else: no setup at a sample, no frame, salt, proof file or inner proof, no level 0
+    and no session's name, and none open. While the first member's session was live the same report held its level 0 and
+    its session, so the report sees them. Each member's sessions reach the auditor on connections of their own: the
+    member's recorded `Hello`, the statement, first, and only then its `Open` and its `Commit`, the session's first coin
+    request, carrying that `Hello`'s Σ.
+    The other tests here never sample a level 0 under a kept loop, so none of them would see a level 0, frame or setup
+    that outlives its member."""
+    records = [_record(zk, "selftest/honest"), _record(zk, "m26")]
+    roots = iter(range(1, 256))
+    answers = {10: plain(REGISTER), 3: b"\x01", 7: coins([])}
+    auditor = Auditor(lambda f: _answer(root=next(roots)) if f[0] == 1 else answers[f[0]])
+    k = Kept()
+    left = []
+    for i, args in enumerate([_args(zk, "pub-16.bin"), _args(zk, "pub-32.bin")]):
+        flags = [*args, "--verifier", auditor.addr]
+        assert k.member(flags) == "ok"
+        assert k.said(f"kept: member {i} ok, ").endswith(f": {json.dumps(flags, separators=(',', ':'))}")
+        assert k.state() == {"window": {"partition": False, "program": 0}, "member": {"flags": flags, "setups": 0},
+                             "open": 0, **EMPTY}
+        first = _streams(args)[0]
+        s = k.connect()
+        call(s, REGISTER)
+        call(s, hello(""))
+        assert call(s, open_(first)) == b"\x01"
+        [table] = re.search(r"tables are \[(.*)\]$", reason(call(s, COMMIT)))[1].split(", ")
+        s.close()
+        s = k.connect()
+        call(s, REGISTER)
+        name = _name(call(s, hello("")))
+        assert call(s, open_(first)) == b"\x01"
+        m = _statement_m(k, name)
+        [(_, _, r)] = level0(k, [(m, _zeros(m))], name)
+        live = k.state()
+        assert live["member"]["setups"] == 1 and live["level0"]["slots"] == 1 and live["open"] >= 1, live
+        assert live["frames"]["sessions"] >= 1 and live["level0"]["sessions"] >= 1, live
+        call(s, commit([(table, r)]))
+        left.append(commit([(table, r)])[5:])
+        s.close()
+        k.said(f"level 0: session {2 * i + 1} ended; ")
+    k.close()
+    assert [[f[0] for f in c] for c in auditor.got] == [[10, 1, 3], [10, 1, 3, 7]] * 2
+    for i, (want, nonce, _) in enumerate(records):
+        for c in auditor.got[2 * i:2 * i + 2]:
+            got = c[1][5:].decode()
+            assert got == want.replace(nonce, NONCE.search(got)[1]), i
+        _, sent, _, commit_left = auditor.got[2 * i + 1]
+        sigma = bytes.fromhex(json.loads(sent[5:])["link"]["sigma"])
+        assert commit_left == b"\x07" + _bytes(sigma) + left[i], i
