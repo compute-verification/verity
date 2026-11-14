@@ -8,6 +8,8 @@ import struct
 
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
+#: a request's length (u32be), which opens it in the link's DATA payloads (`active.request_frames`)
+LENGTH = struct.Struct(">I")
 
 
 def encode_frame(kind: int, stream: int, payload: bytes, frame_bytes: int) -> bytes:

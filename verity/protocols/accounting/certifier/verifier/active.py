@@ -216,10 +216,12 @@ from verity.protocols.accounting.certifier.verifier.id_form import (  # noqa: F4
     ID_REQUEST_HEAD,
     MAX_TOKENS_AT,
     MAX_TOKENS_KEY,
+    _u32_field,
+    id_request,
     id_request_max_tokens,
     u32_field,
 )
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, SALT, decode_frame, encode_frame  # noqa: F401 - re-exported
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, LENGTH, PAD, SALT, decode_frame, encode_frame  # noqa: F401 - re-exported
 from verity.protocols.accounting.certifier.verifier.online import Prover, Refused
 from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
 from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES
@@ -236,7 +238,6 @@ TOKEN_BYTES = 64
 EVENT_TEXT = 4 * -(-TOKEN_BYTES // 3)
 EVENT_TAIL = b'"},"finish_reason":null}]}' + EVENT_END
 EVENT_BYTES = len(EVENT_HEAD) + EVENT_TEXT + len(EVENT_TAIL)
-LENGTH = struct.Struct(">I")
 SALT_STREAM = 0xFFFF_FFFF
 SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
@@ -362,12 +363,6 @@ ID_EVENT_HEAD = EVENT_HEAD[: EVENT_HEAD.index(b'"delta"')] + b'"request":'
 ID_EVENT_MID = b',"token_id":'
 ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
 ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_MID) + ID_DIGITS + len(ID_EVENT_TAIL)
-
-
-def _u32_field(x: int, what: str) -> bytes:
-    if type(x) is not int or not 0 <= x < 1 << 32:
-        raise ValueError(f"{what} is a u32, not {x!r}")
-    return b"%*d" % (ID_DIGITS, x)
 
 
 def id_event(request: int, token_id: int) -> bytes:
@@ -508,54 +503,6 @@ def compact_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
     if frame_bytes < COMPACT_RECORD.size:
         raise ValueError(f"a {frame_bytes}-byte frame has no room for a compact record")
     return 0, COMPACT_RECORD.size, b"", b""
-
-
-def _ratio_field(x: float, what: str) -> bytes:
-    s = b"%8.6f" % x if isinstance(x, (int, float)) and not isinstance(x, bool) else b""
-    if not (s and 0 <= x < 10 and float(s) == x):
-        raise ValueError(f"{what} is a number in [0, 10) of at most six decimals, not {x!r}")
-    return s
-
-
-def _name_field(s: str, what: str) -> bytes:
-    raw = json.dumps(s).encode() if isinstance(s, str) else b""
-    if not raw or len(raw) > ID_NAME_BYTES:
-        raise ValueError(f"{what} is a string of at most {ID_NAME_BYTES} bytes as JSON, not {s!r}")
-    return raw.ljust(ID_NAME_BYTES)
-
-
-def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int, temperature: float = 0.0,
-               top_p: float = 1.0, seed: int = 0, frame_bytes: int, offset: int = LENGTH.size) -> bytes:
-    """A canonical `/v1/completions` request of a token-id prompt, whose every field is at a place fixed by the
-    prompt's length and the frame size alone, in the link frames `request_frames` puts it in: `ID_REQUEST_HEAD`, its
-    body's length in `ID_DIGITS` characters (HTTP's optional whitespace before it), in the first frame, then the body,
-    streamed, with no stop strings: `max_tokens` and `seed` in `ID_DIGITS` characters, `temperature` and `top_p` in
-    eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
-    No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
-    At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
-    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network certifier's
-    cells, which carry the bytes alone."""
-    if offset not in (0, LENGTH.size):
-        raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
-    if not prompt or isinstance(prompt, (str, bytes)):
-        raise ValueError("an id request's prompt is at least one token id")
-    pieces = [b'{"max_tokens":' + _u32_field(max_tokens, "max_tokens"),
-              b',"temperature":' + _ratio_field(temperature, "temperature"),
-              b',"top_p":' + _ratio_field(top_p, "top_p"), b',"seed":' + _u32_field(seed, "a seed"),
-              b',"stop":[],"stream":true', b',"model":' + _name_field(model, "a model"),
-              b',"user":' + _name_field(user, "a user"), b',"prompt":',
-              *((b"," if k else b"[") + _u32_field(t, "a prompt id") for k, t in enumerate(prompt)), b"]}"]
-    room = frame_bytes - HEADER.size
-    at = offset + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
-    if at > room or max(map(len, pieces)) > room:
-        raise ValueError(f"a {frame_bytes}-byte frame has no room for an id request's head or a field")
-    parts = []
-    for p in pieces:
-        gap = -at % room if at // room != (at + len(p) - 1) // room else 0
-        parts.append(b" " * gap + p)
-        at += gap + len(p)
-    raw = b"".join(parts)
-    return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(raw)) + b"\r\n\r\n" + raw
 
 
 def id_request_fields(request: bytes, frame_bytes: int) -> dict | None:
