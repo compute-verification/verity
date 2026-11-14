@@ -156,7 +156,7 @@ guarantee above.
   `security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
   (`security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
   and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
-- `Verity.Assumptions.TrustedHost` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
+- `Verity.Assumptions.TrustedDevice` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
 - The certifier's wire (`security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
