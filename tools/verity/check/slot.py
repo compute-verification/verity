@@ -40,8 +40,8 @@ with a core outside this process's own (os.sched_getaffinity) is skipped, since 
 A slot with book=GB beside its mem= (`c 0-95 only=trains mem=300 book=150`) waits for book GB free and reserves book GB
 (`booked`), for checks that plan on mem= and reach it only some of the time: the ledger then holds what such a check is
 expected to reach, not the most it may. mem= stays the slot's size for everything else: what CMD gets as SLOT_MEM_ENV and what
-MIN_MEM_ENV tests. A run that asks more than book (RUN_MEM_ENV: a train check's shard asks what its steps took, check.py's
-`shard_ask_gib`) waits for and reserves its ask, as on any slot. CMD gets what the slot books as BOOK_ENV, and check.py
+MIN_MEM_ENV tests. A run that asks more than book (RUN_MEM_ENV: a train check asks what its steps took, check.py's
+`shard_ask_gib` for a shard and `whole_ask_gib` for a whole check) waits for and reserves its ask, as on any slot. CMD gets what the slot books as BOOK_ENV, and check.py
 grants its steps no more than that between them (`check.slot_mem_gb`). A check past book meets nothing here: the
 reservation caps nothing and the machine's own limits act, and where OOM kills are ordered by reservation (research's
 `oom_order.py`) it counts as over its reservation from book, not from mem=. A line whose book= isn't a whole number of GB
@@ -164,8 +164,8 @@ BOOK_ENV = "CHECK_SLOT_BOOK_GB"
 MIN_MEM_ENV = "CHECK_MIN_MEM_GB"
 #: the check's own scope unit (a `scope=1` slot), which spans.py reads its memory from
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
-#: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`, or a train check's shard: check.py's
-#: `shard_ask_gib`, through `research run --env`): a slot whose mem= is smaller waits for and reserves
+#: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`, or a train check: check.py's
+#: `shard_ask_gib` or `whole_ask_gib`, through `research run --env`): a slot whose mem= is smaller waits for and reserves
 #: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 #: on a slot with peaks=N, the share `reserved_gb` counts of each unreached lane reservation past the N largest: about what a
