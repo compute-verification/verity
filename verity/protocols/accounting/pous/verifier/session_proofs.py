@@ -2,7 +2,7 @@
 the clear; it reads the outcomes of ``k + 2`` proofs, linked only by their committed rows.
 
     unit 0      PousSessionSig_v1{N, W, H}          (key, m, sig): the signature over m verifies under the key
-    unit 1      PousSessionDigest_v1{k, HEAD, LIMIT} (head, domain, ctx, r0 ... r⌈k/2⌉−1) -> (ok, m, r0 ... r⌈k/2⌉−1):
+    unit 1      PousSessionDigest_v1{k, HEAD, LIMIT} (head, ctx, r0 ... r⌈k/2⌉−1) -> (ok, m, r0 ... r⌈k/2⌉−1):
                 m the digest the signature signs over the header and the records, ok that every record names its
                 round and is on time, and the records rows as read
     unit j + 2  PousRound_v1{block_bytes, j mod 2}  (row, records, j, i): record j names round j and index i and holds the
@@ -98,15 +98,14 @@ def clear_reasons(commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOp
 def known_reasons(commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening], public_key: bytes,
                   proofs: SessionProofs, registered: Callable[[int], bytes | None]) -> tuple[str, ...]:
     """Each public parameter is the value the verifier computes: unit 0's key; unit 1's header (ended complete after k
-    rounds), the records tree's domain id and the signed context; round j's j, its opened index and, as its committed
+    rounds) and the signed context; round j's j, its opened index and, as its committed
     row, the registered row at that index (`registered(i)`, none past C's blocks)."""
     reasons: list[str] = []
-    domain = mc._domain(mc.RECORD_BINDING, commitment.session, commitment.k).domain_id
     ctx = _field(_ROLE) + public_key[:16] + _field(_field(commitment.session))
     by_j = _by_j(openings)
     head = _head(commitment)
     want = [(proofs.signature, "the signature's", {0: public_key}),
-            (proofs.digest, "the signed digest's", {0: head + bytes(len(head) % 2), 1: domain, 2: ctx})]
+            (proofs.digest, "the signed digest's", {0: head + bytes(len(head) % 2), 1: ctx})]
     for j, out in enumerate(proofs.rounds):
         o = by_j.get(j)
         if o is not None:
@@ -121,17 +120,17 @@ def known_reasons(commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOp
 
 
 def link_reasons(commitment: mc.SessionCommitment, proofs: SessionProofs) -> tuple[str, ...]:
-    """The committed rows that link the proofs: unit 0's m (its row 1) is unit 1's output m (its row 4 + T, T = ⌈k/2⌉),
-    and round j's records row (its row 1) is unit 1's records output ⌊j/2⌋ (its row 5 + T + ⌊j/2⌋)."""
+    """The committed rows that link the proofs: unit 0's m (its row 1) is unit 1's output m (its row 3 + T, T = ⌈k/2⌉),
+    and round j's records row (its row 1) is unit 1's records output ⌊j/2⌋ (its row 4 + T + ⌊j/2⌋)."""
     reasons: list[str] = []
     k, d, t = commitment.k, proofs.digest.rows, _rows(commitment.k)
-    if len(proofs.rounds) != k or len(d) != 5 + 2 * t or len(proofs.signature.rows) != 4:
+    if len(proofs.rounds) != k or len(d) != 4 + 2 * t or len(proofs.signature.rows) != 4:
         return (f"the session's proofs are not one signature's, one signed digest's over {_rows(k)} records rows and "
                 f"{k} rounds'",)
-    if proofs.signature.rows[1] != d[4 + t]:
+    if proofs.signature.rows[1] != d[3 + t]:
         reasons.append("the signed message is not the signed digest's")
     for j, out in enumerate(proofs.rounds):
-        if len(out.rows) != 5 or out.rows[1] != d[5 + t + j // 2]:
+        if len(out.rows) != 5 or out.rows[1] != d[4 + t + j // 2]:
             reasons.append(f"round {j}'s record is not the signed digest's")
     return tuple(reasons)
 

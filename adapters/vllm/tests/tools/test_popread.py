@@ -25,7 +25,7 @@ def _toy(tmp_path: Path) -> Path:
     from verity.circuits.types import Array, Value
     from verity.circuits.ops.fp32 import Bf16Add
     from verity.circuits.ops.scalar import I32Add
-    from verity.definitions.registry.prims import gather_bf16
+    from verity_vllm.definitions.registry.prims import gather_bf16
 
     def signature(S):
         return (("prompt", Value(32)), ("prefix", Value(16)), ("table", Array(4, Value(16)))), Value(16)
@@ -87,7 +87,7 @@ def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_
     from verity.circuits.program import Program
     from verity.circuits.types import Array, Value
     from verity.circuits.ops.scalar import I32Add
-    from verity.definitions.registry.prims import gather_bf16
+    from verity_vllm.definitions.registry.prims import gather_bf16
 
     inner = bind(CompositeDefinition("PopreadRow", 0, (), lambda S: ((("e", Value(32)), ("w", Array(2, Array(8, Value(16))))),
                                                                       Array(2, Value(16))),
@@ -288,7 +288,7 @@ def _prefix_form(producers: int, warm: int) -> dict:
     from verity.circuits.types import Array, Value
     from verity.circuits.ops.fp32 import Bf16Add
     from verity.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
-    from verity.definitions.registry.prims import gather_bf16
+    from verity_vllm.definitions.registry.prims import gather_bf16
     from verity_vllm.query.program_view import specialization
 
     V, C, K = 4, 2, producers

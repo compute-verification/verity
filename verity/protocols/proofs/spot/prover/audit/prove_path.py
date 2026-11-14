@@ -371,7 +371,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -1490,15 +1490,18 @@ def network_traces() -> Iterator[None]:
             sys.modules["replay"] = replay
 
 
-def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
+              ) -> tuple[list[list[int]], list[str | None]] | None:
     """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
     state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
     None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
-    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
+    ``window_rows`` reads one ingress record's rows: the network certifier's reader, which the caller passes, since SPOT
+    reads the certifier's record as a certified input and never imports the certifier.
+    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan or the
+    caller passed no reader."""
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
@@ -1508,6 +1511,10 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None
+    if window_rows is None:
+        raise ValueError("the serve kept a network certifier run, whose scan reads its certified ingress rows by the "
+                         "certifier's reader, which SPOT never imports: run this from a caller that passes it "
+                         "(main's window_rows)")
     unpacked = None
     try:
         run = CP.kept_run(serve_dir)
@@ -1536,7 +1543,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     windows = sorted(r.window for r in records[WSV.INGRESS])
     if windows != list(range(len(windows))):
         raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
@@ -1668,7 +1675,7 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     return w, [json.loads(Path(held[s]["manifest"]).read_text()) for s in rounds], rounds, WC.PearlTables(scheme)
 
 
-def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
+def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
@@ -1693,10 +1700,10 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="builds-", dir=out.parent) as builds:
         a.builds = builds
-        return window_commit_of_builds(a)
+        return window_commit_of_builds(a, window_rows)
 
 
-def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
+def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
     """`window_commit_of_advice` over its own Build of each Program, from its compile (`own_builds`, into ``a.builds``
     beside ``--out``, as ``circuit``'s), never its row dir's: those are `advice_compile`'s, written once the serve is done,
     and a window tied to W is committed at its close, before its sample coin (`serve_tie`)."""
@@ -1756,7 +1763,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
-    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units])
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], window_rows=window_rows)
     state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
@@ -1858,7 +1865,9 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
             "requests": len(reqs)}
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> int:
+    """The commands (the module docstring). ``window_rows`` is the network certifier's reader of its ingress rows, which
+    ``window-commit`` needs where the serve kept a certifier run (`kept_scan`): a caller that holds the certifier passes it."""
     from verity_vllm.pipeline.workload_file import workload_file
 
     def workload_arg(s: str) -> str:
@@ -2048,7 +2057,7 @@ def main(argv: list[str] | None = None) -> int:
                  "weights-registration"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
                     "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
-                    "window-commit": window_commit_of_advice, "weights-registration": weights_docket_of_serve}
+                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows), "weights-registration": weights_docket_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

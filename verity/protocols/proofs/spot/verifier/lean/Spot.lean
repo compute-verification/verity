@@ -8,7 +8,7 @@ public import Spot.PartitionRef
 public import Spot.Draw
 public import Spot.LinkPoints
 public import Spot.Supplied
-public import Spot.Registration
+public import Spot.Docket
 public import Spot.Produced
 public import Spot.Bound
 public import Spot.PlanCheck

@@ -15,7 +15,7 @@ meta import PousCheck.Run
 # A PoUS run as a core protocol
 
 `PousCheck.Run.checkAt` behind the core interface (`Core.Protocol`), PoUS's component of onsite Verity
-(`verity/core/protocols/onsite`), each byte string canonical JSON:
+(`verity/protocols/compose/verifier/onsite`), each byte string canonical JSON:
 
 * params `{"point": {"k", "limit_ns", "params": {"blocks_per_segment", "c0", "segments", "w"}}, "session_id": hex,
   "trusted": [hex, …]}`: the point the run is checked at, the id the auditor designated for the period's session, and
@@ -308,17 +308,16 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/pous/p2/v4/run`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
-/-- **What a run accounts for** (`Core.Account`): the bits of `C*` a node held in its GPUs' memory when the challenges
-arrived (`s_bits`), verified from below at the error its certificate states (`eps`), at a moment. A run off every
-certificate publishes `certified` false, and its rows say so. The capacity a run is checked at is its certificate's
-`call_ns`, which its profile names and `Certificate.ROOT_CALL_NS` fixes.
+/-- **What a run accounts for** (`Core.Account`): the bits of `C*` a node held in its GPUs' memory (`.hbm`, where PoUS
+keeps `C*`) when the challenges arrived (`s_bits`), verified from below at the error its certificate states (`eps`), at
+a moment. A run off every certificate publishes `certified` false, and its rows say so.
 
-It names no device and no registration's head. What it would say beyond what `Core.Account` holds: when in the period
-the node held the bits (an amount at a moment states no span, and a series names no time); the tier the store is in,
-which the answer doesn't publish (the GPUs' memory, `.hbm`, is where PoUS keeps `C*`); and the memory challenger's key
-the session was signed under, which is in the parameters' `trusted` list and not in the answer. -/
+Its answers name no auditor's device's key, so they are of the whole site (`witness`): the memory challenger's key the
+session was signed under is in the parameters' `trusted` list, not in the answer. They name no step the bits were held
+at (`held`). The figure a run is computed at, its certificate's `call_ns` (`Certificate.ROOT_CALL_NS`), is in the
+profile's `certificate` object, which no `Core.Account.Key` reaches, so it is no `params` entry. -/
 def account : Core.Account :=
-  { protocol := ID, head := none
+  { protocol := ID, witness := none
     amounts := [{ metric := "held", part := .memory [.hbm], key := .published "s_bits", unit := Core.Account.bits,
                   side := .verified, time := .moment, error := .published "eps",
                   uncertified := .flagged (.published "certified") }] }

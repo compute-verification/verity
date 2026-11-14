@@ -19,11 +19,11 @@ import torch.nn.functional as F
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 
-from tests.program.test_train_step import (
+from tests.frontend.test_train_step import (
     CC,
     TINY_SDPA,
     _bits,
@@ -34,7 +34,7 @@ from tests.program.test_train_step import (
     _sum_of_squares,
     _tiny_stand_ins,
 )
-from tests.program.train_step_lf import ADAMW, meta_step, square_loss
+from tests.frontend.train_step_lf import ADAMW, meta_step, square_loss
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.rules.training import training_rules

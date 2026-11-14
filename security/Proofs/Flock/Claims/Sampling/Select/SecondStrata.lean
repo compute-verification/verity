@@ -4,7 +4,6 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Flock.Claims.Sampling.Reg
 public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
-public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 import Spot.Draw
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take

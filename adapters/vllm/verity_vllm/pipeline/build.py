@@ -23,11 +23,12 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity.definitions.boolean import write_word
+from verity_vllm.definitions.boolean import write_word
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
+from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build_instances import (  # noqa: F401 (read through here)
@@ -85,13 +86,13 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_torch/frontend/rules/common.py", "verity_torch/frontend/value_types.py",
                          "verity_vllm/program/frontend/targets.py",
                          # the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/program/frontend/export_ops.py", "verity/definitions/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/definitions/registry/b1_tp2.py",
                          # the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "verity/definitions/boolean.py",
+                         "verity_vllm/definitions/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
@@ -100,8 +101,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
 
 
 def _source_root(rel: str) -> str:
-    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`, or
-    `verity` for the Definitions), which in a checkout are different directories."""
+    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`)."""
     from importlib import resources
     from pathlib import Path
     return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)
@@ -256,7 +256,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                   "hint": (f"the row's sampling policy is {sampling} (source: {sampling.get('source')}); this builder binds the token-select "
                                            f"kinds {sorted(SAMPLERS_BOUND)} only ({'; '.join(f'{k}: {v}' for k, v in SAMPLERS_BOUND.items())}). A stochastic "
                                            f"row needs a token-select Definition for the pinned BI sampler and a rule that emits it — not the greedy argmax. "
-                                           f"`GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity.definitions.registry.sampling; seed/pos/temperature as "
+                                           f"`GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity_vllm.definitions.registry.sampling; seed/pos/temperature as "
                                            f"bound inputs) is exact to `_temperature_kernel` -> `_gumbel_sample_kernel` for top_p == 1 / no top_k; the top-p "
                                            f"mask (`topk_topp_triton._topp_sb_{{stats,step,mask}}_kernel`) has no exact Definition and no "
                                            f"wrapper authors the stochastic select yet."),
@@ -264,21 +264,22 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "definitions_available": {"GumbelTokenSelect_v1": "temperature + Gumbel-max, top_p == 1, no top_k"},
                                              "missing": ["TopPMask", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
-            raise _Refused()
+            raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
         # the request's launch batch where the row's kernels read it; the stochastic policy's Definition coverage and launch geometry (S)
         geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T)) or LC.bad_chunks(launch, wrapper, LP, T, cached)
                        or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
         if geo_refusal:
             res["unsupported"] = geo_refusal
-            raise _Refused()
+            raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             logger.info("[derive_step] declared target %s x%s: vLLM platform %s", target.sm_arch, tp, select_cuda_platform(tp, device_name))
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
-    except _Refused:
-        pass
+    except Refused as e:
+        if e.what != _CONSTRUCTION:
+            raise
     res = _finish(out, res, t_start)
     if emit is not None:
         from verity_vllm.pipeline.tp.emit_ranks import finish
@@ -289,8 +290,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
 _WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
 
 
-class _Refused(Exception):
-    """The construction refused before derive (target profile mismatch, unbound sampler); `res["unsupported"]` carries the verbatim reason."""
+# the `what` of the construction's own refusals before derive (target profile mismatch, unbound sampler), whose verbatim reason
+# `res["unsupported"]` carries; any other `Refused` propagates
+_CONSTRUCTION = "the construction"
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
@@ -327,7 +329,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             if tp > 1:
                 # rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                from verity.definitions.registry.tp_allreduce import settings_of
+                from verity_vllm.definitions.registry.tp_allreduce import settings_of
                 env_now = engine_env.snapshot()
                 allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
                 observe_allreduce_settings(allreduce_settings)
@@ -373,7 +375,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bad = profile_mismatches(target, applied)
             if bad:
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "instantiation", "hint": "; ".join(bad)}
-                raise _Refused()
+                raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
             chunks = list((launch or {}).get("chunks", ()))
@@ -403,7 +405,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bad = profile_mismatches(target, applied_export)
             if bad:
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "export", "hint": "; ".join(bad)}
-                raise _Refused()
+                raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
             res["declared_derived"] = declared_derived_accounting(target, applied)
             # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
@@ -420,24 +422,26 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
         if not rep.ok:
+            assert rep.unsupported is not None
             res["unsupported"] = rep.unsupported.to_json()
             res["rules_applied_before_refusal"] = rep.provenance.get("rules_applied_before_refusal")
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
-            json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
+            with open(os.path.join(out, "derive-report.json"), "w") as f:
+                json.dump(rep.provenance, f, indent=1, default=str)
         else:
             # the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
             # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
             # the root is recorded as DATA so no reader spells the wrapper prefix
             model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
             write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
-            pre = copy.deepcopy(res) if emit is not None else None      # rank r's `res` before its writer: the template's, at rank r
+            pre = copy.deepcopy(res) if emit is not None else {}        # rank r's `res` before its writer: the template's, at rank r
             write(out, res, rep, rank=rank)
             if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
                 from verity_vllm.program.frontend.export_ops import (
                     rank_embedding_shards,
                 )
-                rep = None                                                 # the template's descriptor and correspondence: freed
+                del rep                                                    # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
                                 post=derived if target.ir == "boolean" else None, write=write)

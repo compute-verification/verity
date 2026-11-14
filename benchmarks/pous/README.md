@@ -164,9 +164,11 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 `benchmarks/one_stage/served_verdicts.sh` runs it as
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
-SHA-512 of the wipe party's public key, by default vy-auditor-2's, `wipe_party.AUDITOR_KEYS`): a session signed under
-another is rejected, and with none pinned, the setting empty, the piece refuses before it asks for a card. A session
-accepted under any other pin is a rehearsal: its record says no bound. Its header lists the challenger's
+SHA-512 of the wipe party's public key, by default the one the run's configuration pins for the memory challenger's wipe,
+`VERITY_PINS`): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
+card. Its record says `trusted-device` holds only under a committed configuration (`VERITY_CONFIGURATION`, in
+`tools/verity/cli/verity_cli/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
+bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
 `served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights as `C*` on

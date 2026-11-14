@@ -884,7 +884,7 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
 
 /-- **The population `popHeld` passes is one the program holds**: under the verifier's query, the program's proof
 blocks are the record's population units in order (`Slots.popOk`). -/
-theorem popOk_of_popHeld {v : _root_.Spot.Registration.Verifier} {record : Json} {n : ℕ}
+theorem popOk_of_popHeld {v : _root_.Spot.Docket.Verifier} {record : Json} {n : ℕ}
     (h : _root_.Spot.OneStageZk.popHeld v record = .ok ())
     (hn : _root_.Spot.nat? (_root_.Spot.getD record "population") = some n) :
     _root_.Spot.Slots.popOk v.program v.query n = true := by
@@ -897,7 +897,7 @@ theorem popOk_of_popHeld {v : _root_.Spot.Registration.Verifier} {record : Json}
 
 /-- **The session's population is the one the program holds** where the session's descriptor parses to v2's program
 and its query is v2's: `Live.hpop` and `Slots.popOk` read one layout's population. -/
-theorem n_of_popOk {A : Live} {v : _root_.Spot.Registration.Verifier} {n : ℕ}
+theorem n_of_popOk {A : Live} {v : _root_.Spot.Docket.Verifier} {n : ℕ}
     (hd : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok v.program) (hq : A.qr = v.query)
     (h : _root_.Spot.Slots.popOk v.program v.query n = true) : A.n = n := by
   unfold _root_.Spot.Slots.popOk at h

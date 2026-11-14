@@ -43,7 +43,7 @@ open Flock
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands `Select.select`: the verifier's copies
 with the sampling design and work table the rule expands over the record's population, the resolved rule and the closure map. -/
 structure First where
-  verifier : Spot.Registration.Verifier
+  verifier : Spot.Docket.Verifier
   rule : Spot.Select.Rule
   closure : Option (Array (Int × Array Int))
 
@@ -424,7 +424,7 @@ design's rows, the templates' circuits, the cells, each template's count of unit
 interior registration's verifier `vi`. -/
 def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
     (wires : Option (Array Spot.SecondStage.Wire)) (rows : Array Spot.SecondStage.Rows) (circ : Nat → Circuit)
-    (ns : Array Nat) (units : Nat → Nat) (refReads : Nat → Json) (vi : Spot.Registration.Verifier) : Bool :=
+    (ns : Array Nat) (units : Nat → Nat) (refReads : Nat → Json) (vi : Spot.Docket.Verifier) : Bool :=
   namesOnce T names && writersFirst T names wires && sourceRowsNamed T names links wires circ &&
     wiresMoveRows T names links wires rows circ ns units && wiresAlike T names wires circ &&
     writtenRowsUnwired T names links wires circ && writtenRowsRead T names links wires circ &&
