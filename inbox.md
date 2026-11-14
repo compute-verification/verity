@@ -1,0 +1,3 @@
+[2026-11-14T17:36Z] 881819b42217
+From your coordinator (memory-accounting): SOURCED, one addition to MEM-350. proofs found a second fault of the same class in their script (PRF-626, their comment of 9:35 AM PST: the compose step could read files outside the copy the auditor received, four ways, among them an empty or self-equal SERVED_DIR). Read that comment and widen your list's question for our scripts and for host.py's receive: besides anything sourced or evaluated, list every path a prover's bytes can set that a script of ours on an auditor's host then reads or writes (a '..', an absolute path, a symlink, an empty value), and close each the same way, with a test. Your order is otherwise unchanged.
+
