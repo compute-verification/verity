@@ -15,7 +15,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 /-!
 # The challenger's sample at every sample of the live sampling design, at hidden-output `--zk`
 
-`zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `Law.execOS`'s samples: the sample file `dj S` proves `S`'s units,
+`zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `SamplingDesign.execOS`'s samples: the sample file `dj S` proves `S`'s units,
 and setupHidden, under the `--zk` tags, sets up at `mPts` link points. As at public outputs (`ZkLink/DrawOk.lean`), the
 first half is custody (`DrawFileZK`) and the second is verity-verify-proof's own arithmetic.
 
@@ -32,7 +32,7 @@ first half is custody (`DrawFileZK`) and the second is verity-verify-proof's own
   `Hidden.setupHidden_spec`. `setupHidden_mPts_of_provedG` reads `g` off the session, and
   `setupHidden_mPts_of_provedSt` off the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
 * `drawOkZKH_of_exec`: from `DrawFileZK` at the live sampling design's own stratified sampling design, `DrawOkZKH` at every sample of
-  `Law.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden. `drawOkZKH_of_execG` is
+  `SamplingDesign.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden. `drawOkZKH_of_execG` is
   it at any `g` every session has, and `drawOkZKH_of_execSt` at the statement circuit's.
 -/
 
@@ -84,17 +84,17 @@ variable {n : ℕ}
 /-- **The challenger's sample is `DrawOkZKH` at every sample of the live sampling design, at any `g` every session under the `--zk`
 tags has.** With the executable strata `St` describing `σs`'s, each sampling `ks s` of its units: when the record's sample
 file is the verifier's sample under the live sampling design's own stratified sampling design (`DrawFileZK`), `DrawOkZKH` holds at
-`mPtsOf g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the source's bytes (every
+`mPtsOf g (∑ s, ks s)` link points at every sample of `SamplingDesign.execOS`, the run that reads past the source's bytes (every
 unit) included. -/
 theorem drawOkZKH_of_execG (I : Inputs) {g : ℕ}
     (hg : ∀ {d : Json} {st : Flock.Stmt}, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some d) I.partition I.program = .ok st → st.c.g = g)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Audit.Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKH I dj (mPtsOf g (∑ s, ks s))
-      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+      ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
   refine ⟨fun D hD u hu => ?_, fun st hst => ?_⟩
   · rw [hdj _ D hD, drawOf_proved, drawOf_mem]
     exact ⟨u, hu, rfl⟩
@@ -108,16 +108,16 @@ theorem drawOkZKH_of_execG (I : Inputs) {g : ℕ}
 /-- **The challenger's sample is `DrawOkZKH` at every sample of the live sampling design.** On tags whose circuit file `HmOut.parse`
 accepts under the `--zk` tags as `c`, with the executable strata `St` describing `σs`'s, each sampling `ks s` of its
 units: when the record's sample file is the verifier's sample under the live sampling design's own stratified sampling design (`DrawFileZK`),
-`DrawOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the
+`DrawOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `SamplingDesign.execOS`, the run that reads past the
 source's bytes (every unit) included. -/
 theorem drawOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Audit.Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKH_of_execG I (fun h => congrArg Flock.Circuit.g (setupHidden_c_of_parse hc h)) σs ks hks
     St hS Kd pop Lb src dj hdj ω
 
@@ -125,12 +125,12 @@ theorem drawOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
 tags. -/
 theorem drawOkZKH_of_execSt (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Audit.Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKH I dj (mPtsOf c.g (∑ s, ks s))
-      ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKH_of_execG I (fun h => (stmt_g_of_setupHidden ((zkTags_typed I).trans ht) hc h).symm) σs ks hks
     St hS Kd pop Lb src dj hdj ω
 

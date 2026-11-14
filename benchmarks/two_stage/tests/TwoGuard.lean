@@ -401,7 +401,7 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let interiorNames ← namesOf held "interior_names"
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
     let verifier : Spot.Registration.Verifier :=
-      { program := P, query := queryJ, law := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
+      { program := P, query := queryJ, samplingDesign := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
       { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,

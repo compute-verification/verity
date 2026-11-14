@@ -90,7 +90,7 @@ count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), and it mee
 the frozen hypotheses (`sessions_ofDeploy`). Its knowledge soundness is the one guarantees read at the deployed sampled
 verifier; `Claims.Sampling` holds no extractor or knowledge-soundness claim of its own. At the deployed
 record `deployOf F c` (`SamplingDeploy.compiled`), four of those are facts about the sampled verifier's code
-(`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the compiler's KS and committed form
+(`Code.DrawDesign`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the compiler's KS and committed form
 there take exactly them, Flock's KS at `F`, the commitment's binding and the sessions' runs, numbers and openings
 (`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`). At Flock's masked record and SHA-512, Flock's KS,
 the decoder's list bound and the commitment's binding are proved (`SamplingGeneric/Masked.lean`: `ks_masked`,
@@ -186,7 +186,7 @@ variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.
 from Flock's KS at `F` and its deployed decoder's list bound, the commitment's binding, the code's four facts and the
 sessions' runs, numbers and openings (`flockKS`, `sessions_compiled`). -/
 theorem ks_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
-    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.DrawLaw)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.DrawDesign)
     (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c iroots).KS H :=
@@ -194,7 +194,7 @@ theorem ks_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
 
 /-- **The committed form at the deployed record**: as `ks_compiled`, `KSReg` (`flockKSReg`). -/
 theorem ksReg_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
-    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.DrawLaw)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.DrawDesign)
     (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c iroots).KSReg H :=

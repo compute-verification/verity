@@ -157,7 +157,7 @@ theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Progr
   | all =>
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, fun _ => rfl, fun h => absurd rfl h⟩
-  | law _ | twoStage _ _ _ =>
+  | samplingDesign _ | twoStage _ _ _ =>
     obtain ⟨parsed, -, h⟩ := _root_.Properties.Spot.SecurityProofs.bind_eq_ok.1 h
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩

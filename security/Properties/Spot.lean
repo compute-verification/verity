@@ -70,14 +70,14 @@ def partitionOf (v : Registration.Verifier) : Json :=
 
 /-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered or holds
 certified entries; its format
-is the matching one and its protocol one-stage's; its sampling design is `law`, the verifier's agreed sampling design as `Draw.derive` expands it
+is the matching one and its protocol one-stage's; its sampling design is `samplingDesign`, the verifier's agreed sampling design as `Draw.derive` expands it
 over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
-def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
+def R1 (rec : Json) (v : Registration.Verifier) (samplingDesign : Json) : Prop :=
   keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
   jeq (getD rec "format")
     (.str (if v.registered.isEmpty && v.certified.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) ∧
   jeq (getD rec "protocol") (.str Registration.PROTOCOL) ∧
-  Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (getD rec "law") law ∧
+  Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (getD rec "law") samplingDesign ∧
   (getD rec "window" matches .obj _) ∧ ∃ k ∈ Registration.KINDS, jeq (getD (getD rec "window") "kind") (.str k)
 
 /-- The window's declared day (`Registration.Verifier.declared`), for a verifier that reads the registration log's
@@ -329,20 +329,20 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
       Registration.entryOf rec want.value = some e → jeq (getD e "root") (.str x.2) = true
 
 /-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
-program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
+program and query applies (`LinkPoints.samplingDesignOf`, with the population), some sample under it ends, and no member's fewest
 and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
 fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
 ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Registration.Verifier) : Prop :=
-  v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
-    LinkPoints.refused law n v.members = .ok #[]
+  v.members.isEmpty = false → ∃ samplingDesign n, LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable = .ok (samplingDesign, n) ∧
+    LinkPoints.refused samplingDesign n v.members = .ok #[]
 
-/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed sampling design as derived; R7, its
+/-- The registration keeps R1–R8 against the verifier's own copies, with `samplingDesign` the agreed sampling design as derived; R7, its
 pinned roots (`PinnedHeld`) and its certified roots (`CertifiedHeld`) when the verifier expects values registered or
 holds certified entries; and the per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s,
 not these. -/
-def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
-  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
+def Registered (v : Registration.Verifier) (rec samplingDesign : Json) : Prop :=
+  R1 rec v samplingDesign ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
     (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v
 
 /-- The caller's facts: what the caller's check (`VStar.Recursive.Caller.check`) holds the record to against what SPOT's
@@ -382,20 +382,20 @@ def countIn (units : Array Int) (s : Json) : Int :=
   let rs := (Draw.ranges? (getD s "units")).getD #[]
   units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
 
-/-- A sample of the sampling design `law` over the registered `population` (`draw.check_draw`): an object naming subset, bernoulli,
-stratified or work, with exactly its sampling design's keys; the sampling design it names is `law` and its population the registered one; its
+/-- A sample of the sampling design `samplingDesign` over the registered `population` (`draw.check_draw`): an object naming subset, bernoulli,
+stratified or work, with exactly its sampling design's keys; the sampling design it names is `samplingDesign` and its population the registered one; its
 units integers, strictly ascending, in `[0, population)`; a subset's `k` its number of units; a Bernoulli `p` written
 `NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work sample's strata well formed over its population
 (`Draw.strataMessage` none: each stratum exactly its keys, a distinct string template, its ranges ascending, disjoint and
 tiling `[0, population)`, its `k` the rule's), and each stratum's `k`, where its template is a string (as
 `Draw.strataMessage` none has every one), the number of units sampled in it; and a work sample's closure, when it has one,
 integers, non-empty, strictly ascending, in `[0, population)` and none of them sampled. -/
-def Drawn (draw population law : Json) : Prop :=
+def Drawn (draw population samplingDesign : Json) : Prop :=
   let kind := kindOf draw
   let closure := kind == "work" && (field? draw "closure").isSome
   (draw matches .obj _) ∧ kind ∈ ["subset", "bernoulli", "stratified", "work"] ∧
   keys? draw = some (drawKeys kind closure) ∧
-  jeq (Draw.lawOf draw) law ∧ jeq (getD draw "population") population ∧
+  jeq (Draw.samplingDesignOf draw) samplingDesign ∧ jeq (getD draw "population") population ∧
   ∃ us units, getD draw "units" = .arr us ∧ us.mapM int? = some units ∧ Ascending units ∧
     (∀ (h : 0 < units.size), 0 ≤ units[0] ∧ ∃ n, int? (getD draw "population") = some n ∧ units[units.size - 1] < n) ∧
     (kind = "subset" → int? (getD draw "k") = some (units.size : Int)) ∧
@@ -465,15 +465,15 @@ def drawnNats (draw : Json) : Array Nat :=
   | .arr us => us.filterMap nat?
   | _ => #[]
 
-/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: whether every
+/-- The public outputs at δ, for the sampling design `samplingDesign` with its profile's sample `d` over `n` units: whether every
 verdict ran (`Record.allRan`, which `VerdictsAccept` asks only of the verdicts of record), the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
+def publicOf (p : Params) (e : Evidence) (samplingDesign : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
-    perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
+    perTemplate := if jeq (getD samplingDesign "law") "stratified" || jeq (getD samplingDesign "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
     complete := Record.allRan e.verdicts }
 
@@ -485,18 +485,18 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDes
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
     delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
 
-/-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed sampling design as derived, the sample is a
-sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
-values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
+/-- What the check accepts: the registration keeps R1–R8 with `samplingDesign` the verifier's agreed sampling design as derived, the sample is a
+sample of `samplingDesign` over the registered population, the units were proved and served as sampled under the registered roots and
+values with the receipt naming the commitment's digest, and the verdicts accept; `samplingDesign` has a profile's sample `d`
 (`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
-      ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
+      ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
-        Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e law d n ∧ prof = profileOf p c e d n
+        Record.profileDraw samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
+        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n
 
 /-- The commitment's digest, which the receipt is held to, is the window record's digest of the record it decodes:
 `SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag. -/

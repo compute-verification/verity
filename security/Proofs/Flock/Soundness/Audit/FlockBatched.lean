@@ -120,7 +120,7 @@ theorem loweringSoundB_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tab
   simp only [hu, ↓reduceDIte]
   exact (place S R u hu).correct hM
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The batched audit's analysis.** `X` is the committed transcript (the link theorem defines it),
 `decode` reads each sampled proof block from its table's witness, `Kr` is the extractor's rerun count. -/

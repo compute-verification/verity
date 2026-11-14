@@ -31,7 +31,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The end-to-end drawn-unit bound with registered reads, under `cr/sha-512` alone**:
 `Registered.flock_e2e_drawn_hm96_reads` with `LinkCRStrict` for `LinkCR`. -/

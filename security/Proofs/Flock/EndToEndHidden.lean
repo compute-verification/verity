@@ -14,7 +14,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 # Proof of Flock's end-to-end guarantee under hidden outputs
 
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Audit.Law.subset_miss`, and
+first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Audit.SamplingDesign.subset_miss`, and
 `linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` is
 `zk_session_soundHJ_custody_drawn_reg` with its last term in closed form. Each reads the circuit the descriptor
 unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
@@ -49,7 +49,7 @@ theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := by
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
   have h := Discharge.ZkHidden.zk_session_soundHJ_custody_reg I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb
     src hA3 hTags hCust hk hRw hM hρ hr ht' K₀ τ (qF := qF) (qS := qS) hCR
-  rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
+  rw [SamplingDesign.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 
 /-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks.** -/

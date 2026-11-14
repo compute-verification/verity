@@ -97,7 +97,7 @@ checks are the function the run of record of step 4 calls for the interior's rec
 registration's own ports at that port's own root is no registered read of the record (`Record.lessOwnReads`), its
 rows being the second-stage statement check's to hold, and a read of one of its ports at any other root is opened and
 not registered, which refuses. A member of an interior that reads another member's port reads it so.
-That design is computed, never read from the evidence (`secondDesignOf`): `Select.secondLaw` of the first stage's sample (the
+That design is computed, never read from the evidence (`secondDesignOf`): `Select.secondSamplingDesign` of the first stage's sample (the
 proved units of the sample the run of record decided) over the replay block's cells under the interior's query
 (`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage samples by.
 Its refusals carry `OneStage.check`'s step prefixes, so a reason names the same step in both forms.
@@ -699,7 +699,7 @@ round is fixed. An honest challenger opens them so. -/
 def repStreamsOrdered (p : Params) (e : Evidence) : V Unit :=
   OneStageZk.treesOf p.audit.base e.interior.base >>= treesOrdered
 
-/-- **The second stage's sampling design** (check, 5), computed and never read: `Select.secondLaw` of the first stage's
+/-- **The second stage's sampling design** (check, 5), computed and never read: `Select.secondSamplingDesign` of the first stage's
 sample, the proved units of the sample the run of record `run` decided, over the cells the replay block's program has
 under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
 second stage computes it. -/
@@ -708,7 +708,7 @@ def secondDesignOf (p : Params) (run : Json) : V Json := do
   let q := p.interior.verifier.query
   let ns ← Select.replayCells p.replay q
   let ks ← k.over (← Select.templateIds q) ns
-  pure (Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)
+  pure (Select.secondSamplingDesign ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)
 
 /-- The interior registration's sampling design as the run of record reads it: a subset of all its `m` proof blocks. -/
 def subsetDesign (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
@@ -753,15 +753,15 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
 /-- **The interior audit's check at the second stage's sampling design** (check, 5; module docstring, **the last
 step**): the interior registration's population `m`; the sample the coins `ξ₂` give under `design`
 (`OneStage.coinsReason` at the verifier whose sampling design is `subsetDesign m`, so that the sample is `design`'s,
-`Draw.flockLaw`), every coin opened read; then `secondChecked` at that verifier. -/
+`Draw.flockSamplingDesign`), every coin opened read; then `secondChecked` at that verifier. -/
 def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (design : Json)
     (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   match nat? (getD c.record "population") with
   | none => .reject "registration: the interior record names no population"
   | some m =>
-    match OneStage.coinsReason { v with law := subsetDesign m } design c.record e.draw ξ₂ with
+    match OneStage.coinsReason { v with samplingDesign := subsetDesign m } design c.record e.draw ξ₂ with
     | some why => .reject s!"draw: coins: {why}"
-    | none => secondChecked { v with law := subsetDesign m } delta c m design e
+    | none => secondChecked { v with samplingDesign := subsetDesign m } delta c m design e
 
 /-- The refusal of a second-stage session whose statement is `2^64` bytes or more (`stmtsBytesFit`). -/
 def STMT_BYTES (session : String) : String :=

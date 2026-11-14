@@ -68,13 +68,13 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
   obtain ⟨pub, prof, hv1⟩ := hM.v1
   obtain ⟨design, n, read, hder0, hn, hdf⟩ := checkAt_drew hv1
   obtain ⟨derived, fl, hder, hfl, hdu⟩ := drawnFrom_ok hdf
-  have hof : LawOf p c (derived.getD fl) n := ⟨design, derived, fl, hder0, hn, hder, hfl, rfl⟩
+  have hof : SamplingDesignOf p c (derived.getD fl) n := ⟨design, derived, fl, hder0, hn, hder, hfl, rfl⟩
   have hdrew : Drew k x.sent dr (derived.getD fl) n ξ (drawnUnits ev.base.draw) :=
     ⟨a, b, e, p, c, ev, hcase, hacc, hof, rfl, read, hdu⟩
   have hnJ : W.nJ = n :=
     hset.toWindowOn.population hset.passes hp hms (membersStructure_laid (membersRun_ok hM.run hM.all).1) hn
-  have hL : W.law = derived.getD fl := by
-    have h1 := lawAt_of_lawOf hof
+  have hL : W.samplingDesign = derived.getD fl := by
+    have h1 := samplingDesignAt_of_samplingDesignOf hof
     rw [← hnJ] at h1
     exact Except.ok.inj (hlaw.symm.trans h1)
   have hs := shows_of_read hv.2.1 hcase hacc hlogRead hl
@@ -112,9 +112,9 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     exact h1.symm
   have hMA := hset.toWindowOn.membersAt
   obtain ⟨read', hok⟩ := joint_drawUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
-  have hok' : _root_.Spot.Draw.drawUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
+  have hok' : _root_.Spot.Draw.drawUnits W.samplingDesign W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
       .ok (drawnUnits ev.base.draw, read') := hok
-  have hended : Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true := by
+  have hended : Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω = true := by
     simp only [Flock.Guarantees.sampleEnded, hok']
   refine ⟨hended, ?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
   · rw [← helloSpecs_congr hfr]

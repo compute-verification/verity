@@ -272,7 +272,7 @@ theorem uniformOn_bytesOf {L : ℕ} (s : Fin L → Fin 256) (n : ℕ) :
       (uniformL n (L + 1) (bsOf s)).map Prod.fst := by
   have h := FlockSoundness.Audit.DrawExec.uniform_streamOf s n (L + 1) 0 (Nat.zero_le _)
   rw [List.drop_zero] at h
-  have hb : Properties.Spot.bytesOf s = FlockSoundness.Audit.Law.streamOf s := rfl
+  have hb : Properties.Spot.bytesOf s = FlockSoundness.Audit.SamplingDesign.streamOf s := rfl
   unfold FlockSoundness.Randomness.uniformOn
   rw [hb, FlockSoundness.Audit.DrawExec.size_streamOf]
   revert h

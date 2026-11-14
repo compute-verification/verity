@@ -209,7 +209,7 @@ theorem sparse_of_readAt {e : ExecHolo} {l : List Step} {u : C3Run e} (hs : Spar
   exact Fin.forall_fin_two.2 ⟨p₀, p₁⟩
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n3's read fact) Each rep's RecSparse unit is on the inner transcript**: at every accepted outcome, the inner
 transcript's steps (V*'s layers' messages zipped with the rounds' coins) hold, past the reps' steps the run reads, rep

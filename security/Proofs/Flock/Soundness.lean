@@ -111,7 +111,7 @@ public import Proofs.Flock.Soundness.Types.Parts
 public import Proofs.Flock.Soundness.Types.Flatten
 public import Proofs.Flock.Soundness.Compose
 public import Proofs.Flock.Soundness.ComposeDag
-public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.SamplingDesign
 public import Proofs.Flock.Soundness.Audit.Pooled
 public import Proofs.Flock.Soundness.Audit.Circuit
 public import Proofs.Flock.Soundness.Audit.OneStage

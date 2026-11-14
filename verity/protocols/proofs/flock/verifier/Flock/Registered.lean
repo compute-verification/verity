@@ -528,7 +528,7 @@ def roundCommitment (value : String) : Bool :=
 stratum samples all of its units (`k_s = n_s`). -/
 def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
-  match d.law with
+  match d.samplingDesign with
   | .subset k => k == d.population
   | .bernoulli a b => a == b
   | .stratified _ strata => strata.any full

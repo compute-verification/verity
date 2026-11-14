@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
@@ -33,7 +33,7 @@ it there alone: each is the old theorem at the sampling design with the one coin
 The samples come from the record's custody (`DrawFileZK`):
 
 * `DrawFileZK.proves`, `DrawFileZK.card`: a sample file custody fixes proves its sample's units, as many as the sample has;
-* `drawOkZK_execOS`, `drawOkZKH_execOS`: `DrawOkZK` (`DrawOkZKH`) at a sample of `Law.execOS` whose run succeeds, at link
+* `drawOkZK_execOS`, `drawOkZKH_execOS`: `DrawOkZK` (`DrawOkZKH`) at a sample of `SamplingDesign.execOS` whose run succeeds, at link
   points `mPts = mPtsOf c.g (∑ s, k s)` (`Exec.setupH_mPts_execOS`, `ZkHidden.setupHidden_mPts_of_proved`), from custody
   under any sampling design. `ZkLink.drawOkZK_of_exec` and `ZkHidden.drawOkZKH_of_exec` give the same at every sample, the failed
   run's (every unit) included, from custody under the live sampling design's own stratified sampling design;
@@ -65,7 +65,7 @@ only where verity-verify-proof `--zk` accepts what `wr` writes at it. -/
 def RunsZCLiveA : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (y₀ : ZkLink.DrawSetupZK I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n),
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.SamplingDesign n),
     ZkLink.TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) → TagsOk I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω R (o : LiveOut mPts), AcceptsZK I (wr (L.draw ω) R o) → ZkLink.DrawOkZK I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (ZkLink.tablesAtZK (Reg := Reg) dj y₀) I wr
@@ -87,14 +87,14 @@ open Flock Exec ZkExec Finset FlockSoundness.Refine
 variable {n : ℕ}
 
 /-- A sample file custody fixes proves its sample's units. -/
-theorem DrawFileZK.proves {dj : Finset (Fin n) → Lean.Json} {law : Draw.Law} {pop : ℕ} (h : DrawFileZK dj law pop)
+theorem DrawFileZK.proves {dj : Finset (Fin n) → Lean.Json} {samplingDesign : Draw.SamplingDesign} {pop : ℕ} (h : DrawFileZK dj samplingDesign pop)
     (S : Finset (Fin n)) : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved := by
   intro D hD u hu
   rw [h S D hD, drawOf_proved, drawOf_mem]
   exact ⟨u, hu, rfl⟩
 
 /-- A sample file custody fixes proves as many units as its sample has. -/
-theorem DrawFileZK.card {dj : Finset (Fin n) → Lean.Json} {law : Draw.Law} {pop : ℕ} (h : DrawFileZK dj law pop) :
+theorem DrawFileZK.card {dj : Finset (Fin n) → Lean.Json} {samplingDesign : Draw.SamplingDesign} {pop : ℕ} (h : DrawFileZK dj samplingDesign pop) :
     ∀ B D, Draw.UnitDraw.ofJson (dj B) = .ok D → D.proved.size = B.card := by
   intro B D hD
   rw [h B D hD, drawOf_proved, drawOf_size]
@@ -102,12 +102,12 @@ theorem DrawFileZK.card {dj : Finset (Fin n) → Lean.Json} {law : Draw.Law} {po
 /-- **`DrawOkZK` at a sample of the live sampling design whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
 theorem drawOkZK_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) {mPts m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ}
-    {St : Fin m → Draw.Stratum} (hS : Audit.Law.ExecStrata σ k St) {law : Draw.Law} {pop' : ℕ}
-    {dj : Finset (Fin n) → Lean.Json} (h : DrawFileZK dj law pop') {K pop : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    {St : Fin m → Draw.Stratum} (hS : Audit.SamplingDesign.ExecStrata σ k St) {samplingDesign : Draw.SamplingDesign} {pop' : ℕ}
+    {dj : Finset (Fin n) → Lean.Json} (h : DrawFileZK dj samplingDesign pop') {K pop : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {L : Fin m → ℕ} {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} {ω : Ω} {d : Draw.UnitDraw}
-    (hrun : Audit.Law.runOS (t ω) (.stratified K (Array.ofFn St)) pop = some d)
+    (hrun : Audit.SamplingDesign.runOS (t ω) (.stratified K (Array.ofFn St)) pop = some d)
     (hm : mPts = mPtsOf c.g (∑ s, k s)) :
-    DrawOkZK I dj mPts ((Audit.Law.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω) := by
+    DrawOkZK I dj mPts ((Audit.SamplingDesign.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω) := by
   have hc' : (if (zkTags I).typed then HmRow.parseTyped (zkTags I) I.circuitFile I.tables
       else HmRow.parse (zkTags I) I.circuitFile I.tables) = .ok c := by
     rw [zkTags_typed, ht]; exact hc
@@ -115,14 +115,14 @@ theorem drawOkZK_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circ
   rw [hm]
   exact setupH_mPts_execOS hc' σ k St hS K pop t ω hrun dj h.card hst
 
-/-- **A sample file custody fixes under the live stratified sampling design has `Σ_s k_s` units**, at every sample of `Law.execOS`: the
+/-- **A sample file custody fixes under the live stratified sampling design has `Σ_s k_s` units**, at every sample of `SamplingDesign.execOS`: the
 run that succeeds samples that many (`execOS_draw_card_or`), and the run that reads past the source's bytes samples every
 unit, whose file decodes only when every stratum samples all its units (`sum_ks_of_univ`). -/
 theorem DrawFileZK.size_execOS {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ)
-    (hks : ∀ s, ks s ≤ (Audit.Law.stratum σs s).card) (St : Fin m → Draw.Stratum) (hS : Audit.Law.ExecStrata σs ks St)
+    (hks : ∀ s, ks s ≤ (Audit.SamplingDesign.stratum σs s).card) (St : Fin m → Draw.Stratum) (hS : Audit.SamplingDesign.ExecStrata σs ks St)
     (Kd pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {dj : Finset (Fin n) → Lean.Json} (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
-    ∀ D, Draw.UnitDraw.ofJson (dj ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    ∀ D, Draw.UnitDraw.ofJson (dj ((Audit.SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
       = .ok D → D.units.size = ∑ s, ks s := by
   intro D hD
   have hDe := hdj _ D hD
@@ -146,14 +146,14 @@ variable {n mPts : ℕ} {Reg : Type}
 /-- **`DrawOkZKH` at a sample of the live sampling design whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
 theorem drawOkZKH_execOS (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ}
-    {St : Fin m → Draw.Stratum} (hS : Law.ExecStrata σ k St) {law : Draw.Law} {pop' : ℕ}
-    {dj : Finset (Fin n) → Lean.Json} (h : DrawFileZK dj law pop') {K pop : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    {St : Fin m → Draw.Stratum} (hS : SamplingDesign.ExecStrata σ k St) {samplingDesign : Draw.SamplingDesign} {pop' : ℕ}
+    {dj : Finset (Fin n) → Lean.Json} (h : DrawFileZK dj samplingDesign pop') {K pop : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {L : Fin m → ℕ} {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} {ω : Ω} {d : Draw.UnitDraw}
-    (hrun : Law.runOS (t ω) (.stratified K (Array.ofFn St)) pop = some d)
+    (hrun : SamplingDesign.runOS (t ω) (.stratified K (Array.ofFn St)) pop = some d)
     (hm : mPts = mPtsOf c.g (∑ s, k s)) :
-    DrawOkZKH I dj mPts ((Law.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω) := by
+    DrawOkZKH I dj mPts ((SamplingDesign.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω) := by
   refine ⟨h.proves _, fun st hst => ?_⟩
-  rw [setupHidden_mPts_of_proved hc (h.card ((Law.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω)) hst,
+  rw [setupHidden_mPts_of_proved hc (h.card ((SamplingDesign.execOS (n := n) t (.stratified K (Array.ofFn St)) pop).draw ω)) hst,
     execOS_draw_card σ k St hS K pop t ω hrun, hm]
 
 /-- **At one table, `DrawOkZKHJ` is `DrawOkZKH`**: the table's sample is the session's, its units are the sampled ones, and
@@ -169,11 +169,11 @@ theorem drawOkZKHJ_one {I : Inputs} (h1 : I.count ≤ 1) {dj : Finset (Fin n) �
 /-- **At one table, `runsZCJH_live`'s samples hold at every sample of the live sampling design**: `drawOkZKH_of_exec` at one table. -/
 theorem drawOkZKHJ_of_exec_one (I : Inputs) (h1 : I.count ≤ 1) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
-    DrawOkZKHJ I dj (mPtsOf c.g (∑ s, ks s)) ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+    DrawOkZKHJ I dj (mPtsOf c.g (∑ s, ks s)) ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKHJ_one h1 (drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hdj ω)
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables of `J` tables, with the sample at accepted outcomes**:
@@ -183,7 +183,7 @@ theorem runsZCJH_liveA (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circu
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω R (o : LiveOutJ (planZHJ (Reg := Reg) dj y₀ (L.draw ω) R).length mPts),
       AcceptsZK I (wr (L.draw ω) R o) → DrawOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
@@ -210,29 +210,29 @@ theorem setupTables_units {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock
 
 /-- **The challenger's live-coin part's samples at `J` tables under the live stratified sampling design, from custody**: when the record's sample file
 is the verifier's sample under the live sampling design's own stratified sampling design (`DrawFileZK`) and the session's tables divide
-`Σ_s k_s`, every sample of `Law.execOS` is `DrawOkZKJ` at `mPtsOf c.g ((Σ_s k_s) / nTab I)` link points, the failed run's
+`Σ_s k_s`, every sample of `SamplingDesign.execOS` is `DrawOkZKJ` at `mPtsOf c.g ((Σ_s k_s) / nTab I)` link points, the failed run's
 (every unit) included: custody's file has `Σ_s k_s` units (`DrawFileZK.size_execOS`), which `partDraw` splits into the
 tables' equal parts (`drawOkZKJ_of_size`). -/
 theorem _root_.FlockSoundness.Discharge.Composed.drawOkZKJ_of_exec (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ) (hdiv : (∑ s, ks s) % nTab I = 0)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ) (hdiv : (∑ s, ks s) % nTab I = 0)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKJ I dj (mPtsOf c.g ((∑ s, ks s) / nTab I))
-      ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKJ_of_size I ht hc _ _ pop hdiv dj hdj _ (DrawFileZK.size_execOS σs ks hks St hS Kd pop Lb src hdj ω)
 
 /-- **The challenger's live-coin part's samples at `J` tables under the live stratified sampling design, from custody, at hidden outputs**:
 `drawOkZKJ_of_exec` at setupHidden (`drawOkZKHJ_of_size`). -/
 theorem drawOkZKHJ_of_exec (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ) (hdiv : (∑ s, ks s) % nTab I = 0)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ) (hdiv : (∑ s, ks s) % nTab I = 0)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKHJ I dj (mPtsOf c.g ((∑ s, ks s) / nTab I))
-      ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKHJ_of_size I ht hc _ _ pop hdiv dj hdj _ (DrawFileZK.size_execOS σs ks hks St hS Kd pop Lb src hdj ω)
 
 /-- **`DrawOkZKHJ` at an accepted outcome of the live sampling design, at any count**: `drawOkZKHJ_of_exec` at `(Σ_s k_s) / nTab I`
@@ -241,16 +241,16 @@ units a table. At one table `nTab I = 1`; at several, verity-verify-proof `--zk`
 `Σ_s k_s` units (`DrawFileZK.size_execOS`), so the tables divide `Σ_s k_s`. -/
 theorem drawOkZKHJ_of_accepts (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop)
     {Jf : Finset (Fin n) → Reg → ℕ} {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript}
     (hRec : RecordsLiveZKJ I dj Jf wr) (ω : Ω) (R : Reg)
-    (o : LiveOutJ (Jf ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
-    (hacc : AcceptsZK I (wr ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
+    (o : LiveOutJ (Jf ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
+    (hacc : AcceptsZK I (wr ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
     DrawOkZKHJ I dj (mPtsOf c.g ((∑ s, ks s) / nTab I))
-      ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+      ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
   refine drawOkZKHJ_of_exec I ht hc σs ks hks St hS Kd pop ?_ Lb src dj hdj ω
   by_cases h1 : I.count ≤ 1
   · rw [show nTab I = 1 from if_pos h1]
@@ -270,16 +270,16 @@ units, and gives table `j` its `j`-th part), `DrawOkZKHJ` holds at `(Σ_s k_s) /
 `drawOkZKHJ_of_accepts` at the custody's two parts. -/
 theorem drawOkZKHJ_of_custodyJS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json)
     {Jf : Finset (Fin n) → Reg → ℕ} {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript}
     (hCust : Assumptions.Zk.RecordCustodyZKJS I dj Jf wr Kd (Array.ofFn St) pop) (ω : Ω) (R : Reg)
-    (o : LiveOutJ (Jf ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
-    (hacc : AcceptsZK I (wr ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
+    (o : LiveOutJ (Jf ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
+    (hacc : AcceptsZK I (wr ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
     DrawOkZKHJ I dj (mPtsOf c.g ((∑ s, ks s) / nTab I))
-      ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
+      ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKHJ_of_accepts I ht hc σs ks hks St hS Kd pop Lb src dj hCust.2 hCust.1 ω R o hacc
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables, at any count, with the sample from custody**: `runsZCJH_liveA`
@@ -287,8 +287,8 @@ at the live sampling design, whose sample hypothesis `drawOkZKHJ_of_accepts` dis
 points. -/
 theorem runsZCJH_live_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop)
     (hm : mPts = mPtsOf c.g ((∑ s, ks s) / nTab I)) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -297,9 +297,9 @@ theorem runsZCJH_live_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock
     (hT : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!)
-      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) := by
+      (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) := by
   subst hm
-  exact runsZCJH_liveA I ht hc ho dj y₀ wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) hT hRec
+  exact runsZCJH_liveA I ht hc ho dj y₀ wr (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) hT hRec
     (drawOkZKHJ_of_accepts I ht hc σs ks hks St hS Kd pop Lb src dj hdj hRec)
 
 /-- **`DrawOkZKHJ` at an accepted outcome of a subset sampling design, at any count**: `drawOkZKHJ_of_file` at `kd / nTab I` units a
@@ -335,7 +335,7 @@ theorem runsZCJH_live_subset (I : Inputs) (ht : I.tags.typed = false) {c : Flock
     (hm : mPts = mPtsOf c.g (kd / nTab I)) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I)
+    (L : SamplingDesign n) (hT : TagsOkZHJ I)
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by

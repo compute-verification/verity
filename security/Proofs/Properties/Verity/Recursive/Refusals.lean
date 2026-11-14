@@ -51,7 +51,7 @@ words. Each is the compiled component's own refusal:
 
 * **`innerOkAt_of_compiled`.** The compiled `innerHeld` runs `innerOk`: Flock's plain setup of the inner statement on its
   circuit, public file and sample, at the verifier's partition and program and `--stratified` at the population they give
-  (`HmRow.stratifiedLaw` at `K = 1`), then each check `FlockDeploy.Ins.setup` runs and the scope check. Where `x` names
+  (`HmRow.stratifiedSamplingDesign` at `K = 1`), then each check `FlockDeploy.Ins.setup` runs and the scope check. Where `x` names
   the component's inputs (`Names`), the inner statement `x` carries reads as those inputs (`ins_inner`), so the model's
   setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the sample, and
   at one table the session's sample is the sample (`RecDeploy.drawTiedS`). That is the model's `innerOk`.
@@ -178,7 +178,7 @@ program and `--stratified n`, and the scope check. -/
 theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     (h : VStar.Recursive.innerOk o cB pB dB = .ok ()) :
     ∃ t j L n spec sts, String.fromUTF8? dB = some t ∧ Flock.JsonParse.parse t = .ok j ∧
-      Flock.HmRow.stratifiedLaw o.partition o.program 1 = .ok (L, n) ∧
+      Flock.HmRow.stratifiedSamplingDesign o.partition o.program 1 = .ok (L, n) ∧
       Flock.Tags.circuitPlainLeaves.hm96Rows = true ∧
       Flock.RecSetup.checkInner none none (pure (none, none)) = .ok () ∧
       Flock.Stmt.setupTables Flock.Tags.circuitPlainLeaves cB pB .seed 1 [] (some (Flock.norm j))
@@ -190,7 +190,7 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
       sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
         = .ok () ∧
       sts.forM (Flock.RecVStar.checkPubRows · none none none) = .ok () ∧
-      Flock.ProvedScope.drawLaw false Flock.Tags.circuitPlainLeaves false (some (Flock.norm j)) =
+      Flock.ProvedScope.drawDesign false Flock.Tags.circuitPlainLeaves false (some (Flock.norm j)) =
         .ok () ∧
       Flock.ProvedScope.check Flock.Tags.circuitPlainLeaves false cB pB [] 1 false false = .ok () := by
   have htg : Flock.Tags.find? VStar.Recursive.INNER_STATEMENT = some Flock.Tags.circuitPlainLeaves := rfl
@@ -270,7 +270,7 @@ theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n 
     (hcoins : sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none)
       (Flock.RecSetup.c3 none none)) = .ok ())
     (hpub : sts.forM (Flock.RecVStar.checkPubRows · none none none) = .ok ())
-    (hlaw : Flock.ProvedScope.drawLaw false Flock.Tags.circuitPlainLeaves false
+    (hlaw : Flock.ProvedScope.drawDesign false Flock.Tags.circuitPlainLeaves false
       (some (Flock.norm j)) = .ok ()) :
     (innerIns cB pB o j n).setup = .ok (spec, sts) := by
   have hsh : (innerIns cB pB o j n).read.tags.hm96Rows = true := hhm

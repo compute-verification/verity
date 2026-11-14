@@ -176,7 +176,7 @@ theorem drawsInFull_of_checkFull_round {own : Array Flock.Registered.Port} {j : 
 /-- **The executable stratum of a unit a stratified sample samples in full**: one of `St`'s strata holds `u` in its ranges and
 samples all of its units. -/
 theorem full_stratum {m : ℕ} {St : Fin m → Flock.Draw.Stratum} {d : Flock.Draw.UnitDraw} {Kd u : ℕ}
-    (hlaw : d.law = .stratified Kd (Array.ofFn St)) (hu : Flock.Registered.drawsInFull d u = true) :
+    (hlaw : d.samplingDesign = .stratified Kd (Array.ofFn St)) (hu : Flock.Registered.drawsInFull d u = true) :
     ∃ t : Fin m, (St t).units.any (fun (lo, hi) => lo ≤ u && u < hi) = true ∧ (St t).k = (St t).size := by
   simp only [Flock.Registered.drawsInFull, hlaw] at hu
   rw [Array.any_eq_true] at hu

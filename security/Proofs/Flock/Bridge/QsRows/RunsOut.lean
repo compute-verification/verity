@@ -151,12 +151,12 @@ theorem loopP_none_of_loopSw (n : ℕ) (src : ByteArray) : ∀ (l : List ℕ) (s
 
 /-- A `subset` sample that returns `none` on a stream has its loop run out on that stream's bytes. -/
 theorem subset_none_failL {L : ℕ} (f : Fin L → Fin 256) (k n : ℕ)
-    (h : Flock.Draw.subset k n (Law.streamOf f) = none) : failL n (L + 1) (List.range' 0 k) (bsOf f) := by
+    (h : Flock.Draw.subset k n (SamplingDesign.streamOf f) = none) : failL n (L + 1) (List.range' 0 k) (bsOf f) := by
   rw [DrawExec.subset_eq] at h
-  cases hl : loopSw n (Law.streamOf f) (List.range' 0 k) ∅ 0 with
+  cases hl : loopSw n (SamplingDesign.streamOf f) (List.range' 0 k) ∅ 0 with
   | some sw => rw [hl] at h; exact absurd h (by simp)
   | none =>
-    have hp := loopP_none_of_loopSw n (Law.streamOf f) _ _ (Equiv.refl ℕ) _ hl
+    have hp := loopP_none_of_loopSw n (SamplingDesign.streamOf f) _ _ (Equiv.refl ℕ) _ hl
     rw [loopP_streamOf f n _ _ 0 (Nat.zero_le _), List.drop_zero] at hp
     exact failL_of_loopL_none n (L + 1) _ _ _ hp
 
@@ -224,13 +224,13 @@ theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Dr
 /-- **`Flock.Draw.subset k n` runs out with probability at most `k·2⁻⁶⁴`**, on a uniform stream of at least
 `k·width n` bytes. -/
 theorem subset_none_le (k n L : ℕ) (hk : k ≤ n) (hL : k * Flock.Draw.width n ≤ L) :
-    prCoin (fun f : Fin L → Fin 256 => Flock.Draw.subset k n (Law.streamOf f) = none) ≤
+    prCoin (fun f : Fin L → Fin 256 => Flock.Draw.subset k n (SamplingDesign.streamOf f) = none) ≤
       (k : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
   (prCoin_mono fun f h => subset_none_failL f k n h).trans (failL_le n L k 0 L (by omega) hL)
 
 end FlockSoundness.Audit.DrawExec
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset
 open scoped ENNReal
@@ -372,4 +372,4 @@ theorem execOS_subset_draw_card_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
     exact (card_filter_mem_le n d.units).trans
       (le_of_eq (_root_.Properties.Spot.SecurityProofs.subset_size (runOS_subset_some (t ω) k n d hd)))
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign

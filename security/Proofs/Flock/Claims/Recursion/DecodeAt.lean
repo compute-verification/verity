@@ -185,15 +185,15 @@ theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
   have hu := FlockComplete.JsonRT.unitDraw_of hl (hd d hdd)
   have hU : st.spec.unitDraw = some d := by simp [Stmt.spec, hu, Except.toOption]
   obtain ⟨D, hD, hn⟩ := hinst d hu
-  have hdl := FlockComplete.JsonRT.Ins.setup_drawLaw hsu hds
+  have hdl := FlockComplete.JsonRT.Ins.setup_drawDesign hsu hds
   rw [hdd, hz] at hdl
-  simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy false s.read.tags false D = none := by
-    cases e : ProvedScope.lawWhy false s.read.tags false D with
+  simp only [ProvedScope.drawDesign, hD] at hdl
+  have hlw : ProvedScope.samplingDesignWhy false s.read.tags false D = none := by
+    cases e : ProvedScope.samplingDesignWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   have hg : Good d := by
-    rcases FlockComplete.JsonRT.law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
+    rcases FlockComplete.JsonRT.samplingDesign_of_samplingDesignWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
     · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hK
     · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hk
   have hnn : d ≠ Json.null := by

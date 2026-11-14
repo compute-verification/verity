@@ -16,7 +16,7 @@ elements they differ at, and that release has the same frame and the same bytes 
   that are release by release the same frame and bytes, and the same release while the coins agree at what it is
   written from.
 * **Along the releases** (`same_placeK`): the outputs at one tape with `r` and with `r'` written in are `SameAt`, by
-  the recursion `placeK_congr` and `law_placeKA` take.
+  the recursion `placeK_congr` and `distribution_placeKA` take.
 * **At the period's game** (`same_place`, `place_prefix`, `place_whole`, `place_prefix_used`).
 
 What this does not say: that the releases before the one `place` puts round `n` on are on rounds below `n`. A strategy

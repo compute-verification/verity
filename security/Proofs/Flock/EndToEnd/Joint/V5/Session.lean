@@ -41,7 +41,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg)
   (one : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → Bool)
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
-  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
+  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : SamplingDesign n}
 
 /-- **`execRefinesZK_tables_drawn` at `acc`**: `acc` accepts the live audit at a sample in `E` no likelier than the
 compiled batched audit, played by `simZJA … τ`, accepts at a sample in `E`. -/
@@ -85,7 +85,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Opening → Prop) {L : Law n}
+  (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Opening → Prop) {L : SamplingDesign n}
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration with canonical openings**: it
 accepts with a sampled proof block in `wrongRegZc` with probability at most `ε_ks + δ_link`, `zk_flock_countC_regC`'s
@@ -119,7 +119,7 @@ variable {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ)
 
 /-- **A member's session accepted with a sampled proof block incorrect**, played alone at the sampling design `L` by `τ`:
 at most `ε_ks + ε_bind` at `L`. -/
-theorem accepted_drawnWrong_le (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L))
+theorem accepted_drawnWrong_le (L : SamplingDesign m.n) (hL : m.OneClass L) (τ : Strategy (m.game L))
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZHJP m.dj m.y₀ (L.draw ω) (reg (m.sim L hL τ))) j
       (zcStrat execArith hs512 (planZHJP m.dj m.y₀) (cont (m.sim L hL τ) ω)) m.qF m.qS)
     (hA2 : LinkCRZC execArith hs512 m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb (reg (m.sim L hL τ))

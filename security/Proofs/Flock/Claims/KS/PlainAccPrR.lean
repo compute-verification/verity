@@ -150,7 +150,7 @@ def PlainAccPrRdR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
 
 /-! ## The sample -/
 
-/-- **`checksAtJ` refuses a session without a sample** (`drawLaw false tags none`). -/
+/-- **`checksAtJ` refuses a session without a sample** (`drawDesign false tags none`). -/
 theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : ∃ d, s.read.draw = some d := by
@@ -161,7 +161,7 @@ theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   cases hd : s.read.draw with
-  | none => simp [hd, ProvedScope.drawLaw] at h
+  | none => simp [hd, ProvedScope.drawDesign] at h
   | some d => exact ⟨d, rfl⟩
 
 /-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a sample** (`decideR_sha512`,

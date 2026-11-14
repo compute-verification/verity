@@ -189,12 +189,12 @@ def paramsParsed (j : Json) : V Params := do
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
 its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
-sample is sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
+sample is sampled under (`OneStage.drawnFrom`, `Draw.deriveSamplingDesign`): v1 has already resolved a rate stated as text over
 the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
 `work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
-  let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""
+  let kind := match getD p.base.verifier.samplingDesign "law" with | .str s => s | _ => ""
   if kind != "subset" then throw (SUBSET_ONLY kind)
   pure p
 
@@ -508,7 +508,7 @@ registered openings, once the sampling design holds. -/
 def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
     V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := do
   let (spec, sts) ← (sessionAt I rd draw).mapError (s!"setup: {·}")
-  (if draw.isSome then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  (if draw.isSome then Flock.ProvedScope.drawDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
   pure (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
     Flock.registeredOpenings sts rd.registered)
 
@@ -554,7 +554,7 @@ def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (co
   Flock.Zk.verify spec tabs record proofs
   scope
   Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-  (if draw.isNone then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  (if draw.isNone then Flock.ProvedScope.drawDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
   Flock.RecSetup.fullDraw none false draw record
   Flock.RecSetup.innerDrawn none
   Flock.ProvedScope.programHeld I.program

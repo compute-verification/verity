@@ -34,7 +34,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 public import Proofs.Flock.Soundness.Discharge.Exec.Pts
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 
 /-!
@@ -100,7 +100,7 @@ since with hidden outputs verity-verify-proof sets up its tables with `setupHidd
   that prove as many units (`setupH_mPts_eq`);
 * `LiveOn`: `Live`'s refinement and headline with the decoder right at the sampling design's samples only (`DecodesOn`,
   `execRefines_on`, `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
-* `LawDraw`: every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit where the run reads past the
+* `SamplingDesignDraw`: every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit where the run reads past the
   source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a sample file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);
 * `SessionLDecisive`: some run of the salted batched session accepts (the all-zero run) and, on a plan with a table,

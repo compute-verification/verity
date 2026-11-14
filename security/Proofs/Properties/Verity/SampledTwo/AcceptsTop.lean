@@ -131,7 +131,7 @@ theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Le
         SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf i.params.verifier) ∧
       ∃ v, Spot.Registration.check it.record v = #[] ∧
         SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf it.params.verifier := by
-  obtain ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
+  obtain ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
     SpotFlock.RunsAs.accepted_registered ha
   exact ⟨⟨_, Array.isEmpty_iff.1 h₁, rfl⟩, _, Array.isEmpty_iff.1 h₂, rfl⟩
 
@@ -203,7 +203,7 @@ theorem partsHeldAt_of_sized {A : Live₂} {C : CaseOf} {K : ℕ} (hK : SpotFloc
   rw [SpotFlock.select_subset_size hK hsel]
   exact hs o i it strata hA hi hit hst
 
-/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate sampling design** for its first stage (`Select.replayLaw?`). -/
+/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate sampling design** for its first stage (`Select.replaySamplingDesign?`). -/
 theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
     (h : Spot.Select.Rule.ofJson j = .ok (.twoStage g t k)) : (Spot.Select.parseRate t).isSome = true := by
   unfold Spot.Select.Rule.ofJson at h
@@ -214,7 +214,7 @@ theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
     | dsimp only at h
   all_goals first
     | (cases h; done)
-    | (cases h; simp_all [Spot.Select.replayLaw?, Option.isSome_iff_ne_none])
+    | (cases h; simp_all [Spot.Select.replaySamplingDesign?, Option.isSome_iff_ne_none])
 
 /-- **The form's parameters' rule is one `Select.Rule.ofJson` read.** -/
 theorem paramsOfJson_ruleOf {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
@@ -292,7 +292,7 @@ theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o
   obtain ⟨⟨a, b, c⟩, hpr⟩ := Option.isSome_iff_exists.1 hrate
   unfold SpotFlock.HeldOf.firstOf at hf
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
-  obtain ⟨n, -, rule, -, law, -, workTable, -, resolved, hres, rfl⟩ := hf
+  obtain ⟨n, -, rule, -, samplingDesign, -, workTable, -, resolved, hres, rfl⟩ := hf
   have hres' := SpotFlock.HeldOf.ok_of_toOption hres
   unfold Spot.Select.resolve at hres'
   obtain ⟨n', hn', hr⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 hres'
@@ -310,8 +310,8 @@ theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o
       exact Verity.Sampled.Record.parseDesign_count "subset" (Or.inl rfl) K hK1
     refine ⟨K, ?_⟩
     unfold SpotFlock.firstK SpotFlock.firstKOf
-    simp only [hcl, SamplingDeploy.Reg.program, SamplingDeploy.Reg.query, hn', Spot.Select.Rule.lawOver, hpd,
-      Verity.Sampled.Record.flockLaw_subset_text K n' hK1 hKn]
+    simp only [hcl, SamplingDeploy.Reg.program, SamplingDeploy.Reg.query, hn', Spot.Select.Rule.samplingDesignOver, hpd,
+      Verity.Sampled.Record.flockSamplingDesign_subset_text K n' hK1 hKn]
   · cases hr
 
 /-- **`PartsHeldAt` from the parts at each count the first stage samples**: at each accepted play the held first
@@ -534,7 +534,7 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A
   have hcl := closure_of_formAccepts hA hi
   obtain ⟨j, ha⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
   obtain ⟨grain, replay, k, hr⟩ := ha.two
-  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, law, workTable, resolved, draw, rest,
+  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, resolved, draw, rest,
       read, -, -, -, ht, -, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
   · have hs := ha.accept
     rw [hj, SpotFlock.RunsAs.symbol_refused] at hs
@@ -550,7 +550,7 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A
       SpotFlock.RunsAs.proved_select (SpotFlock.RunsAs.resolve_ne_all hr hres) hsel0
     unfold SpotFlock.HeldOf.firstOf at hf
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
-    obtain ⟨n', -, rule', -, law', -, workTable', hwt', resolved', hres', hfeq⟩ := hf
+    obtain ⟨n', -, rule', -, samplingDesign', -, workTable', hwt', resolved', hres', hfeq⟩ := hf
     have hwt : workTable' = workTable := Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hwt').symm.trans ht)
     have hrs : resolved' = resolved := Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hres').symm.trans hres)
     subst hwt hrs

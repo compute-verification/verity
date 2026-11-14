@@ -8,7 +8,7 @@ public import Flock.RecSetup
 
 `Stmt.setupTables`, `Stmt.setupH` and `Stmt.setupHidden` read the verifier's partition object `obj` in a few places
 only: whether there is one, the binding check (`HmRow.checkPartition`), a stratified or a work sample's design
-(`HmRow.stratifiedLaw`, `HmRow.workLaw`), the template test on its query, and the units derived from the program
+(`HmRow.stratifiedSamplingDesign`, `HmRow.workSamplingDesign`), the template test on its query, and the units derived from the program
 (`HmRow.deriveTemplateUnits`, `HmRow.qwordFinding`). `PartView` holds those readers at one object (`view obj`).
 
 * `setupHV`, `setupHiddenV`, `setupTablesV`: the three setups' text with each read of `obj` made through a `PartView`.
@@ -30,8 +30,8 @@ open Lean (Json)
 sample's design at a program, whether its query is a template query, and the units derived at a circuit and program. -/
 structure PartView where
   check : Circuit → V HmRow.PartitionFinding
-  strat : ByteArray → Nat → V (Draw.Law × Nat)
-  work : ByteArray → Nat → Array (String × Nat × Nat) → V (Draw.Law × Nat)
+  strat : ByteArray → Nat → V (Draw.SamplingDesign × Nat)
+  work : ByteArray → Nat → Array (String × Nat × Nat) → V (Draw.SamplingDesign × Nat)
   tmpl : Bool
   derive : Circuit → ByteArray → Array Nat → V String
   qword : Circuit → Public → ByteArray → HmRow.PartitionFinding → V (Option HmRow.PartitionFinding)
@@ -39,8 +39,8 @@ structure PartView where
 /-- The readers at the object `obj`, as the setups call them. -/
 def view (obj : Json) : PartView where
   check c := HmRow.checkPartition c (some obj)
-  strat := HmRow.stratifiedLaw obj
-  work := HmRow.workLaw obj
+  strat := HmRow.stratifiedSamplingDesign obj
+  work := HmRow.workSamplingDesign obj
   tmpl :=
     let q := (obj.getObjVal? "query").toOption.getD Json.null
     (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "")
@@ -66,10 +66,10 @@ def setupHV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (
     | none => pure pop
   -- a stratified sample's strata are the verifier's own, from its program and query, when it holds both
   if let some d := draw then
-    if let (Except.ok (Draw.Law.stratified k strata), some v, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), pv, program) then
-      let (law, _) ← v.strat prog k
-      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+    if let (Except.ok (Draw.SamplingDesign.stratified k strata), some v, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.samplingDesign), pv, program) then
+      let (samplingDesign, _) ← v.strat prog k
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmRow.checkPublic c pub
   -- a template query's units, derived from the verifier's own program: the statement's units must be instances of its template
   let finding ← match finding0, pv, program with
@@ -121,10 +121,10 @@ def setupHiddenV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
     | some d => HmIn.drawn c pi pop d
     | none => pure pop
   if let some d := draw then
-    if let (Except.ok (Draw.Law.stratified k strata), some v, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), pv, program) then
-      let (law, _) ← v.strat prog k
-      if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
+    if let (Except.ok (Draw.SamplingDesign.stratified k strata), some v, some prog) :=
+        ((Draw.UnitDraw.ofJson d).map (·.samplingDesign), pv, program) then
+      let (samplingDesign, _) ← v.strat prog k
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
   let linked := J.has c.metaJ "links"
   let finding ← match finding0, pv, program with
@@ -177,7 +177,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
   -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
     if let .ok u := Draw.UnitDraw.ofJson d then
-      if let .work .. := u.law then
+      if let .work .. := u.samplingDesign then
         match closure with
         | some cm =>
           if u.closure != Draw.closureOf cm u.units then
@@ -186,21 +186,21 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
   -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.SamplingDesign.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.samplingDesign) then
       let (some v, some prog, some K) := (pv, program, stratified)
         | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← v.strat prog K
-      if law != Draw.Law.stratified k strata then
+      let (samplingDesign, _) ← v.strat prog K
+      if samplingDesign != Draw.SamplingDesign.stratified k strata then
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.SamplingDesign.work k strata) := (Draw.UnitDraw.ofJson d).map (·.samplingDesign) then
       let (some v, some prog, some (K, table)) := (pv, program, work)
         | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
-      let (law, _) ← v.work prog K table
-      if law != Draw.Law.work k strata then
+      let (samplingDesign, _) ← v.work prog K table
+      if samplingDesign != Draw.SamplingDesign.work k strata then
         throw "U2: the draw's work law is not the verifier's own (its K, program, query and work table)"
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
@@ -224,9 +224,9 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
   -- the sample's sampling design and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
-    match u.law with
+    match u.samplingDesign with
     | .subset _ | .stratified .. => splits u.units.size
-    | _ => throw Draw.TABLES_LAW
+    | _ => throw Draw.TABLES_SAMPLING_DESIGN
   -- without a sample, the population's units (`setupH` checks a sample's population against the file)
   let (population, units) ← match u? with
     | some u => pure (u.population, u.units)

@@ -103,7 +103,7 @@ set_option maxHeartbeats 4000000 in
 tags, `wr` the challenger's record and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ`
 holds at `planPJ` with the decoder `decJ` on each table's two streams, single coins as field elements, no final
 messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnPJ`. -/
-theorem decodesOnPJ_exec (L : Law n)
+theorem decodesOnPJ_exec (L : SamplingDesign n)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPJ (Reg := Reg) ht dj x₀ S R).length mPts → Exec.Transcript)
     (hT : TagsOkZJ I) (hwr : RecordsLiveJ I dj (fun S R => (planPJ (Reg := Reg) ht dj x₀ S R).length) wr)
     (hdraw : ∀ ω, DrawOkPJ I dj mPts (L.draw ω)) :

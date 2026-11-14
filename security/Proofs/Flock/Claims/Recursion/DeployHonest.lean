@@ -245,7 +245,7 @@ theorem insO_staged_link {st : Stage} {x : Msg} {ms : List (Msg Ã— Out)} {s : â„
 /-! ## The inner statement an honest inner run is accepted at -/
 
 /-- **The deployed plain verifier admits the inner statement**: it sets up, `verify`'s scope check
-(`ProvedScope.check`) passes on it, and it carries a unit sample (`ProvedScope.drawLaw` refuses a session without one).
+(`ProvedScope.check`) passes on it, and it carries a unit sample (`ProvedScope.drawDesign` refuses a session without one).
 At a recursive session's inner statement, whose leaves are plain SHA-512, the scope check passes only without `--zk`
 and with hidden outputs (`ProvedScope.leafOk`, `Readable.check_ok_iff`, `Readable.Rules`; `inner_check_plain`). -/
 def InnerAdmitted (x : Msg) : Prop :=

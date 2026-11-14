@@ -263,7 +263,7 @@ up as each part's setup is told to (`--statement verity/flock-circuit+plain-leav
 coin tree, `RecCoins`), the verifier's own partition and program, the inner statement's sample, `--stratified` at the population the verifier's partition object and
 program give (`85-rec-reprice.sh`'s inner `verify`: the inner session's full sample, `rec_live.full_draw`), no lookup
 tables, registered reads or identifier: `verifyCmd`'s plain path), its scope check passes (`ProvedScope.check`), and it
-carries a sample. The population is `HmRow.stratifiedLaw`'s at `K = 1`, which every nonempty population admits. -/
+carries a sample. The population is `HmRow.stratifiedSamplingDesign`'s at `K = 1`, which every nonempty population admits. -/
 def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let some tags := Flock.Tags.find? INNER_STATEMENT | throw s!"the statement {INNER_STATEMENT} is not known"
   let coins := Flock.Coins.seed
@@ -271,7 +271,7 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let draw := some (Flock.norm (← (Flock.JsonParse.parse t).mapError fun e => s!"draw: not JSON: {e}"))
   let partition := some o.partition
   let program := some o.program
-  let (_, n) ← Flock.HmRow.stratifiedLaw o.partition o.program 1
+  let (_, n) ← Flock.HmRow.stratifiedSamplingDesign o.partition o.program 1
   if !tags.hm96Rows then
     throw s!"{tags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   Flock.RecSetup.checkInner none none (pure (none, none))
@@ -283,7 +283,7 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   Flock.RecSetup.checks none none tags [] sts circuitB partition program none none none none
   sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
   sts.forM (Flock.RecVStar.checkPubRows · none none none)
-  Flock.ProvedScope.drawLaw false tags false draw
+  Flock.ProvedScope.drawDesign false tags false draw
   Flock.ProvedScope.check tags false circuitB pubB [] 1 false false
 
 /-- How each part's setup is told to set the inner statement up (`--rec-inner-statement`, `--rec-inner-draw`), which
@@ -388,7 +388,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         r.2.forM (Flock.RecLinkPart.check · registered recCoins none)
         Flock.RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawDesign true tags false draw else .ok ()).map fun () =>
         (spec, sts.map Flock.Setup.ofCircuit)
     | .error e => Except.error s!"setup: {e}"
   let some record := String.fromUTF8? (← bs.get s.record s!"part {j}'s record")
@@ -407,7 +407,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     Flock.Zk.verify spec tabs record proofs
     scope
     Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-    if draw.isNone then Flock.ProvedScope.drawLaw true tags false draw
+    if draw.isNone then Flock.ProvedScope.drawDesign true tags false draw
     Flock.RecSetup.fullDraw inner true draw record
     Flock.RecSetup.innerDrawn recCoins
     Flock.ProvedScope.programHeld program
@@ -667,7 +667,7 @@ def main (args : List String) : IO UInt32 := do
 /-- The inner session's full sample over `n` units (`rec_live.full_draw`): the stratified sampling design at `K = n`, every unit sampled. -/
 private def fullDrawB (n : Nat) (k : Nat := n) : ByteArray :=
   let s : Flock.Draw.Stratum := { template := "t", units := #[(0, n)], k := k }
-  let d : Flock.Draw.UnitDraw := { law := .stratified k #[s], population := n, units := Array.range k }
+  let d : Flock.Draw.UnitDraw := { samplingDesign := .stratified k #[s], population := n, units := Array.range k }
   d.toJson.compress.toUTF8
 
 -- each part's setup accepts the form `innerHeld` tells it, at its files' units (`checkForm` reads only `n` of them)

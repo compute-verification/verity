@@ -34,7 +34,7 @@ sampling design can make; the round trip claims nothing about the others.
 
 So `DrawFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each sample file being the
 JSON value `verity-verify-proof draw` printed for the verifier's own sample (`drawFileZK_of_toJson`, `drawFileZK_of_toJson_subset`,
-`drawFileZK_of_toJson_work`), under every sampling design but a Bernoulli sampling design (`drawFileZK_of_toJson_law`).
+`drawFileZK_of_toJson_work`), under every sampling design but a Bernoulli sampling design (`drawFileZK_of_toJson_samplingDesign`).
 That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
 `Flock.JsonParse.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
 trees that `ofJson` reads alike.
@@ -163,12 +163,12 @@ private theorem workStratumOfJson_toJson (s s' : Draw.WorkStratum) (h : workStra
 section
 variable (K pop : ℕ) (strata : Array Draw.Stratum) (us : Array ℕ)
 
-private abbrev dS : Draw.UnitDraw := { law := .stratified K strata, population := pop, units := us }
+private abbrev dS : Draw.UnitDraw := { samplingDesign := .stratified K strata, population := pop, units := us }
 
 private theorem draw_population : (dS K pop strata us).toJson.getObjVal? "population" = .ok (Lean.toJson pop) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-private theorem draw_law : (dS K pop strata us).toJson.getObjVal? "law" = .ok (.str "stratified") :=
+private theorem draw_design : (dS K pop strata us).toJson.getObjVal? "law" = .ok (.str "stratified") :=
   getObjVal?_mkObj (by simp) (by simp)
 
 private theorem draw_k : (dS K pop strata us).toJson.getObjVal? "k" = .ok (Lean.toJson K) :=
@@ -187,7 +187,7 @@ private theorem ofJson_toJson_stratified {D : Draw.UnitDraw} (h : Draw.UnitDraw.
     D = dS K pop strata us := by
   obtain ⟨e, he⟩ := draw_closure K pop strata us
   unfold Draw.UnitDraw.ofJson at h
-  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, draw_population, draw_law, draw_k, draw_strata, draw_units,
+  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, draw_population, draw_design, draw_k, draw_strata, draw_units,
     he, asNat_toJson, ok_bind, Json.getArr?, Json.getStr?, pure, Except.pure] at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -203,12 +203,12 @@ end
 section
 variable (k pop : ℕ) (us : Array ℕ)
 
-private abbrev dSub : Draw.UnitDraw := { law := .subset k, population := pop, units := us }
+private abbrev dSub : Draw.UnitDraw := { samplingDesign := .subset k, population := pop, units := us }
 
 private theorem sub_population : (dSub k pop us).toJson.getObjVal? "population" = .ok (Lean.toJson pop) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-private theorem sub_law : (dSub k pop us).toJson.getObjVal? "law" = .ok (.str "subset") :=
+private theorem sub_samplingDesign : (dSub k pop us).toJson.getObjVal? "law" = .ok (.str "subset") :=
   getObjVal?_mkObj (by simp) (by simp)
 
 private theorem sub_k : (dSub k pop us).toJson.getObjVal? "k" = .ok (Lean.toJson k) :=
@@ -224,7 +224,7 @@ private theorem ofJson_toJson_subset {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJs
     D = dSub k pop us := by
   obtain ⟨e, he⟩ := sub_closure k pop us
   unfold Draw.UnitDraw.ofJson at h
-  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, sub_population, sub_law, sub_k, sub_units,
+  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, sub_population, sub_samplingDesign, sub_k, sub_units,
     he, asNat_toJson, ok_bind, Json.getArr?, Json.getStr?, pure, Except.pure] at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -238,12 +238,12 @@ end
 section
 variable (K pop : ℕ) (strata : Array Draw.WorkStratum) (us : Array ℕ)
 
-private abbrev dW : Draw.UnitDraw := { law := .work K strata, population := pop, units := us }
+private abbrev dW : Draw.UnitDraw := { samplingDesign := .work K strata, population := pop, units := us }
 
 private theorem work_population : (dW K pop strata us).toJson.getObjVal? "population" = .ok (Lean.toJson pop) :=
   getObjVal?_mkObj (by simp) (by simp)
 
-private theorem work_law : (dW K pop strata us).toJson.getObjVal? "law" = .ok (.str "work") :=
+private theorem work_samplingDesign : (dW K pop strata us).toJson.getObjVal? "law" = .ok (.str "work") :=
   getObjVal?_mkObj (by simp) (by simp)
 
 private theorem work_k : (dW K pop strata us).toJson.getObjVal? "k" = .ok (Lean.toJson K) :=
@@ -262,7 +262,7 @@ private theorem ofJson_toJson_work {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson
     D = dW K pop strata us := by
   obtain ⟨e, he⟩ := work_closure K pop strata us
   unfold Draw.UnitDraw.ofJson at h
-  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, work_population, work_law, work_k, work_strata, work_units,
+  simp only [J.nat, J.arr, J.str, J.get, J.asStr, J.asArr, work_population, work_samplingDesign, work_k, work_strata, work_units,
     he, asNat_toJson, ok_bind, Json.getArr?, Json.getStr?, pure, Except.pure] at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -318,10 +318,10 @@ theorem drawFileZK_of_toJson_work (dj : Finset (Fin n) → Lean.Json) (K : ℕ) 
 
 /-- **`DrawFileZK` from the printed sample under any sampling design but a Bernoulli sampling design**: the subset, stratified and
 work round trips (`drawFileZK_of_toJson_subset`, `drawFileZK_of_toJson`, `drawFileZK_of_toJson_work`). -/
-theorem drawFileZK_of_toJson_law (dj : Finset (Fin n) → Lean.Json) (law : Draw.Law)
-    (hb : ∀ a b, law ≠ .bernoulli a b) (pop : ℕ) (hdj : ∀ S, dj S = (drawOf law pop S).toJson) :
-    DrawFileZK dj law pop := by
-  cases law with
+theorem drawFileZK_of_toJson_samplingDesign (dj : Finset (Fin n) → Lean.Json) (samplingDesign : Draw.SamplingDesign)
+    (hb : ∀ a b, samplingDesign ≠ .bernoulli a b) (pop : ℕ) (hdj : ∀ S, dj S = (drawOf samplingDesign pop S).toJson) :
+    DrawFileZK dj samplingDesign pop := by
+  cases samplingDesign with
   | subset k => exact drawFileZK_of_toJson_subset dj k pop hdj
   | bernoulli a b => exact absurd rfl (hb a b)
   | stratified K strata => exact drawFileZK_of_toJson dj K strata pop hdj

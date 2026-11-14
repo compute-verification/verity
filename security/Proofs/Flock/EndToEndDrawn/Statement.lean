@@ -41,7 +41,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **Flock's one-stage audit, end to end, at the sampled proof blocks.** As in `EndToEnd`: the prover registers `R`; the
-verifier samples a `kd`-subset of the `n` proof blocks from its operating system's bytes (`Law.execOS` on the byte source
+verifier samples a `kd`-subset of the `n` proof blocks from its operating system's bytes (`SamplingDesign.execOS` on the byte source
 `src`); one `--zk` session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and
 `verity-verify-proof verify --zk --session-tables J` reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
@@ -84,9 +84,9 @@ def EndToEndDrawn : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
     let vb := (rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))

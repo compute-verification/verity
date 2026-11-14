@@ -70,7 +70,7 @@ def site (p : Flock.Registered.Port) : RegFields := (p.value, p.root, p.leaves, 
 section Drawn
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Two registered reads of a sampled proof block at one registered port read one port of the circuit** (`hown`: each read's
 port is the circuit's port of its name, `OwnReads`). -/
@@ -225,7 +225,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 
@@ -243,10 +243,10 @@ theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     {sA : Fin 2 → Fin F.stmts.size} {uA : (r : Fin 2) → Fin (F.Vs (sA r)).nv} {col0 col1 : Fin 2 → ℕ → ℕ → ℕ}
     (hk : F.EndKeys dg N k Rw pa sA uA col0 col1) (hreg : F.RowsRegistered dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (r : Fin 2)
-    {ω' : (F.Vs (sA r)).law.live.Ω} {R' : Reg'} {o'}
+    {ω' : (F.Vs (sA r)).samplingDesign.live.Ω} {R' : Reg'} {o'}
     (hlive : LiveAcceptsZKR (F.zs R ω t R₂ (sA r)).I (F.zs R ω t R₂ (sA r)).own
-      (R', (F.Vs (sA r)).law.live.draw ω', (F.zs R ω t R₂ (sA r)).wr ((F.Vs (sA r)).law.live.draw ω') R' o'))
-    (hu : uA r ∈ (F.Vs (sA r)).law.live.draw ω') {q₀ q₁ b₀ e₀ b₁ e₁ : ℕ} (hne : q₀ ≠ q₁)
+      (R', (F.Vs (sA r)).samplingDesign.live.draw ω', (F.zs R ω t R₂ (sA r)).wr ((F.Vs (sA r)).samplingDesign.live.draw ω') R' o'))
+    (hu : uA r ∈ (F.Vs (sA r)).samplingDesign.live.draw ω') {q₀ q₁ b₀ e₀ b₁ e₁ : ℕ} (hne : q₀ ≠ q₁)
     (hk₀ : Aliased.srcKey (F.Vs (sA r)).c (0 * (Rows.ofNet (F.Vs (sA r)).hU).nIn + col0 r 0 0) = .msg q₀ b₀ e₀)
     (hk₁ : Aliased.srcKey (F.Vs (sA r)).c (0 * (Rows.ofNet (F.Vs (sA r)).hU).nIn + col1 r 0 0) = .msg q₁ b₁ e₁) :
     False :=
@@ -262,11 +262,11 @@ theorem openKeys_drawn {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂
     (hk : F.OpenKeys dg N k Rw pa) (hreg : F.RowsRegistered dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (r : Fin 2)
     {ℓ : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) {j : ℕ} (hj : j < F.q ℓ)
-    {ω' : (F.Vs (F.sessO ℓ)).law.live.Ω} {R' : Reg'} {o'}
+    {ω' : (F.Vs (F.sessO ℓ)).samplingDesign.live.Ω} {R' : Reg'} {o'}
     (hlive : LiveAcceptsZKR (F.zs R ω t R₂ (F.sessO ℓ)).I (F.zs R ω t R₂ (F.sessO ℓ)).own
-      (R', (F.Vs (F.sessO ℓ)).law.live.draw ω',
-        (F.zs R ω t R₂ (F.sessO ℓ)).wr ((F.Vs (F.sessO ℓ)).law.live.draw ω') R' o'))
-    (hu : F.unO ℓ r j ∈ (F.Vs (F.sessO ℓ)).law.live.draw ω') :
+      (R', (F.Vs (F.sessO ℓ)).samplingDesign.live.draw ω',
+        (F.zs R ω t R₂ (F.sessO ℓ)).wr ((F.Vs (F.sessO ℓ)).samplingDesign.live.draw ω') R' o'))
+    (hu : F.unO ℓ r j ∈ (F.Vs (F.sessO ℓ)).samplingDesign.live.draw ω') :
     pa R ω t R₂ ∈ (F.zs R ω t R₂ (F.sessO ℓ)).own ∧
       ∃ i : ℕ, (pa R ω t R₂).reads[i]? = some (some (r.val * F.nOpen + ((List.range ℓ).map F.q).sum + j)) := by
   obtain ⟨hmem, -, hpos⟩ := colKeyed_drawn _ hlive hu (hreg R ω t R₂ τ o h _ _)

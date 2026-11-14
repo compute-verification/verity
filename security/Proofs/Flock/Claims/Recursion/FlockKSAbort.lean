@@ -275,7 +275,7 @@ end ForkD
 
 /-! ## The fixed-table bound at the abort distribution, and the tie -/
 
-section AbortLaw
+section AbortSamplingDesign
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
@@ -395,7 +395,7 @@ theorem tableBoundθ_of_kept (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N 
       ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p]
     exact Pr_congr fun d => by simp
 
-end AbortLaw
+end AbortSamplingDesign
 
 /-! ## One wait at the abort distribution, and KS -/
 

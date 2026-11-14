@@ -45,7 +45,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- The probability that the session accepts, after `Commit`. -/
 noncomputable abbrev accProbL {S : Finset (Fin n)} {R : Reg}

@@ -7,7 +7,7 @@ check the stream ran on it, in the stream's order.
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
   whose strata or table don't apply), then R1–R8 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
-  that population (`Select.Rule.lawOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
+  that population (`Select.Rule.samplingDesignOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
@@ -245,10 +245,10 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
 
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, holding each value
 its verifier `v` holds a certified entry for to have a reported read (`Record.certifiedCheck`). -/
-def audit (i : Input) (v : Registration.Verifier) (record receipt draw law : Json) (proved : Array Int)
+def audit (i : Input) (v : Registration.Verifier) (record receipt draw samplingDesign : Json) (proved : Array Int)
     (instances : Int) (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
-    ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
+    ("draw", draw), ("law", samplingDesign), ("proved_units", Json.arr (proved.map Lean.toJson)),
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
     ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots),
     ("certified", Json.arr (v.certified.map fun x => Json.str x.1.value))]))
@@ -291,7 +291,7 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   let boundary ← Registration.digestHex i.record
   if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
     return .error ("interiors", #["interior-window"])
-  let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
+  let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
@@ -299,7 +299,7 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   let (draw, read) ← Select.selectSecond sample ns ks it.source
   if let some code := coinsCode i.key i.main it.coins it.record v.windowRoot it.family (it.source.extract 0 read) then
     return .error ("second", #[code])
-  return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
+  return .ok (it, receipt, draw, Select.secondSamplingDesign sample ns ks, read)
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
 rule. -/
@@ -317,9 +317,9 @@ it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
 def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
-  | some (it, receipt, draw, law, read) => do
+  | some (it, receipt, draw, samplingDesign, read) => do
     let proved := it.provedUnits.getD (Draw.proved draw)
-    let rec_ ← audit i it.params.verifier it.record receipt draw law proved (it.instances.getD proved.size) it.served
+    let rec_ ← audit i it.params.verifier it.record receipt draw samplingDesign proved (it.instances.getD proved.size) it.served
       it.sessionRoots
     let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
     let own : SecondStage.Own :=
@@ -352,15 +352,15 @@ def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let some n := nat? (getD i.record "population") | return refused "register" #["population"]
   if n == 0 then return refused "register" #["population"]
   let some rule := i.rule.over n (Select.strataSizes v.program v.query) | return refused "register" #["rate"]
-  let law ← rule.lawOver n
+  let samplingDesign ← rule.samplingDesignOver n
   let .ok workTable := i.rule.tableOver v.program v.query v.workTable | return refused "register" #["rate"]
-  let v := { v with law, workTable }
+  let v := { v with samplingDesign, workTable }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
-  if Draw.bernoulli law then return refused "register" #["bernoulli"]
+  if Draw.bernoulli samplingDesign then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
-  let derived ← Draw.derive v.program v.query law v.workTable
+  let derived ← Draw.derive v.program v.query samplingDesign v.workTable
   if i.closure.isSome then return refused "select" #["closure"]
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source

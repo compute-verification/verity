@@ -95,7 +95,7 @@ lists each port once: the record names exactly the verifier's ports, and R3 hold
 theorem byPort_root_str {rec : Json} {v : Spot.Registration.Verifier} (h : Spot.Registration.check rec v = #[])
     (hn : (v.ports.map (·.1)).toList.Nodup) {p : String} {x : Json} (hx : (p, x) ∈ Spot.Record.byPort rec) :
     ∃ s, Spot.getD x "root" = .str s := by
-  obtain ⟨law, -, -, h3, -⟩ := (Properties.Spot.registration_nil rec v).1 h
+  obtain ⟨samplingDesign, -, -, h3, -⟩ := (Properties.Spot.registration_nil rec v).1 h
   -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the seventh of its eight
   obtain ⟨-, -, -, -, -, -, hroot, -⟩ := h3
   obtain ⟨⟨ps, hps, -, hmem⟩, -⟩ := recordOk_spec (RecordNames.recordOk_of_check h hn)
@@ -118,7 +118,7 @@ theorem accepted_leftOut_held {i : Spot.Run.Input} {it : Spot.Run.Interior} {j :
     (hno : (v, r) ∉ (Spot.Record.lessOwnReads it.record (some opened)).getD #[]) :
     ∃ x, (v, x) ∈ Spot.Record.byPort it.record ∧ Spot.jeq (Spot.getD x "root") r = true ∧ HeldRead i it v r := by
   obtain ⟨x, hx, hxr, hn | hh⟩ := accepted_leftOut ha ho hv hno
-  · obtain ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, -, -, -, -, -, -, -, -, -, hchk⟩ :=
+  · obtain ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, -, -, -, -, -, -, -, -, -, hchk⟩ :=
       accepted_registered ha
     obtain ⟨s, hs⟩ := byPort_root_str (Array.isEmpty_iff.1 hchk) hports hx
     rw [hs] at hn

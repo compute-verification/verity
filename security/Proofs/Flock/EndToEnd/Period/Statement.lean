@@ -102,7 +102,7 @@ open Classical
 variable (w : SamplingBlock)
 
 /-- The sampling block's sample: `Flock.Draw.drawWith`'s uniform `kd`-subset on the challenger's coins. -/
-def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
+def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.subset w.kd) w.n
 
 /-- The sampling block's audit as it runs: `EndToEndHidden`'s game. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=

@@ -47,7 +47,7 @@ statement the prover staged. This file proves those refusals from the shipped co
   shape. So a session decision the compiled verifier doesn't refuse has the setup's checks accept the statement's inner
   shape (`RecScope.accepts`, on `readOf`).
 * **Sample.** At a decision, a record without a sample fails the custody checks (`checks_recordDraw`: `drawEq` against the
-  statement's sample, and `ProvedScope.drawLaw` refuses a draw-less statement), and the verdict's full-draw refusal
+  statement's sample, and `ProvedScope.drawDesign` refuses a draw-less statement), and the verdict's full-draw refusal
   (`fullDrawO`, `RecSetup.fullDraw`) runs under the staged statement's inner shape, which is `x`'s. So the record's
   sample passes `RecScope.fullDrawOk`, hence is `DrawRecord.Full` (`RecScope.fullDrawOk_iff`).
 
@@ -230,7 +230,7 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
 /-! ## The sample at a decision -/
 
 /-- **The custody checks refuse a record without a sample**: its sample must be the statement's (`drawEq`), and a
-statement without one is refused (`ProvedScope.drawLaw`). -/
+statement without one is refused (`ProvedScope.drawDesign`). -/
 theorem checks_recordDraw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : (Witness.recordDraw f.record).isSome = true := by
@@ -248,7 +248,7 @@ theorem checks_recordDraw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims
     | none =>
       simp only [hr, hd, FlockDeploy.drawEq, Option.isNone_none, ite_true, bind, Except.bind] at h
       repeat' split at h
-      all_goals simp_all [ProvedScope.drawLaw]
+      all_goals simp_all [ProvedScope.drawDesign]
 
 /-! ## The refusals -/
 
@@ -258,7 +258,7 @@ variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Cl
 the final message `f`, the compiled verifier answers other than `.rej` only where the setup's checks accept the inner
 shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` and
 `RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record samples every unit of its population (`RecScope.fullDrawOk` under that shape:
-`ProvedScope.drawLaw` in the custody checks, then `RecSetup.fullDraw`). -/
+`ProvedScope.drawDesign` in the custody checks, then `RecSetup.fullDraw`). -/
 theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')

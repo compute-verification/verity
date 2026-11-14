@@ -168,7 +168,7 @@ structure WindowCommitmentRecord where
   partition : String
   scheme : String
   population : Nat
-  law : Json
+  samplingDesign : Json
   roots : Array Root
   window : ExecutionBlockItem
 
@@ -184,7 +184,7 @@ def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
   let partition ← s "partition"
   let scheme ← s "scheme"
   let some population := nat? (get rec_ "population") | throw "population is missing or not a natural number"
-  let some law := PouwWindow.field? rec_ "law" | throw "law is missing"
+  let some samplingDesign := PouwWindow.field? rec_ "law" | throw "law is missing"
   let roots : Option (Array Root) := match get rec_ "roots" with
     | .arr rs => rs.mapM rootOf?
     | _ => none
@@ -199,7 +199,7 @@ def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
   let some window := window
     | throw ("window is not {context, kind, public}, with strings and an object, and optionally activations " ++
         "and registered")
-  pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
+  pure { bytes := b, format, program, query, partition, scheme, population, samplingDesign, roots, window }
 
 /-- `registration.digest`: the execution phase record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
 bytes it was read from. -/
@@ -209,10 +209,10 @@ def WindowCommitmentRecord.digest (c : WindowCommitmentRecord) : ByteArray :=
 /-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
 refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its sampling design to `outcome`. -/
 
-deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.Law
+deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.SamplingDesign
 
 /-- `parse_design`'s spelling. -/
-def lawName : Flock.Draw.Law → String
+def lawName : Flock.Draw.SamplingDesign → String
   | .subset k => s!"subset:{k}"
   | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
@@ -260,16 +260,16 @@ def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
     throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
   let ctx := "public.draw"
-  let law ← Flock.J.str d "law" ctx
-  let ks ← match law with
+  let samplingDesign ← Flock.J.str d "law" ctx
+  let ks ← match samplingDesign with
     | "subset" => pure ["k", "law", "population", "units"]
     | "bernoulli" => pure ["law", "p", "population", "units"]
     | "stratified" => pure ["k", "law", "population", "strata", "units"]
     | "work" => pure ((if Flock.J.has d "closure" then ["closure"] else []) ++ ["k", "law", "population", "strata", "units"])
-    | _ => throw s!"{ctx}.law: not subset, bernoulli, stratified or work"
+    | _ => throw s!"{ctx}.samplingDesign: not subset, bernoulli, stratified or work"
   keysAre d ks ctx
   let population ← Flock.J.nat d "population" ctx
-  let (l, closure) ← match law with
+  let (l, closure) ← match samplingDesign with
     | "subset" => do pure (.subset (← Flock.J.nat d "k" ctx), #[])
     | "bernoulli" => do let (a, b) ← pOf (← Flock.J.str d "p" ctx) ctx; pure (.bernoulli a b, #[])
     | "stratified" => do

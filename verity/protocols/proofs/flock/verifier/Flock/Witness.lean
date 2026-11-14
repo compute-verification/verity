@@ -43,7 +43,7 @@ def fullDraw (n : Nat) (record : String) : V Unit :=
   | none => throw "the record has no draw"
   | some d => do
     let D ← Draw.UnitDraw.ofJson d
-    match D.law with
+    match D.samplingDesign with
     | .subset k =>
       if k = n ∧ D.population = n ∧ D.units = Array.range n ∧ D.closure = #[] then pure ()
       else throw s!"the draw is subset:{k} of {D.units.size} units over {D.population}, not every one of {n}"

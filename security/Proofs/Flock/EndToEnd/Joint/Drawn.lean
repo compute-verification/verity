@@ -12,10 +12,10 @@ public import Proofs.Flock.Soundness.Audit.HarmBound
   inequality at each of the sampling design's samples, where `E` is fixed.
 * `StratifiedBlock.accepted_drawnWrong_le`: verity-verify-proof accepts the sampling block with a sampled proof block wrong with
   probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planAtZKH`, carried to verity-verify-proof's acceptance.
-* `StratifiedBlock.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s escape of
-  `B`, under A3 (`Law.execOS_escape_le`).
+* `StratifiedBlock.drawMiss_le`: the live sample misses a set `B` with probability at most `SamplingDesign.stratified`'s escape of
+  `B`, under A3 (`SamplingDesign.execOS_escape_le`).
 * `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget:
-  `Law.stratified_risk_le` for its spend, and `maxHarm`'s supremum for its ANDs and output bits.
+  `SamplingDesign.stratified_risk_le` for its spend, and `maxHarm`'s supremum for its ANDs and output bits.
 -/
 
 @[expose] public section
@@ -33,7 +33,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (opn : ∀ (_ : Finset (Fin n)) (_ : Reg), Array ByteArray → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
+  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : SamplingDesign n}
 
 /-- **The refinement at `--zk` at one table, with an event of the sample**: verity-verify-proof `--zk` accepts the live audit at
 a sample in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a sample in `E`. -/
@@ -138,11 +138,11 @@ theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's sample misses a set `B`** with probability at most `Law.stratified`'s escape of `B`, under A3. -/
+/-- **A sampling block's sample misses a set `B`** with probability at most `SamplingDesign.stratified`'s escape of `B`, under A3. -/
 theorem drawMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.escape B := by
   rw [prob_drawMiss]
-  exact Law.execOS_escape_le w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src hA3 B
+  exact SamplingDesign.execOS_escape_le w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src hA3 B
 
 /-- A set in the confidence set holds at most `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : Fin w.n → ℕ) {δ : ℝ} {B : Finset (Fin w.n)}
@@ -154,7 +154,7 @@ theorem harm_le_maxHarm (h : Fin w.n → ℕ) {δ : ℝ} {B : Finset (Fin w.n)}
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : Fin w.n → ℕ) {B : Finset (Fin w.n)}
     (hB : ENNReal.ofReal δ ≤ w.ideal.escape B) : w.Within δ ands bits B := by
   refine ⟨hB, ?_, w.harm_le_maxHarm ands hB, w.harm_le_maxHarm bits hB⟩
-  have h := (Law.stratified_risk_le w.sub w.ks w.hks (ENNReal.ofReal_pos.2 hδ) hB).2
+  have h := (SamplingDesign.stratified_risk_le w.sub w.ks w.hks (ENNReal.ofReal_pos.2 hδ) hB).2
   rw [ENNReal.toReal_ofReal hδ.le, ← one_div] at h
   exact h
 

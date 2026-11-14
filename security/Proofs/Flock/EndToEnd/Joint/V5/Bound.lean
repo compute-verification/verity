@@ -71,7 +71,7 @@ variable [Nonempty w.EndΩ]
 `Σ_m (ε_ks,m + ε_bind,m)`, under `cr/sha-512` and `ecr/sha-512` at each member's session played alone. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game)
     (hCR : ∀ k ω j, TableCRZ execArith hs512
-      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
       (w.ms.get k).qF (w.ms.get k).qS)
     (hA2 : ∀ k, LinkCRZC execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
@@ -100,7 +100,7 @@ where some outcome of the stream ends the sample, which is where its premises ar
 accepted. -/
 theorem accepted_sampledWrong_le (τ : Strategy w.game)
     (hCR : ∀ _ : Nonempty w.EndΩ, ∀ k ω j, TableCRZ execArith hs512
-      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
       (w.ms.get k).qF (w.ms.get k).qS)
     (hA2 : ∀ _ : Nonempty w.EndΩ, ∀ k, LinkCRZC execArith hs512 (w.ms.get k).P
@@ -221,7 +221,7 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
   classical
   let cr : (t : ℕ) → Strategy (W t).game → Prop := fun t τ =>
     (∀ _ : Nonempty (W t).EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw τ k).draw ω) (reg ((W t).memberSim τ k))) j
+      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign τ k).draw ω) (reg ((W t).memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (cont ((W t).memberSim τ k) ω))
       ((W t).ms.get k).qF ((W t).ms.get k).qS) ∧
     ∀ _ : Nonempty (W t).EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P

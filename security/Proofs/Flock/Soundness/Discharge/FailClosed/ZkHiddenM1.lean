@@ -284,7 +284,7 @@ theorem ksStrictZ_le_m1w (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPt
 `ksAvgStrictZm1`. -/
 theorem ksAvgStrictZ_le_m1w (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
+    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
     ksAvgStrictZ planZ L k qF qS R ≤ ksAvgStrictZm1 planZ L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_
   rcases le_or_gt (1 - rateZ (planZ (L.draw ω) R) j k) 0 with h0 | h0
@@ -346,7 +346,7 @@ theorem rateZ_le_m1w (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.ge
 `M1W` and `2^23 < ek`, `ksAvgStrictZ ≤ ksClosedM1/(1 − 2^23/(ek))`. -/
 theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
-    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg)
+    (hW : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1W) (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg)
     (hk : rateM1 k < 1) :
     ksAvgStrictZ planZ L k qF qS R ≤ ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) := by
   have hc : ∀ ω : L.Ω, (⨆ j : Fin (planZ (L.draw ω) R).length,
@@ -375,7 +375,7 @@ variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : 
 committed wires the sampled proof blocks read or write, `Σ_{u ∈ S} |io u|`, at every sample `S`. A sample reads commit string `c`
 only through a wire of a sampled proof block's `io` that `c` holds (`ReadsZ`), so it reads at most that many strings, and
 `Σ_c |Ω_c|/|Ω|` averages that count over the samples. -/
-theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io u).card ≤ B) :
+theorem qs_le_io (L : SamplingDesign n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io u).card ≤ B) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ B := by
   classical
   have hω : ∀ ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card ≤ B := fun ω => by
@@ -400,7 +400,7 @@ theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io 
   linarith [mul_comm (B : ℝ) (Fintype.card L.Ω : ℝ)]
 
 /-- **`Q_s ≤ k_d·r`**: at samples of at most `k_d` units, each with at most `r` committed wires in its `io`. -/
-theorem qs_le_mul (L : Law n) (kd r : ℕ) (hd : ∀ ω, (L.draw ω).card ≤ kd) (hr : ∀ u, (P.io u).card ≤ r) :
+theorem qs_le_mul (L : SamplingDesign n) (kd r : ℕ) (hd : ∀ ω, (L.draw ω).card ≤ kd) (hr : ∀ u, (P.io u).card ≤ r) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ kd * r := by
   have h := qs_le_io A P planZ tab vb L (kd * r) fun ω =>
     (Finset.sum_le_sum fun u _ => hr u).trans (by
@@ -492,13 +492,13 @@ theorem planZHJ_M1W :
   exact tableZHJ_M1W dj y₀ S _
 
 /-- **`ε_ks` at the hidden-output plan is at most `ksAvgStrictZm1`** (`ksAvgStrictZ_le_m1w` at `planZHJ_M1W`). -/
-theorem ksAvgStrictZ_planZHJ_le_m1 (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
+theorem ksAvgStrictZ_planZHJ_le_m1 (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) :
     ksAvgStrictZ (planZHJ dj y₀) L k qF qS R ≤ ksAvgStrictZm1 (planZHJ dj y₀) L k qF qS R :=
   ksAvgStrictZ_le_m1w execArith_correct.card_F (planZHJ dj y₀) (planZHJ_M1W dj y₀) L k qF qS R
 
 /-- **`ε_ks` at the hidden-output plan in closed form**: at most `ksClosedM1/(1 − 2^23/(ek))` once `2^23 < ek`, a
 number that reads no table (`ksAvgStrictZ_le_closed` at `planZHJ_M1W`). -/
-theorem ksAvgStrictZ_planZHJ_le_closed (L : Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) (hk : rateM1 k < 1) :
+theorem ksAvgStrictZ_planZHJ_le_closed (L : SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) (hk : rateM1 k < 1) :
     ksAvgStrictZ (planZHJ dj y₀) L k qF qS R ≤ ENNReal.ofReal (ksClosedM1 k qF qS / (1 - rateM1 k)) :=
   ksAvgStrictZ_le_closed execArith_correct.card_F (planZHJ dj y₀) (planZHJ_M1W dj y₀) L k qF qS R hk
 

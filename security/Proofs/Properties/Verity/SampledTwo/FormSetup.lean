@@ -24,7 +24,7 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
   (`MemberChecks.MemberFields`), by definition.
 * **The sample the form set a session up at is printable** (`draw_good`): it is the record's `unit_draw` rebuilt, so
   its objects are well-formed trees, and the setup decodes it to a subset or a stratified sample
-  (`Verity.Sampled.setupAt_drawLaw`), each printable where it decodes.
+  (`Verity.Sampled.setupAt_drawDesign`), each printable where it decodes.
 * **The statement's printed files read back** (`readsBack_stmtRaw`, `draw_readsBack`): where the member's partition
   object's objects are well-formed trees (`Claims.Json.Wf`) and its registered reads are printable
   (`Claims.Json.Good`), at a session the form set up, Flock's parser reads the statement's partition and registered
@@ -101,7 +101,7 @@ theorem draw_readsBack {record : String}
 
 /-- **The sample the form set a session up at is printable**: the record's sample is its `unit_draw` rebuilt
 (`Verity.Sampled.recordDraw_raw`), so each of its objects is a well-formed tree (`FlockDeploy.wf_norm`). The setup
-decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_drawLaw`, `drawLaw_ok`, `lawWhy_zk`), and a
+decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_drawDesign`, `drawDesign_ok`, `samplingDesignWhy_zk`), and a
 well-formed value that decodes to either is printable (`FlockComplete.JsonRT.good_subset`, `good_stratified`). -/
 theorem draw_good {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {record : String} {dj : Json}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hrd : Flock.Witness.recordDraw record = some dj)
@@ -111,8 +111,8 @@ theorem draw_good {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {recor
     rw [hdj]
     exact FlockDeploy.wf_norm d
   rw [hrd] at h
-  obtain ⟨D, hD, hlaw⟩ := Verity.Sampled.drawLaw_ok (Verity.Sampled.setupAt_drawLaw h)
-  rcases Verity.Sampled.lawWhy_zk hlaw with ⟨kd, hl⟩ | ⟨K, St, hl⟩
+  obtain ⟨D, hD, hlaw⟩ := Verity.Sampled.drawDesign_ok (Verity.Sampled.setupAt_drawDesign h)
+  rcases Verity.Sampled.samplingDesignWhy_zk hlaw with ⟨kd, hl⟩ | ⟨K, St, hl⟩
   · exact FlockComplete.JsonRT.good_subset hw hD hl
   · exact FlockComplete.JsonRT.good_stratified hw hD hl
 

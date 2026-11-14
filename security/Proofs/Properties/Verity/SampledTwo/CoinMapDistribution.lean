@@ -3,9 +3,9 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
 /-!
-# The two-stage leg's coin map: its distribution (`lawAt`)
+# The two-stage leg's coin map: its distribution (`distributionAt`)
 
-`LawAt` at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one coin node at a
+`SamplingDesignAt` at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one coin node at a
 time. At a written node the node's value is a function of a chunk of the run's coins, and everything the map writes
 after it reads only coins past that chunk; so the chunk is uniform and independent of the rest, and the write costs only
 its shortfall below uniform.
@@ -15,16 +15,16 @@ its shortfall below uniform.
 * **Averages over blocks** (`avg_split`, `avg_restrict`, `avg_indep`, `avg_coord`, `avg_le_write1`): uniform coins
   restricted along an injective map are uniform, and a function of a block of uniform coordinates is independent of
   what reads only the others.
-* **The distribution at a node** (`LawHolds`, `law_opt`, `law_ite`, `law_keep`, `law_set`, `law_write`, `law_send`): a bounded
+* **The distribution at a node** (`DistributionHolds`, `distribution_opt`, `distribution_ite`, `distribution_keep`, `distribution_set`, `distribution_write`, `distribution_send`): a bounded
   function of the play is on average at most its average at the mapped tape and uniform coins, plus a term; a kept coin
   node's term is the average of the terms after it, a node written with a value independent of what the map reads after
   it (`Splits`) costs nothing more, and a node written through `W` costs `W`'s shortfall.
 * **The chunks** (`OffChunk`, `splits_chunk`, `splits_fresh`, `splits_open`): a round's chunk of elements, a fresh coin's
   512 bits and an opening's elements split from the coins off the chunk.
-* **Along the releases** (`AgreeFrom`, `placeK_congr`, `law_fresh`, `law_hello`, `law_round`, `law_open`,
-  `law_placeK`): the coin map reads the run's coins only from what the releases before it gave each round, and its distribution
+* **Along the releases** (`AgreeFrom`, `placeK_congr`, `distribution_fresh`, `distribution_hello`, `distribution_round`, `distribution_open`,
+  `distribution_placeK`): the coin map reads the run's coins only from what the releases before it gave each round, and its distribution
   holds along `relK` at `gapK`.
-* **The first clause** (`law_place`, `lawAt`).
+* **The first clause** (`distribution_place`, `distributionAt`).
 -/
 
 @[expose] public section
@@ -245,43 +245,43 @@ theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Gam
 
 /-- **The distribution at a node** with the map `P` of uniform coins `R` and the term `G`: every bounded function of the play's
 output is on average at most its average at the mapped tape and uniform coins, plus `G`. -/
-def LawHolds {R : Type} [Fintype R] (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (G : ℝ≥0∞) : Prop :=
+def DistributionHolds {R : Type} [Fintype R] (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (G : ℝ≥0∞) : Prop :=
   ∀ H : β → ℝ≥0∞, (∀ b, H b ≤ 1) →
     avg (fun t : Tape g s => H (Tape.out g s t)) ≤
       avg (fun r : R => avg fun t : Tape g s => H (Tape.out g s (P r t))) + G
 
 variable {R : Type} [Fintype R] [Nonempty R]
 
-theorem law_mono {g : Game β} {s : Strategy g} {P : R → Tape g s → Tape g s} {G G' : ℝ≥0∞} (h : LawHolds g s P G)
-    (hG : G ≤ G') : LawHolds g s P G' :=
+theorem distribution_mono {g : Game β} {s : Strategy g} {P : R → Tape g s → Tape g s} {G G' : ℝ≥0∞} (h : DistributionHolds g s P G)
+    (hG : G ≤ G') : DistributionHolds g s P G' :=
   fun H hH => (h H hH).trans (add_le_add le_rfl hG)
 
-theorem law_id (g : Game β) (s : Strategy g) : LawHolds g s (fun (_ : R) t => t) 0 := fun H _ => by
+theorem distribution_id (g : Game β) (s : Strategy g) : DistributionHolds g s (fun (_ : R) t => t) 0 := fun H _ => by
   rw [avg_const, add_zero]
 
-theorem law_opt {γ : Type} (n : Game β) (y : γ → Game β) {fn : R → (s : Strategy n) → Tape n s → Tape n s}
+theorem distribution_opt {γ : Type} (n : Game β) (y : γ → Game β) {fn : R → (s : Strategy n) → Tape n s → Tape n s}
     {fy : R → (a : γ) → (s : Strategy (y a)) → Tape (y a) s → Tape (y a) s} {gn : Strategy n → ℝ≥0∞}
-    {gy : (a : γ) → Strategy (y a) → ℝ≥0∞} (hn : ∀ s, LawHolds n s (fun r => fn r s) (gn s))
-    (hy : ∀ a s, LawHolds (y a) s (fun r => fy r a s) (gy a s)) :
+    {gy : (a : γ) → Strategy (y a) → ℝ≥0∞} (hn : ∀ s, DistributionHolds n s (fun r => fn r s) (gn s))
+    (hy : ∀ a s, DistributionHolds (y a) s (fun r => fy r a s) (gy a s)) :
     ∀ (o : Option γ) (s : Strategy (optGame o n y)),
-      LawHolds (optGame o n y) s (fun r => placeOpt n y (fn r) (fy r) o s) (gapOpt n y gn gy o s)
+      DistributionHolds (optGame o n y) s (fun r => placeOpt n y (fn r) (fy r) o s) (gapOpt n y gn gy o s)
   | none, s => hn s
   | some a, s => hy a s
 
-theorem law_ite {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) {f₁ : R → (s : Strategy G₁) → Tape G₁ s → Tape G₁ s}
+theorem distribution_ite {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) {f₁ : R → (s : Strategy G₁) → Tape G₁ s → Tape G₁ s}
     {f₂ : R → (s : Strategy G₂) → Tape G₂ s → Tape G₂ s} {g₁ : Strategy G₁ → ℝ≥0∞} {g₂ : Strategy G₂ → ℝ≥0∞}
-    (h₁ : ∀ s, LawHolds G₁ s (fun r => f₁ r s) (g₁ s)) (h₂ : ∀ s, LawHolds G₂ s (fun r => f₂ r s) (g₂ s)) :
+    (h₁ : ∀ s, DistributionHolds G₁ s (fun r => f₁ r s) (g₁ s)) (h₂ : ∀ s, DistributionHolds G₂ s (fun r => f₂ r s) (g₂ s)) :
     ∀ s : Strategy (@ite _ c dc G₁ G₂),
-      LawHolds (@ite _ c dc G₁ G₂) s (fun r => placeIte dc G₁ G₂ s (f₁ r) (f₂ r)) (gapIte dc G₁ G₂ s g₁ g₂) := by
+      DistributionHolds (@ite _ c dc G₁ G₂) s (fun r => placeIte dc G₁ G₂ s (f₁ r) (f₂ r)) (gapIte dc G₁ G₂ s g₁ g₂) := by
   cases dc with
   | isFalse _ => exact h₂
   | isTrue _ => exact h₁
 
 /-- **At a coin node the map keeps**: the node's term is the average of the terms after it. -/
-theorem law_keep {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
+theorem distribution_keep {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
     {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} {G : C → ℝ≥0∞}
-    (h : ∀ c, LawHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
-    LawHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k id (f r) s) (avg G) := by
+    (h : ∀ c, DistributionHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
+    DistributionHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k id (f r) s) (avg G) := by
   intro H hH
   have e : ∀ r, avg (fun t : Tape (@Game.coin β C iF iN k) s =>
       H (Tape.out _ s (placeCoin k id (f r) s t))) =
@@ -308,11 +308,11 @@ def Splits {C : Type} [Fintype C] (v : R → C) (Rel : R → R → Prop) : Prop 
 
 /-- **At a coin node the map writes `v r`**, a value independent of what the map reads after it: the node's term is the
 average of the terms after it. -/
-theorem law_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
+theorem distribution_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
     {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} {G : C → ℝ≥0∞} (v : R → C)
     (Rel : R → R → Prop) (hv : Splits v Rel) (hf : ∀ c r r' τ, Rel r r' → f r c (s c) τ = f r' c (s c) τ)
-    (h : ∀ c, LawHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
-    LawHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k (fun _ => v r) (f r) s) (avg G) := by
+    (h : ∀ c, DistributionHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
+    DistributionHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k (fun _ => v r) (f r) s) (avg G) := by
   intro H hH
   let B : C → R → ℝ≥0∞ := fun c r => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ))
   have e : ∀ r, avg (fun t : Tape (@Game.coin β C iF iN k) s =>
@@ -333,12 +333,12 @@ theorem law_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β
 open Classical in
 /-- **At a coin node the map writes `W (e r)` of the node's value**, with `e r` independent of what the map reads after
 it: the node's term is `W`'s shortfall below uniform plus the average of the terms after the written value. -/
-theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [Nonempty P] {k : C → Game β}
+theorem distribution_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [Nonempty P] {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s}
     {G : C → ℝ≥0∞} (W : P → C → C) (e : R → P) (Rel : R → R → Prop) (he : Splits e Rel)
     (hf : ∀ c r r' τ, Rel r r' → f r c (s c) τ = f r' c (s c) τ)
-    (h : ∀ c, LawHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
-    LawHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k (W (e r)) (f r) s)
+    (h : ∀ c, DistributionHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
+    DistributionHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k (W (e r)) (f r) s)
       (shortfall W + avg fun p => avg fun c => G (W p c)) := by
   intro H hH
   let A : C → ℝ≥0∞ := fun c => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) τ)
@@ -377,8 +377,8 @@ theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [N
         rw [hX]
         ring
 
-theorem law_congr {g : Game β} {s : Strategy g} {P P' : R → Tape g s → Tape g s} {G : ℝ≥0∞}
-    (hP : ∀ r t, P r t = P' r t) (h : LawHolds g s P' G) : LawHolds g s P G := by
+theorem distribution_congr {g : Game β} {s : Strategy g} {P P' : R → Tape g s → Tape g s} {G : ℝ≥0∞}
+    (hP : ∀ r t, P r t = P' r t) (h : DistributionHolds g s P' G) : DistributionHolds g s P G := by
   have : P = P' := funext fun r => funext fun t => hP r t
   subst this
   exact h
@@ -471,8 +471,8 @@ theorem splits_open {K : ℕ} (i : Fin K) (u n : ℕ) (hu : u + n ≤ 65536) :
   show (FlockDeploy.Coin.at (r i) (u + q.val)).bit b.val = Flock.F128.bit (r i ⟨u + q.val, h3⟩) b.val
   simp only [FlockDeploy.Coin.at, dif_pos h3]
 
-theorem law_send {M : Type} (kf : M → Game β) (m : M) (s' : Strategy (kf m)) {P : R → Tape (kf m) s' → Tape (kf m) s'}
-    {G : ℝ≥0∞} (h : LawHolds (kf m) s' P G) : LawHolds (Game.send M kf) ⟨m, s'⟩ P G := h
+theorem distribution_send {M : Type} (kf : M → Game β) (m : M) (s' : Strategy (kf m)) {P : R → Tape (kf m) s' → Tape (kf m) s'}
+    {G : ℝ≥0∞} (h : DistributionHolds (kf m) s' P G) : DistributionHolds (Game.send M kf) ⟨m, s'⟩ P G := h
 
 /-! ## Along the releases -/
 
@@ -658,55 +658,55 @@ theorem placeK_congr {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts
 /-! ### The distribution frame by frame -/
 
 /-- The distribution along `relK k` from every layout, trees, releases before and continuation. -/
-def RecLaw {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) (gr : GapRec β k) : Prop :=
+def RecDistribution {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) (gr : GapRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
-    (s : Strategy (relK k fs ts f)), LawHolds (relK k fs ts f) s (fun r => rc r fs ts pre f s) (gr fs ts pre f s)
+    (s : Strategy (relK k fs ts f)), DistributionHolds (relK k fs ts f) s (fun r => rc r fs ts pre f s) (gr fs ts pre f s)
 
-theorem law_fresh {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
-    (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
+theorem distribution_fresh {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecDistribution rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β) (l : String) (b : ByteArray)
     (s : Strategy (freshG k fs ts f l b)) :
-    LawHolds (freshG k fs ts f l b) s (fun r => placeFresh L r k (rc r) fs ts pre f l b s)
+    DistributionHolds (freshG k fs ts f l b) s (fun r => placeFresh L r k (rc r) fs ts pre f l b s)
       (gapFresh k gr fs ts pre f l b s) := by
   unfold placeFresh gapFresh
-  refine law_opt _ _ (fun s => law_id _ s) (fun fs' s' => ?_) _ s
+  refine distribution_opt _ _ (fun s => distribution_id _ s) (fun fs' s' => ?_) _ s
   rcases hs : slot L K pre (.fresh l) b 4 with _ | ⟨i, u⟩
-  · refine law_keep s' fun x => ?_
+  · refine distribution_keep s' fun x => ?_
     exact hlaw _ _ _ _ _
   · have hv := splits_fresh i u (slot_spec L hs).2.2
-    refine law_set (R := Fin K → FlockDeploy.Coin) s' _ _ hv ?_ fun x => ?_
+    refine distribution_set (R := Fin K → FlockDeploy.Coin) s' _ _ hv ?_ fun x => ?_
     · intro x r r' τ hr
       exact hrc _ _ _ _ _ _ r r' (offChunk_agree L hs rfl hr _)
     · exact hlaw _ _ _ _ _
 
-theorem law_hello {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
-    (hlaw : RecLaw rc gr) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release)
+theorem distribution_hello {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecDistribution rc gr) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release)
     (f : List Verity.Release → Game β) (spec : Flock.CoinTree.Spec) (ν : ByteArray)
     (s : Strategy (helloG k fs ts f spec ν)) :
-    LawHolds (helloG k fs ts f spec ν) s (fun r => placeHello k (rc r) fs ts pre f spec ν s)
+    DistributionHolds (helloG k fs ts f spec ν) s (fun r => placeHello k (rc r) fs ts pre f spec ν s)
       (gapHello k gr fs ts pre f spec ν s) := by
   unfold placeHello gapHello
-  refine law_ite _ _ _ (fun s' => ?_) (fun s => law_id _ s) s
-  refine law_keep s' fun tr => ?_
+  refine distribution_ite _ _ _ (fun s' => ?_) (fun s => distribution_id _ s) s
+  refine distribution_keep s' fun tr => ?_
   exact hlaw _ _ _ _ _
 
-theorem law_round {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
-    (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
+theorem distribution_round {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecDistribution rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray) (T : OpenTree)
     (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)) (s : Strategy (openP k fs ts f i sn n b T p)) :
-    LawHolds (openP k fs ts f i sn n b T p) s (fun r => placeRound L r k (rc r) fs ts pre f i sn n b T p s)
+    DistributionHolds (openP k fs ts f i sn n b T p) s (fun r => placeRound L r k (rc r) fs ts pre f i sn n b T p s)
       (gapRound L K k gr fs ts pre f i sn n b T p s) := by
   unfold placeRound gapRound
   rcases hs : slot L K pre (.opening i sn n) b n with _ | ⟨j, u⟩
-  · refine law_keep s fun dr => ?_
+  · refine distribution_keep s fun dr => ?_
     exact hlaw _ _ _ _ _
   · obtain ⟨-, -, hu⟩ := slot_spec L hs
     have hv := splits_open j u n hu
-    refine law_mono (law_congr (P' := fun r : Fin K → FlockDeploy.Coin =>
+    refine distribution_mono (distribution_congr (P' := fun r : Fin K → FlockDeploy.Coin =>
         placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
         (fun dr s₅ t₅ => rc r fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
           (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s) ?_
-      (law_write (R := Fin K → FlockDeploy.Coin) s
+      (distribution_write (R := Fin K → FlockDeploy.Coin) s
         (G := fun dr => gr fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
           (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) (s dr))
         (fun (e : Fin n → Fin 128 → Bool) dr => openW n (bitsOf e) dr) _ _ hv ?_ fun dr => ?_)) ?_
@@ -718,46 +718,46 @@ theorem law_round {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → P
     · exact hlaw _ _ _ _ _
     · exact add_le_add le_self_add le_rfl
 
-theorem law_open {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
-    (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
+theorem distribution_open {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecDistribution rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray)
     (s : Strategy (openG k fs ts f i sn n b)) :
-    LawHolds (openG k fs ts f i sn n b) s (fun r => placeOpen L r k (rc r) fs ts pre f i sn n b s)
+    DistributionHolds (openG k fs ts f i sn n b) s (fun r => placeOpen L r k (rc r) fs ts pre f i sn n b s)
       (gapOpen L K k gr fs ts pre f i sn n b s) := by
   unfold placeOpen gapOpen
-  refine law_ite _ _ _ (fun s' => ?_) (fun s => law_id _ s) s
-  refine law_opt _ _ (fun s => law_id _ s) (fun T s₃ => ?_) _ s'
-  refine law_opt _ _ (fun s => law_id _ s) (fun p s₄ => ?_) _ s₃
-  exact law_round L hlaw hrc fs ts pre f i sn n b T p s₄
+  refine distribution_ite _ _ _ (fun s' => ?_) (fun s => distribution_id _ s) s
+  refine distribution_opt _ _ (fun s => distribution_id _ s) (fun T s₃ => ?_) _ s'
+  refine distribution_opt _ _ (fun s => distribution_id _ s) (fun p s₄ => ?_) _ s₃
+  exact distribution_round L hlaw hrc fs ts pre f i sn n b T p s₄
 
 /-- **The distribution along the releases**: at every layout, trees, releases before, continuation and strategy, the coin map
 `placeK` is uniform up to the hiding term `gapK`. -/
-theorem law_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
+theorem distribution_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
     (pre : List Verity.Release) (f : List Verity.Release → Game β) (s : Strategy (relK k fs ts f)),
-    LawHolds (R := Fin K → FlockDeploy.Coin) (relK k fs ts f) s (fun r => placeK L r k fs ts pre f s)
+    DistributionHolds (R := Fin K → FlockDeploy.Coin) (relK k fs ts f) s (fun r => placeK L r k fs ts pre f s)
       (gapK L K k fs ts pre f s)
-  | 0, _, _, _, _, s => law_id _ s
-  | _ + 1, _, _, _, _, ⟨none, _⟩ => law_id _ _
+  | 0, _, _, _, _, s => distribution_id _ s
+  | _ + 1, _, _, _, _, ⟨none, _⟩ => distribution_id _ _
   | k + 1, fs, ts, pre, f, ⟨some (.fresh l, b), s'⟩ => by
-    refine law_send _ _ _ ?_
-    exact law_congr (fun r t => rfl) (law_fresh L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
-      (fun fs ts pre f s => law_placeK k fs ts pre f s)
+    refine distribution_send _ _ _ ?_
+    exact distribution_congr (fun r t => rfl) (distribution_fresh L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s => distribution_placeK k fs ts pre f s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f l b s')
   | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), s'⟩ => by
-    refine law_send _ _ _ ?_
-    exact law_congr (fun r t => rfl) (law_hello (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
-      (fun fs ts pre f s => law_placeK k fs ts pre f s) fs ts pre f spec ν s')
+    refine distribution_send _ _ _ ?_
+    exact distribution_congr (fun r t => rfl) (distribution_hello (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s => distribution_placeK k fs ts pre f s) fs ts pre f spec ν s')
   | k + 1, fs, ts, pre, f, ⟨some (.opening i sn n, b), s'⟩ => by
-    refine law_send _ _ _ ?_
-    exact law_congr (fun r t => rfl) (law_open L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
-      (fun fs ts pre f s => law_placeK k fs ts pre f s)
+    refine distribution_send _ _ _ ?_
+    exact distribution_congr (fun r t => rfl) (distribution_open L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s => distribution_placeK k fs ts pre f s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f i sn n b s')
 
 end Along
 
-theorem law_along {g g' : Game β} (h : g = g') {Pl : R → (s : Strategy g') → Tape g' s → Tape g' s}
-    {G : Strategy g' → ℝ≥0∞} (hl : ∀ s, LawHolds g' s (fun r => Pl r s) (G s)) (s : Strategy g) :
-    LawHolds g s (fun r => along h (Pl r) s) (alongVal h G s) := by
+theorem distribution_along {g g' : Game β} (h : g = g') {Pl : R → (s : Strategy g') → Tape g' s → Tape g' s}
+    {G : Strategy g' → ℝ≥0∞} (hl : ∀ s, DistributionHolds g' s (fun r => Pl r s) (G s)) (s : Strategy g) :
+    DistributionHolds g s (fun r => along h (Pl r) s) (alongVal h G s) := by
   subst h
   exact hl s
 
@@ -766,25 +766,25 @@ theorem law_along {g g' : Game β} (h : g = g') {Pl : R → (s : Strategy g') �
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The coin map is uniform up to the hiding term at the period's game.** -/
-theorem law_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c))
+theorem distribution_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c))
     (L : Locate) (K : ℕ) :
-    LawHolds (R := Fin K → FlockDeploy.Coin) (V.game θ F c) σ (fun r t => place V θ F c σ L r t)
+    DistributionHolds (R := Fin K → FlockDeploy.Coin) (V.game θ F c) σ (fun r t => place V θ F c σ L r t)
       (gapOf V θ F c σ L K) :=
-  law_along (game_eq V θ F c)
+  distribution_along (game_eq V θ F c)
     (Pl := fun r s t => placeK L r (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2 t)
     (G := fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2)
     (fun s => by
       rcases s with ⟨m, s'⟩
-      refine law_send _ _ _ ?_
-      exact law_congr (fun r t => rfl) (law_placeK L _ _ _ _ _ s')) σ
+      refine distribution_send _ _ _ ?_
+      exact distribution_congr (fun r t => rfl) (distribution_placeK L _ _ _ _ _ s')) σ
 
-/-- **`LawAt`**: the period's play is at most as likely, at every event, as the frame's play at a uniform tape and
+/-- **`SamplingDesignAt`**: the period's play is at most as likely, at every event, as the frame's play at a uniform tape and
 uniform run coins, plus the hiding term. -/
-theorem lawAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) : LawAt V A x θ F c σ L P := by
+theorem distributionAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) : SamplingDesignAt V A x θ F c σ L P := by
   classical
   intro E
-  have h := law_place V θ F c σ L (A.L.V.k x) (fun b => if E b then 1 else 0) fun b => by
+  have h := distribution_place V θ F c σ L (A.L.V.k x) (fun b => if E b then 1 else 0) fun b => by
     by_cases hb : E b <;> simp [hb]
   calc Verity.Game.prob E (V.game θ F c) σ
       = prCoin fun t : Tape (V.game θ F c) σ => E (Tape.out _ σ t) := prob_eq_prCoin _ _ _

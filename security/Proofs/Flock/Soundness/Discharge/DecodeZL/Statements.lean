@@ -154,7 +154,7 @@ def DecodesOnExec : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (_hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (wOP : ℕ → List (List Wire))
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (wOP : ℕ → List (List Wire))
     (wLIG : Accounting.Schedule → List (List Wire)),
     OPCarries wOP → LIGCarries wLIG → TagsOk I → RecordsLive I dj wr → (∀ ω, DrawOk I dj mPts (L.draw ω)) →
     DecodesOn H512 enc512 leaf512 (tablesAt (Reg := Reg) ht dj x₀) I wr (opnAt (tablesAt ht dj x₀) I dj)

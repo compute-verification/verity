@@ -289,11 +289,11 @@ theorem drawn_of_ok (hr : r.Ok h) :
   obtain ⟨D', hD', hpopD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdrawn
   rw [hD] at hD'
   cases hD'
-  have hdl := FlockComplete.JsonRT.Ins.setup_drawLaw hsetup (by rw [hdj]; rfl)
+  have hdl := FlockComplete.JsonRT.Ins.setup_drawDesign hsetup (by rw [hdj]; rfl)
   rw [hdj] at hdl
-  simp only [_root_.Flock.ProvedScope.drawLaw, hD] at hdl
-  have hlw : _root_.Flock.ProvedScope.lawWhy r.ins.read.zk r.ins.read.tags false D = none := by
-    cases e : _root_.Flock.ProvedScope.lawWhy r.ins.read.zk r.ins.read.tags false D with
+  simp only [_root_.Flock.ProvedScope.drawDesign, hD] at hdl
+  have hlw : _root_.Flock.ProvedScope.samplingDesignWhy r.ins.read.zk r.ins.read.tags false D = none := by
+    cases e : _root_.Flock.ProvedScope.samplingDesignWhy r.ins.read.zk r.ins.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   have hWd : Claims.Json.Wf S.draw := wf_of_jsonOf hjb
@@ -303,7 +303,7 @@ theorem drawn_of_ok (hr : r.Ok h) :
     unfold Spot.jeq
     rw [FlockDeploy.canon_jsonEquiv (FlockDeploy.jsonEquiv_norm _ hWd)]
     exact hsamp
-  have hprov := proved_of_wf (FlockDeploy.wf_norm _) hD (FlockComplete.JsonRT.law_of_lawWhy hlw) hj
+  have hprov := proved_of_wf (FlockDeploy.wf_norm _) hD (FlockComplete.JsonRT.samplingDesign_of_samplingDesignWhy hlw) hj
   have h0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hpos
   refine ⟨_, D, draw, hdj, hD, hdraw, by rw [h0, hn'], hprov, fun idx hidx n hn => ?_⟩
   rw [h0, unitIndices_of_units hunits] at hidx

@@ -163,7 +163,7 @@ theorem scopeOk_ok {I : Flock.Witness.Inputs} {c : Flock.Circuit} (h : Flock.Wit
 /-- **The witness's sample check**: the record's sample decodes to the full `subset n` sample over `[0, n)`, every unit and
 no closure. -/
 theorem fullDraw_ok {n : ℕ} {r : String} (h : Flock.Witness.fullDraw n r = .ok ()) :
-    ∃ d D, Exec.recordDraw r = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.law = .subset n ∧ D.population = n ∧
+    ∃ d D, Exec.recordDraw r = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.samplingDesign = .subset n ∧ D.population = n ∧
       D.units = Array.range n ∧ D.closure = #[] := by
   unfold Flock.Witness.fullDraw at h
   cases hd : Flock.Witness.recordDraw r with
@@ -174,7 +174,7 @@ theorem fullDraw_ok {n : ℕ} {r : String} (h : Flock.Witness.fullDraw n r = .ok
     rw [hd] at h
     dsimp only at h
     obtain ⟨D, hD, h⟩ := bind_ok h
-    cases hl : D.law with
+    cases hl : D.samplingDesign with
     | subset k =>
       rw [hl] at h
       dsimp only at h

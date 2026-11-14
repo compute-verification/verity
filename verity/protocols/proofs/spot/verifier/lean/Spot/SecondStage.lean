@@ -8,7 +8,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   query (`Partition.strata`, which `population-order` holds to the population's units, template by template), each one
   range of `Q·n_t` slots from `off_t`, `Q` the replay sample's size (`parts`). Template `t`'s cell in the sample's
   `i`-th replay block `S[i]` is its `n_t` slots from `off_t + i·n_t` (`Part.span`). One template's cells are
-  `Select.secondLaw`'s strata.
+  `Select.secondSamplingDesign`'s strata.
 * **A statement** (`Stmt`) is one second-stage session's, as its files state it: the template its circuit is an
   instance of (its stratum's name), its public file's header, its session record's sample (`unit_draw`), and the
   registered reads it was verified against (`--registered`), null for none.

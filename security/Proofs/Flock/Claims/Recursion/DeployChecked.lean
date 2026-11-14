@@ -346,7 +346,7 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
       rw [h4]
       exact h7
     · cases hd : s.read.draw with
-      | none => simp [hd, Flock.ProvedScope.drawLaw] at h6
+      | none => simp [hd, Flock.ProvedScope.drawDesign] at h6
       | some _ => rfl
   · rintro ⟨hr, hc, hd⟩
     unfold checksRun at hr
@@ -365,7 +365,7 @@ theorem checks_iff {zk : Bool} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} 
     rw [h4]
     show (s.read.check >>= _) = _
     rw [hc]
-    show ((if s.read.draw.isNone = true then Flock.ProvedScope.drawLaw zk s.read.tags false none else pure ()) >>= _) = _
+    show ((if s.read.draw.isNone = true then Flock.ProvedScope.drawDesign zk s.read.tags false none else pure ()) >>= _) = _
     cases hdr : s.read.draw with
     | none =>
       rw [hdr] at hd

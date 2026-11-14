@@ -10,10 +10,10 @@ public import Proofs.Flock.Lemmas.Audit
 The sampling design's second version: the stratified sampling design's strata, with each stratum's sample sized by the PoUW
 work its units do instead of by their number. Stratum `s` has `n_s` units, each doing work `w_s` (zero for units that do no
 PoUW work: dequantization, the quantizer, attention), and the population does `W = Σ_s w_s n_s`. Stratum `s` samples
-`k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))` (`Law.workRule`, the executable's `Flock.Draw.workK`) above its floor `f_s ≥ 1`,
+`k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))` (`SamplingDesign.workRule`, the executable's `Flock.Draw.workK`) above its floor `f_s ≥ 1`,
 which the verifier's work table sets per stratum beside `w_s` (one when it names none).
 
-The work sampling design is `Law.stratified` at those sizes (`Law.work`), so every theorem of the stratified sampling design and of the one-stage
+The work sampling design is `SamplingDesign.stratified` at those sizes (`SamplingDesign.work`), so every theorem of the stratified sampling design and of the one-stage
 audit holds of it as stated: `stratified_escape`, `stratified_escape_floor`, `audit_whole_stratum`,
 `extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_drawn` and the Flock instantiations. What is new,
 for every floor `f ≥ 1`:
@@ -43,7 +43,7 @@ For the strata that do no work:
 * `countRule_self`, `countK_self`, `countK_self_miss`: at `C = N` the count sampling design samples every unit of every stratum
   (`stratumK N n_s N = n_s`), so its sampling term is zero: a recursive inner session's full sample.
 
-Closure samples (a sampled proof block proved with the units it reads) are not part of this sampling design. `Law.widen` proves more units than a
+Closure samples (a sampled proof block proved with the units it reads) are not part of this sampling design. `SamplingDesign.widen` proves more units than a
 sampling design samples on the same coins, and `escape_widen_le` carries every escape bound to it.
 -/
 
@@ -54,7 +54,7 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal NNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n m : ℕ}
 
@@ -76,7 +76,7 @@ theorem workK_le (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) 
   min_le_left _ _
 
 /-- **The work sampling design**: independent uniform subsets inside the strata of `σ`, stratum `s` sampling `workK σ w f K s`. -/
-abbrev work (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) : Law n :=
+abbrev work (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K : ℕ) : SamplingDesign n :=
   stratified σ (workK σ w f K) (workK_le σ w f K)
 
 theorem workOf_eq (σ : Fin n → Fin m) (w : Fin m → ℕ) (B : Finset (Fin n)) :
@@ -456,13 +456,13 @@ theorem work_escape_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin
 
 /-- A sampling design that proves more units than it samples: the same coins, each sample widened by `f`. Closure samples are `f S = S`
 with the units `S`'s members read. -/
-def widen (L : Law n) (f : Finset (Fin n) → Finset (Fin n)) : Law n where
+def widen (L : SamplingDesign n) (f : Finset (Fin n) → Finset (Fin n)) : SamplingDesign n where
   Ω := L.Ω
   draw ω := f (L.draw ω)
 
 /-- **Widening only helps**: when `f` keeps every sampled proof block, the widened sampling design escapes at most as often, so every escape
 bound of `L` (the work bound, the floor) holds of it. -/
-theorem escape_widen_le (L : Law n) {f : Finset (Fin n) → Finset (Fin n)} (hf : ∀ S, S ⊆ f S) (B : Finset (Fin n)) :
+theorem escape_widen_le (L : SamplingDesign n) {f : Finset (Fin n) → Finset (Fin n)} (hf : ∀ S, S ⊆ f S) (B : Finset (Fin n)) :
     (L.widen f).escape B ≤ L.escape B :=
   prCoin_mono fun _ hd => hd.mono_left (hf _)
 
@@ -494,7 +494,7 @@ theorem work_escape_of_record (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fi
     (Or.inl (by norm_num))]
   exact_mod_cast (show (totalWork σ w - workOf σ w B) * 1000 ≤ 999 * totalWork σ w by omega)
 
-end Law
+end SamplingDesign
 
 section Audits
 
@@ -503,129 +503,129 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → �
 
 /-- **The work audit** (oracle layer): the audit accepts while its incorrect proof blocks do at least `T` of the work with
 probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
-    prob (fun o => o.1 = true ∧ T ≤ Law.workOf σ w (A.wrong (A.committedOf σ')))
-        (audit (Law.work σ w f K) Reg session) σ' ≤
-      (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
-  refine (audit_profile A hks hlink (fun B => T ≤ Law.workOf σ w B) σ').trans ?_
+theorem audit_work (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
+    prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.workOf σ w (A.wrong (A.committedOf σ')))
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
+      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.workOf σ w B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => Law.work_escape_le_of_le σ w f K hf hW hB
+  exact iSup₂_le fun B hB => SamplingDesign.work_escape_le_of_le σ w f K hf hW hB
 
 /-- **The work audit** (compiled layer, randomized extractor): at most
 `((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
-    prob (fun o => o.1 = true ∧ T ≤ Law.workOf σ w (A.wrong (A.committedOf σ')))
-        (audit (Law.work σ w f K) Reg session) σ' ≤
-      (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K +
+theorem extraction_audit_work (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
+    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
+    prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.workOf σ w (A.wrong (A.committedOf σ')))
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
+      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K +
         εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
-  refine (extraction_audit_le A hks hlink (fun X _ => T ≤ Law.workOf σ w (A.wrong X)) σ').trans ?_
+  refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.workOf σ w (A.wrong X)) σ').trans ?_
   gcongr
-  by_cases hB : T ≤ Law.workOf σ w (A.wrong (A.committedOf σ'))
-  · exact (prCoin_mono fun ω h => h.2).trans (Law.work_escape_le_of_le σ w f K hf hW hB)
+  by_cases hB : T ≤ SamplingDesign.workOf σ w (A.wrong (A.committedOf σ'))
+  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.work_escape_le_of_le σ w f K hf hW hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The work audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks do at least
 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
-theorem audit_work_of_record (A : Analysis (Law.work σ w f 27713) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
-    (σ' : Strategy (audit (Law.work σ w f 27713) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.totalWork σ w ≤ 1000 * Law.workOf σ w (A.wrong (A.committedOf σ')))
-        (audit (Law.work σ w f 27713) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
-  refine (audit_profile A hks hlink (fun B => Law.totalWork σ w ≤ 1000 * Law.workOf σ w B) σ').trans ?_
+theorem audit_work_of_record (A : Analysis (SamplingDesign.work σ w f 27713) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
+    (σ' : Strategy (audit (SamplingDesign.work σ w f 27713) Reg session)) :
+    prob (fun o => o.1 = true ∧ SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.workOf σ w (A.wrong (A.committedOf σ')))
+        (audit (SamplingDesign.work σ w f 27713) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.workOf σ w B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => Law.work_escape_of_record σ w f hf hW hB
+  exact iSup₂_le fun B hB => SamplingDesign.work_escape_of_record σ w f hf hW hB
 
 /-- **The integrity floor, audited** (oracle layer): a wholly wrong non-empty stratum, one that does no PoUW work
 included, is caught: the audit accepts while all of it is wrong with probability at most `ε_ks + δ_link`. -/
-theorem audit_work_whole_stratum (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
+theorem audit_work_whole_stratum (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : 1 ≤ f s)
-    (hs : (Law.stratum σ s).Nonempty) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
-        (audit (Law.work σ w f K) Reg session) σ' ≤ εks + δlink :=
-  audit_whole_stratum A hks hlink s (Law.one_le_workK hf hs) σ'
+    (hs : (SamplingDesign.stratum σ s).Nonempty) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
+    prob (fun o => o.1 = true ∧ SamplingDesign.stratum σ s ⊆ A.wrong (A.committedOf σ'))
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤ εks + δlink :=
+  audit_whole_stratum A hks hlink s (SamplingDesign.one_le_workK hf hs) σ'
 
 /-- **The integrity floor, audited** (compiled layer, randomized extractor): at most `ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work_whole_stratum (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
+theorem extraction_audit_work_whole_stratum (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
+    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : 1 ≤ f s)
-    (hs : (Law.stratum σ s).Nonempty) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
-        (audit (Law.work σ w f K) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
-  extraction_audit_whole_stratum A hks hlink s (Law.one_le_workK hf hs) σ'
+    (hs : (SamplingDesign.stratum σ s).Nonempty) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
+    prob (fun o => o.1 = true ∧ SamplingDesign.stratum σ s ⊆ A.wrong (A.committedOf σ'))
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
+  extraction_audit_whole_stratum A hks hlink s (SamplingDesign.one_le_workK hf hs) σ'
 
 /-- **The per-stratum floor, audited** (oracle layer): the audit accepts while at least `b` units of a non-empty stratum
 `s` are wrong with probability at most `((n_s − b)/n_s)^(f_s) + ε_ks + δ_link`. -/
-theorem audit_work_floor (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
-    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+theorem audit_work_floor (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (SamplingDesign.stratum σ s).Nonempty) (b : ℕ)
+    (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card)
-        (audit (Law.work σ w f K) Reg session) σ' ≤
-      ((((Law.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((Law.stratum σ s).card : ℝ≥0∞)) ^ (f s) + εks + δlink := by
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
+      ((((SamplingDesign.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((SamplingDesign.stratum σ s).card : ℝ≥0∞)) ^ (f s) + εks + δlink := by
   refine (audit_profile A hks hlink (fun B => b ≤ (B.filter (σ · = s)).card) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => Law.work_escape_floor_le_of_le σ w f K s hs hB
+  exact iSup₂_le fun B hB => SamplingDesign.work_escape_floor_le_of_le σ w f K s hs hB
 
 /-- **The per-stratum floor, audited** (compiled layer, randomized extractor): at most
 `((n_s − b)/n_s)^(f_s) + ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work_floor (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
-    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+theorem extraction_audit_work_floor (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
+    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (SamplingDesign.stratum σ s).Nonempty) (b : ℕ)
+    (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card)
-        (audit (Law.work σ w f K) Reg session) σ' ≤
-      ((((Law.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((Law.stratum σ s).card : ℝ≥0∞)) ^ (f s) +
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
+      ((((SamplingDesign.stratum σ s).card - b : ℕ) : ℝ≥0∞) / ((SamplingDesign.stratum σ s).card : ℝ≥0∞)) ^ (f s) +
         εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => b ≤ ((A.wrong X).filter (σ · = s)).card) σ').trans ?_
   gcongr
   by_cases hB : b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card
-  · exact (prCoin_mono fun ω h => h.2).trans (Law.work_escape_floor_le_of_le σ w f K s hs hB)
+  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.work_escape_floor_le_of_le σ w f K s hs hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **Floors at the count sampling design's sizes keep its profile, audited** (oracle layer): when every stratum that does no work has
 a floor of at least the count sampling design's size at `C`, for any family `𝓑`, the audit accepts while the incorrect proof blocks in those
 strata form a set in `𝓑` with probability at most the stratified sampling design's `sup_{B ∈ 𝓑} escape B` at `C`, plus
 `ε_ks + δ_link`. -/
-theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
-    (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDesign.countK σ C s ≤ f s)
+    (A : Analysis (SamplingDesign.work σ w f K) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0))
-        (audit (Law.work σ w f K) Reg session) σ' ≤
-      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) +
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
+      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).escape B) +
         εks + δlink := by
   refine (audit_profile A hks hlink (fun B => 𝓑 (B.filter fun u => w (σ u) = 0)) σ').trans
     (add_le_add (add_le_add ?_ le_rfl) le_rfl)
-  exact iSup₂_le fun B hB => (Law.work_escape_le_count σ w f K C hf B).trans
+  exact iSup₂_le fun B hB => (SamplingDesign.work_escape_le_count σ w f K C hf B).trans
     (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
-      (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) _ hB le_rfl)
+      (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).escape B) _ hB le_rfl)
 
 /-- **Floors at the count sampling design's sizes keep its profile, audited** (compiled layer, randomized extractor): the same with
 `ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
-    (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
-    {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
+theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → SamplingDesign.countK σ C s ≤ f s)
+    (A : ExtractionAnalysis (SamplingDesign.work σ w f K) Reg session)
+    {εks δlink : (R : Reg) → Cont (SamplingDesign.work σ w f K) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop)
-    (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+    (σ' : Strategy (audit (SamplingDesign.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0))
-        (audit (Law.work σ w f K) Reg session) σ' ≤
-      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) +
+        (audit (SamplingDesign.work σ w f K) Reg session) σ' ≤
+      (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).escape B) +
         εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => 𝓑 ((A.wrong X).filter fun u => w (σ u) = 0)) σ').trans ?_
   gcongr
   by_cases hB : 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0)
-  · exact (prCoin_mono fun ω h => h.2).trans ((Law.work_escape_le_count σ w f K C hf _).trans
+  · exact (prCoin_mono fun ω h => h.2).trans ((SamplingDesign.work_escape_le_count σ w f K C hf _).trans
       (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
-        (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) _ hB le_rfl))
+        (SamplingDesign.stratified σ (SamplingDesign.countK σ C) (SamplingDesign.countK_le σ C)).escape B) _ hB le_rfl))
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 end Audits
 
 end FlockSoundness.Audit
 
-theorem FlockSoundness.Audit.SecurityProofs.Law.RecordSizing : FlockSoundness.Audit.Guarantees.Law.RecordSizing := @FlockSoundness.Audit.Law.record_sizing
+theorem FlockSoundness.Audit.SecurityProofs.SamplingDesign.RecordSizing : FlockSoundness.Audit.Guarantees.SamplingDesign.RecordSizing := @FlockSoundness.Audit.SamplingDesign.record_sizing
 
-theorem FlockSoundness.Audit.SecurityProofs.Law.RecordSizingOneFewer : FlockSoundness.Audit.Guarantees.Law.RecordSizingOneFewer := @FlockSoundness.Audit.Law.record_sizing_one_fewer
+theorem FlockSoundness.Audit.SecurityProofs.SamplingDesign.RecordSizingOneFewer : FlockSoundness.Audit.Guarantees.SamplingDesign.RecordSizingOneFewer := @FlockSoundness.Audit.SamplingDesign.record_sizing_one_fewer

@@ -62,7 +62,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **Each sampled proof block's place in its table, for the rows the verifier derives** (named: 1d, 1e, S4). `unitRows u` is
 unit `u`'s rows as the verifier derives them: `Rows.compose` of `derive` on its types (1d). -/
@@ -160,7 +160,7 @@ def ProgPlaces.derived (pp : ProgPlaces p outs plan tab) : (p.partition outs).De
   place S R u h := ⟨p.rows u, pp.inst u, pp.o S R u h, pp.col S R u h, pp.placed S R u h, pp.aliased S R u h⟩
   rows _ _ _ _ := rfl
 
-variable (p outs plan tab) {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : Law n}
+variable (p outs plan tab) {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : SamplingDesign n}
 
 /-- **The end-to-end count curve on the circuit of the statement's rows.** `flock_e2e_count` at `C = p.circuit outs`,
 each unit its template's rows, with each sampled proof block's place from `ProgPlaces`: if `execAccept` holds, the probability

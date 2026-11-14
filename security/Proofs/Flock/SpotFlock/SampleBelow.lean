@@ -56,7 +56,7 @@ end Flock.Bridge
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-open Properties.Spot.SecurityProofs (flockLaw_subset deriveLaw_subset)
+open Properties.Spot.SecurityProofs (flockSamplingDesign_subset deriveSamplingDesign_subset)
 open Lean (Json)
 
 /-- **A first stage of count `K` proves units below its population**: with no closure map it proves the units it
@@ -72,11 +72,11 @@ theorem select_subset_lt {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : Byt
   obtain rfl := Except.ok.inj hn'
   rw [hl] at hl'
   obtain rfl := Except.ok.inj hl'
-  obtain rfl : derived = none := deriveLaw_subset _ _ _ _ _ (flockLaw_subset _ _ _ hf).1 hder
+  obtain rfl : derived = none := deriveSamplingDesign_subset _ _ _ _ _ (flockSamplingDesign_subset _ _ _ hf).1 hder
   rw [hpu hc]
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+  · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
     have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu

@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.ExecDrawOS
 public import Proofs.Flock.Soundness.PlanDraw
 import all Init.Data.String.Defs
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Data.HashMap.Lemmas
 
@@ -23,26 +23,26 @@ the pool (`card_pool_mem`).
 * `subsetOn_eq`, `subsetOn_misses`: the per-swap loop as a list recursion, and its `HashMap` read through a permutation.
 * `loopK_le`: swap `i` on its own uniform stream samples uniformly over the pool `π '' [i, n)`, so the loop escapes `B` with
   at most `C(n − i − |B|, c)/C(n − i, c)`.
-* `Law.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
+* `SamplingDesign.subsetOn_escape_le`: over independent uniform streams, one per swap, `Key.subset` misses `B` with at most the
   uniform `k`-subset's escape.
 
 The window (`PlanDraw.window`, `plan.draw` for each call under one key, admission refusing a repeated call index):
 
 * `drawAll_eq`, `drawK_eq_drawOn`: the calls' samples are one sample over the window's flat strata (`flat`), and on the key
   it is `drawOn` on the key's streams, stratum `p`'s swap `i` at index `("s", *context, i)`.
-* `Law.drawOn_escape_le`: **C per-call samples form one stratified sampling design**. Over independent uniform streams, one per stratum
-  and swap, the window sample misses `B` with at most `(Law.stratified σ k hk).escape B`, for strata that describe `σ`'s
+* `SamplingDesign.drawOn_escape_le`: **C per-call samples form one stratified sampling design**. Over independent uniform streams, one per stratum
+  and swap, the window sample misses `B` with at most `(SamplingDesign.stratified σ k hk).escape B`, for strata that describe `σ`'s
   (`PlanStrata`).
-* `Law.keyedExecutionPhase`, `Law.keyedExecutionPhase_escape_le`: **tier 3**. The live window sample, on the key derived from a verifier
-  secret of `S` bytes, escapes `B` with at most `(Law.stratified σ k hk).escape B + η`, under A4
+* `SamplingDesign.keyedExecutionPhase`, `SamplingDesign.keyedExecutionPhase_escape_le`: **tier 3**. The live window sample, on the key derived from a verifier
+  secret of `S` bytes, escapes `B` with at most `(SamplingDesign.stratified σ k hk).escape B + η`, under A4
   (`Assumptions.KeyedStreamsUniform`) for the test `executionPhaseTest` and swap indices with distinct framings. As for
   `Flock.Draw.subset`, it holds for every number of bytes `L` read per swap, and the unbounded Python stream is the limit.
-* `Randomness.frames_inj'`, `Law.executionPhaseIdx_inj`, `Law.keyedExecutionPhase_escape_le_of_names`: a frame parses uniquely, so the
+* `Randomness.frames_inj'`, `SamplingDesign.executionPhaseIdx_inj`, `SamplingDesign.keyedExecutionPhase_escape_le_of_names`: a frame parses uniquely, so the
   swap indices' framings are distinct when the calls are admitted and each call's stratum names are distinct. So tier 3
   holds from the sample's own checks, with every swap index framed in under `2^64` bytes.
-* `Law.keyedExecutionPhase_audit_of_record`, `Law.keyedExecutionPhase_extraction_audit_of_record`: **step 4**, the window pins on the live
+* `SamplingDesign.keyedExecutionPhase_audit_of_record`, `SamplingDesign.keyedExecutionPhase_extraction_audit_of_record`: **step 4**, the window pins on the live
   keyed sample at the sizing of record: `2^-40 + η + ε_ks + δ_link`, on a fresh uniform window secret (A5).
-* `Law.keyedExecutionPhaseReg_extraction_audit_of_record` (the claim of record), `Law.keyedExecutionPhaseReg_audit_of_record`: the same on the
+* `SamplingDesign.keyedExecutionPhaseReg_extraction_audit_of_record` (the claim of record), `SamplingDesign.keyedExecutionPhaseReg_audit_of_record`: the same on the
   real game, whose key context is the receipt digest, strategy by strategy (`prob_auditReg`).
 -/
 
@@ -145,7 +145,7 @@ theorem subsetOn_misses (k n : ℕ) (S : ℕ → ByteArray) (B : Finset ℕ) (D 
 
 /-- `uniformOn` on a stream of `L` bytes is `uniformL` on its bytes, with `L + 1` fuel. -/
 theorem uniformOn_streamOf {L : ℕ} (g : Fin L → Fin 256) (m : ℕ) :
-    Randomness.uniformOn m (Law.streamOf g) = (uniformL m (L + 1) (bsOf g)).map Prod.fst := by
+    Randomness.uniformOn m (SamplingDesign.streamOf g) = (uniformL m (L + 1) (bsOf g)).map Prod.fst := by
   have h := uniform_streamOf g m (L + 1) 0 (Nat.zero_le _)
   rw [List.drop_zero] at h
   unfold Randomness.uniformOn
@@ -330,7 +330,7 @@ theorem loopK_le (n k L : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ 
 
 /-- Per-swap streams, swap `i` reading `G i`. -/
 def streamsOf {k L : ℕ} (G : Fin k → Fin L → Fin 256) : ℕ → ByteArray := fun i =>
-  if h : i < k then Law.streamOf (G ⟨i, h⟩) else ByteArray.empty
+  if h : i < k then SamplingDesign.streamOf (G ⟨i, h⟩) else ByteArray.empty
 
 theorem loopPK_streamsOf {k L : ℕ} (G : Fin k → Fin L → Fin 256) (n : ℕ) : ∀ (l : List ℕ) (π : Equiv.Perm ℕ),
     (∀ j ∈ l, j < k) → loopPK n (streamsOf G) l π = loopK n (L + 1) (swapsOf 0 G) l π := by
@@ -340,7 +340,7 @@ theorem loopPK_streamsOf {k L : ℕ} (G : Fin k → Fin L → Fin 256) (n : ℕ)
   | cons i is ih =>
     intro π hl
     have hi : i < k := hl i List.mem_cons_self
-    have hS : streamsOf G i = Law.streamOf (G ⟨i, hi⟩) := by simp [streamsOf, hi]
+    have hS : streamsOf G i = SamplingDesign.streamOf (G ⟨i, hi⟩) := by simp [streamsOf, hi]
     have hW : swapsOf 0 G i = bsOf (G ⟨i, hi⟩) := by simp [swapsOf, hi]
     simp only [loopPK, loopK, hS, hW, uniformOn_streamOf]
     cases uniformL (n - i) (L + 1) (bsOf (G ⟨i, hi⟩)) with
@@ -351,7 +351,7 @@ theorem loopPK_streamsOf {k L : ℕ} (G : Fin k → Fin L → Fin 256) (n : ℕ)
 
 end FlockSoundness.Audit.KeyedDraw
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset
 open scoped ENNReal
@@ -381,7 +381,7 @@ theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
           (fun t ht => absurd ht (Nat.not_lt_zero t))
     _ = (subset n k hk).escape B := by rw [subset_escape, hcard, Nat.sub_zero]
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
 namespace FlockSoundness.Audit.KeyedDraw
 
@@ -511,7 +511,7 @@ theorem drawOn_units (T : ℕ → ℕ → ByteArray) : ∀ (WS : List (List Part
 
 end FlockSoundness.Audit.KeyedDraw
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset DrawExec Randomness
 open scoped ENNReal
@@ -529,7 +529,7 @@ def PlanStrata (σ : Fin n → Fin M) (k : Fin M → ℕ) (WS : List (List Part 
 def executionPhaseStreams {k : Fin M → ℕ} {L : ℕ} (F : (p : Fin M) → Fin (k p) → Fin L → Fin 256) : ℕ → ℕ → ByteArray :=
   fun p => if h : p < M then KeyedDraw.streamsOf (F ⟨p, h⟩) else fun _ => ByteArray.empty
 
-/-- **The window sample escapes no more often than `Law.stratified`**: over independent uniform streams, one per stratum
+/-- **The window sample escapes no more often than `SamplingDesign.stratified`**: over independent uniform streams, one per stratum
 and swap, it returns a sample missing `B` with at most the stratified sampling design's escape. -/
 theorem drawOn_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (WS : List (List Part × PlanDraw.Stratum)) (hWS : PlanStrata σ k WS) (L : ℕ) (B : Finset (Fin n)) :
@@ -626,7 +626,7 @@ def executionPhaseTest (WS : List (List Part × PlanDraw.Stratum)) (k : Fin M �
 /-- **The live PoUW window sample as a sampling design**: `PlanDraw.window` on the key derived from the window's secret `sec ω` of
 `S` bytes, each swap's stream read to `L` bytes; a refused or short sample samples every unit. -/
 def keyedExecutionPhase {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (domain : String)
-    (context : List (String × Part)) (calls : List PlanDraw.Call) (L : ℕ) : Law n where
+    (context : List (String × Part)) (calls : List PlanDraw.Call) (L : ℕ) : SamplingDesign n where
   Ω := Ω
   draw ω := match PlanDraw.window (derive ⟨Array.ofFn fun b => UInt8.ofFin (sec ω b)⟩ domain context) calls L with
     | some D => univ.filter fun u => u.val ∈ D
@@ -636,7 +636,7 @@ def keyedExecutionPhase {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : 
 theorem uniformSecret_id (S : ℕ) : Assumptions.UniformSecret (fun ω : Fin S → Fin 256 => ω) := fun _ => rfl
 
 /-- **Tier 3 for the PoUW window sample**: on a uniform window secret (A5), under A4 for the sample's escape test, the live
-window sample escapes `B` with at most `Law.stratified`'s escape plus `η`, for every number of bytes `L` read per swap. -/
+window sample escapes `B` with at most `SamplingDesign.stratified`'s escape plus `η`, for every number of bytes `L` read per swap. -/
 theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ k (KeyedDraw.flat calls)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec) (L : ℕ) (domain : String)
@@ -711,7 +711,7 @@ theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ)
             executionPhaseTest WS k B fun j => ⟨Array.ofFn fun b => UInt8.ofFin (f j b)⟩) + η := hA4 B hinj
       _ ≤ (stratified σ k hk).escape B + η := by gcongr
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
 namespace FlockSoundness.Randomness
 
@@ -889,7 +889,7 @@ theorem frames_inj' {l l' : List Part} (hs : (frames l).size < 2 ^ 64) (h : fram
 
 end FlockSoundness.Randomness
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset Randomness
 open scoped ENNReal
@@ -993,9 +993,9 @@ theorem keyedExecutionPhase_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M
       simp only [hadm, ↓reduceIte] at hd
       exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset Randomness
 open scoped ENNReal
@@ -1119,4 +1119,4 @@ theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
 
 end Audits
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign

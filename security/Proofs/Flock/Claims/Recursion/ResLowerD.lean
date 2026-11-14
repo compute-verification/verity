@@ -111,7 +111,7 @@ abbrev AccP (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
   PartAcceptsP FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
     (DeployedR.layR elem) shape (showsPart untr b) cmt
 
-/-- **Part `s`'s decision**: the session at its staged statement `xO` decided, and its checks (`drawLaw`, `drawEq`) and
+/-- **Part `s`'s decision**: the session at its staged statement `xO` decided, and its checks (`drawDesign`, `drawEq`) and
 last refusals (`fullDrawO`) passed. -/
 def PartDec (xO : Msg) (i : RecIns) : Prop :=
   ∃ (spec' : SessionSpec) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Msg × Coin))

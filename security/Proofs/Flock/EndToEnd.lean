@@ -14,7 +14,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 terms in closed form:
 * `zk_session_soundJ_custody_reg`: one `--zk` session of `J` tables at the record's custody, at the live subset sample, is
   sound against the public file, `Pr[verity-verify-proof accepts ∧ at least K₀ units wrong on it] ≤ miss(K₀) + ε_ks + δ_link`;
-* `Audit.Law.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
+* `Audit.SamplingDesign.subset_miss`: the uniform `kd`-subset's `miss(K₀)` is `C(n − K₀, kd) / C(n, kd)` at `K₀ ≤ n`;
 * `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `δ_link` is its closed form.
 
 `EndToEnd_refSetup` shows the statement's reference setup `y₀` is no extra condition: every sample verity-verify-proof accepts
@@ -46,7 +46,7 @@ theorem EndToEnd : Flock.Guarantees.EndToEnd := by
     hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ hCR hA2
   have h := Discharge.Composed.zk_session_soundJ_custody_reg I ht hc hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb src hA3
     hTags hCust hk hRw hM hρ hr ht' K₀ τ (qF := qF) (qS := qS) hCR
-  rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
+  rw [SamplingDesign.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink

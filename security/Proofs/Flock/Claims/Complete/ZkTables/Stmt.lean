@@ -52,9 +52,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 * A session of several tables (`setupTables_spec`) keeps the statement's sample, which is a subset or a stratified sample
   (the setup refuses any other sampling design at several tables) whose units are the session's instances; its `Σ` is a SHA-512
   digest; and its `Hello` is `helloOf`'s at the tables' names.
-* A subset sample that decodes is an object of exactly `law`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
+* A subset sample that decodes is an object of exactly `samplingDesign`, `population`, `k` and `units` (`UnitDraw.ofJson`'s key
   count), a string, natural numbers and an array of them, so it is printable and has no closure (`good_subset`); a
-  stratified one has exactly `law`, `population`, `units`, `k` and `strata`, so it is printable
+  stratified one has exactly `samplingDesign`, `population`, `units`, `k` and `strata`, so it is printable
   (`JsonRT.good_stratified`) and has no closure either (`closure_stratified`); the statement's sample is JSON that
   `Flock.JsonParse.parse` read, so it is well formed.
 * A masked statement's coins are its keyed coin tree (`zkCoins`), so the `Hello`'s `coins` entry is the tree's spec with
@@ -277,10 +277,10 @@ theorem good_obj_of {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) {L : L
   exact hg
 
 set_option maxHeartbeats 4000000 in
-/-- **A subset sample that decodes is printable**, an object of exactly `law`, `population`, `units` and `k`, so it has no
+/-- **A subset sample that decodes is printable**, an object of exactly `samplingDesign`, `population`, `units` and `k`, so it has no
 closure. -/
 theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
-    (hl : D.law = .subset k) : Good j ∧ D.closure = #[] := by
+    (hl : D.samplingDesign = .subset k) : Good j ∧ D.closure = #[] := by
   unfold Draw.UnitDraw.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -289,7 +289,7 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
   all_goals
-    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    have hp := ‹(pure _ : V Draw.SamplingDesign) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
   all_goals
     try simp only [reduceCtorEq] at hl
@@ -324,10 +324,10 @@ theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDra
         simp at this
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified sample that decodes has no closure**: an object of exactly `law`, `population`, `units`, `k` and
+/-- **A stratified sample that decodes has no closure**: an object of exactly `samplingDesign`, `population`, `units`, `k` and
 `strata`, so it holds no `closure` key. -/
 theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
-    {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : D.closure = #[] := by
+    {strata : Array Draw.Stratum} (hl : D.samplingDesign = .stratified K strata) : D.closure = #[] := by
   unfold Draw.UnitDraw.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -336,7 +336,7 @@ theorem closure_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
   all_goals
-    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    have hp := ‹(pure _ : V Draw.SamplingDesign) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
   all_goals
     try simp only [reduceCtorEq] at hl
@@ -391,7 +391,7 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
       .ok (spec, sts)) (hs : 1 < sts.size) :
     spec.unitDraw = draw ∧ spec.sigma.size = 64 ∧
       (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧
-        ((∃ k, D.law = .subset k) ∨ ∃ K st, D.law = .stratified K st) ∧ spec.instances = D.units.size) ∧
+        ((∃ k, D.samplingDesign = .subset k) ∨ ∃ K st, D.samplingDesign = .stratified K st) ∧ spec.instances = D.units.size) ∧
       Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello := by
   unfold Stmt.setupTables at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
@@ -429,8 +429,8 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
       | exact (‹∀ u, some _ = some u → False› _ rfl).elim
       | (cases ‹some _ = some _›
          first
-           | exact ⟨_, hd, .inl ⟨_, ‹_ = Draw.Law.subset _›⟩, rfl⟩
-           | exact ⟨_, hd, .inr ⟨_, _, ‹_ = Draw.Law.stratified _ _›⟩, rfl⟩)
+           | exact ⟨_, hd, .inl ⟨_, ‹_ = Draw.SamplingDesign.subset _›⟩, rfl⟩
+           | exact ⟨_, hd, .inr ⟨_, _, ‹_ = Draw.SamplingDesign.stratified _ _›⟩, rfl⟩)
 
 /-! ## The statement at a good case of several tables -/
 

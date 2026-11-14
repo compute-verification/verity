@@ -2852,6 +2852,17 @@
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Flock/Audit/Law.lean": "security/Definitions/Flock/Audit/SamplingDesign.lean",
+        "security/Proofs/Flock/Bridge/DrawnLaw.lean": "security/Proofs/Flock/Bridge/DrawnSamplingDesign.lean",
+        "security/Proofs/Flock/Claims/Sampling/Select/DrawLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/DrawDesign.lean",
+        "security/Proofs/Flock/Soundness/Audit/Law.lean": "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Laws.lean": "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/SamplingDesigns.lean",
+        "security/Proofs/Flock/Soundness/Discharge/Exec/LawDraw.lean": "security/Proofs/Flock/Soundness/Discharge/Exec/SamplingDesignDraw.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/CoinMapLaw.lean": "security/Proofs/Properties/Verity/SampledTwo/CoinMapDistribution.lean"
+      }
     }
   ]
 }

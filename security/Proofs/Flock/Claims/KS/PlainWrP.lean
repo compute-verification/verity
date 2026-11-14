@@ -65,7 +65,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The checks after the verdict refuse a session without a sample** (`drawLaw zk tags false none`). -/
+/-- **The checks after the verdict refuse a session without a sample** (`drawDesign zk tags false none`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
@@ -77,7 +77,7 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
   obtain ⟨_, h, -⟩ := Refine.ebind_ok h
   cases hd : s.read.draw with
-  | none => simp [hd, ProvedScope.drawLaw] at h
+  | none => simp [hd, ProvedScope.drawDesign] at h
   | some d => exact ⟨d, rfl⟩
 
 
@@ -85,7 +85,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The checks after the verdict refuse a session without a sample** (`drawLaw zk tags false none`). -/
+/-- **The checks after the verdict refuse a session without a sample** (`drawDesign zk tags false none`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d :=

@@ -229,13 +229,13 @@ private def circuit : String :=
 
 private def query : Json := jsonOf r#"{"name":"Q_template_instance","params":{"template":"CoreSpotPair_v0"},"version":0}"#
 private def partition : Json := Json.mkObj [("program", circuit), ("query", query)]
-private def law : Json := jsonOf r#"{"k":1,"law":"subset"}"#
+private def samplingDesign : Json := jsonOf r#"{"k":1,"law":"subset"}"#
 private def ports : Json := Json.mkObj [("out", Json.mkObj [("domain", rep "d1"), ("leaves", 2)]),
   ("x", Json.mkObj [("domain", rep "d2"), ("leaves", 1)])]
 
 /-- The run's record after `previous`, registering `registered`. -/
 private def runRecord (previous : Json) (registered : Array Json) : Json := Json.mkObj [("anchors", Json.arr #[]),
-  ("format", "verity/registration/v2"), ("law", law), ("leaf_layer", rep "ee"),
+  ("format", "verity/registration/v2"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("partition", (Spot.Partition.digest partition).getD ""), ("population", 1), ("previous", previous),
   ("program", circuit), ("protocol", Spot.Registration.PROTOCOL),
   ("query", (Spot.Registration.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
@@ -269,7 +269,7 @@ private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W"
 /-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the window's,
 and `proofs`, the circuit and public files' SHA-512s and the verifier's registered file. -/
 private def sampledParams (log : Array Json) (outputs : Option Json) : Json := Json.mkObj ([("anchors", Json.arr #[]),
-  ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", law), ("leaf_layer", rep "ee"),
+  ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
   ("program", jsonOf descriptor),
   ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"), ("registered", readsFile)]),

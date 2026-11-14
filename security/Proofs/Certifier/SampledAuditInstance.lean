@@ -80,7 +80,7 @@ theorem sampledAuditAccepted_of {T : Type}
   subst hflock
   exact NetTiming.SecurityProofs.SampledAuditAccepted H _ L K S lay k
     (Claims.SamplingGeneric.flockKS H D.flock _ hKS hlist (Binding_of_hm96 D own at_ row salt π layer hcommit hrow H)
-      (Claims.SamplingGeneric.sessions_ofDeploy D iroots H (drawLaw_of_slots D hslots)
+      (Claims.SamplingGeneric.sessions_ofDeploy D iroots H (drawDesign_of_slots D hslots)
         (refuses_of H D (scopeMatches_of D hslots hprog) hchecks) hfix hfixed hsessions hnum hopens))
 
 set_option synthInstance.maxSize 1024 in

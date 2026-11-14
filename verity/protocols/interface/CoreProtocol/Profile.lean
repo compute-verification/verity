@@ -71,9 +71,9 @@ def WorkStratum.problem (k : Nat) (strata : Array WorkStratum) : Option String :
       return some s!"stratum '{s.name}': k is not the work rule's"
   return none
 
-/-- The sampling design of Flock's law (`Flock.Draw.Law`) at its sizes: each stratum named by its template, its size
+/-- The sampling design of Flock's law (`Flock.Draw.SamplingDesign`) at its sizes: each stratum named by its template, its size
 its ranges' total. `none` for a Bernoulli law of denominator 0. -/
-def SamplingDesign.ofFlock : Flock.Draw.Law → Option SamplingDesign
+def SamplingDesign.ofFlock : Flock.Draw.SamplingDesign → Option SamplingDesign
   | .subset k => some (.subset k)
   | .bernoulli a b => (Ratio.mk' a b).map .bernoulli
   | .stratified _ strata => some (.stratified (strata.map fun s => { name := s.template, size := s.size, k := s.k }))

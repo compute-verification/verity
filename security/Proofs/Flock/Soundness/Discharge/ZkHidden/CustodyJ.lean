@@ -53,14 +53,14 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **The challenger's live-coin part's sample is `DrawOkZKHJ` at a sample of `kd` units, under any sampling design, at any `g` every table's session
-has.** When the record's sample file is the verifier's sample under `law` over `[0, pop)` (`DrawFileZK`), the sample file at
+has.** When the record's sample file is the verifier's sample under `samplingDesign` over `[0, pop)` (`DrawFileZK`), the sample file at
 `S` decodes only to a sample of `kd` units, and the session's tables divide `kd`, `S` is `DrawOkZKHJ` at
 `mPtsOf g (kd / nTab I)` link points: each table proves its `kd / nTab I` consecutive units, whatever the sampling design. -/
 theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
     (hg : ∀ (j : ℕ) (d : Lean.Json) (st : Flock.Stmt), Stmt.setupHidden (tagsAt (zkTags I) I.count j) I.circuitFile
       I.publicFile (zkCoins I) I.tables (some d) I.partition I.program = .ok st → st.c.g = g)
-    (law : Draw.Law) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj samplingDesign pop) (S : Finset (Fin n))
     (hsz : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
     DrawOkZKHJ I dj (mPtsOf g (kd / nTab I)) S := by
   intro j
@@ -149,16 +149,16 @@ theorem drawOkZKHJ_of_sizeG (I : Inputs) {g : ℕ}
 
 /-- **The challenger's live-coin part's sample is `DrawOkZKHJ` at a sample of `kd` units, under any sampling design.** On untyped `--statement` tags
 whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`: when the record's sample file is the verifier's sample
-under `law` over `[0, pop)` (`DrawFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
+under `samplingDesign` over `[0, pop)` (`DrawFileZK`), the sample file at `S` decodes only to a sample of `kd` units, and the session's
 tables divide `kd`, `S` is `DrawOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
 consecutive units, whatever the sampling design. -/
 theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj samplingDesign pop) (S : Finset (Fin n))
     (hsz : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
     DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
   drawOkZKHJ_of_sizeG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
-    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) law kd pop hdiv dj hdj S hsz
+    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) samplingDesign kd pop hdiv dj hdj S hsz
 
 /-- **The challenger's live-coin part's samples are `DrawOkZKHJ`, at any `g` every table's session has.** When the record's sample file
 is the verifier's sample under the subset sampling design `subset kd` over `[0, pop)` (`DrawFileZK`) and the session's tables divide
@@ -215,23 +215,23 @@ theorem zk_session_soundHJ_custody
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
           fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
           k Rw M ρ t' (reg σ) (cont σ) :=

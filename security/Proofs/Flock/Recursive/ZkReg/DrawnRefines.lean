@@ -59,7 +59,7 @@ variable {n : ℕ} {Reg : Type}
 sample the live session's event `acc` is at most as likely as the compiled session's acceptance (`hat`), the registrations
 agreeing (`hreg`), then a bound on the compiled audit's `Pr[accept ∧ Q R S]` (`R` the registration, `S` the sample)
 bounds the live audit's `Pr[acc ∧ Q o.1 o.2.1]`. -/
-theorem exec_le_of_refines_drawn {L : Law n} {live : Finset (Fin n) → Reg → Game Exec.Transcript}
+theorem exec_le_of_refines_drawn {L : SamplingDesign n} {live : Finset (Fin n) → Reg → Game Exec.Transcript}
     {session : Finset (Fin n) → Reg → Game Bool} (τ : Strategy (auditLive L Reg live))
     (σ : Strategy (audit L Reg session)) (hreg : reg σ = τ.1) (acc : Exec.Transcript → Prop)
     (hat : ∀ ω, prob acc (live (L.draw ω) τ.1) (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)) ≤
@@ -96,7 +96,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (opn : ∀ (_ : Finset (Fin n)) (_ : Reg), Array ByteArray → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
+  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : SamplingDesign n}
 
 /-- **The `--zk` headline at an event of the registration and the sample**: a bound on the compiled batched audit's
 `Pr[accept ∧ Q R S]` at `simZ … τ` bounds verity-verify-proof `--zk`'s `Pr[accept ∧ Q o.1 o.2.1]`
@@ -151,7 +151,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg)
   (one : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → Bool)
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
-  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
+  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : SamplingDesign n}
 
 /-- **The `--zk` headline at an event of the registration and the sample, for sessions of `J` tables**
 (`zk_headline_exec_drawn` at `simZJ`). -/
@@ -194,7 +194,7 @@ noncomputable abbrev simZHJ {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S�
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
     (hU : Built c.unit)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (dg : ByteArray → ByteArray) (N : ℕ) {L : Law n} (hTags : TagsOkZHJ I)
+    (dg : ByteArray → ByteArray) (N : ℕ) {L : SamplingDesign n} (hTags : TagsOkZHJ I)
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω))
     (τ : Strategy (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr))) :
@@ -219,7 +219,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 table at its place (`place`) and the committed values the plurality value layer of `vb`,
 `Pr[accept ∧ some drawn unit is wrong] ≤ ε_ks + δ_link`, `ε_ks = ksAvgStrictZ` under A1 for every table's finders after
 each sample (`hCR`) and `δ_link = linkBoundZC` under A2 for the link finders. -/
-theorem zk_flock_drawnC_cr (hA : A.Correct) {L : Law n}
+theorem zk_flock_drawnC_cr (hA : A.Correct) {L : SamplingDesign n}
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc)
@@ -262,17 +262,17 @@ theorem zk_session_drawnR
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hDraw : ∀ ω, DrawOkZK I dj mPts ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZAt dj y₀
-        ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+        ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))) j
       (zcStrat execArith hs512 (planZAt dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ) ω)) qF qS) :
@@ -283,8 +283,8 @@ theorem zk_session_drawnR
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) k Rw))
           o.2.1)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ksAvgStrictZ (planZAt dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      ksAvgStrictZ (planZAt dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
           ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))

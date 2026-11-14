@@ -41,9 +41,9 @@ theorem splits_ok {units : Array ℕ} {count : ℕ} {e : String} {w : Unit}
 
 theorem draw_split {draw : Option Json} {u u' : Draw.UnitDraw}
     (hd : draw.mapM Draw.UnitDraw.ofJson = .ok (some u))
-    (hlaw : (∃ k, u.law = .subset k) ∨ ∃ K st, u.law = .stratified K st) (huu : some u = some u') :
+    (hlaw : (∃ k, u.samplingDesign = .subset k) ∨ ∃ K st, u.samplingDesign = .stratified K st) (huu : some u = some u') :
     (∀ d, draw = some d → ∃ v, Draw.UnitDraw.ofJson d = .ok v ∧
-      ((∃ k', v.law = .subset k') ∨ ∃ K st, v.law = .stratified K st) ∧
+      ((∃ k', v.samplingDesign = .subset k') ∨ ∃ K st, v.samplingDesign = .stratified K st) ∧
       v.population = u'.population ∧ v.units = u'.units) ∧ (draw = none → u'.units = Array.range u'.population) := by
   cases huu
   cases draw with
@@ -89,7 +89,7 @@ theorem setupTables_parts (hh : tags.hiddenOutputs = false) (hc1 : 1 < count)
     tags.manyTables.isSome ∧ count ≤ Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
         (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
-          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+          ((∃ k', u.samplingDesign = .subset k') ∨ ∃ K st, u.samplingDesign = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (draw = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % count = 0 ∧ sts.size = count ∧

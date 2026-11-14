@@ -40,14 +40,14 @@ def checkFull (record : String) : Except String Unit :=
   | none => .error "the session's record has no draw"
   | some d => match Flock.Draw.UnitDraw.ofJson d with
     | .error e => .error s!"the session's draw: {e}"
-    | .ok D => match D.law with
+    | .ok D => match D.samplingDesign with
       | .subset k =>
         if k = D.population ∧ 0 < k ∧ D.units = Array.range k then .ok ()
         else .error s!"the session's draw is subset:{k} of {D.units.size} units over {D.population}, not every unit"
       | _ => .error "the session's draw's law is not subset"
 
 theorem checkFull_ok {record : String} (h : checkFull record = .ok ()) :
-    ∃ d D k, recordDraw record = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.law = .subset k ∧
+    ∃ d D k, recordDraw record = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.samplingDesign = .subset k ∧
       k = D.population ∧ 0 < k ∧ D.units = Array.range k := by
   unfold checkFull at h
   split at h

@@ -95,7 +95,7 @@ section Link
 variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
-  {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+  {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
@@ -154,7 +154,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
       (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
           (planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts))
-          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
+          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : SamplingDesign n}
           {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
           (vb : ValueBindingZ execArith P planZ tab decode Hc) (R : Reg)
           (τ : Cont L Reg (batchedSessionZC execArith ZkExec.hs512 planZ) R) (k Rw M : ℕ),
@@ -170,7 +170,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
       (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
           (planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts))
-          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
+          (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : SamplingDesign n}
           {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
           (vb : ValueBindingZ execArith P planZ tab decode Hc) (R : Reg)
           (τ : Cont L Reg (batchedSessionZC execArith ZkExec.hs512 planZ) R) (k Rw M : ℕ),

@@ -71,14 +71,14 @@ private theorem accept_of_ite {α β : Type} {b : Bool} {r : String} {x : Core.O
   · exact ⟨rfl, by simpa using h⟩
 
 /-- **What the two-stage form's last step accepts** (`VStar.Recursive.SampledTwo.secondChecked`): the registration
-keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `law` the step is handed, over the registered
+keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `samplingDesign` the step is handed, over the registered
 population; the units hold at the reads the step hands the record's checks, the verdicts' own for the registration's
 own values less the reads of its own ports at their own roots (`UnitsAt` at `Record.lessOwnReads` of `openedRoots`);
 and the verdicts accept. -/
-theorem secondChecked_units {v : Registration.Verifier} {delta : Core.Ratio} {c : Commitment} {m : Nat} {law : Json}
+theorem secondChecked_units {v : Registration.Verifier} {delta : Core.Ratio} {c : Commitment} {m : Nat} {samplingDesign : Json}
     {e : Evidence} {pub : Public} {prof : Core.Integrity}
-    (h : VStar.Recursive.SampledTwo.secondChecked v delta c m law e = .accept pub prof) :
-    (∃ law', Registered v c.record law') ∧ Drawn e.draw (getD c.record "population") law ∧
+    (h : VStar.Recursive.SampledTwo.secondChecked v delta c m samplingDesign e = .accept pub prof) :
+    (∃ samplingDesign', Registered v c.record samplingDesign') ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
       UnitsAt c e (Record.lessOwnReads c.record (openedRoots c.record e.verdicts)) ∧ VerdictsAccept e.verdicts := by
   unfold VStar.Recursive.SampledTwo.secondChecked at h
   obtain ⟨h1, h⟩ := accept_of_ite h

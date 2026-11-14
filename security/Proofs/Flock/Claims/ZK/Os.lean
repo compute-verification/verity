@@ -98,14 +98,14 @@ def dec (O : OsTape R lay) : ((k : Fin O.reps ⊕ Fin O.taps) → Fin (O.Ls k) �
 /-- Rep `i`'s frame's bytes on the tape `ρ`: its stream, as bytes. A rep from `reps` on has no stream and reads
 none, which the frame refuses (`drawsWith_refuses`). -/
 def frameBytes (O : OsTape R lay) (ρ : R) (i : ℕ) : ByteArray :=
-  if h : i < O.reps then FlockSoundness.Audit.Law.streamOf ((O.e.symm ρ).1 ⟨i, h⟩) else ByteArray.empty
+  if h : i < O.reps then FlockSoundness.Audit.SamplingDesign.streamOf ((O.e.symm ρ).1 ⟨i, h⟩) else ByteArray.empty
 
 /-- The release whose rep `i` reads stream `i` of the tape at its start. -/
 def release {W : Type} (O : OsTape R lay) (L : LeanRelease W R) : LeanRelease W R :=
   { L with draws := O.frameBytes }
 
 theorem frameBytes_of_lt (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
-    O.frameBytes ρ i = FlockSoundness.Audit.Law.streamOf ((O.e.symm ρ).1 i) :=
+    O.frameBytes ρ i = FlockSoundness.Audit.SamplingDesign.streamOf ((O.e.symm ρ).1 i) :=
   dif_pos i.isLt
 
 /-- Rep `i`'s frame reads exactly the bytes its samples take. -/

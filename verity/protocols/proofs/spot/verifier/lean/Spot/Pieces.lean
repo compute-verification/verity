@@ -203,7 +203,7 @@ def partition (j : Json) : V Json := do
     ("population", orNull Lean.toJson (Partition.units v.program v.query)),
     ("strata", orNull (fun ss => Json.arr (ss.map fun (t, rs) => Json.arr #[Json.str t, Json.arr (rs.map range)]))
       (Partition.strata v.program v.query)),
-    ("law", orNull id (Draw.derive v.program v.query v.law v.workTable))]
+    ("law", orNull id (Draw.derive v.program v.query v.samplingDesign v.workTable))]
 
 /-- `{"program", "X"}`, a program object and a natural number, to `[[definition, bits, bits by walk], …]`: per distinct
 Definition `Q_call` v1 at X cuts (`Flock.Qcall.evaluate`), its units' committed bits read off its layout
@@ -392,7 +392,7 @@ def select (j : Json) : V Json := do
 sample, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
-  let some design := Core.SamplingDesign.ofFlock d.law | throw "the draw's law has no sampling design"
+  let some design := Core.SamplingDesign.ofFlock d.samplingDesign | throw "the draw's law has no sampling design"
   return Json.mkObj [("design", design.toJson)]
 
 /-- `{"sample", "ns", "ks", "source"}` to `{"draw", "read"}`: a two-stage rule's second stage (`Select.selectSecond`)

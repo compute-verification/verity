@@ -103,7 +103,7 @@ theorem stageCoins_holoCTs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoA
 
 section src
 
-variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
+variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n}
   {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp

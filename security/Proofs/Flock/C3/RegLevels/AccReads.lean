@@ -261,7 +261,7 @@ section Drawn
 open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- An outcome the session's game reaches: the registration sent, the sampling design's sample at some coins, and the transcript the
 session writes there (`ZkOuter.game`'s outcomes, `prob_auditLive_liveOfZJ_mono`'s). -/
@@ -307,7 +307,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -340,7 +340,7 @@ theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
   have hacc := (h.1 j).1
   rw [ho] at hacc
   obtain ⟨u₁, q₁, d, D, dp, idx, h₁, hmem, hf, hd, hD, hdp, hidx, hu, hpos⟩ :=
-    (F.zs R ω t R₂ j).hown ω' R' x hacc (.inl (u, q)) ⟨hr, execOS_subset_full_mem (F.Vs j).law.src ω' u⟩
+    (F.zs R ω t R₂ j).hown ω' R' x hacc (.inl (u, q)) ⟨hr, execOS_subset_full_mem (F.Vs j).samplingDesign.src ω' u⟩
   simp only [Sum.inl.injEq, Prod.mk.injEq] at h₁
   obtain ⟨rfl, rfl⟩ := h₁
   have h1 := List.find?_some hf

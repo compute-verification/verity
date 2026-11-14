@@ -65,7 +65,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
 acceptance), the probability that at least `K` units of the committed circuit are wrong at the committed values is at
@@ -119,7 +119,7 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-variable {D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {L : Law n}
+variable {D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {L : SamplingDesign n}
 
 /-- **The end-to-end count curve on the circuit of the statement's rows.** `flock_e2e_countL` at `C = p.circuit outs`,
 each unit its template's rows, with each sampled proof block's place from `ProgPlaces`: if `execAccept` holds, the probability

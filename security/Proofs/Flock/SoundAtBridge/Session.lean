@@ -102,7 +102,7 @@ structure RowsSession where
   hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ
   t' : ℝ
   ht' : 0 ≤ t'
-  τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))
+  τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))
   qF : ℝ
   qS : ℝ
   qR : ℝ
@@ -125,7 +125,7 @@ theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Fl
 abbrev Out : Type := s.Reg × Finset (Fin s.n) × Discharge.Exec.Transcript
 
 /-- The verifier's sample. -/
-abbrev L := Law.execOS (n := s.n) s.src (.subset s.kd) s.n
+abbrev L := SamplingDesign.execOS (n := s.n) s.src (.subset s.kd) s.n
 
 /-- The live audit. -/
 abbrev G : Game s.Out := auditLive s.L s.Reg (liveOfZJ s.dg (planZHJ s.dj s.y₀) s.N s.wr)

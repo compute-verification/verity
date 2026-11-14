@@ -22,8 +22,8 @@ one table of `A.kd` units (`RefOk`, `numsOk_of_refOk`):
   have one `n` give one set of numbers (`nums_congr`), the reference sample file's (`d₀`) among them.
 
 And what `RefOk`'s unit count reads at a sample v2 accepts: a sample file's units are its `units` field's
-(`unitsAt_size`), a sample by a sampling design `LawOn` holds samples `A.kd` units (`drawn_length`), and a session's sample that
-`ProvedScope.drawLaw` keeps proves its sampled proof blocks alone (`proved_of_drawLaw`).
+(`unitsAt_size`), a sample by a sampling design `SamplingDesignOn` holds samples `A.kd` units (`drawn_length`), and a session's sample that
+`ProvedScope.drawDesign` keeps proves its sampled proof blocks alone (`proved_of_drawDesign`).
 -/
 
 @[expose] public section
@@ -133,24 +133,24 @@ theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
   simp only [h, Array.length_toList]
   exact _root_.Properties.Spot.SecurityProofs.drawUnits_size A.hlaw h
 
-/-- **A sample `ProvedScope.drawLaw` keeps proves its sampled proof blocks alone**: it is by a subset or stratified sampling design, whose
+/-- **A sample `ProvedScope.drawDesign` keeps proves its sampled proof blocks alone**: it is by a subset or stratified sampling design, whose
 samples carry no closure. -/
-theorem proved_of_drawLaw {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitDraw}
+theorem proved_of_drawDesign {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitDraw}
     (hD : Flock.Draw.UnitDraw.ofJson (Flock.norm J) = .ok D)
-    (h : Flock.ProvedScope.drawLaw true T false (some (Flock.norm J)) = .ok ()) : D.proved = D.units := by
-  unfold Flock.ProvedScope.drawLaw at h
+    (h : Flock.ProvedScope.drawDesign true T false (some (Flock.norm J)) = .ok ()) : D.proved = D.units := by
+  unfold Flock.ProvedScope.drawDesign at h
   try dsimp only at h
   rw [hD] at h
   try dsimp only at h
-  cases hw : Flock.ProvedScope.lawWhy true T false D with
+  cases hw : Flock.ProvedScope.samplingDesignWhy true T false D with
   | some why => rw [hw] at h; cases h
   | none =>
     have hcl : D.closure = #[] := by
-      cases hl : D.law with
+      cases hl : D.samplingDesign with
       | subset k => exact (FlockComplete.ZkTables.good_subset (FlockDeploy.wf_norm J) hD hl).2
       | stratified K St => exact FlockComplete.ZkTables.closure_stratified (FlockDeploy.wf_norm J) hD hl
-      | bernoulli a b => simp [Flock.ProvedScope.lawWhy, hl] at hw
-      | work K ws => simp [Flock.ProvedScope.lawWhy, hl] at hw
+      | bernoulli a b => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
+      | work K ws => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
     unfold Flock.Draw.UnitDraw.proved
     rw [hcl]
     rfl

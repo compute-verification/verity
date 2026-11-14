@@ -63,7 +63,7 @@ Here each is the `Claims.Pr` that a model sample misses `B`:
   samples of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes sampled as strata are one strata sample.
 
 `Live.lean` proves these distributions of the executable sample on uniform bytes, and `Select` of the deployed sampled
-verifier's (`drawMisses`, and `DrawLaw` from it, `drawLaw_of_slots`).
+verifier's (`drawMisses`, and `DrawDesign` from it, `drawDesign_of_slots`).
 -/
 
 @[expose] public section

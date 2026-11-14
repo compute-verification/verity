@@ -51,7 +51,7 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
   [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin p.n)) → (R : Reg) → Fin p.n → Fin (plan S R).length)
-  {L : Law p.n}
+  {L : SamplingDesign p.n}
 
 /-- **The end-to-end count curve on a program of units.** `flock_e2e_count`, carried by `UProg.rowsL1`:
 if `execAccept` holds, the probability that at least `K` units are wrong on the program's Boolean circuit, at the

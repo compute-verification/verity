@@ -42,7 +42,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full
 import Std.Tactic.BVDecide.Normalize.Bool
@@ -50,11 +50,11 @@ import Std.Tactic.BVDecide.Normalize.Bool
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
 
-The sample `drawnOn` runs over the strata `law` gives misses a set `B` only if every stratum's own `subset` sample misses
+The sample `drawnOn` runs over the strata `samplingDesign` gives misses a set `B` only if every stratum's own `subset` sample misses
 `B`'s units in it, and the streams are independent (`miss_le_prod`, the first steps of
-`Law.stratified_exec_escape_le`): the miss probability is at most `∏_s C(n_s − m_s, k_s)/C(n_s, k_s)`, `m_s` the units
+`SamplingDesign.stratified_exec_escape_le`): the miss probability is at most `∏_s C(n_s − m_s, k_s)/C(n_s, k_s)`, `m_s` the units
 of stratum `s` in `B` (`localOf`). The work sampling design's sizes make that product at most `((W − Σ_s w_s m_s)/W)^K`
-(`prod_le_pow`, `Law.work_escape_le`'s weighted AM-GM over the strata, here with strata that may overlap and floors
+(`prod_le_pow`, `SamplingDesign.work_escape_le`'s weighted AM-GM over the strata, here with strata that may overlap and floors
 that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitWork_le`). So a set of work `ε·C`
 escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
 doing work samples all its units, and a set of positive work escapes never.
@@ -86,26 +86,26 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
   calc prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d)
       ≤ prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∀ s ∈ (univ : Finset (Fin S.size)),
           (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
-            ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧
+            ∃ D, Flock.Draw.subset S[s].k S[s].size (SamplingDesign.streamOf f) = some D ∧
             ∀ j ∈ localOf S B s, j.val ∉ D) s (g s)) := by
         refine prCoin_mono fun g ⟨D, hD, hmiss⟩ s _ => ?_
         have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.Spot.bytesOf (g i)) = some D := hD
-        obtain ⟨li, hli, hmem⟩ := Law.stratified_units _ _ D hD' s.val s.isLt
+        obtain ⟨li, hli, hmem⟩ := SamplingDesign.stratified_units _ _ D hD' s.val s.isLt
         have hSs : S[s.val]! = S[s] := getElem!_pos S s.val s.isLt
         have hfs : (Array.ofFn fun i => Properties.Spot.bytesOf (g i)).getD s.val ByteArray.empty =
-            Law.streamOf (g s) := by
-          simp [Array.getD_eq_getD_getElem?, Properties.Spot.bytesOf, Law.streamOf]
+            SamplingDesign.streamOf (g s) := by
+          simp [Array.getD_eq_getD_getElem?, Properties.Spot.bytesOf, SamplingDesign.streamOf]
         rw [hSs, hfs] at hli
         rw [hSs] at hmem
         exact ⟨li, hli, fun j hj hjli => hmiss _ (Finset.mem_filter.1 hj).2 (hmem _ hjli)⟩
     _ = ∏ s : Fin S.size, prCoin (fun f : Fin S[s].need → Fin 256 =>
-          ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D) :=
+          ∃ D, Flock.Draw.subset S[s].k S[s].size (SamplingDesign.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D) :=
         prCoin_pi_forall (ι := Fin S.size) (Ω := fun s : Fin S.size => Fin S[s].need → Fin 256) univ
           (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
-          ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
-    _ ≤ ∏ s : Fin S.size, (Law.subset S[s].size S[s].k (hk s)).escape (localOf S B s) :=
-        Finset.prod_le_prod fun s _ => Law.subset_exec_escape_le _ _ _ (hk s) _
-    _ = _ := Finset.prod_congr rfl fun s _ => Law.subset_escape (hk s) _
+          ∃ D, Flock.Draw.subset S[s].k S[s].size (SamplingDesign.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
+    _ ≤ ∏ s : Fin S.size, (SamplingDesign.subset S[s].size S[s].k (hk s)).escape (localOf S B s) :=
+        Finset.prod_le_prod fun s _ => SamplingDesign.subset_exec_escape_le _ _ _ (hk s) _
+    _ = _ := Finset.prod_congr rfl fun s _ => SamplingDesign.subset_escape (hk s) _
 
 /-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
 theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
@@ -189,7 +189,7 @@ theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) 
       rw [div_mul_eq_mul_div, div_le_iff₀ (by exact_mod_cast hW)]
       exact_mod_cast (show w s * N s * K ≤ k s * W by linarith [hges, mul_comm (K * w s) (N s)])
     calc ((N s - M s).choose (k s) : ℝ≥0) / ((N s).choose (k s) : ℝ≥0) ≤ x s ^ (k s) :=
-          Law.choose_div_le_pow (hkN s) hpos
+          SamplingDesign.choose_div_le_pow (hkN s) hpos
       _ = x s ^ ((k s : ℕ) : ℝ) := (NNReal.rpow_natCast _ _).symm
       _ ≤ x s ^ ((a s : ℝ) * K) := NNReal.rpow_le_rpow_of_exponent_ge hx0 hx1 hexp
   calc _ ≤ ∏ s, x s ^ ((a s : ℝ) * K) := Finset.prod_le_prod fun s _ => hfac s
@@ -281,7 +281,7 @@ theorem workDrawMisses : WorkDrawMisses := by
   obtain ⟨hK1, -, hstrata⟩ := Properties.Pouw.Strata.law_ok hlaw
   have hsz : strata.size = ss.size := by rw [hstrata, Array.size_map]
   have hS : ∀ s : Fin strata.size,
-      strata[s] = Properties.Pouw.Strata.lawOf K (Flock.Draw.totalWork ss) ss[s.val]! := by
+      strata[s] = Properties.Pouw.Strata.samplingDesignOf K (Flock.Draw.totalWork ss) ss[s.val]! := by
     subst hstrata
     exact Properties.Pouw.Strata.getElem_lawOf ss K _
   have hWsum' := sum_work ss strata hsz
@@ -488,7 +488,7 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 
 /-! ## `GroupedDrawMisses`'s witnesses
 
-The compiled `strata` and `law` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+The compiled `strata` and `samplingDesign` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
 `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 /-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
@@ -519,12 +519,12 @@ theorem leaves_lanes (u : ℕ) :
 theorem work_lanes : ∑ b ∈ lanesBlocks, lanesWork b = Flock.Draw.totalWork lanesStrata := by decide +kernel
 
 /-- **`GroupedDrawMisses`'s honest lemma**: its premises hold at the lanes window (`lanesLayout`), sixteen 32 × 32 leaves
-at K = 2048 each proved as its 32 lanes and their combine (`lanesBlocks`, `lanesLeaf`, `lanesWork`): `strata` and `law`
+at K = 2048 each proved as its 32 lanes and their combine (`lanesBlocks`, `lanesLeaf`, `lanesWork`): `strata` and `samplingDesign`
 accept it at `K = 8`, `kPrime` answers `K′ ≤ 8` at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more
 than the leaf, and the blocks do at least ε of the work. -/
 theorem groupedDrawMisses_honest :
     ∃ k', PouwCheck.Credit.strata lanesLayout = .ok lanesStrata ∧
-      PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw ∧
+      PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesLaw ∧
       PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata) (Flock.Draw.totalWork lanesStrata) 1 =
         .ok k' ∧ k' ≤ lanesK ∧
       (∀ u, ∑ b ∈ lanesBlocks.filter (fun b => lanesLeaf b = u), lanesWork b ≤ unitWork lanesStrata u) ∧

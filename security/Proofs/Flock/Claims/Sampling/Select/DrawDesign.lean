@@ -43,7 +43,7 @@ import Proofs.Flock.Claims.Prob
 import VCVio.Prelude.Core
 
 /-!
-# The sampling design from the deployed sample (`Claims.Sampling.DrawLaw`)
+# The sampling design from the deployed sample (`Claims.Sampling.DrawDesign`)
 
 * `Design.Pa_empty`: a well-formed design has `P_a(∅) = 1`.
 * `allSlots`, `drawChecked`: every slot of a layout, and the deployed sample's checked slots, `Slots.select`'s or, where
@@ -52,7 +52,7 @@ import VCVio.Prelude.Core
   only it (`Design.Pa_of_shape`, `Partition.blocks_length_of_shape`, `Design.wellFormed_of_shape`).
 * `DrawSlots`: the deployed sample is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
   from uniform bytes of the coins.
-* `drawLaw_of_slots`: `DrawLaw` there, from `drawMisses`.
+* `drawDesign_of_slots`: `DrawDesign` there, from `drawMisses`.
 -/
 
 @[expose] public section
@@ -217,7 +217,7 @@ def DrawSlots (D : Deploy Coin Col T) : Prop :=
 /-- **The sampling design from the deployed sample**: where the sample is `Slots.select`'s on uniform bytes (`DrawSlots`), its
 miss probability at fixed first-stage coins averages at most `P_a(B)` (`drawMisses`); a refused sample checks every slot,
 so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
-theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
+theorem drawDesign_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawDesign D := by
   intro x s Pt hx hP hin B hB
   obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
   have hnPU : nPU D x = (slotPartition l).blocks.length := by

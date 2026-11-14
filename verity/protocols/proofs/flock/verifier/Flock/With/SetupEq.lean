@@ -120,16 +120,16 @@ theorem drawnWith_std (c : Circuit) (pub : Public) (draw : Json) :
   try rfl
 
 set_option maxRecDepth 20000 in
-theorem stratifiedLawWith_std (obj : Json) (program : ByteArray) (k : Nat) :
-    HmRow.stratifiedLawWith std obj program k = HmRow.stratifiedLaw obj program k := by
-  unfold HmRow.stratifiedLawWith HmRow.templateStrataWith HmRow.stratifiedLaw
+theorem stratifiedSamplingDesignWith_std (obj : Json) (program : ByteArray) (k : Nat) :
+    HmRow.stratifiedSamplingDesignWith std obj program k = HmRow.stratifiedSamplingDesign obj program k := by
+  unfold HmRow.stratifiedSamplingDesignWith HmRow.templateStrataWith HmRow.stratifiedSamplingDesign
   simp only [descParseWith_std]
   try rfl
 
 set_option maxRecDepth 20000 in
-theorem workLawWith_std (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    HmRow.workLawWith std obj program k table = HmRow.workLaw obj program k table := by
-  unfold HmRow.workLawWith HmRow.templateStrataWith HmRow.workLaw
+theorem workSamplingDesignWith_std (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    HmRow.workSamplingDesignWith std obj program k table = HmRow.workSamplingDesign obj program k table := by
+  unfold HmRow.workSamplingDesignWith HmRow.templateStrataWith HmRow.workSamplingDesign
   simp only [descParseWith_std]
   try rfl
 
@@ -167,7 +167,7 @@ theorem setupHWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (coins
       = Stmt.setupH tags circuitFile publicFile coins tables draw partition program := by
   unfold Stmt.setupHWith Stmt.setupH
   simp -zeta only [parseTypedWith_std, parseWith_std, checkPartitionWith_std, loadPublicWith_std, drawnWith_std,
-    stratifiedLawWith_std, checkPublicWith_std, deriveTemplateUnitsWith_std, qwordFindingWith_std, std_sha512, pure_bind]
+    stratifiedSamplingDesignWith_std, checkPublicWith_std, deriveTemplateUnitsWith_std, qwordFindingWith_std, std_sha512, pure_bind]
   try rfl
 
 set_option maxRecDepth 20000 in
@@ -216,7 +216,7 @@ theorem setupHiddenWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (
       = Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs := by
   unfold Stmt.setupHiddenWith Stmt.setupHidden
   simp -zeta only [outParseCommitWith_std, checkPartitionWith_std, inLoadPublicWith_std, inDrawnWith_std,
-    stratifiedLawWith_std, outCheckPublicWith_std, deriveTemplateUnitsWith_std, linksCheckWith_std, qwordFindingWith_std,
+    stratifiedSamplingDesignWith_std, outCheckPublicWith_std, deriveTemplateUnitsWith_std, linksCheckWith_std, qwordFindingWith_std,
     std_sha512, pure_bind]
   try rfl
 
@@ -230,7 +230,7 @@ theorem setupTablesWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (
       = Stmt.setupTables tags circuitFile publicFile coins count tables draw partition program work stratified closure
         publicInputs := by
   unfold Stmt.setupTablesWith Stmt.setupTables
-  simp -zeta only [stratifiedLawWith_std, workLawWith_std, setupHiddenWith_std, setupHWith_std, outParseWith_std,
+  simp -zeta only [stratifiedSamplingDesignWith_std, workSamplingDesignWith_std, setupHiddenWith_std, setupHWith_std, outParseWith_std,
     inLoadPublicWith_std, loadPublicWith_std, parseWith_std, std_sha512, pure_bind]
   try rfl
 

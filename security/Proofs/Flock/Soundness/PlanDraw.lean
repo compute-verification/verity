@@ -22,7 +22,7 @@ namespace FlockSoundness.PlanDraw
 
 open Randomness
 
-/-- A layout stratum as `plan.draw` reads it: its template name, its units in order, and the size its law gives it. -/
+/-- A layout stratum as `plan.draw` reads it: its template name, its units in order, and the size its samplingDesign gives it. -/
 structure Stratum where
   name : String
   units : List Nat

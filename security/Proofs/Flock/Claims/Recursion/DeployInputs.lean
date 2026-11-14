@@ -319,7 +319,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   sts.forM (RecCoins.checkLink · s.base.registered (RecCoins.Source.atC3 s.src s.inner s.commits) s.link)
   sts.forM (RecLinkPart.check · s.base.registered s.src s.links)
   if s.inner.isSome then RecVStar.checkLabels r.draw r.I.count sts
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
+  if r.draw.isSome then ProvedScope.drawDesign r.zk r.tags false r.draw
   pure (spec, sts)
 
 /-- The statement's inputs: a statement of the masked verifier only. -/

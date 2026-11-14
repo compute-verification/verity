@@ -89,7 +89,7 @@ noncomputable def linkTermCandZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
       (LinkEvCandZK A P planZ tab vb Sk wv S R u Xc) /
     (1 - rateZ (planZ S R) (tab S R u) k))
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled `--zk` audit's analysis against a candidate**: `analysisZC`, its incorrect proof blocks also those that read a
 wire disagreeing with the candidate (`candWrongZ`), and its binding error at `LinkEvCandZK`. -/
@@ -587,7 +587,7 @@ theorem zk_session_candValsR
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design
-    (Lv : Law n)
+    (Lv : SamplingDesign n)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session

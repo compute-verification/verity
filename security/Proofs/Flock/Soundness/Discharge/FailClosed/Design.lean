@@ -10,11 +10,11 @@ set_option Elab.async false
 /-!
 # The hidden-output headlines without `--zk` at a sample design
 
-verity-verify-proof samples a one-table session without `--zk` by one of two sampling designs (`ProvedScope.lawWhy`): the live stratified
+verity-verify-proof samples a one-table session without `--zk` by one of two sampling designs (`ProvedScope.samplingDesignWhy`): the live stratified
 sample, and at hidden outputs also the live subset sample, the sample every one_stage driver takes. Neither headline reads
 the sampling design but through its miss term, so one statement covers both: a **sample design** `DrawDesign n` names the live sample's
 sampling design and population and the ideal miss that bounds its count curve under A3 (`DrawDesign.miss_le`, which is
-`Law.execOS_miss_le` at the stratified sample, at every assignment of units to strata that the strata describe, and
+`SamplingDesign.execOS_miss_le` at the stratified sample, at every assignment of units to strata that the strata describe, and
 `Tables.execOS_subset_miss_le` at the subset sample).
 
 * `Prog.flock_headline_live_onLX`: `Prog.flock_headline_live_onX` at any sampling design `L`, its miss term `L.miss K`
@@ -54,7 +54,7 @@ def streams : DrawDesign n → ℕ
   | subset _ _ => 1
 
 /-- The executable sampling design the live sample runs (`Flock.Draw.drawWith`'s). -/
-def law : DrawDesign n → Flock.Draw.Law
+def samplingDesign : DrawDesign n → Flock.Draw.SamplingDesign
   | stratified St Kd _ => .stratified Kd (Array.ofFn St)
   | subset kd _ => .subset kd
 
@@ -64,24 +64,24 @@ def pop : DrawDesign n → ℕ
   | subset _ _ => n
 
 /-- The ideal miss that bounds the live sample's count curve under A3 (`miss_le`). At the stratified sample it is the
-stratified sampling design's at every assignment `σs` of the units to the strata that the strata describe (`Law.ExecStrata`), the
+stratified sampling design's at every assignment `σs` of the units to the strata that the strata describe (`SamplingDesign.ExecStrata`), the
 infimum over them; at the subset sample it is the subset sampling design's. -/
 noncomputable def idealMiss : DrawDesign n → ℕ → ENNReal
   | @stratified _ m St _ _, K =>
-    ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
-    ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card, (Law.stratified σs (fun s => (St s).k) hks).miss K
-  | subset kd hkd, K => (Law.subset n kd hkd).miss K
+    ⨅ σs : Fin n → Fin m, ⨅ _ : SamplingDesign.ExecStrata σs (fun s => (St s).k) St,
+    ⨅ hks : ∀ s, (St s).k ≤ (SamplingDesign.stratum σs s).card, (SamplingDesign.stratified σs (fun s => (St s).k) hks).miss K
+  | subset kd hkd, K => (SamplingDesign.subset n kd hkd).miss K
 
-/-- **Under A3 the live sample misses no more than the ideal miss**: `Law.execOS_miss_le` at every assignment the strata
+/-- **Under A3 the live sample misses no more than the ideal miss**: `SamplingDesign.execOS_miss_le` at every assignment the strata
 describe, at the stratified sample, and `Tables.execOS_subset_miss_le` at the subset sample. -/
 theorem miss_le (D : DrawDesign n) : ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ)
     (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256), Assumptions.UniformRandomBytes Lb src → ∀ K : ℕ,
-    (Law.execOS (n := n) src D.law D.pop).miss K ≤ D.idealMiss K := by
+    (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).miss K ≤ D.idealMiss K := by
   cases D with
   | stratified St Kd pop =>
     intro Ω _ _ Lb src hA3 K
     exact le_iInf fun σs => le_iInf fun hS => le_iInf fun hks =>
-      Law.execOS_miss_le σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 K
+      SamplingDesign.execOS_miss_le σs (fun s => (St s).k) hks St hS Kd pop Lb src hA3 K
   | subset kd hkd =>
     intro Ω _ _ Lb src hA3 K
     exact Tables.execOS_subset_miss_le kd hkd Lb src hA3 K
@@ -102,7 +102,7 @@ variable {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {R
 /-- **The headline at the executable, for one-table sessions of the challenger, at any sampling design.**
 `Prog.flock_headline_live_onX` with the verifier's sample any sampling design `L` and the miss term `L.miss K`. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_onLX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {L : Law n}
+    {L : SamplingDesign n}
     (T : Finset (Fin n) → Reg → TabSpec mPts)
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin [T S R].length)
     (pp : ProgPlaces p outs (fun S R => [T S R]) tab)
@@ -187,13 +187,13 @@ theorem flock_headline_hidden_design {Lp : Merkle.Leaf (List FlockLevel3.GF128) 
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
     (hdec : DecodesOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dec one fin capOf
-      (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+      (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL (p.partition outs) H512 enc512 Lp (planAtH dj x₀) (tabAtH dj x₀) (rs.binding hHm)
       (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
       (batchStratL H512 enc512 Lp (planAtH dj x₀)
         (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
@@ -204,11 +204,11 @@ theorem flock_headline_hidden_design {Lp : Merkle.Leaf (List FlockLevel3.GF128) 
               (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       D.idealMiss K +
-        StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src D.law D.pop)
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop)
           (planAtH dj x₀) (tabAtH dj x₀) (rs.binding hHm) k Rw M ρ t' :=
   (p.flock_headline_live_onLX outs (tablesAtH dj x₀) (tabAtH dj x₀) pp ones hConst zeros hZero lay rs hHm hk hRw hM hρ
     hr ht' K I wr opn dg dec one fin capOf N hdec τ hCR hKS).trans
@@ -237,8 +237,8 @@ theorem flock_headline_exec_hidden_design_dec
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src D.law D.pop).draw ω))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hdraw : ∀ ω, DrawOkH I dj mPts ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
         (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables))
@@ -249,7 +249,7 @@ theorem flock_headline_exec_hidden_design_dec
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, TableCRL execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))) j
@@ -270,14 +270,14 @@ theorem flock_headline_exec_hidden_design_dec
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : Scope I, (D.idealMiss K +
-        StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
             (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t') := by
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
@@ -306,8 +306,8 @@ theorem flock_headline_exec_hiddenG_design
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src D.law D.pop).draw ω))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hdraw : ∀ ω, DrawOkH I dj mPts ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, LinkCRL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀)
       ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
@@ -319,7 +319,7 @@ theorem flock_headline_exec_hiddenG_design
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, TableCRL execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))) j
@@ -341,14 +341,14 @@ theorem flock_headline_exec_hiddenG_design
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : Scope I, (D.idealMiss K +
-        StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ)) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
             (rsAtG_computes hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)) k Rw M ρ t') := by
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_

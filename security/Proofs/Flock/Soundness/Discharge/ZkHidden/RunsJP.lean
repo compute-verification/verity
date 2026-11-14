@@ -32,7 +32,7 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
     (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts →
       Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I)
+    (L : SamplingDesign n) (hT : TagsOkZHJ I)
     (hRec : RecordsLiveZKJA (AcceptsZKP I own) (setupOfP (zkInputs I) own) dj
       (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, DrawOkZKHJP I own dj mPts (L.draw ω)) :
@@ -162,7 +162,7 @@ theorem decodesZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.ty
     (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts →
       Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I)
+    (L : SamplingDesign n) (hT : TagsOkZHJ I)
     (hRec : RecordsLiveZKJA (AcceptsZKP I own) (setupOfP (zkInputs I) own) dj
       (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, DrawOkZKHJP I own dj mPts (L.draw ω)) :

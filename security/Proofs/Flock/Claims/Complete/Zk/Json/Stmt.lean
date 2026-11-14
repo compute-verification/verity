@@ -53,7 +53,7 @@ object, printable with the prover's nonce put in: `StmtOkZk`, from the case's se
 `stmtOk` at the plain verifier.
 
 * `Σ`, the sample's instances and the session's sample are as in `stmtOk`, at the one table `readyZk` asks
-  (`CaseZk.one`). Under `--zk` the sample's sampling design is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
+  (`CaseZk.one`). Under `--zk` the sample's sampling design is stratified or a subset (`ProvedScope.samplingDesignWhy true`), printable as at the
   plain verifier (`good_stratified`, `good_subset`).
 * The masked verifier's coins are the keyed coin tree (`Read.coins`), so the hello's `coins` is the tree's spec with an
   empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Flock.JsonParse.parse` reads back an alike object
@@ -216,15 +216,15 @@ theorem stmtOkZk : StmtOkZk H rel := by
   rw [hU]
   dsimp only
   obtain ⟨D, hD, hn⟩ := hinst d hu
-  have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.2.1
+  have hdl := Ins.setup_drawDesign (setupOf_some c.setup).2 c.ready_parts.2.1
   rw [hdd, hz] at hdl
-  simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy true c.s.read.tags false D = none := by
-    cases e : ProvedScope.lawWhy true c.s.read.tags false D with
+  simp only [ProvedScope.drawDesign, hD] at hdl
+  have hlw : ProvedScope.samplingDesignWhy true c.s.read.tags false D = none := by
+    cases e : ProvedScope.samplingDesignWhy true c.s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   have hg : Good d := by
-    rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
+    rcases samplingDesign_of_samplingDesignWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
     · exact good_stratified (draw_wf hdraw hdd) hD hK
     · exact good_subset (draw_wf hdraw hdd) hD hk
   refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩

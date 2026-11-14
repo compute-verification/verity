@@ -12,7 +12,7 @@ over the statements of the reference prover's sessions at `x` (`Reference.sessEr
 `Reference.complete_of_sessions` with the record's facts. What remains, each a hypothesis:
 
 * `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `ZkTables.honestPR` at `ZkTables.δc H`.
-* `DrawFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.DrawLaw`), the sampled verifier's, as for KS: the
+* `DrawFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.DrawDesign`), the sampled verifier's, as for KS: the
   checked units' sessions are in the second stage and the sample doesn't read them; the sample is `Slots.select`'s, so it
   checks at most the statement's proof blocks (`checkedLe_of_slots`).
 * `Framed`: the reference prover's router (`step`) reads the sampled verifier's framing: at coins that check `u`, a

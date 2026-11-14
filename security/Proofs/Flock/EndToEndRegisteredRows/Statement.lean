@@ -126,9 +126,9 @@ def EndToEndRegisteredRows : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the live prover: it registers the session's rows, the sinks among them, after the coin
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS qR : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let G := auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub).bindingZ
@@ -196,9 +196,9 @@ def EndToEndRegisteredRowsFlat : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the live prover: it registers the session's rows, the sinks among them, after the coin
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS qR : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let G := auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)
     let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
     let vb := (rsZHJS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHJS_computes dj y₀ ht hc hscope hU hpub)

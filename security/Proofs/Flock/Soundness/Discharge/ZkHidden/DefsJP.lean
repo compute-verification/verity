@@ -73,7 +73,7 @@ theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
     tags.manyTables.isSome ∧ count ≤ Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
         (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
-          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+          ((∃ k', u.samplingDesign = .subset k') ∨ ∃ K st, u.samplingDesign = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (draw = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % count = 0 ∧ sts.size = count ∧

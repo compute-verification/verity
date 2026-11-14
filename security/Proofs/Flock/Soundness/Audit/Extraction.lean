@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.OneStage
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -33,7 +33,7 @@ namespace FlockSoundness.Audit
 open Game
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- A per-unit quantity at the unit a rule picks, and zero when it picks none or an unsampled one. -/
 noncomputable def atTgt (S : Finset (Fin n)) (t : Option (Fin n)) (f : Fin n → ℝ≥0∞) : ℝ≥0∞ :=
@@ -52,7 +52,7 @@ theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞
 /-- What the analysis of an audit fixes when extraction is randomized: the committed transcript,
 and for each sampled proof block the joint probabilities of the two ways its table can accept while it is
 wrong. -/
-structure ExtractionAnalysis (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
+structure ExtractionAnalysis (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
     where
   Tr : Type
   wrong : Tr → Finset (Fin n)

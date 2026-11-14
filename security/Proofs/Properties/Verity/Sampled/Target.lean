@@ -86,7 +86,7 @@ charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a s
 at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
 (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
 there, and `live-verifier` at the registration's sampling design is the sample file's (`Live.hsub`, `Live.hCust`). -/
-theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
+theorem v5_at (L : FlockSoundness.Audit.SamplingDesign A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
       (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)

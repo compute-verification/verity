@@ -66,7 +66,7 @@ those bits (`bitsOf_injective`), so the bytes a sample reads, when their bits ar
 namespace Verity.Sampled
 
 open FlockSoundness
-open FlockSoundness.Audit.Law (streamOf)
+open FlockSoundness.Audit.SamplingDesign (streamOf)
 open Properties.Challenger (bitsOf)
 
 variable {k B : ℕ}

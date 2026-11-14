@@ -61,9 +61,9 @@ agreement on `--zk` that C's `scope_iff` and `scopeMatches` take.
 `Ins.setup` is `verifyCmd`'s `setupOf` at the statement's sample, with no recursive input and no `--identifier`: the
 session's statement (`Stmt.setupTables`), each table's registered reads (`checkRegistered`) and the identifier's absence
 (`checkIdentifier` without `--identifier`), `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` under `--zk`,
-`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's sampling design (`ProvedScope.drawLaw`). It refuses a statement without
+`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's sampling design (`ProvedScope.drawDesign`). It refuses a statement without
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
-sample, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
+sample, `drawDesign zk tags false none`); the deployed form does not carry `--comp`.
 -/
 
 @[expose] public section
@@ -259,7 +259,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.registered (RecCoins.Source.atC3 none none none) (RecSetup.c3 none none))
   sts.forM (RecVStar.checkPubRows · s.registered none none)
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
+  if r.draw.isSome then ProvedScope.drawDesign r.zk r.tags false r.draw
   pure (spec, sts)
 
 /-- The statement's inputs, for the verifier that is masked exactly when `zk`: a statement of the other verifier does not

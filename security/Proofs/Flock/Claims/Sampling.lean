@@ -45,7 +45,7 @@ leaf (`Sampling.Leaf`); `B_ext` and bits from a linear KS bound (`Sampling.Bext`
 (`Sampling.Wait`); the deployed sampled verifier's named facts, which the compiled verifier's KS reads at a frozen
 record (`Sampling.KS`, and at a session `Sampling.Session`); `SessionRuns` at a verifier that runs a prefix of rounds,
 then one Flock session at the statement the prefix fixes (`Sampling.Prefix`); the deployed sample's miss bound and
-`DrawLaw` from it (`Sampling.Select`), and how many proof blocks its second stage proves, `|sample| · Σ_t k_t`
+`DrawDesign` from it (`Sampling.Select`), and how many proof blocks its second stage proves, `|sample| · Σ_t k_t`
 (`Sampling.Select.SecondCount`), and by template, `|sample| · Σ_t k_t · M_t` for a weight at most `M_t` on template
 `t`'s blocks (`Sampling.Select.SecondStrata`); the universal unit's gates running its private circuit
 (`Sampling.Universal`);

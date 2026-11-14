@@ -208,7 +208,7 @@ theorem packed_check {m : ℕ} (hm : 7 ≤ m) {c : Flock.Claim} {c' : Model.Clai
 /-! ## The read fact -/
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n4's read fact) R's opening steps are the opening's prover's**, at every accepted outcome: on the tape of V*'s
 layers' messages and the rounds' coins, the part past both sparse phases begins with the opening's steps, whose ring

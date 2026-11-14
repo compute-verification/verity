@@ -95,17 +95,17 @@ theorem card_filter_ascending {n : ℕ} {units : Array ℕ} (h : unitsAscending 
 
 /-- **The window's sample at coins whose sample ends** with `units` is the proof blocks they name. -/
 theorem joint_draw_eq (w : JointAuditV5) (ω : w.L.Ω) {units : Array ℕ} {read : ℕ}
-    (h : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
+    (h : _root_.Spot.Draw.drawUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
     w.L.draw ω = Finset.univ.filter fun u => u.val ∈ units :=
   Finset.ext fun u => (w.draw_ok ω h u).trans (by simp)
 
 /-- **v2's sample ends the same on the window's bytes**: at coins whose bytes start with the coins v2 drew its units
 from, at a window whose sampling design and population are the ones v2 drew under. -/
 theorem joint_drawUnits_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws}
-    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units)
-    (w : JointAuditV5) (ω : w.L.Ω) (hL : w.law = L) (hn : w.nJ = n)
+    {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units)
+    (w : JointAuditV5) (ω : w.L.Ω) (hL : w.samplingDesign = L) (hn : w.nJ = n)
     (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
-    ∃ read, _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) =
+    ∃ read, _root_.Spot.Draw.drawUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) =
       .ok (units, read) := by
   obtain ⟨_, _, _, _, _, _, _, _, _, _, read, hdu⟩ := h
   obtain ⟨t, ht⟩ := append_of_bitsOf_prefix hξ
@@ -115,9 +115,9 @@ theorem joint_drawUnits_of_drew {k : Verity.Registration.Composite} {s : Verity.
 
 /-- **v2's units are the window's sample** at coins whose bytes start with the coins v2 drew them from, at a window
 whose sampling design and population are the ones v2 drew under: the period's one sample is the joint audit's. -/
-theorem joint_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law}
+theorem joint_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (w : JointAuditV5) (ω : w.L.Ω)
-    (hL : w.law = L) (hn : w.nJ = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
+    (hL : w.samplingDesign = L) (hn : w.nJ = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
     w.L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨read, hr⟩ := joint_drawUnits_of_drew h w ω hL hn hξ
   exact joint_draw_eq w ω hr
@@ -128,7 +128,7 @@ theorem joint_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent}
 units `u` with `base k ≤ u < base k + n_k`, each less the member's base. -/
 theorem member_draw_eq {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {units : Array ℕ}
     {read : ℕ}
-    (h : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
+    (h : _root_.Spot.Draw.drawUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read)) :
     (w.design k).draw ω = Finset.univ.filter fun v : Fin (w.ms.get k).n =>
       v.val ∈ (MemberLayout.memberUnits w.counts k.1 (w.ms.get k).n units.toList).toArray := by
   ext v
@@ -137,9 +137,9 @@ theorem member_draw_eq {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) (�
 
 /-- **Member `k`'s sample is its part of v2's units**, at coins whose bytes start with the coins v2 drew them from, at a
 window laid out in order whose sampling design and population are the ones v2 drew under. -/
-theorem member_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law}
+theorem member_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) {w : JointAuditV5} (hw : w.Laid)
-    (j : Fin w.ms.length) (ω : w.L.Ω) (hL : w.law = L) (hn : w.nJ = n)
+    (j : Fin w.ms.length) (ω : w.L.Ω) (hL : w.samplingDesign = L) (hn : w.nJ = n)
     (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
     (w.design j).draw ω = Finset.univ.filter fun v : Fin (w.ms.get j).n =>
       v.val ∈ (MemberLayout.memberUnits w.counts j.1 (w.ms.get j).n units.toList).toArray := by
@@ -151,7 +151,7 @@ theorem member_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent
 (`printedPart`) is `UnitDraw.toJson` of its part of `units`, in its own indices, under `subset` of that part's size. -/
 theorem printedPart_member {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) {units : Array ℕ}
     {read : ℕ}
-    (h : _root_.Spot.Draw.drawUnits w.law w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read))
+    (h : _root_.Spot.Draw.drawUnits w.samplingDesign w.nJ (_root_.Properties.Spot.bytesOf (w.src ω 0)) = .ok (units, read))
     (hu : unitsAscending w.nJ units = true) :
     printedPart ((w.design k).draw ω) =
       Flock.Draw.UnitDraw.toJson
@@ -163,9 +163,9 @@ theorem printedPart_member {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length
 /-- **Member `k`'s sample file is the subset print of its part of v2's units**, at coins whose bytes start with the
 coins v2 drew them from, at a window laid out in order whose sampling design and population are the ones v2 drew under, where
 v2's units are ascending below the population. -/
-theorem printedPart_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law}
+theorem printedPart_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) {w : JointAuditV5} (hw : w.Laid)
-    (j : Fin w.ms.length) (ω : w.L.Ω) (hL : w.law = L) (hn : w.nJ = n)
+    (j : Fin w.ms.length) (ω : w.L.Ω) (hL : w.samplingDesign = L) (hn : w.nJ = n)
     (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) (hu : unitsAscending n units = true) :
     printedPart ((w.design j).draw ω) =
       Flock.Draw.UnitDraw.toJson

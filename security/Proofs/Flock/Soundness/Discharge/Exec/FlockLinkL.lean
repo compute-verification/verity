@@ -62,7 +62,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-variable {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionL H E Lf plan) R)
 
@@ -115,7 +115,7 @@ noncomputable def readsAtL (ω : L.Ω) (bs : List (List (OutCL 𝔽 D Sl))) (c :
   Finset.univ.filter fun v => ∃ o, OpensAtL P H E Lf plan tab vb R τ ω bs c v o
 
 /-- A trial's outcome: the sample, the fresh run, and the waits' runs. -/
-abbrev TrialOutL (L : Law n) (D Sl : Type) := L.Ω × List (OutCL 𝔽 D Sl) × List (List (List (OutCL 𝔽 D Sl)))
+abbrev TrialOutL (L : SamplingDesign n) (D Sl : Type) := L.Ω × List (OutCL 𝔽 D Sl) × List (List (List (OutCL 𝔽 D Sl)))
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, a fresh session, and `k` waits of at
 most `Rw` reruns each. -/

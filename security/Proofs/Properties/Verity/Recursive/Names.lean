@@ -54,7 +54,7 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
 * `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and sample are the blobs the
   verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT`
   without `--coins` (a seed's, as `Raw.ins` reads a plain statement) at one table with no lookup table, `--stratified` at the population the verifier's partition and
-  program give (`HmRow.stratifiedLaw` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
+  program give (`HmRow.stratifiedSamplingDesign` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
   inputs; `w`'s inner shape is
   `innerHeld`'s; `w`'s registration the registration blob `Own` names; and `w` carries no link table;
 * `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
@@ -103,7 +103,7 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   draw : ri.draw = (bs.get o.draw "the inner statement's draw").toOption
   work : ri.work = none
   workTable : ri.workTable = none
-  stratified : ri.stratified = (Flock.HmRow.stratifiedLaw o.partition o.program 1).toOption.map (·.2)
+  stratified : ri.stratified = (Flock.HmRow.stratifiedSamplingDesign o.partition o.program 1).toOption.map (·.2)
   closure : ri.closure = none
   registered : ri.registered = none
   publicInputs : ri.publicInputs = none

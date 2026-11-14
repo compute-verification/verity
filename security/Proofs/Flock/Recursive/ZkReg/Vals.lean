@@ -78,7 +78,7 @@ theorem zk_session_regValsR
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design
-    (Lv : Law n)
+    (Lv : SamplingDesign n)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
@@ -184,7 +184,7 @@ theorem zk_session_regDrawnR
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design
-    (Lv : Law n)
+    (Lv : SamplingDesign n)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session

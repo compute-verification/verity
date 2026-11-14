@@ -64,7 +64,7 @@ noncomputable def servedRun (W : ℕ → JointAuditV5) (T : ℕ)
 
 theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
     (hCR : ∀ _ : Nonempty w.EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw (servedAudit w τ) k).draw ω)
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign (servedAudit w τ) k).draw ω)
         (reg (w.memberSim (servedAudit w τ) k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim (servedAudit w τ) k) ω))
       (w.ms.get k).qF (w.ms.get k).qS)
@@ -104,7 +104,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
       MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → 
       ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
-        (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
+        (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign (servedAudit (W t) τ) k).draw ω)
           (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
         (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
           (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))
@@ -127,7 +127,7 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
   refine TheftServed C gen Stolen A p Ou T L E M _ (fun θ r => servedRun W T (s θ r)) hhon hsim fun θ r => ?_
   let cr : (t : ℕ) → Strategy (servedGame (W t) (Release O V Tick Adv)) → Prop := fun t τ =>
     (∀ _ : Nonempty (W t).EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
+      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign (servedAudit (W t) τ) k).draw ω)
         (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
       (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))

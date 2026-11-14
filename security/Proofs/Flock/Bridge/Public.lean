@@ -48,7 +48,7 @@ off the public parameters:
   applies, and its rate `2^23/(ek)` is at most `ρ`;
 * `Q_s ≤ W`, `W = Σ_u |io u|` (`Bridge.ioSum`) the committed wires each unit of the circuit's partition computes or
   reads: a sample reads a commit string only through such a wire of a sampled proof block (`qs_le_io`). It is `Σ_u`, not
-  `k_d · max_u`, because the live subset sample on finite bytes samples every unit when it runs out (`Law.execOS`).
+  `k_d · max_u`, because the live subset sample on finite bytes samples every unit when it runs out (`SamplingDesign.execOS`).
 
 So `SampledKSLivePub` is `SampledKSLiveV2` with its error `Bridge.deltaPub`:
 $$\binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{\mathrm{ksClosedM1}(k,q_F,q_S)}{1-\rho}
@@ -114,12 +114,12 @@ def SampledKSLivePub : Prop :=
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hρk : rateM1 k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     -- one opening's verification, in SHA-512 evaluations
     (v : ℝ) (_hv : 0 ≤ v)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
       (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)

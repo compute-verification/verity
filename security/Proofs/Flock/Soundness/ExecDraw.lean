@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.SamplingDesign
 public import Flock.Draw
 import all Init.Data.Array.QSort.Basic
 
@@ -9,8 +9,8 @@ import all Init.Data.Array.QSort.Basic
 
 `Flock.Draw.subset k n src` is the verifier's executable sampler (`verity/commitments/lean/Commitments/Draw.lean`): a
 partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
-on big-endian words, and the `k` values sorted by `Array.qsort`. `Law.subset_exec_escape_le`: over a uniform stream of
-bytes, it returns a sample that misses `B` with probability at most `(Law.subset n k hk).escape B`, the model's uniform
+on big-endian words, and the `k` values sorted by `Array.qsort`. `SamplingDesign.subset_exec_escape_le`: over a uniform stream of
+bytes, it returns a sample that misses `B` with probability at most `(SamplingDesign.subset n k hk).escape B`, the model's uniform
 `k`-subset. A stream that runs out gives `none`, which only lowers the executable's escape.
 
 * `mem_qsort`: `Array.qsort` keeps its elements, through core's private `qsort.sort` and `qpartition.loop`.
@@ -25,12 +25,12 @@ bytes, it returns a sample that misses `B` with probability at most `(Law.subset
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 /-- The byte stream of `L` bytes `f`, as `Flock.Draw` reads it. -/
 def streamOf {L : ℕ} (f : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun i => UInt8.ofFin (f i)⟩
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
 
 namespace FlockSoundness.Audit.DrawExec
@@ -434,16 +434,16 @@ theorem uniformL_le (m : ℕ) (hm : 0 < m) (Q : ℕ → List UInt8 → Prop) (q 
 
 /-! ## The executable's reads, on the rest of the stream -/
 
-theorem size_streamOf {L : ℕ} (f : Fin L → Fin 256) : (Law.streamOf f).size = L := by
-  simp [Law.streamOf, ByteArray.size]
+theorem size_streamOf {L : ℕ} (f : Fin L → Fin 256) : (SamplingDesign.streamOf f).size = L := by
+  simp [SamplingDesign.streamOf, ByteArray.size]
 
 theorem get!_streamOf {L : ℕ} (f : Fin L → Fin 256) (j : ℕ) (hj : j < L) :
-    (Law.streamOf f).get! j = UInt8.ofFin (f ⟨j, hj⟩) := by
+    (SamplingDesign.streamOf f).get! j = UInt8.ofFin (f ⟨j, hj⟩) := by
   show (Array.ofFn fun i => UInt8.ofFin (f i))[j]! = _
   simp [hj]
 
 theorem take_drop_bsOf {L : ℕ} (f : Fin L → Fin 256) (pos w : ℕ) (h : pos + w ≤ L) :
-    ((bsOf f).drop pos).take w = (List.range w).map fun i => (Law.streamOf f).get! (pos + i) := by
+    ((bsOf f).drop pos).take w = (List.range w).map fun i => (SamplingDesign.streamOf f).get! (pos + i) := by
   apply List.ext_getElem
   · simp [length_bsOf]; omega
   · intro i h1 h2
@@ -451,15 +451,15 @@ theorem take_drop_bsOf {L : ℕ} (f : Fin L → Fin 256) (pos w : ℕ) (h : pos 
     rw [get!_streamOf f (pos + i) (by simp at h2; omega)]
 
 theorem beNat_streamOf {L : ℕ} (f : Fin L → Fin 256) (pos w : ℕ) (h : pos + w ≤ L) :
-    Flock.Draw.beNat (Law.streamOf f) pos w = beL (((bsOf f).drop pos).take w) := by
+    Flock.Draw.beNat (SamplingDesign.streamOf f) pos w = beL (((bsOf f).drop pos).take w) := by
   rw [take_drop_bsOf f pos w h, beL, List.foldl_map]
   rfl
 
 /-- **`Flock.Draw.uniform` at position `pos` is `uniformL` on the stream from `pos`.** -/
 theorem uniform_streamOf {L : ℕ} (f : Fin L → Fin 256) (m : ℕ) : ∀ fuel pos, pos ≤ L →
     match uniformL m fuel ((bsOf f).drop pos) with
-    | none => Flock.Draw.uniform m (Law.streamOf f) fuel pos = none
-    | some (r, rest) => ∃ p, p ≤ L ∧ rest = (bsOf f).drop p ∧ Flock.Draw.uniform m (Law.streamOf f) fuel pos = some (r, p) := by
+    | none => Flock.Draw.uniform m (SamplingDesign.streamOf f) fuel pos = none
+    | some (r, rest) => ∃ p, p ≤ L ∧ rest = (bsOf f).drop p ∧ Flock.Draw.uniform m (SamplingDesign.streamOf f) fuel pos = some (r, p) := by
   intro fuel
   induction fuel with
   | zero => intro pos _; simp [uniformL, Flock.Draw.uniform]
@@ -475,10 +475,10 @@ theorem uniform_streamOf {L : ℕ} (f : Fin L → Fin 256) (m : ℕ) : ∀ fuel 
       have hx0 := beNat_streamOf f pos _ hw'
       have hdd : ((bsOf f).drop pos).drop (Flock.Draw.width m) = (bsOf f).drop (pos + Flock.Draw.width m) := by
         rw [List.drop_drop]
-      by_cases hx : Flock.Draw.beNat (Law.streamOf f) pos (Flock.Draw.width m) <
+      by_cases hx : Flock.Draw.beNat (SamplingDesign.streamOf f) pos (Flock.Draw.width m) <
           2 ^ (8 * Flock.Draw.width m) - 2 ^ (8 * Flock.Draw.width m) % m
       · have hu : uniformL m (fuel + 1) ((bsOf f).drop pos) =
-            some (Flock.Draw.beNat (Law.streamOf f) pos (Flock.Draw.width m) % m, (bsOf f).drop (pos + Flock.Draw.width m)) := by
+            some (Flock.Draw.beNat (SamplingDesign.streamOf f) pos (Flock.Draw.width m) % m, (bsOf f).drop (pos + Flock.Draw.width m)) := by
           simp only [uniformL, hlen, hw, ite_false, ← hx0, hx, ite_true, hdd]
         rw [hu]
         refine ⟨pos + Flock.Draw.width m, hw', rfl, ?_⟩
@@ -489,8 +489,8 @@ theorem uniform_streamOf {L : ℕ} (f : Fin L → Fin 256) (m : ℕ) : ∀ fuel 
             uniformL m fuel ((bsOf f).drop (pos + Flock.Draw.width m)) := by
           simp only [uniformL, hlen, hw, ite_false, ← hx0, hx, hdd]
         rw [hu]
-        have he : Flock.Draw.uniform m (Law.streamOf f) (fuel + 1) pos =
-            Flock.Draw.uniform m (Law.streamOf f) fuel (pos + Flock.Draw.width m) := by
+        have he : Flock.Draw.uniform m (SamplingDesign.streamOf f) (fuel + 1) pos =
+            Flock.Draw.uniform m (SamplingDesign.streamOf f) fuel (pos + Flock.Draw.width m) := by
           simp only [Flock.Draw.uniform, size_streamOf]
           rw [ite_eq_right (by omega)]
           simp only [hx, ite_false]
@@ -507,7 +507,7 @@ def loopL (n F : ℕ) : List ℕ → Equiv.Perm ℕ → List UInt8 → Option (E
     | some (r, rest) => loopL n F is ((Equiv.swap i (i + r)).trans π) rest
 
 theorem loopP_streamOf {L : ℕ} (f : Fin L → Fin 256) (n : ℕ) : ∀ (l : List ℕ) (π : Equiv.Perm ℕ) (pos : ℕ), pos ≤ L →
-    loopP n (Law.streamOf f) l π pos = loopL n (L + 1) l π ((bsOf f).drop pos) := by
+    loopP n (SamplingDesign.streamOf f) l π pos = loopL n (L + 1) l π ((bsOf f).drop pos) := by
   intro l
   induction l with
   | nil => intro π pos _; rfl
@@ -688,7 +688,7 @@ theorem loopL_le (n k F : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ 
 
 end FlockSoundness.Audit.DrawExec
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 open Game Finset
 open scoped ENNReal
@@ -698,18 +698,18 @@ the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`, `uni
 `drawOS_subset_escape_le` (`ExecDrawOS.lean`) takes for the live sample, reruns included. -/
 theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
-        ∃ D, Flock.Draw.subset k n (Law.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
+        ∃ D, Flock.Draw.subset k n (SamplingDesign.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
       (subset n k hk).escape B := by
   classical
   set B' : Finset ℕ := B.image Fin.val with hB'
   have hB'n : ∀ u ∈ B', u < n := fun u hu => by obtain ⟨v, _, rfl⟩ := mem_image.1 hu; exact v.isLt
   have hcard : B'.card = B.card := card_image_of_injective _ Fin.val_injective
   calc prCoin (fun f : Fin L → Fin 256 =>
-          ∃ D, Flock.Draw.subset k n (Law.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D)
+          ∃ D, Flock.Draw.subset k n (SamplingDesign.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D)
       ≤ prCoin (fun f : Fin L → Fin 256 => ∃ π', DrawExec.loopL n (L + 1) (List.range' 0 k) (Equiv.refl ℕ)
           (DrawExec.bsOf f) = some π' ∧ ∀ t < k, π' t ∉ B') := by
         refine prCoin_mono fun f ⟨D, hD, hmiss⟩ => ?_
-        obtain ⟨π, hπ, hπB⟩ := DrawExec.subset_misses k n (Law.streamOf f) B' D hD (fun u hu hmem => by
+        obtain ⟨π, hπ, hπB⟩ := DrawExec.subset_misses k n (SamplingDesign.streamOf f) B' D hD (fun u hu hmem => by
           obtain ⟨v, hv, rfl⟩ := mem_image.1 hu
           exact hmiss v hv hmem)
         rw [DrawExec.loopP_streamOf f n _ _ 0 (Nat.zero_le _), List.drop_zero] at hπ
@@ -719,5 +719,5 @@ theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) 
           (fun t ht => absurd ht (Nat.not_lt_zero t)) L
     _ = (subset n k hk).escape B := by rw [subset_escape, hcard, Nat.sub_zero]
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 

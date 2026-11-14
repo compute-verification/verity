@@ -174,7 +174,7 @@ sets up (`planJ`, at any fallback `T₀`) with the decoder `decJ` on each table'
 elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnJ`. -/
 def DecodesOnJExec : Prop :=
   ∀ {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ} (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json)
-    {Reg : Type} (L : Law n)
+    {Reg : Type} (L : SamplingDesign n)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planJ ht T₀ dj S R).length mPts → Exec.Transcript),
     TagsOkJ I → RecordsLiveJ I dj (fun S R => (planJ ht T₀ dj S R).length) wr →
     (∀ ω, DrawOkJ I mPts dj (L.draw ω)) →

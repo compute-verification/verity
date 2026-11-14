@@ -82,7 +82,7 @@ theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Js
     (hpin : PinHeld h m₂) (hpc : PlayCoins h i it c₀ c₁) : stmtOk h x m₁ m₂ c₀ c₁ = true := by
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂, read₂,
     strata, hrule, hns, hids, hks, hss, -, hstrata, hcodes⟩ := accepted_steps ha
-  obtain ⟨n, rule, law, workTable', resolved', -, -, -, ht', hres', hreg⟩ := hm.first
+  obtain ⟨n, rule, samplingDesign, workTable', resolved', -, -, -, ht', hres', hreg⟩ := hm.first
   have hwt : workTable' = workTable := Except.ok.inj (ht'.symm.trans ht)
   have hrs : resolved' = resolved := Except.ok.inj (hres'.symm.trans hres)
   subst hwt hrs

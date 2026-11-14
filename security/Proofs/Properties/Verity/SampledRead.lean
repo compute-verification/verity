@@ -36,9 +36,9 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
   `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the sample's ask with no premise.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
-* **The session's sampling design** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
+* **The session's sampling design** (`samplingDesign_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
   parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
-  sample's sampling design is the session's wherever its population is (`lawAt_of_lawOf`), and the sample's piece of `CouplingTarget`
+  sample's sampling design is the session's wherever its population is (`samplingDesignAt_of_samplingDesignOf`), and the sample's piece of `CouplingTarget`
   needs only the population.
 * **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
   `coupled_draw_tied`, `coupled_draw_coins_tied`): v2 refuses a record whose population isn't its program's proof
@@ -804,11 +804,11 @@ theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
     {p' : _root_.Spot.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p :=
   (Sum.inl.inj (params_of_case hS hcase hacc.1 h)).symm
 
-/-- The sampling design `lawAt` reads at the population `LawOf` names is the sampling design `LawOf` names. -/
-theorem lawAt_of_lawOf {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
-    {L : Flock.Draw.Law} {n : ℕ} (h : LawOf p c L n) : lawAt p.base.verifier n = .ok L := by
-  obtain ⟨law, derived, fl, hd, -, hder, hfl, rfl⟩ := h
-  simp only [lawAt, hd, hder, hfl, ok_bind]
+/-- The sampling design `samplingDesignAt` reads at the population `SamplingDesignOf` names is the sampling design `SamplingDesignOf` names. -/
+theorem samplingDesignAt_of_samplingDesignOf {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {L : Flock.Draw.SamplingDesign} {n : ℕ} (h : SamplingDesignOf p c L n) : samplingDesignAt p.base.verifier n = .ok L := by
+  obtain ⟨samplingDesign, derived, fl, hd, -, hder, hfl, rfl⟩ := h
+  simp only [samplingDesignAt, hd, hder, hfl, ok_bind]
   rfl
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
@@ -816,14 +816,14 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **The session's sampling design is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
 units, ran under `A.design`. -/
-theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
-    {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray}
+theorem samplingDesign_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
+    {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray}
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
     (hn : A.n = n) : A.design = L := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
   obtain ⟨p', hp', -, -, hlaw, -⟩ := hA.params
   rw [← hθ] at hp'
-  rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
+  rw [paramsAt_case hS hcase hacc hp', hn, samplingDesignAt_of_samplingDesignOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm
 
 /-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's sampling design read
@@ -840,7 +840,7 @@ theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite}
   obtain ⟨p₀, hp₀, -⟩ := hA.params
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ :=
     coupled_draw K A θ F c σ hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl
-  exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (samplingDesign_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-- `coupled_draw_coins` at the session v2 sets up. -/
 theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
@@ -857,7 +857,7 @@ theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Comp
   obtain ⟨p₀, hp₀, -⟩ := hA.params
   obtain ⟨dr, L, n, ξ, units, hd, h⟩ :=
     coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl κ hsrc
-  exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (samplingDesign_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-! ## The session's population -/
 
@@ -919,7 +919,7 @@ def PopTied (θ : ByteArray) (A : Live) : Prop :=
 parameters `θ`, ran over the population of a session tied to v2's verifier there, since v2 refuses a record whose
 population isn't its program's proof blocks in order (`popHeld`). -/
 theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity.Registration.Composite}
-    {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
+    {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.SamplingDesign} {n : ℕ} {ξ : ByteArray} {units : Array ℕ}
     (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units) : A.n = n := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
   obtain ⟨p', hp', hdesc, hq⟩ := ht

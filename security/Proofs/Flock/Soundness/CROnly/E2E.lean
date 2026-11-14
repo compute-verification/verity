@@ -41,7 +41,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The link bound at the best budget**: at `q³ = t'·2^512`, `linkBoundE` at the per-run cost `strictRunCost t' q` is
 `Q_s/(1 − ρ)·(3(1 + k)·q²/2^512 + 1/(eM) + k/(eR_w))`. -/
@@ -161,18 +161,18 @@ theorem flock_e2e_drawn_exec_hm96
     (hHm : rs.Computes)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' q : ℝ} (ht : 0 < t') (hq : 0 < q)
-    (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
+    (σ : Strategy (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t' q)
-    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((Law.execStratified St Ls).draw ω) (reg σ)) j
+    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((SamplingDesign.execStratified St Ls).draw ω) (reg σ)) j
       (batchStrat H E plan (cont σ ω)) qF qS)
-    (tr : StrictCR.TreeRewind H (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ
+    (tr : StrictCR.TreeRewind H (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
         ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
-        (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
-      StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
-        P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
+        (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
+      StrictCR.ksAvgStrict plan (SamplingDesign.execStratified St Ls) k qF qS (reg σ) +
+        P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
         ENNReal.ofReal (tr.bound qT) :=
   Binding.flock_e2e_drawn_exec_hm96 P H E plan tab St Ls dp ones hConst zeros hZero lay rs hHm hk hRw hM hρ hr
     (strictRunCost_pos ht hq).le σ (linkCR_of_strict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) ht hq hCRs)
@@ -181,7 +181,7 @@ theorem flock_e2e_drawn_exec_hm96
 /-- **The e2e count curve at the executable's sampling design, with the rows' value binding, under `cr/sha-512` alone**:
 `Binding.flock_e2e_count_exec_hm96` with `LinkCRStrict` for `LinkCR`. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
-    (hks : ∀ s, ks s ≤ (Law.stratum σs s).card) (hS : Law.ExecStrata σs ks St)
+    (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card) (hS : SamplingDesign.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -190,18 +190,18 @@ theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (hHm : rs.Computes)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' q : ℝ} (ht : 0 < t') (hq : 0 < q)
-    (K : ℕ) (σ : Strategy (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)))
+    (K : ℕ) (σ : Strategy (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t' q)
-    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((Law.execStratified St Ls).draw ω) (reg σ)) j
+    {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H E (plan ((SamplingDesign.execStratified St Ls).draw ω) (reg σ)) j
       (batchStrat H E plan (cont σ ω)) qF qS)
-    (tr : StrictCR.TreeRewind H (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ
+    (tr : StrictCR.TreeRewind H (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
         K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
-      (Law.stratified σs ks hks).miss K + StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
-        P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
+        (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + StrictCR.ksAvgStrict plan (SamplingDesign.execStratified St Ls) k qF qS (reg σ) +
+        P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
         ENNReal.ofReal (tr.bound qT) :=
   Binding.flock_e2e_count_exec_hm96 P H E plan tab St Ls σs ks hks hS dp ones hConst zeros hZero lay rs hHm hk hRw
     hM hρ hr (strictRunCost_pos ht hq).le K σ
@@ -217,7 +217,7 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
 
 section Session
 
-variable {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : Law n}
+variable {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : SamplingDesign n}
 
 /-- **The end-to-end count curve on the circuit of the statement's rows, under `cr/sha-512` for the link finders**:
 `Prog.flock_e2e_count` with `LinkCRStrict` for `LinkCR`. -/
@@ -272,8 +272,8 @@ the tables' knowledge finders (`hKS`) and the serving roots' rewinding finder (`
 headline's, A3 (`hA3`) among them. The bound is `miss(K) + ε_ks + δ_link + δ_tree`, with `δ_link = linkBoundE` at the
 per-run cost `strictRunCost t' q`; at `q³ = t'·2^512` its hash part is `3(1 + k)·q²/2^512` (`linkBoundE_at_cube`). -/
 theorem flock_headline
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -285,23 +285,23 @@ theorem flock_headline
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' q : ℝ} (ht : 0 < t') (hq : 0 < q)
     (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSession H512 enc512 plan)))
     (hCRs : LinkCRStrict (p.partition outs) H512 enc512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t' q)
     {qF qS : ℝ} (hKS : ∀ ω j, StrictCR.TableCR execArith H512 enc512
-      (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStrat H512 enc512 plan (cont σ ω)) qF qS)
     (tr : StrictCR.TreeRewind H512
-      (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSession H512 enc512 plan)) σ
+      (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSession H512 enc512 plan)) σ
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
         K ≤ ((p.partition outs).wrong
           (Xpub ones zeros ((p.partition outs).Xplur H512 enc512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSession H512 enc512 plan)) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSession H512 enc512 plan)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) plan tab
           (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
         ENNReal.ofReal (tr.bound qT) :=
   p.flock_headline outs plan tab σs ks hks St hS Kd pop Lb src hA3 pp ones hConst zeros hZero lay rs hHm hk hRw hM hρ

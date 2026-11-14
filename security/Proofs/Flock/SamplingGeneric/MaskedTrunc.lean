@@ -100,7 +100,7 @@ theorem sessionOpens_deployTrunc (H : Claims.Msg → Claims.Msg)
 
 /-- **The contract at the truncation**: the code's four facts and the deployed record's sessions' runs, scope and
 openings (`sessions_ofDeploy`). -/
-theorem sessions_compiledTrunc (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
+theorem sessions_compiledTrunc (hd : c.DrawDesign) (hr : c.Refuses FlockDeploy.sha512)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
     (hruns : SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
     (hnum : SessionsIn c.atInnerN₀)
@@ -115,7 +115,7 @@ form at the strict birthday bound**: `KSReg` by `flockKSReg` (Flock's KS by `zk_
 `listWithin_deployZk`, binding by `commit_binds`, the contract by `sessions_compiledTrunc`), read at `StrictBirthday`
 by `ksRegAtSB_of_ksReg` with the opening checks' count from the reveal count. It takes what `ksReg_masked` takes, and
 the reveal count; its `q_T` reads `ρ_s ≤ 1 + 210·K₀` (`ρs_compiledTrunc_le`). -/
-theorem ksRegAtSB_maskedTrunc (hK₀ : 0 < K₀) (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
+theorem ksRegAtSB_maskedTrunc (hK₀ : 0 < K₀) (hd : c.DrawDesign) (hr : c.Refuses FlockDeploy.sha512)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
     (hruns : SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
     (hnum : SessionsIn c.atInnerN₀)
