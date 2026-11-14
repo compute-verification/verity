@@ -76,7 +76,7 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
     assert key, "the key's rustc runs under the script's pin, and never installs it"
-    (flock.parent / "agreement" / "ci.py").write_text("changed")
+    (flock / "agreement" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
     (flock / "live" / "src" / "lib.rs").write_text("fn b() {}")
@@ -1059,8 +1059,9 @@ def test_the_agreement_is_not_required_for_docs_alone():
     rule = tool.CHECK.merge_requires["lean-agreement"]
     docs = ["verity/protocols/flock/prover/live/PROTOCOL.md", "verity/protocols/flock/prover/agreement/README.md", "verity/protocols/flock/prover/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/protocols/flock/prover/agreement/ci.py"]) == ["verity/protocols/flock/prover/agreement/"]
-    assert rule_touches(rule, ["verity/protocols/flock/prover/agreement/DESIGN.md"]) == ["verity/protocols/flock/prover/agreement/"]  # only the two names are left out
+    both = ["verity/protocols/flock/prover/", "verity/protocols/flock/prover/agreement/"]
+    assert rule_touches(rule, [*docs, "verity/protocols/flock/prover/agreement/ci.py"]) == both
+    assert rule_touches(rule, ["verity/protocols/flock/prover/agreement/DESIGN.md"]) == both  # only the two names are left out
 
 
 def _lean_code(text: str) -> str:
