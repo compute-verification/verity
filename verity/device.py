@@ -74,12 +74,12 @@ node carries (`device.sku`, `device.count`), the host card (`host.sku`), the hos
 `B/s`, a ceiling), and the node's ways out: the interfaces that carry traffic off the node, one table each
 (`interface.NAME`: its `rate`, the line rate each way in `bit/s`, or, where the interface reads none, its `driver` and
 the `source` of that read, and no rate), and the storage path, once (`storage`, below). A card's own memory is its
-card's `store.dram`, whole, and no clock or peak of a card is here: those are the cards'. Every number is an entry
-`{value, unit, mark, source}` under the cards' rules, so what is not a number is not written as one, and a leaf or an
-interface with no read on record has no table. A kind is the card and its count, never a host's name, and a file names
-no machine, no address and no provider: whoever registers a node gives its host's id (`Registration.node_entry`, which
-gives no entry of a file with no `dram` or no `disk` leaf, none of a file with no interface, and none of a file with no
-way out that has a rate).
+card's `store.dram_installed`, whole, and no clock or peak of a card is here: those are the cards'. Every number is an
+entry `{value, unit, mark, source}` under the cards' rules, so what is not a number is not written as one, and a leaf
+or an interface with no read on record has no table. A kind is the card and its count, never a host's name, and a file
+names no machine, no address and no provider: whoever registers a node gives its host's id (`Registration.node_entry`,
+which gives no entry of a file with no `dram` or no `disk` leaf, none of a file with no interface, and none of a file
+with no way out that has a rate).
 
 **A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
 card's `memory.bandwidth_max`, the server's channels. A disk's is its own interface's where the disk states one (a
@@ -391,13 +391,18 @@ class Sheet:
         """The sheet a card file gives (`load_card(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
         and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
         its SMs at that clock. Its memory figures at ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card:
-        the bandwidth a ceiling rounded up, and the stores' sizes exact."""
+        the bandwidth a ceiling rounded up, and the stores' sizes exact. Device memory is `store.dram_installed`, the
+        memory on the board: a sheet's `mem` bounds what a device holds from above, so of the card's two readings it
+        takes the larger, and a card file with no such entry is refused."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
         sms, store = v(card["sm"]["count"]), card["store"]
         chip = (32 * sms * (v(store["reg"]) + v(store["reg_extra"])) + 8 * (sms * v(store["smem"]) + v(store["l2"])))
-        mem = v(store["dram"])
+        if "dram_installed" not in store:
+            raise Malformed(f"card {card['sku']}: its store has no dram_installed, the memory on the board, which a "
+                            "sheet's mem reads; state it in the card file, at or above store.dram")
+        mem = v(store["dram_installed"])
         if chip.denominator != 1 or mem.denominator != 1:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
         clock = v(card["clock"]["sm"]) * 10 ** 6

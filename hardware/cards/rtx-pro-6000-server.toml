@@ -85,4 +85,4 @@ fp32_loop = { value = 8.376, unit = "tensor unit/add", mark = "measurement", sou
 # The model's own ranges (Accel.Card's exact and text).
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (models.BLACKWELL_SM120_S8_M16N8K32, _WRAP)" }
-instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
+instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram_installed / 16 instructions" }
