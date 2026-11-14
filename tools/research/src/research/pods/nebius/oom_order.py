@@ -60,7 +60,8 @@ def clock() -> datetime:
 def _json(p: Path) -> dict:
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"oom_order: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -84,7 +85,8 @@ def reservations(ramlock: Path) -> list[dict]:
         d = _json(f)
         try:
             gb = float(d["gb"])
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"oom_order: {f.name} has no amount of memory, so it reserves none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out.append({"file": f.name, "gb": gb, "run_id": d.get("run_id"), "pid": d.get("pid") if isinstance(d.get("pid"), int) else None,
                     "priority": d.get("priority") is True})

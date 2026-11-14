@@ -46,11 +46,13 @@ import contextlib
 import fcntl
 import json
 import os
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
+from . import settings
 from .remote import MemoryNotAvailable
 from .telemetry.cgroup import _int_or_kind, _kv_file, _read
 from .telemetry.job import write_json_atomic
@@ -62,8 +64,8 @@ TERMINAL = ("done", "failed", "cancelled")
 
 
 def _cgroup_dirs() -> list[Path]:
-    if os.environ.get("RESEARCH_CGROUP_DIR"):
-        return [Path(os.environ["RESEARCH_CGROUP_DIR"])]
+    if settings.get("RESEARCH_CGROUP_DIR"):
+        return [Path(settings.need("RESEARCH_CGROUP_DIR"))]
     from .telemetry.cgroup import Cgroup
 
     cg = Cgroup("self")
@@ -81,7 +83,7 @@ def _with_ancestors(dirs: list[Path]) -> list[Path]:
 
 
 def _proc() -> Path:
-    return Path(os.environ.get("RESEARCH_PROC_ROOT", "/proc"))
+    return Path(settings.get("RESEARCH_PROC_ROOT", "/proc"))
 
 
 def readings() -> list[dict[str, Any]]:
@@ -126,7 +128,8 @@ def _rss_tree(pid: int) -> int | None:
     rss: dict[int, int] = {}
     try:
         entries = [e for e in os.listdir(_proc()) if e.isdigit()]
-    except OSError:
+    except OSError as e:
+        print(f"mem: {_proc()} unlisted, so no process tree is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     for e in entries:
         stat, _ = _read(_proc() / e / "stat")
@@ -240,7 +243,8 @@ def waiters(ramlock_dir: Path, *, prune: bool = False) -> list[dict[str, Any]]:
             doc = json.loads(f.read_text())
             gb = float(doc["gb"])
             live = _alive(pid) and doc.get("start") in (None, _start_time(pid))
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"mem: reservation {f.name} unread, so it counts as stale ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             live = False
         if not live:
             if prune:
@@ -361,16 +365,18 @@ def release(path: str | Path | None, run_id: str | None = None) -> None:
     if not path:
         return
     p = Path(path)
+    if not p.exists():
+        return
     try:
         if run_id is None or json.loads(p.read_text()).get("run_id") == run_id:
             p.unlink()
-    except (OSError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"mem: reservation {p.name} not released ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research mem", description="this machine's memory reading for admission (research.mem)")
-    ap.add_argument("--ramlock", default=os.environ.get("RESEARCH_RAMLOCK_DIR", RAMLOCK_DIR), metavar="DIR")
+    ap.add_argument("--ramlock", default=settings.get("RESEARCH_RAMLOCK_DIR", RAMLOCK_DIR), metavar="DIR")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     s = snapshot(Path(ns.ramlock))

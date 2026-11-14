@@ -599,6 +599,10 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
 
 
 def template_fn(t: str) -> SpecializedDefinition:
+    """The check template descriptor id ``t`` names (`boundary_rows.check_template`), the long row's among them, which
+    `long_row` registers and no registry module does."""
+    from verity_vllm.pipeline import long_row  # noqa: F401
+
     return BR.check_template(t)
 
 
@@ -805,7 +809,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
              pins: Mapping[str, Mapping[str, Any]] | None = None, tied: Tied | None = None) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
-    (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
+    (`interior_rows.interior`: each wired unit held to the writer unit the block's rows give it, `Design.rows`; each
+    replay-block parameter a port reads registered as a value, under ``window_root``;
     each output that writes a return round 1's record commits under the serve's salts at round 1's rows, opened from
     ``c``; each port that reads a parameter round 1's record commits the same way, opened from ``kept``), written under
     ``directory`` as the one-stage audit reads a window (`interior_rows.write`), registered on the stream
