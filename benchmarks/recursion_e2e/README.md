@@ -102,8 +102,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   table part over it (`rec_vstage stage-links`: `links`, the table registered as V*'s value `rec-links`, and the forgery
   `forged-link`, a table whose first row names a writer whose output is not its reader's row), oprove proves both beside
   the other statements, and `rec-inner`, every verify and `rec-compose` read the table's `--rec-links ROOT:N`. Lean's
-  `verify` and `statement` refuse `--rec-links` (`RecLinks.refuseLinks`), and `rec-compose` refuses it (`NO_LINKS`),
-  until a guarantee covers the table, so such a run's lean step refuses every part. `--max-min` budgets the link
+  `verify`, `statement` and `rec-compose` read it too (`RecLinkTree.linksArg`): V*'s link part (`RecLinkPart.check`)
+  holds every row of the table to the inner statement's, and `rec-compose` requires every part to name the composition's
+  table, so the lean step judges the link part and `forged-link` like any other part. `--max-min` budgets the link
   part's releases and its forgery's each as the largest measured statement's (`max_min` in `run.py`).
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   run needs ran (build, inner, vstage, vcap, oprove, lean). `parts_ok` when, in addition, every invocation exited 0, every
