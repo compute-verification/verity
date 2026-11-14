@@ -360,8 +360,8 @@ def _ways(host: str = "n0", storage: int | None = None, eth0: int | None = 25 * 
 
 
 def _leaves(host: str = "n0", memory: object = None) -> tuple:
-    """`NODE_FILE`'s leaves under `host`, or those of these `memory` tables, as `verity.hardware.nodes.leaves` gives
-    them: each with its id, tier, bytes and rate, a DRAM leaf at `DRAM` and a disk at `DISKS`, and each tier's rate."""
+    """`NODE_FILE`'s leaves under `host`, or those of these `memory` tables, as `leaves` gives them: each with its id,
+    tier, bytes and rate, a DRAM leaf at `DRAM` and a disk at `DISKS`, and each tier's rate."""
     rates = {"dram": DRAM, "disk": DISKS}
     tables = NODE_FILE["memory"] if memory is None else memory
     each = tuple((f"{host}/{name}", leaf.get("tier"), leaf.get("bytes", {}).get("value"), rates.get(leaf.get("tier"), 1))

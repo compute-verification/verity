@@ -204,7 +204,7 @@ node none of whose ways out the auditor's hardware sits on. Two kinds of way say
 line rate stated"), and the storage path ("storage path"). `onsite` takes their reasons, and a site with either is
 not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
 until a certifier splits it. Where a network certifier stands in front of such a node without splitting its interface (a process on
-another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key))` registers it too:
+another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key, scheme))` registers it too:
 the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
 interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no
 registration says that every bit leaves through a certifier that does not hold the wire. The storage path's rate is
