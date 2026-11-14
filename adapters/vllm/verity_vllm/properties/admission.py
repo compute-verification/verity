@@ -30,7 +30,7 @@ import importlib
 import json
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -198,7 +198,6 @@ class ProduceOptions:
     seed: int = option("--seed", type=int, default=7)
     out: str = option("--out")
     device: str = option("--device", default="cuda")
-    cmd: str = field(default="produce", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -207,7 +206,6 @@ class CheckOptions:
     dir: str = option("--dir")
     out: str = option("--out")
     append: bool = option("--append", default=False, action="store_true", help="merge into an existing quarantine.json")
-    cmd: str = field(default="check", init=False)
 
 
 COMMANDS = {"produce": ProduceOptions, "check": CheckOptions}
