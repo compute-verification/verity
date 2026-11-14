@@ -35,8 +35,7 @@ decode them to one digest (`one_digest`), so no record strays and both digests a
 (`acceptInferenceOnly_honest`).
 The record may name any registered circuit, a tiny one among them: the commitment decoders read only its `format`.
 
-The lemma takes the decoders' acceptance of the bytes as its hypotheses rather than exhibiting concrete bytes: the
-decoders read their bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates them on a literal.
+The lemma takes the decoders' acceptance of the bytes as its hypotheses rather than exhibiting concrete bytes.
 -/
 
 @[expose] public section
