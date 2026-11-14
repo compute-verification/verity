@@ -342,6 +342,15 @@ def test_main_prints_the_fit_and_each_table_and_writes_them_as_json(m, tmp_path,
                          "0.272 (0.857) | 0.318 (0.685) |")
     assert ladder[5] == ("| decode 32 / 8192 + 92-SM filler | 0.061 (1.000) | 0.103 (1.000) | 0.151 (1.000) | "
                          "0.167 (1.000) | 0.252 (0.880) | 0.295 (0.708) |")
+    # which rows the others are: the τ table's prefill step with FA2, and each mix at its batch, separate, with FA2
+    assert ladder[3] == ("| prefill step 8192 (FA2) | 0.059 (1.000) | 0.099 (1.000) | 0.145 (1.000) | 0.161 (1.000) | "
+                         "0.243 (0.891) | 0.284 (0.719) |")
+    assert ladder[8] == ("| chat B = 256 | 0.038 (1.000) | 0.064 (1.000) | 0.094 (1.000) | 0.104 (1.000) | "
+                         "0.157 (0.991) | 0.184 (0.818) |")
+    assert ladder[9] == ("| chat B = 256 + 92-SM filler | 0.066 (1.000) | 0.112 (1.000) | 0.164 (1.000) | "
+                         "0.181 (1.000) | 0.274 (0.854) | 0.321 (0.682) |")
+    assert ladder[10] == ("| reasoning B = 132 | 0.006 (1.000) | 0.010 (1.000) | 0.014 (1.000) | 0.016 (1.000) | "
+                          "0.024 (1.000) | 0.028 (0.972) |")
     res = json.loads((tmp_path / "share.json").read_text())
     assert (res["read_mhz"], res["dram_read_gb_s"], res["pool_tokens"], res["filler"]) == (
         2000, 1000.0, 1220703, "W11 (assumed)")
@@ -359,6 +368,10 @@ def test_main_prints_the_fit_and_each_table_and_writes_them_as_json(m, tmp_path,
     assert res["adaptive"] == {"as tuned for the whole GPU": {}, "tuned": {}}
     assert res["fstep_pick"] == {"fused": {}, "fused + pump": {}}
     assert [r["row"] for r in res["tau_ladder"]] == [line.split(" | ")[0][2:] for line in ladder[2:]]
-    assert res["tau_ladder"][0]["no CUDA-core product route"] == pytest.approx(
-        {"tau": 8192 * S.LIN_TOK / 0.384 / (1024 * 188 * 2430e6), "hidden": 0.685}, abs=5e-4)
+    top = 8192 * S.LIN_TOK / 0.384 / (1024 * 188 * 2430e6)  # the linears' MACs a second over the peak at 2,430 MHz
+    assert res["tau_ladder"][0]["no CUDA-core product route"] == pytest.approx({"tau": top, "hidden": 0.685}, abs=5e-4)
+    # under a vector of A below one τ is A times that, and what stays hidden is (1 − 0.99 τ) / A
+    a = 256 / 300.08
+    assert res["tau_ladder"][0]["product routes only, A = 256/R*"] == pytest.approx(
+        {"tau": a * top, "hidden": (1 - 0.99 * a * top) / a})
 
