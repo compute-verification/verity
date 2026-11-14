@@ -70,24 +70,24 @@ def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -
     that opens its session itself opens it on (H1's window-open root, `Window`; Pearl-C's epoch root, `salt_session`)."""
     out = []
     if settings.session is None:
-        out.append(f"{scheme}: the pouw setting 'challenger' needs 'session', the challenger gate's "
+        out.append("the pouw setting 'challenger' needs 'session', the challenger gate's "
                    + (f"reserve answer for the window ({{'session', ...}}), which it opens on {opens}"
                       if opens else "open answer for the window's Commit ({'session', 'seq', 'root', 'commitment'})")
                    + ", which the window carries and the verifier checks against the auditor's ledger")
     elif opens and ("root" in settings.session or settings.gate is None):
-        out.append(f"{scheme}: the window opens its session itself, on {opens}, committed before its salt: the pouw "
+        out.append(f"the window opens its session itself, on {opens}, committed before its salt: the pouw "
                    "setting 'session' is the gate's reserve answer and 'gate' opens it")
     elif not opens and "root" not in settings.session:
-        out.append(f"{scheme}: the pouw setting 'session' is the gate's open answer for the window's Commit "
+        out.append("the pouw setting 'session' is the gate's open answer for the window's Commit "
                    "({'session', 'seq', 'root', 'commitment'})")
     if not opens and settings.gate is not None:
-        out.append(f"{scheme}: the pouw setting 'gate' opens a reserved session on the root its window commits first, and "
+        out.append("the pouw setting 'gate' opens a reserved session on the root its window commits first, and "
                    "this window's 'session' is the gate's open answer")
     if settings.coins is not None or settings.rounds is not None:
-        out.append(f"{scheme}: the window's coins come from one source: the pouw setting 'challenger' (the auditor device's "
+        out.append("the window's coins come from one source: the pouw setting 'challenger' (the auditor device's "
                    "salt and round coins) or, in tests, 'coins' and 'rounds' held in this process, not both")
     if stage == "capture":
-        out.append(f"{scheme}: a capture records nothing, so it opens no session on the auditor device's challenger (the pouw "
+        out.append("a capture records nothing, so it opens no session on the auditor device's challenger (the pouw "
                    "setting 'challenger' is a served window's)")
     return out
 
