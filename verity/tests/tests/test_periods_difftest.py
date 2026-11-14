@@ -1,4 +1,4 @@
-"""`CoreProtocol.Period` against `verity.periods`, through the core difftest harness (`tools/difftest`).
+"""`CoreProtocol.Period` against `verity.protocol`'s monitoring periods, through the core difftest harness (`tools/difftest`).
 
 `core-periods-difftest` (`Core.PeriodDifftest.table`) serves `span` (a span read from its JSON, and its stop), `within`,
 `cut` (the parts of a span's cut at its boundaries) and `monitoring` (a monitoring period read from its JSON, its execution
@@ -17,7 +17,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.periods import Cut, MonitoringPeriod, PeriodError, TickSpan
+from verity.protocol import Cut, MonitoringPeriod, PeriodError, TickSpan
 
 LEAN = Path(__file__).resolve().parents[2] / "protocols" / "interface"
 EXE = "core-periods-difftest"
