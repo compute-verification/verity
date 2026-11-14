@@ -6,7 +6,7 @@ import json
 import pytest
 
 from verity_vllm.properties import noninterference as NI
-from verity_vllm.properties.record import REGISTRY, PropertyRecord
+from verity_vllm.records.property_record import REGISTRY, PropertyRecord
 
 
 def _arm(d, sub, gens, world=None):
