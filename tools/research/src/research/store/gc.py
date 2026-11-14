@@ -153,12 +153,12 @@ def scan_linear(gql: Callable[[str, dict], dict]) -> tuple[set[str], set[str], i
         if not conn["pageInfo"]["hasNextPage"]:
             break
         after = conn["pageInfo"]["endCursor"]
-    for field, sel in LINEAR_OTHERS.items():
+    for collection, sel in LINEAR_OTHERS.items():
         after = None
         while True:
             q = "query($after: String) { %s(first: %d, after: $after) { %s pageInfo { hasNextPage endCursor } } }" % (
-                field, LINEAR_PAGE, sel)
-            conn = pull(q, {"after": after})[field]
+                collection, LINEAR_PAGE, sel)
+            conn = pull(q, {"after": after})[collection]
             take(conn["nodes"])
             if not conn["pageInfo"]["hasNextPage"]:
                 break
