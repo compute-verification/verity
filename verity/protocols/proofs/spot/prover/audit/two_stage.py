@@ -172,7 +172,7 @@ from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
-from verity_vllm.pipeline import interior_links as IL, interior_rows as IR
+from verity_vllm.pipeline import interior_rows as IR
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 FORMAT = "verity-vllm/two-stage/stage1/v0"
@@ -604,6 +604,13 @@ def template_fn(t: str) -> SpecializedDefinition:
 
 #: the last part of the name of the value a registered table's reads' verdicts read, after their ``root``'s (`verdicts`)
 OPENED = "opened"
+#: the members of a replay block whose reads open registered tables, by place, each with its ``root`` `Supply`, its
+#: read's V and H and whether it is a fused block: the adapter's `interior_links.tied`, which only the adapter can
+#: give, since it reads the adapter's served templates; its caller passes it (`design`'s ``tied``)
+Tied = Callable[[Sequence[CS.Member], Sequence[IR.Link]], Mapping[int, tuple[IR.Supply, int, int, bool]]]
+#: why `design` refuses a block whose reads open registered tables when its caller passes no ``tied``
+TIED_WHY = ("its reads' verdicts are of the members the adapter's `interior_links.tied` ties to the tables, which "
+            "SPOT never imports: pass it as `tied`")
 
 
 @dataclass(frozen=True)
@@ -620,12 +627,13 @@ class Verdict:
     at: tuple[int, ...]
 
 
-def verdicts(members: Sequence[CS.Member], links: Sequence[IR.Link]) -> tuple[Verdict, ...]:
-    """The verdicts of ``members`` whose reads open registered tables (`interior_links.tied` on ``links``): each one's
-    ``o1`` at the value ``<its root's value>/opened``, placed as its ``root``."""
+def verdicts(members: Sequence[CS.Member], links: Sequence[IR.Link], tied: Tied) -> tuple[Verdict, ...]:
+    """The verdicts of ``members`` whose reads open registered tables (``tied`` on ``links``, the adapter's
+    `interior_links.tied` as its caller passes it): each one's ``o1`` at the value ``<its root's value>/opened``,
+    placed as its ``root``."""
     ms = list(members)
     return tuple(Verdict(ms[k].template, SS.OPENING_VERDICT, f"{x.value}/{OPENED}", x.per, x.at)
-                 for k, (x, *_r) in IL.tied(ms, links).items())
+                 for k, (x, *_r) in tied(ms, links).items())
 
 
 def verdict_sources(vs: Sequence[Verdict], q: int) -> dict[str, list[list[dict[str, str]]]]:
@@ -668,7 +676,7 @@ class Design:
 
 
 def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False,
-           tables: Mapping[str, Sequence[str]] | None = None) -> Design:
+           tables: Mapping[str, Sequence[str]] | None = None, tied: Tied | None = None) -> Design:
     """The class's `Design`, its links named as round 1's record ``record`` names its ports (the layout's own ports
     where none is given). ValueError where round 2 derives no links or no wires from the replay block (its
     ``second-links`` and ``second-wires``): such a class has no second stage to run. ``unlinked``: such a class's
@@ -676,7 +684,9 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
     at its own rows, but nothing ties one to another or to round 1, and round 2 refuses its statements by that code.
     ``tables``: the block's parameters that are registered tables' roots and domain ids, by name, each the tables a row
     (`interior_rows.links`' ``tables``): the verifier supplies them from the entries it pinned, and each read of them
-    has its verdict (`verdicts`)."""
+    has its verdict (`verdicts` by ``tied``, the adapter's `interior_links.tied`, refused by name where ``tables`` are
+    given and ``tied`` is not). With no ``tied`` the block has no verdict, and `interior_rows.interior` refuses an
+    untied fused block before anything is committed."""
     key = descriptor_id(layout.replay)
     record = {"roots": [{"port": p} for p in layout.ports()]} if record is None else record
     members = tuple(IR.member(P.template_id(t)) for t in layout.templates)
@@ -687,10 +697,12 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
     if wires is None:
         raise ValueError(f"replay block {key} makes no wires round 2 derives (`second_stage.replay_wires`): "
                          f"{SS.WIRES_WHY}")
+    if tables and tied is None:
+        raise ValueError(f"replay block {key} reads registered tables {sorted(tables)}: {TIED_WHY}")
     links = IR.links(layout.program, key, record, members, cells, dict.fromkeys(tables) if tables else None, tables)
     return Design(key, members, cells, links, tuple(wires), IR.returns(layout.program, key, record, members, cells),
                   SS.replay_rows(layout.program, key), IR.inputs(layout.program, key, record, members, cells),
-                  verdicts(members, links))
+                  () if tied is None else verdicts(members, links, tied))
 
 
 def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
@@ -790,7 +802,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
              rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False,
              kept: Path | None = None, clock: Callable[[], float] | None = None,
              tables: Mapping[str, Sequence[str]] | None = None, registered: Mapping[str, Any] | None = None,
-             pins: Mapping[str, Mapping[str, Any]] | None = None) -> Replayed:
+             pins: Mapping[str, Mapping[str, Any]] | None = None, tied: Tied | None = None) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
     (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
@@ -810,13 +822,14 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     ``tables``, ``registered`` and ``pins``: a block whose reads open registered tables (`design`'s ``tables``), the
     tables with their rows held (core's `Registered`, by parameter) and the entries the verifier pinned for them
     (`interior_rows.interior`'s); the stream is handed the values the verifier fills, their roots and domain ids from
-    the pins and their reads' verdicts 1 (``supplied``: `interior_rows.sources`, `verdict_sources`).
+    the pins and their reads' verdicts 1 (``supplied``: `interior_rows.sources`, `verdict_sources`). ``tied``: the
+    adapter's `interior_links.tied`, which such a block's verdicts need (`design`'s).
     ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', the class's record
     commits a parameter and ``kept`` doesn't hold it at that root, or a replayed unit takes or returns another row than
     round 1 committed for it. `service.Refused` as the stream refuses the docket."""
     if {k: v for k, v in c.public().items() if k != "seconds"} != {k: v for k, v in again.pub.items() if k != "seconds"}:
         raise ValueError("the class's files are not the commitment its first stage registered")
-    d = design(again.layout, again.record, unlinked=unlinked, tables=tables)
+    d = design(again.layout, again.record, unlinked=unlinked, tables=tables, tied=tied)
     sample = [int(u) for u in again.sample.units]
     t0 = None if clock is None else clock()
     per, launches = spans_of(c, capture, sample, rids)

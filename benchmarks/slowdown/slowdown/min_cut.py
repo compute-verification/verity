@@ -323,7 +323,7 @@ def slowdown_of(c: float, k: float, n: float | None = None, *, size: float, work
     `F`.
 
     `N` and `O` are `scale` times the sum of the products' MACs and wires: the share of the work its caller counts.
-    No `β` is capped and no product priced here: a product states what it costs as its caller reads it."""
+    No `β` is clipped and no product priced here: a product states what it costs as its caller reads it."""
     if beta(k) is None:
         N, O = scale * sum(p.macs for p in work), scale * sum(p.wires for p in work)
         return Chosen(bound(c, k, n, N=N, O=O, size=size), None, (), 0.0, dict.fromkeys(SUBWORKS), None, N=N, O=O)

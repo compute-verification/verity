@@ -50,7 +50,7 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   session; it is undecided while a window is unverified; it accepts once every window is.
 
 On acceptance it publishes `{"eps", "q_bytes", "span_ns"}`: the credited reads (`P2Session.credit`, the answer's),
-their span, and the error they hold at, ε = δ + S/2^64 for S the draws, `Poub.Protocol.certify`'s terms (not
+their span, and the error they hold at, ε = δ + S/2^64 for S the samples, `Poub.Protocol.certify`'s terms (not
 the sketch's term at units, `SketchBoundP2`, which is drafted). The profile is the rest of the session's answer.
 No property states yet what this check accepts; `p2_case.py`'s tests hold it to the live process's answer.
 -/
@@ -71,7 +71,7 @@ def DIGEST_DOMAIN : ByteArray := "verity/remote-bandwidth/p2/commitment/v0".toUT
 /-- A coin as the log carries it: the challenger's whole coin, whose first `Codec.COIN_BYTES` the replay reads. -/
 def COIN_BYTES : Nat := 64
 
-/-- The draws a thread checks (`P2Session.checkOpeningsChunked`), which changes no verdict. -/
+/-- The samples a thread checks (`P2Session.checkOpeningsChunked`), which changes no verdict. -/
 def CHUNK : Nat := 64
 
 private def natJ (n : Nat) : Json := .num (JsonNumber.fromNat n)

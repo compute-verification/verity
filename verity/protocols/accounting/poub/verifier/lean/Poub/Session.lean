@@ -19,10 +19,10 @@ its openings coin at W + t, and the append coins in the order sampled). Each eve
   already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, one holding a
   released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), `lifetime` (an appended block that joined a window L or more before);
-* `close(t)`: the window's draws, once its roots are final (the next window's first root, `D_t` passed, or a paced
+* `close(t)`: the window's samples, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
-* `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws); rejected `malformed` on a window with
-  no draws, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
+* `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the samples); rejected `malformed` on a window with
+  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
@@ -37,7 +37,7 @@ namespace Poub.Session
 def STEP_LIMIT : Nat := 2 ^ 64
 
 /-- A window's receipts stay below this (`receive` rejects with `plan` a pass that would take them to it), so each
-draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at `U < 2^448`). -/
+sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at `U < 2^448`). -/
 def RECEIPT_LIMIT : Nat := 2 ^ 64
 
 /-- `audit.Pace`: a paced session's windows hold at most `k` roots each, and its γ is declared per `windowNs`. -/
@@ -294,8 +294,8 @@ def verify (s : State) (t : Int) (openings : Array Opening) : Result × State :=
   if v = .accept then return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   return s.fail t v.rejection.failure v.rejection.at?
 
-/-- What window t's openings are checked against, once its draws are out and it has no verdict: the registration, its
-digest, the appends, the window's record and its draws (`none` where `verify` refuses). -/
+/-- What window t's openings are checked against, once its samples are out and it has no verdict: the registration, its
+digest, the appends, the window's record and its samples (`none` where `verify` refuses). -/
 def State.awaiting (s : State) (t : Int) : Option (WindowRecord × Array (Nat × Nat)) := do
   if s.failed.isSome || t < 0 || t ≥ s.windows.size then none
   let w := s.windows[t.toNat]!
@@ -303,7 +303,7 @@ def State.awaiting (s : State) (t : Int) : Option (WindowRecord × Array (Nat ×
   if w.verdict.isSome then none
   pure (s.record t.toNat, drawn)
 
-/-- `verify` with the window's verdict `check` computed on its draws: `verify s t openings` is
+/-- `verify` with the window's verdict `check` computed on its samples: `verify s t openings` is
 `verifyBy s t (checkWindow s.reg s.digest s.appends (s.record t.toNat) · openings)` (`verify_eq_verifyBy`). -/
 def verifyBy (s : State) (t : Int) (check : Array (Nat × Nat) → Verdict) : Result × State := Id.run do
   if let some r := live s then return (r, s)
@@ -344,7 +344,7 @@ def State.outcome (s : State) : Option String :=
 
 /-- What `Session.record` gives of an accepted session, which is all of it but the coin commitment's root, the block
 size and the registration's fields its digest binds: each window's passes' lengths, steps, post-seed reads, heads,
-stale bounds and arrivals, its challenge's release, its deadline, its openings coin's release and draws, and the
+stale bounds and arrivals, its challenge's release, its deadline, its openings coin's release and samples, and the
 session's store size, appended and released blocks, lifetime cap, pace and chain over its appends. -/
 structure WindowSummary where
   lengths : Array Nat

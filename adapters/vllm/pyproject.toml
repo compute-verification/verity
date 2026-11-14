@@ -117,7 +117,8 @@ untraced = [
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `poub-verifier`.
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
-# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
+# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py),
+# and hands drawn's stage h1_prove's stagers.py (test_pouw_h1_drawn.py, test_pouw_h1_refusals.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
 # The package imports the PyTorch adapter (adapters/torch/verity_torch) throughout, and tests/program/test_inputs.py reads its
@@ -154,7 +155,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/ver
           "tools/research/src/research/treelock.py", "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
-          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
+          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py", "benchmarks/pouw/h1_prove/stagers.py",
           "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py", "tools/difftest"]
 parallel = true
 # verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;

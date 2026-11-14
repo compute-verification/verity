@@ -280,12 +280,12 @@ def window(p: Param, widen: float = 1.0) -> tuple[float, float]:
     """A window around `p`'s plausible range: positive ranges grow by their own ratio to the power `widen` (at least a
     decade) at each end, others by ten widths; a range inside `[0, 1]` (a share, a utilization) stays inside it."""
     lo, hi = sorted((float(p.low), float(p.high)))
-    cap = 1.0 if 0 <= lo and hi <= 1 else math.inf
+    ceiling = 1.0 if 0 <= lo and hi <= 1 else math.inf
     if lo > 0:
         f = max((hi / lo) ** widen, 10.0)
-        return lo / f, min(hi * f, cap)
+        return lo / f, min(hi * f, ceiling)
     w = 10 * (hi - lo) * widen
-    return (max(lo - w, 0.0) if lo >= 0 else lo - w), min(hi + w, cap)
+    return (max(lo - w, 0.0) if lo >= 0 else lo - w), min(hi + w, ceiling)
 
 
 def position(p: Param, v: float) -> float:
