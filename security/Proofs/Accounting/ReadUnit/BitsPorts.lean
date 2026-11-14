@@ -55,8 +55,8 @@ theorem map_single {α β : Type} (f : α → β) {gs : Array α} {g0 : α} (h :
 
 /-- **A template the read's check accepts has one input group**: the read's ports, from column 0. -/
 theorem checked_inGroups {V H : ℕ} {t : Flock.Tmpl.Tmpl} (hc : Checked V H t) :
-    ∃ g : Flock.Group, t.inGroups = #[g] ∧ g.col = 0 ∧ g.bits = portBits V H := by
-  obtain ⟨w, hr⟩ : ∃ w, (readTmpl V H).inGroups = #[⟨0, w, portBits V H⟩] := ⟨_, rfl⟩
+    ∃ g : Flock.Group, t.inGroups = #[g] ∧ g.col = 0 ∧ g.bits = Flock.ReadNet.portBits V H := by
+  obtain ⟨w, hr⟩ : ∃ w, (readTmpl V H).inGroups = #[⟨0, w, Flock.ReadNet.portBits V H⟩] := ⟨_, rfl⟩
   have h := hc.inG
   rw [hr] at h
   obtain ⟨g, hg, hk⟩ := map_single groupKey h
@@ -70,10 +70,10 @@ theorem unrolled_inCol {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (h
   obtain ⟨g, hg, hcol, hbits⟩ := checked_inGroups (checked_of_check hcheck)
   have h16 : ∀ b ∈ g.bits.toList, b = 16 := by
     intro b hb
-    rw [hbits, portBits, Array.toList_replicate] at hb
+    rw [hbits, Flock.ReadNet.portBits, Array.toList_replicate] at hb
     exact List.eq_of_mem_replicate hb
   have hq : p < g.bits.size := by
-    rw [hbits, portBits, Array.size_replicate]
+    rw [hbits, Flock.ReadNet.portBits, Array.size_replicate]
     exact hp
   rw [unrolled_inGroups ht hsz, hg, FlockSoundness.Discharge.HiddenExec.portCols_16_get h16 hq, hcol, Nat.zero_mul,
     Nat.zero_add]
