@@ -120,3 +120,6 @@ Neither touches my files. Rather than cross them by hand, I re-applied the commi
 
 Collect head cc2896af77e3. SCANLEAN2 has the modules. TIMER: none.
 
+[2026-11-14T23:32Z] 3afd121e616b
+LAYOUTREAD2, A.2 declared_words_map `6e107a6e2f0`: 3 files of ours, 7 lines, all docstrings ("declared circuit" to "registered circuit") in `CreditedWords.lean`, `WorkOfH1CheckedCreditMonitoringPeriod.lean` and `test_inference_only_protocol.py`; no Lean name, string, key or seed of ours changed; the kept refusal "the run's registration record is not the declared circuit's" is unchanged in the policy's Lean and both tests that quote it (the one added site is the map's own keep) [ran: diff, string diff, counts]; the test compiles [ran]. All five of piece A are read; none needed a mend on our side.
+
