@@ -139,13 +139,16 @@ class TickFeed:
 
     A request of a release a watermark line names lost is this middleware's to end: the gate keeps it from the
     scheduler, so vLLM never answers it. One that is in the server when its line comes is given its disconnect, the next
-    message its ``receive`` returns, on which vLLM's server aborts it as it does on its connection's close. Nothing the
-    server sends after that goes on, and once its call returns the middleware answers: 400 with `serve_admit.LOST` where
-    the server had begun no response, and where it had, the response's end with no body, since a middleware writes no
-    event in the server's stream. One whose line has come by the time its body is read, so every one that comes after
-    its line, is answered 400 with that sentence, and reaches neither the server nor the feed. A watermark that breaks
-    forgets its run's lost releases: the gate is open then, and adds every request at once. Both are this process's:
-    among several API server processes, a line ends only the requests of the process its stream reached."""
+    message its ``receive`` returns, on which vLLM's server aborts it as it does on its connection's close. Where the
+    server had begun no response, nothing it sends after that goes on, and once its call returns the middleware answers
+    400 with `serve_admit.LOST`. Where a stream's head had gone, nothing more of the stream goes on and the middleware
+    ends it with no body, since a middleware writes no event in the server's stream. A response whose head gave its
+    length is the server's whole answer, which only an open gate lets it have, and is left to finish: a shorter body
+    would break the length it declared. One whose line has come by the time its body is read, so every one that comes
+    after its line, is answered 400 with that sentence, and reaches neither the server nor the feed. A watermark that
+    breaks forgets its run's lost releases: the gate is open then, and adds every request at once. What the middleware
+    keeps for this is its process's own: among several API server processes, a line ends only the requests of the
+    process its stream reached, and only that process refuses the later ones."""
 
     def __init__(self, app: Any) -> None:
         self.app = app
@@ -219,7 +222,7 @@ class TickFeed:
             scope = {**scope, "headers": [*scope.get("headers", ()), (b"x-request-id", key.encode())]}
         self.write({"key": key, "run": run, "n": n, "bucket": bucket})
         gone = self.served[run, n] = asyncio.get_running_loop().create_future()
-        began = started = ended = False
+        began = started = sized = ended = False
 
         async def heard() -> Any:
             """The request's next message, or its disconnect once a line has named its release lost."""
@@ -235,12 +238,13 @@ class TickFeed:
             return {"type": "http.disconnect"}
 
         async def watched(message: dict[str, Any]) -> None:
-            nonlocal began, started, ended
-            if gone.done():
+            nonlocal began, started, sized, ended
+            if gone.done() and not sized:
                 return
             kind = message.get("type")
             if kind == "http.response.start":
                 started, began = True, began or message.get("status") == 200
+                sized = any(k.lower() == b"content-length" for k, _ in message.get("headers") or ())
             elif kind == "http.response.body" and not message.get("more_body", False):
                 ended = True
             await send(message)
@@ -253,7 +257,7 @@ class TickFeed:
                 self.write({"run": run, "n": n, "passed": True})
         if gone.done() and not started:
             await _answer(send, 400, LOST.format(n=n, run=run))
-        elif gone.done() and not ended:
+        elif gone.done() and not sized and not ended:
             await send({"type": "http.response.body", "body": b""})
 
     async def _watermark(self, w: Watermark, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:

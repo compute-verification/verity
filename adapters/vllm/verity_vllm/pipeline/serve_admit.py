@@ -65,7 +65,7 @@ file, and a vLLM general plugin whose gate in the engine core process reads it).
 frontend's to end, and each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the
 one in the engine with that error and aborts it (`TickAdmit`). vLLM's own server's is given the request's disconnect, on
 which vLLM aborts it as it does on its connection's close, and is then answered by the middleware: 400 where the server
-had begun no response, the response ended with nothing more of it where it had (`tick_plugin.TickFeed`).
+had begun no response, a stream ended with nothing more of it where its head had gone (`tick_plugin.TickFeed`).
 """
 from __future__ import annotations
 

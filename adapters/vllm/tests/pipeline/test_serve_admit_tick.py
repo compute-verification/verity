@@ -850,24 +850,26 @@ def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(pl
 
 
 HEAD = {"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/event-stream")]}
+SIZED = {"type": "http.response.start", "status": 200, "headers": [(b"Content-Length", b"4")]}
+NULL = {"type": "http.response.body", "body": b"null"}
 LOST_SAID = "x-verity-release: {n} of run 'ab' was lost on the way to the server, as the watermark says"
 
 
 class Held:
-    """vLLM's server with a request the gate keeps from the scheduler. It reads the body and, where the request streams,
-    sends the stream's 200 head at once, as vLLM does before any token. The engine never answers, so from there it
-    waits on the request's disconnect alone, as vLLM's listener beside each handler does, and once it has it sends
-    ``late``: what a handler still sends as it ends."""
+    """vLLM's server with a request it waits on. It reads the body and sends ``head`` at once, if it has one: a stream's
+    200 head, which vLLM sends before any token, or a whole answer's with its length. From there it waits on the
+    request's disconnect alone, as vLLM's listener beside each handler does, and once it has it sends ``late``: what a
+    handler still sends as it ends."""
 
-    def __init__(self, stream: bool, late: Sequence[dict] = ()) -> None:
-        self.stream, self.late, self.waits, self.ended = stream, list(late), 0, 0
+    def __init__(self, head: dict | None, late: Sequence[dict] = ()) -> None:
+        self.head, self.late, self.waits, self.ended = head, list(late), 0, 0
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         more = True
         while more:
             more = (await receive()).get("more_body", False)
-        if self.stream:
-            await send(HEAD)
+        if self.head is not None:
+            await send(self.head)
         self.waits += 1
         while (await receive())["type"] != "http.disconnect":
             pass
@@ -890,18 +892,19 @@ def numbered(n: int) -> dict:
     return scope_of("/v1/completions", {"x-verity-release": str(n), "x-verity-release-run": RUN, "x-request-id": f"c{n}"})
 
 
-@pytest.mark.parametrize("stream", [False, True])
-def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_answered(tmp_path, monkeypatch, stream):
-    """Release 0's request is in vLLM's server, its client's connection open, when a watermark line names it lost. The
-    gate drops it, so the engine never answers it, and the middleware ends it: the server gets the request's disconnect,
-    what it sends after that goes nowhere, and the client is answered, with 400 and the sentence serve-openai's frontend
-    says where the server had begun no response, and with the stream's end and no event where its 200 head had gone.
-    A client's own close stays the server's to end, and the middleware adds nothing to it."""
+@pytest.mark.parametrize("head", [None, HEAD, SIZED], ids=["no response begun", "a stream's head gone", "a whole answer's head gone"])
+def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_answered(tmp_path, monkeypatch, head):
+    """Release 0's request is in vLLM's server, its client's connection open, when a watermark line names it lost, and
+    the middleware ends it: the server gets the request's disconnect. Where the server had begun no response, what it
+    sends after that goes nowhere (a cancelled handler's 200) and the client gets 400 and the sentence serve-openai's
+    frontend says. Where a stream's 200 head had gone, the client gets the stream's end, with no later chunk and no
+    event. Where a whole answer's head had gone with its length, which takes an open gate, its body goes on, and the
+    middleware adds nothing. A client's own close stays the server's to end, and the middleware adds nothing to it."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    late = ([{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}] if stream else
-            [{"type": "http.response.start", "status": 200, "headers": []}, {"type": "http.response.body", "body": b"null"}])
-    app = Held(stream, late)
+    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+            [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
+    app = Held(head, late)
     feed, sent = tp.TickFeed(app), []
 
     async def run() -> tuple[bool, bool]:
@@ -928,16 +931,16 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
 
     held, done = asyncio.run(run())
     assert held and done and app.ended == 1
-    if stream:
-        assert sent == [HEAD, {"type": "http.response.body", "body": b""}]
-    else:
+    if head is None:
         assert [m.get("status") for m in sent] == [400, None] and sent[1]["body"] == LOST_SAID.format(n=0).encode()
+    else:
+        assert sent == [head, NULL if head is SIZED else {"type": "http.response.body", "body": b""}]
     assert tp.FeedReader(tmp_path / "feed.jsonl")() == [
         {"key": "c0", "run": RUN, "n": 0, "bucket": None}, {"run": RUN, "t": 0, "n": 2, "lost": [0]}, {"run": RUN, "end": True},
-        *([] if stream else [{"run": RUN, "n": 0, "passed": True}])]
+        *([{"run": RUN, "n": 0, "passed": True}] if head is None else [])]
     assert feed.served == {}
     app.late = []
-    assert asgi(feed, numbered(1), [GREEDY]) == ([HEAD] if stream else []) and app.ended == 2
+    assert asgi(feed, numbered(1), [GREEDY]) == ([head] if head else []) and app.ended == 2
 
 
 def test_under_vllms_server_a_request_after_its_lost_line_is_refused_until_the_watermark_breaks(tmp_path, monkeypatch):
