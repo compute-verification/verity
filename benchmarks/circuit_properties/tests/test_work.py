@@ -691,6 +691,34 @@ def test_rows_of_one_value_that_are_inf_at_the_point_are_refused_as_equal():
     assert (e.value.definition, e.value.operand, e.value.rows) == ("SelfCancelInfStep_v1", "x", (0, 1))
 
 
+def _zero_signs(signs: bool) -> Program:
+    """W plus -1 times W, 0 in every word, times a stated S, ±1: with ``signs`` S is -1 at one word of each row past
+    the first, another word a row, so the rows are zeros whose signs differ; else S is 1 everywhere. W′ = W plus z;
+    u W′′^T, W′′ the product."""
+    one, neg = 0x3F800000, 0xBF800000
+
+    def step(B, c, z):
+        w, u = c
+        zero = _add(B, w, _mul(B, w, B.call(const(32, neg))))
+        s = concat([B.call(const(32, neg if signs and i >= 1 and j == i - 1 else one)).refs
+                    for i in range(N) for j in range(K)])
+        flat = Array(N * K, F32)
+        wp = B.batch(P.F32Mul, Coll(flat, zero.refs), Coll(flat, s), axes=(0, 0)).reshape(W_T)
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, wp)
+
+    return _loop("ZeroSigns" if signs else "ZeroOnes", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+
+
+@pytest.mark.parametrize("signs", [True, False], ids=["signs", "ones"])
+def test_rows_of_zeros_whose_signs_differ_are_refused_as_equal(signs):
+    """W plus -1 times W times a stated ±1 is 0 in every word, whatever W, which the reading's rules take as distinct
+    rows: compared as words with the two zeros one word, rows 0 and 1 are equal, the signs as S states them or not,
+    and the Program is refused."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_zero_signs(signs), KB)
+    assert (e.value.operand, e.value.rows) == ("w", (0, 1))
+
+
 def _swap(order: str, carried: bool) -> Program:
     """prev′ = the PN rows looked up by the iteration's tokens, plus M times M's rows in ``order`` ("swap": the other
     order; "same": its own), M carried and updated by an input (``carried``) or unchanged; and prev W^T."""
@@ -771,8 +799,10 @@ def test_what_the_point_never_meets_stays_a_premise():
     """Rows equal only at values the point never takes are charged, held as facts beside those of
     `test_what_the_carried_words_premise_leaves_held_as_facts` (a one-word multiplier that is 0) and
     `test_an_update_by_a_stated_zero_leaves_a_weight_thetas` (W plus z plus -1 times z): W plus an input's rows Z,
-    whose rows are equal where Z is fitted to W (Z0 - Z1 = W1 - W0), and M times W0 minus a stated c, a circuit that
-    tests its own weights, whose rows are all 0 where W0 is c."""
+    whose rows are equal where Z is fitted to W (Z0 - Z1 = W1 - W0), M times W0 minus a stated c, a circuit that
+    tests its own weights, whose rows are all 0 where W0 is c, and W times z0 plus max(z0, -z0), plus z, whose
+    multiplier is 0, and its rows z's, only where the input's word z0 is negative, which the point's positive
+    inputs never are."""
     def fitted(B, c, zr, z):
         w, u = c
         return (_add(B, w, zr), _add(B, u, z)), B.call(LIN, u, w)
@@ -787,6 +817,14 @@ def test_what_the_point_never_meets_stays_a_premise():
 
     w = WK.read(_loop("TestsItself", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, tests, shared=(("v", X_T),),
                       registered=("v",)), KB)
+    assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+    def negative(B, c, z):
+        w, u = c
+        m = B.call(P.F32Add, z[0], B.call(P.F32Max, z[0], B.call(F32Neg, z[0])))
+        return (_add(B, _mul(B, w, m), z), _add(B, u, z)), B.call(LIN, u, w)
+
+    w = WK.read(_loop("Negative", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, negative), KB)
     assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
 
 
@@ -879,7 +917,7 @@ def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
         "rather than out of a scan whose contexts repeat")
 
 
-def test_the_point_is_sampled_once_a_program_and_read_at_every_k():
+def test_the_point_is_sampled_once_a_program_and_read_at_every_k(monkeypatch):
     """Two walks of one Program sample one point (SHA-512 of its digest, nothing else), and its reads at two k make
     one pass."""
     p = carried_loop()
@@ -896,11 +934,8 @@ def test_the_point_is_sampled_once_a_program_and_read_at_every_k():
         return real(self)
 
     PT._MEMO.clear()
-    PT.Walk.run = counted
-    try:
-        WK.read(p, KB), WK.read(p, 4 * KB)
-    finally:
-        PT.Walk.run = real
+    monkeypatch.setattr(PT.Walk, "run", counted)
+    WK.read(p, KB), WK.read(p, 4 * KB)
     assert len(runs) == 1
 
 
@@ -1202,7 +1237,7 @@ def _reading_of(name: str) -> dict:
     try:
         return _reading(WK.read(CASES[name](), KB))
     except WK.RepeatedRows as e:
-        return {"refused": [e.definition, e.operand, list(e.rows)]}
+        return {"refused": [e.definition, e.operand, None if e.rows is None else list(e.rows)]}
 
 
 @pytest.mark.parametrize("name", sorted(CASES))

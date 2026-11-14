@@ -3,21 +3,24 @@
 A charged product's operand that the reading takes as a weight with distinct rows (`Status.distinct`: `claims`) is
 claimed to have no two equal rows of its contraction's K words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
-is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
-(`Input<w>`) is one word, sampled generic, nonzero and, as a float, positive, repeated through every array it fills
-(all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
+is one draw at which every input is one positive word repeated, as a submitter may choose: whoever submits the
+circuit also picks the data. So every word of an input (`Input<w>`) is one word, sampled generic, nonzero and, as a
+float, positive, repeated through every array it fills (all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
 binades about 2^`CENTRE`, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no
 float has. An input's float is about 1 and positive, because an input is data or a state the step carries in, which an
 honest step reads under a square root, a logarithm or a divide: a positive word is inside each such domain, and one word repeated
 says nothing about rows by its sign. `θ` keeps every sign, the generic part of the point. A NaN and equal rows are
 refused, so the sign passes no claim; it decides only which honest circuits pass. The sample is seeded by SHA-512 of
-the Program's digest, with no other randomness, so two reads agree.
+the Program's digest, with no other randomness, so two reads agree. The seed is public: a submitter can try variants
+of a circuit until the point misses an identity that holds only on a thin set of values, which is a premise
+(below), not something the point tests.
 
 Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
-by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), so a row holding an inf is
-a row: two words of one value hold the same inf there. A row holding an f32 NaN is refused: no comparison shows it
+by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), with an f32 row's two zeros
+one word (-0 read as +0), so a row holding an inf is a row (two words of one value hold the same inf there) and an
+f32 row of zeros is one row whatever their signs. A row holding an f32 NaN is refused: no comparison shows it
 distinct, and whoever submits the circuit can make a NaN at the point. `CENTRE` is where the point makes no inf or NaN
 from finite operands in training_slowdown's step, nor a binade either side; a -inf the Program states as a value (a
 causal mask's) is not the point's doing, and stays at every centre through the mask's add and the softmax's subtraction
@@ -44,7 +47,8 @@ out of range).
 
 What the point doesn't meet stays a premise (`work`'s docstring): rows equal only at values the sample never takes (W
 plus z plus -1 times z, a one-word multiplier that is 0, inputs fitted to the weights, a circuit that tests its own
-weights against a stated constant, rows equal only where an input's word is negative).
+weights against a stated constant, rows equal only where an input's word is negative, and rows equal only at values
+a submitter found by trying circuits against the public seed).
 """
 from __future__ import annotations
 
@@ -72,6 +76,8 @@ CENTRE = -3
 #: the bits a word of each rounding's format holds at the point: its sign, its mantissa and two of its exponent
 ROUNDED = {"F32ToBf16Rn": 10, "F32ToF16Rn": 13, "F32ToE4m3Sat": 6, "F32ToE2m1Sat": 4}
 F32_NAN, F32_NAN_PTX = 0x7FC00000, 0x7FFFFFFF
+#: f32's -0, compared as +0: a row of zeros is one value whatever their signs
+F32_NEG_ZERO = 0x80000000
 
 
 def held(w: int) -> int:
@@ -526,6 +532,7 @@ class Walk:
         P, A, R = self.P, L // self.P, W // K
         v = words.reshape(P, A, R, K).transpose(1, 2, 0, 3).reshape(A * R, P * K)
         if _operand_width(nd, i) == 32:
+            v = np.where(v == F32_NEG_ZERO, np.uint64(0), v)
             bad = _nan(v).any(axis=1).reshape(A, R)
             if bad.any():
                 a = int(np.flatnonzero(bad.any(axis=1))[0])

@@ -98,11 +98,13 @@ are distinct, wherever the point (`points.check`) doesn't make two of them equal
 weight or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where one word that
 every member of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed
 from inputs, taken as nonzero), where the inputs are fitted to the weights, where the circuit tests its own weights
-against a stated constant, where the rows are equal only where an input's word is negative, and where two nodes
+against a stated constant, where the rows are equal only where an input's word is negative, where they are equal
+only at values a submitter found by trying circuits against the point's public seed, and where two nodes
 compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
 products by W are charged). The reading refuses a circuit
 (`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point:
-a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v) or
+a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v; and
+rows of zeros whose signs differ, compared as one value) or
 times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a weight times a
 difference of an input's words; and where such an operand holds a NaN at the point, which leaves its rows uncompared.
 
