@@ -4,12 +4,17 @@
 # has one, else r2.env's, which also writes that bucket (fixtures_export.sh). Code: /data/infra/store-index-src, a
 # tools/research tree whose COMMIT file names it. The credentials go only into the environment: r2.env is sourced, and the
 # unquoted lines of store-index.env (its URL has `&`) and store-export.env are read with sed. Log: /data/infra/store-index.log
+# Each pass's start, end, exit code and commit go to $PASS as it ends, and the watchers tree's loop_metrics.py sends its length to
+# the metrics door in the background: a send that fails or hangs is a line in the log, and the loop goes on.
 LOG=/data/infra/store-index.log
 CONF=/root/.config/verity
+PASS=/data/infra/store-index-pass.json
+WATCHERS_SRC=/data/watchers/src
 exec 9> /root/store-index.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/store-index.lock" >> "$LOG"; exit 0; }
 val() { sed -n "s/^$1=//p" "$2" | tr -d "\"'"; }
 while :; do
+  start=$(date +%s)
   (
     set -a; . $CONF/r2.env; set +a
     STORE_INDEXER_DATABASE_URL=$(val STORE_INDEXER_DATABASE_URL $CONF/store-index.env)
@@ -30,6 +35,14 @@ while :; do
     cd /data/infra/store-index-src && PYTHONPATH=src LC_ALL=C.UTF-8 timeout 3000 \
       python3.12 -m research data index --store /root/store-index-store --postgres $PUBLIC --jobs 48
   ) >> "$LOG" 2>&1
-  echo "$(date -u +%FT%TZ) pass rc=$? $(cat /data/infra/store-index-src/COMMIT 2>/dev/null)" >> "$LOG"
+  rc=$?
+  end=$(date +%s)
+  commit=$(cat /data/infra/store-index-src/COMMIT 2>/dev/null)
+  echo "$(date -u +%FT%TZ) pass rc=$rc $commit" >> "$LOG"
+  printf '{"start": %s, "end": %s, "rc": %s, "commit": "%s"}\n' "$start" "$end" "$rc" "$commit" > "$PASS.tmp" && mv "$PASS.tmp" "$PASS"
+  [ -n "$sending" ] && wait "$sending"    # the last pass's send, ended within its 60 s: reaped, never waited on
+  PYTHONPATH=$WATCHERS_SRC/tools/research/src timeout 60 python3.12 -s "$WATCHERS_SRC/infra/control/loop_metrics.py" index \
+    --pass "$PASS" >> "$LOG" 2>&1 9>&- &
+  sending=$!
   sleep 300
 done

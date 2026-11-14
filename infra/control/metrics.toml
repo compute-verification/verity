@@ -1,0 +1,23 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it. The control pod's loops send them to the site with loop_metrics.py; each command is that loop's.
+
+# the watchers loop `loop-metrics` (watchers.toml) runs it every minute and sends each fleet sample (every 5 min) once
+[[metric]]
+id = "infra/compute-usd-per-hour"
+title = "All compute's dollars an hour: the running Nebius machines' rates and the RunPod pods' the budget guard read, against the cap"
+owner = "infra"
+unit = "USD per hour"
+better = "lower"
+command = "python3.12 -s infra/control/loop_metrics.py compute --every 60"
+every = "10m"
+floor = 150
+
+# store_index.sh runs it as each pass ends, about every 11 minutes
+[[metric]]
+id = "infra/store-index-pass-seconds"
+title = "One store index pass's length"
+owner = "infra"
+unit = "s"
+better = "lower"
+command = "python3.12 -s infra/control/loop_metrics.py index --pass /data/infra/store-index-pass.json"
+every = "30m"
