@@ -57,20 +57,18 @@ CGROUP_ROOT = Path("/sys/fs/cgroup")
 
 def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/cgroup")) -> tuple[int, int] | None:
     """The tightest ``memory.max`` on this process's cgroup v2 path and that cgroup's anonymous memory (page cache, which
-    the checkpoint's load leaves behind, is reclaimable); None without one."""
-    try:
-        rel = next(line.split("::", 1)[1].strip() for line in self_cgroup.read_text().splitlines() if line.startswith("0::"))
-    except (OSError, StopIteration):
+    the checkpoint's load leaves behind, is reclaimable); None without one. A cgroup on the path with no ``memory.max`` (the
+    root's) sets no limit; a limit whose files don't read as the kernel writes them raises."""
+    lines = self_cgroup.read_text().splitlines() if self_cgroup.is_file() else []
+    rel = next((line.split("::", 1)[1].strip() for line in lines if line.startswith("0::")), None)
+    if rel is None:
         return None
     best, path = None, root / rel.lstrip("/")
     while True:
-        try:
-            limit = (path / "memory.max").read_text().strip()
-            if limit != "max" and (best is None or int(limit) < best[0]):
-                stat = dict(line.split() for line in (path / "memory.stat").read_text().splitlines())
-                best = (int(limit), int(stat["anon"]))
-        except (OSError, ValueError, KeyError):
-            pass
+        limit = (path / "memory.max").read_text().strip() if (path / "memory.max").is_file() else "max"
+        if limit != "max" and (best is None or int(limit) < best[0]):
+            stat = dict(line.split(maxsplit=1) for line in (path / "memory.stat").read_text().splitlines())
+            best = (int(limit), int(stat["anon"]))
         if path == root or root not in path.parents:
             return best
         path = path.parent
