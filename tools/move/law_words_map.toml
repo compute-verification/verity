@@ -4,13 +4,14 @@
 # `sampling_design` or `SAMPLING_DESIGN` (`WorkLaw` to `WorkSamplingDesign`); prose takes "sampling design". The
 # adapter's test constants take the `DESIGN` its other tests already hold, so the adapter has one spelling.
 # It renames the names whose definitions are on this side (the PoUW plan's `WorkLaw`, `CountLaw`, `TileLaw` and
-# `window_laws`, the configuration's `default_law`, the adapter's `window_law` module and its `law_of`, the served
-# commit's `law_of`, test constants `LAW`), the Lean names proofs' map renamed where Python cites them (`Law.toJson`),
+# `window_laws`, the configuration's `default_law`, the adapter's `window_law` module, the served commit's `law_of`,
+# test constants `LAW`), the Lean names proofs' map renamed where Python cites them (`Law.toJson`),
 # and prose that names the sampling design by a possessive or a qualifier.
 # Left by this map:
 # - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, the lane's benchmarks, the
 #   files `law_prose_map.toml` names), and the names defined there (`Law`, `selection_law`, `params_law`, `second_law`,
 #   `core_law`, one-stage's `law_of`, `V3C_LAW`, `FLOCK_DRAW_LAW`): a use here takes proofs' spelling after its map;
+# - the adapter's `law_of`, which proofs' files call as `serving_rows.law_of`: it renames with those callers;
 # - the bare `law` in code and every Lean name, which follow proofs' map and lean's names move;
 # - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the key `law`), reason codes
 #   (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`;
@@ -55,9 +56,13 @@
 "Law.subset_miss" = "SamplingDesign.subset_miss"
 
 [[words_in]]
-files = ["adapters/**", "benchmarks/pouw/**", "**/served_zk/served_commit.py"]
+files = ["adapters/**"]
 [words_in.words]
 "window_law" = "window_sampling_design"
+
+[[words_in]]
+files = ["benchmarks/pouw/**", "**/served_zk/served_commit.py"]
+[words_in.words]
 "law_of" = "sampling_design_of"
 
 [[words_in]]
