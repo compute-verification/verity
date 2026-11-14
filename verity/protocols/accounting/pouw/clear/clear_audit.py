@@ -42,9 +42,10 @@ from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_rea
 from verity.protocols.accounting.pouw.verifier.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
 from verity.errors import ProtocolError
 from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, VerificationLimits, verify_opening
+from verity.commitments.domains import POUW_AUDIT_KEY
 from verity.commitments.randomness import derive
 
-AUDIT_DOMAIN = "verity/pouw/audit/v1"
+AUDIT_DOMAIN = POUW_AUDIT_KEY
 
 
 def commitment_hash(scheme: PoUWScheme) -> str:
