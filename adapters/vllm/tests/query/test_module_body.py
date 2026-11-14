@@ -277,6 +277,29 @@ def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keep
         merge_ranks([m0, m0])
     with pytest.raises(ValueError, match="one Program digest"):
         merge_ranks([m0, dict(m1, program_digest=m0["program_digest"])])
+    with pytest.raises(ValueError, match=r"declare worlds \[2, 3\]"):
+        merge_ranks([m0, dict(m1, ranks=3)])
+    with pytest.raises(ValueError, match=r"declare worlds \[1\]"):
+        merge_ranks([dict(m0, ranks=1)])
+    with pytest.raises(ValueError, match="different step compositions"):
+        merge_ranks([m0, dict(m1, steps=[0, 1])])
+    with pytest.raises(ValueError, match=f"disagree on alias '{SITE}'"):
+        merge_ranks([m0, dict(m1, op_path_aliases={SITE: [f"{W}.embed", 0]})])
+
+
+def test_merge_ranks_names_each_ranks_partition_and_never_one_ranks_for_all():
+    def manifest(rank: int, program_digest: str | None) -> dict:
+        P = tp_program()
+        res = {"program": {"digest": f"d{rank}", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}, "tp": {"world": 2, "rank": rank}}
+        return request_manifest(P, Correspondence(P), res, request_id="r0", rank=rank, ranks=2, program_digest=program_digest).manifest
+
+    p0, p1 = "0a" * 64, "1b" * 64
+    m0, m1 = manifest(0, p0), manifest(1, p1)
+    assert (m0["query"]["partition"], m1["query"]["partition"]) == (partition_of(p0), partition_of(p1))
+    assert merge_ranks([m1, m0])["query"] == {**m0["query"], "partition": {"by_rank": {"0": partition_of(p0), "1": partition_of(p1)}}}
+    assert merge_ranks([m0, manifest(1, None)])["query"] == {**m0["query"], "partition": {"by_rank": {"0": partition_of(p0)}}}
+    unnamed = merge_ranks([manifest(0, None), manifest(1, None)])["query"]
+    assert unnamed == manifest(0, None)["query"] and "partition" not in unnamed
 
 
 def test_return_slot_policy_is_switchable():

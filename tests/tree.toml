@@ -214,6 +214,13 @@ means = "the inference-only policy's check"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/accounting/registration/"
+means = "the accounting protocol that runs once, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
+protocol = true
+owner = "proofs"
+day = "2026-11-14"
+
+[[tree]]
 path = "verity/protocols/compose/"
 means = "the protocol on top of the audits that holds several quantities on one registration, their named values tied by key; remote's and onsite's lists of protocols inside it"
 protocol = true
@@ -281,20 +288,8 @@ means = "its tests, a suite of its own"
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
 
 [[not_yet]]
-path = "verity/protocols/reporting.py"
-to = "into verity/protocol.py"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
 path = "verity/hardware/registration.py"
-to = "into the hardware file"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
-path = "verity/hardware/record.py"
-to = "into the hardware file"
+to = "verity/protocols/accounting/registration/"
 owner = "top"
 day = "2026-11-15"
 
@@ -313,29 +308,15 @@ note = "two Lake packages move with Sunday's chain; its served part waits for th
 
 [[not_yet]]
 path = "verity/claims/"
-to = "not ruled, with soundness: it defines the assumption ids that Lean and the locks name, so it is not deleted"
-owner = "top"
-day = "2026-11-17"
-note = "top brings the ruling by the day; nothing moves until then"
-
-[[not_yet]]
-path = "verity/periods/"
-to = "verity/protocol.py"
-owner = "top"
-day = "2026-11-15"
-note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
+to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
+owner = "soundness"
+day = "2026-11-18"
 
 [[not_yet]]
 path = "fixtures/"
 to = "beside its reader, each file"
 owner = "proofs"
 day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/accounting/pouw/clear/"
-to = "verity/protocols/accounting/pouw/verifier/"
-owner = "compute-accounting"
-day = "2026-11-19"
 
 [[not_yet]]
 path = "verity/protocols/proofs/flock/sigma/"
@@ -349,11 +330,6 @@ day = "2026-11-18"
 what = "whether a device with parts gets limits of its own in the Lean"
 answers = "top"
 by = "2026-11-13 10:00 PST"
-
-[[open]]
-what = "verity/claims/: where the assumption ids are defined once each named assumption carries its id in a lock, in the locks alone with Python reading a generated table, or in a module that stays"
-answers = "soundness"
-by = "2026-11-17"
 
 [[open]]
 what = "verity/commitments/windows/, inside verity/commitments/ and so below the levels the test reads: its name (the Glossary retires the word), its place and its day"

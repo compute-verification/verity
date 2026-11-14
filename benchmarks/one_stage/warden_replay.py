@@ -165,7 +165,7 @@ def rehearse(args) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:
-        ws.make_key(scratch / "warden", args.height)
+        ws.make_key(scratch / "network_certifier", args.height)
         up = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "endpoint", "--serve-run", str(args.serve_run),
                                "--serve-window", str(args.serve_window), "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms)],
                               stdout=subprocess.PIPE, text=True)
@@ -174,7 +174,7 @@ def rehearse(args) -> int:
         windows = math.ceil((sent[-1]["at"] + args.tail) / (params.window * params.bucket_ms / 1000))
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(warden + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0", "--out",
-                                                 str(out), "--key", str(scratch / "warden"), "--session", secrets.token_hex(32),
+                                                 str(out), "--key", str(scratch / "network_certifier"), "--session", secrets.token_hex(32),
                                                  "--windows", str(windows), "--start-in", str(args.start_in), "--slack",
                                                  str(args.slack), *ws._flags(args)],
                                        stdout=subprocess.PIPE, stderr=log, text=True)

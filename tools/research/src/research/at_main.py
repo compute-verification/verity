@@ -22,7 +22,8 @@ process exits), never one a live process of this user names (a copy of this modu
 passed since it was last picked (the `lock` file's mtime, dated under the lock by every pick). Picking and judging both
 happen under the entry's `lock`, so a pruner either sees a pick (and keeps the entry) or removes it first (and the command
 makes it again). An entry that holds nothing, which a pruner that died before its `rmdir` leaves, is dated by its
-directory and removed by `rmdir` alone. A removal that fails is one line on stderr, and the command runs on.
+directory and removed by `rmdir` alone. A removal that fails is one line on stderr, and the command runs on. A tree is
+removed together with what its repository registered for it (`discard`), so no repository lists a worktree that is gone.
 
 `cli.main` asks this module first, which covers a checkout that has it. A checkout from before it can't ask, so on an
 agent VM `/usr/local/bin/research` (`tools/agent-guard/research.sh`, installed at boot) runs origin/main's copy of this
@@ -130,13 +131,35 @@ def tree(repo: Path, main: str, cache: Path, end: float | None = None) -> Path:
         if whole != main:
             at.unlink(missing_ok=True)
             if not whole or git(wt, *checkout, end=end).returncode:
-                call(f"`rm -rf {wt}`", ["rm", "-rf", "--", str(wt)], end, check=True)
+                discard(wt, end)
                 git(repo, "worktree", "add", "--force", "--force", "-q", "--no-checkout", "--detach", str(wt), main, end=end,
                     check=True)
                 git(wt, *checkout, end=end, check=True)
             at.write_text(main + "\n")
         use(home)
     return wt
+
+
+def registers(reg: Path, wt: Path) -> bool:
+    """Whether `reg` is what a repository registered for the worktree `wt`: a directory `<git dir>/worktrees/<name>` whose
+    `gitdir` names `wt/.git`. Anything else, or one that can't be read, isn't."""
+    try:
+        return (reg.is_absolute() and reg.parent.name == "worktrees"
+                and os.path.samefile((reg / "gitdir").read_text().strip(), wt / ".git"))
+    except (OSError, ValueError):
+        return False
+
+
+def discard(wt: Path, end: float) -> None:
+    """Remove the worktree `wt` by ``end``, and with it what its repository registered for it, which `wt/.git` names and
+    which names it back (`registers`): `rm` alone leaves the repository listing a worktree that is gone, which git itself
+    prunes only months later. The registration goes first: a removal cut short then leaves a tree with no stamp, which
+    the next command removes."""
+    dot_git = wt / ".git"
+    word, _, path = (dot_git.read_text(errors="replace") if dot_git.is_file() else "").partition(":")
+    if word == "gitdir" and registers(reg := Path(path.strip()), wt):
+        call(f"`rm -rf {reg}`", ["rm", "-rf", "--", str(reg)], end, check=True)
+    call(f"`rm -rf {wt}`", ["rm", "-rf", "--", str(wt)], end, check=True)
 
 
 def same(f: IO, path: Path) -> bool:
@@ -304,7 +327,7 @@ def remove(home: Path, end: float) -> bool:
             if named(home / "tree"):
                 return False
             (home / "at").unlink(missing_ok=True)
-            call(f"`rm -rf {home / 'tree'}`", ["rm", "-rf", "--", str(home / "tree")], end, check=True)
+            discard(home / "tree", end)
             (home / "inuse").unlink(missing_ok=True)
             (home / "lock").unlink(missing_ok=True)
         rmdir(home)
