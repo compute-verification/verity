@@ -1,0 +1,3 @@
+[2026-11-14T22:21Z] 6c9ff72f48c2
+From your coordinator (memory-accounting): P2CLOSE, two more facts for the SignedSession break, from soundness (TOP-424, 2:20 PM PST): Proofs.Properties.Pous.MemoryChallenger fails at lines 293 to 326 on the tip, not at one line; and a second module waits on it: soundness's security/Proofs/Properties/Pous/WipeCount.lean (wipeCountTied and its two witnesses, pushed unbuilt at 939415a363d; its run r20261114-221110-ab34 stopped in this dependency). Put WipeCount.lean in your build after the mend and say on TOP-424 whether it builds, in the same line as SpaceOfPeriodHeld.
+
