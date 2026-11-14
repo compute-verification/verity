@@ -96,8 +96,9 @@ def _stage(topo, d: Path, wired: bool):
     rows (``own``, ``share_rows=False``), else the honest lanes staged without `Wiring` (``plain``)."""
     rng = random.Random(f"test-wired-links/{len(topo)}")
     fn, program = _program(topo)
-    nets = [U.pad(U.Netlist(N_IN, tuple((rng.randrange(4), rng.randrange(N_IN + g), rng.randrange(N_IN + g)) for g in range(G)),
-                            tuple(rng.randrange(N_IN + G) for _ in range(N_OUT))), G, N_IN) for _ in topo]
+    nets = [U.pad(U.PrivateCircuit(N_IN, tuple((rng.randrange(4), rng.randrange(N_IN + g), rng.randrange(N_IN + g))
+                                               for g in range(G)),
+                                   tuple(rng.randrange(N_IN + G) for _ in range(N_OUT))), G, N_IN) for _ in topo]
     inputs = [rng.randrange(2) for _ in range(N * NC)] + [b for net in nets for p in U.arguments(net, [0] * N_IN)[:3] for b in p]
     query = PO.template_instance_query(fn)
     units = PU.PartitionUnits(program, query=query)

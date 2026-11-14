@@ -538,7 +538,7 @@ def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool],
                                 f"function's parameters are inputs and a static is a constant: make it a static of the "
                                 f"Definition that reads it, or a constant gate")
             if p.kind == "coin" and reg:
-                raise PortError("E_PORT_KIND", f"program function {fn.id}: parameter {name!r} is kind=coin, so it is drawn "
+                raise PortError("E_PORT_KIND", f"program function {fn.id}: parameter {name!r} is kind=coin, so it is flipped "
                                 f"per run and never registered")
             if p.bound is not None and not full(p.bound, w) and not _is_harness(fn):
                 raise PortError("E_PORT_BOUND", f"program function {fn.id}: parameter {name!r} leaves [{lo}, {hi}) declare the "
@@ -1039,7 +1039,7 @@ def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta:
         if p.kind == "static" and not harness:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: an input is never kind=static (only a harness's)")
         if p.kind == "coin" and reg:
-            raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is drawn per run, never registered "
+            raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is flipped per run, never registered "
                             f"({node.fn.id})")
         if p.kind == "coin" and theta:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is the verifier's, never a model weight: "
@@ -1445,7 +1445,7 @@ class _Uses:
             if (x[_NOISE] or x[_OTHER]) and _total(x) > 1:
                 self._refuse(f"{at}: a coin that a noise primitive reads is read once, by that instance alone, but it is "
                              f"read {_total(x)} times ({self._readers(x, 'noise-coin')}): a second noise or a receipt key "
-                             f"from a noise bit's coin puts the bit in the cheater's view. Draw a coin of its own for each "
+                             f"from a noise bit's coin puts the bit in the cheater's view. Flip a coin of its own for each "
                              f"noise and for the receipt keys")
             if x[_SEED] and x[_FOLD]:
                 self._refuse(f"{at}: a coin that a seed reads is read by seeds alone, but a receipt fold reads it too "
@@ -1460,7 +1460,7 @@ class _Uses:
                 self._refuse(f"{where} return leaf {leaf}: noise is the noise of one operand of one instance and is read "
                              f"at most once, but it is read {_total(x)} times ({self._readers(x, 'noise')}): two copies of "
                              f"one noise cancel, and noise shared across rows, matmuls, batch members or scan steps is "
-                             f"fresh for none of them. Draw fresh coins for each use")
+                             f"fresh for none of them. Flip fresh coins for each use")
 
     def _gather(self, refs: Refs, env: dict) -> _Map | None:
         spaces: set = set()
