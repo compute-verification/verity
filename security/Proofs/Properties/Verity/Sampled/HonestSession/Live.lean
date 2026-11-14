@@ -4,6 +4,8 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.LiveFacts
 public import Proofs.Properties.Verity.Sampled.HonestSession.Setup
 public import Proofs.Properties.Verity.Sampled.HonestSession.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
+public import Proofs.Properties.Verity.Sampled.Instance
+public import Proofs.Properties.Verity.Sampled.OpensAt
 
 /-!
 # The honest session
@@ -28,7 +30,7 @@ def D : Flock.Desc := .single cH
 theorem desc_ok : Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables = .ok D := by
   show Flock.Desc.parse tagsZ circuitFile [] = .ok (.single cH)
   unfold Flock.Desc.parse
-  rw [CircuitFile.parse_ok] <;> rfl
+  rw [CircuitFile.parse_ok]
 
 theorem nTab_inputs : Composed.nTab inputs = 1 := rfl
 
@@ -36,7 +38,8 @@ theorem proved_size (D' : Flock.Draw.UnitDraw) (h : Flock.Draw.UnitDraw.ofJson d
     D'.proved.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits) := by
   rw [Setup.draw_ofJson] at h
   cases h
-  rw [Program.design_eq] <;> rfl
+  rw [Program.design_eq]
+  rfl
 
 /-- The honest session supplies every field of a `Live`. -/
 theorem exists_live : ∃ A : Live,
@@ -86,7 +89,7 @@ theorem exists_live : ∃ A : Live,
       Lb := deployedLb
       src := deployedSrc
       hA3 := uniformRandomBytes_deployed
-      hTags := by decide
+      hTags := ⟨rfl, rfl, rfl⟩
       k := Instance.Honest.k
       Rw := 1
       M := 1
