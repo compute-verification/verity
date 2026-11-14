@@ -293,7 +293,7 @@ def check_source(so: str, seed: int) -> dict[str, Any]:
     names = [n for n, _t in com.acquired]
     rec["names"] = names
     rec["names_ok"] = names == [f"moe/L{k}/{RS.MEMBER}" for k in sorted(LAYERS_TOY)]
-    tap = getattr(torch.ops, "verity_router_tap")
+    tap = torch.ops.verity_router_tap
     eq = []
     for (n, t), k in zip(com.acquired, sorted(LAYERS_TOY)):
         E, K, _V, r = LAYERS_TOY[k]
