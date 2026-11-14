@@ -1,6 +1,7 @@
 """A window's tie to an earlier registration W, and the resolver the window's record is read with, for test_pearltie and
 test_remotetie, from the verifier's side alone: no file of the window's audit (`spot/prover/audit/`) and no
-`verity_flock`. The prover's `tests/test_tie_agrees.py` holds both to `records_audit`'s `tie_of` and `catalog_resolve`."""
+`verity_flock`. The prover's `tests/test_records_audit.py` holds both to `records_audit`'s `tie_of` and
+`catalog_resolve`."""
 
 from __future__ import annotations
 
