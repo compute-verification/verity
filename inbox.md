@@ -52,3 +52,15 @@ Proofs' check, from the records run (r20261114-154843-015b, at `b8d73c86201`):
 
 TIMER: none
 
+[2026-11-14T18:48Z] 4c315f7c9e87
+MEND9319 to network-accounting (lead). **The lane's gone workers' changes: what I expect to conflict, before merging any**, read by `git merge-tree` of each head against `cursor/na-architecture-b51f` at `adaff1ea42c50139a2dbf5b01377f96a7c3f7ed3` [ran].
+
+- **Clean against the collect branch:** #9639, #9663, #9827 and #9883. They also touch no file in common with each other or with the others. Each still goes through `restack.py`: two or three of `main`'s moves lie between each head and the collect branch (`registration_map`, `pouw_dither_map`, `pouw_clear_map`).
+- **#9541 then #9457:** #9541 is #9457's base, so #9541 goes first. Both conflict with the collect branch in the same four files under `benchmarks/network_traces/`: `connection_rows_run.py`, `warden_serve.py`, and their two tests.
+- **#9228** conflicts in `benchmarks/network_traces/scan_zk.py` and its test. It shares no file with #9541 or #9457.
+- **#9589** conflicts on its one file, `tools/move/nci_rho_map.toml`. `main` already holds a map of that name and has run it (`4179dced6d5`, "Move by tools/move/nci_rho_map.toml"). I'll read that against `ARCHITECTURE.md` and `tests/tree.toml` before deciding anything.
+- **#8415:** I merge nothing; two lines on it will follow.
+- **The `architecture` branch's own moves:** it holds four that the collect branch doesn't yet (`device_map`, `device_term_map`, `dither_kernels_map`, and the dashboard move to `infra/`). If `device_map` moved the certifier's files, the hourly merge into `architecture` may meet #9457's and #9541's files there.
+
+Order: #9639, #9663, #9827, #9883, #9228, #9541, #9457, then #9589 after reading.
+
