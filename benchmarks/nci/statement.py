@@ -33,10 +33,10 @@ import tiers as T  # noqa: E402
 from slowdown.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
-TODAY = {"residual": 1.0}
-ATTESTED = {"residual": 0.213, "clock_share": 0.0}
+TODAY = {"free": 1.0}
+ATTESTED = {"free": 0.213, "clock_share": 0.0}
 #: the C7 dossier's eight conditions for a 1% residual include PoUW's deficit at most 0.25%
-BEST = {"residual": 0.01, "clock_share": 0.0, "eps_w": 0.0025}
+BEST = {"free": 0.01, "clock_share": 0.0, "eps_w": 0.0025}
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 
 
@@ -47,7 +47,7 @@ def streamed(gb: float, base: dict | None = None) -> dict:
     return over | {"unfilled_gb": gb - X.wipe_residual(T.DEFAULTS | over | {"unfilled_gb": 0.0}) / T.GB}
 
 
-FLOOR = streamed(4.0, BEST | {"residual": 0.0})
+FLOOR = streamed(4.0, BEST | {"free": 0.0})
 RUNGS = {
     "Today": TODAY,
     "PoUW's floor credit": {},
@@ -67,7 +67,7 @@ FIT_TARGET = ("besiroglu", "405b")
 FIT_TIERS = ("T3", "T5")
 #: frontier training compute grows 4-5x a year (Epoch AI)
 GROWTH = 4.5
-#: the s dossier's unmonitored shares, central and adversarial
+#: the s dossier's unregistered shares, central and adversarial
 REGIMES = {
     "Domestic oversight of 3-5 labs": (0.005, 0.05),
     "International compute registry": (0.02, 0.1),
@@ -80,7 +80,7 @@ LEVELS = (1000.0, 100.0, 10.0, 2.0)
 THRESHOLD_TIERS = ("T1", "T3", "T4", "T5")
 #: parameters the page's "no other parameter" sets aside: the parts of r̂ (the GPUs, the clock, host CPUs and the verdict
 #: lag J Delta / H), s and g
-TORNADO_SKIP = ("residual", "host_share", "clock_share", "lag_s", "identities", "unmonitored", "g")
+TORNADO_SKIP = ("free", "host_share", "clock_share", "lag_s", "identities", "unregistered", "g")
 COSTS = {"today's sparse draws": T.DEFAULTS["overhead"], "512 draws per statement": 1.7e10}
 
 
@@ -98,14 +98,14 @@ def r_wipe_gb(p: dict, unfilled: float) -> float:
 
 #: section 6's parameters: the key searched, its overrides on the scenario, and each view of an edge
 THRESHOLD_ROWS: list[tuple[str, dict, list[tuple[str, Callable[[dict, float], float]]]]] = [
-    ("residual", {"clock_share": 0.0}, [("r̂ (the GPU residual, the clock at 0)", same)]),
+    ("free", {"clock_share": 0.0}, [("r̂ (the GPU residual, the clock at 0)", same)]),
     ("disk_gb", {}, [("unwiped disk, GB", same)]),
     ("intake_x", {}, [("declared intake, multiple of αF", same)]),
     ("sigma", {}, [("side channels σ, bit/s", same)]),
     ("K", {}, [("K, bits", same), ("α = K/Γ", alpha)]),
     ("b_a", {}, [("b_a, bits", same)]),
     ("d", {}, [("d", same)]),
-    ("unmonitored", {}, [("unmonitored share s", same)]),
+    ("unregistered", {}, [("unregistered share s", same)]),
     ("unfilled_gb", STREAMED, [("R_wipe, GB (streamed-label wipes, unfilled_gb varied)", r_wipe_gb)]),
 ]
 
@@ -136,7 +136,7 @@ def capacity(p: dict) -> float:
 
 
 def fit_mu(gb: float) -> float:
-    """The fit bound's cap on monitored efficiency at a wipe residual of ``gb`` GB, for a ``FIT_TARGET``-class target at
+    """The fit bound's cap on registered efficiency at a wipe residual of ``gb`` GB, for a ``FIT_TARGET``-class target at
     central w_e; ``inf`` where it doesn't hold."""
     law, target = FIT_TARGET
     L = F.target_loss(law, target)
@@ -145,10 +145,10 @@ def fit_mu(gb: float) -> float:
 
 def capped(p: dict, tier: str, mu: float) -> float:
     """D at ``tier`` with ``mu`` as the memory cap in place of the closed form: ``tiers.evaluate`` without wipes or
-    exhaustion, its monitored terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
+    exhaustion, its registered terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
     r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False}, p["mfu"])
-    monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * p["m"] * mu)
-    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": monitored, "declared": 0.0}),
+    registered = min(r["free"] + r["declared"], p["g"] * (1 - min(p["unregistered"], 0.999)) * p["m"] * mu)
+    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"free": registered, "declared": 0.0}),
                           reference_efficiency=False)
 
 
@@ -196,15 +196,15 @@ def symbols() -> list[dict]:
     p = T.DEFAULTS
     H = p["years"] * T.YEAR
     C = capacity(p)
-    r = T.audited_residual(p)
+    r = T.audited_free(p)
     sampled = T.evaluate(p, T.TIERS["T5"])
     chi = sampled["cheat"]
     R = X.wipe_residual(p)
     out = [
-        ("N", "monitored servers", p["nodes"]),
+        ("N", "registered servers", p["nodes"]),
         ("F", "a server's peak, FLOP/s", p["node_flops"]),
         ("H", "the horizon, years", p["years"]),
-        ("C = NFH", "monitored capacity, FLOP", C),
+        ("C = NFH", "registered capacity, FLOP", C),
         ("κ", "Kimi K2's pretraining schedule (kappa.py)", K.schedule(K.MODELS["kimi-k2"])[0]),
         ("κ", "the model's value", p["kappa"]),
         ("κ", "adversarial", X.RANGES["kappa"][0]),
@@ -213,17 +213,17 @@ def symbols() -> list[dict]:
         ("m", "recipe multiplier, central", p["m"]),
         ("m", "recipe multiplier, adversarial", X.RANGES["m"][1]),
         ("r̂", "under the floor credit: GPU + clock (hosts carry no compute)", r),
-        ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
+        ("r̂ GPU", "the GPUs' residual at the locked clock", p["free"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
         ("ε_W", "PoUW's deficit, a share of certified work (CircuitCredit)", p["eps_w"]),
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
         ("ε′", "aggregation slack (δ_win / ε′: 2.7e-8 if δ_win were 3·2^-40, which has no value yet)", p["eps_agg"]),
         ("r = r̂ + ε_W W_cert/C + ε′", "the residual SlowdownRemote bounds, under the floor credit",
-         T.residual_share(p)),
-        ("GPU / r̂", "share of r̂", p["residual"] / r),
+         T.free_share(p)),
+        ("GPU / r̂", "share of r̂", p["free"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
-        ("r̂", "at the best plausible PoUW design", T.audited_residual(p | BEST)),
+        ("r̂", "at the best plausible PoUW design", T.audited_free(p | BEST)),
         ("K", "novel bits per inference block", p["K"]),
         ("Γ", "gates per inference block", p["Gamma"]),
         ("α = K/Γ", "", p["K"] / p["Gamma"]),
@@ -284,7 +284,7 @@ def ladder() -> list[dict]:
         p = T.DEFAULTS | over
         closed = {t: slowdown(p, t) for t in LADDER_TIERS}
         by_fit = {t: fit_slowdown(p, t) for t in FIT_TIERS}
-        out.append({"rung": name, "overrides": over, "r_hat": T.audited_residual(p),
+        out.append({"rung": name, "overrides": over, "r_hat": T.audited_free(p),
                     "R_wipe_gb": X.wipe_residual(p) / T.GB, "window_min": X.wipe_residual(p) / X.intake(p) / 60,
                     "slowdown": closed, "slowdown_fit": by_fit, "years": years(closed), "years_fit": years(by_fit)})
     return out
@@ -350,7 +350,7 @@ def regimes() -> dict:
     caps nothing) and with 6 GB streamed-label wipes; and the s above which s sets D, 1/D at s = 0."""
     wipes = {"today's wipes": BEST, "6 GB streamed-label wipes": streamed(6.0, BEST)}
     out = [{"regime": name, "case": case, "s": s,
-            "slowdown": {w: {t: fit_slowdown(T.DEFAULTS | over | {"unmonitored": s}, t) for t in REGIME_TIERS}
+            "slowdown": {w: {t: fit_slowdown(T.DEFAULTS | over | {"unregistered": s}, t) for t in REGIME_TIERS}
                   for w, over in wipes.items()}}
            for name, shares in REGIMES.items() for case, s in zip(("central", "adversarial"), shares)]
     return {"rows": out, "s_sets_slowdown": {w: {t: 1 / fit_slowdown(T.DEFAULTS | over, t) for t in REGIME_TIERS}
@@ -459,8 +459,8 @@ def holes() -> dict:
         ("μ̂ at d = 1, today's R_wipe", X.mu(p | {"d": 1.0})),
         ("1 / slack at 86 rounds and δ = 1/100", 1 / T.slack(p | {"pous_rounds": 86.0})),
         ("slack at 86 rounds and δ = 2^-40", T.slack(p | {"pous_rounds": 86.0, "pous_delta": 2.0 ** -40})),
-        ("1/r̂ under the floor credit", 1 / T.audited_residual(p)),
-        ("1/r̂ at the best plausible PoUW design", 1 / T.audited_residual(p | BEST)),
+        ("1/r̂ under the floor credit", 1 / T.audited_free(p)),
+        ("1/r̂ at the best plausible PoUW design", 1 / T.audited_free(p | BEST)),
     ]
     return {"cases": cases, "t5": t5, "other": rows(other)}
 
@@ -520,7 +520,7 @@ def render(s: dict) -> str:
     reg = s["regimes"]
     wipes = list(reg["s_sets_slowdown"])
     cols = [(w, t) for w in wipes for t in REGIME_TIERS]
-    out += ["## The unmonitored share by regime: best plausible PoUW design, by the fit bound", ""]
+    out += ["## The unregistered share by regime: best plausible PoUW design, by the fit bound", ""]
     out += table(["Regime", "Case", "s", *(f"D at {t}, {w}" for w, t in cols),
                   *(f"1/D at T5, {w}" for w in wipes)],
                  [[r["regime"], r["case"], num(r["s"]), *(num(r["slowdown"][w][t]) for w, t in cols),

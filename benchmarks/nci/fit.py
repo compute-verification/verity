@@ -130,7 +130,7 @@ def undersizing(fit: str, N: float, L: float) -> float:
 
 def params(wipe_gb: float, **over: float) -> dict:
     """``tiers``' defaults with a wipe residual of ``wipe_gb`` (memory the fill doesn't reach, no proof-of-space slack):
-    the monitored residual is the ladder's, PoUW's floor credit at the locked clock."""
+    the registered residual is the ladder's, PoUW's floor credit at the locked clock."""
     return T.DEFAULTS | {"unfilled_gb": wipe_gb, "pous_rounds": 1e9, "pous_floor": 0.0} | over
 
 
@@ -184,7 +184,7 @@ def left_out(p: dict, periods: int) -> float:
 
 
 def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
-    """The fit bound's cap on monitored efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    """The fit bound's cap on registered efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
     rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
     return share(p, rate) + left_out(p, periods)
 
@@ -193,15 +193,15 @@ def closed_form(p: dict, wipe_bits: float) -> float:
     return 4 * wipe_bits * intake(p) / (p["kappa"] * p["d"] * p["b_w"] * p["b_a"] * p["node_flops"])
 
 
-def residual_with_lag(p: dict) -> float:
-    return min(1.0, T.residual_share(p) + p["identities"] * p["lag_s"] / (p["years"] * T.YEAR))
+def free_with_lag(p: dict) -> float:
+    return min(1.0, T.free_share(p) + p["identities"] * p["lag_s"] / (p["years"] * T.YEAR))
 
 
 def slowdown(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``, with nothing unmonitored: ``multiple_bound`` in Lean's form at
+    """D under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
     x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
     multiplications."""
-    x = min(p["mfu"] * residual_with_lag(p) + declared, p["m"] * mu) + cheat
+    x = min(p["mfu"] * free_with_lag(p) + declared, p["m"] * mu) + cheat
     return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
 
 
@@ -218,7 +218,7 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
     MFU_0 r F b_sync / (6 lambda_in) tokens, whatever its size."""
     N = S / b_train
     lam = intake(p)
-    r = residual_with_lag(p)
+    r = free_with_lag(p)
     m = multiplier * undersizing(fit, gain * N, L)
     sync_s = N * b_sync / lam
     return {
@@ -295,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
           f"{N['405b']['1e15'] / 1e9:.0f}B at 1e15 tokens, {N['405b']['1e14'] / 1e9:.0f}B at 1e14; "
           f"Hoffmann's fit {s['n_star_hoffmann']['405b'] / 1e9:.1f}B")
     print(f"K2-class target L* = {L['k2']:.4f}: N* at most {N['k2']['inf'] / 1e9:.0f}B")
-    print(f"r-hat = {T.audited_residual(T.DEFAULTS):.3g}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
+    print(f"r-hat = {T.audited_free(T.DEFAULTS):.3g}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
           f"{T.DEFAULTS['wipe_s']:.0f} s, b_w = {T.DEFAULTS['b_w']}, w_e = "
           + " / ".join(f"{w:.0f}" for w in BOUNDARY.values()) + " bits (low / central / high)\n")
     print("S and k' = N* b_w / S at one wipe period; L, the window in wipe periods at which the fit bound is least\n")

@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly
 public import Definitions.InferenceOnly.Assumptions.Theta
-public import Definitions.InferenceOnly.Assumptions.Threads
+public import Definitions.Slowdown.Assumptions.Threads
 
 /-!
 # A verdict of compliance carries the thread bound
@@ -11,7 +11,7 @@ public import Definitions.InferenceOnly.Assumptions.Threads
 declaration the Program lays out, with the registered information `theta` names, complies with the inference-only policy
 at its rate, `InferenceOnly.CompliesRate c α`, at the gate budget `c = gamma` and the rate `α = num / den`. The thread
 bounds, `InferenceOnly.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
-(`Definitions/InferenceOnly/Guarantees/Threads.lean`), bound a complying declaration that contains a reference training
+(`Definitions/Slowdown/Guarantees/Threads.lean`), bound a complying declaration that contains a reference training
 circuit. The statements here join the two, so that the check's verdict carries the bound: on every instance with a
 verdict whose `complies` is `true`, every such declaration `d` meets the bound's conclusion at `c` and the fresh-input
 budget `k = α c`, for every reference training circuit `r` it contains, under the bound's premises.

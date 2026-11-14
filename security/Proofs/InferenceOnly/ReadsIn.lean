@@ -2,7 +2,7 @@ module
 
 public import Definitions.InferenceOnly.Reads
 public import Proofs.InferenceOnly.Pull
-public import Proofs.InferenceOnly.Threads
+public import Proofs.Slowdown.Threads
 
 /-!
 # Reads in a set of gates, the pull into the contained circuit, and Theorem 1 over a read measure
@@ -15,7 +15,7 @@ public import Proofs.InferenceOnly.Threads
   image of `S` and of the gates `S` reads in place of `M`'s image.
 * `threaded_reads_by`: Theorem 1 (`threaded_reads`) with reads counted by any measure `ρ`. Its proof reads the count
   twice, through `ρ R ≤ S` and through `ρ R` paying for the weights used and the thread values read, so it goes through
-  for any `ρ`; `threaded_count` (`Proofs.InferenceOnly.Threads`) is the counting. Theorem 1 is the instance `ρ = freshInput`.
+  for any `ρ`; `threaded_count` (`Proofs.Slowdown.Threads`) is the counting. Theorem 1 is the instance `ρ = freshInput`.
 -/
 
 @[expose] public section

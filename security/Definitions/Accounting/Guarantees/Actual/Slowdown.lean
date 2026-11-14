@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Actual.Threaded
-public import Definitions.InferenceOnly.Slowdown
+public import Definitions.Slowdown.Slowdown
 
 /-!
 # The slowdown's windows from the memory cap over threads (trusted)
