@@ -37,7 +37,7 @@ so it declares none (`PrimitiveDefinition.tables`): a labelled hash is `hashlib`
 message, and a compression from a given state, which `hashlib` does not give, is `_compress`, whose round constants are
 computed as FIPS 180-4 defines them. One written with `compress_ref` would reach SHA-512's round constants as a table.
 
-A Boolean Definition is a proof unit only up to 65,536 ANDs, the size circuit-check lowers one whole at, and a compression is
+A Boolean Definition is a proof block only up to 65,536 ANDs, the size circuit-check lowers one whole at, and a compression is
 about 56,000. So a Definition of more than one compression is a composition of units under that size, each lowered and pinned
 on its own, and its Boolean version the σ of the composition (`sigma_lift`): `PearlCRowSeed` is its two compressions,
 `PearlCRowSeedTail` of `PearlCRowSeedHead`, and `PearlCNoiseLine` its hash and its codes, `PearlCLineCodes` of
