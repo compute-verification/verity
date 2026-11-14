@@ -359,7 +359,7 @@ def _called(call: ast.Call) -> str | None:
 
 
 def _import_call(node: ast.AST | None) -> str | None:
-    """The module of the package a call such as `importlib.import_module("verity_vllm.x")` names."""
+    """The module of the package a call such as `importlib.import_module("verity_vllm.llm")` names."""
     if (isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)
             and _called(node) in IMPORT_CALLS and node.args[0].value.split(".")[0] == PACKAGE):
         return node.args[0].value
