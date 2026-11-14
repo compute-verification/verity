@@ -51,7 +51,8 @@ def gate_run(d: Path) -> Path:
     run = published(d / "flat")
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
-    G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
+    outcome = G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
+    assert "unruled" not in outcome, "a run's own lines are in the forms the gate publishes them in"
     return d / "gate"
 
 
@@ -238,7 +239,7 @@ def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_r
     lines = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines()]
     assert [sorted(x) for x in lines] == [["cost", G.ROWS_NO_HEAD]] * 2 + [["cost", "registration"]] * 2
     for w, line in enumerate(lines):
-        public = G.row_certificate(line)
+        public = G.row_certificate(line, G.deployment_forms(out / "deployment.json"))
         c = public["certificate"]
         assert sorted(public) == ["certificate"]
         assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]

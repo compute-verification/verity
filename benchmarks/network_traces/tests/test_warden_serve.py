@@ -888,6 +888,38 @@ def test_of_a_deployment_the_gate_gives_out_every_key_but_the_three_of_the_audit
     assert A.public_deployment(out / "none.json") is None
 
 
+def test_the_gates_forms_are_the_verifiers_constants_and_hold_a_runs_own_lines(tmp_path):
+    """The gate publishes a certificate and a cells' registration only in forms it states itself, since it loads
+    nothing of the certifier's verifier: its constants are `warden_rows`' and the runner's word for word, and
+    every line a run writes passes them under the run's own deployment, so an honest run publishes all its
+    certificates and registrations. A value changed in a line is out of form, and nothing of its file is
+    published."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    assert (A.ROW_FORMAT, A.ROW_SCHEMA, A.ROW_WORD_BITS) == (WR.REGISTRATION, WR.SCHEMA, WR.WORD_BITS)
+    assert {ws.LINK + follows for follows in A.CERTIFIED_LINKS} == {link for link, _ in ws.CERTIFIED.values()}
+    assert set(A.DIRECTIONS) == {d.value for _, d in ws.CERTIFIED.values()}
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    out.mkdir()
+    _run(run, tmp_path / "key", [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200)],
+         [_response([" a", " b"]), _response([" word"] * 40)], windows=2)
+    given = A.deployment_forms(run / "deployment.json")
+    dep = json.loads((run / "deployment.json").read_text())
+    assert given["link"] == (ws.LINK,) and given["parameters"] == (dep["digest"],)
+    assert "unruled" not in A.warden_outcome(out, run)
+    for name, public in (("certified.jsonl", "certificates.jsonl"), ("cells.jsonl", "cells-certificates.jsonl"),
+                         ("cells.jsonl", "cells-registrations.jsonl")):
+        lines = (run / name).read_text().splitlines()
+        assert lines and len((out / public).read_text().splitlines()) == len(lines), public
+    line = json.loads((run / "cells.jsonl").read_text().splitlines()[0])
+    assert A.row_registration(json.dumps(line), given)
+    for key, value in (("value", "another/egress/0"), ("parameters", "00" * 64), ("row_schema", "cells/v1"),
+                       ("root", line["registration"]["root"][:-2]), ("rows", str(line["registration"]["rows"]))):
+        with pytest.raises(A.Unruled, match=f"registration's {key} isn't in the form ROW_LINE"):
+            A.row_registration(json.dumps(line | {"registration": line["registration"] | {key: value}}), given)
+
+
 def _session(tmp_path: Path, windows: int):
     """The gate's `relay-session` command for `windows` execution phases at the scan's w63k4 schedule, parsed, with its
     schedule, and a maker of `n` id requests of the class's most tokens with their id-form answers."""

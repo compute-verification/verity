@@ -5,6 +5,7 @@ quarantine, fails the record and names the key only there."""
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -45,17 +46,17 @@ def test_the_declared_lists_load_and_each_names_its_writer_in_the_tree():
 
 
 def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
-    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a line (`ROW_LINE`'s
-    PUBLIC ones), so a key the gate starts publishing fails a record until the list gives it a kind, and the list
-    holds none the gate leaves out. The certificates' list names exactly a certificate's fields as the gate writes
-    them of a row registration (`row_certificate`), and the execution phase a line was refused for."""
+    """The list of a gate run's cells' registrations names exactly the keys the gate publishes of a line (those
+    `ROW_LINE` gives a form), so a key the gate starts publishing fails a record until the list gives it a kind,
+    and the list holds none the gate leaves out. The certificates' list names exactly a certificate's fields as the
+    gate writes them (`CERTIFICATE_LINE`, `row_certificate`), and the execution phase a line was refused for."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
 
     def public(rule, at=()):
         if isinstance(rule, dict):
             return {p for k, v in rule.items() for p in public(v, (*at, k))}
-        return {"/".join(at)} if rule == A.PUBLIC else set()
+        return set() if rule == A.WITHHELD else {"/".join(at)}
 
     def declared(listing):
         doc = next(d for d in json.loads(RK.DECLARED.read_text())["lists"] if d["name"] == listing.name)
@@ -64,20 +65,26 @@ def test_the_gates_lists_are_what_the_gate_publishes_of_a_line():
     lists = RK.load()
     listing = lists.listing(f"gates/c0/r0/out/{A.ROW_REGISTRATIONS['cells.jsonl']}")
     assert declared(listing) == public(A.ROW_LINE)
-    line = {"registration": {"format": "f", "wiring": "w", "link": "l", "direction": "ingress", "window": 2,
-                             "layout": {"buckets": 1}, "certificate": {"key": "k", "digest": "d", "signature": "s"}},
+    signed = re.compile("[0-9a-f]{4}")
+    given = {"link": ("l",), "links": ("l",), "parameters": ("31" * 64,), "cell_bytes": (64,), "buckets": (1,),
+             "signature": signed, "refused": [("l",), A.DIRECTIONS, int]}
+    line = {"registration": {"format": A.ROW_FORMAT, "wiring": "w", "link": "l", "direction": "ingress", "window": 2,
+                             "layout": {"buckets": 1},
+                             "certificate": {"key": "0c" * 16, "digest": "9d" * 64, "signature": "e5e5"}},
             "cost": {"s": 1}}
     refused = {"refused": ["l", "ingress", 3], "withheld": True}
-    assert listing.undeclared(A.row_registration(json.dumps(line)).encode()) == {}
+    assert listing.undeclared(A.row_registration(json.dumps(line), given).encode()) == {}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration/wiring", "cost"}
-    assert listing.undeclared(A.row_registration(json.dumps(refused)).encode()) == {}
+    assert listing.undeclared(A.row_registration(json.dumps(refused), given).encode()) == {}
     certificates = {lists.listing(f"gates/c0/r0/out/{f}").name
                     for f in ("certificates.jsonl", *A.ROW_CERTIFICATES.values())}
     assert len(certificates) == 1
     listing = lists.listing("gates/c0/r0/out/certificates.jsonl")
-    written = A.row_certificate(line)
-    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} | {"refused"}
-    for doc in (written, A.row_certificate(refused), A.row_certificate({A.ROWS_NO_HEAD: line["registration"]})):
+    written = A.row_certificate(line, given)
+    assert declared(listing) == {f"certificate/{k}" for k in written["certificate"]} | {"refused"} == public(
+        A.CERTIFICATE_LINE)
+    for doc in (written, A.row_certificate(refused, given),
+                A.row_certificate({A.ROWS_NO_HEAD: line["registration"]}, given)):
         assert listing.undeclared(json.dumps(doc).encode()) == {}
     assert set(listing.undeclared(json.dumps(line).encode())) == {"registration", "cost"}
 
