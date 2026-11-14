@@ -436,7 +436,7 @@ if how != "kept" and req["apply"]:
     os.chown(tmp, own.st_uid, own.st_gid)
     if st is not None:
         prev = os.path.join(d, ".deploy-prev")
-        os.makedirs(prev, exist_ok=True)
+        os.makedirs(prev, mode=0o700, exist_ok=True)
         os.chown(prev, own.st_uid, own.st_gid)
         try:
             os.link(ak, os.path.join(prev, f"{os.path.basename(ak)}.{stamp}"))

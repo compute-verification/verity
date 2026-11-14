@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 import pytest
 from test_deploy import _commit, _git, local
@@ -37,6 +38,15 @@ def machine(reg: Path, name: str, host: str | None, **more: str) -> None:
     (reg / f"{name}.toml").write_text("".join(f"{k} = {json.dumps(v)}\n" for k, v in table.items()))
 
 
+def node(tmp: Path, name: str, key: bool = True) -> None:
+    """A node, as a directory: its /etc, and its login's ssh directory with another key's line and, with `key`, the list's key."""
+    (tmp / name / "etc").mkdir(parents=True)
+    (tmp / name / "ssh").mkdir()
+    (tmp / name / "ssh" / "authorized_keys").write_text(OTHER + "\n")
+    if key:
+        (tmp / name / "ssh" / "k.pub").write_text(KEY + "\n")
+
+
 @pytest.fixture
 def fleet(tmp_path, monkeypatch):
     origin, repo, reg = tmp_path / "origin.git", tmp_path / "repo", tmp_path / "machines.d"
@@ -53,10 +63,7 @@ def fleet(tmp_path, monkeypatch):
     machine(reg, "vy-n-1", None)
     monkeypatch.setenv("RESEARCH_MACHINES_D", str(reg))
     for n in "abc":
-        (tmp_path / n / "etc").mkdir(parents=True)
-        (tmp_path / n / "ssh").mkdir()
-        (tmp_path / n / "ssh" / "k.pub").write_text(KEY + "\n")
-        (tmp_path / n / "ssh" / "authorized_keys").write_text(OTHER + "\n")
+        node(tmp_path, n)
     manifest = tmp_path / "deploy.toml"
     manifest.write_text("""
 [nodes.a]
@@ -84,6 +91,7 @@ nodes = ["a"]
 """)
     calls: list[tuple[str, str]] = []
     faults: dict[tuple[str, str], tuple[int, str]] = {}
+    then: dict[tuple[str, str], Callable[[], None]] = {}
 
     def run(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
         root = f"{tmp_path}/{node}/"
@@ -94,10 +102,11 @@ nodes = ["a"]
             return subprocess.CompletedProcess(argv, rc, b"", err.encode())
         r = local(node, [a if a in SCRIPTS else a.replace("/NODE/", root) for a in argv],
                   stdin.replace(b"/NODE/", root.encode()) if stdin else stdin)
+        then.get((node, kind), lambda: None)()
         return subprocess.CompletedProcess(argv, r.returncode, *(o.replace(root.encode(), b"/NODE/") for o in (r.stdout, r.stderr)))
 
     return {"repo": repo, "reg": reg, "tmp": tmp_path, "manifest": manifest, "nodes": deploy.load(manifest), "run": run,
-            "calls": calls, "faults": faults}
+            "calls": calls, "faults": faults, "then": then}
 
 
 def _main(fleet: dict, *argv: str) -> int:
@@ -318,6 +327,54 @@ def test_a_roll_brings_a_new_machine_into_every_nodes_list_one_node_at_a_time_ke
         assert "192.0.2.21" in _keys(fleet, n)[1] and _read(fleet, n)["state"] == "ok"
 
 
+def test_bringing_up_a_machine_gives_it_the_list_and_the_key_and_puts_it_in_every_other_nodes_list(fleet, capsys):
+    """A machine from its launch to a node every other reaches. The nodes here are the machines the list names: two that serve
+    and one the manifest lists ahead of its launch. Registering it is the launch's; the key pair is copied to it; one roll then
+    has every node take the key from it and it from every node, and writes each node's list, one node at a time."""
+    tmp, calls, reg, new = fleet["tmp"], fleet["calls"], fleet["reg"], "vy-cpu-3"
+    nodes = ["vy-cpu-1", "vy-cpu-2", new]
+    for n in nodes:
+        node(tmp, n, key=n != new)
+    text = fleet["manifest"].read_text().replace('nodes = ["a", "b", "c"]', f"nodes = {json.dumps(nodes)}")
+    for old, name in zip("abc", nodes):
+        text = text.replace(f"[nodes.{old}]\n", f"[nodes.{name}]\n" + ('staged = "its quota is asked for"\n' if name == new else ""))
+    fleet["manifest"].write_text(text.replace('nodes = ["a"]', 'nodes = ["vy-cpu-1"]'))
+    fleet["nodes"] = deploy.load(fleet["manifest"])
+    roll = ("roll", "/NODE/etc/peers", "--by", "lane-x")
+
+    def lists() -> list[str | None]:
+        return [p.read_text() if (p := tmp / n / "etc" / "peers").exists() else None for n in nodes]
+
+    assert _main(fleet, *roll, "--apply") == 1              # before its launch it is passed by, and the others hold the list
+    assert f"{new}  passed by: staged (its quota is asked for) and not in the register" in capsys.readouterr().out
+    assert lists() == [LIST, LIST, None]
+
+    machine(reg, new, "192.0.2.13")                         # the launch registered it: its key pair isn't on it yet
+    calls.clear()
+    assert _main(fleet, *roll, "--apply") == 3
+    err = capsys.readouterr().err
+    assert f"{new}: no public key at /NODE/ssh/k.pub" in err and "Nothing changed on any node (1 of 3 refuse)" in err
+    assert lists() == [LIST, LIST, None] and not [c for c in calls if c[1] in ("accept", "install")]
+
+    (tmp / new / "ssh" / "k.pub").write_text(KEY + "\n")    # the pair is copied to it: the dry run says what each node gains
+    assert _main(fleet, *roll) == 0
+    out = capsys.readouterr().out
+    assert out.count(f"names 4 machines now, 5 after; adds {new}; its key is taken from 1 more address(es), 5 in all") == 2
+    assert f"{new}  would install  isn't installed, 5 after; its key is taken from 5 more address(es), 5 in all" in out
+    assert lists() == [LIST, LIST, None]
+
+    calls.clear()
+    assert _main(fleet, *roll, "--apply") == 0
+    assert [c for c in calls if c[1] in ("accept", "install")] == [*((n, "accept") for n in nodes), *((n, "install") for n in nodes)]
+    after = LIST.replace("vy-cpu-10 ", f"{new} -i /k research@192.0.2.13\nvy-cpu-10 ")
+    assert lists() == [after] * 3
+    every = {*HOSTS.values()} - {"gate.example"} | {"192.0.2.13"}
+    for n in nodes:
+        line = _keys(fleet, n)[1]
+        assert line.endswith(KEY) and set(line.split('"')[1].split(",")) == every and _read(fleet, n)["state"] == "ok"
+    assert _main(fleet, *roll, "--apply") == 0 and "unchanged, reads ok" in capsys.readouterr().out
+
+
 def test_a_roll_changes_nothing_when_a_node_refuses_stops_at_the_first_that_fails_and_passes_by_one_it_cannot_reach(fleet, capsys):
     tmp, calls, faults = fleet["tmp"], fleet["calls"], fleet["faults"]
     assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 0
@@ -334,6 +391,14 @@ def test_a_roll_changes_nothing_when_a_node_refuses_stops_at_the_first_that_fail
     assert "b: install failed (exit 1): disk full. The roll stopped there: done a; not done b, c" in capsys.readouterr().err
     assert "vy-cpu-11" in (tmp / "a" / "etc" / "peers").read_text() and (tmp / "c" / "etc" / "peers").read_text() == LIST
     assert (tmp / "b" / "etc" / "peers").read_text() == hand
+
+    faults.clear()                                          # b's file isn't the register's once written: c is not started
+    fleet["then"][("b", "install")] = lambda: (tmp / "b" / "etc" / "peers").write_text("written over\n")
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply", "--allow-shrink") == 1
+    assert "b: /NODE/etc/peers reads unknown after its install" in (err := capsys.readouterr().err) and "not done b, c" in err
+    assert (tmp / "c" / "etc" / "peers").read_text() == LIST
+    fleet["then"].clear()
+    (tmp / "b" / "etc" / "peers").write_text(hand)
 
     faults.clear()                                          # b is stopped: passed by and named, and c is done
     faults[("b", "probe")] = (255, "ssh: connect to host b port 22: Connection timed out")
