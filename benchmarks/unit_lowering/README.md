@@ -16,6 +16,13 @@ one row, and a row is whole 16-bit words (`h1zy._leaf`). So at 4 × 8 and 8 × 8
 is one lane. Every lowering runs with `HZ_STAGE=fast` (under `--staging library`, with none of `fast_stage`'s patches)
 and with `H1_TMPL` unset (flat) or `structural`.
 
+**What a caller may import** is `run.py`'s and `lanes.py`'s `__all__`. The directory is no package: its modules import
+each other by bare name (`from run import BIND`) with the directory on `sys.path`, as its suite does, and no code
+outside it imports them. `mem_profile.py` and `structural.py` are commands, which nothing imports. **What it never
+does:** it proves nothing (it writes a circuit file, reads it and measures the writing), it writes no circuit file
+under `--out` (the file goes under `--scratch`, to `--path` or to a temporary directory), and its guard passes no flat
+file whose SHA-512 differs from `reference.json`'s.
+
 ## The two numbers, the guard and the target
 
 1. **Peak RSS in GiB** to write the K 2048 lane file, and the combine file, the lowering child's `ru_maxrss`, at each leaf.
