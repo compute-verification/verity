@@ -47,7 +47,7 @@ class Token:
 
 @dataclass
 class Worker:
-    id: str                            # a RunPod pod id, or 'dispatch:{name}' for a stage-1 dispatcher
+    id: str                            # a RunPod pod id, or 'dispatch:{name}' for a step-1 dispatcher
     kind: str                          # pod | dispatcher
     token: str                         # the name of the one jobs:work token that may claim as this worker
     kinds: tuple[str, ...]             # the job kinds it may claim
@@ -274,12 +274,12 @@ class JobService:
         kinds = body.get("kinds") or list(w.kinds)
         if set(kinds) - set(w.kinds):
             raise Refused(403, f"this worker may claim only {', '.join(w.kinds)}")
-        caps = body.get("capabilities") or {}
-        if not isinstance(caps, dict):
+        capabilities = body.get("capabilities") or {}
+        if not isinstance(capabilities, dict):
             raise Refused(400, "capabilities must be an object")
-        w.capabilities, w.last_seen = caps, now
+        w.capabilities, w.last_seen = capabilities, now
         ready = [j for j in self.jobs.values() if j.state == "queued" and j.kind in kinds and j.not_before <= now
-                 and meets(j.requirements, caps)]
+                 and meets(j.requirements, capabilities)]
         if not ready:
             return 204, {}
         j = min(ready, key=lambda j: (-j.priority, j.enqueued_at, j.id))
