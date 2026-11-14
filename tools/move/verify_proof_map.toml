@@ -19,6 +19,9 @@
 # `security/Proofs/Flock/Claims/Recursion/IrDepSession.lean` (its `compile_time` entry in the proofs' lock). Each names
 # the program only in a comment.
 #
+# `live/src/session_verify.rs` keeps its one site, the name of the Rust prover's own thread pool (upstream's), which is
+# not this program.
+#
 # The Lean locks keep their text too: none spells the word in a record the Lean check writes, and the reasons that do
 # (a trust-base premise's, the frozen shapes', the upstream watches') say what a guarantee rests on, which their owners
 # reword.
@@ -44,4 +47,5 @@ strings = []
 [keep_in]
 "verity/commitments/lean/Commitments/Draw.lean" = ["flock-verify"]
 "security/Proofs/Flock/Claims/Recursion/IrDepSession.lean" = ["flock-verify"]
+"verity/protocols/proofs/flock/prover/live/src/session_verify.rs" = ["flock-verify"]
 "**/lean-audit.json" = ["flock-verify"]
