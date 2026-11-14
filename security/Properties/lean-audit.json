@@ -100,7 +100,8 @@
   "Properties.Challenger",
   "Properties.Firewall",
   "Properties.Core.Site",
-  "Properties.Accounting.Registration.Code"
+  "Properties.Accounting.Registration.Code",
+  "Properties.Accounting.Registration.Premises"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -2396,9 +2397,15 @@
    "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
   },
   "Properties.Accounting.Registration": {
-   "imports": ["Definitions.Accounting.Registration", "CoreProtocol.Registration", "Properties.Core.Site"],
+   "imports": [
+    "Definitions.Accounting.Registration",
+    "CoreProtocol.Registration",
+    "Properties.Core.Site",
+    "Properties.Accounting.Registration.Premises",
+    "Definitions.Core.Compiler"
+   ],
    "except": [],
-   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Accounting.Registration.View`), over the Site's denotations (`Properties.Core.Site`), never a proof",
+   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Accounting.Registration.View`), over the Site's denotations (`Properties.Core.Site`) and, for the builders' caps (`Properties.Accounting.Registration.Premises`), the compilers they name (`Definitions.Core.Compiler`), never a proof",
    "sealed": true
   },
   "Properties.Remote": {
