@@ -190,7 +190,7 @@ theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.find? _root_.Spot.OneS
 
 /-! ## What acceptance gives -/
 
-/-- **What V3's and V5's events read of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
+/-- **What v2's acceptance gives of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
 population `n`: `verify --zk` accepts the transcript (`AcceptsZK`) at a statement with hidden outputs that is not
 templated; the files' ports and roots (`PortRoots.checkOf`) and their form at the record's sample (`KsScope.checkOf`)
 pass on the circuit `verify` reads (`ProvedScope.circuitOf`); the program's proof blocks under the verifier's query are
