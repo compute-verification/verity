@@ -30,6 +30,7 @@ proof or timed response, and validation: the pieces and the onsite check).
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -51,6 +52,7 @@ from verity.protocol import Channel, ProtocolDef, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
@@ -542,6 +544,21 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
                               dial_to=None if role.name == listener else {listener: address}).outcomes[role.name]
 
 
+def placement(cfg: Mapping[str, Any], piece: Piece, outcome: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """`trusted-device`'s premise for a memory challenger's ``piece``, from its outcome: the key its session is signed
+    under (the outcome's ``public_key``) against the pins the configuration gives that party for that protocol, under the
+    configuration's hash (`memory_challenger.trusted_device`, `committed` its committed set). ``None`` for a party that
+    signs no session; a session that reports no key reads rehearsal."""
+    if piece.party != MEMORY_CHALLENGER:
+        return None
+    key = (outcome or {}).get("public_key")
+    machine = {p["name"]: p["machine"] for p in cfg["party"]}[piece.party]
+    return {mc.PREMISE: mc.trusted_device(cfg.get("pin", []), piece.party, piece.component,
+                                          None if key is None else hashlib.sha512(bytes.fromhex(key)).hexdigest(),
+                                          f"the {piece.party} ran on {machine}", configuration=K.digest(cfg),
+                                          committed=mc.committed())}
+
+
 def composite(env: Mapping[str, str]) -> dict[str, str]:
     """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
     composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
@@ -597,12 +614,25 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
+#: what an unwritten registration raises with: the goal that brings it
+REGISTRATION_GOAL = "memory-accounting/architecture-on-branch"
+
+
 def registration(cfg: Mapping[str, Any], state: Path) -> str:
-    """The digest of the run's registration, the VERDICT line's ``registration``: a registration log
-    (`verity.protocols.accounting.registration`) whose entries name the configuration's hash, ``K.digest(cfg)``, the
-    ``configuration`` of ``state``'s ``run.json``, which `verity run` writes before any party starts and so before any
-    coin; a ``run.json`` under another hash is refused. Until it is written the line's ``registration`` is ``None``."""
-    raise NotImplementedError("MEM-300")
+    """The head of the run's registration log, the VERDICT line's ``registration``, once an information entry of it
+    registers the configuration's hash (the item ``{"kind": "configuration", "digest": K.digest(cfg)}``), before any
+    party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
+    one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
+    another hash, or none, is refused (``registration``). The log's items are θ and the builder alone
+    (`verity.protocols.accounting.registration.verifier.registration.item_of`, `Core.Registration`): no item names a
+    configuration yet, so it raises `NotImplementedError` (`REGISTRATION_GOAL`), and the line's ``registration`` is
+    ``None``."""
+    f, digest = state / "run.json", K.digest(cfg)
+    run = json.loads(f.read_text()) if f.is_file() else {}
+    if run.get("configuration") != digest:
+        raise Refused("registration", f"{f} names configuration {str(run.get('configuration'))[:16]}…, not this "
+                                      f"configuration's {digest[:16]}…: the registration names the run's own hash")
+    raise NotImplementedError(REGISTRATION_GOAL)
 
 
 def coins_of(cfg: Mapping[str, Any]) -> str:
@@ -624,12 +654,16 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
             k for x in runtime for k in x.unbound(bindings))):
         raise Refused("unbound", f"the deploy bindings (verity run --bindings) don't bind {', '.join(missing)}")
     ready = [(x, prepare(cfg, state, bindings, x)) for x in runtime]
+    if ready:
+        registration(cfg, state)
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:
         mine = out.setdefault(x.party, {"outcome": {}, "refused": None})
         mine["outcome"][x.component] = got.get("outcome")
         mine["refused"] = mine["refused"] or got.get("refused")
+        if (where := placement(cfg, x, got.get("outcome"))) is not None:
+            mine.setdefault("placement", {})[x.component] = where
 
     for x, start in ready:
         if x.session.before:
@@ -661,6 +695,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "SERVED", "WORKLOADS", "Held",
-           "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "prepare", "served_window", "unbound",
-           "variables"]
+__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
+           "prepare", "registration", "served_window", "unbound", "variables"]
