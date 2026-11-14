@@ -85,15 +85,31 @@ def _number(view: Mapping[str, Any], key: str, left_out: int | None = None) -> i
         raise _refused(view, key, "a number") from e
 
 
-def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
-    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
-    xs = _listed(view, key)
+def _numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, each as `int` reads it.  A view that leaves the key out, or states there what is
+    no list of numbers (a null among them), is refused by name."""
+    xs = view.get(key)
     if not isinstance(xs, (list, tuple)):
         raise _refused(view, key, "a list of numbers")
     try:
         return [int(x) for x in xs]
     except (TypeError, ValueError, OverflowError) as e:
         raise _refused(view, key, "a list of numbers") from e
+
+
+def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
+    return _numbers(view, key) if _listed(view, key) else []
+
+
+def _itemsize(view: Mapping[str, Any]) -> int:
+    """The bytes of one element of the dtype a fold view states, by the recorder's table, which holds every dtype a `ViewDesc`
+    takes.  A view that leaves the dtype out, or states there what is no dtype of that table, is refused by name."""
+    dtype = view.get("dtype")
+    size = DTYPE_BYTES.get(dtype) if isinstance(dtype, str) else None
+    if size is None:
+        raise _refused(view, "dtype", "a dtype the recorder writes (observe.events.DTYPE_BYTES)")
+    return size
 
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
@@ -253,13 +269,11 @@ class MatchOracle:
         return b
 
     def _view_bytes(self, event: int, view: dict) -> tuple[bytes | None, str | None]:
-        """The logical (contiguous) bytes of one storage view at the snapshot of `event`, or (None, why).  A view that states no
-        allocation or no offset, or one that is no number, is refused by name."""
+        """The logical (contiguous) bytes of one storage view at the snapshot of `event`, or (None, why).  A view that leaves its
+        allocation, offset, shape or dtype out, or states there what is no number, no list of numbers or no dtype the recorder
+        writes, is refused by name; so are strides that are no list of numbers.  A view that states no strides is contiguous."""
         alloc, off = _number(view, "alloc"), _number(view, "offset")
-        shape, strides, dtype = list(view["shape"]), list(_listed(view, "strides")), str(view["dtype"])
-        isz = DTYPE_BYTES.get(dtype)
-        if isz is None:
-            return None, f"dtype {dtype} unknown itemsize"
+        shape, strides, isz = _numbers(view, "shape"), _stated_numbers(view, "strides"), _itemsize(view)
         numel = _prod(shape) if shape else 1
         if not strides or _contiguous(shape, strides):
             lo, hi = off * isz, (off + numel) * isz

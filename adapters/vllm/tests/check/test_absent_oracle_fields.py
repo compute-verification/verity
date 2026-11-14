@@ -4,8 +4,10 @@
 instances.  Each test takes the complete record of `tests/check/test_oracle_compare.py`, leaves one field out of one
 file (absent, null, empty, or any other value that tests false: `left_out`) and states what the oracle then
 answers: which requests, steps and ids it knows, and what it says of a member it cannot read.  A workload and a
-required manifest's row, which a caller hands in, are held the same way.  A view's allocation and offset are held
-beside them: where the oracle needs the number, a view that states none, or one that is no number, is refused by name.
+required manifest's row, which a caller hands in, are held the same way.  A view's own fields are held beside them:
+where the oracle reads a member's bytes through a view, one that states no allocation, offset, shape or dtype, or states
+there what is no number, no list of numbers or no dtype the recorder writes, is refused by name, and so are strides that
+are no list of numbers.  Every dtype the recorder writes is read.
 """
 from __future__ import annotations
 
@@ -181,10 +183,11 @@ def test_the_range_of_a_view_that_states_no_stride_is_its_whole_shape(stated):
 
 # ------------------------------------------------------------------------------------------------------------ a view's allocation and offset
 
-def refused(e: pytest.ExceptionInfo[RecordError], field: str, stated: Any) -> bool:
-    """Whether the refusal names the view's `field` and what the view states there (None where it leaves the field out)."""
+def refused(e: pytest.ExceptionInfo[RecordError], field: str, stated: Any, kind: str = "a number") -> bool:
+    """Whether the refusal names the view's `field`, what the view states there (None where it leaves the field out) and the
+    `kind` of thing it is not."""
     said = None if stated is ABSENT else stated
-    return (e.value.where, e.value.field) == (MO.VIEW, field) and e.value.why.startswith(f"is {said!r}, not a number (the view: {{")
+    return (e.value.where, e.value.field) == (MO.VIEW, field) and e.value.why.startswith(f"is {said!r}, not {kind} (the view: {{")
 
 
 def first_view(views: str, field: str, stated: Any) -> Callable[[list[dict[str, Any]]], object]:
@@ -307,6 +310,52 @@ def test_a_producer_whose_first_view_leaves_its_allocation_or_offset_out_is_foun
     with pytest.raises(RecordError) as e:
         null.member_bytes(0, "top", "in", "r1", producer=PROMOTED)
     assert refused(e, field, None)
+
+
+# ------------------------------------------------------------------------------------------------------------ a view's shape, strides and dtype
+
+#: what a view states under `shape` or `strides` that tests true and is no list of numbers
+NO_NUMBERS = [1, 2.5, True, "thirteen", "24", {"a": 1}, ["two"], [None], [[2]], [float("inf")]]
+#: what a view states under `dtype` that is no dtype the recorder writes
+NO_DTYPE = [None, "", "thirteen", "BFLOAT16", "bf16", 2, ["bfloat16"], {"bfloat16": 2}]
+A_LIST, A_DTYPE = "a list of numbers", "a dtype the recorder writes (observe.events.DTYPE_BYTES)"
+
+
+def refuses_the_first_request(tmp_path: Path, field: str, stated: Any, kind: str) -> bool:
+    """Whether the embedding's output for request r1, whose first row's view states `stated` under `field`, is refused by that
+    field's name, and request r0's rows are still read."""
+    o = oracle(tmp_path, "instances", first_view("output_views", field, stated))
+    with pytest.raises(RecordError) as e:
+        o.member_bytes(0, EMBED, "out", "r1")
+    return refused(e, field, stated, kind) and o.member_bytes(0, EMBED, "out", "r0")[1:] == (None, 5)
+
+
+@pytest.mark.parametrize("stated", [ABSENT, None, 0, False, "", {}, *NO_NUMBERS])
+def test_a_member_whose_view_states_no_shape_or_one_that_is_no_list_of_numbers_is_refused_by_name(tmp_path, stated):
+    assert refuses_the_first_request(tmp_path, "shape", stated, A_LIST)
+
+
+@pytest.mark.parametrize("stated", NO_NUMBERS)
+def test_a_member_whose_view_states_strides_that_are_no_list_of_numbers_is_refused_by_name(tmp_path, stated):
+    assert refuses_the_first_request(tmp_path, "strides", stated, A_LIST)
+
+
+@pytest.mark.parametrize("stated", [ABSENT, *NO_DTYPE])
+def test_a_member_whose_view_states_no_dtype_or_one_the_recorder_does_not_write_is_refused_by_name(tmp_path, stated):
+    assert refuses_the_first_request(tmp_path, "dtype", stated, A_DTYPE)
+
+
+@pytest.mark.parametrize(("field", "stated"), [("shape", ["4"]), ("shape", [4.0]), ("shape", [4.9]), ("strides", ["1"]), ("strides", [1.0]), ("strides", [True])])
+def test_a_views_shape_and_strides_are_numbers_as_int_reads_them(tmp_path, field, stated):
+    whole = oracle(tmp_path / "whole").member_bytes(0, EMBED, "out", "r1")
+    assert whole[0] is not None and len(whole[0]) == 3 * 2 * H and whole[1:] == (None, 3)
+    assert oracle(tmp_path / "stated", "instances", first_view("output_views", field, stated)).member_bytes(0, EMBED, "out", "r1") == whole
+
+
+def test_a_view_that_states_an_empty_shape_is_one_element(tmp_path):
+    o = oracle(tmp_path, "instances", first_view("output_views", "shape", []))
+    read, why, rows = o.member_bytes(0, EMBED, "out", "r1")
+    assert read is not None and len(read) == 2 + 2 * 2 * H and (why, rows) == (None, 3)      # the first row's one element, then two rows whole
 
 
 # ------------------------------------------------------------------------------------------------------------ a view's dtype
