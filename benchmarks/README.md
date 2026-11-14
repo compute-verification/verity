@@ -35,7 +35,7 @@ says. These are the directories that have one:
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
-| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.sh` or else its `run.py`; given no NAME, the names |
+| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
@@ -98,12 +98,13 @@ for a new benchmark.
 
 ## Metrics
 
-Each benchmark declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs (the first
-`.py` or `.sh` under `benchmarks/`, `demos/` or `tools/` the command names: `benchmarks/serve_tax/run.sh`'s in
-`benchmarks/serve_tax/metrics.toml`), one `[[metric]]` table per number. Each row's `owner` owns its file: the longest
-`owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's numbers in
-another lead's directory take a file entry of their own there. The console's Metrics tab and `research metrics show`
-read every such file on `main` and show each number's history from the evidence store.
+Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
+(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
+`benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
+`infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each row's `owner` owns its file:
+the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's
+numbers in another lead's directory take a file entry of their own there. The console's Metrics tab and `research
+metrics show` read every such file on `main` and show each number's history from the evidence store.
 
 A metric's value is the measurement its `id` names in a run's `result.json`, which the benchmark records it under
 (`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store, so a value without a preserved run
@@ -114,7 +115,8 @@ value reaches the tab up to an hour after its run is preserved. Its keys:
 - `title`, `owner` (a handle in the registry) and `unit`, the unit its measurements carry.
 - `better`: `lower` or `higher`.
 - `command`: the one command that measures it, whose script's directory records it under `id`.
-- `every`: how often its owner measures it (`7d`, `12h`), well over the index's hour; a value older than that is stale.
+- `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
+  stale, so a number that reaches the tab through the index needs an `every` well over the index's hour.
 - Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
   list of words.
 
@@ -122,14 +124,26 @@ Each value carries its mark, how it was had, which the tab shows beside it: the 
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
 and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
 
+A value over a span of time or of compute says which, each as its own field of the measurement, held only where
+given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter`
+(`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
+id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
+three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
+of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
+benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
+the name, period and `over` reads the others. A value for one member of a set (a deployed guarantee, a lead) names it
+as `member`, a non-empty string held only where given, and the writer keys on it too, so one id gives a value for each
+member (`lean/trust-gap`'s, one a deployed guarantee).
+
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
 "parked".
 
 `tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an owner who
-doesn't own the row's file, an id outside its owner's prefix, a `better` other than `lower` or `higher`, a command whose
-script is missing or whose directory never names the id, a row whose command's first script is outside the directory
-of the file declaring it, and a shared `metrics.toml` directly under `benchmarks/`.
+doesn't own the row's file, an id outside its owner's prefix, a `better` other than `lower` or `higher`, an `every`
+that isn't a count of minutes, hours or days, a command whose script is missing or whose directory never names the id,
+a row whose command's first script is outside the directory of the file declaring it, and a shared `metrics.toml`
+directly under `benchmarks/`.
 
 ## Index
 
@@ -280,4 +294,6 @@ How long the team's own changes take to reach `main`: measured on the verified q
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
+| `dashboard/` | the top goals of the console's Metrics dashboard whose own number has a target, a value younger than its `every` and a mark, out of the top goals it lists (`run.py`) | maintained |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
+| `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
