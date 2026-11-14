@@ -55,7 +55,7 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
 
 
 def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
-    """A row of record's φ at `rank` as `score.phi_of` makes it, the checkpoint's config.json the package's byte copy of it
+    """A workload of record's φ at `rank` as `score.phi_of` makes it, the checkpoint's config.json the package's byte copy of it
     (`hf_configs/<case>.config.json`)."""
     w = json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())
     cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))

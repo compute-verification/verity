@@ -1,0 +1,27 @@
+[project]
+name = "verity-core-zk-server"
+version = "0.1.0"
+description = "Tests only: the ZK server's release side in Lean (core_zk_server) against Python's verity_flock.zk_server and the frozen cases of the Rust reference it replaced."
+requires-python = ">=3.12"
+dependencies = ["verity-flock", "verity-difftest", "hypothesis>=6.100"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_zk_server_release_agreement.py",
+    "tests/test_zk_server_release_protocol.py",
+    "tests/test_zk_server_session_loop.py",
+]
+# `lake` builds this package and, through its path requires, Flock's verifier (`Flock.ZkServer.Contract` and what it
+# imports; its `flock-zk-server contract` decides the references' transcripts), the base packages under it and the core
+# protocol interface.
+inputs = ["verity/protocols/proofs/flock/verifier", "verity/protocols/interface",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
+          "verity/__init__.py", "verity/protocols/__init__.py"]

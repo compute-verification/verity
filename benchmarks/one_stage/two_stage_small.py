@@ -59,7 +59,7 @@ MAX_MODEL_LEN = 4096
 TABLE_LAYER, TABLE_LEAVES = 0, 16
 #: the stream's code for the two-stage form, which it refuses every run by, last, until the form's proof lands
 FORM = "two-stage-form"
-#: round 2's code for a value the interior registration registers that a replay block's input may not read: here the
+#: round 2's code for a value the interior docket registers that a replay block's input may not read: here the
 #: sampler's ``logits``, which the prover registers after the first stage's sample
 INPUTS = "second-inputs"
 #: round 2's code for a replay block it derives no wires from: an inlined class's

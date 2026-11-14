@@ -18,9 +18,9 @@ import pytest
 import torch
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_windows as BW
 from verity_vllm.pipeline.boundary_stop import Stop

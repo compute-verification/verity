@@ -381,7 +381,7 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
         "the plan's picks are the replay's, request by request and step by step"
 
 
-def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
+def test_a_population_prepared_before_the_seed_samples_and_reads_the_same(world):
     bmap, committed = world.bmap_and_reader()
     progs = _programs(world)
     seen: dict[str, list] = {"cold": [], "warm": []}

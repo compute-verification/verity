@@ -8,7 +8,7 @@ public import Proofs.Properties.Challenger.Coins
 
 On a play whose logs the check read and found the device's (`ReadIsDevice`), every fresh coin the play's log shows of
 the first stage's family is released after the boundary registration's digest, and every one of the second stage's
-family after the interior registration's (`oneRoot_draws`, at the cut's two samples; `oneRoot_second`, the second
+family after the interior registration's (`oneRoot_samples`, at the cut's two samples; `oneRoot_second`, the second
 stage's in the case's words; `OneRootIn`).
 
 A session's read shows a fresh coin of a family only after a root its log's lines show of that family
@@ -194,8 +194,8 @@ theorem read_oneRoot {label : String} {after : ByteArray} {records : List Json} 
 /-- **The session a sample's coins are read from**: its commitment and the roots it shows, its log's lines, every root
 it shows of the sample's own family the sample's digest (the challenger's stream refuses any other), and the roots it shows
 of each family those its lines' pairs name. -/
-theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
-    (h : drawCoins key w label after coins = .ok ξ) :
+theorem sampleCoins_roots {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
+    (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ cm roots, ∃ (ls : Array Json) (lines : List String),
       trustedChallengePhaseOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
         (Spot.getD coins "pins") (Spot.getD coins "main") (Spot.getD coins "session") = .ok (cm, roots) ∧
@@ -204,9 +204,9 @@ theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteAr
       ∀ L, Verity.Sampled.look roots L =
         Verity.Sampled.sel L (pairs (lines.tail.filter fun l => !treeLine l)) := by
   obtain ⟨cm, roots, hts, hst⟩ := Verity.Sampled.drawCoins_ok h
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   obtain ⟨_, _, _, _, -, -, -, -, -, -, hall⟩ := Properties.Challenger.Coins.stream_ok hst
   exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, Verity.Sampled.releasedRootsOf_ok hrr⟩
 
@@ -214,15 +214,15 @@ theorem drawCoins_roots {key : ChallengerKey} {w label : String} {after : ByteAr
 sample's family after the sample's digest alone. -/
 theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
     {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws} {ξ : ByteArray} {r : List Release}
-    (hd : firstDraws key p c e = some d)
-    (hξ : drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) (hr : firstRead key p c e ξ = some r) :
+    (hd : firstSamples key p c e = some d)
+    (hξ : sampleCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ) (hr : firstRead key p c e ξ = some r) :
     ∃ cm roots,
       trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d.window)]) d.key
         (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
           .ok (cm, roots) ∧
       (∀ x ∈ Verity.Sampled.look roots d.label, x = d.after) ∧
       ∀ L a, (∀ x ∈ Verity.Sampled.look roots L, x = a) → OneRootIn L a r := by
-  obtain ⟨cm, roots, ls, lines, hts, hlog, hls, hown, hsel⟩ := drawCoins_roots hξ
+  obtain ⟨cm, roots, ls, lines, hts, hlog, hls, hown, hsel⟩ := sampleCoins_roots hξ
   have hl : firstLines e = .ok lines := firstLines_eq hlog hls
   have he : firstRead key p c e ξ = Verity.Sampled.readLog d.label d.after [] ξ lines := by
     simp [firstRead, hd, hl, Except.toOption]
@@ -235,7 +235,7 @@ theorem first_oneRoot {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Para
 sample's family after the sample's digest alone. -/
 theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {bs : _root_.Core.Blobs} {c₂ : Spot.OneStage.Commitment} {d : Draws} {ξ : ByteArray} {r : List Release}
-    (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondDraws p e = some d)
+    (hd' : oneStageZkSource p.audit c₂ = some d) (hd : secondSamples p e = some d)
     (hξ : Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ) (hr : secondRead p e bs ξ = some r) :
     ∃ cm roots,
       trustedChallengePhaseOf (Spot.getD e.interior.base.coins "ledger") (Json.mkObj [("root", Json.str d.window)]) d.key
@@ -244,7 +244,7 @@ theorem second_oneRoot {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recurs
       (∀ x ∈ Verity.Sampled.look roots d.label, x = d.after) ∧
       ∀ L a, (∀ x ∈ Verity.Sampled.look roots L, x = a) → OneRootIn L a r := by
   obtain ⟨raw, hraw, -⟩ := oneStageZk_reads p.audit c₂ d hd' e.interior ξ hξ
-  obtain ⟨cm, roots, ls, lines, hts, hlog, hls, hown, hsel⟩ := drawCoins_roots hraw
+  obtain ⟨cm, roots, ls, lines, hts, hlog, hls, hown, hsel⟩ := sampleCoins_roots hraw
   have hl : Verity.Sampled.linesOf e.interior = .ok lines := Verity.Sampled.Binding.linesOf_eq hlog hls
   obtain ⟨recs, hrecs⟩ : ∃ recs, secondRecords bs e = some recs := by
     unfold secondRead at hr
@@ -266,8 +266,8 @@ session shows of the second sample's family are all the second sample's digest, 
 of the first sample's family are all the first sample's digest. It holds wherever neither session's roots show the other
 sample's family. The form's accept does not give it. -/
 def OtherRoots (s : Verity.Sent) : Prop :=
-  ∀ p c e key d₁ d₂, caseOf s = .ok (p, c, e) → keyOf s.params = some key → firstDraws key p c e = some d₁ →
-    secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
+  ∀ p c e key d₁ d₂, caseOf s = .ok (p, c, e) → keyOf s.params = some key → firstSamples key p c e = some d₁ →
+    secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     (∀ cm roots,
       trustedChallengePhaseOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
         (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
@@ -285,10 +285,10 @@ def OtherRoots (s : Verity.Sent) : Prop :=
 the device's (`ReadIsDevice`), with every step the check read on the way: on one window each session's read is the
 whole log; on two, the log is the first session's releases then the interior's, each showing the other sample's family
 after that sample's digest alone (`OtherRoots`). -/
-theorem oneRoot_draws {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.sent) :
+theorem oneRoot_samples {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.sent) :
     ∃ p c e key d₁ c₂ d₂ ξ, caseOf o.sent = .ok (p, c, e) ∧ keyOf o.sent.params = some key ∧
-      firstDraws key p c e = some d₁ ∧ drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
-      interiorOf e = .ok c₂ ∧ secondDraws p e = some d₂ ∧
+      firstSamples key p c e = some d₁ ∧ sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
+      interiorOf e = .ok c₂ ∧ secondSamples p e = some d₂ ∧
       OneRootIn d₁.label d₁.after o.log ∧ OneRootIn d₂.label d₂.after o.log := by
   obtain ⟨hread, hdev⟩ := hg
   cases hR : readsLogs o.sent with
@@ -297,7 +297,7 @@ theorem oneRoot_draws {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.se
     obtain ⟨p, c, e, key, d₁, ξ, c₂, d₂, ξ₂, r₁, r₂, h1, h2, h3, h4, h5, h6, h7, h8, h9, hE⟩ :=
       readsLogs_cases (s := o.sent) (l := l₀) (by rw [hR]; exact List.mem_cons_self ..)
     obtain ⟨cm₁, roots₁, ht₁, ho₁, hall₁⟩ := first_oneRoot h3 h4 h8
-    obtain ⟨cm₂, roots₂, ht₂, ho₂, hall₂⟩ := second_oneRoot (secondDraws_eq h5 h6) h6 h7 h9
+    obtain ⟨cm₂, roots₂, ht₂, ho₂, hall₂⟩ := second_oneRoot (secondSamples_eq h5 h6) h6 h7 h9
     refine ⟨p, c, e, key, d₁, c₂, d₂, ξ, h1, h2, h3, h4, h5, h6, ?_⟩
     by_cases hw : d₁.window = d₂.window
     · have hl₁ : r₁ ∈ readsLogs o.sent := by
@@ -322,7 +322,7 @@ theorem oneRoot_draws {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.se
 
 /-! ## The second stage, in the case's words -/
 
-theorem source_draws {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws} {key : ChallengerKey}
+theorem source_samples {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {d : Draws} {key : ChallengerKey}
     {label : String} (h : oneStageZkSource p c = some d) (hch : p.base.challenger = some (key, label)) :
     d.label = label ∧ d.after = c.digest := by
   unfold oneStageZkSource oneStageSource at h
@@ -338,12 +338,12 @@ theorem oneRoot_second {o : Exchange} (hg : ReadIsDevice o) (hx : OtherRoots o.s
     {c₂ : Spot.OneStage.Commitment} {k : ChallengerKey} {label : String} (hcase : caseOf o.sent = .ok (p, c, e))
     (h5 : interiorOf e = .ok c₂) (hch : p.audit.base.challenger = some (k, label)) :
     OneRootIn label c₂.digest o.log := by
-  obtain ⟨p', c', e', key, d₁, c₂', d₂, ξ, h1, -, -, -, h5', h6, -, ho⟩ := oneRoot_draws hg hx
+  obtain ⟨p', c', e', key, d₁, c₂', d₂, ξ, h1, -, -, -, h5', h6, -, ho⟩ := oneRoot_samples hg hx
   have hpce := Except.ok.inj (h1.symm.trans hcase)
   simp only [Prod.mk.injEq] at hpce
   obtain ⟨rfl, rfl, rfl⟩ := hpce
   obtain rfl : c₂' = c₂ := Except.ok.inj (h5'.symm.trans h5)
-  obtain ⟨hlab, haft⟩ := source_draws (secondDraws_eq h5' h6) hch
+  obtain ⟨hlab, haft⟩ := source_samples (secondSamples_eq h5' h6) hch
   rw [← hlab, ← haft]
   exact ho
 

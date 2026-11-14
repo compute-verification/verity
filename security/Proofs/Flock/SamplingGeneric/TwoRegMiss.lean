@@ -14,9 +14,9 @@ import Proofs.Flock.SamplingGeneric.TwoReg
 
 At a tape `ω` the committed incorrect set is fixed before the second stage's coins (`CompiledTwo.FregTwo_forkOn`). So at
 a run's first-stage coins the second stage misses it with probability at most the product of the sampled replay blocks'
-escapes at the committed boundary trace's footprint (`secondDraws`), each at most its escape at a best interior
+escapes at the committed boundary trace's footprint (`secondSamples`), each at most its escape at a best interior
 (`exists_best_interiorsAt`); over the first stage's coins that product's expectation is at most `P̄_a` there
-(`replayDraws`, `Ex_esc_le`): `CompiledTwo.pr_missTwo_le_Pa`. Then:
+(`replaySamples`, `Ex_esc_le`): `CompiledTwo.pr_missTwo_le_Pa`. Then:
 
 * **`CompilerMissTwo` is proved** (`compilerMissTwo`): at rates `r₁` and `r₂`, `P̄_a ≤ (1 − r₁·r₂)^m` at the footprint's
   `m` marked replay blocks (`Design.Two.Pa_le_pow`), which include every replay block wrong at the boundary
@@ -29,7 +29,7 @@ escapes at the committed boundary trace's footprint (`secondDraws`), each at mos
   interior.
 
 The miss, the threshold form and the headline are proved at any boundary values (`CompiledTwo.pr_missTwo_le_Pa`,
-`CompiledTwo.pr_missTwo_le_pow`, `CompiledTwo.threshold_of_event`, `CompiledTwo.headline_of_event`): the draw laws read
+`CompiledTwo.pr_missTwo_le_pow`, `CompiledTwo.threshold_of_event`, `CompiledTwo.headline_of_event`): the sampling designs read
 a set of proof blocks and no trace. The three above are those at the committed boundary trace
 (`CompiledTwo.FregTwo_eq`), and `SamplingGeneric/TwoRegX.lean` takes them at the boundary trace read at the statement.
 -/
@@ -123,7 +123,7 @@ theorem pr_missTwo_fork_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
       ∏ ρ ∈ (range d.part.blocks.length).filter (· ∈ L.replaySample x r),
         d.esc Pt (footprintAt s Pt d.part val ι) ρ := by
   simp only [iregVal_forkOn]
-  refine (hS.secondDraws x s Pt d hs hPt hd hin r (wrongAllAt s Pt d.part val (L.iregVal H P x ω r))).trans ?_
+  refine (hS.secondSamples x s Pt d hs hPt hd hin r (wrongAllAt s Pt d.part val (L.iregVal H P x ω r))).trans ?_
   refine prod_le_prod₀ (fun _ _ => prod_nonneg fun _ _ => Claims.Sampling.escCell_nonneg _ _ _) fun ρ hρ => ?_
   have hρl : ρ < d.part.blocks.length := mem_range.1 (mem_filter.1 hρ).1
   refine le_trans (le_of_eq ?_) (hι ρ hρl (L.iregVal H P x ω r))
@@ -146,7 +146,7 @@ theorem pr_missTwo_le_Pa (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sess
       d.Pa Pt (footprintAt s Pt d.part val ι) := by
   rw [Claims.SamplingGeneric.Pr_forkOn (L.stage2 x)]
   exact (Ex_mono fun r => pr_missTwo_fork_le H L hS hs hPt hd hin P ω val ι hι r).trans
-    (Claims.Sampling.Ex_esc_le d Pt _ (L.replaySample x) (hS.replayDraws x s Pt d hs hPt hd hin))
+    (Claims.Sampling.Ex_esc_le d Pt _ (L.replaySample x) (hS.replaySamples x s Pt d hs hPt hd hin))
 
 /-- **The miss bound, at boundary values `val`**: on the contract, at rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, the miss
 at best interiors (`pr_missTwo_le_Pa`) is at most `(1 − r₁·r₂)` to the footprint's marked replay blocks

@@ -49,7 +49,7 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
+                                    "order: its reference, kernels and install, which benchmarks/kernels/moe_align checks and times",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -57,6 +57,20 @@ PUBLIC = {
                                           "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
+    "verity_vllm.engine.hooks": "I2: the one owner of runtime patches: the patches one component installs on an engine and puts "
+                                "back (Hooks, Patch, patch, wrap, patched, triton_launch), a hook run at a module's import "
+                                "(OnImport) and the patches installed now (live), which the harness's arms and engine install "
+                                "under",
+    "verity_vllm.engine.env": "I1: the engine's environment, written before torch and vLLM are imported: vLLM's pinned and served "
+                              "variables (ENGINE, pin, served_defaults, apply_engine), a target's (apply_target), a fresh "
+                              "compile and its directories (apply_compile_fresh, compile_dirs, own_compile_dirs, own_inductor_dir, "
+                              "INDUCTOR_DIR_MARK), which the harness's engine and benchmarks/replay_determinism write",
+    "verity_vllm.engine.arrivals": "I1: an engine driven over a step-indexed arrival schedule (run_requests_arrivals), its "
+                                   "forwards counted (ForwardCounter) and the steps each request arrived at "
+                                   "(realized_arrive_steps), which the harness's engine serves under",
+    "verity_vllm.engine.int8_ranks": "I1: the exact-int8 parts a process's engines build with, its tensor-parallel ranks "
+                                     "included (register, EXTENSION), which the harness's engine and benchmarks/network_e2e's "
+                                     "trace plugin register",
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
                                    "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
                                    "benchmarks/network_e2e/encodings drives over recorded traces",
@@ -85,19 +99,23 @@ PUBLIC = {
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
-    "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
+    "verity_torch.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
+    "verity_vllm.program.frontend.kernel_readback": "I7: what a built model's layers execute, read back: the int8 scope "
+                                                    "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
+                                                    "value over the layers, which the harness's engine checks against its "
+                                                    "declaration",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
     "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
                                           "and b.egress rows by size class, a class's layout, record and files (Layout, "
-                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
+                                          "record, reopen), which verity/protocols/proofs/spot/device/two_stage.py registers",
     "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
                                           "computes where a response ends, and a stop class's stop record "
-                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
+                                          "(stop_registration, stop_record), which verity/protocols/proofs/spot/device/two_stage.py "
                                           "registers under the verifier's own rule",
     "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
                                              "scheduler that commits each window's finished requests by class "
@@ -109,13 +127,13 @@ PUBLIC = {
     "verity_vllm.pipeline.boundary_logits": "I1: a two-stage window's select inputs at serve: rank 0's hook on the sampler "
                                             "(SamplerHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
-                                            "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
+                                            "benchmarks/serve_tax's plugin installs and verity/protocols/proofs/spot/device/two_stage.py "
                                             "opens (load)",
     "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
                                           "(interior, register), the block parameters it registers as values, the "
                                           "verifier's (Supply) and the replay's own (Operand), and the challenger's "
                                           "copies of them (span_values, link_words, link_schemas, sources, history), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
+                                          "verity/protocols/proofs/spot/device/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
@@ -183,6 +201,10 @@ PUBLIC = {
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
                                                 "harness's tests and benchmarks/prove_path's window cost read",
+    "verity_vllm.commit.committer.native_collect": "I7: the windowed native collector, the committer that commits a served "
+                                                   "engine's values in its own worker (NativeCollectCommitter), its row "
+                                                   "budgets (ROWS_HOLD_BYTES, ROWS_FOLD_BYTES) and its extension (ext), which "
+                                                   "the harness's Commit arm and benchmarks/served_commit run",
     "verity_vllm.commit.committer.native_jit": "I7: the native collector's JIT build, keyed by what it compiles, and its CUDA "
                                                "flags (CUDA_CFLAGS), which benchmarks/served_commit's rows floor compiles under",
     "verity_vllm.commit.index": "I7: vLLM's labels of a window's units (index.json): per member, each served row's unit and "
@@ -204,7 +226,7 @@ PUBLIC = {
     "verity_vllm.correspondence.reader_for_query": "I7: the per-Call runtime correspondence of a derived Program for the query, "
                                                    "and a Call's name (call_name_of, parse_call_name), which "
                                                    "benchmarks/served_commit's granularity reads",
-    "verity_vllm.correspondence.runtime": "I7: runtime-correspondence/v1: per Call, the facts that resolve a Program's logical "
+    "verity_torch.correspondence.runtime": "I7: runtime-correspondence/v1: per Call, the facts that resolve a Program's logical "
                                           "value to a runtime occurrence (RuntimeCorrespondence), which "
                                           "benchmarks/served_commit's granularity reads",
     "verity_vllm.llm": "I1: the pinned engine's own module: LLM, the protocol options it resolves and the context it hands them "
@@ -225,6 +247,9 @@ PUBLIC = {
                              "the Commit install",
     "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
                                        "Context, Target)",
+    "verity_vllm.protocols.pouw": "I1: PoUW's protocol option, and what a run that is its own auditor reads of it: its "
+                                  "coins an in-process challenger's (challenged) and the H1 run an installed H1 option "
+                                  "serves (h1_run), which the harness's arms and engine and benchmarks/pouw read",
     "verity_vllm.protocols.linear.api": "I1: the linear-site interface: what computes y at a linear layer, where its weight comes "
                                         "from, and the one object vLLM's quant_method.apply calls (Stack, Arm, Control, PassSpec, "
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
@@ -246,7 +271,7 @@ PUBLIC = {
                                             "benchmarks/prove_path and benchmarks/pouw read",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.grouped": "I1: Pearl-C's grouped call for a fused-MoE layer on an H100 or H200, every "
                                                   "routed expert's rows of one layer in one launch a step (gemm_grouped, group, "
-                                                  "module, ROTATED), which benchmarks/pouw/pearl_c_sm90 checks and times",
+                                                  "module, ROTATED), which verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90 checks and times",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest": "I1: the Pearl-C device path's manifest as a verifier reads it, and a retained "
                                                    "pass's execution phase re-started from it (manifest_epoch, session_head), "
                                                    "which benchmarks/pouw/pearl_c_vllm's screen reads",
@@ -271,20 +296,15 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.opening",
     "verity_vllm.check.weights_of_record",
     "verity_vllm.commit.committer.host_retention",
-    "verity_vllm.commit.committer.native_collect",
     "verity_vllm.commit.memory_map",
     "verity_vllm.commit.opened",
-    "verity_vllm.engine.arrivals",
     "verity_vllm.engine.build",
     "verity_vllm.engine.engine_driver",
     "verity_vllm.engine.engine_profile",
-    "verity_vllm.engine.env",
-    "verity_vllm.engine.hooks",
     "verity_vllm.engine.int8_attention",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
     "verity_vllm.engine.int8_ops",
-    "verity_vllm.engine.int8_ranks",
     "verity_vllm.engine.int8_vllm",
     "verity_vllm.engine.profiles.dense_generic",
     "verity_vllm.engine.profiles.engine_classes",
@@ -317,9 +337,8 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.tp.warmup",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
-    "verity_vllm.program.frontend.derive",
+    "verity_torch.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
-    "verity_vllm.program.frontend.kernel_readback",
     "verity_vllm.program.frontend.rules.family",
     "verity_vllm.program.frontend.targets",
     "verity_vllm.program.predict.batch",
@@ -329,7 +348,6 @@ KNOWN = frozenset({
     "verity_vllm.program.predict.score",
     "verity_vllm.program.predict.steps",
     "verity_vllm.program.predict.window_circuit",
-    "verity_vllm.protocols.pouw",
     "verity.protocols.accounting.pouw.prover.serving.h1",
     "verity.protocols.accounting.pouw.prover.serving.h1.challenger",
     "verity.protocols.accounting.pouw.prover.serving.h1.window",

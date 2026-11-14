@@ -24,7 +24,7 @@ untraced = [
 inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
           "tools/difftest/python/verity_difftest",
-          "security/Proofs/Flock/Soundness/Audit/Law.lean",
+          "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
           "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
           "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean",
           "security/Proofs/Flock/SamplingGeneric/TwoCount.lean",
@@ -48,7 +48,11 @@ inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/tool.py",
           "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
           "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
-          "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py"]
+          "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py",
+          # the scripts under `benchmarks/` the window's audit from its records (`prover/audit/records_audit.py`), which
+          # two tests here load, still loads off `sys.path`
+          "benchmarks/one_stage", "benchmarks/prove_path", "benchmarks/network_traces",
+          "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

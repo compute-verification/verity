@@ -67,7 +67,7 @@ def test_the_sessions_coins_are_the_challengers(fx):
     assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", tables, rec)])
 
 
-def test_the_plain_session_on_the_tree_at_a_subset_draw_is_accepted(fx):
+def test_the_plain_session_on_the_tree_at_a_subset_sample_is_accepted(fx):
     import plain_hidden as PH
 
     program, _ = PH.program()

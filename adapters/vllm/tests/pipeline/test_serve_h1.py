@@ -578,6 +578,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
         return 3
 
     monkeypatch.setattr(PH, "weight_root", rooted)
+    monkeypatch.setattr(PHK, "h1_weight_root", rooted)
     monkeypatch.setattr(PHK, "warm_zy", warm)
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))

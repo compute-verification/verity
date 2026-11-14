@@ -25,7 +25,7 @@ sessions.
   `TMPL_STATEMENT` on its unit rows, placed once by ``--tmpl-unit-bin`` (`flock-tmpl-unit`).
 * **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `verity-verify-proof draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
-  (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
+  (`a0.challenger_sample`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost), the whole plan
@@ -74,7 +74,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
@@ -310,7 +310,7 @@ def stage(a) -> int:
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
                 law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
-                p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
+                p = a0.challenger_sample(a.lean, ["--program", str(sd / "program.json"), "--partition",
                                                 str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
                                        sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)

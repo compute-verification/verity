@@ -49,7 +49,7 @@ inner statement (`parse_innerOk`: it sets up, its scope check passes, it carries
   (`namesDistinct_of_setup`).
 * **`.shaped`** (`holdsR_shaped`): where the decided proofs are shaped for their files (`DecShaped`).
 * **`.after`** (`holdsR_after`): the last message's statement is the statement (`DecStmt`), the reader's record's sample
-  is the statement's (`DrawTied`), custody passes at the reader's record (`CustodyRecJ`), the scope check passes, and
+  is the statement's (`SampleTied`), custody passes at the reader's record (`CustodyRecJ`), the scope check passes, and
   the draw-less refusal is not reached.
 
 `RestBaseHolds` is the statement `hrest` reads at a base check: at every compiled statement the outer reader parses,
@@ -59,7 +59,7 @@ every coin sequence and every messages, the base check holds (`restBase_holds`).
 **What the reading must fix.** `DecStmt` and `DecShaped` are facts about `decR`: the last message's statement and the
 opened proofs' lengths are the prover's (`rd` reads them from the last message, which `final` assembles from the parts'
 pieces), so no statement fact gives them. `decR` fixes both where it takes the statement for the last message's and
-refuses proofs that are not shaped. `DrawTied` is a statement fact: the session's `unitDraw` is the statement's sample.
+refuses proofs that are not shaped. `SampleTied` is a statement fact: the session's `unitSample` is the statement's sample.
 At several tables the setup sets it to the sample; at one table it is read back from the public file's parsed header,
 which the parser makes a well-formed tree (`FlockComplete.JsonRT.parse_wf`).
 -/
@@ -71,7 +71,7 @@ namespace RecDeploy
 open Flock
 open Lean (Json)
 open Claims (Msg)
-open FlockDeploy (Coin FinalP nextR nextR_coin VerdictR holdsR decR DecR actR jAt checksAtJ drawOfJ drawEq custody
+open FlockDeploy (Coin FinalP nextR nextR_coin VerdictR holdsR decR DecR actR jAt checksAtJ sampleOfJ sampleEq custody
   liveOfJ setupOf setupWith tabsOf pointsOf shapeAt NamesDistinct)
 open Claims.Recursion.VStarB
 
@@ -91,10 +91,10 @@ def DecShaped (rd : Msg → Option FinalP) : Prop :=
       FlockVBridge.Family.ProofShaped (shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) k) d.f.ps[k]
 
 /-- **The session's sample is the statement's**: at every statement that sets up and passes its scope check, the sample a
-record carrying the session's `unitDraw` has is the statement's sample up to `JsonEquiv`. -/
-def DrawTied : Prop :=
+record carrying the session's `unitSample` has is the statement's sample up to `JsonEquiv`. -/
+def SampleTied : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
-    s.read.check = .ok () → drawEq (drawOfU spec.unitDraw) s.read.draw = true
+    s.read.check = .ok () → sampleEq (sampleOfU spec.unitSample) s.read.draw = true
 
 /-- **Custody passes at the reader's record**: at every decision of `decR` on as many coins as messages, at a
 statement whose scope check passes, what `liveOfJ` reads of the substituted record (`jAt` at SHA-512) passes custody
@@ -164,7 +164,7 @@ theorem holdsR_shaped (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs
 sampled session. -/
 theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.FinalJ} {j' : Json} {lv : FlockDeploy.Live}
-    (hS : f.stmt = x) (hD : drawEq (drawOfJ f.j) s.read.draw = true) (hL : liveOfJ spec j' = .ok lv)
+    (hS : f.stmt = x) (hD : sampleEq (sampleOfJ f.j) s.read.draw = true) (hL : liveOfJ spec j' = .ok lv)
     (hC : custody spec lv link c₁ mids = .ok ()) (hQ : s.read.check = .ok ()) (hN : s.read.draw.isSome = true) :
     checksAtJ s spec x link c₁ mids f j' = .ok () := by
   have hN' : s.read.draw.isNone = false := by
@@ -176,22 +176,22 @@ theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {li
     Bool.false_eq_true, ↓reduceIte]
   try rfl
 
-/-- **The honest record's sample is its session's `unitDraw`, rebuilt**, as `drawOfJ` reads it. -/
-theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+/-- **The honest record's sample is its session's `unitSample`, rebuilt**, as `sampleOfJ` reads it. -/
+theorem sampleOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (points : Array (Array F128)) (streams : Array (Array Flock.Round)) (proofs : Array ByteArray) :
-    drawOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) =
-      (drawOfU spec.unitDraw).map Flock.norm := by
-  unfold drawOfJ FlockComplete.JsonRT.recordObj
+    sampleOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) =
+      (sampleOfU spec.unitSample).map Flock.norm := by
+  unfold sampleOfJ FlockComplete.JsonRT.recordObj
   rw [FlockComplete.JsonRT.getObjVal?_mkObj (FlockComplete.JsonRT.recordList_distinct spec h rootB points streams
-    proofs) (k := "unit_draw") (v := spec.unitDraw.getD Json.null) (by simp [FlockComplete.JsonRT.recordList])]
-  cases spec.unitDraw with
+    proofs) (k := "unit_draw") (v := spec.unitSample.getD Json.null) (by simp [FlockComplete.JsonRT.recordList])]
+  cases spec.unitSample with
   | none => rfl
   | some d => cases d <;> first | rfl | exact congrArg some (FlockDeploy.norm_norm _).symm
 
 /-- **Rebuilding one side keeps the sample check** where the other side's sample is already rebuilt. -/
-theorem drawEq_map_norm {a b : Option Json} (hb : ∀ e, b = some e → Flock.norm e = e) (h : drawEq a b = true) :
-    drawEq (a.map Flock.norm) b = true := by
-  rw [FlockDeploy.drawEq_iff] at h ⊢
+theorem sampleEq_map_norm {a b : Option Json} (hb : ∀ e, b = some e → Flock.norm e = e) (h : sampleEq a b = true) :
+    sampleEq (a.map Flock.norm) b = true := by
+  rw [FlockDeploy.sampleEq_iff] at h ⊢
   cases h with
   | none => exact .none
   | @some a' b' h' =>
@@ -206,7 +206,7 @@ statement's and custody passes at the reader's record. -/
 theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = cs.length)
     (hck : ∀ s spec sts, setupOf false x = some (s, spec, sts) → s.read.check = .ok () ∧ s.read.draw.isSome = true)
-    (hstmt : DecStmt rd) (hud : DrawTied) (hcu : CustodyRecJ rd) :
+    (hstmt : DecStmt rd) (hud : SampleTied) (hcu : CustodyRecJ rd) :
     holdsR FlockDeploy.sha512 rd .after x as cs := by
   unfold holdsR
   split
@@ -217,13 +217,13 @@ theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs 
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hs')
     obtain ⟨hq, hn⟩ := hck _ _ _ hx
     obtain ⟨lv, hL, hC⟩ := hcu x as cs _ hlen hd hq
-    have hD : drawEq (drawOfJ f.j) s.read.draw = true := by
+    have hD : sampleEq (sampleOfJ f.j) s.read.draw = true := by
       obtain ⟨v, c₁', r₀, rss, fl, link', pf, -, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
       obtain ⟨-, hspec, -, -, -, -, hf⟩ := DecR.mk.inj he
       rw [hf]
       dsimp only
-      rw [FlockDeploy.recJ, drawOfJ_recordObj, ← hspec]
-      exact drawEq_map_norm (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hx).1 he).1)
+      rw [FlockDeploy.recJ, sampleOfJ_recordObj, ← hspec]
+      exact sampleEq_map_norm (fun e he => (FlockDeploy.insOf_sample_norm (FlockDeploy.setupOf_some hx).1 he).1)
         (hud _ _ _ _ hx hq)
     exact checksAtJ_ok_of (f := ⟨f.stmt, f.j, #[]⟩) (hstmt x as cs _ hd) hD hL hC hq hn
   · trivial
@@ -238,7 +238,7 @@ def BasesHold (rd : Msg → Option FinalP) : Prop :=
 
 /-- **The base checks hold** where the reading fixes the last message's statement and refuses unshaped proofs, the
 session's sample is the statement's and custody passes at the reader's record. -/
-theorem basesHold (rd : Msg → Option FinalP) (hstmt : DecStmt rd) (hsh : DecShaped rd) (hud : DrawTied)
+theorem basesHold (rd : Msg → Option FinalP) (hstmt : DecStmt rd) (hsh : DecShaped rd) (hud : SampleTied)
     (hcu : CustodyRecJ rd) : BasesHold rd := by
   intro x st hx b hb as cs hlen
   have hck : ∀ s spec sts, setupOf false (xIOf x) = some (s, spec, sts) →

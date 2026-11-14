@@ -62,7 +62,7 @@ run's own coins (`Run.recCoins`) and the honest prover's messages (`Run.recMsgs`
 
 * **The reading and the five checks** (`ReadOkR`, `holdsR` at every `VerdictR`): the setup, the shapes, the names
   (`honestSetup`, `honestShaped`, `honestNames`), the verdict (`honestVerdict`), the checks after it (`checksAtJ`:
-  the statement, the sample `honest_drawJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
+  the statement, the sample `honest_sampleJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
 * **`nextR rdR` accepts** (`nextR_sound`).
 * **`IVStar` at `DeployedR.bdR` accepts the honest committed run** (`ivstar_honest_filesR`), at any salts `ys`.
 * **Row D's `hlev`** at every decision on the honest messages (`hlev_honest_deployed`), with the rep streams' names
@@ -77,8 +77,8 @@ What the run must fix and where it is fixed here:
   registered scheme's (`scheme_bounds`).
 * **As many coins as messages** (`honest_len`): round 0, the reps' rounds (`honestRounds_nAt`) and the last message,
   against `(V false).k x` coins (`repLens_sum`).
-* **The record's sample is the statement's** (`honest_drawTied`): the session's `unitDraw` is the statement's sample
-  (`stmtOk`), not `null` (`DrawOk`), and rebuilt (`Raw.ins_read`), so rebuilding it again changes nothing (`norm_norm`).
+* **The record's sample is the statement's** (`honest_sampleTied`): the session's `unitSample` is the statement's sample
+  (`stmtOk`), not `null` (`SampleOk`), and rebuilt (`Raw.ins_read`), so rebuilding it again changes nothing (`norm_norm`).
 -/
 
 @[expose] public section
@@ -300,12 +300,12 @@ theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.
 /-! ## The record's sample -/
 
 /-- **The session's sample is the statement's** at a plain completeness run. -/
-theorem honest_drawTied (o : Run sha512 Readable.relation) :
-    drawEq (RecDeploy.drawOfU o.spec.unitDraw) o.s.read.draw = true := by
+theorem honest_sampleTied (o : Run sha512 Readable.relation) :
+    sampleEq (RecDeploy.sampleOfU o.spec.unitSample) o.s.read.draw = true := by
   obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) o.toCase
   have hne : ∀ d, o.s.read.draw = some d → d ≠ Lean.Json.null := by
     intro d hd
-    unfold JsonRT.DrawOk at hDO
+    unfold JsonRT.SampleOk at hDO
     rw [hU, hd] at hDO
     exact hDO.1
   rw [hU]
@@ -318,23 +318,23 @@ theorem honest_drawTied (o : Run sha512 Readable.relation) :
     rw [hdr] at hdr'
     obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hdr'.symm
     have hnn := norm_norm d₀
-    have e : RecDeploy.drawOfU (some (Flock.norm d₀)) = some (Flock.norm d₀) := by
+    have e : RecDeploy.sampleOfU (some (Flock.norm d₀)) = some (Flock.norm d₀) := by
       cases h : Flock.norm d₀ with
       | null => exact absurd h hn
       | _ =>
         rw [h] at hnn
         exact congrArg some hnn
     rw [e]
-    exact drawEq_refl _
+    exact sampleEq_refl _
 
 /-- **The reader's record carries the statement's sample** at the honest decision. -/
-theorem honest_drawJ (o : Run sha512 Readable.relation)
-    (cs : List Coin) : drawEq (drawOfJ (o.recDec cs).f.j) o.s.read.draw = true := by
-  show drawEq (drawOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))
+theorem honest_sampleJ (o : Run sha512 Readable.relation)
+    (cs : List Coin) : sampleEq (sampleOfJ (o.recDec cs).f.j) o.s.read.draw = true := by
+  show sampleEq (sampleOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))
     o.s.read.draw = true
-  rw [recJ, RecDeploy.drawOfJ_recordObj]
-  exact RecDeploy.drawEq_map_norm
-    (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some o.setup).1 he).1) (honest_drawTied o)
+  rw [recJ, RecDeploy.sampleOfJ_recordObj]
+  exact RecDeploy.sampleEq_map_norm
+    (fun e he => (FlockDeploy.insOf_sample_norm (FlockDeploy.setupOf_some o.setup).1 he).1) (honest_sampleTied o)
 
 /-! ## The reading and the checks -/
 
@@ -376,7 +376,7 @@ theorem honest_holdsR (o : Run sha512 Readable.relation) :
     cases hs'
     obtain ⟨lv, hL, hC⟩ := RecDeploy.custodyRecJ RecDeploy.DeployedR.rdR o.x _ _ _
       (honest_len o hcs o.recCoins_length _) (honest_decR_deployed o) o.scope_ok
-    exact RecDeploy.checksAtJ_ok_of (f := ⟨o.x, (o.recDec o.recCoins).f.j, #[]⟩) rfl (honest_drawJ o _) hL hC
+    exact RecDeploy.checksAtJ_ok_of (f := ⟨o.x, (o.recDec o.recCoins).f.j, #[]⟩) rfl (honest_sampleJ o _) hL hC
       o.scope_ok o.ready_parts.1
 
 end FlockDeploy

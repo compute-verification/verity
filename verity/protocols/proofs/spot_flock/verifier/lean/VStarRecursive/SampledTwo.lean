@@ -46,7 +46,12 @@ package's audit builds and reads it.
 * **check** (`checkBlobsAt`), in order:
   0. each second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, `STMT_BYTES`): the sum of the
      lengths a session's statement holds, which v2 holds each under `2^64` (`OneStageZk.fitsWhy`,
-     `OneStageZk.drawFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
+     `OneStageZk.sampleFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
+     and each statement is the one the session at its position makes, the sessions as many as the statements
+     (`stmtsSessions`, `STMT_COUNT`, `STMT_SESSION`): at each position the verifier rebuilds the statement the
+     session there makes (`stmtOwnAt`), refuses where the counts differ or a position's rebuilt statement is none or
+     not the evidence's canonical text, and hands round 2 those rebuilt statements (`stmtsOwn`), so they are the
+     ones the sessions make, on those templates' circuits;
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
   2. the second stage's sessions, as v2's per-member form runs them (`OneStageZk.membersRun`: the statements held as
@@ -92,7 +97,7 @@ checks are the function the run of record of step 4 calls for the interior's rec
 registration's own ports at that port's own root is no registered read of the record (`Record.lessOwnReads`), its
 rows being the second-stage statement check's to hold, and a read of one of its ports at any other root is opened and
 not registered, which refuses. A member of an interior that reads another member's port reads it so.
-That design is computed, never read from the evidence (`secondDesignOf`): `Select.secondLaw` of the first stage's sample (the
+That design is computed, never read from the evidence (`secondDesignOf`): `Select.secondSamplingDesign` of the first stage's sample (the
 proved units of the sample the run of record decided) over the replay block's cells under the interior's query
 (`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage samples by.
 Its refusals carry `OneStage.check`'s step prefixes, so a reason names the same step in both forms.
@@ -383,6 +388,96 @@ def stamped (p : Params) (e : Evidence) (bs : Core.Blobs) (out : Array (String �
       ("session_tables", Lean.toJson (1 : Nat))] ++ reads ++ sample
     pure (k, fields.foldl (fun acc (f, x) => acc.setObjVal! f x) v)
 
+/-- The refusal of a statement other than the one the session at its position makes (`stmtsSessions`). -/
+def STMT_SESSION (t : Nat) : String :=
+  s!"statement {t} is not the one the {t}-th of the statements' sessions makes: round 2 reads the statements by " ++
+    "position, each its template's session's, on that template's circuit"
+
+/-- The refusal of a count of sessions other than the count of statements (`stmtsSessions`): a session past the last
+statement, or a statement with no session, must not pass unread. -/
+def STMT_COUNT : String :=
+  "the sessions are not as many as the statements: round 2 reads one statement a session, in order, so a session " ++
+    "past the last statement or a statement with no session is refused"
+
+/-- A file read as JSON, as `verity-verify-proof verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
+def jsonOfBytes (b : ByteArray) : Option Json :=
+  (String.fromUTF8? b).bind fun s => (Flock.JsonParse.parse s).toOption
+
+/-- A public file's header: its first line's JSON (`a0.public_header`, `Spot.FilePart.header` but for the norm its
+own reader applies), none where it has no line or doesn't parse. -/
+def headerLine (file : ByteArray) : Option Json := do
+  let nl ← Flock.findByte file 10
+  (Flock.JsonParse.parse (← String.fromUTF8? (file.extract 0 nl))).toOption
+
+/-- **A session's statement as round 2 reads one**, of the template `name`, at the public file `pub`, the sample's
+text `sampleB` and the registered reads' text `registeredB`: the template's name, the public file's header, the sample
+and the registered reads (null where there are none), each read as `verity-verify-proof verify` reads JSON. None where a
+field doesn't read or there is no sample. -/
+def stmtOf (name : String) (pub : ByteArray) (sampleB registeredB : Option ByteArray) : Option Json := do
+  let header ← headerLine pub
+  let draw ← jsonOfBytes (← sampleB)
+  let registered ← match registeredB with
+    | some b => jsonOfBytes b
+    | none => some .null
+  pure (Json.mkObj [("draw", draw), ("header", header), ("registered", registered), ("template", .str name)])
+
+/-- **The statement the `t`-th of the statements' sessions makes** (`stmtOf`): template `t`'s, at the public file of
+the member the session's statement names, the sample in the session's record and the member's registered reads, each
+as `Flock.RecordText.printT` prints it. None where the member's circuit is not template `t`'s, or the session's
+record or the member's circuit or public file is on no blob, or a field doesn't read. -/
+def stmtOwnAt (p : Params) (e : Evidence) (bs : Core.Blobs) (t : Nat) : Option Json := do
+  let st ← (e.statements.toList.flatMap fun st => st.sessions.toList.map fun _ => st)[t]?
+  let s ← (e.statements.toList.flatMap (·.sessions.toList))[t]?
+  let name ← st.member
+  let m ← p.members.find? (·.name == name)
+  let c ← p.circuits[t]?
+  let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
+  let _ ← (bs.get m.own.circuit "circuit").toOption
+  let pub ← (bs.get m.own.pub "public file").toOption
+  if m.own.circuit == c.2.1 then
+    stmtOf c.1 pub ((Flock.Witness.recordDraw record).map fun j => (Flock.RecordText.printT j).toUTF8)
+      (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)
+  else none
+
+/-- **The statements round 2 reads** (check, 4): at each position of the evidence's, the statement its session makes
+(`stmtOwnAt`). `stmtsSessions` refuses a play where the counts differ, or one is none or not the evidence's. -/
+def stmtsOwn (p : Params) (e : Evidence) (bs : Core.Blobs) : Array Json :=
+  (Array.range e.stmts.size).map fun t => (stmtOwnAt p e bs t).getD .null
+
+/-- **Each statement is its session's, and the counts agree** (check, 0; `STMT_COUNT`, `STMT_SESSION`): the sessions
+are as many as the statements, and at each position `t` the statement the `t`-th of the statements' sessions makes
+(`stmtOwnAt`) is there and has the evidence's `t`-th statement's canonical text. -/
+def stmtsSessions (p : Params) (e : Evidence) (bs : Core.Blobs) : V Unit :=
+  if (e.statements.toList.flatMap (·.sessions.toList)).length != e.stmts.size then
+    .error STMT_COUNT
+  else (List.range e.stmts.size).forM fun t =>
+    match stmtOwnAt p e bs t with
+    | some j => if jeq j (e.stmts.toList.getD t .null) then .ok () else .error (STMT_SESSION t)
+    | none => .error (STMT_SESSION t)
+
+theorem stmtsOwn_size (p : Params) (e : Evidence) (bs : Core.Blobs) : (stmtsOwn p e bs).size = e.stmts.size := by
+  simp [stmtsOwn]
+
+theorem stmtsOwn_getD (p : Params) (e : Evidence) (bs : Core.Blobs) {t : Nat} (ht : t < e.stmts.size) :
+    (stmtsOwn p e bs).toList.getD t .null = (stmtOwnAt p e bs t).getD .null := by
+  simp [stmtsOwn, List.getD_eq_getElem?_getD, ht]
+
+/-- **Where each statement is its session's, every position below the count has a session statement** (`stmtOwnAt`). -/
+theorem stmtsSessions_at {p : Params} {e : Evidence} {bs : Core.Blobs} (h : stmtsSessions p e bs = .ok ())
+    {t : Nat} (ht : t < e.stmts.size) : ∃ j, stmtOwnAt p e bs t = some j := by
+  unfold stmtsSessions at h
+  split at h
+  · cases h
+  · have h' := Flock.RecCompose.forM_ok h t (List.mem_range.2 ht)
+    cases hc : stmtOwnAt p e bs t with
+    | none => rw [hc] at h'; cases h'
+    | some j => exact ⟨j, hc⟩
+
+#guard (jsonOfBytes "{\"a\":1}".toUTF8).isSome
+#guard (jsonOfBytes "{".toUTF8).isNone
+#guard (headerLine "{\"a\":1}\nrest".toUTF8).isSome
+#guard (headerLine "{\"a\":1}".toUTF8).isNone
+
 /-- **The stream's run of record over both stages** (check, 4), the input `Run.run` reads: the boundary's parameters,
 record, rule, values, declared items, challenger, receipt `received₁`'s place and the bytes `ξ` it read, no closure, the
 second stage's sessions and the verdicts `vs`, no public outputs, the interior audit's statement, δ, the boundary's
@@ -466,7 +561,8 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   digestIs j₁ c.digest
   let j₂ ← readBack e.record
   interiorDigestIs e.record j₂ c₂.digest
-  pure (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs)
+  pure (c₂, ξ₂, r,
+    inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂, stmts := stmtsOwn p e bs } received₂ vs)
 
 def SOURCE_READ : String :=
   "the evidence's first-stage bytes run past what the first stage read: the run holds only the bytes it read to the " ++
@@ -603,7 +699,7 @@ round is fixed. An honest challenger opens them so. -/
 def repStreamsOrdered (p : Params) (e : Evidence) : V Unit :=
   OneStageZk.treesOf p.audit.base e.interior.base >>= treesOrdered
 
-/-- **The second stage's sampling design** (check, 5), computed and never read: `Select.secondLaw` of the first stage's
+/-- **The second stage's sampling design** (check, 5), computed and never read: `Select.secondSamplingDesign` of the first stage's
 sample, the proved units of the sample the run of record `run` decided, over the cells the replay block's program has
 under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
 second stage computes it. -/
@@ -612,7 +708,7 @@ def secondDesignOf (p : Params) (run : Json) : V Json := do
   let q := p.interior.verifier.query
   let ns ← Select.replayCells p.replay q
   let ks ← k.over (← Select.templateIds q) ns
-  pure (Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)
+  pure (Select.secondSamplingDesign ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)
 
 /-- The interior registration's sampling design as the run of record reads it: a subset of all its `m` proof blocks. -/
 def subsetDesign (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
@@ -641,7 +737,7 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
   | .reject r => .reject r
   | .undecided r => .undecided r
   | .accept () () =>
-  match Record.profileDraw design with
+  match Record.profileSample design with
   | some prof =>
     let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
     let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
@@ -657,15 +753,15 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
 /-- **The interior audit's check at the second stage's sampling design** (check, 5; module docstring, **the last
 step**): the interior registration's population `m`; the sample the coins `ξ₂` give under `design`
 (`OneStage.coinsReason` at the verifier whose sampling design is `subsetDesign m`, so that the sample is `design`'s,
-`Draw.flockLaw`), every coin opened read; then `secondChecked` at that verifier. -/
+`Draw.flockSamplingDesign`), every coin opened read; then `secondChecked` at that verifier. -/
 def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (design : Json)
     (ξ₂ : ByteArray) (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   match nat? (getD c.record "population") with
   | none => .reject "registration: the interior record names no population"
   | some m =>
-    match OneStage.coinsReason { v with law := subsetDesign m } design c.record e.draw ξ₂ with
+    match OneStage.coinsReason { v with samplingDesign := subsetDesign m } design c.record e.draw ξ₂ with
     | some why => .reject s!"draw: coins: {why}"
-    | none => secondChecked { v with law := subsetDesign m } delta c m design e
+    | none => secondChecked { v with samplingDesign := subsetDesign m } delta c m design e
 
 /-- The refusal of a second-stage session whose statement is `2^64` bytes or more (`stmtsBytesFit`). -/
 def STMT_BYTES (session : String) : String :=
@@ -684,7 +780,7 @@ def tablesSize (tables : List (String × ByteArray)) : Nat :=
 /-- **A bound on the bytes of a member's session statement** at its record's sample `draw` and lookup tables of
 `tables` bytes (`tablesSize`): `STMT_HEAD`, the circuit and public files, the tables, the program, and the
 partition object, the registered reads and the sample as `Flock.RecordText.printT` prints them
-(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.drawFitsWhy` hold each under
+(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.sampleFitsWhy` hold each under
 `2^64`; this is their sum. -/
 def stmtSize (o : OneStageZk.Own) (circuit pub : ByteArray) (tables : Nat) (draw : Option Json) : Nat :=
   STMT_HEAD + circuit.size + pub.size + tables + o.program.size + OneStageZk.printedSize o.partition +
@@ -742,12 +838,16 @@ def prepareRun (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteAr
   let design ← secondDesignOf p run
   pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ design ξ₂ { e.interior.base with verdicts := r.out }, run)
 
-/-- Check steps 0 to 5: the sessions' statements' bytes (`stmtsBytesFit`), then `prepareRun`. -/
+/-- Check steps 0 to 5: the sessions' statements' bytes (`stmtsBytesFit`), that each statement is its session's and
+the counts agree (`stmtsSessions`), then `prepareRun`. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) :=
   match stmtsBytesFit p e bs with
   | .error err => .error err
-  | .ok () => prepareRun form p c ξ e bs
+  | .ok () =>
+    match stmtsSessions p e bs with
+    | .error err => .error err
+    | .ok () => prepareRun form p c ξ e bs
 
 theorem bytesFit_ok {limit : Nat} {session : String} {n : Nat}
     (h : bytesFit limit session (some n) = .ok ()) : n < limit := by
@@ -772,7 +872,21 @@ theorem prepare_ok {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : By
   unfold prepare at h
   split at h
   · cases h
-  · next hw => exact ⟨h, hw⟩
+  · next hw =>
+    split at h
+    · cases h
+    · exact ⟨h, hw⟩
+
+/-- **Steps 0 to 5 return only where each statement is its session's and the counts agree** (`stmtsSessions`). -/
+theorem prepare_sessions {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {r : Core.Outcome OneStage.Public Core.Integrity × Json}
+    (h : prepare form p c ξ e bs = .ok r) : stmtsSessions p e bs = .ok () := by
+  unfold prepare at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · next hw _ => exact hw
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
 does, the run of record must accept, and then the form is refused while `form` is off. -/
@@ -798,10 +912,13 @@ def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : 
   | .error err => .reject s!"two-stage: {err}"
   | .ok (two, run) => finishWith form two run
 
-/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`). -/
-def checkBlobsAt : Params → OneStage.Commitment → ByteArray → Evidence → Core.Blobs →
+/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`), held to the caller's check
+(`Caller.gate`) on the boundary's record at its verifier and on the interior's at the verifier the last step reads:
+neither the run of record nor the last step (`Spot.Run.run`, `secondChecked`) makes the caller's codes. -/
+def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  checkBlobsAtWith FORM
+  Caller.gate e.record p.audit.base.verifier
+    (Caller.gate c.record p.boundary.verifier (checkBlobsAtWith FORM p c ξ e bs))
 
 /-- The check at the bytes the evidence says the first stage read, which the run of record holds to the
 challenger's coins (`Run.coinsHold`). -/
@@ -824,7 +941,10 @@ bytes, the evidence and the blobs. -/
 theorem checkBlobsAt_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : Evidence) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
     checkBlobsAt p c ξ e bs ≠ .accept pub prof := by
-  unfold checkBlobsAt checkBlobsAtWith
+  intro h
+  have h₁ := (Caller.gate_accept (Caller.gate_accept h).2).2
+  revert h₁
+  unfold checkBlobsAtWith
   split
   · simp
   · exact finish_refuses hF _ _ _ _

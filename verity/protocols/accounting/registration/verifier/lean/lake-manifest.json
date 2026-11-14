@@ -12,7 +12,7 @@
    "scope": "",
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
-   "inherited": true,
+   "inherited": false,
    "dir": "../../../../../circuits/difftest",
    "configFile": "lakefile.toml"},
   {"type": "path",

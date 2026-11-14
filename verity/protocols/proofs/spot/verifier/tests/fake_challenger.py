@@ -1,13 +1,13 @@
 """The auditor's challenger for a test, in process: the only coins a `service.Stream` that reads coins takes are a
 challenger's (`coins.ChallengerCoins`), and the verifier's run accepts a sample only with the evidence that the challenger
-released them after the registration's digest, so a test's stream samples from this one.
+released them after the docket's digest, so a test's stream samples from this one.
 
 `Challenger` is a `ChallengerCoins` each of whose commitments opens a session of its own: a `LiveChallenger` on
 seeded entropy whose record is signed under the pinned key (`test_remote.PINNED`) and which an auditor's ledger of its
 own opens for `WINDOW`, withheld (the verifier takes only a withheld session's coins, `challenger.withheld_on`), and
 ends once the sample is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the sample after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
-coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
+coins to the docket's digest first (a second stage's to the interior docket's), and `outcome` hands the
 verifier the sample's evidence (a two-stage sample's, both stages'), a two-stage sample's second-stage sessions'
 statements, an honest prover's (`statements`), and the auditor's params for them (`proofs`)."""
 
@@ -111,7 +111,7 @@ class Challenger(T.ChallengerCoins):
         return super().commit(after)
 
     def evidence(self, digest: str) -> dict[str, Any] | None:
-        """The evidence for the sample after registration `digest` (hex): its session closed by its client, its release
+        """The evidence for the sample after docket `digest` (hex): its session closed by its client, its release
         log as a served challenger writes it (each root, then its coin's release, as `remote.serve` answers one open at a
         time), and the ledger's end sealing it; None for a sample that read no coins."""
         after = bytes.fromhex(digest)
@@ -134,8 +134,8 @@ class Challenger(T.ChallengerCoins):
 
 class Stream(S.Stream):
     """A `service.Stream` on a test's own challenger (`coins`, a new `Challenger` unless given; none for a stream
-    that reads no coins), driven as a deployment drives it: a registration names `WINDOW`'s root unless it names
-    another, a sample's coins are committed to its registration's digest before it is sampled, the stream holds the
+    that reads no coins), driven as a deployment drives it: a docket names `WINDOW`'s root unless it names
+    another, a sample's coins are committed to its docket's digest before it is sampled, the stream holds the
     challenger's key (`pinned_key`) and the verifier's copy of main's history (`MAIN`) unless the test gives its own
     (`key`, `main`), and an outcome's run is
     given the sample's evidence unless the test gives its own (`coins`, None for none), and a two-stage one the honest
@@ -170,8 +170,8 @@ class Stream(S.Stream):
     def outcome(self, draw: S.Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, proofs: Any = _NONE,
                 **kwargs: Any) -> S.Outcome | S.Pending:
-        """A two-stage sample's evidence is both stages': the first stage's after the registration, the second's
-        (`interior_coins`) after the interior registration."""
+        """A two-stage sample's evidence is both stages': the first stage's after the docket, the second's
+        (`interior_coins`) after the interior docket."""
         first = draw.replay_sample or draw
         if coins is Stream._NONE:
             coins = self._evidence(first.registration)
@@ -202,7 +202,7 @@ class Stream(S.Stream):
     def _reads(self, second: S.Draw) -> list[dict[str, Any] | None]:
         """Each template's registered reads in the check's order, as an honest session reads them: each port the replay
         block's Definition links (`second_stage.replay_links`) of the boundary port its link names, each slot its unit's
-        row of its cell's replay block's (`second_stage.replay_rows`), and each value the interior registration
+        row of its cell's replay block's (`second_stage.replay_rows`), and each value the interior docket
         registers, under a port of its name (None when it reads none)."""
         e = self._entries[second.registration.order]
         rec, boundary = second.registration.record, second.replay_sample.registration.record
@@ -235,7 +235,7 @@ class Stream(S.Stream):
     def statements(self, second: S.Draw) -> list[dict[str, Any]]:
         """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
         the interior program, its header the one the served path writes for the template's slots of the interior
-        registration (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
+        docket (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
         bindings there), its sample the second stage's units among them, counted from its first, and its registered
         reads (`_reads`)."""
         rec = second.registration.record

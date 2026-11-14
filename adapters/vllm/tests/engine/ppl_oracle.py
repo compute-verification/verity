@@ -1,56 +1,55 @@
-"""The plain int8 step's oracle: `benchmarks/ppl/steps.py` itself, imported as the bench imports it (its directory on sys.path),
-and run on the CPU through the bench's own `matmul.MM` and gates.
+"""The plain int8 linear's oracle: the registered Definition's equations (`verity/definitions/registry/int8_exact.py`,
+`Int8RowQuant` then `ScaledMmS8`), in torch on the CPU, one rounding per operation.
 
-`int8_linear(x, w)` is what the bench's layer computes for a linear under the arm `[[linear]] step = "int8"` (defaults): the
-chain `steps.int8_linear` -> `matmul.terminal` on x.float() and the bf16 weight's float(), then `.to(bf16)` as `model.Layer.linear`
-does.  Every product runs on the check window, so the bench's gates (int8 range, s32 accumulator, float64 recomputation) run too.
+    s    = RN32(max(max_k |x_k|, RN32(1e-30)) / 127)            per row of x and per output row of the weight
+    X_k  = clamp(rint(RN32(x_k / s)), -127, 127)
+    Y_n  = sum_k X_k W_nk                                      exact, in int64; k max|X| max|W| within s32
+    y_n  = bf16(RN32(RN32(RN32(Y_n) s_a) s_w[n]))
+
+`int8_linear(x, w)` is y [M, N] bf16 of x [M, K] bf16 and the bf16 weight w [N, K], both read as float32; it is the perplexity
+bench's `[[linear]] step = "int8"` arm with its defaults.
 """
 from __future__ import annotations
 
-import sys
-import types
-from pathlib import Path
-
 import torch
 
-PPL = Path(__file__).resolve().parents[4] / "benchmarks" / "ppl"
-if str(PPL) not in sys.path:
-    sys.path.insert(0, str(PPL))
-
-import gates as G  # noqa: E402
-import matmul as MM  # noqa: E402
-import methodology  # noqa: E402
-import steps as S  # noqa: E402
+TOP = 127
+S32 = (1 << 31) - 1
+#: the scale floor, RN32(1e-30): a float32 clamp rounds the bound to float32
+FLOOR = 1e-30
 
 
-def run(arm=None) -> MM.Run:
-    return MM.Run(arm or types.SimpleNamespace(name="vllm-int8"), 0, methodology.CHECK_WINDOW, types.SimpleNamespace(li=0), G.Gates(),
-                  {}, {}, None)
+def quant_rows(m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """(codes [R, K] int8, scales [R] float32) of the rows of m, read as float32."""
+    m = m.float()
+    s = m.abs().amax(dim=1).clamp(min=FLOOR) / TOP
+    return torch.round(m / s[:, None]).clamp(-TOP, TOP).to(torch.int8), s
 
 
-def _passed(r: MM.Run) -> None:
-    bad = {n: g for n, g in r.gates.log.items() if g["failed"]}
-    assert not bad, f"the bench's gates failed: {bad}"
+def int_product(xq: torch.Tensor, wq: torch.Tensor) -> torch.Tensor:
+    """Y [M, N] int64 = xq wq^T, exact; refused unless k max|xq| max|wq| is within s32."""
+    bound = xq.shape[1] * int(xq.abs().max()) * int(wq.abs().max())
+    assert bound <= S32, f"the s32 accumulator's bound {bound} exceeds {S32}"
+    return xq.long() @ wq.long().T
+
+
+def dequantize(y: torch.Tensor, sa: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
+    """bf16(RN32(RN32(RN32(Y) s_a) s_w)) of the integer product y [M, N]."""
+    return (y.float() * sa[:, None] * sw[None, :]).to(torch.bfloat16)
 
 
 def int8_linear(x: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
-    """y [M, N] bf16 of x [M, K] bf16 and the bf16 weight w [N, K], by steps.int8_linear with its defaults."""
-    r = run()
-    mm = MM.MM("linear", "mlp.up_proj", r, x.reshape(-1, x.shape[-1]).float(), w, maps=(lambda t: t.float(),))
-    y = S.int8_linear(mm, MM.terminal)
-    _passed(r)
-    return y.to(torch.bfloat16)
+    """y [M, N] bf16 of x [M, K] bf16 and the bf16 weight w [N, K]."""
+    xq, sa = quant_rows(x.reshape(-1, x.shape[-1]))
+    wq, sw = quant_rows(w)
+    return dequantize(int_product(xq, wq), sa, sw)
 
 
 def int8_linear_scaled(x: torch.Tensor, w: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    """steps.int8_linear's dequantization (bf16) of a given integer product y [M, N] (int64), on x's and w's scales: the step
-    with the rest of its chain returning y."""
-    mm = MM.MM("linear", "mlp.up_proj", run(), x.reshape(-1, x.shape[-1]).float(), w, maps=(lambda t: t.float(),))
-    return S.int8_linear(mm, lambda _m: y).to(torch.bfloat16)
+    """The dequantization (bf16) of a given integer product y [M, N] (int64), on x's and w's scales."""
+    return dequantize(y, quant_rows(x.reshape(-1, x.shape[-1]))[1], quant_rows(w)[1])
 
 
 def int8_weights(w: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """(int8 [N, K], scales [N]) steps.int8_linear quantizes the bf16 weight w to (`quant_rows(w.float(), 127)`)."""
-    q, s = S.quant_rows(w.float(), 127)
-    return q.to(torch.int8), s
-
+    """(int8 [N, K], scales [N]) the bf16 weight w quantizes to."""
+    return quant_rows(w)

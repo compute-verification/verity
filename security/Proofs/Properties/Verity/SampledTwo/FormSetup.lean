@@ -22,10 +22,10 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
 
 * **The statement's fields** (`memberFields_stmtRaw`): `SessionMsgs.stmtRaw`'s fields are a member's
   (`MemberChecks.MemberFields`), by definition.
-* **The sample the form set a session up at is printable** (`draw_good`): it is the record's `unit_draw` rebuilt, so
+* **The sample the form set a session up at is printable** (`sample_good`): it is the record's `unit_draw` rebuilt, so
   its objects are well-formed trees, and the setup decodes it to a subset or a stratified sample
-  (`Verity.Sampled.setupAt_drawLaw`), each printable where it decodes.
-* **The statement's printed files read back** (`readsBack_stmtRaw`, `draw_readsBack`): where the member's partition
+  (`Verity.Sampled.setupAt_sampleDesign`), each printable where it decodes.
+* **The statement's printed files read back** (`readsBack_stmtRaw`, `sample_readsBack`): where the member's partition
   object's objects are well-formed trees (`Claims.Json.Wf`) and its registered reads are printable
   (`Claims.Json.Good`), at a session the form set up, Flock's parser reads the statement's partition and registered
   reads back alike (`Flock.PartCong.partition_readsBack_of_setup`, `registered_readsBack`), and its sample back as a
@@ -37,7 +37,7 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
   not plain, which the member's statement passing gives (`verified_at`).
 * **The statement decodes from its bytes** (`stmtRaw_decode`): the form refuses a member's file, lookup table,
   program, partition object or registered reads, or a record's sample, at `2^64` bytes or more
-  (`Spot.OneStageZk.fitsWhy`, `drawFitsWhy`), so every length of the statement fits its 8-byte word
+  (`Spot.OneStageZk.fitsWhy`, `sampleFitsWhy`), so every length of the statement fits its 8-byte word
   (`stmtRaw_fits`) and `FlockDeploy.decode` reads it back (`FlockDeploy.decode_encode_of_fits`).
 * **The session digests with SHA-512** (`setupAt_sha512`), as `setupAt_oneTable` gives its one table.
 * **The session retains rounds** (`setupAt_retains`), as the circuit statement's tags do, so a session the masked
@@ -75,20 +75,20 @@ theorem memberFields_stmtRaw (m : Spot.OneStageZk.Member) (circuitB pubB : ByteA
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 /-- **A record's printed sample reads back as the record's sample**: where the record's sample is printable, Flock's
-parser reads the bytes `SessionMsgs.drawBytes` prints of it as a value whose rebuilt form (`Flock.norm`) is that
-sample. The sample is `norm` of the record's `unit_draw` (`Verity.Sampled.recordDraw_raw`), which `norm` fixes
+parser reads the bytes `SessionMsgs.sampleBytes` prints of it as a value whose rebuilt form (`Flock.norm`) is that
+sample. The sample is `norm` of the record's `unit_draw` (`Verity.Sampled.recordSample_raw`), which `norm` fixes
 (`FlockDeploy.norm_norm`), and the parser reads a printable value's text back alike it
 (`Flock.PartCong.printed_readsBack`), which rebuilds to the same value (`FlockDeploy.norm_congr`). -/
-theorem draw_readsBack {record : String}
+theorem sample_readsBack {record : String}
     (hd : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj) :
-    ∃ D, (SessionMsgs.drawBytes record).mapM (FlockDeploy.jsonOf "draw") = .ok D ∧
+    ∃ D, (SessionMsgs.sampleBytes record).mapM (FlockDeploy.jsonOf "draw") = .ok D ∧
       D.map Flock.norm = Flock.Witness.recordDraw record := by
-  unfold SessionMsgs.drawBytes
+  unfold SessionMsgs.sampleBytes
   cases hrd : Flock.Witness.recordDraw record with
   | none => exact ⟨none, rfl, rfl⟩
   | some dj =>
     obtain ⟨P, hP, hsame⟩ := Flock.PartCong.printed_readsBack "draw" (hd dj hrd)
-    obtain ⟨_, d, -, -, -, hdj⟩ := Verity.Sampled.recordDraw_raw hrd
+    obtain ⟨_, d, -, -, -, hdj⟩ := Verity.Sampled.recordSample_raw hrd
     have hn : Flock.norm dj = dj := by
       rw [hdj]
       exact FlockDeploy.norm_norm d
@@ -100,26 +100,26 @@ theorem draw_readsBack {record : String}
       exact congrArg some ((FlockDeploy.norm_congr a dj (FlockComplete.JsonRT.same_jsonEquiv hs)).trans hn)
 
 /-- **The sample the form set a session up at is printable**: the record's sample is its `unit_draw` rebuilt
-(`Verity.Sampled.recordDraw_raw`), so each of its objects is a well-formed tree (`FlockDeploy.wf_norm`). The setup
-decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_drawLaw`, `drawLaw_ok`, `lawWhy_zk`), and a
+(`Verity.Sampled.recordSample_raw`), so each of its objects is a well-formed tree (`FlockDeploy.wf_norm`). The setup
+decodes it to a subset or a stratified sample (`Verity.Sampled.setupAt_sampleDesign`, `sampleDesign_ok`, `samplingDesignWhy_zk`), and a
 well-formed value that decodes to either is printable (`FlockComplete.JsonRT.good_subset`, `good_stratified`). -/
-theorem draw_good {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {record : String} {dj : Json}
+theorem sample_good {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {record : String} {dj : Json}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hrd : Flock.Witness.recordDraw record = some dj)
     (h : Spot.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok x) : Claims.Json.Good dj := by
-  obtain ⟨_, d, -, -, -, hdj⟩ := Verity.Sampled.recordDraw_raw hrd
+  obtain ⟨_, d, -, -, -, hdj⟩ := Verity.Sampled.recordSample_raw hrd
   have hw : Claims.Json.Wf dj := by
     rw [hdj]
     exact FlockDeploy.wf_norm d
   rw [hrd] at h
-  obtain ⟨D, hD, hlaw⟩ := Verity.Sampled.drawLaw_ok (Verity.Sampled.setupAt_drawLaw h)
-  rcases Verity.Sampled.lawWhy_zk hlaw with ⟨kd, hl⟩ | ⟨K, St, hl⟩
+  obtain ⟨D, hD, hlaw⟩ := Verity.Sampled.sampleDesign_ok (Verity.Sampled.setupAt_sampleDesign h)
+  rcases Verity.Sampled.samplingDesignWhy_zk hlaw with ⟨kd, hl⟩ | ⟨K, St, hl⟩
   · exact FlockComplete.JsonRT.good_subset hw hD hl
   · exact FlockComplete.JsonRT.good_stratified hw hD hl
 
 /-- **A member's statement's printed files read back** (`MemberChecks.ReadsBack`), at a session the form set up on
 the member's files at the record's sample, where the member's partition object's objects are well-formed trees and
 its registered reads are printable. The setup returned only where `Flock.canon` prints the partition object
-(`Flock.PartCong.partition_readsBack_of_setup`), and its sample is printable (`draw_good`). -/
+(`Flock.PartCong.partition_readsBack_of_setup`), and its sample is printable (`sample_good`). -/
 theorem readsBack_stmtRaw {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {bs : Core.Blobs}
     {tables : List (String × ByteArray)} {rd : Spot.OneStageZk.Reads} {record : String}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hp : Claims.Json.Wf m.own.partition)
@@ -127,9 +127,9 @@ theorem readsBack_stmtRaw {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArra
     (hst : Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs) rd
       (Flock.Witness.recordDraw record) = .ok x) :
     MemberChecks.ReadsBack
-      (SessionMsgs.stmtRaw m circuitB pubB tables (SessionMsgs.drawBytes record)
+      (SessionMsgs.stmtRaw m circuitB pubB tables (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) m record := by
-  have hd : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := fun dj hdj => draw_good hdj hst
+  have hd : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := fun dj hdj => sample_good hdj hst
   obtain ⟨spec, tabs, rest⟩ := x
   obtain ⟨sts, hs, -⟩ := Verity.Sampled.setupAt_ok hst
   obtain ⟨hset, -⟩ := Verity.Sampled.sessionAt_ok hs
@@ -140,7 +140,7 @@ theorem readsBack_stmtRaw {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArra
   have hb : (Flock.Witness.zkTags
       (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs)).bindings = true := rfl
   exact ⟨Flock.PartCong.partition_readsBack_of_setup (o := m.own.partition) hp hh hb hset,
-    Flock.PartCong.registered_readsBack hr, draw_readsBack hd⟩
+    Flock.PartCong.registered_readsBack hr, sample_readsBack hd⟩
 
 /-- **A member's statement sets up the session the form set up**: a statement `w` with the member's fields, whose
 printed files read back and whose bytes decode as `w`, sets up under `--zk` (`FlockDeploy.setupOf true`) the session
@@ -194,12 +194,12 @@ private theorem printed_fits {o : Option Json}
 
 /-- **Every length of a member's statement fits its 8-byte word** (`FlockDeploy.Raw.Fits`), where the form's check
 refused none of them: the member's files, the lookup tables, its program, partition object and registered reads
-(`Spot.OneStageZk.fitsWhy`), and the record's sample (`Spot.OneStageZk.drawFitsWhy`). -/
+(`Spot.OneStageZk.fitsWhy`), and the record's sample (`Spot.OneStageZk.sampleFitsWhy`). -/
 theorem stmtRaw_fits {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {bs : Core.Blobs} {record : String}
     (hfit : Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf bs)
       (some m.own.program) (some m.own.partition) m.own.registered = none)
-    (hd : Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none) :
-    (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.drawBytes record)
+    (hd : Spot.OneStageZk.sampleFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none) :
+    (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.sampleBytes record)
       (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).Fits := by
   unfold Spot.OneStageZk.fitsWhy at hfit
   obtain ⟨h1, hfit⟩ := ite_some_none hfit
@@ -209,7 +209,7 @@ theorem stmtRaw_fits {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {b
   obtain ⟨h5, hfit⟩ := ite_some_none hfit
   obtain ⟨h6, hfit⟩ := ite_some_none hfit
   obtain ⟨h7, -⟩ := ite_some_none hfit
-  unfold Spot.OneStageZk.drawFitsWhy at hd
+  unfold Spot.OneStageZk.sampleFitsWhy at hd
   obtain ⟨h8, -⟩ := ite_some_none hd
   refine ⟨statement_size, Nat.lt_of_not_le h1, Nat.lt_of_not_le h2, Nat.lt_of_not_le h3, fun q hq => ?_,
     (by show 1 < 2 ^ 64; decide), printed_fits h8, ?_, ?_, ?_, ?_, ?_, ?_, printed_fits h7, ?_⟩
@@ -236,11 +236,11 @@ theorem stmtRaw_fits {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {b
 theorem stmtRaw_decode {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {bs : Core.Blobs} {record : String}
     (hfit : Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf bs)
       (some m.own.program) (some m.own.partition) m.own.registered = none)
-    (hd : Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none) :
+    (hd : Spot.OneStageZk.sampleFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none) :
     FlockDeploy.decode
-        (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.drawBytes record)
+        (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.sampleBytes record)
           (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode =
-      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.drawBytes record)
+      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) :=
   FlockDeploy.decode_encode_of_fits (stmtRaw_fits hfit hd)
 
@@ -321,7 +321,8 @@ member's files (`verified_at`), which are that statement's fields (`stmtAtCase_o
 statement sets up is the one the check verified (`setupOf_of_fields`), of one table, `Flock.Tags.circuit.table`
 (`setupAt_oneTable`), under SHA-512 digests (`setupAt_sha512`). It retains rounds (`setupAt_retains`), so the session
 the verdict accepted has messages (`SessionLive.sessionMsgs_of_verify`). -/
-theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+theorem verdictsAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hcount : StmtsCount A C Good)
     (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) :
@@ -356,11 +357,11 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
   have hdec := stmtRaw_decode hfw hfd
   obtain ⟨si, sts, hset, htabs⟩ :=
     setupOf_of_fields hpl
-      (memberFields_stmtRaw m circuitB pubB k.blobs (SessionMsgs.drawBytes record)
+      (memberFields_stmtRaw m circuitB pubB k.blobs (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8))
       (readsBack_stmtRaw hgp hgr hsetup) hdec hrd hsetup
   have hxe : SpotFlock.stmtAt A.h m₂ t =
-      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode :=
     Option.some.inj (hx.symm.trans hxw)
   have hset₂ : FlockDeploy.setupOf true (SpotFlock.stmtAt A.h m₂ t) = some (si, spec, sts) := by
@@ -390,7 +391,8 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
 
 /-- **`MsgsOfRecords` at the form's reading**, at the table `Flock.Tags.circuit.table`: `msgsOfRecords_of` at
 `verdictsAt_of`, where the reading's statements and messages are the case's. -/
-theorem msgsOfRecords_form {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+theorem msgsOfRecords_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)

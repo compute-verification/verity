@@ -105,7 +105,7 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
 
 def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monkeypatch):
     # Only for this test: left on sys.path, the repo root makes a later test's `--tool check` import the repo's own
-    # tools/verity/check/tool.py instead of its fixture's, outside the suite's inputs.
+    # tools/check/tool.py instead of its fixture's, outside the suite's inputs.
     monkeypatch.syspath_prepend(str(REPO))
     from adapters.vllm.verity_vllm.pipeline import research_tools as RT
 

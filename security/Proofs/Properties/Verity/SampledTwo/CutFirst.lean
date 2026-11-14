@@ -19,7 +19,7 @@ import all Init.Data.String.Slice
 # The first stage's coins read under the parameters' key, from the form's acceptance
 
 `CutRead` takes `FirstReads θ` as a premise: on every accepted play, the parameters name a challenger key at the
-deployed LMS parameters, the case names the first session's window and family, and `drawCoins` under that key reads
+deployed LMS parameters, the case names the first session's window and family, and `sampleCoins` under that key reads
 the first stage's coin evidence. This module derives it from the two-stage form's acceptance (`firstReads_of_shown`)
 on every play whose first stage's coin evidence is not `null` (`FirstCoinsShown`), in four steps:
 
@@ -31,12 +31,12 @@ on every play whose first stage's coin evidence is not `null` (`FirstCoinsShown`
   has no `symbol` (`refused_symbol`), and the form accepts only where the run of record's symbol is `accept`
   (`accepted_steps`), so on an accepted play the coin check gave no code.
 * **What the coin check read** (`coinsCode_none`): no code is either `null` evidence where the first stage read no
-  byte, or `drawCoins` reading the evidence under the run's key, window and family after the record's digest
+  byte, or `sampleCoins` reading the evidence under the run's key, window and family after the record's digest
   (`coinsReason_none`).
 * **The run's inputs** (`inputAt_ok`, `inputOf`): the run's key is the interior audit's, its window and family the
   boundary registration's, its coin evidence the form's `coins` (`firstCoins`), its record the registration's as the
   form read it back (`readBack`), whose digest the form holds to the commitment's (`digestIs`). These are
-  `firstDraws`'.
+  `firstSamples`'.
 
 `FirstCoinsShown θ` is a hypothesis here, and `CutAccept.firstShown` proves it from the form's refusal of `null`
 first-stage coin evidence. The run of record alone passes a first stage that read no byte with `null` coin evidence,
@@ -91,7 +91,7 @@ private theorem form_members_spec (j : Json) :
 private theorem form_values_spec (j : Json) (w : String) :
     ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.valuesOf j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-open private exactly from Spot.OneStageZk
+open Spot.OneStageZk (exactly)
 
 private theorem members_exactly_spec (j : Json) (ks : Array String) (w : String) :
     ⦃⌜True⌝⦄ exactly j ks w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -192,12 +192,12 @@ theorem refused_symbol (step : String) (codes : Array String) :
       Json.null :=
   (rfl)
 
-/-- **What a coin check that gave no code read**: `null` evidence, or `drawCoins` reading the evidence under the key,
+/-- **What a coin check that gave no code read**: `null` evidence, or `sampleCoins` reading the evidence under the key,
 window and family after the record's digest. -/
 theorem coinsCode_none {key : Option ChallengerKey} {main coins record : Json} {window family : Option String}
     {read : ByteArray} (h : Spot.Run.coinsCode key main coins record window family read = none) :
     coins = Json.null ∨ ∃ k w label after ξ, key = some k ∧ window = some w ∧ family = some label ∧
-      Spot.Registration.digest record = .ok after ∧ drawCoins k w label after coins = .ok ξ := by
+      Spot.Registration.digest record = .ok after ∧ sampleCoins k w label after coins = .ok ξ := by
   unfold Spot.Run.coinsCode at h
   by_cases hr : read.isEmpty = true
   · rw [if_pos hr] at h
@@ -267,7 +267,7 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
   have hl' : firstLabel p = some label := hl
   have hb : boundaryOf p = .ok p.boundary := rfl
   refine ⟨k, ⟨k, w, label, c.digest⟩, ξ, hK, ?_, hξ⟩
-  simp [firstDraws, hb, hw', hl', Except.toOption]
+  simp [firstSamples, hb, hw', hl', Except.toOption]
 
 /-! ## The cut -/
 

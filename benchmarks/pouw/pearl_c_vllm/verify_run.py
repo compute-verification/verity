@@ -96,7 +96,7 @@ A reader holds a challenger sample to: ``opening`` is coin ``pouw/draw`` 0 of ``
 (`challenger.live_reason`) and its coin is S; ``commitment`` is the one the session's challenger signed, of a sample
 session's layout (`window.draw_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
 withheld (`challenger.withheld_on`); and that session is its lane's first reserve after the lane's Pearl-C period closed
-(`served_verdicts.pearlplus_live_draw`, over `pouw_h1_window.after_close`), so a prover who tries again under another
+(`served_verdicts.pearlplus_live_sample`, over `pouw_h1_window.after_close`), so a prover who tries again under another
 session holds a sample no reader takes.
 
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
@@ -145,7 +145,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c import K_MIN, TILE
 from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as REG
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD

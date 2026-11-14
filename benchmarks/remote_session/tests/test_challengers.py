@@ -569,7 +569,7 @@ def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store
     assert doc["credit"]["credited_sessions"] == [0] and doc["credit"]["summary"] == "the line credits session(s) 0"
     assert doc["conditional_on"]["DeveloperStore"].startswith(words)
 
-def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
+def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
     session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which

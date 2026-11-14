@@ -472,7 +472,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
 
-def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
+def test_a_window_with_no_samples_settles_malformed_whatever_its_batches():
     """A window with no draws (none a session makes) settles `malformed` whatever its batches' results, as
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
@@ -865,7 +865,7 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 
 
 @pytest.mark.parametrize("k", [1, 3])
-def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
+def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
     (`audit.AuditRun.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
     last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
@@ -1296,7 +1296,7 @@ def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(
     assert closed[0]["sessions"] == ["accepted", "receipt"] and "python" not in closed[0]
 
 
-def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypatch):
+def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_sample(monkeypatch):
     """A window's verdict is the Lean's, set on `audit.AuditRun` (`Checks.settle`): the Lean's accepting window 1 read
     as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1366,7 +1366,7 @@ def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, 
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
 
 
-def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
+def test_a_session_sampled_four_windows_a_coin_is_accepted_through_both_verifiers_and_a_skipper_is_not(
         tmp_path, monkeypatch):
     """`--groups-per-coin 4` over five windows: two draws, windows 0–3 and window 4, each sampled at its last window's
     close on its own openings coin (`audit.Params.groups_per_coin`), the challenger reserving ⌈5/4⌉ = 2 of them. The
@@ -1399,7 +1399,7 @@ def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_
     assert bad["disagreement"] is None
 
 
-def test_a_session_drawn_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts(
+def test_a_session_sampled_two_windows_a_coin_at_one_window_in_flight_is_refused_before_it_starts(
         tmp_path, monkeypatch, capsys):
     """`--groups-per-coin 2` with a `--paced` session at F = 1: no property covers one window in flight at g > 1, so
     the Lean verifier's `session` request refuses it, and the driver refuses the pair before it listens."""
@@ -1463,7 +1463,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
         lean.close()
 
 
-def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draws_of_the_record_it_makes(tmp_path):
+def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_samples_of_the_record_it_makes(tmp_path):
     """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three draws. Its line
     of record reads the same twelve groups and, for its pooled bound, the three draws, each four windows' receipts and
     draws summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
@@ -1584,7 +1584,7 @@ SCHEDULE = ("released_ns", "boundary_ns", "deadline_ns", "passes", "arrivals_ns"
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
-def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_draw(monkeypatch, held_lean,
+def test_a_lean_that_answers_nothing_until_the_passes_end_delays_no_coin_root_or_sample(monkeypatch, held_lean,
                                                                                      defer_openings):
     """The driver waits on no Lean answer while a session runs: with every request to the Lean from the session's
     first event held back until the prover's passes are done (`HeldLean`), with its openings after its passes or
@@ -1776,7 +1776,7 @@ def test_codec_names_round_trip(name):
     assert wire.codec_named(name).name == name
 
 
-def test_the_predicted_rate_is_the_draws_chance_to_miss_every_dropped_receipt():
+def test_the_predicted_rate_is_the_samples_chance_to_miss_every_dropped_receipt():
     import summary
 
     assert summary.miss(100, 0, 10) == 1.0 and summary.miss(10, 1, 10) == 0.0

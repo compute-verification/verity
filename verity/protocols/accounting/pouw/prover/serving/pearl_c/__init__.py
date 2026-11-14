@@ -87,6 +87,7 @@ from verity.protocols.accounting.pouw.verifier.serving import (
     hash_format,
 )
 
+from verity.protocols.accounting.pouw.prover.serving import run_matmul
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds, _Pass
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs import (
     GRAPH_ROWS,
@@ -310,7 +311,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
 
 
 class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
-    """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
+    """One install's Pearl-C workload on the device, with the NCP runs' interface (`serving.MatmulRun`'s `gemm`, `finish`, `commits`, `details`) and
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
@@ -721,7 +722,7 @@ class _ExecutorPass:
                 run.poison(0xA5 if c.arg is None else c.arg)
 
     def call(self, site: Any, x: Any, weight: Any, bias: Any) -> Any:
-        return self.run.gemm(site.weight_id, x, weight, bias)
+        return run_matmul(self.run, site.weight_id, x, weight, bias)
 
     def end(self) -> dict[str, Any]:
         try:

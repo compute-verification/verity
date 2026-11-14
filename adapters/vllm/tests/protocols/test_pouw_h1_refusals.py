@@ -832,7 +832,7 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
     `resume` refuses a file that isn't a saved window's before it reads the stream's descriptor."""
     run = _driven()
     for refuse in (lambda: HO.client_of(run), lambda: HO.suspend(run, tmp_path / "saved")):
-        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor host's session hands off$"):
+        with pytest.raises(ValueError, match="^t: only a window whose coins are the auditor device's session hands off$"):
             refuse()
     assert not (tmp_path / "saved").exists()
     (tmp_path / HO.FILE).write_bytes(pickle.dumps({"schema": "another/v1"}))
@@ -842,7 +842,7 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
 
 
 def test_a_window_with_the_commit_in_its_engine_does_not_hand_off(tmp_path, monkeypatch):
-    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor host's session whose served trees
+    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor device's session whose served trees
     hold the Commit's tap, asked here inside its first forward: the tap holds the engine's committer, which no other
     process resumes, so the window closes where it served, nothing is saved, and it closes as it would have."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
@@ -2534,7 +2534,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     monkeypatch.setattr(torch.cuda, "get_device_capability", {0: (12, 0)}.__getitem__)
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(RuntimeError: no nvcc "):
         assert RGD.zy_available.__wrapped__() is False
-    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(OSError: the stand-in builds nothing\)"):
         assert RGD.zy_available.__wrapped__() is False
     assert built[1:] == [(0, RGD.device_lib, "rr_midstates")] * 2

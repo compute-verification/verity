@@ -9,11 +9,11 @@ public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
 `joinedForm`: the projection's bound at the form's acceptance, `JoinGood` with no collision of the play's blobs with
 the registered files, and the run's locator, at the cut's terms at the deployed two-session history plus the blob
 finder's collision probability, from the join's one premise (`JoinsAt`, `JoinsAt.lean`) and nothing else. It is
-`joinedOfLaw` at COINMAP's proof of the coin map's law (`CoinMap.coinMapHolds`, `CoinMapAgree.lean`).
+`joinedOfDistribution` at COINMAP's proof of the coin map's distribution (`CoinMap.coinMapHolds`, `CoinMapAgree.lean`).
 
 `joinedCoupling`: the two-stage leg's coupling (`CouplingTargetTwo`) with the join's projection bound, its blob term
 under `ecr/sha-512` (`joinCRBound`), and MAJORITY's majority bound as its terms, from one `CouplesAt`
-(`JoinedCoupling.lean`) at each commitment and strategy and nothing else. It is `joinedCouplingOfLaw` at the same proof
+(`JoinedCoupling.lean`) at each commitment and strategy and nothing else. It is `joinedCouplingOfDistribution` at the same proof
 of the sampling design.
 
 What `JoinsAt` holds, what the join discharges and what is not established are in `JoinsAt.lean`'s docstring. Every
@@ -45,7 +45,7 @@ theorem joinedForm (V : Vocab d α) (k : Verity.Registration.Composite) (A : Liv
         joinMiss V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q +
         (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
           ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg))) :=
-  joinedOfLaw V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' CoinMap.coinMapHolds h
+  joinedOfDistribution V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' CoinMap.coinMapHolds h
 
 /-- **The two-stage leg's coupling at the form's accept**: `CouplingTargetTwo` with the join's projection bound and
 the majority's at the join's frame as its terms, from one `CouplesAt` at each commitment and strategy. -/
@@ -69,7 +69,7 @@ theorem joinedCoupling (V : Vocab d α) (k : Verity.Registration.Composite) (A :
         bindBound V A (x c σ) θ F c σ
           (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
           (openOf c σ) (dColl c σ) :=
-  joinedCouplingOfLaw V k A θ F x C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl
+  joinedCouplingOfDistribution V k A θ F x C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl
     CoinMap.coinMapHolds h
 
 end Verity.SampledTwo

@@ -16,8 +16,8 @@ import slots as S, slots_gpu as G
 S.commit(context, layout, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, the same signature with a plan in place of (context, layout)
-plan = G.Plan(context, layout)                     # once a run; temp_bytes= bounds a step's temporaries
-plan = G.Plan(context, layout, sms=32)             # the side stream on a green context of 32 SMs (same bytes)
+plan = G.Plan(context, layout, "cuda", build=DIR)  # once a run; temp_bytes= bounds a step's temporaries
+plan = G.Plan(context, layout, "cuda", sms=32, build=DIR)  # the side stream on a green context of 32 SMs (same bytes)
 G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, streaming as a step's groups (e.g. layers) come out of the forward pass
@@ -29,7 +29,7 @@ pending = sc.finish()                              # pending.result() -> S.StepC
 sc = G.StepCommitter(plan, step, slots, salt_key, graphs=True)
 
 # several layers a launch: the same proof blocks, rows, digest and roots
-plan = G.Plan(context, G.regroup(layout, 4))
+plan = G.Plan(context, G.regroup(layout, 4), "cuda", build=DIR)
 ```
 
 - `context`: 64 bytes naming the run (the model and serving instance); every domain binds it.
