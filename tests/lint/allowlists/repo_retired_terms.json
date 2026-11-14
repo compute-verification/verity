@@ -3930,6 +3930,7 @@
     {"file": "adapters/vllm/verity_vllm/program/predict/window_weights.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/program/prefix_plan.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/program/quarantine/act/silu_mul_difftest.py", "count": 2},
+    {"file": "adapters/vllm/verity_vllm/program/quarantine/collective/allreduce.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/program/quarantine/collective/allreduce_difftest.py", "count": 4},
     {"file": "adapters/vllm/verity_vllm/program/sampling_topp_adapter.py", "count": 5},
     {"file": "adapters/vllm/verity_vllm/program/workload.py", "count": 57},
