@@ -62,7 +62,7 @@ file is its statement's where the verifier accepts it, `RecVStar.checkStmt`), th
 rounds' commit strings, the inner run each history's layers decode to (`run`), and the `b ‖ c` the inner transcript
 holds at each registered value's row (`row`, by `RecVStar.fixedRow`'s prefixes: a rep's round, R's stream's round, a
 node of R's level top, a sparse stream's round). -/
-structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) {n : ℕ} (L : Law n)
+structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) {n : ℕ} (L : SamplingDesign n)
     (Reg Cm Reg' Reg₂ : Type) where
   ish : RecVStar.Inner
   stmts : Array VStar.Stmt
@@ -80,7 +80,7 @@ structure C3Family (st : Flock.Stmt) (hp : HoloParams) (xR : HoloReg GF128 Dig) 
     C3Run (holoAt st hp)
   row : String → ℕ → List (Cm × (holoInnerAt T CT st hp).Coin) → Option (List UInt8)
 
-variable {T CT} {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n}
+variable {T CT} {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n}
   {Reg Cm Reg' Reg₂ : Type}
 
 namespace C3Family

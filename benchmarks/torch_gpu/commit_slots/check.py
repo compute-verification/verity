@@ -23,8 +23,10 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sha512_rows"))
 
 import slots as S  # noqa: E402
+import torch_engine as T  # noqa: E402
 import slots_gpu as G  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 
@@ -45,7 +47,7 @@ def fixture_check() -> dict[str, Any]:
     doc = json.loads(S.FIXTURE.read_text())
     layout, slots = S.edge_layout(), doc["slots"]
     outputs = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(slots, -1).copy() for h in tensors] for tensors in doc["outputs"]]
-    got = G.commit(G.Plan(bytes.fromhex(doc["context"]), layout), doc["step"], bytes.fromhex(doc["salt_key"]), _cuda(outputs),
+    got = G.commit(G.Plan(bytes.fromhex(doc["context"]), layout, "cuda", build=T.BUILD, default=T.VARIANT), doc["step"], bytes.fromhex(doc["salt_key"]), _cuda(outputs),
                    slots)
     return {"name": "fixture", "ok": got.root.hex() == doc["root"]
             and [r.hex() for r in got.slot_roots] == [d["root"] for d in doc["per_slot"]], "root": got.root.hex()}
@@ -53,11 +55,11 @@ def fixture_check() -> dict[str, Any]:
 
 def against(name: str, layout: S.CommitShape, slots: int, seed: int, other: str) -> dict[str, Any]:
     outputs = S.random_outputs(layout, slots, np.random.default_rng(seed))
-    got = G.commit(G.Plan(CTX, layout), seed, KEY, _cuda(outputs), slots)
+    got = G.commit(G.Plan(CTX, layout, "cuda", build=T.BUILD, default=T.VARIANT), seed, KEY, _cuda(outputs), slots)
     if other == "reference":
         want = S.commit(CTX, layout, seed, KEY, outputs, slots)
     else:
-        want = G.commit(G.Plan(CTX, layout, "host"), seed, KEY, outputs, slots)
+        want = G.commit(G.Plan(CTX, layout, "host", build=T.BUILD, default=T.VARIANT), seed, KEY, outputs, slots)
     return {"name": name, "slots": slots, "against": other, **_same(got, want)}
 
 
@@ -68,7 +70,7 @@ def frozen(slots: int, samples: int, seed: int) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
     sampled = sorted({0, slots - 1, *rng.choice(slots, size=min(samples, slots), replace=False).tolist()})
     index = torch.tensor(sampled, device="cuda")
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, "cuda", build=T.BUILD, default=T.VARIANT)
     gen = torch.Generator(device="cuda")
     bufs = [[torch.empty((slots, n), dtype=torch.uint8, device="cuda") for n in group.sources] for _ in range(2)]
     done: list[Any] = [None, None]

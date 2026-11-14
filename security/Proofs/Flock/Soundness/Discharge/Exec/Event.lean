@@ -84,7 +84,7 @@ variable {n : ℕ} {Reg : Type}
 /-- **The audit as it runs**: the prover registers `R`; the verifier samples `S` by `L`; the live session `live S R`
 (the prover against the challenger) ends in the session directory. Output: the registration, the sample and the
 transcript. -/
-def auditLive (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game Transcript) :
+def auditLive (L : SamplingDesign n) (Reg : Type) (live : Finset (Fin n) → Reg → Game Transcript) :
     Game (Reg × Finset (Fin n) × Transcript) :=
   .send Reg fun R => .coin L.Ω fun ω => (live (L.draw ω) R).map fun t => (R, L.draw ω, t)
 

@@ -129,33 +129,10 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
     "compute-accounting": {
-        # Needs, outside pouw's verifier/: the audit's types and weight commitment (`Workload`, `Epoch`, `HM96`,
-        # `weights_root`, `weight_binding`), the matmul types (`Matmul`, `Shape`, `DomainError`), and a coins client in
-        # place of the verifier's own `Challenger` and the window's draw and live challengers.
+        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`), and a coins client in place of the
+        # verifier's own `Challenger` and `verifier.coins` for the Pearl+ serve.
         "verity_vllm/check/replay/pouw_circuit.py": ("accounting.pouw.verifier.protocol.DomainError",),
-        "verity_vllm/pipeline/serve_h1.py": ("accounting.pouw.verifier.credit", "accounting.pouw.verifier.verifier"),
-        "verity_vllm/pipeline/serve_pearl.py": (
-            "accounting.pouw.verifier.coins.Challenger", "accounting.pouw.verifier.verifier",
-        ),
-        "verity_vllm/protocols/pouw/__init__.py": (
-            "accounting.pouw.verifier.audit.Epoch", "accounting.pouw.verifier.audit.HM96",
-            "accounting.pouw.verifier.audit.HM96_WEIGHTS", "accounting.pouw.verifier.audit.Workload",
-            "accounting.pouw.verifier.audit.commit_rows", "accounting.pouw.verifier.audit.weight_binding",
-            "accounting.pouw.verifier.audit.weights_root", "accounting.pouw.verifier.coins.Challenger",
-            "accounting.pouw.verifier.coins.CoinCommitment", "accounting.pouw.verifier.protocol.DomainError",
-            "accounting.pouw.verifier.protocol.Matmul", "accounting.pouw.verifier.protocol.Shape",
-            "accounting.pouw.verifier.serving.SCHEDULES", "accounting.pouw.verifier.verifier",
-        ),
-        "verity_vllm/protocols/pouw/h1_ranks.py": (
-            "accounting.pouw.verifier.audit.Epoch", "accounting.pouw.verifier.audit.Workload",
-            "accounting.pouw.verifier.audit.weights_root", "accounting.pouw.verifier.protocol.Matmul",
-            "accounting.pouw.verifier.protocol.Shape", "accounting.pouw.verifier.verifier",
-            "accounting.pouw.verifier.window",
-        ),
-        "verity_vllm/protocols/pouw/h1_settings.py": (
-            "accounting.pouw.verifier.coins.Challenger", "accounting.pouw.verifier.verifier",
-            "accounting.pouw.verifier.window",
-        ),
+        "verity_vllm/pipeline/serve_pearl.py": ("accounting.pouw.verifier.coins.Challenger", "accounting.pouw.verifier.verifier"),
     },
     "memory-accounting": {
         # `protocols/pous.py` runs a whole period (setup, serve, audit, certify, the memory challenger's session): it

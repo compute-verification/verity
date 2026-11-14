@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Flock.SpotFlock.Jeq
-public import Spot.Run
+public import all Spot.Run
 import all Lean.Data.Json.Basic
 
 /-!
@@ -21,7 +21,7 @@ coin) agrees, on the bytes the first stage read, with every coin the device's re
 bytes, say), the reading pads that prefix with zeros, and the device released the whole coin, whose bytes past the
 prefix are not zeros. What the projection uses is weaker (its `AcceptsRun` premise): the reading's coin agrees with
 the chosen coin wherever the device's release does. The projection's `CoinsAgree` says that; `CoinsRead` implies it
-(`coinsAgree_of_coinsRead`), and with the coin map's second sampling design it gives `AcceptsRun`'s coin premise.
+(`coinsAgree_of_coinsRead`), and with the coin map's second distribution it gives `AcceptsRun`'s coin premise.
 
 **What it rests on**, each a named `Prop` taken as a hypothesis:
 * `FirstShown`: the play's log shows, after the first stage's digest in the first sample's family, the bytes the first
