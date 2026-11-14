@@ -104,7 +104,7 @@ def _sweep_caption(out: dict) -> str:
     sw = out["sweep"]
     loads = ", ".join(f"{g['load']} ({g['rate']:g} req/s)" for g in sw)
     taus = sorted({(r["sat_ms"], r["free_ms"]) for g in sw for r in g["tick"] if not r["old_rule"]})
-    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the production "
+    text = (f"(b) {out['model']} served at each load ({loads}), one run a point: the no-tick point on the serving "
             "scheduler beside the tick at each period, τ_sat / τ_free "
             + ", ".join(f"{a:.0f} / {f:.0f} ms" for a, f in taus) + ". ")
     pairs = [(g, r) for g in sw if g["none"] for r in g["tick"]]

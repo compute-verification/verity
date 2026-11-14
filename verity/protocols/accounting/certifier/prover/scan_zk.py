@@ -248,7 +248,7 @@ from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.accounting.certifier.verifier.scan_answer import _found, window_answer
 
@@ -452,7 +452,7 @@ def members_of(templates: tuple[str, ...], T: int, entries: int = 0, lanes: int 
     its o0 rows are the lane's ``prog<j>`` tree."""
     if templates == BLOCK:
         if entries < 1 or lanes < 1 or entries % lanes:
-            raise ValueError("the block round's members are the link-window's slot entries, a lane each: give "
+            raise ValueError("the block round's members are the execution phase's slot entries, a lane each: give "
                              "entries (entries_of) and lanes, the lanes dividing the entries")
         nb = entries // lanes
         return [SimpleNamespace(template="block", name=f"block-c{j}", base=j * nb,
@@ -683,12 +683,12 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
         for w in windows:
             cells, cert = WR.attest(issuer, records[w], setup.params, direction)
             if cert is None:
-                raise SystemExit("the test signer refused a link-window")
+                raise SystemExit("the test signer refused an execution phase")
             registration = WR.registration(cells.head, cert, setup.params)
             head, dom = WR.check_registration(registration, signer.public_key(), SESSION, setup.params,
                                               records[w].link, direction, w)
             if list(cells.rows) != WR.window_rows(records[w], setup.params):
-                raise SystemExit(f"{side}: the warden's committed rows of link-window {w} aren't its record's")
+                raise SystemExit(f"{side}: the warden's committed rows of execution phase {w} aren't its record's")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     return SimpleNamespace(source="the synthetic run (scan_traffic.serve), signed with the driver's own key",
                            params=setup.params, session=SESSION, sides=sides, outputs=served.outputs, run_id=None,
@@ -734,18 +734,18 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
                    == (RC.LINK, direction.value, w)]
             record = next((r for r in records[name] if r.window == w), None)
             if not got or record is None:
-                raise SystemExit(f"--warden-run {run}: {side} link-window {w} has no registration or no record (the "
+                raise SystemExit(f"--warden-run {run}: {side} execution phase {w} has no registration or no record (the "
                                  "signer refused it, or the run ended before it)")
             registration, blob = got[0]
             try:
                 head, dom = WR.check_registration(registration, key, session, params, RC.LINK, direction, w)
             except ValueError as e:
-                raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s registration doesn't verify under the "
+                raise SystemExit(f"--warden-run {run}: {side} execution phase {w}'s registration doesn't verify under the "
                                  f"deployment's key and session: {e}")
             row_salts, wiring_salt = WR.read_witness(blob)
             cells = WR.Cells.of(RC.LINK, direction, record, params, session, row_salts, wiring_salt)
             if cells.head != head:
-                raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
+                raise SystemExit(f"--warden-run {run}: {side} execution phase {w}'s record under cells.salts isn't the rows "
                                  "whose root the warden signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
@@ -794,7 +794,7 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
     cells = WR.Cells.commit(c.link, c.direction, c.window, rows, c.wiring, c.params, c.session)
     cert = got.issuer.sign(c.link, c.direction, c.window, cells.head.digest())
     if cert is None:
-        raise SystemExit("the test signer refused the tampered link-window")
+        raise SystemExit("the test signer refused the tampered execution phase")
     registration = WR.registration(cells.head, cert, c.params)
     head, dom = WR.check_registration(registration, got.key, c.session, c.params, c.link, c.direction, c.window)
     return SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom, window=w, bucket=t,
@@ -853,7 +853,7 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
                                    f"{SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
         raise _v3c_refused(window, f"its {SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
-                                   "empty state of link-window 0): it scanned another warden run or link-window")
+                                   "empty state of execution phase 0): it scanned another warden run or execution phase")
     return held
 
 
@@ -929,9 +929,9 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     holds). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`)."""
     t0 = time.time()
     if group < 1 or start < 0:
-        raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
+        raise SystemExit(f"a group is 1 or more execution phases from execution phase 0 on, not {group} from {start}")
     if v3c is not None and (group, start) != (1, 0):
-        raise SystemExit(f"--v3c: V3c's window is link-window 0's, a group of 1, not {group} from {start}")
+        raise SystemExit(f"--v3c: V3c's window is execution phase 0's, a group of 1, not {group} from {start}")
     windows = list(range(start, start + group))
     got = synthetic(out, setup, windows) if run is None else warden_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
@@ -939,7 +939,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     try:
         ch = traffic.chain(cls, ingress, egress, got.outputs)
     except (ValueError, KeyError) as e:
-        raise SystemExit(f"the scan refuses link-windows {windows}' rows: {e!r} (the scan reads warden-form id "
+        raise SystemExit(f"the scan refuses execution phases {windows}' rows: {e!r} (the scan reads warden-form id "
                          "requests at its class, answered id-form: warden_serve.py rehearse --ids)")
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
     void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
@@ -951,11 +951,11 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                          f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
                          + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
     if early := sorted({windows[t // T] for t in void if t // T != group - 1}):
-        raise SystemExit(f"the warden failed a connection in link-windows {early}, which the scan refuses, and the "
-                         "link-window after a refused one has no start the verifier holds: prove the group up to "
+        raise SystemExit(f"the warden failed a connection in execution phases {early}, which the scan refuses, and the "
+                         "execution phase after a refused one has no start the verifier holds: prove the group up to "
                          f"the first of them (--group {early[0] - start + 1})")
     if not 0 <= setup.A < group * T or setup.A % T + 2 >= T:
-        raise SystemExit(f"the chain round swaps S_A and S_(A+1), its link-window's state leaves a + 1 and a + 2, "
+        raise SystemExit(f"the chain round swaps S_A and S_(A+1), its execution phase's state leaves a + 1 and a + 2, "
                          f"a = A mod {T}: 0 <= A < {group * T} and a < {T - 2}, not A = {setup.A}")
     admitted: dict[int, int] = {}
     for st in ch.scan:
@@ -1265,7 +1265,7 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
     if not whole.void:
         claimed = ch.states[(group - 1) * T]
         if claimed == _bits(begin, 0):
-            raise SystemExit("the last link-window ends in the state it started from, so the stale round would claim "
+            raise SystemExit("the last execution phase ends in the state it started from, so the stale round would claim "
                              "the honest start")
         at = window_of(whole, group - 1, begin, claimed)
         read(at, at.number + 1)
@@ -1297,7 +1297,7 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
     if log:
         e = next((r for r in log[-1]["roots"] if r["port"] == CARRY_PORT), None)
         if e is None:
-            raise SystemExit(f"the log's last record names no {CARRY_PORT}, and the start of the link-window after "
+            raise SystemExit(f"the log's last record names no {CARRY_PORT}, and the start of the execution phase after "
                              "it reads it")
         root, dom, how, empty = e["root"], e["domain"], {"outputs": {CARRY: {"port": CARRY_PORT}}}, None
     else:
@@ -1738,7 +1738,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     opens a start that is the empty state's (``empty``); its outcome carries the record's changed forms' codes
     (``registration_negatives``) and the root the verdicts of record opened the start unit's ``sin`` against
     (``carried_start``, `audit.session_registered`)."""
-    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_leg.frame_ports
+    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_subprotocol.frame_ports
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:
@@ -1762,12 +1762,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
     law, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
-    win = {"kind": "stand-in", "of": f"round {name}: link-window {at.number} of {at.source}, its ingress and egress "
+    win = {"kind": "stand-in", "of": f"round {name}: execution phase {at.number} of {at.source}, its ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
                        for m in members},
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
-                   "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
+                   "execution phase, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
     win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
@@ -1979,7 +1979,7 @@ def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dic
     audits, windows, said = [], [], {}
     for at in ats:
         cls, honest, block = at.setup.cls, round_name("honest", at.number), round_name("block", at.number)
-        reg, answer = _answer(out, honest, results[honest], delta, f"the scan's audit of link-window {at.number}")
+        reg, answer = _answer(out, honest, results[honest], delta, f"the scan's audit of execution phase {at.number}")
         if block in results:
             breg, banswer = _answer(out, block, results[block], delta, "the block's audit")
             audits.append({"answer": banswer, "free": entries_of(cls, at.T) * IS.entry_bits(cls),
@@ -2148,9 +2148,9 @@ def prove(a) -> int:
                                            "trees": sorted(k for k, t in last.trees.items() if isinstance(t, Held))},
                      "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs}
                                      for m in r.members] for name, r in h.rounds.items()}}
-    void = (f" but its FAIL buckets {whole.void} (void: link-window {last.number}'s honest round refused at "
+    void = (f" but its FAIL buckets {whole.void} (void: execution phase {last.number}'s honest round refused at "
             f"{summary['void']['refused']})" if whole.void else "")
-    log(f"run: {whole.source}; {setup.name}'s class, link-windows {whole.windows} of {T} buckets, each a "
+    log(f"run: {whole.source}; {setup.name}'s class, execution phases {whole.windows} of {T} buckets, each a "
         f"registration, admitted {whole.admitted}, responses {summary['responses']}, anchors {summary['anchors']}, "
         f"cells {summary['cells']}; every egress bucket computes the warden's row from its ingress bucket's "
         f"view{void}; host reads as expected ({whole.run_s} s); draw {summary['draw']}")
@@ -2179,7 +2179,7 @@ def prove(a) -> int:
                 summary.setdefault("coins", {"challenger": coins.challenger, "sessions": {}})["sessions"][
                     honest.name] = {"window_root": coins.root}
                 log(f"{honest.name} draws on the challenger's coins ({coins.challenger}), its session on the "
-                    f"link-window's root {coins.root[:16]}…; the other rounds on a development challenger's")
+                    f"execution phase's root {coins.root[:16]}…; the other rounds on a development challenger's")
             for r in rs:
                 name, at, pg = r.name, r.at, pgs[r.templates]
                 members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in r.members]
@@ -2200,7 +2200,7 @@ def prove(a) -> int:
                         records.append(json.loads((out / name / "registration.json").read_text()))
                     done.append(at)
                     summary["answers"] = answers(done, out, results, Fraction(a.delta))
-                    log(f"answers: link-window {number}: {summary['answers'][number]}")
+                    log(f"answers: execution phase {number}: {summary['answers'][number]}")
                 inst = out / name / "instances.bin"
                 inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
                 rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
@@ -2240,7 +2240,7 @@ def prove(a) -> int:
             session = {x: pub.get(x) for x in ("trusted", "error", "plan")}
             summary["coins"]["sessions"][honest.name]["session"] = session
             ok &= pub.get("error") is None and (pub.get("trusted") or {}).get("pinned_session") is None
-            log(f"the challenger's session for link-window {number}: {session}")
+            log(f"the challenger's session for execution phase {number}: {session}")
     summary["ok"] = ok
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))
@@ -2250,7 +2250,7 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="each link-window's start, ingress and egress proof blocks chained by registered "
+    p = sub.add_parser("prove", help="each execution phase's start, ingress and egress proof blocks chained by registered "
                                      "reads, --zk")
     p.add_argument("--bin")
     p.add_argument("--lean")
@@ -2263,9 +2263,9 @@ def main(argv=None) -> int:
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
                    help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
                         "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window; "
-                        "test2: test's over two link-windows, a request anchored at the second's first boundary)")
+                        "test2: test's over two execution phases, a request anchored at the second's first boundary)")
     p.add_argument("--group", type=int, default=1,
-                   help="G: link-windows 0 .. G - 1, each a registration of its own, its scan started from the "
+                   help="G: execution phases 0 .. G - 1, each a registration of its own, its scan started from the "
                         "state the record before it committed (default 1)")
     p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
@@ -2297,7 +2297,7 @@ def main(argv=None) -> int:
         print(" ".join(f"--{k.replace('_', '-')} {getattr(params, k)}" for k in W.INTEGER_FIELDS))
         return 0
     if a.group < 1:
-        p.error(f"--group is 1 or more link-windows, not {a.group}")
+        p.error(f"--group is 1 or more execution phases, not {a.group}")
     if a.challenger:
         if a.challenger != "local" and not a.challenger.startswith("gate:"):
             p.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")

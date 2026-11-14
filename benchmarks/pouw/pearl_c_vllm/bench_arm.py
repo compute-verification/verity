@@ -249,7 +249,7 @@ class PearlCArm:
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
         from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+        from verity_torch.pouw.pearl_c import run_device as PPDR
 
         scheme = self.scheme
         sites = vllm_site.discover(target.model)
@@ -427,7 +427,7 @@ class PearlCWholeArm(PearlCArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.engine import handle
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import WholeStep
+        from verity_torch.pouw.pearl_c.whole import WholeStep
 
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)

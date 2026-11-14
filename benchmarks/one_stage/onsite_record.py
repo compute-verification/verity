@@ -21,7 +21,7 @@ no serving settings is refused (`UNLABELLED`).
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
 
-* SPOT: its leg in the composite of record, the outcome of remote's SPOT case there
+* SPOT: its subprotocol in the composite of record, the outcome of remote's SPOT case there
   (`SAMPLED_ID`: VStar.Recursive.Sampled on OneStageZk's case, the proofs themselves), never ``record/verdicts.json``'s
   ``integrity`` row, the records audit's one-stage v1 answer, which is no verdict (`V1_UNREAD`): where the composite of
   record has no such case, not established, the row's answer beside it (``answer``), and missing where the row is too;
@@ -113,7 +113,7 @@ more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 
 **The bound** is the network certifier's accepted answer's public in its rows form: K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
-(``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
+(``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's execution phase,
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
@@ -207,7 +207,7 @@ if str(HERE.parents[1]) not in sys.path:
     sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from served_integrity import exact_delta  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"
@@ -386,7 +386,7 @@ UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it
 UNREPORTED = "its Lean verdict of record didn't accept its completed file reporting exactly that file's reads"
 UNLISTED = "the audit's record lists its Lean verdict but no completion of its --registered file"
 #: where the window report keeps the records audit's answer, whose profile and public, the draw's n, sampling_design and δ and the
-#: bound there, SPOT's guarantee reads once its verdict, the composite's leg (`sampled_verdict`), accepted
+#: bound there, SPOT's guarantee reads once its verdict, the composite's subprotocol (`sampled_verdict`), accepted
 SAMPLED_FROM = f"record/verdicts.json protocols.{ROWS['sampled proofs']}.answer"
 SAMPLED = ("sampled proofs' guarantee, what its draw establishes, ε at δ, per window and pooled over each monitoring "
            "period, never the window's alone. A window (``per_window``): its answer's bound at its integrity profile's δ "
@@ -424,7 +424,7 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
 #: the network certifier's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
-CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `LinkWindows.period_draw`) "
+CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `TransferBlocks.period_draw`) "
                "takes every window (sampling_design all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
                "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
                "published report doesn't say. So each draw whose sampling_design isn't all is open under "
@@ -463,7 +463,7 @@ AUDITOR_RECORD, AUDITOR_LISTING, SCAN_STATE_PINNED = "auditor-record", "auditor-
 #: remote's SPOT case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
-V1_UNREAD = (f"sampled proofs' verdict is its leg in the composite of record, the outcome of {SAMPLED_ID}'s case there "
+V1_UNREAD = (f"sampled proofs' verdict is its subprotocol in the composite of record, the outcome of {SAMPLED_ID}'s case there "
              "(VStar.Recursive.Sampled on OneStageZk's case, which verifies the proofs themselves), never the window "
              "report's integrity row: that is the records audit's one-stage v1 answer (served_integrity.answer), and a "
              "v1 verdict is no verdict of record")
@@ -494,7 +494,7 @@ CHECKED = {
                       "and that period.json are both the auditor's own outputs in OUT. It holds where the period lists "
                       "none, and not where the run has no case of the period to say what it lists. No published record "
                       "states the files the scan's sessions were verified against, so it doesn't hold where the period "
-                      "lists the scan's. With it, the remote theorem's registered-files condition on its sampled leg "
+                      "lists the scan's. With it, the remote theorem's registered-files condition on its sampled subprotocol "
                       f"(``registered_files``, `registered_files`): for each statement of remote's sampled proofs case "
                       f"({SAMPLED_ID}, --sampled-proofs-case), the one statement or a drawn member's, the circuit file "
                       "its params θ name for it (proofs.circuit, or its member's under proofs.members) is, by SHA-512, "
@@ -522,7 +522,7 @@ CHECKED = {
                       "composite of the "
                       "run reads the case. Where either doesn't hold the network verdict is not established and there "
                       "is no bound (`LISTING_UNMET`, `FILES_UNMET`), and where the registered-files condition doesn't, "
-                      "neither is the verdict of a composite that reads the case, nor sampled proofs', its leg there"),
+                      "neither is the verdict of a composite that reads the case, nor sampled proofs', its subprotocol there"),
     SCAN_STATE_PINNED: (f"that V3c's audit opened its reads of the scan's state where the period ties them: for each "
                         f"audit of the case's commitment whose window commits {SCAN_STATE} in its activations "
                         "(window.activations.values, the entry NetworkCheck.Period's auditStateEntries reads and "
@@ -597,7 +597,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "proved inside its own session, whose statement reads the writer's committed leaf by path and "
                             "whose circuit equates it with the wired input, so no opening reaches the verifier; "
                             "OneStageZk.verdicts accepting only where each sampled reader's wire is the layout's, at the "
-                            "registered position, root and path; and SessionOpens and the binding from the sampled leg's "
+                            "registered position, root and path; and SessionOpens and the binding from the sampled subprotocol's "
                             "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
                       "discharged_by": ()},
@@ -646,13 +646,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                           "discharged_by": ("Properties.NetworkPeriod.phaseTiesOrdered",)},
     "shared-roots-parsed": {"is": "SharedRootsParsed: at the deployment, two gates the registrations commit at one "
                                   "position under one root open to one value, or their H calls collide; the sampled "
-                                  "leg's bridge proves it of the deployed parse. Open until that theorem is named",
+                                  "subprotocol's bridge proves it of the deployed parse. Open until that theorem is named",
                             "discharged_by": ()},
     "reg-opens-at": {"is": "RegOpensAt: at each window's statement the registration's openings open its registered "
                            "inputs under the statement's roots (RegOpens). The run's reg holds per-window values (the "
                            "window's tied activations and the scan's state) and pinned ones (the weights, at their "
                            "registration's roots): the per-window part by a restatement of the finder per window, the "
-                           "pinned part by the sampled leg's bridge with a coverage Property of the registration check at "
+                           "pinned part by the sampled subprotocol's bridge with a coverage Property of the registration check at "
                            "OneStageZk's record. Open until both are named",
                      "discharged_by": ()},
     "certifiers-open": {"is": "CertifiersOpen, PeriodLeakRegistered's antecedent and MonitoringPeriodLeakAccepted's CertifierRegisters: at "
@@ -687,7 +687,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "(countBound at the code's strata and δ), from the design's miss at a well-formed design whose "
                            "rules are strata draws. Open, by this name, until a theorem stating it at the deployed draw is "
                            "in the lock. Three of its parts are in no lock: RegMatches, that the registration matches the "
-                           "design the bound reads, assumed and the sampled leg's bridge's to give (`sampled-leg-bridge`); "
+                           "design the bound reads, assumed and the sampled subprotocol's bridge's to give (`sampled-leg-bridge`); "
                            "the sampling_design identity, that OneStage.check's derived v.law is g.rule.samplingDesignOver n, which today meet "
                            "only through R1's Draw.sameLaw, an equality of canonical texts (jeq); and the population "
                            "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
@@ -707,7 +707,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                                 "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
                                 "decoder, is what K counts (`COUNTS`)",
                           "discharged_by": ("Properties.Certifier.schedulesCoveredAt",)},
-    "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
+    "sampled-leg-bridge": {"is": "the sampled subprotocol's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KSBy at "
                                  "the wired check at the layout's wires, KS where it has none, from KS_of's hypotheses "
                                  "and the record's check of each session's wired reads, WiredReads; "
@@ -738,7 +738,7 @@ FILES_UNMET = (f"{AUDITOR_LISTING}'s {REGISTERED_FILES} condition doesn't hold (
                "proofs case registers isn't, by SHA-512, the one its params θ name, or its public file the one pinned "
                "at staging before the draw, or the run can't say, so a Lean "
                "accept (``answer``) establishes no verdict of the network certifier, of a composite that reads that "
-               "case or of sampled proofs, its leg there, and the record states no bound")
+               "case or of sampled proofs, its subprotocol there, and the record states no bound")
 STATE_UNPINNED = (f"{SCAN_STATE_PINNED} doesn't hold (``checked``): the run doesn't show that V3c's audit opened its "
                   "reads of the scan's state at the root and domain its window's activations entry commits, the one the "
                   "period ties to the scan's state, so a Lean accept (``answer``) establishes no verdict of the network "

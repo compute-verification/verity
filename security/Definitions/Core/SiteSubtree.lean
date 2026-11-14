@@ -28,7 +28,8 @@ each host with all its locations or not at all (`Site.HostsWhole`) is one whose 
 * `Site.places`, `Site.under`: the places, and the subtree at a place.
 * `Site.Place`, `Site.place`, `Site.placesIn`: the places as a type, the place an id names, and the places whose id
   is in a set.
-* `Site.placeEnds`, `Site.linkβ`: the registered links as the model's.
+* `Site.placeEnds`, `Site.linkβ`: the registered links as the model's, a link's rate `none` where none is registered.
+* `Site.RatedOn`: a model's rates are the registered ones on a set of links, each of which has one.
 * `Site.linkEnd`, `Site.linkPlace`: the place a link may end at for a place, read through the Site's own `host?`.
 * `Site.HostsWhole`: a subtree holds each host whole.
 * `Site.proverUnder`, `Site.certifiersOf`, `Site.challengersOf`, `Site.auditorsOf`: a subtree's prover places, and the
@@ -77,8 +78,15 @@ def placesIn (X : Finset String) : Finset S.Place := Finset.univ.filter fun p =>
 def placeEnds (e : Fin S.links.length) : S.Place × S.Place :=
   (S.place (S.links.get e).ends.1, S.place (S.links.get e).ends.2)
 
-/-- The registered links as the model's: link `e`'s capacity each way, in bits a tick. -/
-def linkβ (e : Fin S.links.length) : ℕ := (S.links.get e).β
+/-- The registered links as the model's: link `e`'s capacity each way, in bits a tick, and `none` where the Site
+registers no rate for it. -/
+def linkβ (e : Fin S.links.length) : Option ℕ := (S.links.get e).β
+
+/-- **`β` is the registered rate of each link in `E`**: every link of `E` is registered with a rate, and it is `β e`.
+A statement that sums the links' capacities takes it at the links it sums: a link with no rate is one the Site
+registers no capacity for, so no limit is stated across it, and none is read as `0`. -/
+def RatedOn (β : Fin S.links.length → ℕ) (E : Set (Fin S.links.length)) : Prop :=
+  ∀ e ∈ E, S.linkβ e = some (β e)
 
 /-- **The place a link may end at** for the place `i`: the host the location `i` is in, as the Site reads it off the
 location's parent (`host?`: the parent when that is a host, else the parent's parent), and `i` itself where that

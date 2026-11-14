@@ -117,9 +117,9 @@ REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256,
 
 
 def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
-    """The advice docket's public form states no length of the advice but its compiler's cap, counts and refuses
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
     none of its requests, names no window, and keeps its roots, compiler and binding's root."""
-    got = S.public_docket(REGISTRATION)
+    got = S.public_registration(REGISTRATION)
     assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
     assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
     assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
@@ -469,7 +469,7 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
     said = json.loads(capsys.readouterr().out)
     assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
-    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one execution phase"}))
     assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
     assert "64" not in capsys.readouterr().out
     assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1
@@ -816,7 +816,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
 
 
-#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate, the
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's subprotocol certificate, the
 #: bandwidth audit's profile naming the term its error leaves out, as its piece writes it
 ACCEPTS = {
     "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
@@ -840,7 +840,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     about, and the wipe's `SERVED`): the composed verdict is ``pending``, the block record's ``undecided``, since its
     verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
     accept, the bandwidth audit's with its error and the term it leaves out beside it. One piece with no answer leaves it ``pending`` and names that piece missing with
-    why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
+    why; one that rejects, or accepts with outputs that are not its subprotocol's certificate, makes it ``reject`` naming it, with
     no block record, and so does a bandwidth answer whose profile names no term its error leaves out; one about another
     server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -870,7 +870,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
                  "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"),
                  "--node", "vy-dc-h200"])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
-    leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
+    subprotocol, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
     name = S.NAMES[runner[piece]] if piece else None
     if case in ("reject", "malformed", "unnamed"):
         assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
@@ -880,7 +880,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
         why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
                                                    "leaves out; its piece writes them in its answer's profile as named_terms"}
-        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} leg: {why[case]}")
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} subprotocol: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
@@ -888,21 +888,21 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     if case == "accept":
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
-        assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
+        assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
                                          "except with 1/100)",
                 "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
-    assert line["composed"] == "pending" and line["record_missing"] == [leg]
+    assert line["composed"] == "pending" and line["record_missing"] == [subprotocol]
     if case == "missing":
         what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
         assert line["missing"] == {name: f"{piece.upper()}_CMD unset: {what}"}
-        assert rec["legs"][leg] is None and line["elsewhere"] == {}
+        assert rec["legs"][subprotocol] is None and line["elsewhere"] == {}
     else:
         assert line["missing"] == {} and line["elsewhere"] == {name: "vy-dc-h200-2"}
-        assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
+        assert rec["legs"][subprotocol]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [subprotocol]
 
 
 def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):
@@ -2641,7 +2641,7 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
 
 
 def test_the_weights_step_writes_the_serves_first_registration_record_and_says_who_wrote_it(tmp_path):
-    """The serve's weights step asks ``weights-registration`` for the serve's first docket too
+    """The serve's weights step asks ``weights-registration`` for the serve's first registration record too
     (deployment-registration.json in the serve dir, the one Pearl+'s W is chained after and a deferral lists among its
     follow-on's inputs), copies it out beside the docket, and says its digest and that the developer wrote it
     before the first request with no auditor holding the digest. A refused docket leaves neither file."""
@@ -2812,7 +2812,7 @@ def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(t
 def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_inference_only_check_where_the_build_built_it(
         tmp_path, lean):
     """The verdict reads the policy, the serve dir, window K's circuit record at the class, its docket and the
-    weights docket's pins, and writes the public verdict into the record and the full one in the serve dir; it
+    weights registration's pins, and writes the public verdict into the record and the full one in the serve dir; it
     runs `inference-only-check --count` only where the build built it. $OUT names no window."""
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
@@ -3461,7 +3461,7 @@ def _live(tmp_path: Path, ledger: list[str], hosts: bool = False) -> dict[str, s
 
 
 def test_v3cs_audit_samples_on_the_live_challenger_once_the_gate_holds_no_session_on_its_run_root(tmp_path):
-    """V3c's audit is the sampled-proofs audit of record: with PP_CHALLENGER the live challenger it takes its coins
+    """V3c's audit is the SPOT audit of record: with PP_CHALLENGER the live challenger it takes its coins
     there (records_audit's --challenger, --peer PP_PEER, --challenger-key and --gate-key), as its COINS line says, once
     `served_verdicts.py gate --root`, through the same ssh and key, finds no session on the window's run root and no
     period of the lane open, which its V3C-GATE line says, and when, before the audit reserves anything."""
@@ -3515,7 +3515,7 @@ def _not_development(challenger: str) -> str:
 ])
 def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_development_run_or_a_live_one_it_cannot_hold(
         tmp_path, extra, line):
-    """V3c's audit is the sampled-proofs audit of record, so its coins are the live challenger's: a local or loopback
+    """V3c's audit is the SPOT audit of record, so its coins are the live challenger's: a local or loopback
     session is refused unless the run is a development run (DEVELOPMENT=1, which is otherwise unset), and a live one with
     no peer for its session to listen on or no key record to hold it to; each before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
@@ -3524,7 +3524,7 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
 
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
 def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
-    """With V3c off step 3's audit is the sampled-proofs audit of record, whose SPOT the compose gate's Lean
+    """With V3c off step 3's audit is the SPOT audit of record, whose SPOT the compose gate's Lean
     holds to a challenger, so its local or loopback session is refused unless the run is a development run, before
     anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
@@ -4416,7 +4416,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     """The follow-on of a deferral made under COMPOSE_OFF_NODE=0, at the settings the deferral recorded: the copy held to
     the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
     tree's, and the commit H1 bound, held as there), V3c's audit and period, the final record about the served node from
-    the pieces it read and V3c's audit, the sampled-proofs audit of record, and the composite, told the served node, so
+    the pieces it read and V3c's audit, the SPOT audit of record, and the composite, told the served node, so
     each says it composed elsewhere. Another tree runs only under FOLLOW_ANY_TREE, which its line names. $OUT names no
     window."""
     assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
@@ -4861,7 +4861,7 @@ def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve
 
 def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):
     """Where V3c audited the window before the hand-off (its summary there), the hand-off names V3c's audit, the
-    sampled-proofs audit of record, as the record's (SAMPLED_AUDIT) and carries its summary, audit record, docket
+    SPOT audit of record, as the record's (SAMPLED_AUDIT) and carries its summary, audit record, docket
     and runs; of step 3's, on local coins while V3c's are live, only the cases the composite reads. The compose's record
     then reads V3c's audit, its Lean check on that audit's coins."""
     v3c = f"v3c-w7-{VTAG}/audit"
@@ -5039,7 +5039,7 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
 def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):
     """Under COMPOSE_OFF_NODE=1 the deferral's follow-on is prover-side (it holds the copy's value files), so after V3c's
     audit it composes neither the record nor the composite: it writes the compose hand-off, naming itself as where V3c's
-    audit ran and that audit, the sampled-proofs audit of record, as the record's (step 3's, on local coins while V3c's
+    audit ran and that audit, the SPOT audit of record, as the record's (step 3's, on local coins while V3c's
     are live, isn't carried), with the deferral's pieces and inference-only verdict. A compose follow-on on a third node
     then composes both from that hand-off alone, the record from V3c's audit, and refuses the follow-on's serve dir, which
     holds the value files."""

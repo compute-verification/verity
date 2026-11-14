@@ -392,8 +392,8 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
             "registered": OP.block("test/model", {"b": b})}
     assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
-    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.docket_roots({"window": 63})
-    assert RA.docket_roots({"window": w}) == RA.window_roots(w)
+    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
+    assert RA.registration_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
                      ({"activations": group(x="zz")}, "hex digits"), ({"registered": group(w=None)}, "hex digits"),
                      ({**w, "registered": group(x="cd" * 64)}, r"two roots for \['x'\]"),
@@ -407,7 +407,7 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
     no run) or, ``--description``, the description, prints the length the docket charges with the count, and exits
     `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
-    charge. Each count holds the pin to the window's root its advice docket records: where it records another root,
+    charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
     or none, every registered read is free."""
     from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import _served
@@ -564,7 +564,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     rec = json.loads((got.dir / "registration.json").read_text())
-    roots, pin = RA.docket_roots(rec), {v: e["root"] for v, e in pins.items()}
+    roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
     assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
     count = RA.declared_count(doc, 0, pins=pin, roots=roots)
     assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
@@ -585,7 +585,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
 
 
 def test_an_expert_tables_registration_is_a_pin_as_written():
-    """A TP rank's docket of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
+    """A TP rank's registration of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
     each table under its rank's program: moved to another rank's program it refuses, and two ranks' dockets name each table
     twice, so a rank's window pins its own rank's."""
     from verity_vllm.pipeline import expert_tables as ET
@@ -626,7 +626,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     files = IF.registered_reads(ldoc, ml, pins, registered=REG)
     assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
     pin = RA.pin_roots(pins)
-    roots = RA.docket_roots(json.loads((listed.dir / "registration.json").read_text()))
+    roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
     assert roots == pin and count == {**RA.declared_count(sdoc, 0, pins=pin, roots=roots), IF.WINDOW_INGRESS: 0}
     assert count["registered"] == 8 * 8 * K and "unpinned" not in count

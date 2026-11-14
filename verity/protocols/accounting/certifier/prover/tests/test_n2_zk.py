@@ -19,7 +19,7 @@ from benchmarks.network_traces.tests.test_warden_chain import gate_run
 @pytest.fixture(scope="module")
 def runs(tmp_path_factory):
     run = gate_run(tmp_path_factory.mktemp("n2zk"))
-    return {"honest": n2.link_windows(run), "tampered": n2.link_windows(run, edit=n2.one_count)}
+    return {"honest": n2.phases(run), "tampered": n2.phases(run, edit=n2.one_count)}
 
 
 def test_each_round_refuses_what_its_references_say(runs):

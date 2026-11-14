@@ -13,10 +13,10 @@ record (H1's own W, or none) is refused before any composite, so neither product
 name the window's tables as values ahead of its templates', and a Program that isn't that population is refused.
 
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
-templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
+templates) v1's Lean (`spot-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
 one whose verdict refused, and names the record's digest either way; the inference-only case is accepted by the policy's
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
-check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
+check's profile at no budget), and refused one gate or one bit under; v2's Lean (`spot-one-stage-zk check`)
 names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
 does SPOT's Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
@@ -503,7 +503,7 @@ def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name
 @lean
 @pytest.mark.parametrize("accepted, verdict", [(True, "accept"), (False, "reject")])
 def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, capsys, v1_exe, accepted, verdict):
-    """`sampled-proofs-one-stage check` on a5's case of a whole audit of the toy (its record, sample, receipt and
+    """`spot-one-stage check` on a5's case of a whole audit of the toy (its record, sample, receipt and
     verdict of record): it accepts when the verdict of record accepted and rejects when it refused, and names the
     record's digest either way, so its verdict is the case's (a failed proof is a visible failure, never a missing
     case)."""
@@ -584,7 +584,7 @@ def test_the_lean_check_refuses_a_tampered_inference_only_case(tmp_path, inferen
 
 @lean
 def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path, capsys, v2_exe):
-    """`sampled-proofs-one-stage-zk check` reads the toy's v2 case through its commitment and names the record's digest,
+    """`spot-one-stage-zk check` reads the toy's v2 case through its commitment and names the record's digest,
     the one `registration.digest` computes; the toy's v2 case holds no coins and no proofs, so it rejects, and that
     rejection is the case's verdict (a failed proof is a visible failure, never a missing case). The case is sampled
     by a subset design: v2 refuses any other at its parameters, before it reads the record."""

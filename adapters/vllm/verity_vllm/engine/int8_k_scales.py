@@ -24,6 +24,8 @@ import numpy as np
 from verity_vllm import config as C
 from verity_vllm.records.schema_ids import INT8_K_SCALES_SCHEMA
 
+__all__ = ["MANIFEST", "entry", "table", "with_entry"]
+
 RECIPE = "verity-int8-kscale-amax/v0"
 SCHEMA = INT8_K_SCALES_SCHEMA
 MANIFEST = C.MANIFESTS / "int8-k-scales.json"

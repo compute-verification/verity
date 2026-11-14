@@ -17,7 +17,7 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 
 * `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
   with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
-  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
+  (`Security/Proofs/Poub/Lemmas/RateAudit.lean`).
 * `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
 * `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
   account that did `W` of work leaves `F·T − W` for them.

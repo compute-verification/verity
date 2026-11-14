@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.Reading
 public import Proofs.Properties.Verity.Sampled.CoinMap
 
 /-!
-# The two-stage leg's coin map
+# The two-stage subprotocol's coin map
 
 `CoinMapDistribution` (`Proofs.Properties.Verity.SampledTwo.Projection`) reads a play of the period's game as a run of the two-stage
 verifier whose coins are written into the play's tape where the device releases them. This module builds that map and
@@ -20,13 +20,13 @@ states its sampling design.
 * **The coin map** (`slot`, `freshVal`, `openBits`, `openW`, `placeK`, `place`, `frame`): at a fresh coin the locator puts
   on round `i`, the node's 512 bits become the round's coin's next 4 elements; at an opening it puts there, the node's
   round becomes one of those whose first `n` coins are the round's coin's next `n` elements (`pickIn` of the class,
-  as the one-stage leg's `writeOpening` picks), the node's own where there is none; every other node keeps its value.
+  as the one-stage subprotocol's `writeOpening` picks), the node's own where there is none; every other node keeps its value.
   `placeK` writes along the releases' continuation form `relK`, and `place` at the period's game (`game_eq`).
 * **What the device released for a round** (`devBits`, `elemOfBits`, `dev`): the coin whose elements are the bits of
   the releases the locator puts on round `i`, in log order, padded with zeros; none where it puts none or more than a
   coin's 65536 elements.
 * **The hiding term** (`bitsOf`, `gapK`, `gapOf`): along the frame's play, at each written opening, the written round's
-  shortfall below uniform (`Verity.Game.shortfall`, the one-stage leg's `openGap` at each node) plus the chance its class
+  shortfall below uniform (`Verity.Game.shortfall`, the one-stage subprotocol's `openGap` at each node) plus the chance its class
   at the run's uniform elements is empty. A fresh coin's write costs nothing: its 512 bits are the coin's 4 elements one
   for one.
 * **The sampling design** (`SamplingDesignAt`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
@@ -98,7 +98,7 @@ coins (`TreeDraw.opened`). -/
 def openBits (c : FlockDeploy.Coin) (u n : ℕ) : List Bool := List.ofFn fun t : Fin (128 * n) => coinBit c (128 * u + t.val)
 
 open Classical in
-/-- **An opening's write**: the round picked among those released as `bits` (`pickIn`, as the one-stage leg's
+/-- **An opening's write**: the round picked among those released as `bits` (`pickIn`, as the one-stage subprotocol's
 `writeOpening`), the node's own where none is. -/
 noncomputable def openW {ν : ByteArray} {spec : Flock.CoinTree.Spec} {t : TreeSample spec} {s : Fin spec.streams.size}
     {r : Fin (2 ^ spec.roundsLog)} (n : ℕ) (bits : List Bool) (dr : TreeOpenable ν spec t s r) :

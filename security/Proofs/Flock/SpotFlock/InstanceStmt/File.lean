@@ -4,7 +4,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Meta
 public import Proofs.Flock.SpotFlock.InstanceStmt.Digests
 public import Proofs.Flock.SessionLoop.Concrete.File
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
-import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.MonitoringPeriod.Sort
 import Flock.HmRow
 import Flock.Net
 import Flock.HmNets
@@ -178,7 +178,7 @@ theorem part_hex {p : Lean.Json} (hp : p = (metaJ.getObjVal? "partition").toOpti
 it. -/
 theorem qsort_io {ns : Array String} (hns : ns = #["i0", "o0"]) : ns.qsort (· < ·) = #["i0", "o0"] := by
   subst hns
-  exact Array.ext' (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := #["i0", "o0"]) (by decide))
+  exact Array.ext' (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted (as := #["i0", "o0"]) (by decide))
 
 fwd_def cX parse_cX (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
     (hH : Sha512.hash (bytesOf ls lh) = H)

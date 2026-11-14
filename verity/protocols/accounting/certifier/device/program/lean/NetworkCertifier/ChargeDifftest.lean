@@ -13,16 +13,16 @@ results from the program's definitions (`NetworkCertifier.AdviceV1`), gives ever
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.Certifier.Code`
 (`CodeChargesV1`) proves `charges` equal to the reference's (`Security/Definitions/Certifier/AdviceV1.lean`).
 
-An instance is a executionPhase size `N`, a book (`arrived`, n_arrived's bin frequencies at bins `0 … bitlen N`, its `total`,
+An instance is an execution phase size `N`, a book (`arrived`, n_arrived's bin frequencies at bins `0 … bitlen N`, its `total`,
 each zero count's `(freq, total)`, and the contexts' `priors`), a first carry, and windows, each `N` slots that ask or
-not (`en`) with their decisions (`bit`), as `ChargeCount_v1{N}`'s witness holds them. A executionPhase's decision stream is the
+not (`en`) with their decisions (`bit`), as `ChargeCount_v1{N}`'s witness holds them. An execution phase's decision stream is the
 decisions of the slots that ask, in order.
 
 `evaluate` gives, from the definitions themselves:
-* `steps`: from the instance's carry, each executionPhase's `executionPhase`, its charge and the carry it passes on (`[charge, counts,
+* `steps`: from the instance's carry, each execution phase's `executionPhase`, its charge and the carry it passes on (`[charge, counts,
   run]`), up to and including the first executionPhase it refuses (`null`): Python's `reference_charge` executionPhase by executionPhase, each
   `ok` 0 a `null`;
-* `charges`: `charges` of the decision streams, from the book's priors and run 0, or `null` when a executionPhase refuses.
+* `charges`: `charges` of the decision streams, from the book's priors and run 0, or `null` when an execution phase refuses.
 -/
 
 @[expose] public section
@@ -65,13 +65,13 @@ def rawOfJson (j : Json) : Except String Raw := do
       pure ((← (← fromJson? (α := List Json) (← w.getObjVal? "en")).mapM bitOfJson),
         (← (← fromJson? (α := List Json) (← w.getObjVal? "bit")).mapM bitOfJson)) }
 
-/-- A executionPhase's decision stream: the decisions of the slots that ask, in order. -/
+/-- An execution phase's decision stream: the decisions of the slots that ask, in order. -/
 def stream (w : List Bool × List Bool) : List Bool :=
   (w.1.zip w.2).filterMap fun (e, b) => if e then some b else none
 
 def pairsJson (l : List (Nat × Nat)) : Json := toJson (l.map fun p => [p.1, p.2])
 
-/-- `executionPhase` from `cy` on each executionPhase in turn, up to and including the first it refuses. -/
+/-- `executionPhase` from `cy` on each execution phase in turn, up to and including the first it refuses. -/
 def steps (bk : Book) (N : Nat) : Carry → List (List Bool) → List Json
   | _, [] => []
   | cy, ds :: ws => match executionPhase bk N cy ds with

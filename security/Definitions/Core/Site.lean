@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Core.DeviceFigures
 public import Definitions.Core.Period
 public import Mathlib.Data.Finset.Lattice.Fold

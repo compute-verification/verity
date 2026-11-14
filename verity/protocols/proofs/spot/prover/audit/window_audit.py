@@ -144,7 +144,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
 * **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
+  registered value's (a warden execution phase's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
   table's (below). `a5_warden.py` is their stand-in.
@@ -297,7 +297,7 @@ CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
 def tie(a: argparse.Namespace) -> dict[str, Any]:
-    """The window's tie to the earlier docket of the values its program takes (``a.tie``, records_audit's
+    """The window's tie to the earlier registration of the values its program takes (``a.tie``, records_audit's
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})
@@ -1555,11 +1555,11 @@ def case_coins(case: dict, coins: dict, key: dict | None, label: str | None, win
 
 #: onsite's and remote's SPOT component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
 #: whichever form its params and evidence name; it refuses one-stage v1's
-SAMPLED_PROOFS = "verity/sampled-proofs/v1"
+SPOT = "verity/sampled-proofs/v1"
 
 
 def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SAMPLED_PROOFS`): its params and
+    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SPOT`): its params and
     its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
     RP = own_replay()

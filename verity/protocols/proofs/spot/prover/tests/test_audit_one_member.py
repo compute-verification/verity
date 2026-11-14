@@ -1,5 +1,5 @@
 """A window of one member through the records audit on the window's own challenger session, then the compiled check,
-`sampled-proofs-one-stage-zk check`, on the case the audit writes (``case-v2.json``). It is `test_audit_two_members`'s
+`spot-one-stage-zk check`, on the case the audit writes (``case-v2.json``). It is `test_audit_two_members`'s
 audit (its `_audit` and `binaries`) on a window of one template and one proof block (``ScaledMmS8Coordinate`` at
 K = 128) of one instance under ``subset:1``, the plain random subset the one-statement theorem covers (a design by
 strata or by work is the several-statement form's), under FLOCK_CHALLENGER=1 and a local key at the deployed parameters

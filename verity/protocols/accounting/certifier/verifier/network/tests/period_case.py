@@ -18,7 +18,7 @@ phase (`scan_ok.constants` and `held`), and the scan's terms read off its Progra
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
 check reads: parameters naming a `sync_set` (the clock form's) are refused before anything else is read. Public is `K`
-and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' scans, all at one δ), each with its
+and its terms over `MonitoringPeriodLeakAccepted`'s windows (the execution phases' scans, all at one δ), each with its
 `delta`, and `eps`, the union of those deltas as an exact ratio string, and the schedule's response cap
 (`max_tokens_cap`) when it has one.
 
@@ -26,8 +26,8 @@ and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' s
 parameters, commitments, evidence and cases). Its parameters list the signer's entry (its key, its session and the
 start of its stretch, at or before `first`, so the signer's numbers are the period's less that start), alone in a
 small period and otherwise among up to two more whose stretches hold none of the period's execution phases; `second-key`
-lists the signer second of two, and `two-stretches` two entries whose stretches each hold some of the period's execution
-phases, each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn,
+lists the signer second of two, and `two-stretches` two entries, the period's one execution phase the second's
+stretch's first, signed by that entry at its number 0. Refused: two listed entries that sign in turn,
 each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); a certificate or a
 rows registration under the other listed entry, outside its stretch (`cert-outside-stretch`, `reg-outside-stretch`),
 under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the other entry's session
@@ -37,12 +37,14 @@ out of order or with one start, one session twice, two keys under one key identi
 first entry, or the earlier forms `"key"`, `"session"` and `"sessions"`. A period's evidence shows each listed entry's
 session's signed start, its base on its key's life sampled for a key's first listed entry and, for a later one, as many
 of the schedule's execution phases on as its start is, and its ordinal among its key's sessions, sampled for a key's
-first listed entry and the next for each later one. `restart` lists the signer's key in two sessions, each stretch
-holding some of the period, and is accepted. Refused: that list with the second session's base another
-(`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a shown start that is not its session's
+first listed entry and the next for each later one. `two-sessions` lists the signer's key in two sessions, the period's
+one execution phase in the second's stretch, and is accepted. Refused: that list with the second session's base
+another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a period of two execution phases,
+one in each of the two sessions' stretches (`restart`), as a period is one execution phase (`startCarriedRefusal`);
+a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
-shows a start too few or too many, or none (`start-count`). The link-windows of one link from the execution phase
-`first`, each link-window's ingress and egress rows committed and registered under a small sampled schedule
+shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
+`first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
@@ -820,7 +822,7 @@ def params(j) -> Params:
     scan = _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
-        raise D.Reject("windows: a period has at least one link-window")
+        raise D.Reject("windows: a period has at least one execution phase")
     if not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
     if list(cells) != schedule.rows_cells(windows):
@@ -846,7 +848,7 @@ def commitment(b: bytes) -> Commitment:
     j = P.canonical_json(b)
     _exactly(j, ["audits", "windows"], "the object")
     return Commitment([_registration(x, "an audit's registration") for x in _of(j["audits"], list, "audits")],
-                      [_registration(x, "a link-window's registration") for x in _of(j["windows"], list, "windows")], b)
+                      [_registration(x, "an execution phase's registration") for x in _of(j["windows"], list, "windows")], b)
 
 
 def _answer(j, ctx: str) -> dict:
@@ -906,7 +908,7 @@ def evidence(b: bytes) -> tuple[list[dict], list[Window], list[CertifiedStart]]:
     if not shown:
         _exactly(j, ["audits", "windows"], "the object")
     answers = [_answer(a, "an audit's answer") for a in _of(j["audits"], list, "audits")]
-    windows = [_window(x, "a link-window") for x in _of(j["windows"], list, "windows")]
+    windows = [_window(x, "an execution phase") for x in _of(j["windows"], list, "windows")]
     starts = [_start(x, "a start") for x in _of(j["starts"], list, "starts")] if shown else []
     if shown and not starts:
         raise D.Reject('starts: none: evidence that shows no session\'s start has no "starts"')
@@ -1400,7 +1402,8 @@ def _start_refusal(w: int, i: int, reg: dict) -> str | None:
     """`scanStartCheck`'s refusal of execution phase `w`'s scan, the `i`-th of its period: none when it is its period's
     first and, where it is the run's first, execution phase 0, its scan starts from the empty state (`_start_empty`).
     A period's first that is not the run's first starts from a state the check holds to nothing, and is charged
-    (`public`'s ``start``)."""
+    (`public`'s ``start``). A period is one execution phase: a later one is refused (`CARRIED`), so a period spanning a
+    restart is too, though its device restarted honestly."""
     if i != 0:
         return CARRIED
     return None if w != 0 or _start_empty(reg) else UNPINNED
@@ -1439,9 +1442,9 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], charged: list[Facts] = (),
            start: int = 0) -> dict:
-    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the link-windows' scans (`scans`, each its facts,
+    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the execution phases' scans (`scans`, each its facts,
     its tied audits' free inputs and its `β_w`), where a compute audit's own terms are in none, a tied audit's free
-    inputs are in its link-window's `free` and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit
+    inputs are in its execution phase's `free` and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit
     sampled in part (`charged`) is in `eps`, and the period's first start, where it is not the run's first, is charged
     ``start``, the state's full width, once."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
@@ -1460,11 +1463,11 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], c
 def check(p: Params, c: Commitment, e) -> tuple:
     audits, windows, starts = e
     if len(c.windows) != p.windows:
-        return REJECT, "the commitment registers another number of link-windows"
+        return REJECT, "the commitment registers another number of execution phases"
     if len(c.audits) != len(p.audits):
         return REJECT, "the commitment registers another number of audits"
     if len(windows) != len(c.windows):
-        return REJECT, "evidence: another number of link-windows"
+        return REJECT, "evidence: another number of execution phases"
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts, scans = _start_checks(p, starts), [], []
@@ -1544,8 +1547,8 @@ def _key(i: int, seed: int = 0, same_id: bool = False) -> lms.PrivateKey:
 
 EXPECT = {
     "rows-honest": ACCEPT, "rows-second-key": ACCEPT, "rows-two-stretches": ACCEPT, "rows-two-signers": REJECT,
-    "rows-restart": ACCEPT, "rows-start-not-signed": REJECT, "rows-start-uncertified": REJECT,
-    "rows-start-count": REJECT, "rows-start-skipped": REJECT,
+    "rows-two-sessions": ACCEPT, "rows-restart": REJECT, "rows-start-not-signed": REJECT,
+    "rows-start-uncertified": REJECT, "rows-start-count": REJECT, "rows-start-skipped": REJECT,
     "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
     "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
@@ -1581,15 +1584,18 @@ MUTATIONS = list(EXPECT)
 #: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
 #: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
 #: outside its stretch, and at the period's number where the session's belongs. The check reads each session's
-#: signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
-#: second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second session's
-#: base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`). `case` aims at none
-#: (`AIMS`), so its period lists the one entry that signs it.
+#: signed start: accepted, one key listed in two sessions, the period's one execution phase in the second's stretch, the
+#: second starting where the two sessions' signed bases put it (`two-sessions`); refused, that list with the second
+#: session's base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`), and a period of
+#: two execution phases, one in each session's stretch (`restart`): a period is one execution phase, so one spanning a
+#: restart is refused (`startCarriedRefusal`). `case` aims at none (`AIMS`), so its period lists the one entry that
+#: signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number",
-         "restart", "start-not-signed", "start-skipped")
-#: The changes whose parameters list one key in two sessions, each stretch holding some of the period
-RESTARTS = ("restart", "start-not-signed", "start-skipped")
+         "two-sessions", "restart", "start-not-signed", "start-skipped")
+#: The changes whose parameters list the signer's key in two sessions, the period's one execution phase in the second's
+#: stretch, the signer's; `restart` lists it so too, its period two execution phases, one in each stretch
+RESTARTS = ("two-sessions", "start-not-signed", "start-skipped")
 #: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
 #: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
@@ -2244,7 +2250,7 @@ def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few link-windows
+    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few execution phases
     and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
@@ -2261,33 +2267,34 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
     link = r.choice(["eth0", "a", "d-e"])
     carry = rp.choice(CARRIES) if m == "start-carried" else None
-    least_windows = 2 if m in ("undecided-and-reject", "delta", "two-stretches", *RESTARTS) or carry else 1
+    least_windows = 2 if m in ("undecided-and-reject", "delta", "restart") or carry else 1
     least_audits = 2 if m == "state-untied" else \
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     # a rows period is one execution phase (`scanStartCheck`): more only where the change asks, refused, and a later one
     # than the run's first only where the change asks, charged its start
     n_windows = r.randint(least_windows, least_windows if small or not carry else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a link-window's own audit, and at times one no link-window ties, which may leave units unsampled
+    # an execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1)))
     first = r.choice([0, 0, r.randrange(1, 6)])
-    if (m in SECOND or carry == "later" or m == "start-charged") and first == 0:
+    if (m in (*SECOND, *RESTARTS, "two-stretches", "start-charged") or carry == "later") and first == 0:
         first = rk.randrange(1, 6)
     elif m == "start-unpinned" or carry == "more":
         first = 0
     # the entries the parameters list, by their stretches' starts, the signer's (`key`, `session`) among them, its
-    # numbers the period's less its start; seed 1's key is never listed. Two entries whose stretches each hold some of
-    # the period's execution phases, the signer's from one of them on (`two-stretches`); two, the period in the second's
-    # stretch, the signer's (`SECOND`); else the signer's, alone in a small period, or among up to two more whose
+    # numbers the period's less its start; seed 1's key is never listed. Two, the period's one execution phase the
+    # second's stretch's first, the signer's (`two-stretches`); two of the signer's key, each stretch holding one of the
+    # period's two execution phases (`restart`); two, the period in the second's stretch, the signer's (`SECOND`, and
+    # `RESTARTS` under the signer's key); else the signer's, alone in a small period, or among up to two more whose
     # stretches hold none of the period's execution phases, before the signer's or after the period
     other = lambda k, start: Stretch(k, rk.randbytes(lms.SESSION_BYTES), start)  # noqa: E731
-    if m == "two-stretches" or m in RESTARTS:
-        # two stretches under two keys, or under the signer's key in two sessions
-        listed = [other(key if m in RESTARTS else _key(ki, 2), rk.randint(0, first)),
-                  Stretch(key, session, first + rk.randrange(1, n_windows))]
-    elif m in SECOND:
+    if m == "two-stretches":
+        listed = [other(_key(ki, 2), rk.randrange(first)), Stretch(key, session, first)]
+    elif m == "restart":
+        listed = [other(key, rk.randint(0, first)), Stretch(key, session, first + 1)]
+    elif m in SECOND or m in RESTARTS:
         start = rk.randint(1, first)
-        listed = [other(_key(ki, 2), rk.randrange(start)), Stretch(key, session, start)]
+        listed = [other(key if m in RESTARTS else _key(ki, 2), rk.randrange(start)), Stretch(key, session, start)]
     else:
         start = rk.randint(0, first)
         more = [] if small else [_key(ki, 2), _key(ki, 3)][:rk.randrange(3)]
@@ -3163,7 +3170,7 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0) -> dict:
-    """A small period (`build(..., small=True)`: the toy key, as few link-windows and audits as its change needs) aimed
+    """A small period (`build(..., small=True)`: the toy key, as few execution phases and audits as its change needs) aimed
     at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)

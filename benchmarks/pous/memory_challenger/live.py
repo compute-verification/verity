@@ -450,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sessions", default=None,
                     help="where the signed sessions go before any verdict runs (default: sessions-<--out's name> beside it)")
     ap.add_argument("--seed", type=bytes.fromhex, default=None, metavar="HEX",
-                    help="derive each session's coin source and session id from this seed (--clock logical --signer test only)")
+                    help="derive each session's live coins and session id from this seed (--clock logical --signer test only)")
     a = ap.parse_args(argv)
     if a.seed is not None and not (a.clock == "logical" and a.signer == "test"):
         ap.error(SEEDED_ONLY)
