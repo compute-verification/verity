@@ -253,6 +253,7 @@ FLAGS = ["--build", "--closure"]
 #: read of one fails the audit
 NOT_READ = {
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
+    "claim_ids.py": "`verity.claims`' table of each claim id's premises, written from the locks by a command of its own",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",

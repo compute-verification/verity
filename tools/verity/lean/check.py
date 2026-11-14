@@ -122,9 +122,9 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open",
-         "open_seed", "open_default_issue", "default_owner", "trust", "deployed", "trust_gap", "meaning", "escapes", "verifier",
-         "claims", "witnesses", "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked", "layers",
-         "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
+         "open_seed", "open_default_issue", "default_owner", "ids", "trust", "deployed", "trust_gap", "meaning", "escapes",
+         "verifier", "claims", "witnesses", "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked",
+         "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 #: an open premise's `issue` (the Linear issue that discharges it) and `due`
@@ -1062,7 +1062,7 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
 #: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
 #: witnesses); and `format`, which `dump` writes and only the merge driver reads
 JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
-                    "witnesses", "witnesses_assumed", "format"})
+                    "witnesses", "witnesses_assumed", "ids", "format"})
 
 
 def build_inputs(policy: dict) -> dict:
@@ -1258,8 +1258,8 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed` and `trust_gap` with every
-    guarantee, theorem and premise they name `renamed` by ``moved``."""
+    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap` and `ids` with
+    every guarantee, theorem and premise they name `renamed` by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
     if name_list(policy.get("deployed")):
         out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
@@ -1272,6 +1272,8 @@ def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
         out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
         out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
+    if isinstance(ids := policy.get("ids"), dict):
+        out["ids"] = {renamed(p, moved): i for p, i in ids.items()}
     if isinstance(ws, dict):
         out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
                                                 if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
@@ -1698,6 +1700,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     if update and isinstance(policy.get("trust_gap"), dict):
         out["trust_gap"] = trust_gap_kept(out)
     fails += trust_failures(out)
+    if update and isinstance(policy.get("ids"), dict):
+        out["ids"] = ids_kept(out)
+    fails += id_failures(out, {getattr(f, "entry", None) for f in fails})
     return fails, out
 
 
@@ -3154,7 +3159,7 @@ def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[st
     if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
         return None
     new = judge(policy, facts, files, update=True)[1]
-    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "trust_gap")
+    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "trust_gap", "ids")
                      if k in new}
 
 
@@ -3177,7 +3182,7 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there fails."""
     new = judge(policy, facts, files, update=True, ticket=ticket)[1]
     out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed",
-                                        "trust_gap") if k in new}
+                                        "trust_gap", "ids") if k in new}
     out.pop("open_seed", None)
     allow, shape_ = dict(out.get("unwitnessed") or {}), dict(out.get("shape") or {})
     drops = {"witnesses.stale": ("witnesses",), "witnesses.assumed-stale": ("witnesses_assumed",),
@@ -3356,6 +3361,46 @@ def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
     entry left empty or of a guarantee `deployed` doesn't list.  It adds nothing, so the gap only shrinks."""
     held, gaps = lock.get("trust_gap") or {}, trust_gaps(lock)
     return {g: kept for g in sorted(held) if g in gaps and (kept := sorted(set(name_list(held[g])) & set(gaps[g])))}
+
+
+#: a claim id (`verity.claims`): a property of an instance, `cr/sha-512`, or a bare kebab-case id, `trusted-host`
+CLAIM_ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*)?")
+
+
+def trust_premises(lock: dict) -> set[str]:
+    """The premises `trust` names: its base's and each deployed guarantee's own."""
+    trust = lock.get("trust") if isinstance(lock.get("trust"), dict) else {}
+    extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
+    return set(trust.get("base") or {}) | {p for ps in extra.values() if isinstance(ps, dict) for p in ps}
+
+
+def id_listed(lock: dict) -> set[str]:
+    """The premises an `ids` entry may name: those the lock lists under `assumptions`, `domain` or `open`, or in `trust`."""
+    return {p for k in ("assumptions", "domain", "open") if isinstance(lock.get(k), dict) for p in lock[k]} | \
+        trust_premises(lock)
+
+
+def ids_kept(lock: dict) -> dict[str, str]:
+    """The `ids` an update writes: each entry of a premise the lock still lists (`id_listed`), sorted."""
+    listed = id_listed(lock)
+    return {p: i for p, i in sorted((lock.get("ids") or {}).items()) if p in listed}
+
+
+def id_failures(lock: dict, failed: set | frozenset = frozenset()) -> list[str]:
+    """Each premise's claim id.  `ids` is {premise: its claim id} (`CLAIM_ID`), the id `verity.claims` cites it by, from
+    which `tools/verity/lean/claim_ids.py` writes that package's table of each id's Lean names.  Every named assumption
+    (`assumptions`) and every premise `trust` names has one, which only a person gives; an open or domain premise may.
+    A premise that fails already (``failed``, the entries of the judge's other failures) owes that fix first.  An entry
+    of a premise the lock no longer lists is read by nothing, and `--update` drops it (`ids_kept`)."""
+    ids = lock.get("ids", {})
+    if not isinstance(ids, dict) or not all(isinstance(i, str) and CLAIM_ID.fullmatch(i) for i in ids.values()):
+        return [Failure("ids.form", None, "ids: `ids` is {premise: its claim id}, each id a property of an instance "
+                        "(`cr/sha-512`) or a bare kebab-case id (`trusted-host`), as `verity.claims` cites it")]
+    assumed = set(lock["assumptions"]) if isinstance(lock.get("assumptions"), dict) else set()
+    return [Failure("ids.missing", p, f"ids: {p}, {'a named assumption' if p in assumed else 'a premise `trust` names'}, "
+                    f"has no claim id: write {json.dumps(p)}: \"<id>\" under `ids`, the id `verity.claims` cites it by "
+                    "(its docstring's), then `python3 tools/verity/lean/claim_ids.py --write`")
+            for p in sorted((assumed | trust_premises(lock)) - set(ids) - set(failed))]
 
 
 #: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that

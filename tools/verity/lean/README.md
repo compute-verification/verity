@@ -157,6 +157,9 @@ keeps or drops from and never adds to.
   an entry that gives a `why`, for each guarantee that reads it (`on_read`). Each has an `owner` and a `digest`, so a
   change to a premise or to what it reads fails under its own name. `open_seed`, `open_default_issue` and
   `default_owner` are what `--update` and the records run fill an entry from (`bookkeeping_ticket`).
+- `ids`: {premise: its claim id}, the id `verity.claims` cites it by; every named assumption and every premise `trust`
+  names has one, written by hand, and `--update` drops an entry whose premise the lock no longer lists (`id_failures`).
+  `claim_ids.py --write` writes `verity.claims`' table of each id's premises (`LEAN`) from every lock's.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
