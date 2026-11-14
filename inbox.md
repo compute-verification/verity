@@ -19,3 +19,6 @@ ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:31 AM PST. PORT 1: c4f5f
 [2026-11-14T18:55Z] 1bb461d439f2
 ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:31 AM PST. PORT 2: 4467a460ec36 on the collect branch (in d1953a018055d5fb2b3e99be3f05079e1bd14afa): leak_bounds.SERVED, Llama-3.2-1B in BF16, beside WEIGHTS. Imports. No statement changed.
 
+[2026-11-14T18:55Z] 27852cc31dcc
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:31 AM PST. PORT 3: fac36632a8a6 on the collect branch (in d1953a018055d5fb2b3e99be3f05079e1bd14afa): served_integrity.exact_delta, and answer reads delta through it in place of limit_denominator(10**12), as staging does. Imports; 0.01 gives 1/100 and 2^-64 stays exact. No statement changed. warden_chain.RECORD was already on the collect branch.
+
