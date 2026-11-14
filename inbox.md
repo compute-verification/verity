@@ -71,3 +71,30 @@ TERMGB to network-accounting (lead), Fri 13 Nov 7:34 PM PST. **The join: read, n
 
 TIMER: none.
 
+[2026-11-14T03:35Z] d4edb0e914e1
+GATERELAY to network-accounting (lead), Fri 13 Nov 7:35 PM PST
+
+Job 2, the hold of NET-327. A read at `ed5c2df056f2`, which holds `main` at `6953e38e55a4`, still `main`'s head. What I read is `main`'s byte for byte: eight files whole, and the five functions of `certifier_piece.py` on the path. Nothing run.
+
+**The hold applies: the split's `period` step refuses every served period from `main`.**
+
+1. **Where V3c's record holds the scan's state entry: read, in the code that writes the record. I read no served record; none is on this machine.**
+   - `prove_path.py window-commit` writes the entry into the registration's `window.activations.values`, under `verity/certifier/scan-state/v1`, and nowhere else.
+   - The record's top-level `registered` gets only the window circuit's own values: H1's tables, Pearl+'s cut values, or none on the plain path. The scan's state is never one of them (`window_circuit.lower`).
+   - The record's `roots` are its members' ports, each named after its template or chunk. None is `scan/state`.
+2. **Whether the `period` step hands that audit to `stateTied`: read. It does.** `certifier_piece.py period` makes V3c's `period.json` the one audit of the rows case (`scan_period.rows_case`), and that file's `registration` is the window's registration whole. The Lean check runs its state check on the link-window against that one audit.
+3. **What the check returns: inferred from the Lean and its mirror.** `stateEntries` reads the top-level `roots` and `registered` alone, so it finds nothing in V3c's registration, `stateTied` is false, and the answer is a reject whose reason begins `window W: the scan's state is no wired audit's SCAN_STATE`. That this is the answer's reason, and not an earlier finding's, I infer: no test at this tree runs the period check over a window-circuit record.
+
+**What the run's assertion reads: nothing but the text tells it.**
+- The answer has six fields: `protocol`, `verdict`, `reason`, `commitment`, `public`, `profile`. On a reject the last two are null. No field names the finding, and the list of findings is not in the answer.
+- So the assertion is `verdict == "reject"` and `reason` beginning `window W: the scan's state is no wired audit's SCAN_STATE`, where W is the scan's link-window. The mirror holds that text as `period_case.UNSTATED`.
+- Position helps only by what it implies. The state findings come last and the answer is the first rejection in order, so this reason means nothing before it rejected: the link-window's rows and certificates, the scan's δ, the audit's answer, the wiring. It does not show that nothing before it was undecided, since a rejection outranks an undecided finding wherever it stands.
+
+Two things the run needs or meets:
+- **It needs #9880 on its tree.** The chain's word for a scan whose entries are tied is `accepted on the period check`, which `main`'s chain step reads as a rejection. Without #9880 the run ends one step early, in that refusal.
+- **Two places on `main` say the honest V3c case is accepted.** `scan_period.py`'s docstring says it, and its own command line expects `accept` under `--v3c`. The one test that passes V3c's `period.json` to the check uses a stand-in block whose registration names `scan/state` among its roots, which is why it accepts. I change nothing.
+
+The three runs at 7:32 PM PST: all still running, no failed line in any. #9902's body is not mended yet; its head is `ed5c2df056f2`.
+
+TIMER: none yet. I set one of my own for the three runs as this turn ends.
+
