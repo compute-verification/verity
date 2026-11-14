@@ -505,7 +505,7 @@ def test_attention_rows_fa2_equals_the_registered_attention_v3_definition(T):
 def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition_and_the_cpp_fa3_model(T, geometry):
     """`attention_rows(dot_prim=HopperBF16WgmmaDot16_v1, inv_prim=Fa3InvSum_v1)` == `Attention_v2{T, NH, KVH, D,
     BN, DOT=Hopper, INV=Fa3InvSum}` gate for gate (the sm_90 FA3 chain: wgmma 16:26:-133 step, the Program's kBlockN, `? 0 : rcp`) AND ==
-    the independent C++ model `verity.definitions.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 production
+    the independent C++ model `verity.definitions.numerics.fa3_model.fa3_rows` (the arithmetic MEASURED exact on the H100 served
     capture, hopper-profile.md) on Qwen2.5-1.5B geometry (NH=12, KVH=2, D=128, BN=128) and Llama-3.2-1B's (NH=32, KVH=8, D=64, BN=192
     -- the tile the H100 B8 1024/128 Program of record binds at T >= 2) -- two implementations, one word sequence."""
     from verity.circuits.defs import bind

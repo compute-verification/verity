@@ -128,8 +128,8 @@ def test_the_boolean_definition_is_its_word(st):
     word = word_of(target)
     assert SW.boolean_version(word).id == target.id
     sweep = _args(st, _sweep(st), 3)
-    drawn = T._sample(np.random.default_rng(4), 64, None, **st)
-    for args in (sweep, drawn):
+    sampled = T._sample(np.random.default_rng(4), 64, None, **st)
+    for args in (sweep, sampled):
         n = len(args[1])
         got = np.asarray(evaluate_words(target, *args), dtype=np.uint64).reshape(n, -1)
         assert np.array_equal(got, _reference(st, args).reshape(n, -1))

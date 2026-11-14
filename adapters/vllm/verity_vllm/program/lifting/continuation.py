@@ -50,9 +50,9 @@ PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.asyn
 #: record's own `pos` fact: slot t samples at pos = prompt_len - 1 + (t - 1), the ledger's "sample k at prompt_len - 1 + k") "advances" means "the
 #: sample at pos exists": the served samples at pos < prompt_len - 1 + n are unchanged whether or not the lag slot ran.  stoch_recompute carries the
 #: accounting; POSITIONS HERE ARE THE LEDGER'S (one convention on the record).
-RNG_STATEMENT = ("RNG advances iff r_t: the sampler of slot t executes iff r_t = 1; the lag slot (0, 1) consumes exactly one draw after the served "
+RNG_STATEMENT = ("RNG advances iff r_t: the sampler of slot t executes iff r_t = 1; the lag slot (0, 1) consumes exactly one sample after the served "
                  "EOS at pos = prompt_len - 1 + n (n served slots; pos = the query position of record, slot t at prompt_len - 1 + (t - 1)); an "
-                 "inactive slot (0, 0) draws nothing; served draws are unchanged by the lag slot (counter RNG keyed by (seed, pos), no "
+                 "inactive slot (0, 0) samples nothing; served samples are unchanged by the lag slot (counter RNG keyed by (seed, pos), no "
                  "sequential state)")
 
 
@@ -61,10 +61,10 @@ def rng_accounting(slots: Sequence[Slot], *, prompt_len: int | None = None) -> d
     absolute when `prompt_len` is known).  A statement about the Definition; the record-side count is stoch_recompute's."""
     exe = executed_slots(slots)
     lag = lag_slots(slots)
-    return {"statement": RNG_STATEMENT, "draws": len(exe), "draw_slots": exe, "draws_after_served_eos": len(lag),
-            "lag_draw_slot": (lag[0] if lag else None),
-            "lag_draw_pos": (None if not lag or prompt_len is None else int(prompt_len) - 1 + (lag[0] - 1)),  # the ledger's pos
-            "inactive_slots_draw_nothing": [s.t for s in slots if not s.run]}
+    return {"statement": RNG_STATEMENT, "samples": len(exe), "sample_slots": exe, "samples_after_served_eos": len(lag),
+            "lag_sample_slot": (lag[0] if lag else None),
+            "lag_sample_pos": (None if not lag or prompt_len is None else int(prompt_len) - 1 + (lag[0] - 1)),  # the ledger's pos
+            "inactive_slots_sample_nothing": [s.t for s in slots if not s.run]}
 
 
 def check_profile(A: int) -> int:
@@ -317,13 +317,13 @@ def slot_map(executed_engine_steps: Sequence[int], *, arrive_step: int, prefill_
             "positive_attestation": "the workload's applicability (contiguity + unchunked prefill on the pinned profile) -- not this map's to give"}
 
 
-def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int], prompt_len: int) -> dict[str, Any]:
+def expected_sample_positions(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int], prompt_len: int) -> dict[str, Any]:
     """The sample positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
     `pos` fact = the query position whose logits are sampled: the sample ledger's 'sample k at pos = prompt_len - 1 + k', slot t = k + 1;
     the counter RNG is keyed by `(seed, pos)`), read from the recurrence over the SERVED list (the one mechanism).
-    An ORDERED list: the served slots' samples, then the one lag sample (A = 1, EOS before the cap), nothing after -- so an over-cap sample without
+    An ORDERED list: the served slots' samples, then the one lag sample (A = 1, EOS before the cap), nothing after -- so a sample past the cap without
     an EOS, a second post-EOS sample, or a sample at an inactive slot is an EXTRA position by name, a missing served sample a MISSING one
-    (`compare_draw_positions`).  `A in {0, 1}` (check_profile) -- a lag >= 2 has no admitted profile."""
+    (`compare_sample_positions`).  `A in {0, 1}` (check_profile) -- a lag >= 2 has no admitted profile."""
     check_profile(A)
     if prompt_len < 1:
         raise ValueError(f"prompt_len = {prompt_len}: a request has at least one prompt token")
@@ -332,36 +332,36 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
     lag = lag_slots(slots)
     L = int(prompt_len)
     pos = lambda t: L - 1 + (t - 1)  # noqa: E731  -- slot t's query position, the ledger's convention
-    return {"rule": "expected draw positions = {L - 1 + (t - 1) : r_t = 1}, L = prompt_len, pos = the query position of record (Continuation_v1 "
-                    "recurrence over the served list; A = LAG; the draw ledger's convention)",
+    return {"rule": "expected sample positions = {L - 1 + (t - 1) : r_t = 1}, L = prompt_len, pos = the query position of record (Continuation_v1 "
+                    "recurrence over the served list; A = LAG; the sample ledger's convention)",
             "prompt_len": int(prompt_len), "A": A, "cap": cap, "n_served": len(served),
             # the recurrence runs on served[:cap]; a served list OVER the cap is named here (and its samples past the cap
             # are EXTRA positions in the compare), never truncated silently
-            "n_served_over_cap": max(0, len(served) - cap),
+            "n_served_past_cap": max(0, len(served) - cap),
             "positions": [pos(t) for t in run], "slots": run, "n": len(run),
             "lag_positions": [pos(t) for t in lag],
             "served_positions": [pos(s.t) for s in slots if s.emit],
             "first_forbidden_position": (pos(run[-1]) + 1) if run else pos(1)}
 
 
-def compare_draw_positions(expected: Sequence[int], drawn: Sequence[int]) -> dict[str, Any]:
-    """`drawn` = the positions the record's ledger shows a sample at (stoch_recompute's `draw_accounting`), in ledger order.  Every extra / missing / repeated /
+def compare_sample_positions(expected: Sequence[int], sampled: Sequence[int]) -> dict[str, Any]:
+    """`sampled` = the positions the record's ledger shows a sample at (stoch_recompute's `draw_accounting`), in ledger order.  Every extra / missing / repeated /
     out-of-order position is a problem BY NAME; `ok` is their absence -- 'RNG advances iff r_t' measured literally."""
     exp = [int(p) for p in expected]
-    got = [int(p) for p in drawn]
+    got = [int(p) for p in sampled]
     problems: list[str] = []
     extra = sorted(set(got) - set(exp))
     missing = sorted(set(exp) - set(got))
     dup = sorted({p for p in got if got.count(p) > 1})
     if extra:
-        problems.append(f"draws at positions {extra[:8]} where r_t = 0 (over the cap / past the lag slot / at an inactive slot): the RNG advanced without r_t")
+        problems.append(f"samples at positions {extra[:8]} where r_t = 0 (over the cap / past the lag slot / at an inactive slot): the RNG advanced without r_t")
     if missing:
-        problems.append(f"no draw at positions {missing[:8]} where r_t = 1: an executed slot without its sampling event")
+        problems.append(f"no sample at positions {missing[:8]} where r_t = 1: an executed slot without its sampling event")
     if dup:
-        problems.append(f"positions {dup[:8]} drawn more than once: two draws in one slot")
+        problems.append(f"positions {dup[:8]} sampled more than once: two samples in one slot")
     if not extra and not missing and not dup and got != exp:
-        problems.append(f"draws out of order: ledger {got[:8]} vs the rule's {exp[:8]}")
-    return {"ok": not problems, "expected": exp, "drawn": got, "extra": extra, "missing": missing, "repeated": dup, "problems": problems}
+        problems.append(f"samples out of order: ledger {got[:8]} vs the rule's {exp[:8]}")
+    return {"ok": not problems, "expected": exp, "sampled": got, "extra": extra, "missing": missing, "repeated": dup, "problems": problems}
 
 
 # ---------------------------------------------------------------------------------------------------------

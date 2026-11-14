@@ -1,4 +1,4 @@
-"""Stage 2 of the padded MoE: the complete small padded block.
+"""Part 2 of the padded MoE: the complete small padded block.
 
 Four experts, top-1 AND top-2, the Program built before any route (`moe_pad.block`), every admitted route walked in full
 (`moe_pad.admitted_routes`: 4 at top-1, 12 ordered at top-2), each demonstrated on the reference evaluator (`serve3_reference.materialize`:
@@ -112,7 +112,7 @@ class Assignment:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@composite("MoeIndexedReadRefStage2", 1, ["E", "TOPK", "VPT", "H", "I"],
+@composite("MoeIndexedReadRefPart2", 1, ["E", "TOPK", "VPT", "H", "I"],
            lambda S: ((("x", Array(S.H, BF16)), ("wg", Array(S.E, Array(S.H, BF16))), ("w13", Array(S.E, Array(2 * S.I, Array(S.H, BF16)))),
                        ("w2", Array(S.E, Array(S.H, Array(S.I, BF16))))),
                       Tuple(Array(S.H, BF16), Array(S.TOPK, I32), Array(S.TOPK, F32), Array(S.TOPK, Array(S.H, BF16)))),
@@ -391,7 +391,7 @@ def test_negative_an_unselected_expert_cannot_influence_the_output_and_a_selecte
     assert c.ids == a.ids and c.z[e_on] != a.z[e_on] and c.y != a.y
 
 
-@composite("TwoTokensSharedExpertsStage2", 1, ["E", "TOPK", "VPT", "H", "I"],
+@composite("TwoTokensSharedExpertsPart2", 1, ["E", "TOPK", "VPT", "H", "I"],
            lambda S: ((("x0", Array(S.H, MP.V(16))), ("x1", Array(S.H, MP.V(16)))) + MP.block_signature(S)[0][1:-1]
                       + (("a0", L.ENABLE_T), ("a1", L.ENABLE_T)),
                       Tuple(MP.block_signature(S)[1], MP.block_signature(S)[1])), conformance="protocol-defined")
@@ -467,7 +467,7 @@ def StrictReplayOfTwinNEGATIVE(B, S, x, wg, w13, w2, a):
     return L.replay_lifted(B, sp.body, [x, wg, w13, w2], enable=a)
 
 
-@composite("CallsTheTwinStage2", 1, ["E", "TOPK", "VPT", "H", "I"],
+@composite("CallsTheTwinPart2", 1, ["E", "TOPK", "VPT", "H", "I"],
            lambda S: bind(MP.MoeFfnFixed, **S.__dict__).signature(), conformance="protocol-defined")
 def CallsTheTwin(B, S, x, wg, w13, w2):
     """An unlifted Program that CALLS the twin (a Program's root inlines its own body, so the twin must be a callee to be a decoded node)."""

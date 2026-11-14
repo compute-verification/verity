@@ -1,6 +1,6 @@
 """Adversarial tests for the MIXED BATCH stage (LIFTING-REVIEW attack list A1/A5), Program side, TINY shape.
 
-Two requests share ONE weights Input and one EOS set; request A stops early (EOS at event 3), request B never stops (cap decides).
+Two requests share ONE weights Input and one EOS set; request A stops early (EOS at event 3), request B never stops (its max_tokens decides).
 The attacks these tests aim at:
 
   A1  ⊥ leaking across requests — A's deactivation must not change one bit of B's values (no cross-request edge in the greedy
