@@ -12,7 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.definitions.registry import ref_prims
 
     return [
-        ("RoPEGptJ_v1", lambda: bind(ref_prims.RoPEGptJ, NHEADS=2, D=16)),
+        ("RoPEHeadGptJ_v1", lambda: bind(ref_prims.RoPEHeadGptJ, D=16)),
         ("RoPEInterleavedRef_v1", lambda: bind(ref_prims.RoPEInterleavedRef, D=16, DT="bf16")),
         ("LogSoftmaxRef_v1", lambda: bind(ref_prims.LogSoftmaxRef, N=16, DT="f32")),
     ]
