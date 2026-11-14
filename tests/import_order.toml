@@ -174,6 +174,7 @@ paths = [
 trusted = true
 loaded_by = [
     "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
 ]
 
@@ -537,6 +538,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
@@ -775,5 +777,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
 ]
