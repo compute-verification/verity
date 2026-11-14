@@ -51,12 +51,14 @@ verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
   as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
-research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
+research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
-  the fast path (the lean-proofs skill): PKG's records and its requirers'
-research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone -- \
+  93 GB is 86.6 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
+  `lean_changed.py --ask PKG` prints PKG's ask
+research run --on auto --mem-gb 258 --max-min 180 --project verity --source . --cwd clone -- \
   python3 tools/verity/lean/check.py --build --update PKG
-  a full record, left at lean-audit/audit-TAG/lean-audit.json
+  258 GB is 240.3 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
+  `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
 `check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
@@ -94,6 +96,12 @@ of `check.py` unless it says otherwise, or the lock's section below.
   checked it, wherever it was compiled: a key reads a module's `.olean` files without the source's path a message keeps
   (`closure_plan`, `replay_keys`, `replay_digest`, `olean_graph.canonical`, `build_roots_over`); the audit prints
   `closure: N modules checked, M reused` under each package's line.
+- **`--build` judges the sources first**: before the slot and any build, each package's sources and lock against the
+  checks that read no build (`sources_judge`: the scans, the `runs` paths, the `compile_time` listings, and `exempt` and
+  `layers` over the import graph read from the headers, `source_graph`). A package that fails is reported and not built,
+  nor is one that requires an unbuilt package by path or names one under `proved_in` (`unbuilt_by_sources`). A pass
+  decides nothing: the audit runs each check again on the build, and fails where the build's import graph is not the one
+  the headers gave (`source_graph_failures`).
 - **`--build` recompiles a sample** of the modules the build didn't compile and compares the outputs
   (`sampled_recompile`, `olean_graph.py`).
 - **Each test under `runs` passes** on the data whose SHA-256 the record holds (`tests`, `run_paths`).
@@ -103,8 +111,16 @@ of `check.py` unless it says otherwise, or the lock's section below.
 
 Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
 the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
-after taking one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
-`MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
+after taking one of the node's Lean audit slots (`lean_slot`). What a run reserved is the least of what it declares (a slot's
+`mem=`, `research run --mem-gb`) and what the machine lets it hold, its cgroup's cap else its memory; a run that declares
+nothing plans by the latter, and says which (`reserved`, `memory`). A run is refused where that is less than the largest
+floor among the steps it takes of every package it audits, or where a reservation is no number, with the command to run
+at its ask, in GB, and the ask in GiB under it (`memory_refusal`; `--ask` prints the ask). A heavy build runs as many jobs
+as what its run reserved holds (`build_threads`), a heavy replay one thread per `REPLAY_PER_THREAD_GIB` of it, up to
+every core (`replay_threads`). The rules are `reserve.py`'s, in every audit's key; the figures are `reserve.json`'s, in
+none, so a changed figure audits nothing again. A figure is its step's largest peak with `MARGIN` above it, to the
+nearest GiB: a step whose peak would give a larger one prints a warning naming the line of `reserve.json` to raise,
+which no report keeps (`peaked`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
 (`controls`; `--no-controls` skips them).
@@ -287,14 +303,20 @@ Lean's job in `check` and the tools around the audit:
 - `warm.py`: the Lean audit of a ready mark's merge, which builds a Lean change before a candidate holds it.
 - `siblings.py`, `axiom_probe.py`: what `verity lean try` runs beside lean: the sibling check and the axiom probe.
   The sibling check leaves out, and counts as unchecked, a module whose build, or an import's, is not of its source
-  as it is (by the hash Lake's trace states). It leaves out uncounted, FILE's own module aside, what no root loads
-  beside the rest: the other executables' roots, and every module under an `exempt` prefix of the package's lock (the
-  name or below it, as the audit matches it), so two scripts that each declare `main` don't clash. It never fails on
-  the lock: with none, or one that can't be read (which it says on stderr), it leaves out the executables' roots alone.
+  as it is: by the hash Lake's trace states for a module it built, and for one it took from its cache or an archive
+  by Lake's own word, a `lake build --no-build -v` of the modules that could be siblings, which compiles nothing, run
+  before any product is read and again after a rebuild. A word it can't take (an exit other than 0 or 3, a line it
+  doesn't read, a write the try's sandbox refused) leaves every build Lake took unchecked; no time decides. On a node,
+  a build Lake took and would compile (an import rebuilt since) counts where the node's artifact index records the
+  SHA-512 of its source as it is under its trace's hash, read and never written; a checkout has Lake's word alone.
+  It leaves out uncounted, FILE's own module aside, what no root loads beside the rest: the other executables' roots,
+  and every module under an `exempt` prefix of the package's lock (the name or below it, as the audit matches it), so
+  two scripts that each declare `main` don't clash. It never fails on the lock: with none, or one that can't be read
+  (which it says on stderr), it leaves out the executables' roots alone.
   A sibling is checked as it is built. One built against an older build of an import is rebuilt when a refusal names
   it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
-  so, and what the stub says once more is the verdict. That is the step's limit, and the full check, which builds
-  every module, has none.
+  so, and what the stub of the plan made once more says is the verdict. That is the step's limit, and the full check,
+  which builds every module, has none.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
