@@ -729,14 +729,15 @@ def _slot_table(pr: Mapping[str, Any]) -> list[str]:
     for w in pr["workloads"]:
         n, g, a = w["cpu"], w["gpu"], w["cpu"]["at_cap"]
         s = n["heaviest"]
-        sh = lambda m: a[f"sumcheck_h_{m}"] / a[f"prover_h_{m}"] if a[f"prover_h_{m}"] else 0.0  # noqa: E731
+        h = hours(a)
         bd = [f"{b['prover_h_mean']:.3g} / {b['prover_h_public']:.3g} ({b['share_mean']:.0%})" for b in n["band"]]
         L.append("| " + " | ".join([
             P._short(w["workload"]), f"{_p2(n['cap'])} / {_p2(g['cap'])}", f"{_p2(n['cap_flock'])} / {_p2(g['cap_flock'])}",
             P._si(s["Z"]), P._si(s["template"]), _t(s["prove_s"]), _t(s["sumcheck_s"]), _t(s["total_s"]),
             f"{s['rss_gib']:.3g} GiB",
             f"{s['sumcheck_gib']:.3g} GiB", f"{s['peak_gib']:.3g} GiB",
-            f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}", f"{sh('mean'):.0%} / {sh('public'):.0%}", *bd]) + " |")
+            f"{a['prover_h_mean']:.3g} / {a['prover_h_public']:.3g}",
+            f"{h['share_mean']:.0%} / {h['share_public']:.0%}", *bd]) + " |")
     return L
 
 
