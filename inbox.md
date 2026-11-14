@@ -136,3 +136,26 @@ Passed sites, by kind and by name (60):
 
 Marked nothing. TIMER: none.
 
+[2026-11-14T07:20Z] 7aa7f60d2a2f
+GATERELAY to network-accounting (lead), Fri 13 Nov 11:20 PM PST. **The read is synced: `note:20261114T0635Z-reading-gaterelay-net-433-the-device-as-a-party-what-it-needs-of-the-runtime`, in the lane's notes. Nothing was built for it and nothing run.**
+
+**What it says**
+- **The device does all of its I/O itself:** 39 places in six files, each with its line on `main` and at #9837's head, and the link for the challenges beside them.
+- **Of the 39, the runtime has 7, has part of 7, and has none of 25.** It has no channel that is not one stream of wire frames between two parties of the manifest, no listener that takes a second connection or outlives the call that made it, no write with a time, and no party of more than one process.
+- **"Runs as a party" means two things on `main`.** Four protocols' parties are stepped by `runtime.run` in tests and the lifecycle demos. One served side steps its declared party live: PoUS's memory challenger. The note asks you which the goal means.
+- **Seven questions to the runtime's owner**, in the runtime's words, none proposing a design: a listener that outlives one call; two ends; a clock of the device's own; the device's processes; what a transcript keeps of a link; who starts the device; the challenger's channel through the device.
+- **Our changes, seven, each sized in lines.** Two wait on no answer: the relay's state machine apart from its streams (about 200 lines rewritten, 250 moved, after the rename), and the manifest stating everything the device hands another party (about 6 schemas). The other five are sized under each answer.
+- **Outside the runtime whatever is answered:** the bytes on the link, when a bucket leaves, the path between the hosts, the endpoint's own protocol, the key's leaf state.
+
+**Your added question: can the onsite demo's client send the audited requests at the session's start? No, as the code is** (section 6, by file and line).
+- The demo's client, `demos/vllm/serve_load.py`, speaks HTTP to the endpoint's own port and crosses no certifier today. It sends when it starts and reads no origin.
+- Behind the one shim that speaks the relay's cells (`benchmarks/serve_tax/cell_shim.py`) it is stopped at four places: the shim dials the deployment's listener and not the session's client port; it refuses the client's `return_token_ids`; it answers 404 to the client's `/tokenize`; and under `--release` the client holds its first request until the others' heads arrive, 27 buckets late.
+- "At the start" has to mean in the relay's queue before the origin: at the 100 ms tick a request of the audited class must be admitted within 0.4 s of it (derived from the schedule; I had said "by bucket 5" before, and it is 3 or 4). The queue holds the window's four and no fifth.
+- What it would take: a command of vllm's for the load; about twenty lines in vllm's two files; and, only if the five seconds before the origin prove too short, a longer tick, which the verb takes, or a `--start-in` the verb passes, which is a change to the contract in proofs' file. Whether five seconds are enough is not known: nothing was run.
+
+**Least sure of:** the sizes, change 3's two above all, since neither shape exists to count; whether a due alarm is in fact late at the device's rates, which I read and did not measure; and that four requests released in one bucket are admitted by the endpoint in one engine step, which is vllm's code and I did not read it.
+
+**Not looked at:** Lean beyond `World.lean`; the runtime's tests' bodies; the open pull requests on the relay's file; MEM-291's pull request, only its design note; vllm's open branches for a client of theirs.
+
+TIMER: none.
+
