@@ -30,9 +30,7 @@ import argparse
 import hashlib
 import json
 import random
-import subprocess
 import sys
-import tempfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -52,17 +50,8 @@ def challenger():
 
 
 def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
-    """The memory challenger's `timed_audit.verdict` by `pous-timed-audit READY LEAVES AUDIT`."""
-    exe = build(HERE, EXE)
-    with tempfile.TemporaryDirectory() as tmp:
-        files = [Path(tmp) / name for name in ("ready.json", "leaves.bin", "audit.json")]
-        files[0].write_text(json.dumps(ready))
-        files[1].write_bytes(leaves)
-        files[2].write_text(json.dumps(doc))
-        p = subprocess.run([str(exe), *map(str, files)], capture_output=True, text=True)
-    if p.returncode not in (0, 1):
-        raise RuntimeError(f"{EXE} failed ({p.returncode}): {p.stderr}")
-    return json.loads(p.stdout)
+    """The memory challenger's `timed_audit.verdict` by `pous-timed-audit READY LEAVES AUDIT`, built here."""
+    return challenger().run_lean(build(HERE, EXE), ready, leaves, doc)
 
 
 class Store:

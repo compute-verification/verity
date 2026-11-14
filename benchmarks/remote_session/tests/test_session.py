@@ -19,6 +19,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
 from verity.protocols.accounting.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
@@ -203,6 +204,25 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert set(lg["terms"]) == set(audit.LEDGER_SOURCES) and lg["gamma"] > 0
     assert all(len(d) == 6 for d in r["draws"].values())
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
+
+
+@pytest.mark.parametrize("outcome", ["rejected", None, "error"])
+def test_a_session_whose_windows_all_accept_is_not_accepted_unless_the_leans_outcome_is(monkeypatch, outcome):
+    """The session's acceptance is the Lean's `outcome` at its end: an honest session whose every window verdict
+    accepts, while the Lean's `outcome` is anything but `accepted` (another word, none, or no answer), is not
+    accepted, and the record says `disagreement` at the event `outcome`; the books' acceptance is the veto beside it."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    end = verifier.Pair.end
+
+    def other(self, failure):
+        end(self, failure)
+        got = self.outcome_json
+        self.outcome_json = {"error": "no answer"} if outcome == "error" else {**got, "outcome": outcome}
+
+    monkeypatch.setattr(verifier.Pair, "end", other)
+    (r,), (pr,) = run("honest")
+    assert not r["accepted"] and not pr["accepted"] and r["failure"]["failure"] == "disagreement"
+    assert r["disagreement"]["event"] == "outcome" and r["disagreement"]["python"] == {"windows_accepted": True}
 
 
 def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):

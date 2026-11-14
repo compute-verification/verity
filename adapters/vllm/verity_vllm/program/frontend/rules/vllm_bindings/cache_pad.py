@@ -34,7 +34,7 @@ class CachePadRule(StateRule):
 
     def applies(self, node, ctx):
         live, zero, slot = node.args[:3]
-        from verity_vllm.program.frontend.rules.padding import _bit_value, _static_bit
+        from verity_torch.frontend.rules.padding import _bit_value, _static_bit
         if _bit_value(ctx, live) is None and _static_bit(ctx, live) is None:
             return "live is neither a bool value collection nor a statically known bool tensor"
         if not isinstance(zero, torch.fx.Node) or not isinstance(ctx.val(zero), Coll) or not dtype_is(ctx, zero, BF16):
@@ -49,7 +49,7 @@ class CachePadRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend.rules.padding import (
+        from verity_torch.frontend.rules.padding import (
             _materialize_bits,
             _scalar_of,
         )
