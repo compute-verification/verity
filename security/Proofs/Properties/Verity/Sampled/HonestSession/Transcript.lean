@@ -54,18 +54,42 @@ def transcript : Exec.Transcript where
 def draw : Lean.Json :=
   (Exec.recordDraw transcript.record).getD .null
 
+/-- One closed check of the record's draw and all fields the honest witness reads from it. -/
+def inspectionOk : Bool :=
+  match Exec.recordDraw transcript.record with
+  | none => false
+  | some d =>
+    match Flock.Draw.UnitDraw.ofJson d with
+    | .error _ => false
+    | .ok u =>
+      match u.law with
+      | .subset k => k == 16 && u.population == 32 && u.units.size == 16
+      | _ => false
+
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
-theorem record_draw_some : (Exec.recordDraw transcript.record).isSome = true := by
+/-- The concrete record has a valid 16-of-32 subset draw. -/
+theorem inspection_ok : inspectionOk = true := by
   decide +kernel
+
+theorem record_draw_some : (Exec.recordDraw transcript.record).isSome = true := by
+  unfold inspectionOk at inspection_ok
+  generalize h : Exec.recordDraw transcript.record = o at inspection_ok ⊢
+  cases o <;> simp_all
 
 /-- The subset draw's decoded value. -/
 def unitDraw : Flock.Draw.UnitDraw :=
   (Flock.Draw.UnitDraw.ofJson draw).toOption.get
     (by
-      set_option maxHeartbeats 0 in
-      set_option maxRecDepth 1000000 in
-      decide +kernel)
+      unfold inspectionOk at inspection_ok
+      generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+      cases o with
+      | none => simp at inspection_ok
+      | some d =>
+        have hd : draw = d := by simp [draw, hr]
+        rw [hd]
+        generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+        cases u <;> simp_all)
 
 /-- The concrete draw's units. -/
 def units : Array ℕ := unitDraw.units
@@ -77,28 +101,62 @@ theorem record_draw : Exec.recordDraw transcript.record = some draw := by
   | none => simp at record_draw_some
   | some d => rfl
 
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 1000000 in
 /-- **The concrete record's draw decodes to its subset of its population**, checked by kernel reduction. -/
 theorem draw_decodes : Flock.Draw.UnitDraw.ofJson draw = .ok unitDraw := by
-  have h : (Flock.Draw.UnitDraw.ofJson draw).toOption.isSome = true := by
-    decide +kernel
-  generalize he : Flock.Draw.UnitDraw.ofJson draw = e at h ⊢
-  cases e with
-  | error msg => simp at h
-  | ok d => rfl
+  unfold inspectionOk at inspection_ok
+  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  cases o with
+  | none => simp at inspection_ok
+  | some d =>
+    have hd : draw = d := by simp [draw, hr]
+    rw [hd]
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok ⊢
+    cases u <;> simp_all [unitDraw, hd, hu]
 
-set_option maxHeartbeats 0 in
 theorem unit_law : unitDraw.law = .subset 16 := by
-  have h : (match unitDraw.law with | .subset k => k == 16 | _ => false) = true := by
-    decide +kernel
-  cases hl : unitDraw.law <;> simp_all
+  unfold inspectionOk at inspection_ok
+  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  cases o with
+  | none => simp at inspection_ok
+  | some d =>
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+    cases u with
+    | error msg => simp at inspection_ok
+    | ok v =>
+      have hd : draw = d := by simp [draw, hr]
+      have hv : unitDraw = v := by simp [unitDraw, hd, hu]
+      rw [hv]
+      cases hl : v.law <;> simp_all
 
-set_option maxHeartbeats 0 in
-theorem unit_population : unitDraw.population = 32 := by decide +kernel
+theorem unit_population : unitDraw.population = 32 := by
+  unfold inspectionOk at inspection_ok
+  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  cases o with
+  | none => simp at inspection_ok
+  | some d =>
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+    cases u with
+    | error msg => simp at inspection_ok
+    | ok v =>
+      have hd : draw = d := by simp [draw, hr]
+      have hv : unitDraw = v := by simp [unitDraw, hd, hu]
+      rw [hv]
+      cases hl : v.law <;> simp_all
 
-set_option maxHeartbeats 0 in
-theorem unit_count : units.size = 16 := by decide +kernel
+theorem unit_count : units.size = 16 := by
+  unfold inspectionOk at inspection_ok
+  generalize hr : Exec.recordDraw transcript.record = o at inspection_ok
+  cases o with
+  | none => simp at inspection_ok
+  | some d =>
+    generalize hu : Flock.Draw.UnitDraw.ofJson d = u at inspection_ok
+    cases u with
+    | error msg => simp at inspection_ok
+    | ok v =>
+      have hd : draw = d := by simp [draw, hr]
+      have hv : unitDraw = v := by simp [unitDraw, hd, hu]
+      rw [hv]
+      cases hl : v.law <;> simp_all [units]
 
 /-- The concrete ZK transcript has the verifier's two repetition streams. -/
 theorem proof_count : transcript.proofs.size = 2 := by
