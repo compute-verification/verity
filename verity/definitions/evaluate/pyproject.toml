@@ -28,7 +28,7 @@ untraced = ["tests/test_difftest.py"]
 # (`AFTER_LEAN`), since that build writes into the base packages' `.lake`, as the verifier's does.
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/program/__init__.py",
           # `verity_difftest`, which builds and drives the evaluator
-          "verity/difftest/python/verity_difftest",
+          "tools/difftest/python/verity_difftest",
           "verity/definitions/registry", "security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
           "adapters/vllm/tests/regression/store_io.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
