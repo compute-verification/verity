@@ -20,6 +20,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from conftest import load
+from verity_config.settings import of
 
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
@@ -222,9 +223,9 @@ def test_sass_gate_refuses_what_it_should(monkeypatch):
     assert S.gate(PTXAS_OK, SASS_OK.replace("gemm_x", "gemm_y"))[1]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_POUW_NVCC"), reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 15 s)")
+@pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 15 s)")
 def test_the_sm120a_build_passes_the_gate(tmp_path):
-    cuda = Path(os.environ["VERITY_POUW_NVCC"])
+    cuda = Path(of(__file__).VERITY_POUW_NVCC)
     cubin, ptxas, sass = tmp_path / "k.cubin", tmp_path / "ptxas.txt", tmp_path / "k.sass"
     with open(ptxas, "w") as err:
         subprocess.run([str(cuda / "bin" / "nvcc"), "-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-fmad=false",

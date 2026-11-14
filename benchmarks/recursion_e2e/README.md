@@ -77,8 +77,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **The session's times** (the result's `session_times`): each step of one recursive session after its build (inner,
   vstage, vcap, oprove, lean), its first invocation's wall and CPU seconds and peak RSS, what the session's figures (its
   cost, knowledge-soundness error and stop-leak bound per window and pooled over the monitoring periods) scale from. The
-  figures read the census and the periods, which stay off this public bench: `benchmarks/recursion_figures/figures.py
-  RESULT.json` gives them.
+  figures read the census and the periods: `benchmarks/recursion_figures/figures.py RESULT.json` gives them.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
   rep 0 flipped (the pod script's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
   statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no
@@ -117,6 +116,11 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   and the `compose` row has no verdict. A run whose composition Lean refused is not accepted, and the line gives
   Lean's reason (`refused`): a forced retry's (`RETRY`) starts with the retry. A merged table's verdict is only as
   whole as its runs.
+- **The numbers** (`metrics.toml`): `record.py run` is `run.py run` with `record.py job` around job.sh, which after
+  job.sh writes two of the headline's figures into the run's result through the harness kit (`record.py`'s `METRICS`):
+  `pipeline_sum_s`, one recursive run as an auditor waits for it, and the Lean step's seconds within it, each measured
+  when the run was whole and partial when it wasn't. The run's validation is the verdict: passed only for an accepted
+  recursive run.
 - **Data.** the pod script's staged statements and runs go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
   `--env KEEP_DATA=1`. A later run takes them with `--env TAG=rb-<run id> --env KEEP_DATA=1 --steps oprove,...`. Runs on
   one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.

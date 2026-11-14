@@ -463,7 +463,7 @@ def test_a_measurement_over_a_period_and_a_scope_holds_each_as_its_own_field_and
                     "over": "world", "commit": SHA, "run": RUN, "ci95": None, "target": None, "verdict": None,
                     "inputs": ["modeled"], "host": stamp}
     week = w.measurement("gb", 273.1, "GB a datacenter week", mark="modeled", period="week", over="datacenter")
-    phase = w.measurement("gb", None, "GB a phase", mark="modeled", period="phase", why="no row of record")
+    phase = w.measurement("gb", None, "GB a phase", mark="modeled", period="phase", why="no phase's rows")
     world = w.measurement("gb", 3.0, "GB", mark="modeled", over="world")
     bare = w.measurement("gb", 2.0, "GB", mark="modeled")
     assert [(m.get("period"), m.get("over")) for m in (week, phase, world, bare)] == [

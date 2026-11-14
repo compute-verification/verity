@@ -62,6 +62,10 @@ failure message carries its fix.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
+- **What the lints keep** (`conftest.py`, held by `test_caches.py`): the rules share one parsed tree of each library
+ file, in `functools` caches of this directory's modules. They are emptied when a test process leaves this directory, so
+ a process that goes on to other tests does not hold the parsed library, which its cyclic collector would walk in every
+ full collection. `conftest.py` finds a cache where a module names it at its top level: cache a top-level function.
 
 **The rule on every change: no growth.** No PR adds a ratchet
 exception or raises a recorded count: against the commit below it (in a candidate, its `Queue: #N` merge against the merge

@@ -89,12 +89,12 @@ def test_replay_rejects(tmp_path):
         unit = Matmul(3, Shape(32, K, 16), 9)
         epoch = Epoch.unverified(Workload((unit,)), {9: bytes.fromhex(t["weight_roots"]["9"])}, b"beacon")
         rec = W.UnitRecord(unit, 20, K)
-        beacon = R.draw_beacon(bytes.fromhex(t["transcript"]["root"]),
-                               W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [rec]))
+        beacon = R.sample_beacon(bytes.fromhex(t["transcript"]["root"]),
+                                 W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [rec]))
         t["draw"]["value"] = beacon.value.hex()
 
     assert bad(tamper)["reason"] == "activation opening"
-    assert bad(lambda t: t["draw"].update(value="00" * 32))["reason"].startswith("the draws' beacon is not")
+    assert bad(lambda t: t["draw"].update(value="00" * 32))["reason"].startswith("the samples' beacon is not")
     assert "A row 3 is credited but fails" in bad(hide)["reason"]
     assert bad(lambda t: t["openings"].pop(0))["reason"] == "'the transcript does not open tile 0'"
 
@@ -129,7 +129,7 @@ def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_
     credited = json.loads(json.dumps(serial))
     credited["records"][0]["excluded_a"] = []
     digest = W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [W.UnitRecord(unit, 20, K)])
-    credited["draw"]["value"] = R.draw_beacon(bytes.fromhex(serial["transcript"]["root"]), digest).value.hex()
+    credited["draw"]["value"] = R.sample_beacon(bytes.fromhex(serial["transcript"]["root"]), digest).value.hex()
     rep = R.verify(credited, scheme=s)
     assert not rep["accepted"] and rep["reason"].startswith("A row 5 is credited but its own debit passes R1's bound")
 

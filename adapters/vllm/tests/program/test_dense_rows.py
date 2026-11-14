@@ -263,8 +263,8 @@ def test_the_words_are_the_same_at_any_thread_count(dot_id, monkeypatch, chain_p
     assert DR.threads() == 3
 
 
-@pytest.mark.parametrize(("env", "cap"), [("16", 16), ("many", DR.MAX_THREADS), (None, DR.MAX_THREADS)])
-def test_a_process_takes_the_cap_from_its_environment_at_import(env, cap):
+@pytest.mark.parametrize(("env", "limit"), [("16", 16), ("many", DR.MAX_THREADS), (None, DR.MAX_THREADS)])
+def test_a_process_takes_the_thread_limit_from_its_environment_at_import(env, limit):
     """No caller passes `VERITY_DENSE_THREADS`: a process that imports the module, as every stage process of a row does, is capped
     by its own environment under `use_threads`' rule."""
     environ = {k: v for k, v in os.environ.items() if k != "VERITY_DENSE_THREADS"}
@@ -272,7 +272,7 @@ def test_a_process_takes_the_cap_from_its_environment_at_import(env, cap):
         environ["VERITY_DENSE_THREADS"] = env
     out = subprocess.run([sys.executable, "-c", "from verity.definitions.numerics import dense_rows as DR; print(DR._THREADS[0])"],
                          env=environ, capture_output=True, text=True, check=True).stdout
-    assert int(out) == cap
+    assert int(out) == limit
 
 
 def test_gemm_row_kernel_is_the_same_on_either_path(monkeypatch, chain_path):

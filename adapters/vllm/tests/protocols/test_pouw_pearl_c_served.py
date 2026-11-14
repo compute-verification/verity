@@ -447,7 +447,7 @@ class _GateSession:
         session = R.open_session(self.challenger, KEY, f"{CH.HOST}.{sid}",
                                  lambda m: lms.sign_at(PRIVATE, self.gate.take(), m).encode(), self.directory, sid)
         ours, theirs = socket.socketpair()
-        self._thread = threading.Thread(target=self._serve, args=(ours, session))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
         self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))

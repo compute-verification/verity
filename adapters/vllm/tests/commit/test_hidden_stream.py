@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.commit import hidden_stream as hs
+from tests.commit import hidden_stream as hs
 
 
 def _layout() -> hs.StreamLayout:

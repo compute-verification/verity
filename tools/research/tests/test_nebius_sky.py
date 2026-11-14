@@ -1423,15 +1423,27 @@ def test_a_clean_up_pass_runs_mains_copy_and_never_a_snapshot_a_run_shipped(tmp_
         assert not w["out"].exists() and not w["ls"].exists(), "nothing ran, and no snapshot was looked for"
 
 
-def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
+def test_the_collector_takes_unpreserved_runs_on_node_2_and_cpu_1_to_15_alone(tmp_path):
     """`--unpreserved-runs` deletes a run's only copy, so the unit passes it only where a tracked drop-in says so, which
-    deploy.toml installs on vy-nebius-2 and nowhere else."""
+    deploy.toml installs on vy-nebius-2 and vy-nebius-cpu-1 to cpu-15, each with the unit and the code it runs, and on no other
+    machine: no other entry installs it or writes its path, and no other file of the nodes' sets the switch."""
     import shlex
     import subprocess
     import tomllib
     conf = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
-    got = [(f["path"], f["nodes"]) for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"] if f.get("src") == conf]
-    assert got == [("/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf", ["vy-nebius-2"])]
+    dropin = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
+    takers = ["vy-nebius-2"] + [f"vy-nebius-cpu-{i}" for i in range(1, 16)]
+    doc = tomllib.loads((SKY.parent / "deploy.toml").read_text())
+    entries = doc["file"] + doc["tree"]
+    got = [(f["path"], f["nodes"]) for f in entries if f.get("src") == conf or f["path"] == dropin]
+    assert got == [(dropin, takers)], "the drop-in, once, on vy-nebius-2 and cpu-1 to cpu-15 and on no other machine"
+    assert not set(takers) - set(doc["nodes"]), f"{sorted(set(takers) - set(doc['nodes']))} have no [nodes] table"
+    for needed in ("/etc/systemd/system/vy-retention-gc.service", "/etc/systemd/system/vy-retention-gc.timer", "/usr/local/lib/vy-monitoring/clean-up"):
+        on = {n for f in entries if f["path"] == needed for n in f["nodes"]}
+        assert not set(takers) - on, f"{sorted(set(takers) - on)} get the drop-in without {needed}"
+    switch = [p.relative_to(SKY.parent).as_posix() for p in sorted(SKY.parent.rglob("*"))
+              if p.is_file() and "VY_GC_UNPRESERVED_RUNS=1" in p.read_text(errors="replace")]
+    assert switch == ["sky/retention_gc_unpreserved.conf"], f"{switch}: only the drop-in sets the switch"
     sets = [ln for ln in (SKY / "retention_gc_unpreserved.conf").read_text().splitlines() if ln and not ln.startswith("#")]
     assert sets == ["[Service]", "Environment=VY_GC_UNPRESERVED_RUNS=1"], "it sets the switch and replaces nothing of the unit"
     assert "unpreserved" not in "".join((SKY / u).read_text() for u in CLEAN_UP_UNITS if u != "retention_gc.service")

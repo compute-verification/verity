@@ -13,14 +13,14 @@ This module sums the bytes the collector binds per ENGINE STEP under the declare
     tokens_s x per_token + live_s x per_seq + per_step (+ per_step per extra prefill chunk)
     + layers x 4 B x [ sum over prompts arriving at s of M1(heads, prompt_r, NB_s)  +  M1(decode launch of the live rows, NB_s) ]
 
-where NB_s = ceil(K_s / kBlockN) and K_s = the longest context any request live at s can reach (prompt + cap + lag) -- the geometry the
+where NB_s = ceil(K_s / kBlockN) and K_s = the longest context any request live at s can reach (prompt + max_tokens + lag) -- the geometry the
 record shows: one `fa2.m1/L<k>/s<i>/g<heads>x<prompt_i>x<NB>` stream per arriving prompt, one `g<live x kv_heads>x<g>x<NB>` (GQA swapped
 kernel) or `g<live x heads>x1x<NB>` stream for the decode rows, NB shared step-wide (vLLM passes the batch's max_seqlen_k to every
 launch of the step).  Held against the per-step `n_bytes` of three Commit records (mixed arrivals; concurrent prefills; a head
 dimension of 96 with no GQA) in tests/pipeline/test_admission_commit.py: at or over every observed step, and within the test's
 ratio of the run's total.
 
-Soundness assumptions (named on the record): every request runs to its cap plus `lag` post-EOS rows (an EOS stop before the cap only
+Soundness assumptions (named on the record): every request runs to its `max_tokens` plus `lag` post-EOS rows (an EOS stop before `max_tokens` only
 removes bytes; the LAG is declared -- pass the Program's lag); a prompt longer than the step's token budget is chunked by the engine
 (the sum over chunks of rows x NB is <= the unchunked launch; one `per_step` of chunk padding is added per extra chunk); the module
 widths are those `step_bound_bytes` measured (a sizing record that predates the per-layer RoPE count is corrected here by name).
@@ -101,7 +101,7 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
         a = int(r.get("arrive_step") or 0)
         if p <= 0 or c <= 0 or a < 0:
             raise ValueError(f"request {i}: prompt_len={p} max_tokens={c} arrive_step={a} (need prompt_len>0, max_tokens>0, arrive_step>=0)")
-        reqs.append({"i": i, "prompt": p, "cap": c, "arrive": a, "end": a + c + max(0, int(lag))})   # live at steps [arrive, end)
+        reqs.append({"i": i, "prompt": p, "max_tokens": c, "arrive": a, "end": a + c + max(0, int(lag))})   # live at steps [arrive, end)
     if not reqs:
         raise ValueError("no requests")
     horizon = max(r["end"] for r in reqs)
@@ -116,7 +116,7 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
         if not live:
             continue                                                            # an idle step binds nothing
         tokens = sum(r["prompt"] for r in pref) + len(dec)
-        K = max(r["prompt"] + r["cap"] + max(0, int(lag)) for r in live)        # the longest context any live request can reach
+        K = max(r["prompt"] + r["max_tokens"] + max(0, int(lag)) for r in live)        # the longest context any live request can reach
         chunks = 1
         if max_num_batched_tokens and pref:
             budget = max(1, int(max_num_batched_tokens) - len(dec))
@@ -143,7 +143,7 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
             "composition": {"token_bytes": tok_b, "seq_bytes": seq_b, "step_bytes": step_b, "hidden_bytes": hid_b},
             "per_token_bytes": per_token, "per_seq_bytes": per_seq, "per_step_bytes": per_step, "hidden_m1": hidden_m1,
             "attn_backend": str(model.get("attn_backend") or "fa2"), "max_num_batched_tokens": max_num_batched_tokens,
-            "assumptions": [f"every request runs to its cap + {int(lag)} lag row(s); an EOS before the cap only removes bytes",
+            "assumptions": [f"every request runs to its max_tokens + {int(lag)} lag row(s); an EOS before max_tokens only removes bytes",
                             "per-arriving-prompt M1 stream (heads x prompt x NB) + one decode-launch stream, NB from the step's longest reachable context",
                             "a prompt over the step's token budget is chunked by the engine: rows x NB per chunk <= unchunked; one per_step of padding per extra chunk"]
                            + ([rope_note] if rope_note else []),
