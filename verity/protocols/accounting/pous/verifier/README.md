@@ -162,7 +162,8 @@ publish once it ties `E` to the certifier's count between the session's marks. `
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
-meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
+meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers by label and
+bytes; it names no device).
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.runtime`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
 `wipe_party.serve` signs.
@@ -179,8 +180,11 @@ not the auditor's pinned key, no bound", whatever the host names say; the placem
 `prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
-declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger
-of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an uncounted egress (the check given no count). It
+declares whole, the host's DRAM, its disks), what the prover's store leaves out (the placement's `store_gaps`, by
+tier: a GPU's driver reserve when NVML gave no total, as the wipe declares the larger of CUDA's and NVML's totals and
+NVML's counts the reserve, `wipe_store.Cuda.info`; what its disks leave outside the boundary) and an uncounted egress
+(the check given no count). The placement names no device: the store as the prover measured it (the GPU's name, uuid
+and bus id among it) stays in the prover's own record, `wipe.json`'s `prover`. The record
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
