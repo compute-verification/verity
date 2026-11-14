@@ -512,10 +512,10 @@ def chain_witness(keep: Path, run: str) -> Path:
     return keep / run / "quarantine" / "witness"
 
 
-def case_of(warden: Path, scan: Path, answers: Path, v3c: Path | None = None) -> dict:
+def case_of(run: Path, scan: Path, answers: Path, v3c: Path | None = None) -> dict:
     import scan_period as SP
     try:
-        return SP.rows_case(warden, scan, v3c=v3c, answers=answers)
+        return SP.rows_case(run, scan, v3c=v3c, answers=answers)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
