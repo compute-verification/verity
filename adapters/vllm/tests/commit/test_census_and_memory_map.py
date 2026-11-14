@@ -1,6 +1,6 @@
 """`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.memory_map.Lines`) held to
-`core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
-agreeing with Lean on each.
+`core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`, the port's test in
+`verity/circuits/requirement/tests/`, loaded by file), Python's reference agreeing with Lean on each.
 
 The census path: a census and a schedule as an instance (`census_execution`): the census's values, then a value of 0 bits
 for each root Call a step runs, whose operands are the values the Call reads or selects. Lean's live values and bits are
@@ -38,11 +38,14 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
+import shutil
+import sys
 from itertools import chain, count
+from pathlib import Path
 
 import pytest
 import verity_difftest as D
-from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.phi import Phi
@@ -57,6 +60,15 @@ from verity.circuits.census import census, step_ends, step_of
 from verity.protocols.accounting.poub.verifier import codec
 from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
 
+PORT_TEST = Path(__file__).resolve().parents[4] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
+_spec = importlib.util.spec_from_file_location("test_requirement_difftest", PORT_TEST)
+assert _spec is not None and _spec.loader is not None
+RD = importlib.util.module_from_spec(_spec)
+sys.modules.setdefault("test_requirement_difftest", RD)
+_spec.loader.exec_module(RD)
+PORT, _lean, encode, rmsnorm, serve, toy_decoder = RD.PORT, RD._lean, RD.encode, RD.rmsnorm, RD.serve, RD.toy_decoder
+
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 server = D.server_fixture(PORT)
 
 
@@ -335,8 +347,13 @@ def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, 
     give, that every credited row is in a block the map holds (a block with none may be held too, and earns W nothing).
     Returns the live rows in incomplete blocks and the blocks held with no credited row, by step."""
     rows, block, held, arrive = session["rows"], session["block"], session["held"], session["arrive"]
-    born = lambda v: arrive[rows[v][0]] + rows[v][3].born  # noqa: E731
-    live = lambda t: {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}  # noqa: E731
+
+    def born(v: int) -> int:
+        return arrive[rows[v][0]] + rows[v][3].born
+
+    def live(t: int) -> set[int]:
+        return {v for v, (r, _, _, x) in rows.items() if born(v) < t <= arrive[r] + x.last}
+
     uncredited, dead = {}, {}
     for t, s in enumerate(out["steps"]):
         assert s["live"] == s["reads"] == sorted(live(t)) and s["resident"] == sorted(held[t])
@@ -432,7 +449,10 @@ def deferred(value: dict, lag: int) -> dict:
                 freed[free[j]].remove(j)
             else:
                 written[t + lag].append(j)
-    resident = lambda t: set(chain(*written[:t])) - set(chain(*freed[:t]))  # noqa: E731
+
+    def resident(t: int) -> set[int]:
+        return set(chain(*written[:t])) - set(chain(*freed[:t]))
+
     return {**value, "encoded": [encoded.get(j, 0) for j in range(1 + max(encoded, default=-1))],
             "store": {**s, "written": written, "freed": freed},
             "plans": [sorted(set(p) & resident(t)) for t, p in enumerate(value["plans"])]}

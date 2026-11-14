@@ -4248,7 +4248,7 @@
     {"file": "verity/circuits/requirement/CircuitRequirement.lean", "count": 3},
     {"file": "verity/circuits/requirement/lakefile.toml", "count": 2},
     {"file": "verity/circuits/requirement/pyproject.toml", "count": 2},
-    {"file": "verity/circuits/requirement/tests/test_census_and_memory_map.py", "count": 4},
+    {"file": "adapters/vllm/tests/commit/test_census_and_memory_map.py", "count": 4},
     {"file": "verity/core/protocols/__init__.py", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/PROTOCOL.md", "count": 120},
     {"file": "verity/protocols/accounting/certifier/verifier/README.md", "count": 49},
