@@ -1053,13 +1053,15 @@ def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answe
                                                                for r in reg["roots"]] for d in x["registrations"])
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
+    # the scan's start is its state's full width, the start unit's sin; the period begins the run, so it charges none
     assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["ingress"]["o1"] + bits["ingress"]["o2"],
-                                        16 + bits["egress"]["o1"], E * bits["ingress"]["prog0"])
+                                        16 + bits["egress"]["o1"], E * bits["ingress"]["prog0"], bits["start"]["sin"])
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, N), out
+    assert out["public"]["start"] == 0
     assert p["circuit"] == audit["registration"]["program"]
     window_record = tmp_path / "window-circuit.json"
     window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
