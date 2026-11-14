@@ -127,10 +127,11 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
     node0's uplink."""
     log = REG.chain(composite, [REG.site(
         locs=(S.Loc("site0", "site"), S.Loc("node0", "host", "site0"),
-              S.Loc("cert0", "certifier", "site0", "auditor", key=held if placed is None else placed)),
+              S.Loc("cert0", "certifier", "site0", "auditor", key=held if placed is None else placed,
+                    scheme=S.SCHEMES[0])),
         links=(S.Link("uplink0", ("node0", "cert0"), 100_000, 100_000),
                S.Link("uplink0-out", ("cert0", S.OUTSIDE), 100_000, 0)))])
-    return {"params": REG.params(composite, S.Auditor(keys=(("cert0", held),))),
+    return {"params": REG.params(composite, S.Auditor(keys=(("cert0", held, S.SCHEMES[0]),))),
             "log": json.loads(REG.committed(composite, log))}
 
 
