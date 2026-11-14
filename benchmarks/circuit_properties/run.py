@@ -1,4 +1,4 @@
-"""Measure the reference circuits' structural properties and set them beside benchmarks/slowdown's shape-derived ones.
+"""Measure the registered circuits' structural properties and set them beside benchmarks/slowdown's shape-derived ones.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 

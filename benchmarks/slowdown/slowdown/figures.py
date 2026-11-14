@@ -146,7 +146,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
                   "overhead": "w c / q_T(c, k) at c, and w c_S / (q_T(c_S, k) + ω_max μ k) at c_S, the serving cut's "
-                              "argument with its boundary term; 0 where the statement's premise fails (no cap), ∞ where "
+                              "argument with its boundary term; 0 where the statement's premise fails (no yield bound), ∞ where "
                               "it is 0",
                   "panels": []}
     fig, axes = plt.subplots(1, len(panels), figsize=(6.4 * len(panels), 5.2), sharey=True, squeeze=False)

@@ -536,11 +536,21 @@ def deployment(cfg: Mapping[str, Any], piece: Piece, protocol: ProtocolDef, addr
                        **({"listen": address} if c == s.listener else {})} for c, r in sorted(s.roles.items())]}
 
 
+def request_bound(protocol: ProtocolDef, params: Mapping[str, Any]) -> None:
+    """That the two sides of ``protocol``'s run start on one request, ``params`` this side's: each side's start computes
+    the request on its own machine, and the run's handshake compares only the configuration's hash, the onsite
+    configuration's that the deployment states (`deployment`) so that a signed session names it. The two sides would
+    compare SHA-512 of the request's canonical JSON at the session's start; the runtime's ``Hello``
+    (`verity/runtime/handshake.py`) has no field for it, and neither side's messages carry it, so a run raises here
+    (`NOT_YET`) until one does."""
+    raise NotImplementedError(NOT_YET)
+
+
 def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], piece: Piece) -> Callable[[], Any]:
     """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, its
     protocol's start (`ProtocolDef.starts`: its request and capabilities, from the configuration, the piece's bindings and
-    its state directory ``state/runs/<component>/<party>``), what this machine hands it (`held`), its clock, and the
-    listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
+    its state directory ``state/runs/<component>/<party>``), the two sides' request bound (`request_bound`), what this
+    machine hands it (`held`), its clock, and the listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
     tree; a party its protocol declares no start for raises `NOT_YET`."""
     s = piece.session
     if absent := s.absent():
@@ -553,6 +563,7 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
     bound = {**piece._bindings(bindings),
              **{k: str(state / "runs" / c / p) for k, (c, p) in s.reads.get(piece.party, {}).items()}}
     begun = protocol.starts[role.name](cfg, bound, here)
+    request_bound(protocol, begun.params)
     h = held(piece, role)
     address, listener = bound["address"], s.roles[s.listener]
     sources = {role.name: {"clock": RealClock(*s.clocks[role.name])}} if "clock" in role.needs else None
@@ -664,7 +675,8 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
     window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
-    the gate; and the onsite check when the verifier is here. Refused by name (``unbound``) while a listed piece's
+    the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
+    premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
     runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
@@ -706,8 +718,10 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
             out[p] = {"outcome": {"started": f"by the auditor's gate, for {', '.join(x.component for x in mine)}"},
                       "refused": None}
     if VERIFIER in here:
+        devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
         try:
-            out[VERIFIER] = {"outcome": {"verdicts": [onsite_check(cfg, state)]}, "refused": None}
+            out[VERIFIER] = {"outcome": {"verdicts": [{**onsite_check(cfg, state), mc.PREMISE: devices}]},
+                             "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
     return Result(out)
@@ -715,4 +729,4 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 __all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
            "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
-           "prepare", "registration", "served_window", "unbound", "variables"]
+           "prepare", "registration", "request_bound", "served_window", "unbound", "variables"]

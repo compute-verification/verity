@@ -5,7 +5,6 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
                          | --sessions N [--windows W] [--window-ms MS] [--samples S])
                          [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L]
-                         [--model ROLE [--engines E] --arena-blocks A]
     vy-verifier-gate status [RUN] | fetch RUN [--transcripts] | replay RUN | stop RUN | close NODE_HEX
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-verifier-gate` (`command=`),
@@ -41,25 +40,6 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
-- **A bound run** (`--model ROLE --arena-blocks A [--engines E]`, ROLE of [A-Z0-9_], E 1..8 and verifier.py's 8 by
-  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
-  `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
-  adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
-  pinned tree (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
-  challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
-  when the role has no directory there or the pinned tree has no `models.json`; verifier.py then holds every file the
-  role's entry pins to its SHA-512 before it listens, and refuses a role the pin lacks. `<models>` is `verifier.json`'s
-  `models`, default `/var/lib/vy-verifier/models`. Infra provisions a role's directory: every file the role's entry
-  pins, at the pinned revision, as a root-held regular file (0644, in a root-held 0755 directory), copied out of a
-  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which
-  `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
-
-      hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q
-      install -d -m 0755 -o root -g root /var/lib/vy-verifier/models/QWEN25_32B_BF16
-      install -m 0644 -o root -g root /tmp/q/* /var/lib/vy-verifier/models/QWEN25_32B_BF16/
-
-  The files are held to the pin, not to where they came from: a run binds to the role once the pinned tree's
-  `models.json` pins it.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/protocols/accounting/poub/verifier/lean/tests/replay.py transcript --record verifier.json`), or the record
@@ -118,6 +98,7 @@ import fcntl
 import fnmatch
 import gzip
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -163,13 +144,6 @@ SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
         "--minutes": MINUTES}
 DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--pace-pass-ms": (0.0, 1_000.0)}
-ROLE = re.compile(r"[A-Z0-9_]{1,64}")
-STORE = {"--engines": (1, 8), "--arena-blocks": (1, 1 << 25)}
-"""A bound run's store: its arenas, one a GPU of the node's 8, and each arena's 4 KiB blocks, at most 128 GiB (an RTX
-PRO 6000 has 96 GB of HBM)."""
-STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
-MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.json")
-"""Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.device.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
@@ -185,6 +159,16 @@ UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
 COMPOSE_SUMS = "private/compose/inputs.sha256"
+COMPOSE_ENV = "private/compose/compose.env"
+"""The hand-off's settings, the prover's bytes, which `served_verdicts.sh compose` reads (`compose_settings`)."""
+COMPOSE_SETTINGS = ("K", "PRODUCT", "PEARLPLUS_TIE", "COMPOSITE", "ALPHA", "GAMMA", "SERVED_NODE", "SERVED_DIR",
+                    "COMPOSE_NODE", "COMPOSE_TREE", "AUDITED_ON", "SAMPLED_AUDIT", "STEPS")
+"""The settings a hand-off may set: served_verdicts.sh's COMPOSES, in its order, which `tests/test_host.py` holds it to."""
+ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+ENV_VALUE = re.compile(r"([A-Za-z0-9._/:+@=,-]|\\,)*")
+"""A setting's value as handoff's `printf %q` writes it, each character as itself but a comma (`\\,`), or `''` for an
+empty one: served_verdicts.sh's ENV_VALUE, which `tests/test_host.py` holds it to."""
+COMPOSE_ENV_BYTES = 1 << 16
 COMPOSE_MINUTES = 180
 COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
@@ -242,11 +226,6 @@ class Host:
 
     def settings(self) -> dict:
         return json.loads(self.config.read_text())
-
-    def models(self, settings: dict) -> Path:
-        """Where infra keeps each bound role's checkpoint, `<models>/<ROLE>/`: `verifier.json`'s `models`, else
-        `root/models`."""
-        return Path(settings.get("models") or self.root / "models")
 
 
 COMPOSE_HOST = Host(root=Path("/var/lib/vy-compose"), config=Path("/etc/vy/compose.json"),
@@ -346,7 +325,7 @@ def parse_run(argv: list[str], settings: dict) -> dict:
     for flag in ("--peer", "--port", "--period", "--pin"):
         p.add_argument(flag, required=True)
     p.add_argument("--paced", nargs="+")
-    for flag in (*INTS, *DECIMALS, "--quantile", "--model", *STORE):
+    for flag in (*INTS, *DECIMALS, "--quantile"):
         p.add_argument(flag)
 
     def refuse(why: object) -> None:
@@ -396,41 +375,13 @@ def parse_run(argv: list[str], settings: dict) -> dict:
         raise Refused("run: --paced SPEC ... or --sessions N")
     elif "pace-pass-ms" in req:
         raise Refused("--pace-pass-ms is a paced run's")
-    if a.model is not None:
-        if not ROLE.fullmatch(a.model):
-            raise Refused(f"--model {a.model!r}: a role of core's pin ({MODEL_PINS}), 1 to 64 of [A-Z0-9_]")
-        req["model"] = a.model
-    for flag, (lo, hi) in STORE.items():
-        v = getattr(a, flag[2:].replace("-", "_"))
-        if v is not None:
-            if a.model is None:
-                raise Refused(f"{flag} shapes a bound run's store: it comes with --model ROLE")
-            if not STORE_INT.fullmatch(v) or not lo <= int(v) <= hi:
-                raise Refused(f"{flag} {v!r}: an integer, {lo} to {hi}")
-            req[flag[2:]] = int(v)
-    if a.model is not None and "arena-blocks" not in req:
-        raise Refused("--model needs --arena-blocks A, each arena's blocks (verifier.py's)")
     return req
-
-
-def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tuple[Path, Path]:
-    """A bound run's checkpoint, the host's `<models>/<ROLE>/`, and its pin, core's `models.json` in the pinned tree;
-    refused when either is missing. Neither is the request's: the role names both."""
-    checkpoint, pin = host.models(settings) / role, tree / MODEL_PINS
-    if not checkpoint.is_dir():
-        raise Refused(f"--model {role}: this host has no {checkpoint}, the role's checkpoint (infra provisions it, "
-                      "root-held regular files)")
-    if not pin.is_file():
-        raise Refused(f"--model {role}: the pinned tree has no {MODEL_PINS}, core's pin of each role, which the "
-                      "verifier binds the store to")
-    return checkpoint, pin
 
 
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
-    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
-    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
@@ -448,12 +399,6 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
     for key in ("host_bytes", "hbm_bytes", "ingress_bytes_per_s"):
         if key in node:
             argv += ["--" + key.replace("_", "-"), str(node[key])]
-    if "model" in req:
-        checkpoint, pin = bound_paths(host, settings, req["model"], tree)
-        argv += ["--model", req["model"], "--checkpoint", str(checkpoint), "--pin", str(pin)]
-        for key in STORE:
-            if key[2:] in req:
-                argv += [key, str(req[key[2:]])]
     if "paced" in req:
         argv += ["--paced", *req["paced"]]
     return argv
@@ -906,14 +851,39 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
     return out
 
 
+def compose_settings(body: bytes) -> dict[str, str]:
+    """A hand-off's `COMPOSE_ENV` read as data, as served_verdicts.sh's `read_env` reads it: the settings by name, each
+    line NAME=VALUE (NAME up to its first `=`), NAME one of `COMPOSE_SETTINGS` and set once, VALUE `''` or of
+    `ENV_VALUE`, a last line without its newline read too; else refused, naming the line and never quoting it."""
+    if len(body) > COMPOSE_ENV_BYTES:
+        raise Refused(f"the hand-off's {COMPOSE_ENV} is over {COMPOSE_ENV_BYTES} bytes")
+    lines = body.decode("latin-1").split("\n")
+    got: dict[str, str] = {}
+    for i, line in enumerate(lines[:-1] if lines[-1] == "" else lines, 1):
+        name, eq, value = line.partition("=")
+        why = ("is not NAME=VALUE" if not eq else "names no setting" if not ENV_NAME.fullmatch(name)
+               else "sets no setting of a hand-off" if name not in COMPOSE_SETTINGS
+               else f"sets {name} a second time" if name in got
+               else f"sets {name} to a value of other characters than A-Za-z0-9._/:+@=,-"
+               if value != "''" and not ENV_VALUE.fullmatch(value) else None)
+        if why:
+            raise Refused(f"the hand-off's {COMPOSE_ENV}, which the compose reads as data and never runs: its line {i} "
+                          f"{why}")
+        got[name] = "" if value == "''" else value.replace("\\,", ",")
+    return got
+
+
 def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, str]:
     """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
     the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
     served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
-    past `cap` in all; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum."""
+    past `cap` in all, or it is `COMPOSE_ENV` and not settings `compose_settings` reads, or its path is another member's
+    file or directory; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum,
+    so a path the sums name is only ever one of the members it wrote."""
     d.mkdir(mode=0o700, parents=True)
     got: dict[str, str] = {}
     total = 0
+    name = "(none yet)"
     try:
         with tarfile.open(fileobj=src, mode="r|") as t:
             for m in t:
@@ -934,6 +904,9 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 f.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 h = hashlib.sha256()
                 fin = t.extractfile(m)
+                if name == COMPOSE_ENV:
+                    compose_settings(body := fin.read(COMPOSE_ENV_BYTES + 1))
+                    fin = io.BytesIO(body)
                 with open(f, "wb", opener=lambda p, fl: os.open(p, fl, 0o600)) as fout:
                     while chunk := fin.read(1 << 24):
                         h.update(chunk)
@@ -941,6 +914,9 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 got[name] = h.hexdigest()
     except tarfile.TarError as e:
         raise Refused(f"the hand-off isn't a tar: {e}") from None
+    except OSError as e:
+        raise Refused(f"the hand-off's member {name} can't be written under the serve dir ({e.strerror}): its path is "
+                      "another member's, or the disk refused it") from None
     if COMPOSE_SUMS not in got:
         raise Refused(f"the hand-off has no {COMPOSE_SUMS}, the sums the served node wrote")
     listed: dict[str, str] = {}
@@ -998,18 +974,29 @@ def run_compose(env: dict[str, str], log: Path, minutes: int = COMPOSE_MINUTES, 
 
 
 def answered(out: Path, cap: int = COMPOSE_ANSWER_BYTES) -> dict[str, Any]:
-    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size."""
+    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size.
+    A link is named and never followed, so the answer carries no byte from outside $OUT."""
     files: dict[str, str] = {}
     over: dict[str, int] = {}
+    links: list[str] = []
     used = 0
-    for f in sorted(p for p in out.rglob("*") if p.is_file()) if out.is_dir() else []:
-        rel, n = str(f.relative_to(out)), f.stat().st_size
-        if used + n > cap:
-            over[rel] = n
+    walked = [Path(r) / n for r, ds, fs in os.walk(out) for n in [*ds, *fs]] if not out.is_symlink() else []
+    for f in sorted(walked):
+        rel = str(f.relative_to(out))
+        if f.is_symlink():
+            links.append(rel)
             continue
-        files[rel] = f.read_text(errors="replace")
+        if not f.is_file():
+            continue
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as fin:
+            n = os.fstat(fd).st_size
+            if used + n > cap:
+                over[rel] = n
+                continue
+            files[rel] = fin.read().decode(errors="replace")
         used += n
-    return {"files": files, **({"not_sent": over} if over else {})}
+    return {"files": files, **({"not_sent": over} if over else {}), **({"links": links} if links else {})}
 
 
 def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on: str | None,
@@ -1031,7 +1018,7 @@ def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on
 
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
-         "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
+         "| replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
          "| bw_party (--pous-session SID | --fixture) [--session SID] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "

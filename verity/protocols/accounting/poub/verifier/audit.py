@@ -147,7 +147,7 @@ SAMPLES = 33_273
 DELTA = 2.0 ** -101
 """PoUB's δ, its own: each window's profile δ and the pooled bound's (`RemoteAudit.Protocol.DELTA`), 2^-101, half
 of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and PoUB-P2's δ is its own
-(`p2_party.DELTA`)."""
+(`p2_parties.DELTA`)."""
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
