@@ -481,9 +481,9 @@ class Remote:
     pouw: Pouw
     detection: Detection
 
-    #: the inference cut: the remote composition, `InferenceOnly.Guarantees.DampenerRemote`, term for term, its envelopes'
+    #: the inference cut: the remote composition, `InferenceOnly.Guarantees.SlowdownRemote`, term for term, its envelopes'
     #: premises, and the registration
-    CITES = ("InferenceOnly.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
+    CITES = ("InferenceOnly.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
@@ -491,11 +491,11 @@ class Remote:
         return {"pouw": self.pouw, "detection": self.detection}
 
     def slack(self, ctx: Context) -> dict[str, float]:
-        """Shares of a location's capacity no inference block constrains, by route (`DampenerRemote`'s terms)."""
+        """Shares of a location's capacity no inference block constrains, by route (`SlowdownRemote`'s terms)."""
         return self.pouw.slack(ctx.location) | self.detection.slack(ctx)
 
     def uncertified(self, ctx: Context) -> float:
-        """The share of capacity `DampenerRemote` leaves uncertified: `r̂ + ε_W W_cert/C + ε' + JΔ/H + θ`, and `χ`."""
+        """The share of capacity `SlowdownRemote` leaves uncertified: `r̂ + ε_W W_cert/C + ε' + JΔ/H + θ`, and `χ`."""
         return math.fsum(self.slack(ctx).values())
 
     def blocks(self, ctx: Context, gates: float) -> Blocks:
