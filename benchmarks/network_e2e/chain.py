@@ -797,7 +797,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
                       f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
-                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean firewall "
+                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
                       f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
                       + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "
                          "root registered under that Commit and opened to the report's advice of its window, and an "
@@ -818,7 +818,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path" + (" (from the fixed workload, not this run)" if served else ""), "",
                       f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
                       "advice by the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean "
-                      "firewall and verified by Lean. The advice each arm committed is the --advice file: "
+                      "ZK server and verified by Lean. The advice each arm committed is the --advice file: "
                       f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
                       + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
                       + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items()

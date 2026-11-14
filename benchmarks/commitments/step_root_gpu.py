@@ -158,7 +158,7 @@ def run(arm: str, model: Model, graphs: dict, ctx: bytes, key: bytes, first: int
                 end.record(serving)
                 p = D.step_roots(ctx, s, model.outputs(model.kept[s % 2]), key)
                 root = torch.cuda.Event(enable_timing=True)
-                root.record(row_table_side_stream())
+                root.record(row_table_side_stream(torch))
                 marks.append((end, root))
                 hashed[s] = p.done
                 pending.append(p)

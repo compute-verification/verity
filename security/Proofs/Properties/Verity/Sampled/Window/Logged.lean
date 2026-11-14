@@ -208,7 +208,7 @@ after `q`, the session's closing round's, and writes a transcript verity-verify-
 (`step`); and a member with no proof block in the sample, which has
 no statement and no session in the play, has `I` at the next place and the same position (`skip`). It is
 `MemberDecodes` with what every member's trace keeps handed to the step. -/
-structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
@@ -241,7 +241,7 @@ steps (`MemberSteps`) at an invariant `I`, it holds at `I` beside the play's sta
 member's session starts at, wherever each round's reading picks only openings. The play's start and where the walk
 stops are kept by every member's trace (`MemberReach.inv`, `MemberReach.stopsAt`), so `MemberReach.logged` applies at
 each member. -/
-theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →

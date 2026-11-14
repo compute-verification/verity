@@ -1573,7 +1573,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
 def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_samples_of_the_record_it_makes(tmp_path):
     """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three samples. Its line
     of record reads the same twelve groups and, for its pooled bound, the three samples, each four windows' receipts and
-    samples summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
+    samples summed (`line.samples_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
     the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
     the record's pace at one window in flight it has no line (`line.SHARED`)."""
     import copy
@@ -1591,7 +1591,7 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
     inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     record = inputs["record"]
     assert record["groups_per_coin"] == 4 and len(record["windows"]) == 12
-    draws = verifier.line.draws_of(4, record["windows"])
+    draws = verifier.line.samples_of(4, record["windows"])
     assert [d for _, d in draws] == [min(inputs["samples"], u) for u, _ in draws] and len(draws) == 3
     assert draws == verifier.recorded_windows(r)[0]
     want = verifier.line.record_run_json(inputs)

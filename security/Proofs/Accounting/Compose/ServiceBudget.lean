@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Compose
-public import Proofs.Accounting.TS.Stages
+public import Proofs.Pouw.TS.Stages
 public import Proofs.Accounting.Lemmas.Compose
 
 /-!

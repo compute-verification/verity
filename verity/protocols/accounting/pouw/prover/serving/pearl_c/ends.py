@@ -24,7 +24,7 @@ from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul
 from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y_device as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import (
     _bytes,
     _Driver,
@@ -72,7 +72,7 @@ class _Pass:
 
 class _RunState:
     """What `PearlCDeviceRun.__init__` sets and its four base classes (`PassEnds`, `passes.EpochCalls`,
-    `graphs.GraphCalls` with its base `whole_calls.WholeCalls`, `lanes.LaneCalls`) read of each other and of the run,
+    `graphs.GraphCalls` with its base `whole_calls.WholeCalls`, `lanes_device.LaneCalls`) read of each other and of the run,
     declared once: annotations only, so the class holds no value and ``hasattr`` on a run reads as before.  A tensor, a
     shape, a weight's side and a graph are ``Any``."""
     scheme: C.PearlC
@@ -153,7 +153,7 @@ class PassEnds(_RunState):
     ``lag_ends``, ``_lagged``, ``_weight_files``, ``shapes``, ``_graphs`` and ``_stages``, and its ``stream``,
     ``join_sides``, ``begin``, ``settle``, ``_end_aside`` and ``_ended``."""
 
-    #: the run's y trees on its device (`served_y.DeviceTrees`), made at the first retained call on it
+    #: the run's y trees on its device (`served_y_device.DeviceTrees`), made at the first retained call on it
     _y_trees: Any = None
     #: whether a step's retained pass is completed behind it (`end`'s ``behind``)
     retain_behind: bool = True
@@ -245,7 +245,7 @@ class PassEnds(_RunState):
     def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None,
                   y_tree: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
-        and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
+        and given its real rows of `y`, y's rows and its tree, `served_y_device.y_tree`, made on the call's device: all written
         behind the call, `write_behind`, joined by the pass's end).  On a device the call's buffers are copied as they are on
         its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
         host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`).  With `y_tree`

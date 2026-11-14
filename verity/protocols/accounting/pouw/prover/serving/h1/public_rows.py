@@ -1,5 +1,5 @@
 """A call's public table's rows as H1's served window registers them (`pouw_h1_served.Served._pubs`): `PublicRows`, built
-again on read, on the host or on a torch device, rather than held."""
+again on read, on the host or on the workload's device, rather than held."""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 
+from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
+
 
 @dataclass(frozen=True)
 class PublicRows(Sequence):
@@ -16,7 +18,7 @@ class PublicRows(Sequence):
     of the window's Program ``salt``, position u0 + t and the call's two ``roots``, and with ``blocks`` ``(M, K, (R, C),
     q)`` a J10-R call's u0 and unit t's blocks (`core_check.j10r_blocks` of unit (t // q, t % q), as
     `h1window.call_blocks` lays them). Items as `pouw_h1_registered.Rows` gives them; `words` builds rows of a NumPy
-    array there, `tensor` every row on a torch device."""
+    array there, `tensor` every row on the workload's device."""
 
     salt: bytes
     roots: tuple[bytes, bytes]
@@ -53,14 +55,14 @@ class PublicRows(Sequence):
         return out.astype("<u4").view("<u2").astype(np.uint16)
 
     def tensor(self, device: Any) -> Any:
-        """Every row as an ``(n, W)`` u16 tensor on torch ``device``, written on its current stream; the only copy to it is
-        the one row of what's common to all of them, from pinned memory, so the host waits on nothing there."""
-        import torch
-
-        base = torch.from_numpy(self._base())
-        base = (base.pin_memory() if torch.device(device).type == "cuda" else base).to(device, non_blocking=True)
-        out = self._fill(base.expand(self.n, -1).clone(), torch.arange(self.n, dtype=torch.int64, device=device))
-        return out.view(torch.uint8).view(self.n, -1, 8)[:, :, :4].contiguous().view(torch.uint16).view(self.n, -1)
+        """Every row as an ``(n, W)`` u16 buffer on the workload's ``device`` (`tensors`), written on its current stream; the
+        only copies to it are the one row of what's common to all of them and the positions, queued from page-locked memory,
+        so the host waits on nothing there."""
+        ts = tensors()
+        out = ts.zeros((self.n, len(self._base())), "int64", device)
+        out[:] = ts.put(self._base(), device)
+        out = self._fill(out, ts.put(np.arange(self.n, dtype=np.int64), device))
+        return ts.view(ts.view(out, "uint8").reshape(self.n, -1, 8)[:, :, :4], "uint16").reshape(self.n, -1)
 
     def _base(self) -> np.ndarray:
         """The row's u32 words (`core_check.public_row`'s 4-byte groups, each big-endian) with the position, and a J10-R
@@ -69,7 +71,7 @@ class PublicRows(Sequence):
         return np.frombuffer(self.salt + bytes(8) + self.roots[0] + self.roots[1] + tail, ">u4").astype(np.int64)
 
     def _fill(self, out: Any, t: Any) -> Any:
-        """``out`` (rows ``t``'s `_base`, a NumPy array or a tensor) with each row's own: its position, and a J10-R call's
+        """``out`` (rows ``t``'s `_base`, a NumPy array or the workload's buffer) with each row's own: its position, and a J10-R call's
         u0 and blocks, each u64 its high word then its low."""
         cols = [(len(self.salt) // 4, self.u0 + t)]
         if self.blocks is not None:

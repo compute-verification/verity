@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Bridges
+public import Definitions.Pouw.Guarantees.Bridges
 public import Definitions.Accounting.Guarantees.RegisteredSite
 
 /-!

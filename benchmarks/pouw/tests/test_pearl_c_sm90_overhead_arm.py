@@ -32,7 +32,9 @@ from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y_device as SYD  # noqa: E402
 
 
 def _load(name: str, path: Path):
@@ -424,10 +426,10 @@ class Recording:
 def _trees(dev):
     import torch
     s, cpu = PPD.scheme_of(OA.SERVED), torch.device("cpu")
-    const = PPD._constants(s, cpu, SALT_KEY)
+    const = PPDR._constants(s, cpu, SALT_KEY)
     run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
-                          const_keys=PPD._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)
-    return SY.DeviceTrees(run)
+                          const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)
+    return SYD.DeviceTrees(run)
 
 
 @pytest.fixture(scope="module")

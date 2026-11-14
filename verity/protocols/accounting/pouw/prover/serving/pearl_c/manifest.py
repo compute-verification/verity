@@ -1,13 +1,18 @@
 """The Pearl-C device path's manifest as a verifier reads it (`pouw_pearl_c_device`, which writes it): its schemas, the
-live session a pass names (`session_head`), and a retained pass's execution phase re-started from it (`manifest_epoch`), from the
+epoch a salt coin opens (`epoch_of`), a transcript file's entry (`_write`), the live session a pass names (`session_head`), and a retained pass's execution phase re-started from it (`manifest_epoch`), from the
 execution phase's coins or, for a pass recorded before them, from its beacon.
 """
 from __future__ import annotations
 
+import hashlib
+import os
+from pathlib import Path
 from typing import cast
 
 from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, salt_of, weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
 from verity.protocols.accounting.pouw.verifier.protocol import (
     DomainError,
@@ -15,11 +20,54 @@ from verity.protocols.accounting.pouw.verifier.protocol import (
     Shape,
 )
 from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import epoch_of
+__all__ = ["SaltCoins", "SaltOpening", "epoch_of", "manifest_epoch", "session_head"]
 
-__all__ = ["manifest_epoch", "session_head"]
+#: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
+type SaltCoins = CoinCommitment | LiveCommitment
+type SaltOpening = CoinOpening | LiveOpening
+
+
+def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening,
+             pass_index: int | None = None) -> Epoch:
+    """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
+    `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
+    (the auditor device's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
+    commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
+    opening against it after the salt epoch's root (`challenger.live_reason`), `salt.epoch_open_root` of the weights' root
+    W and `pass_index`, the epoch's number k over W, an integer in [0, 2^64).  Either is refused with `DomainError`; a
+    live salt is `audit.salt_of`'s over W, as H1's and ncp-v2's are."""
+    live = isinstance(coins, LiveCommitment), isinstance(opening, LiveOpening)
+    if not any(live):
+        return Epoch.start(workload, roots, coins, opening)
+    if not all(live):
+        raise DomainError("a live session's salt coin opens against that session's live coin commitment, and nothing else")
+    if set(roots) != set(workload.weights()):
+        raise DomainError("every weight of the workload is committed, and only those")
+    root = weights_root(roots)
+    why = Wd.salt_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, PS.epoch_open_root(root, pass_index))
+    if why is not None:
+        raise DomainError(f"the salt's {why}")
+    return Epoch(workload, dict(roots), salt_of(coins, opening.coin, root))
+
+
+def _entry(path: Path, n: int) -> dict:
+    nested = path.parent.name in ("calls", "weights", "y")
+    return {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": n}
+
+
+def _write(path: Path, data: bytes, digest: bool = True) -> dict:
+    """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
+    against them."""
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        f.write(data)
+    out = _entry(path, len(data))
+    if digest:
+        out["sha256"] = hashlib.sha256(data).hexdigest()
+    return out
+
 
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt execution phase's
 #: execution phase root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's

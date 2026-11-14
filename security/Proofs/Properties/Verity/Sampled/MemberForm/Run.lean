@@ -290,7 +290,7 @@ theorem runMembers_ok {slice : _root_.Spot.OneStageZk.Member → Json} {ms : Arr
     stated_of_sessions hs fun z hz => ((membersHeld_zip hheld).2 z hz).2.2, hv, hprov⟩
 
 /-- **The per-member form's sessions' verdicts**: where `membersRun` returns a run that accepted every session, the
-form's structure holds (`membersStructure`), the registration's roots are each one member's (`rootsOf`), and the
+form's structure holds (`membersStructure`), the registration's roots are each one member's (`membersRootsOf`), and the
 run is its statements' sessions' verdicts in order, at each member's slice of the registration (`runMembers_ok`). -/
 theorem membersRun_ok {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
     {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
@@ -298,7 +298,7 @@ theorem membersRun_ok {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spo
     {r : _root_.Spot.OneStageZk.Run} (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r)
     (hall : r.all = true) :
     _root_.Spot.OneStageZk.membersStructure p ms c e sts bs = .ok () ∧
-      ∃ roots, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+      ∃ roots, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
         ∃ held files l, _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
           _root_.Spot.OneStageZk.membersFiles (fun m => m.slice c.record roots) bs ms.toList = .ok files ∧
           List.Forall₂ (Stated (_root_.Spot.OneStageZk.statementAt files)) (sts.zip held).toList l ∧

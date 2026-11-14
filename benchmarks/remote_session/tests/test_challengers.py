@@ -651,7 +651,7 @@ def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
     three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three samples
-    (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
+    (`line.samples_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest,skip:0.5", True, groups_per_coin=4)

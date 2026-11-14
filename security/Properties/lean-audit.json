@@ -2326,12 +2326,12 @@
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
    "except": [],
-   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Pouw.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
    "except": [],
-   "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Accounting.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
+   "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Pouw.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
   },
   "Properties.Accounting.JointBridge": {
    "imports": [
@@ -2346,7 +2346,7 @@
   "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
    "except": [],
-   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
+   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
@@ -2384,9 +2384,9 @@
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": ["Definitions.Pous.Wipe", "MemoryChallenger.WipeProtocol"],
    "except": [],
-   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Accounting.Wipe`), never a proof"
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Wipe`), never a proof"
   },
   "Properties.Attest": {
    "imports": [
@@ -2620,11 +2620,11 @@
    "imports": [
     "Properties.InferenceOnly.Record",
     "Properties.Flock.Circuit.CircuitOf",
-    "Definitions.Accounting.ReadUnit",
+    "Definitions.Poub.ReadUnit",
     "Spot.Bits"
    ],
    "except": [],
-   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
+   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Poub.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
    "sealed": true
   },
   "Properties.Pouw.PearlPlusTie": {

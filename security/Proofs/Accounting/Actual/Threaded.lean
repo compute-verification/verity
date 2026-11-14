@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual.Threaded
+public import Definitions.Slowdown.Guarantees.Actual.Threaded
 public import Proofs.Accounting.Actual.ServerBlocks
 public import Proofs.Slowdown.Threads
 
