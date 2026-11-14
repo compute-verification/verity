@@ -18,7 +18,7 @@ template (`slotIn_eq`). `OneGrid` says no unit lies in two of the grids.
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 
 /-- The slot of unit `u` by the grids `gs`: `RecordText.slotIn` after its lookup. -/
 def slotOf (S : ℕ) (gs : List Grid) (u : ℕ) : Option ℕ :=

@@ -19,7 +19,7 @@ bits.
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 
 /-- **A row's bits**, as the summary counts them: of a row of port `p` of the template `tid` of `ts`, the port's

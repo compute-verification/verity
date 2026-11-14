@@ -34,7 +34,7 @@ from verity.protocols.accounting.poub.tests.test_remote_session import (
 from verity.protocols.accounting.poub.verifier import audit, memory_map
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
-from verity_vllm.protocols.remote_bandwidth import remote
+from verity_vllm.protocols.poub import remote
 
 VLLM = Path(__file__).resolve().parents[3]
 
@@ -398,7 +398,7 @@ FAILING = '''
 import os
 from pathlib import Path
 
-from tests.protocols.remote_bandwidth import test_commit_session as C
+from tests.protocols.poub import test_commit_session as C
 from verity.protocols.accounting.poub.tests import test_remote_session as T
 
 
