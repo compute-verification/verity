@@ -165,7 +165,7 @@
 # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
 # the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
 # `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
-# (`verity/protocols/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
+# (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
 # vy-auditor-2's public address, where the gate admits senders (set it for any other COMPOSE_NODE), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt sampled proofs Lean; COMPOSE_TREE_ON the branch
 # infra pinned it on, which the record's composed_on names beside the commit) and answers its $OUT, written to
@@ -556,7 +556,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
 tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
@@ -579,7 +579,7 @@ pearl_dir() { echo "$D/pearlplus/w$K"; }
 pearl_tied() {  # under PEARLPLUS_TIE: 0 iff Pearl+'s piece wrote W for window K and $VW's registration R is chained right after it
   "$PY" - "$(pearl_dir)/registration.json" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 try:
     w = REG.digest(json.load(open(sys.argv[1])))
 except (OSError, ValueError):
@@ -732,8 +732,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
-  leanb=$TREE/verity/protocols/flock/verifier/.lake/build/bin
-  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/flock/prover/python:$TREE/adapters/vllm
+  leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin
+  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
   if [ -n "${V3C_WARM_JOBS:-}" ]; then
     v3c_warm
     cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
@@ -903,7 +903,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     # session (`serve_h1.arm_of`): a reserve joins only a period already open, so it's opened on the offline Program
     say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" program "$D/h1" --model "$REPO" --rows "$T" \
       --steps "$WINDOW_STEPS" "${pc[@]}" 2>&1 | tail -1)"
-    (cd "$TREE/adapters/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/protocols/flock/prover/python "$PY" -m tests.protocols.pouw_h1_circuits \
+    (cd "$TREE/adapters/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/protocols/proofs/flock/prover/python "$PY" -m tests.protocols.pouw_h1_circuits \
       --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}" \
       ${H1_LANES:+--lanes "$H1_LANES"}) \
       > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"
@@ -1043,7 +1043,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   done
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
-IO_LEAN=$TREE/verity/protocols/inference_only/verifier/nci/lean/.lake/build/bin/nci-check
+IO_LEAN=$TREE/verity/protocols/policy/inference_only/verifier/nci/lean/.lake/build/bin/nci-check
 io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of CLASSES but `record`
   local c
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
@@ -1622,7 +1622,7 @@ mkdir -p "$D" "$ROOT/cache" "$FW"
 if [ -z "$FOLLOW$COMPOSE" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
-  (cd "$TREE/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
+  (cd "$TREE/verity/protocols/accounting/pouw/verifier/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
     || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
 fi
 
@@ -1630,14 +1630,14 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) || return 7
-  (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) || return 7
+  (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) || return 7
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
-  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/flock/prover/pod/60-circuit.sh || return 6
+  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
   # after flock-verify's build, whose package it requires by path: the inference-only verdict's `nci-check --count`,
   # without which the verdict is the Python count's alone
-  (cd verity/protocols/inference_only/verifier/nci/lean && lake build nci-check) || echo "nci-check didn't build"
+  (cd verity/protocols/policy/inference_only/verifier/nci/lean && lake build nci-check) || echo "nci-check didn't build"
 }
 if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$OUT/build.log" 2>&1 &
 else ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
