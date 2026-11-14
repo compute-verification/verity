@@ -1182,6 +1182,14 @@ def peers(host: Host) -> list[str]:
     return [n for n in names if n != host.name]
 
 
+def registered_peer(host: Host, peer: str) -> str:
+    """`peer` when it is one of this device's peers, else a refusal that gives the caller's word back and names none
+    of them: the list is the device's own file (/etc/vy/peers), the names of the machines it reaches."""
+    if peer not in peers(host):
+        raise Refused(f"--peer {peer!r}: not one of this device's peers")
+    return peer
+
+
 def coin_ports(host: Host, peer: str) -> range:
     """The ports of `peer`'s certifier coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
     (`Host.coin_ports`), ports within `PORTS` of this host's loopback that the link carries to the same ports of the
@@ -1222,8 +1230,7 @@ def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
         a = p.parse_args(argv)
     except argparse.ArgumentError as e:
         refuse(e)
-    if a.peer not in peers(host):
-        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    registered_peer(host, a.peer)
     coin_ports(host, a.peer)
     if not SCHEME.fullmatch(a.scheme):
         raise Refused(f"--scheme {a.scheme!r}: [a-z0-9/._-], up to 128")
@@ -1586,8 +1593,7 @@ def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host, *,
         a = p.parse_args(argv)
     except argparse.ArgumentError as e:
         refuse(e)
-    if a.peer not in peers(host):
-        raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
+    registered_peer(host, a.peer)
     a.sampling = sampling(a.temperature, a.top_p) if sampled else {}
     a.height = bounded("--height", a.height, *REHEARSAL_HEIGHT)
     return a

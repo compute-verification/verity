@@ -689,7 +689,7 @@ def test_a_lane_key_starts_a_relay_session_at_the_scans_schedule_one_at_a_time_w
     (SESSION + ["--window-per-group"], "relay-session: unrecognized arguments: --window-per-group"),
     (SESSION + ["--temperature", "0"], "relay-session: unrecognized arguments: --temperature 0"),
     (SESSION + ["--top-p", "1"], "relay-session: unrecognized arguments: --top-p 1"),
-    (SESSION[:2] + ["nobody"] + SESSION[3:], "--peer 'nobody': one of"),
+    (SESSION[:2] + ["nobody"] + SESSION[3:], "--peer 'nobody': not one of this device's peers"),
 ])
 def test_the_gate_refuses_a_relay_session_it_cant_check_and_writes_nothing(host, argv, why):
     """Each refusal the verb adds (the clients' port, the execution phases, the key and the minutes they take), each

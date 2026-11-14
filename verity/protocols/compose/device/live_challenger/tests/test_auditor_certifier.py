@@ -122,6 +122,19 @@ def test_the_gate_refuses_a_rehearsal_it_cant_check(host, bad, why):
     assert not host.certifier.exists()
 
 
+def test_a_peer_the_device_doesnt_know_is_refused_in_words_that_name_none_it_does(host):
+    """The device's list of peers is its own file, the names of the machines it reaches. A request for a peer that
+    isn't on it gets its own word back and none of the list's."""
+    known = A.peers(host)
+    good = dict(zip(REQUEST[1::2], REQUEST[2::2])) | {"--peer": "elsewhere"}
+    argv = ["--ssh", shlex.join(["certifier-rehearse", *[w for kv in good.items() for w in kv]]), "--key",
+            "network-accounting"]
+    rc, out = gate(host, argv, started=[])
+    assert rc == 3 and json.loads(out)["refused"] == "--peer 'elsewhere': not one of this device's peers"
+    assert known and not any(name.encode() in out for name in known) and not host.certifier.exists()
+    assert A.registered_peer(host, known[0]) == known[0]
+
+
 def test_a_key_that_reads_only_starts_no_rehearsal(host):
     for argv in (["--ssh", shlex.join(REQUEST)], ["--ssh", shlex.join(REQUEST), "--key", "-"]):
         rc, out = gate(host, argv, started=[])
