@@ -287,7 +287,10 @@ def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStag
 
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and sampling design, and the bytes it read; or the refusal's step
-and codes. -/
+and codes. The interior's registration is SPOT's check alone (`Registration.check`): this package has no caller's check
+(`VStar.Recursive.Caller.check`), so it refuses no interior for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, and the pool's marks and chain); the stream
+refuses those when the interior registers (`one_stage.verifier.check`, `Caller.gate`), and the two-stage form gates its
+run (`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
 def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
@@ -356,7 +359,10 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
 
 /-- The run, step by step; an error where the Python raises. The second stage's statement check allows the two-stage
 form where `form` does, by default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs
-it at `form := true`. -/
+it at `form := true`. Its registration step is SPOT's check alone (`Registration.check`), as `interiorSteps`' is: it
+refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, and the pool's marks and chain), which the stream refuses at registration,
+before any run (`one_stage.verifier.check`, `Caller.gate`), and the two-stage form after its run
+(`VStar.Recursive.SampledTwo.checkBlobsAt`). -/
 def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let v := i.params.verifier
   if !grainHolds i.rule v.query then return refused "register" #["grain"]
