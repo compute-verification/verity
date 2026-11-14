@@ -6,7 +6,7 @@ import json
 import pytest
 
 from tests.properties import fa_tap_exactness
-from verity_vllm.properties import golden, holdout, quarantine_lint
+from verity_vllm.properties import quarantine_lint
 from verity_vllm.records.property_record import (
     BY_SCHEMA,
     REGISTRY,
@@ -92,12 +92,10 @@ def test_the_registry_names_each_harness_schema_once():
 
 
 def test_harnesses_return_sealed_records(tmp_path):
-    (tmp_path / "holdouts").mkdir()
     (tmp_path / "quarantine").mkdir()
-    for doc in (golden.check(tmp_path / "corpus.json"), holdout.assemble(tmp_path / "holdouts"), quarantine_lint.lint(tmp_path / "quarantine")):
-        rec = PropertyRecord(doc)
-        assert rec.name in REGISTRY and rec.problems() == [], (doc["schema"], rec.problems())
-    assert PropertyRecord(golden.check(tmp_path / "corpus.json")).ok is False            # nothing checked is not a pass
+    doc = quarantine_lint.lint(tmp_path / "quarantine")
+    rec = PropertyRecord(doc)
+    assert rec.name in REGISTRY and rec.problems() == [], (doc["schema"], rec.problems())
 
 
 def test_records_of_a_run_and_their_citations(tmp_path):

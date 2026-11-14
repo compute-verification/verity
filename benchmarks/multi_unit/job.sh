@@ -31,7 +31,7 @@ build_tests() {   # build_tests DEST: DEST/flock-live-tests, flock-live's lib te
   cp -r "$SRC/verity/protocols/proofs/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime wide; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   exe=$(CARGO_TARGET_DIR=$W/target-tests cargo test -q --release -p flock-live --features sha512,glue --lib --no-run \
     --message-format=json -j "$TH" | "$PY" -c "import json, sys; print([j['executable'] for j in map(json.loads, sys.stdin) \

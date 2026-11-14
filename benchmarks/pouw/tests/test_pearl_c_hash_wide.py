@@ -27,9 +27,10 @@ from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, rows_dom
 
 HERE = Path(__file__).resolve().parent
 POUW = HERE.parent
+KERNELS = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"
 R = load("pearl_c_sm90/run.py")
 host = HH.host
-SOURCE = (POUW / "pearl_c" / "hash_wide.cuh").read_text()
+SOURCE = (KERNELS / "pearl_c" / "hash_wide.cuh").read_text()
 POISON = 0xA5
 #: both sides of s512_rows' bound (128), an odd and an even count past it, the width of a row of 128,256 words, and the widest
 SEGS = (1, 128, 129, 130, 501, 1024)

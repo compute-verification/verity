@@ -36,7 +36,7 @@ In (i), as in `PublicAudit`'s:
   (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
   registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, off a
   read's leaf off the table's, else `leafFinder`, and off a read of R's level-0 top off its node's row under the held
-  salts, else `saltFinder`, and off a held top other than `bcs'`, else `topFinder`, at `_hstk`), here at
+  salts, else `saltFinder`, and off a held top other than `bcs'`, else `topFinder`, under `_hstk`), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * at inputs whose inner shape check 5 refuses (`checkInnerStmt`, `AcceptsC3`'s last conjunct), the event is empty; where
   it passes, `T_LOG` is zero, so the slots have one typing, the registered one `hp.τ` (`typing_eq_registered`), and the
@@ -53,7 +53,7 @@ Candidate 3's table ignores the last round's coin, as its pick does (`schedInner
 gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_innerLV`, `innerC`'s form off
 `ValueColl ∨ LeafColl ∨ SaltColl ∨ TopColl` that `RegExtract`'s proof reads).
 
-`_hstk` is read here only as `TopColl`'s collision (`topFinder`): VBridgeCOff is a premise. `vbridge_checked` and
+`_hstk` is read here only as `TopColl`'s collision (`TopColl.cand`): VBridgeCOff is a premise. `vbridge_checked` and
 `vbridgeC_checked` carry VBridge and VBridgeC from the typed sessions to the checked ones.
 
 (ii) is `RecursiveFirewallPrivate`.

@@ -1,4 +1,4 @@
-"""Pearl-C's grouped call on sm_90a off the card (benchmarks/pouw/pearl_c_sm90/grouped.py, and the vLLM call over it,
+"""Pearl-C's grouped call on sm_90a off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py, and the vLLM call over it,
 `pouw_pearl_c_grouped.gemm_grouped`), on a recording stand-in for the device: each expert's rows cut into units of at most
 pd_commit's 256 rows; each unit's record in the call's table is the launch `run.Pipeline` makes for that unit's rows called
 alone, at the unit's offsets; a call is eight launches whatever its experts; and the vLLM call's matmuls, tiles, keys, screen

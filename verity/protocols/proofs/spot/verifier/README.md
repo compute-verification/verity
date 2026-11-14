@@ -107,7 +107,10 @@ independently with probability `NUM/DEN`.
 strata and that sampler but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
-soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
+soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`). The audit on the
+proofs refuses a `stratified` or `work` design in its one-statement form too, by the design's kind
+(`OneStageZk.SUBSET_ONLY`), written as a sampling design or as a rate: that form's soundness statement covers `subset:K` alone, which
+a rate `rate:NUM/DEN` names over the population. Its per-member form parses every design v1 does.
 
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -180,18 +183,26 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`).
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
-  and check are in the module's docstring. It reads the
+  and check are in the module's docstring; the parameters, one statement's check and a member's statement and files
+  are in `Spot/OneStageZkStatement.lean`, which it imports, and the run over the members and the checks in the
+  module itself, all in the namespace `Spot.OneStageZk`. It reads the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
-  `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
-  `members` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of a case, with no verdict,
-  and its `refusal` (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) why the audit's check refuses it, each as
-  its module's docstring says; the refusal accepts nothing and never
-  exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
+  `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
+  statement's and decides by `checkMembersAt`: it accepts where the form's run returns with every session accepted
+  and v1's check at the coins accepts on the sessions' verdicts (`one_stage.members.check`, with the Python of the
+  run, `members_run`). The pass that reads every member's files (`membersFiles`) is compiled as `membersFilesKept`,
+  proved equal to it: it reads the blobs' lookup tables once and a circuit file once for the members that name it,
+  and keeps of the file the circuit's own verdicts and the circuit without its rows (`Spot/CircuitKept.lean`), so
+  its work on a circuit's rows is by the file and not by the member; and it parses and hashes the program, and
+  evaluates the partition's query on it, once for the members that read it under the parameters' partition, so its
+  work on the program is by the program and not by the member. The executable's `members` (`Spot/MembersParse.lean`,
+  `proofs.members_parsed`) prints what its parsers read of a case, with no verdict, as its module's docstring says. A
+  window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
   (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
   every wired row of every unit of the sample to its writer's output row in the members' public files
@@ -388,6 +399,7 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/accounting/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+- **Certified values.** R7 holds a registered value no parameter reads to the verifier's `certified` entry of it.
 - **Reads.** Every port of a statement is either a registered port of the `--registered` file
   (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
   domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No

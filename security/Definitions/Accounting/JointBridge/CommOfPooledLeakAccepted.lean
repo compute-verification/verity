@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.JointPeriod
-public import Definitions.NetworkCertifier.PooledLeak
-public import Definitions.NetworkCertifier.Checked
-public import Definitions.NetworkCertifier.Tap
+public import Definitions.Certifier.PooledLeak
+public import Definitions.Certifier.Checked
+public import Definitions.Certifier.Tap
 public import Definitions.Core.Assumptions
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

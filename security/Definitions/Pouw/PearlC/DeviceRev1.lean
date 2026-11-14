@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.Mend
 
 /-!
 # rev1: Pearl-C's credit without the promotions into a +0 total (trusted; definitions only)
@@ -19,11 +20,23 @@ The maps, the domain and the cap's form are the device record's. The debit gains
 otherwise `debitDev`, which still gives each flagged atom-word `add/G` of its group's promotion, the first group's
 included. That over-debits by at most `firstAddDev` per unit, so it only lowers the credit and tightens the cap.
 
+The debit also gains, at one MAC each, the products of a word that no salt of the support makes count (`wordMend`), so
+that a program which skips them gains nothing:
+* **a dead pair**: element `l` of both the A row and the B row is salt-dead (`saltDead`), so the product's codes, and its
+  value, are the same at every salt;
+* **a forced zero** (`Mend.ForcedZero`): the product is cut (its aligned contribution is 0) at both ends of the noise
+  support, the two salts at which every element's line is the flat pair with `F` at `+11/4` and at `−11/4`. A product
+  cut at every salt is cut at both (`Proofs.Pouw.PearlC.Mend.forcedZero_of_cutForEverySalt`).
+A product of both kinds counts once. At the H100 atom neither occurs on an honest workload's tiles (measured on the
+614b tiles: no dead pair and no product cut at both ends, so the two terms cost honest serving nothing there). At
+sm_120's step the honest cost of the two terms has not been measured and is owed. The planted products of a skipped step
+that stay uncut at some salt are not charged here.
+
 * `firstAddDev`, `creditDevRev1`, `wrefDevRev1`: the first add of every word at the device's add price, and the credit
   and `W_ref` without it. `creditOfRev1` and `wrefOfRev1` are the same at `Params` and `Costs` (H100 prices).
-* `laterZeroPromos`, `PearlCSem.unitDebitRev1`, `PearlCSem.tileDebitRev1`: the later +0 promotions of a word, read off the
-  record's own ticket map on column prefixes (`T_g` is the chain over the first `32·G·g` columns), and the unit and
-  tile debits with them.
+* `laterZeroPromos`, `wordMend`, `PearlCSem.unitDebitRev1`, `PearlCSem.tileDebitRev1`: the later +0 promotions of a
+  word, read off the record's own ticket map on column prefixes (`T_g` is the chain over the first `32·G·g` columns), a
+  word's dead pairs and forced zeros, and the unit and tile debits with them.
 * `pearlCProtocolDevRev1`, `pearlCTilesDevRev1`: `pearlCProtocolDev` and `pearlCTilesDev` with rev1's credit, debit and
   `W_ref`, in the credit, the cap and `W_ref` alike.
 -/
@@ -67,24 +80,39 @@ noncomputable def laterZeroPromos (d : PearlCDevice) {m n k : ℕ} (A : Matrix (
     ((Ico 1 (k / (32 * d.G))).filter fun g =>
       ∃ h : 32 * d.G * g ≤ k, d.ticket (prefixCols A _ h) (prefixCols B _ h) i j = some 0).card
 
+open Classical in
+/-- **A word's products that no salt makes count**, of the A row `x` and the B row `w` at the scales `alpha` and
+`beta`: the elements `l` that are a dead pair (salt-dead in both rows) or a forced zero (cut at both ends of the support
+on the device's step, promoted every `G` atoms). -/
+noncomputable def wordMend (d : PearlCDevice) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) {k : ℕ} (x w : Fin k → ℚ) : ℕ :=
+  ((univ : Finset (Fin k)).filter fun l => (d.saltDead alpha beta k x l ∧ d.saltDead alpha beta k w l) ∨
+    Mend.ForcedZero d.pipe d.G alpha beta k x w l).card
+
 variable {Q R S : Type}
 
 /-- rev1's replayed debit of a unit: `debitDev` of `unitDebitDev`, plus its later promotions into a +0 total at the
-add price. -/
+add price and its words' `wordMend` at one MAC each. -/
 noncomputable def PearlCSem.unitDebitRev1 (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (act : Codes) : ℚ :=
+  let sh := U.layout.shape u
   let AB := sem.unitChain H s U u act
-  debitDev d (sem.unitDebitDev d H s U u act) + d.prices.add * ∑ i, ∑ j, (laterZeroPromos d AB.1 AB.2 i j : ℚ)
+  debitDev d (sem.unitDebitDev d H s U u act) + d.prices.add * ∑ i, ∑ j, (laterZeroPromos d AB.1 AB.2 i j : ℚ) +
+    ∑ i, ∑ j, (wordMend d sem.alpha sem.beta (wordsVal sh.m sh.k act i)
+      (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) j) : ℚ)
 
 open Classical in
-/-- rev1's replayed debit of a tile: `tileDebitDev`, plus the later promotions into a +0 total of the tile's words. -/
+/-- rev1's replayed debit of a tile: `tileDebitDev`, plus the later promotions into a +0 total of the tile's words and
+their `wordMend` at one MAC each. -/
 noncomputable def PearlCSem.tileDebitRev1 (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let AB := sem.unitChain H s U u act
   sem.tileDebitDev d H s U u rows cols act + d.prices.add *
     ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
-      (laterZeroPromos d AB.1 AB.2 e.1 e.2 : ℚ)
+      (laterZeroPromos d AB.1 AB.2 e.1 e.2 : ℚ) +
+    ∑ e ∈ (univ : Finset (Fin sh.m × Fin sh.n)).filter (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
+      (wordMend d sem.alpha sem.beta (wordsVal sh.m sh.k act e.1)
+        (wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u)) e.2) : ℚ)
 
 /-- **Pearl-C's protocol at a device record under rev1**, with the debit cap `ρ`: `pearlCProtocolDev` with
 `creditDevRev1`, `unitDebitRev1` and `wrefDevRev1`. -/
