@@ -90,27 +90,27 @@ def test_the_slot_sumcheck_at_fixed_coefficients():
 
 
 def test_the_slot_table_prints_the_hours_and_shares_of_the_audit_at_the_node_limit():
-    """One row a workload. Its prover hours and the sumcheck's share of them are `hours` of the audit at the node limit,
-    mean and public, and an audit with no prover hours reads 0%."""
-    heaviest = {"Z": 2 ** 20, "template": 2 ** 10, "prove_s": 1.0, "sumcheck_s": 2.0, "total_s": 3.0, "rss_gib": 4.0,
-                "sumcheck_gib": 5.0, "peak_gib": 9.0}
+    """One workload of three types, K1 1,000 ns and a band from K1 to four times it. The row's sumcheck share is `hours`
+    of the audit at the node limit, which the band's low end reruns at the same K1: 23% of the mean prover hours and 50%
+    of the public ones. `hours` of an audit with no prover hours gives a share of 0."""
+    def row(label, n, nnz):
+        per = {"nnz": nnz, "ands": nnz // 20, "committed": nnz // 28}
+        return {"workload": "w", "unit_type": label, "template": "silu-mul", "subcircuit_parameters": {"I": n},
+                "source": "generic", "subcircuits_per_vu": 1,
+                "subcircuit": {"units": n, "population": 1000, "per_unit": per}}
 
-    def workload(name, prover_h, sumcheck_h):
-        at_cap = {"prover_h_mean": prover_h[0], "prover_h_public": prover_h[1],
-                  "sumcheck_h_mean": sumcheck_h[0], "sumcheck_h_public": sumcheck_h[1]}
-        return {"workload": name, "gpu": {"cap": 2 ** 30, "cap_flock": 2 ** 31},
-                "cpu": {"cap": 2 ** 32, "cap_flock": 2 ** 33, "at_cap": at_cap, "heaviest": heaviest,
-                        "band": [PR.hours(at_cap, 1.0), PR.hours(at_cap, 2.0)]}}
-
-    pr = {"slot_sumcheck": {"band": (1.0, 2.0), "k1_ns": 1.5, "source": "a source"},
-          "workloads": [workload("wa/b1/i256", (8.0, 10.0), (2.0, 5.0)), workload("wb/b8/i64", (0.0, 0.0), (0.0, 0.0))]}
-    lines = PR._slot_table(pr)
-    cells = [line.strip("| ").split(" | ") for line in lines[-2:]]
-    head = lines[-4].strip("| ").split(" | ")
-    assert len(lines) == 9 and [len(c) for c in cells] == [len(head)] * 2 == [15, 15]
+    inv = {"K": 160, "token_select": {}, "rows": [row("a", 900, 1_000), row("b", 99, 20_000), row("c", 1, 4_000_000)]}
+    S = {"k1_ns": 1000.0, "band": (1000.0, 4000.0), "reps": 2, "bits_bytes": 8.0, "work_bytes": 16.0, "source": "s"}
+    w = PR.workload(inv, "w", COEF, PR.staging_fit(), slot=S, **TINY)
+    low, high = w["cpu"]["band"]
+    lines = PR._slot_table({"slot_sumcheck": S, "workloads": [w]})
+    head, cells = (line.strip("| ").split(" | ") for line in (lines[-3], lines[-1]))
+    assert len(lines) == 8 and len(head) == len(cells) == 15
     assert head[11:13] == ["prover h mean / public", "sumcheck share mean / public"]
-    assert [c[11:] for c in cells] == [["8 / 10", "25% / 50%", "8 / 10 (25%)", "8 / 10 (25%)"],
-                                       ["0 / 0", "0% / 0%", "0 / 0 (0%)", "0 / 0 (0%)"]]
+    assert cells[12] == f"{low['share_mean']:.0%} / {low['share_public']:.0%}" == "23% / 50%"
+    assert cells[13] == f"{cells[11]} (23%)" and cells[14].endswith(" (55%)") and high["share_mean"] > low["share_mean"]
+    idle = PR.hours(dict.fromkeys(("prover_h_mean", "prover_h_public", "sumcheck_h_mean", "sumcheck_h_public"), 0.0))
+    assert (idle["share_mean"], idle["share_public"]) == (0.0, 0.0)
 
 
 def test_dp4t_keys_buckets_by_template():
