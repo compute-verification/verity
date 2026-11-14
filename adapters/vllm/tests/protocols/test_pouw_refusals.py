@@ -151,10 +151,11 @@ def _groups(prog) -> list[int]:
     return [len(group.refs) for group in prog.root.input_colls]
 
 
-def test_a_program_is_not_evaluated_on_an_input_group_of_another_length():
+def test_a_program_is_not_evaluated_on_an_input_group_of_another_length(monkeypatch):
     """Each group of a call's Program and of its weight side's, one value short and one over, with every other group
     at its length: the refusal names the group's two lengths and comes before any gate is evaluated."""
     c = PC.program("ncp-v2", 16, 64, 16)
+    monkeypatch.setattr(PC, "evaluate_region", lambda *_: pytest.fail("a gate was evaluated before the refusal"))
     for prog in (c.program, c.weight_program):
         sizes = _groups(prog)
         for at, size in enumerate(sizes):
