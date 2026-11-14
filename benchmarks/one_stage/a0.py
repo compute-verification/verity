@@ -23,8 +23,10 @@ import select
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Sequence
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from verity.commitments.identity import identity_digest, identity_digest_sha512
@@ -500,6 +502,18 @@ class VerifyMembers:
         return self.proc.returncode
 
 
+_CLAIMS = threading.Lock()
+
+
+def archiving(held: dict | None, ident: tuple | None) -> AbstractContextManager:
+    """The lock a run's checks (`lean_verify`, sharing ``held``) on the circuit file of identity ``ident`` archive their
+    files under (`archive_put`): the first puts them, and one running beside it waits, then links what the first put."""
+    if held is None:
+        return nullcontext()
+    with _CLAIMS:
+        return held.setdefault(("archiving", ident), threading.Lock())
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
@@ -511,7 +525,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     (`VerifyMembers`), which is handed `verify`'s arguments for this session as its next member in place of a `verify`
     process of its own, and gives the same verdict. ``st["archived"]``, a dict a run's members share (`archive_put`'s
     ``held``): a file archived once, the members' circuit or a file the run put before its sessions, is linked into
-    every later archive rather than put again. ``st["statement"]``: the statement `verify` sets up
+    every later archive rather than put again, a check running beside it (`a5.LeanPool`) on the same circuit file
+    waiting for the first to put its files (`archiving`). ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
@@ -521,8 +536,9 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
     archive, files = out / "archive", archive_files(st, n)
-    keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
-                       st.get("archived"))
+    with archiving(st.get("archived"), identity(files[0])):
+        keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
+                           st.get("archived"))
     bound = [y for x in bound_files(st) for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
     args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
             "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,

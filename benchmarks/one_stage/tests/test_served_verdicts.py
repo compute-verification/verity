@@ -2959,6 +2959,24 @@ def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree
     assert (rc, lines, order) == (3, [line], [])
 
 
+@pytest.mark.parametrize("given, want, line", [
+    (None, None, None), ("7", "7", None),
+    ("0", None, "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not 0"),
+    ("all", None, "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, "
+                  "not all"),
+])
+def test_v3cs_audit_runs_its_negatives_side_by_side_only_where_v3c_negative_workers_says(tmp_path, given, want, line):
+    """V3C_NEGATIVE_WORKERS reaches the audit as a5's --negative-workers; unset, the audit gets no such flag, so its
+    negatives run one after another as before; one that isn't a positive integer is refused before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, **({"V3C_NEGATIVE_WORKERS": given} if given else {}))
+    if line:
+        assert (rc, lines, order) == (3, [line], [])
+        return
+    assert rc == 0 and "audit" in order, (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert (audit[audit.index("--negative-workers") + 1] if "--negative-workers" in audit else None) == want
+
+
 @pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
 def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_parent_line(tmp_path, given):
     """records_audit samples only on the auditor's challenger's coins, so a development run's V3c audit takes a local
@@ -4011,6 +4029,41 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
+
+
+def _pool(tmp_path: Path) -> dict[str, str | None]:
+    """The audit's memory and Lean workers as V3c's audit was run with them, None for a flag it wasn't given."""
+    a = json.loads((tmp_path / "order.audit").read_text())
+    return {f: a[a.index(f) + 1] if f in a else None for f in ("--lean-workers", "--audit-mem-gb")}
+
+
+@pytest.mark.parametrize("given, want", [
+    ({}, {"--lean-workers": "1", "--audit-mem-gb": "290"}),
+    ({"V3C_LEAN_WORKERS": "2", "V3C_AUDIT_MEM_GB": "400", "NODE_MEM_GB": "755"}, {"--lean-workers": "2", "--audit-mem-gb": "400"}),
+])
+def test_a_served_nodes_audit_runs_one_lean_check_at_a_time_within_v3c_audit_mem_gb_unless_told(tmp_path, given, want):
+    """On the node that served, V3c's audit shares the node: one Lean check at a time and V3C_AUDIT_MEM_GB as the audit's
+    memory, each a default its command can set."""
+    rc, lines, order, _limits = _v3c(tmp_path, **given)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert _pool(tmp_path) == want
+
+
+@pytest.mark.parametrize("given, want", [
+    ({}, {"--lean-workers": None, "--audit-mem-gb": None}),
+    ({"V3C_LEAN_WORKERS": "2"}, {"--lean-workers": "2", "--audit-mem-gb": None}),
+    ({"V3C_AUDIT_MEM_GB": "650"}, {"--lean-workers": None, "--audit-mem-gb": "650"}),
+])
+def test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_its_command_sets_it(tmp_path, given, want):
+    """A follow-on's audit has its node: a5's own default of one Lean check at a time, within what the node has free
+    each time the audit reads it (as its sessions start, and as its negatives' workers and its registered reads' pool
+    are made), unless its command says otherwise. V3C_AUDIT_MEM_GB set on the follow-on's command reaches the
+    audit as its memory, which its Lean checks and its negatives' workers then start within; left unset, its default
+    is only what the node must have, and the audit is given no figure."""
+    assert _deferred(tmp_path).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path, **given)
+    assert rc == 0 and order[0] == "audit", (lines, order)
+    assert _pool(tmp_path) == want
 
 
 FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "
