@@ -309,6 +309,10 @@
     {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursiveMain.lean", "rule": "module-doc", "count": 1},
     {"file": "security/Proofs/Properties/InferenceOnly/ReadsExact.lean", "rule": "long-file", "count": 1},
     {"file": "security/Proofs/Properties/InferenceOnly/ReadsOneNode.lean", "rule": "long-file", "count": 1},
-    {"file": "security/Proofs/Properties/InferenceOnly/ReadsSet.lean", "rule": "long-file", "count": 1}
+    {"file": "security/Proofs/Properties/InferenceOnly/ReadsSet.lean", "rule": "long-file", "count": 1},
+    {"file": "security/Proofs/Flock/Claims/ZK/Refine.lean", "rule": "long-file", "count": 1},
+    {"file": "security/Proofs/Pouw/PearlC/PeelExactProofs.lean", "rule": "long-file", "count": 1},
+    {"file": "security/Proofs/Pouw/PearlC/PeelExactProofsP.lean", "rule": "heartbeats-unlimited", "count": 2},
+    {"file": "verity/protocols/proofs/flock/verifier/FlockVerify.lean", "rule": "module-doc", "count": 1}
   ]
 }

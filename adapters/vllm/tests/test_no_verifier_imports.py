@@ -74,6 +74,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # Needs: the certifier's advice format (`Advice`, `RequestAdvice`, `Row`, `Source`, `SCHEMA`), which moves out of
         # `verity/` to the adapter by the integrations rule, its release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
+        # `serve_protocol.py`'s `id_form` and `link_frame.HEADER` stay until the certifier's workload side offers them.
         "verity_vllm/pipeline/advice.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/pipeline/advice_code/codec.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/pipeline/advice_code/derived.py": (
@@ -87,14 +88,11 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "accounting.certifier.verifier.io_tie", "accounting.certifier.verifier.release",
         ),
         "verity_vllm/pipeline/serve_admit.py": ("accounting.certifier.verifier.release.read_watermark",),
-        "verity_vllm/pipeline/serve_commit.py": (
-            "accounting.certifier.verifier.charge_chain", "accounting.certifier.verifier.compile_slice",
-            "accounting.certifier.verifier.served_rows",
-        ),
+        "verity_vllm/pipeline/serve_commit.py": ("accounting.certifier.verifier.charge_chain",),
         "verity_vllm/pipeline/serve_head.py": ("accounting.certifier.verifier.release",),
         "verity_vllm/pipeline/serve_protocol.py": (
-            "accounting.certifier.verifier.active", "accounting.certifier.verifier.io_tie",
-            "accounting.certifier.verifier.release",
+            "accounting.certifier.verifier.id_form", "accounting.certifier.verifier.io_tie",
+            "accounting.certifier.verifier.link_frame.HEADER", "accounting.certifier.verifier.release",
         ),
         "verity_vllm/pipeline/window_advice.py": (
             "accounting.certifier.verifier.advice", "accounting.certifier.verifier.advice.KINDS",

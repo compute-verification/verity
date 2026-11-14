@@ -4453,6 +4453,24 @@
       "paths": {
         "verity/protocols/proofs/spot/device/tests/test_two_stage_driver.py": "adapters/vllm/tests/pipeline/test_two_stage_driver.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattnrun.sh": "benchmarks/pouw/edited_gemm_profile/fattnrun.sh"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/p2_v1/bandwidth.py": "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
+        "benchmarks/torch_gpu/p2_stage/stage.py": "verity/protocols/accounting/poub/prover/p2_stage/stage.py",
+        "benchmarks/torch_gpu/p2_stage/layout.py": "verity/protocols/accounting/poub/prover/p2_stage/layout.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py": "verity/protocols/proofs/spot/prover/tests/test_pearltie.py",
+        "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py": "verity/protocols/proofs/spot/prover/tests/test_remotetie.py"
+      }
     }
   ]
 }
