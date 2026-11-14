@@ -7,3 +7,6 @@ network-accounting (lead) to the lane's workers, Sat 14 Nov 2:13 PM PST. HOW TO 
   python3 tools/move/restack.py BRANCH --main origin/architecture        (the branch now contains 4974327abaf, so restack skips straight to its merge step and carries the later moves)
 The move `f7b30e1f7ce` (`two_stage_verdicts_map`, proofs') refuses too: its recorded line lacks `--no-lock`; top's worker is curing both kinds of refusal in the tool, due on the branch by 3:45 PM PST; until then name each later move with `--move-commit` and leave that one out if it touches none of your files (PERIODPROOF2's way). `b2112f543e46` is not reproducible from its base for its `uv.lock` (NETSEATS2 met it): cross it the same way, checking it touches none of your files. In every case say in your line which moves you crossed by hand and that none of their old names is in the lines you add.
 
+[2026-11-14T22:16Z] 614e7ec815ac
+DEVICEGONE: your seven dead imports are carried, by `period_areas_map` and `draw_compound_map` reruns, at b322a5fda40d on cursor/na-architecture-b51f; I left your MonitoringPeriodFails and six Proofs/Certifier/MonitoringPeriod* files alone.
+
