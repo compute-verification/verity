@@ -17,7 +17,9 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "torch_gpu" / "sha512_rows")))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+#: where ``bench.h200_rows`` is, the H200 layer's rows ``check_layout`` reads
+BENCH_DIR = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "sha512_rows"
 
 import engine as E
 from verity.commitments import hm96
@@ -219,6 +221,7 @@ def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
 
 def check_layout(engine: E.Engine, slots: int, sample: Sequence[int], seed: int = 4) -> dict[str, Any]:
     """The H200 layout's rows (one layer) at ``slots`` slots: every row's digest and leaf on the sampled slots."""
+    sys.path.insert(0, str(BENCH_DIR))
     import bench
     torch = engine.torch
     gen = torch.Generator(device=engine.device).manual_seed(seed)

@@ -24,7 +24,7 @@ from typing import Any
 
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "sha512_rows"))
 
 import engine as E
 from verity.commitments.identity import identity_digest_sha512
