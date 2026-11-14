@@ -88,8 +88,8 @@ serves it and this tree builds no circuit of it. Its number with every word tied
   many a block of a phase, over the phases the period has. They enter the count over the period
   (`min_cut.bound_charged`) under three readings, each printed under its name (`Charged.reading`): one `β_x` with the
   threshold at which the figure is largest, one `β_x` at the top budget with no block charged, and a `β_x` a block.
-- **The uncredited share** `s`: a developer gets that share of a block's work whole, so each number `ρ` is printed
-  with its limit at `s`, `1 / (s + 1/ρ)` (`min_cut.capped`), and the pooled total in gates is at that limit. The
+- **The uncredited share** `s`: a developer gets that share of a block's work whole, so each number `slowdown` is printed
+  with its limit at `s`, `1 / (s + 1/slowdown)` (`min_cut.capped`), and the pooled total in gates is at that limit. The
   words that work computes are tied by nothing either: a fourth reading counts them as fresh input, `k + 32 u` with
   `u` the most words the share's MACs feed (a word of a linear's output is fed by at least the least fan-in of the
   model's linears).
