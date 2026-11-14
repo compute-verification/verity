@@ -4156,6 +4156,13 @@
         "security/Proofs/Properties/Verity/Sampled/Window/Leg.lean": "security/Proofs/Properties/Verity/Sampled/Window/Subprotocol.lean",
         "security/Proofs/Properties/Verity/SampledTwo/Leg.lean": "security/Proofs/Properties/Verity/SampledTwo/Subprotocol.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Compose/Remote/Draw.lean": "security/Definitions/Compose/Remote/Sample.lean",
+        "security/Proofs/Compose/RemoteHeld/Draw.lean": "security/Proofs/Compose/RemoteHeld/Sample.lean",
+        "security/Proofs/Properties/Compose/Remote/Draw.lean": "security/Proofs/Properties/Compose/Remote/Sample.lean"
+      }
     }
   ]
 }

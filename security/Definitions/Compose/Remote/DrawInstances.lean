@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Compose.Remote.Held
-public import Definitions.Compose.Remote.Draw
+public import Definitions.Compose.Remote.Sample
 
 /-!
 # PoUB's sample: the instances its witnesses are stated at
@@ -24,7 +24,7 @@ stated at these instances.
 
 namespace Accounting.Remote.Instances
 
-open Finset Accounting.Remote.Held Accounting.Remote.Draw
+open Finset Accounting.Remote.Held Accounting.Remote.Sample
 
 /-! ## A node that uses every route -/
 

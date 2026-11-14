@@ -466,9 +466,9 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
     "security/Definitions/Poub/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Compose/Remote/Draw.lean::Accounting.Remote.Draw.Coins":
+    "security/Definitions/Compose/Remote/Sample.lean::Accounting.Remote.Sample.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Compose/Remote/Draw.lean::Accounting.Remote.Draw.Session":
+    "security/Definitions/Compose/Remote/Sample.lean::Accounting.Remote.Sample.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "security/Definitions/Compose/Remote/Held.lean::Accounting.Remote.Held.Trace":
         "homonym, a PoUB session's record of the registered blocks in node memory: rename (memory-accounting)",

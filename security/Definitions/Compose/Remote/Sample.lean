@@ -132,7 +132,7 @@ at least 4 for `N < 2^64`.
 
 @[expose] public section
 
-namespace Accounting.Remote.Draw
+namespace Accounting.Remote.Sample
 
 open Finset
 open scoped ENNReal
@@ -338,4 +338,4 @@ noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m
 
 end Receipts
 
-end Accounting.Remote.Draw
+end Accounting.Remote.Sample
