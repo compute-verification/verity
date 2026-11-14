@@ -24,6 +24,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     partition as P,
     registered as G,
     docket as R,
+    caller as C,
 )
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -54,6 +55,12 @@ def _check(rec, prog, q, **kw):
     n = P.units(prog, q)
     args = {"law": LAW, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
     return R.check(rec, prog, q, **args)
+
+
+def _check_both(rec, prog, q, **kw):
+    n = P.units(prog, q)
+    args = {"law": LAW, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
+    return C.both(rec, prog, q, **args)
 
 
 def test_the_query_makes_each_instance_one_unit():
@@ -293,17 +300,17 @@ def test_the_window_runs_its_days_declared_circuit():
     prog, q, rec = _registration(6)
     bodies = [G.Declaration(0, rec["program"], (PAIR.id,)), G.Declaration(1, "0" * 128, (PAIR.id,))]
     declared = G.check(G.Auditor(), "remote", G.chain("remote", bodies)).view().to_json()["declarations"]
-    assert _check(rec, prog, q).ok and _check(rec, prog, q, day=0, declarations=declared).ok
-    assert _check(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
-    assert _check(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
+    assert _check_both(rec, prog, q).ok and _check_both(rec, prog, q, day=0, declarations=declared).ok
+    assert _check_both(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
+    assert _check_both(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
     with pytest.raises(G.Refused, match="entry 2: duplicate-declaration"):
         G.check(G.Auditor(), "remote", G.chain("remote", [*bodies, G.Declaration(0, "0" * 128)]))
     twice = [*declared, {"blocks": [], "day": 0, "program": "0" * 128}]
-    assert _check(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
+    assert _check_both(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
     for day, given in ((0, None), (None, declared), (-1, declared), (True, declared),
                        (0, [{"day": 0, "program": rec["program"]}])):
         with pytest.raises(ValueError, match="declar"):
-            _check(rec, prog, q, day=day, declarations=given)
+            _check_both(rec, prog, q, day=day, declarations=given)
 
 
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():

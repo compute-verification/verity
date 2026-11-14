@@ -11,7 +11,9 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 * `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out and tied values a template query's
   verdict publishes (`Verdict.fanout` and `Verdict.rests_on_period_check`, the Lean's `fanout` and
   `rests_on_period_check`); the details are Python's (the Lean reports codes).
-  History tables both refuse are the registration's refusal, `R.HISTORY`, with both reasons; one refusing alone disagrees;
+  History tables both refuse are the registration's refusal, `R.HISTORY`, with both reasons; one refusing alone disagrees.
+  Where R1-R8 pass, the caller's check (`caller.check`, its Lean `spot-flock-caller`'s `VStar.Recursive.Caller.check`),
+  compared the same way, decides as `Caller.gate` does (`caller.gate`);
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
@@ -51,7 +53,7 @@ from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, hello as H, link_points as LP, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit, caller as C, draw as D, hello as H, link_points as LP, docket as R
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
@@ -61,6 +63,9 @@ DISAGREE = "disagree"
 ROOT = Path(__file__).resolve().parents[6]
 PACKAGE = ROOT / "verity/protocols/proofs/spot/verifier/lean"
 EXE = "sampled-proofs-verifier"
+#: SPOT's caller's check's Lean (`VStar.Recursive.Caller.check`), which SPOT's package can't load: its own executable
+CALLER_PACKAGE = ROOT / "verity/protocols/proofs/spot_flock/verifier/lean"
+CALLER_EXE = "spot-flock-caller"
 BUILD_LOCK = ROOT / "verity/circuits/difftest/.lake/harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R8 never read.
 REGISTRATION_DELTA = "1/2"
@@ -71,18 +76,19 @@ class LeanError(RuntimeError):
 
 
 @functools.cache
-def executable(exe: str = EXE) -> Path:
-    """`lake build sampled-proofs-verifier` (or `exe`), once per process, under `BUILD_LOCK`; the executable's path."""
+def executable(exe: str = EXE, package: Path = PACKAGE) -> Path:
+    """`lake build sampled-proofs-verifier` (or `exe` of `package`), once per process, under `BUILD_LOCK`; the
+    executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            p = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
+            p = subprocess.run(["lake", "build", exe], cwd=package, capture_output=True, text=True)
         except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {exe} in {PACKAGE} cannot be built") from None
+            raise LeanError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
     if p.returncode != 0:
-        raise LeanError(f"lake build {exe} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
-    return PACKAGE / ".lake" / "build" / "bin" / exe
+        raise LeanError(f"lake build {exe} in {package} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
+    return package / ".lake" / "build" / "bin" / exe
 
 
 def _dumps(value: Any) -> str:
@@ -111,8 +117,8 @@ class _Server:
     """One serving process of `exe` per Python process (`Difftest.serve`: a request line, an answer line), started at
     the first call and again after it dies."""
 
-    def __init__(self, exe: str = EXE) -> None:
-        self.exe = exe
+    def __init__(self, exe: str = EXE, package: Path = PACKAGE) -> None:
+        self.exe, self.package = exe, package
         self._proc: subprocess.Popen | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
@@ -123,7 +129,7 @@ class _Server:
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
                 self._stderr = tempfile.TemporaryFile()
-                self._proc = subprocess.Popen([str(executable(self.exe))], stdin=subprocess.PIPE,
+                self._proc = subprocess.Popen([str(executable(self.exe, self.package))], stdin=subprocess.PIPE,
                                               stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8")
             try:
                 self._proc.stdin.write(line + "\n")
@@ -159,12 +165,15 @@ class _Server:
 
 _server = _Server()
 atexit.register(_server.close)
+_caller_server = _Server(CALLER_EXE, CALLER_PACKAGE)
+atexit.register(_caller_server.close)
 
 
-def lean(fn: str, value: Any) -> dict[str, Any]:
-    """The Lean's answer: its output, or `{"refused": reason}` where it refuses the input or can't run."""
+def lean(fn: str, value: Any, server: _Server = _server) -> dict[str, Any]:
+    """The Lean's answer (`server`'s, by default `sampled-proofs-verifier`'s): its output, or `{"refused": reason}` where
+    it refuses the input or can't run."""
     try:
-        kind, body = _server.call(fn, value)
+        kind, body = server.call(fn, value)
     except LeanError as e:
         return {"refused": str(e)}
     return body if kind == "output" else {"refused": body}
@@ -304,10 +313,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, members: Sequence[LP.Member] = (),
           compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
-    """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`,
-    R6's seed salt when it passes `seed_salt`, R6's registered compiler when it passes `compiler`, R6's pool reset,
-    week and spent mark, a reset at most once a week, and R7's pool chain when it passes `pool`, R8's tied values when
-    it passes `tied`, the roots of the history
+    """`docket.check` (R1-R8) by the verifier, then, where it passes, the caller's check (`caller.check`, `Caller.gate`):
+    the declared day when it passes `day` and `declarations`, the binding when it passes `binding`, the seed salt when it
+    passes `seed_salt`, the registered compiler when it passes `compiler`, and the pool's reset, week and spent mark, a
+    reset at most once a week, and the pool chain when it passes `pool`; with R8's tied values when it passes `tied`, the
+    roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
     supplied values' `history` sources, and R7's certified entries when it passes `certified`
     (``{value: {"root", "leaves", "words", "domain"}}``, `registration.check`'s). History tables both verifiers refuse
@@ -326,21 +336,33 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
-    got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs, day, declarations, seed_salt, pool, tied,
-                                                  history, compiler, certified),
-                       "record": dict(rec),
-                       **({"members": [{"units": us, "vus_per_block": g} for us, g in members]} if members else {})})
-    if "codes" in got:
-        got = {"ok": not got["codes"], "codes": got["codes"],
-               **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
+    params = _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                     supplied, pinned, binding, schemas, window_root, held, outputs, day, declarations, seed_salt, pool,
+                     tied, history, compiler, certified)
+    got = _codes(lean("registration", {
+        "params": params, "record": dict(rec),
+        **({"members": [{"units": us, "vus_per_block": g} for us, g in members]} if members else {})}))
     if py is None:
         verifiers = {"of_record": RECORD_VERDICT, "lean": _summary(got), "python": {"refused": why}}
         if "refused" in got:
             return Verdict(False, (R.HISTORY,), {R.HISTORY: {"lean": got["refused"], "python": why}}, verifiers)
         return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": {"refused": why}}}, verifiers)
-    return _decide(got, py, whole=False)
+    spot = _decide(got, py, whole=False)
+    if not spot.ok:
+        return spot
+    py = C.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                 supplied, pinned, binding, outputs, schemas, window_root, held, members, day, declarations, seed_salt,
+                 pool, tied, history, compiler, certified)
+    caller = _decide(_codes(lean("caller", {"params": params, "record": dict(rec)}, _caller_server)), py, whole=False)
+    return C.gate(spot, caller)
+
+
+def _codes(got: dict[str, Any]) -> dict[str, Any]:
+    """A Lean check's `{"codes", ...}` answer as `_decide` reads it; a refusal as it is."""
+    if "codes" not in got:
+        return got
+    return {"ok": not got["codes"], "codes": got["codes"],
+            **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
