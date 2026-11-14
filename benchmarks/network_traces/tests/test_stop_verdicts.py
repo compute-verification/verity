@@ -8,8 +8,8 @@ rule charges below is held only where each verifier that accepted refused its ne
 and the serve's registration registers every block of both sampled populations, as each of their verdicts says it
 ran; each verdict read is handed on under the mark of a run that is no proof; and the run files are read from the
 store as the harness reads it. As it stands the reader lists no format and asks the rule without a schedule, so it
-holds nothing, and a test pins each; the others ask what it holds with a format listed and the rule handed the
-schedule (`listed`, `handed`)."""
+holds nothing, and a test pins each; the others ask what it would hold with a format listed and the rule handed a
+schedule, neither of which the reader does (`listed`, `schedule_the_reader_does_not_hand`)."""
 
 from __future__ import annotations
 
@@ -66,12 +66,14 @@ TIED = tied()
 
 
 @pytest.fixture(autouse=True)
-def handed():
-    """The reader is handed no schedule and asks the rule without one, so as it stands it holds nothing
+def schedule_the_reader_does_not_hand():
+    """Hands the rule a schedule the reader itself does not hand. The reader is handed no schedule and asks the
+    rule without one, so as it stands it holds nothing
     (`test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing`, which undoes this). The other tests are
-    of what the reader holds of a class the rule charges below, so here the rule is handed the schedule a head
-    names wherever a caller hands none and the head names `TIED`: a stand-in for the reader being handed the
-    schedule, as `listed` is for a format being listed."""
+    of what the reader holds of a class the rule charges below, so under this fixture the rule is handed the
+    schedule a head names wherever its caller hands none and the head names `TIED`. It is a stand-in for a reader
+    that is handed the schedule, as `listed` is for a format being listed, and nothing a test holds under it is
+    what the reader says of a run's files as it stands."""
     rule = CC.charge
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(CC, "charge", lambda of, cls, records, schedule=None: rule(
@@ -922,16 +924,17 @@ def test_a_verdict_whose_format_is_not_listed_reads_as_missing(monkeypatch):
         assert stop([registration(first)], [tie]).verdicts == ()
 
 
-def test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing(handed, monkeypatch, tmp_path):
+def test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing(schedule_the_reader_does_not_hand,
+                                                                      monkeypatch, tmp_path):
     """The reader is handed no schedule, so it asks the rule without one, and the rule charges no class below a
     schedule it was not handed. With the four verdicts' records of every class that holds a row, their controls
     and their serves' registrations, each as its verifier would write it and in a format that is listed, no
     execution phase is held: each class that holds a row is at its whole schedule, its line and the answer's first
     line say the schedule was not handed, and the verdicts read are handed on as they are. The same records hold
-    both execution phases where the rule is handed the schedule their heads name, which is what this file's other
-    tests ask (`handed`). A class short of a verdict is counted in the first line and its line names the verdict
-    beside the schedule. From a store's run files it is the same answer. As the reader stands it lists no format
-    either, and then each verdict is missing too."""
+    both execution phases where the rule is handed the schedule their heads name, which the reader does not do and
+    this file's other tests ask (`schedule_the_reader_does_not_hand`). A class short of a verdict is counted in
+    the first line and its line names the verdict beside the schedule. From a store's run files it is the same
+    answer. As the reader stands it lists no format either, and then each verdict is missing too."""
     first, second = head(3, 5, 0), head(4, 5, 2)
     registrations, records = [registration(first), registration(second)], four(first) + four(second) + four(second, 1)
     files = {SV.REGISTRATIONS_FILE: jsonl(registrations), "out/the-verdicts.jsonl": jsonl(records),
@@ -941,7 +944,7 @@ def test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing(handed, m
     asked = stop(registrations, records)
     assert asked.held == 2 == SV.of_runs(store, ["r1"]).held and asked.why[0].startswith(
         "2 of the 2 execution phase(s) read are charged below their schedule")
-    handed.undo()
+    schedule_the_reader_does_not_hand.undo()
     got = stop(registrations, records)
     assert (got.held, got.verdicts) == (0, asked.verdicts) and len(got.verdicts) == 12
     assert CC.NOT_HANDED == "the schedule was not handed"
