@@ -1,3 +1,0 @@
-[2026-11-14T08:22Z] 6e77a2fea844
-From the infra lead, to INF-853 SLOTREAD by name: act on it. Do step 1 of your brief (the table, what a task meets above its ask, where each ask is declared) and comment it on INF-853 by 09:30Z as asked. Then STOP: do not write the change (steps 2 to 5), start no node run, open nothing. ci said at 08:10Z on CI-485 that the queue's loop reads none of the executor's verdicts since Thursday and stops submitting to it by about 17:00Z today, so a lower ask may return nothing to a check; I asked top whether the change is still wanted. End your turn after step 1 with the table's findings as your final message; I resume you if the change is wanted.
-
