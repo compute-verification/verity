@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Pouw.PearlC.ServedRev1Gap
+public import Definitions.Pouw.PearlC.DeviceWithin
 
 /-!
 # v1 under rev1 on a served step's layout, every linear at once (compute accounting's file)
@@ -9,6 +10,9 @@ public import Proofs.Pouw.PearlC.ServedRev1Gap
   each at any mix of batch sizes, as a served step's layout is. `pearlCGapDevRev1KShapes`,
   `pearlCSampledDevRev1KShapes` and `pearlCSampledDevRev1KShapes_of_cap` are `ServedRev1Gap`'s one-linear theorems
   with `ω` any bound on the ratio `wrefDevRev1K/((1 − ρ)·creditDevRev1)` over `nks`.
+* **Any set of shapes:** `pearlCGapDevRev1KOn` and `pearlCSampledDevRev1KOn_gen` are the same on the domain restricted
+  to any shapes `Ss` (`pearlCDomainDevOn`). The theorems on `nks` are them at the shapes whose `(n, k)` is in `nks`, and
+  the guarantees over every device record (`Proofs.Pouw.PearlC.DevGap`) are them at W1.
 * **The g is the max of the per-linear g.** `Wins` compares the adversary's online cost with the honest work of its
   correct units `K`, and the adversary picks `K`. The reduction turns TT_OUT's bound on credit into one on `W_ref`
   through `∑_K W_ref ≤ ω·∑_K credit`, so `ω` must bound the credit-weighted mediant of the per-unit ratios over every
@@ -39,6 +43,36 @@ theorem mul_share_le_cast {w C t ω ρ : ℚ} (h : w ≤ ω * ((1 - ρ) * C)) (h
     linarith [show ω * ((1 - ρ) * C) * t = ω * ((1 - ρ) * C * t) by ring]
   exact_mod_cast this
 
+/-- TT_OUT rev1 at a device record gives `G_g` against the kernel's `W_ref` on the domain restricted to the shapes `Ss`,
+at `g = 1 − (399/400)/ω`, where `wrefDevRev1K d c ≤ ω·(1 − ρ)·creditDevRev1` at every shape `Ss` holds of. -/
+theorem pearlCGapDevRev1KOn [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Shape → Prop) (ω : ℚ)
+    (hω0 : 0 < ω) (hω : ∀ s, Ss s → wrefDevRev1K d c s ≤ ω * ((1 - ρ) * creditDevRev1 d s))
+    (hTT : TTOutPearlCDevRev1 CM d sem ρ) :
+    GGap CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) ((1 - (1 - 1 / 400) / ω : ℚ) : ℝ)
+      δPearlC := by
+  have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) →
+      ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
+        (pearlCProtocolDevRev1K d sem ρ c).actOK (U.layout.shape u) act →
+        (pearlCProtocolDevRev1K d sem ρ c).capOK H s' U u act →
+          (pearlCProtocolDevRev1K d sem ρ c).Wref U.layout u ≤
+            (ω : ℝ) * (pearlCProtocolDevRev1K d sem ρ c).credit H s' U u act := by
+    intro U hU H s' u hu act _ hcap
+    have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
+    have h1 : wrefDevRev1K d c (U.layout.shape u) ≤ ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) :=
+      hω _ (hU.2.2 u hu)
+    show (wrefDevRev1K d c (U.layout.shape u) : ℝ) ≤
+      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
+    have : ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) ≤
+        ω * (creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act) :=
+      mul_le_mul_of_nonneg_left (by linarith) hω0.le
+    exact_mod_cast h1.trans this
+  have key := gapFromTTOut CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) (1 / 400) (ω : ℝ)
+    δPearlC (by exact_mod_cast hω0) hW (ttOut_mono_domain (fun _ h => h.1) (ttOut_wref _ hTT))
+  have e : (((1 - (1 - 1 / 400) / ω : ℚ)) : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by push_cast; ring
+  rw [e]
+  exact key
+
 /-- `pearlCGapDevRev1KNK` on a set of linears at any `m`: TT_OUT rev1 at a device record gives `G_g` against the
 kernel's `W_ref` at `g = 1 − (399/400)/ω`, where `wrefDevRev1K d c ≤ ω·(1 − ρ)·creditDevRev1` at every `m × n × k` with
 `(n, k) ∈ nks`. The least such `ω` is the max of the per-linear ratios, and its g the max of the per-linear g. -/
@@ -49,27 +83,42 @@ theorem pearlCGapDevRev1KShapes [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
       wrefDevRev1K d c ⟨m, nk.1, nk.2⟩ ≤ ω * ((1 - ρ) * creditDevRev1 d ⟨m, nk.1, nk.2⟩))
     (hg : g = 1 - (1 - 1 / 400) / ω) (hTT : TTOutPearlCDevRev1 CM d sem ρ) :
     GGap CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) (g : ℝ) δPearlC := by
-  have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) →
-      ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
-        (pearlCProtocolDevRev1K d sem ρ c).actOK (U.layout.shape u) act →
-        (pearlCProtocolDevRev1K d sem ρ c).capOK H s' U u act →
-          (pearlCProtocolDevRev1K d sem ρ c).Wref U.layout u ≤
-            (ω : ℝ) * (pearlCProtocolDevRev1K d sem ρ c).credit H s' U u act := by
-    intro U hU H s' u hu act _ hcap
-    have hc : sem.unitDebitRev1 d H s' U u act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
-    have h1 : wrefDevRev1K d c (U.layout.shape u) ≤ ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) :=
-      hω _ (hU.2.2 u hu) _
-    show (wrefDevRev1K d c (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act : ℚ) : ℝ)
-    have : ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape u)) ≤
-        ω * (creditDevRev1 d (U.layout.shape u) - sem.unitDebitRev1 d H s' U u act) :=
-      mul_le_mul_of_nonneg_left (by linarith) hω0.le
-    exact_mod_cast h1.trans this
-  have key := gapFromTTOut CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) (1 / 400) (ω : ℝ)
-    δPearlC (by exact_mod_cast hω0) hW (ttOut_mono_domain (fun _ h => h.1) (ttOut_wref _ hTT))
-  have e : (g : ℝ) = 1 - (1 - 1 / 400) / (ω : ℝ) := by rw [hg]; push_cast; ring
-  rw [e]
-  exact key
+  subst hg
+  exact pearlCGapDevRev1KOn CM d sem ρ c (fun s => (s.n, s.k) ∈ nks) ω hω0 (fun s hs => hω _ hs s.m) hTT
+
+/-- TT_OUT rev1 per tile, at any `g₀`, gives `GGapSampled` against the kernel's `W_ref` on the domain restricted to the
+shapes `Ss`, at `g = 1 − (1 − g₀)/ω`, where `0 ≤ wrefDevRev1K d c ≤ ω·(1 − ρ)·creditDevRev1` at every shape `Ss` holds
+of. -/
+theorem pearlCSampledDevRev1KOn_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+    (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Shape → Prop) (ω : ℚ)
+    (g₀ : ℝ) (hg₀ : g₀ < 1) (hω0 : 0 < ω) (hw0 : ∀ s, Ss s → 0 ≤ wrefDevRev1K d c s)
+    (hω : ∀ s, Ss s → wrefDevRev1K d c s ≤ ω * ((1 - ρ) * creditDevRev1 d s))
+    (hTT : TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) g₀ δPearlC) :
+    GGapSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss)
+      (1 - (1 - g₀) / (ω : ℝ)) δPearlC := by
+  have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) →
+      ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
+        (pearlCTilesDevRev1K d sem ρ c).capOK H s' U g act →
+        (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤
+          (ω : ℝ) * (pearlCTilesDevRev1K d sem ρ c).credit H s' U g act := by
+    intro U hU H s' g hg act _
+    have hu := auditTiling_unit_lt 64 64 U.layout hg
+    have h1 : wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) ≤
+        ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape ((auditTiling 64 64 U.layout).unit g))) :=
+      hω _ (hU.2.2 _ hu)
+    simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
+    exact mul_share_le_cast h1 (tileShare_nonneg _ _ _)
+  have hWc : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) →
+      ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
+        (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤ (pearlCTilesDevRev1K d sem ρ c).Wref U.layout g := by
+    intro U hU g hg act
+    have hu := auditTiling_unit_lt 64 64 U.layout hg
+    have h0 : 0 ≤ wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) := hw0 _ (hU.2.2 _ hu)
+    simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
+    exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) h0
+  exact gapSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c)
+    (pearlCDomainDevOn d Ss) g₀ (ω : ℝ) δPearlC hg₀ (by exact_mod_cast hω0) hW hWc
+    (ttOutTile_mono_domain (fun _ h => h.1) (ttOutTile_wref _ _ _ hTT))
 
 /-- `pearlCSampledDevRev1KNK_gen` on a set of linears at any `m`. -/
 theorem pearlCSampledDevRev1KShapes_gen [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
@@ -80,30 +129,9 @@ theorem pearlCSampledDevRev1KShapes_gen [Fintype Q] [DecidableEq Q] [Fintype R] 
       wrefDevRev1K d c ⟨m, nk.1, nk.2⟩ ≤ ω * ((1 - ρ) * creditDevRev1 d ⟨m, nk.1, nk.2⟩))
     (hTT : TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) g₀ δPearlC) :
     GGapSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks)
-      (1 - (1 - g₀) / (ω : ℝ)) δPearlC := by
-  have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) →
-      ∀ (H : Q → R) (s' : S), ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
-        (pearlCTilesDevRev1K d sem ρ c).capOK H s' U g act →
-        (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤
-          (ω : ℝ) * (pearlCTilesDevRev1K d sem ρ c).credit H s' U g act := by
-    intro U hU H s' g hg act _
-    have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have h1 : wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) ≤
-        ω * ((1 - ρ) * creditDevRev1 d (U.layout.shape ((auditTiling 64 64 U.layout).unit g))) :=
-      hω _ (hU.2.2 _ hu) _
-    simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
-    exact mul_share_le_cast h1 (tileShare_nonneg _ _ _)
-  have hWc : ∀ U : Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevShapes d nks) →
-      ∀ g < ((pearlCTilesDevRev1K d sem ρ c).tiling U.layout).NT, ∀ act : Codes,
-        (pearlCTilesDevRev1K d sem ρ c).Wcred U.layout g act ≤ (pearlCTilesDevRev1K d sem ρ c).Wref U.layout g := by
-    intro U hU g hg act
-    have hu := auditTiling_unit_lt 64 64 U.layout hg
-    have h0 : 0 ≤ wrefDevRev1K d c (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) := hw0 _ (hU.2.2 _ hu) _
-    simp only [pearlCTilesDevRev1K, pearlCTilesDevRev1]
-    exact_mod_cast mul_le_mul_of_nonneg_left (tileShare_mono _ (passRows_subset sem _ _ _) _) h0
-  exact gapSampled CM (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c)
-    (pearlCDomainDevShapes d nks) g₀ (ω : ℝ) δPearlC hg₀ (by exact_mod_cast hω0) hW hWc
-    (ttOutTile_mono_domain (fun _ h => h.1) (ttOutTile_wref _ _ _ hTT))
+      (1 - (1 - g₀) / (ω : ℝ)) δPearlC :=
+  pearlCSampledDevRev1KOn_gen CM d sem ρ c (fun s => (s.n, s.k) ∈ nks) ω g₀ hg₀ hω0 (fun s hs => hw0 _ hs s.m)
+    (fun s hs => hω _ hs s.m) hTT
 
 /-- `pearlCSampledDevRev1KNK` on a set of linears at any `m`: TT_OUT rev1 per tile at a device record gives
 `GGapSampled` against the kernel's `W_ref` at `g = 1 − (399/400)/ω`, where `0 ≤ wrefDevRev1K d c ≤

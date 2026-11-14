@@ -370,6 +370,11 @@
    "digest": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
    "why": "Route U's instance on the domain: `W_ref` is `wrefU f`, every unit has at least `n₀` columns and `g₀ ≥ d/(3k)`, the conditions `GapFromTTNCP_U_v1` takes inline."
   },
+  "Pouw.PearlC.KernelWithin": {
+   "owner": "@compute-accounting",
+   "digest": "4eaf6aa2d969b8fbbfb3c4c7e70a14c8f4ea349394ff9475771f608427a4f240",
+   "why": "What a gap statement over every device record asks of the record: on the shapes its domain holds, the honest kernel's W_ref is non-negative and within ω of the credit left under the cap, the ω its gap 1 − (1 − 1/400)/ω is a function of."
+  },
   "Pouw.Protocol.WrefWithin": {
    "owner": "@compute-research",
    "digest": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858",
@@ -22959,6 +22964,23 @@
    "type_hash": "484a5865bb47ec8908f82b4f73e13fcc54d4d64f8472920431bf1136e0cc3fb7",
    "unfolded_hash": "d31dd92315d6f2cca2938207e52aa5ac7c40ee25023a75fe5f3c2229940edb64"
   },
+  "Pouw.SecurityProofs.PearlC.GapDevRev1K": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlC.GapDevRev1K : Pouw.Guarantees.PearlC.GapDevRev1K"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pouw.PearlC.KernelWithin"],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "0a8890fcaf01ce7d1e337ca97c4acc61b9ce5d93ea331e7e1ac59161ca107529",
+   "unfolded_hash": "2d62423e7005c20c4f4c9579795965afd98fe31c6e0c9546ed2d82e95299d63e"
+  },
   "Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384 : Pouw.Guarantees.PearlC.GapFp4Sm120_16384"],
@@ -23930,6 +23952,26 @@
    "type_hash": "ce977e24e7cbcf47fc30f4709e41dda9ec3ece88dce12c461fd22d7b91057f85",
    "unfolded_hash": "834cfa917252bb63ebb42a8cdcb5a80ea37f50323b8be9832043f1507855fd4a"
   },
+  "Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K : Pouw.Guarantees.PearlC.HiddenFlockDevRev1K"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pouw.PearlC.KernelWithin"],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
+     "Pouw.PearlC.FlockTile.TileReadBinds",
+     "Pouw.PearlC.FlockTile.TileReadSound",
+     "Pouw.PearlC.HiddenAudit.ProverBounded",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
+   },
+   "type_hash": "b0a2cdf380d5b222e2067dd5b3100450f8b79a6566873fe721e3b7ebb6662db1",
+   "unfolded_hash": "4df997d4aba6177207030286a18a0c1ab16a5c211181e772b1f1ce40d600025b"
+  },
   "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
    "signature": [
@@ -23952,6 +23994,23 @@
    },
    "type_hash": "1e54f1c04ee114ed2c890933ced37f2e30c19cd92e5e38f76578dc52ab5daa1c",
    "unfolded_hash": "2908260473ff052baa58169ed5e8de3f88e263f8f5cbb7abd0fea2bddf0fc4aa"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledDevRev1K": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlC.SampledDevRev1K : Pouw.Guarantees.PearlC.SampledDevRev1K"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pouw.PearlC.KernelWithin"],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
+   },
+   "type_hash": "8b186e7cda530e4e93dca82a5790b37609657d8a2b2cbce9c032d97707da6fb7",
+   "unfolded_hash": "3517828de98c15cf320853abc916d09411af2c2af981af238caa794b851ecc1c"
   },
   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": {
    "owner": "@compute-accounting",
@@ -28265,7 +28324,10 @@
    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
+   "Pouw.SecurityProofs.PearlC.GapDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
+   "Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1W1 (the device's timing at the cap at the W1 machine, W1.w1Priced) at every device record and W1 setting it ranges over, the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (security/Definitions/Pouw/PearlC/FlockTile/Audit.lean:52, :93-97), and it holds trivially for an empty class until TileRead lands. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
+   "Pouw.SecurityProofs.PearlC.SampledDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -39757,6 +39819,14 @@
     "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192": "11eab441930e380feb659354016a36a0971b4435cdd6315dd4cfdf8bf4b42327"
    }
   },
+  "Definitions.Pouw.Guarantees.PearlCDev": {
+   "digest": "1cfe9f1ad3413f9eae3bfe6adbe4d25dc154336a9675a8941ba58d61af84c11a",
+   "definitions": {
+    "Pouw.Guarantees.PearlC.GapDevRev1K": "7a733ce504d4fc9fac5ea2f04a9e138706a5f2756fe44b6d3730ca59134afd4b",
+    "Pouw.Guarantees.PearlC.HiddenFlockDevRev1K": "5cae8c8253f5a3fd269305ace336b9927516fcfaf90ffebe1139f803ac2fa5a0",
+    "Pouw.Guarantees.PearlC.SampledDevRev1K": "65aae056a7c14c7ebe1880bce934157b0519c0df7e8bd15be5486ebc6f94a62d"
+   }
+  },
   "Definitions.Pouw.Guarantees.PearlCFlockTile": {
    "digest": "152c0b1798ad3f204b5f2b3fe0bb6cbcbfc212401e0975f0a811b30864ff0f78",
    "definitions": {
@@ -40378,6 +40448,13 @@
     "Pouw.PearlC.pearlCTilesDevRev1": "e4cb0c810a1a6fed510a49e646b94247e317ea96e749c19c1334ea1d6a162ccb",
     "Pouw.PearlC.prefixCols": "3d2f6160477b8290eb7b68a17f646b7d44bf7a4e1c6054e25b4f1bebd5f96697",
     "Pouw.PearlC.wrefDevRev1": "82090ae714a525de44db217cfd62d293cf628d4e03e99c22b990179b706dd0ab"
+   }
+  },
+  "Definitions.Pouw.PearlC.DeviceWithin": {
+   "digest": "a09e7af316cfd52cec7f6cfe004a2d6f89004676ec48484015ae70cf680edc57",
+   "definitions": {
+    "Pouw.PearlC.KernelWithin": "4eaf6aa2d969b8fbbfb3c4c7e70a14c8f4ea349394ff9475771f608427a4f240",
+    "Pouw.PearlC.pearlCDomainDevOn": "c22242c94576a16131c666722ddf9ae45dbd69189d4ced412085f97bd9e3953a"
    }
   },
   "Definitions.Pouw.PearlC.FlockTile.Audit": {
