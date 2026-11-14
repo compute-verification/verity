@@ -4476,6 +4476,12 @@
       "paths": {
         "verity/protocols/accounting/pous/prover/wipe_on_node.py": "benchmarks/pous/streamed_wipe/wipe_on_node.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/": "adapters/vllm/verity_vllm/protocols/poub/",
+        "adapters/vllm/tests/protocols/remote_bandwidth/": "adapters/vllm/tests/protocols/poub/"
+      }
     }
   ]
 }
