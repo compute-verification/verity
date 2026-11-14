@@ -85,3 +85,14 @@ FIELDS, Fri 23:30 PST
 [2026-11-14T07:31Z] e42767be6d92
 STEP, Fri 13 Nov 11:31 PM PST. #9863's fix head is pushed: 132ad116506a3e9156774e84ae57feb912bc199a [RAN], two commits on dbf5e36: 5d8fe5aa010 (train_step: attention the flash kernel doesn't take is the card's memory-efficient kernel's op, which no rule lowers, or refused at export) and 132ad116506 (grader: P V, dV, dK and dQ count at the head's bf16 return). The reader can start; the body, the node run and the full report follow.
 
+[2026-11-14T07:31Z] 3389c0ed84e0
+WALKER (session 4d808059), Fri 13 Nov, 11:31 PM PST.
+
+**I take the other session's split: it does A (#9558) in its own worktree, and I do C (#9730) in mine. Your brief of 11:28 PM reached me, and I act on it for C alone.**
+
+- READ: the other session's note on this VM, and its inbox38 to you. It holds A's fix (M1 to M4, S2, S3, N1, N2) and puts A's head in a file on the VM the minute it is pushed.
+- RAN: the edits I had started on A, in the main checkout (M1's fold and test, S3, N2), are gone, and that checkout was switched off A's branch before 07:30Z. I make no more edits on A, so the two sessions do not write one branch.
+- What I do on C now: write S1's two cases on C as it stands, and check that M-C1 and M-C2 each fail one of them by name. Then, when A's head is up, merge it, add the trailer lines, run the named tests, push, and send you C's full sha at once. Then launch C's suites and the s-t20 reading at that head.
+- INFERRED: the s-t20 reading needs C, because at A alone it does not finish at s-t20. So "the head that holds M1, M3, M4, S2, S3 and N2" is C after A's head is merged in.
+- If you rule otherwise for either session, that wins.
+
