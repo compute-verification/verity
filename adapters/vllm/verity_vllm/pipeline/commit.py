@@ -2031,7 +2031,7 @@ def main(args: Options) -> None:
 
 def write_verdict(cfg: CommitConfig, *, versions: dict, rows: list[dict], step_rows: list[dict], decl: Any | None,
                   decls: dict[str, dict], required_classes: tuple[str, ...], fa_version: int | None, moe_attached: bool,
-                  flip_weight_rec: dict | None, replay_cache: dict[str, dict[str, Any]], first_run: dict[str, object],
+                  flip_weight_rec: dict | None, replay_cache: dict[str, dict[str, Any]], first_run: dict[str, Any],
                   protocols: PO.Composition | None, engine_kw: dict[str, Any], deferred: dict[int, dict[str, Any]]) -> None:
     """What a Commit writes once its runs are over and its committers closed, the timeline's ``closure.summary``: the summary
     (of the one arm under ``--only-arm``, of the pairs, or of each treatment arm against the control), then the verdict, which
@@ -2049,7 +2049,7 @@ def write_verdict(cfg: CommitConfig, *, versions: dict, rows: list[dict], step_r
     TL.start("closure.summary")
     if args.only_arm:
         # one arm per process: the paired summary (delta, CI) is produced by compiled_merge from both runs.jsonl files
-        summary = {"schema": SCHEMA + "/only-arm", "only_arm": args.only_arm, "runs": len(rows), "versions": versions, "declaration": decl,
+        summary: dict[str, Any] = {"schema": SCHEMA + "/only-arm", "only_arm": args.only_arm, "runs": len(rows), "versions": versions, "declaration": decl,
                    "wall_s": [r["wall_s"] for r in rows], "commit_pass": (RB.pass_of(rows) if args.only_arm == "instrumented" else None),
                    "table_md": f"only-arm {args.only_arm}: {len(rows)} runs, wall {[round(r['wall_s'], 4) for r in rows]}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str) + "\n")
@@ -2094,7 +2094,7 @@ def write_verdict(cfg: CommitConfig, *, versions: dict, rows: list[dict], step_r
     # error, openings all verified, tokens equal); otherwise the first reason is printed and recorded and the process exits 3
     fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not RB.commit_of(r).get("commit_pass") and not RB.awaits_replay(r["commit"])]
     pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(RB.commit_of(r))]
-    verdict = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
+    verdict: dict[str, Any] = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
                "runs_failed": len(fails), "first_fail_reason": (fails[0][2] if fails else None),
                "required_classes": list(required_classes), "required_classes_source": (
                    f"program/query manifest {required_manifest['manifest_digest']} (R14 MAN-01; classes kept as a secondary check)" if required_manifest is not None else
