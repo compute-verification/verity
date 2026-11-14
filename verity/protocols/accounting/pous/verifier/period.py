@@ -388,6 +388,18 @@ def decided_by(exe: str | os.PathLike | None) -> dict[str, str]:
     return {"program": "python" if exe is None else Path(exe).name, "host": socket.gethostname()}
 
 
+#: why a PoUS answer no `pous-run-protocol` gave is undecided where the Python accepted (`unjudged`)
+NO_JUDGE = "no pous-run-protocol answered the case: the Lean decides PoUS, and the Python's accept decides nothing alone"
+
+
+def unjudged(answer_: Mapping[str, Any], reason: str = NO_JUDGE) -> dict[str, Any]:
+    """A Python answer with no Lean to ask: its reject or undecided, which the Python may give alone, and undecided for
+    its accept (`reason`), with no public outputs and no profile."""
+    if answer_["verdict"] != "accept":
+        return dict(answer_)
+    return dict(answer_) | {"profile": None, "public": None, "reason": reason, "verdict": "undecided"}
+
+
 def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> mc.LmsSigner:
     """The memory challenger's key at S1's deployed parameters in `directory`, made there once (its seed from the OS, its
     tree computed in `workers` processes, all of them by default) with its leaf state beside it, so each session signs at
@@ -561,7 +573,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
     (`challenger_session.side_of`; on this node by default, a process whose key and session log are beside the periods)
     and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
-    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
+    answers and must agree with the Python; without `pous-run-protocol` the Python's reject or undecided stands and its
+    accept is undecided (`unjudged`). It writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
     whether `trusted-device`'s premise holds (`challenger_session.placement`, of the key the session was signed under),
     and that setup was checked by the developer, not the auditor (`challenger_session.SETUP`), go in `pous.json` and in
@@ -592,6 +605,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
         answer = lean["run"]
+    else:
+        answer = unjudged(answer)
     if fresh and "pous-setup" in tools:
         lean["setup"] = serve(tools["pous-setup"], [period.setup_case])[0]
         if lean["setup"]["verdict"] != "accept":
@@ -610,7 +625,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "EncodedStore", "Period", "Prover", "Run", "SetupInputs",
+__all__ = ["LEDGER_SCHEMAS", "NO_JUDGE", "PROTOCOL", "SETUP_WORKERS", "EncodedStore", "Period", "Prover", "Run", "SetupInputs",
            "answer", "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps",
            "honest", "leg", "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs",
-           "setup_store", "tie"]
+           "setup_store", "tie", "unjudged"]

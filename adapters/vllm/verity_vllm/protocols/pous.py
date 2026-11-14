@@ -443,7 +443,7 @@ class PousOption(Option):
         challenger at ``period.json``'s ``challenger_host`` (`challenger_session.side_of`, its side's key and session log
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
-        Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
+        Python's; where they name none, the Python's accept is undecided (`period.unjudged`).  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
         returns the answer, its profile carrying where each party ran, whether `trusted-device` holds, which only the
         key the session was signed under decides, and that setup was checked by the developer, not the auditor
         (`challenger_session.placement`).  ``schemes`` and
@@ -468,6 +468,8 @@ class PousOption(Option):
             if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
                 raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
             answer = lean["run"]
+        else:
+            answer = period.unjudged(answer)
         if fresh and "pous-setup" in tools:
             lean["setup"] = period.serve(tools["pous-setup"], [got.setup_case])[0]
             if lean["setup"]["verdict"] != "accept":

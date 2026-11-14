@@ -246,26 +246,46 @@ def _in_process_party(signer, log):
     return session, calls
 
 
-def _period_dir(tmp_path, n: int):
+def _period_dir(tmp_path, n: int, tools: dict[str, str] | None = None):
     d = tmp_path / "periods" / f"p{n}"
     d.mkdir(parents=True)
     (d / "period.json").write_text(json.dumps({"challenger_host": AUDITOR, "challenger": {"pous": {
         "command": ["ssh", AUDITOR, "uv", "run", "python", "-m", CS.MODULE, "--device", "pous-challenger",
-                    "--listen", "0.0.0.0:7710"], "address": f"{AUDITOR}:7710"}}}))
+                    "--listen", "0.0.0.0:7710"], "address": f"{AUDITOR}:7710"}}} | ({"tools": tools} if tools else {})))
     return d
+
+
+#: stand-ins for the period's Lean tools, which `_judges` answers for
+JUDGES = {"pous-run-protocol": "RUN", "pous-setup": "SETUP"}
+
+
+def _judges(monkeypatch) -> list:
+    """`period.serve` answering for `JUDGES` as the Lean does of an honest period: the run tool with the Python's
+    answer, the setup tool with an accept. Returns the Python's runs, in order."""
+    audit, runs = period.audit, []
+
+    def audited(*args, **kw):
+        runs.append(audit(*args, **kw))
+        return runs[-1]
+
+    monkeypatch.setattr(period, "audit", audited)
+    monkeypatch.setattr(period, "serve", lambda exe, cases: [runs[-1].answer if exe == "RUN" else {"verdict": "accept"}])
+    return runs
 
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
     """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits, and that its setup
-    was checked by the developer, not the auditor."""
+    was checked by the developer, not the auditor. The Lean's tools are stand-ins that answer as the Python
+    (`_judges`)."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CS, "session", session)
+    _judges(monkeypatch)
     with PO.install(toy, _ctx(ENTRY)) as comp:
         opt = comp.get("pous")
         for n in (0, 1):
             out = tmp_path / f"out{n}"
-            got = opt.leg(_period_dir(tmp_path, n), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+            got = opt.leg(_period_dir(tmp_path, n, JUDGES), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-device"] == (   # the test signer's key is no auditor's pinned key
@@ -279,6 +299,20 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
         party, request = calls[0]
         assert party.host == AUDITOR and party.address == (AUDITOR, 7710)
         assert request == CS.request_of(NODE, opt.store.point, opt.store.root) and opt.periods == 2
+
+
+def test_a_period_whose_tools_name_no_lean_is_undecided_where_the_python_accepts(toy, tmp_path, monkeypatch):
+    """`PousOption.leg` with no ``pous-run-protocol`` among the period's tools: the Python's accept of an honest period
+    decides nothing alone, so the answer is undecided with `period.NO_JUDGE`, no public outputs and no profile."""
+    session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
+    monkeypatch.setattr(CS, "session", session)
+    runs = _judges(monkeypatch)
+    with PO.install(toy, _ctx(ENTRY)) as comp:
+        got = comp.get("pous").leg(_period_dir(tmp_path, 0), NODE, tmp_path / "out", schemes=ts.SCHEMES,
+                                   protocol=TEST_PROTOCOL)
+    assert runs[0].answer["verdict"] == "accept", runs[0].answer["reason"]
+    assert got["verdict"] == "undecided" and got["reason"] == period.NO_JUDGE
+    assert got["public"] is None and got["profile"] is None
 
 
 def test_a_dropped_block_rejects(toy, tmp_path):
