@@ -185,6 +185,28 @@ def test_under_gate_verdict_a_plain_candidate_whose_quick_tier_fails_is_a_red_of
         "step pytest", [f"pkg::{NEW}"], ["pkg/tests/test_x.py"], "own")
 
 
+def test_under_gate_verdict_a_quick_tier_that_ended_in_infra_is_started_again_on_another_machine(env, monkeypatch):
+    """A plain candidate's quick tier ends with no report of the tier: infra, no red.  The loop starts it again, as it starts
+    a check again, on another of the queue's machines than the one it ended so on, and the candidate lands on that one."""
+    below = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs, quick = _verdict(env, monkeypatch)
+    _, built, started = loop.tick()
+    sha = built["sha"]
+    runs.end(below)
+    (d := runs.tmp / "q-1").mkdir(parents=True)
+    (d / "result.json").write_text("{}")
+    runs.state["q-1"] = ("done", 1, None)
+    logged = loop.tick()
+    assert _acts(logged)[-2:] == ["retry", "slim"] and env.main() == below
+    again = logged[-1]["record"]
+    assert (again["gate"], again["ids"]) == (vqueue_slim.QUICK, ["q-2"]) and logged[-1]["why"].startswith("started again")
+    (first, second) = (m for _, _, m in quick.launches)
+    assert first == started["record"]["on"] and second == again["on"] and second != first
+    quick.end(sha)
+    assert "advance" in _acts(loop.tick()) and env.main() == sha
+
+
 def test_under_gate_verdict_a_plain_candidate_falls_back_to_the_whole_check_once_a_member_has_no_land_verdict(env, monkeypatch):
     """A member's land verdict is gone from its head while its candidate's quick tier runs: the candidate isn't plain, so its
     whole check starts in the quick tier's place."""

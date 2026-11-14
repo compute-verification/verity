@@ -397,15 +397,16 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     return rec if _go(driver, rec, go, gone) is None else None
 
 
-def start_quick(driver: Landing, sha: str, base: str) -> dict | None:
+def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
     """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
-    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one.  The record to
+    `research run`) on one of the queue's machines, the one its sha picks of those but ``avoid`` (the machine its tier before
+    ended in infra on, ``erred_on``; all of them when that leaves none), so a start again takes the same one.  The record to
     keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
     (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
     ``driver`` launches nothing (a dry run, or its queue's shadow)."""
     if not driver.on:
         raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
-    ms = driver.on.split(",")
+    ms = elsewhere(driver.on, avoid).split(",")
     on = ms[int(sha[:8], 16) % len(ms)]
     what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
     if driver.dry_run or driver.q.shadow:
@@ -425,7 +426,8 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     (`queue.judge_report`, each failure an allowance at ``base`` covers counting as passed): pass; fail, ended, when only suites
     failed, one `Failed` of step `QUICK_STEP` as the check's (`read_suite` of each, what it declares at the candidate,
     `suite_reads`), so `vqueue.decide` reads it as it reads the check's; infra when it registered no run, was lost, never ran
-    or ended without its facts (`queue.tier_report`), or failed on what no suite says (a Lean build, a checkout not at it)."""
+    or ended without its facts (`queue.tier_report`), or failed on what no suite says (a Lean build, a checkout not at it);
+    infra of a run that was lost or ended keeps its machine as ``erred_on``, which a start again avoids (`start_quick`)."""
     tip, base = rec["tip"], rec["base"]
     if (tail := driver._resolve(rec, f"the quick tier of candidate {tip[:12]}")) is not None:
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -435,7 +437,7 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
         return _keep(rec, _down(rec, "registered no run"))
     states = driver.states(driver.repo, ids)
     if driver._lost(rec, states):
-        return _keep(rec, _down(rec, "was lost"))
+        return _keep(_erred(rec), _down(rec, "was lost"))
     st, rc, *_ = states.get(ids[0]) or ("unknown", None)
     if st in ACTIVE:
         return Verdict(PENDING)
@@ -444,7 +446,7 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
     res, why = tier_report(got[0], ids[0], on, status)
     if why is not None:
-        return _keep(rec, _down(rec, f"{why}"))
+        return _keep(_erred(rec), _down(rec, f"{why}"))
     covers = allowed(driver.repo, base)
     if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
         return _keep(rec, Verdict(PASS), [QUICK_STEP])
@@ -452,11 +454,18 @@ def _quick(driver: Landing, rec: dict) -> Verdict:
     rows = [r for r in tier.get("rows") or () if isinstance(r, dict) and r.get("status") == "failed"
             and not (covers is not None and covers(r))]
     if not rows or quick_tier.judge({**tier, "rc": 0}, tip) is not None:
-        return _keep(rec, _down(rec, f"failed on what no suite says: {why}"))
+        return _keep(_erred(rec), _down(rec, f"failed on what no suite says: {why}"))
     k = key(driver.repo, tip, QUICK_STEP) or f"{tip}:{QUICK_STEP}"
     parts = [read_suite(r.get("name") or r.get("suite") or ".", r, "", unnamed(k),
                         *suite_reads(driver.repo, tip, r.get("suite") or ".")) for r in rows]
     return _keep(rec, Verdict(FAIL, (_failure(QUICK_STEP, k, key(driver.repo, base, QUICK_STEP), parts),), ended=True), [])
+
+
+def _erred(rec: dict) -> dict:
+    """``rec``, a quick tier's record, keeping the machine it ran on as ``erred_on``."""
+    if rec.get("on"):
+        rec["erred_on"] = [rec["on"]]
+    return rec
 
 
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:

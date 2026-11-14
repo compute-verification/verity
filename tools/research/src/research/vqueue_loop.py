@@ -3428,7 +3428,7 @@ class Loop:
         if self._quick(line):
             try:
                 with self.steps("launch"):
-                    rec, error = self.slim.start_quick(d, line["sha"], line["base"]), None
+                    rec, error = self.slim.start_quick(d, line["sha"], line["base"], *([tuple(avoid)] if avoid else [])), None
             except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
                 rec, error = None, f"{type(e).__name__}: {e}"[-600:]
             return self._line(n, main, origin, "slim", **line, why=f"{why}: the quick tier, its members' land verdicts gating it",
