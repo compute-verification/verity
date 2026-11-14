@@ -10,7 +10,7 @@ session, and `verity/protocols/compose/device/live_challenger/coin_link.py` runs
 
 ### The path
 
-The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor host, the device that
+The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor device, the device that
 runs the server's network certifier (`trusted-host`). A window's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
@@ -69,7 +69,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
   The record comes before `serve.py` listens, and the link starts after it listens, so no challenger frame reaches the
   prover before the prover's root is in the ledger. The gate's `open` answer carries the commitment root too. It is
   given after the open entry, and on the gate's own ssh channel, which carries no coin.
-- **WitnessPathPrivate.** The coins leave the trusted host only inside the tunnel's ssh channel. That channel goes
+- **WitnessPathPrivate.** The coins leave the trusted device only inside the tunnel's ssh channel. That channel goes
   straight to the server's own sshd: the link sets `ProxyJump` and `ProxyCommand` to `none`, and refuses a peer whose
   line names a jump host or a proxy (`jump`). From the server's sshd to the prover's client is the server's loopback.
   So the hop from the certifier to the server crosses no developer-controlled host beyond the server itself, and what the
@@ -79,7 +79,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 
 The challenger's premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock`, named in
 `verity/protocols/proofs/spot/verifier/README.md`.
-Here the challenger and the link are one device, the trusted host: the coins cross only its loopback until the link
+Here the challenger and the link are one device, the trusted device: the coins cross only its loopback until the link
 releases them, and the link's ticks read the host's monotonic clock, which the challenger's release log reads too (RP8).
 
 ### Parameters and record

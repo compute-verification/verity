@@ -162,7 +162,7 @@ sparse noise with row tags and three certifier-streamed coin lanes, every k32 wo
 - ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
 - the copy model is tile grain;
 - hiding is the keyed leaf, d = SHA-512(ks_w ‖ salt_w ‖ M_top);
-- the certifier is the coin source, on a trusted host;
+- the certifier is the coin source, on a trusted device;
 - the network term and whole-step coverage are reported beside T1;
 - the fold is exact on |A·Bᵀ| ≤ 2^22;
 - stock's decode price is reported both ways.

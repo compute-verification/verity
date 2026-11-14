@@ -214,7 +214,7 @@ def test_the_machines_deployed_tool_rules_judge_the_package_that_answers(tmp_pat
 
 
 def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, monkeypatch):
-    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor host runs its own service and nothing else, so the
+    """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor device runs its own service and nothing else, so the
     launcher refuses any other command before anything starts, a listed one with an extra argument or a wrapper among them, and a
     marker it can't read lets nothing through."""
     marker = tmp_path / "auditor"
