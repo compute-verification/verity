@@ -204,6 +204,44 @@ def test_a_late_round_ends_the_session_with_no_retry():
     assert judge(*on_time).accepted
 
 
+def form(doc):
+    """`doc` with every string replaced by its length and every integer by its type: what its bytes say about its shape."""
+    if isinstance(doc, dict):
+        return {k: form(v) for k, v in doc.items()}
+    if isinstance(doc, list):
+        return [form(v) for v in doc]
+    return len(doc) if isinstance(doc, str) else type(doc).__name__
+
+
+def test_a_late_sessions_release_is_a_complete_ones_in_form():
+    complete, signed, signer = session()
+    late = mc.MemoryChallenger(coins(hashlib.sha512(b"late").digest()[:32]), signer, log=ts.session_log(), limit_ns=LIMIT,
+                               block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
+    clock = late.clock
+    while not late.done:
+        i = late.challenge()
+        clock.now += LIMIT + 1 if len(late.rounds) == 1 else 20_000
+        late.receive(block(i))
+    assert late.close().ended == mc.LATE and len(late.rounds) == 2
+    assert [o.j for o in late.openings()] == [o.j for o in complete.openings()] == list(range(K))
+    assert late.openings() == late.coins.release().openings and complete.openings() == complete.coins.release().openings
+    a, b = complete.coins.release(), late.coins.release()
+    assert a != b and form(a.to_json()) == form(b.to_json())
+    assert all(mc.verify_coin(late.commitment, o) for o in late.openings())
+    assert mc.Release.from_json(b.to_json()) == b
+    assert judge(late, late.signed, signer).reasons == (f"the session ended late after 2 of {K} rounds",
+                                                        f"1 answers are past Δ + RTT = {LIMIT} ns")
+
+
+def test_a_coin_tree_with_no_session_releases_the_same_form():
+    tree = coins()
+    released = tree.release()
+    assert (released.session, released.coin_root, released.coin_key) == (SESSION, tree.root, KEY)
+    assert released.openings == tuple(tree.opening(j) for j in range(K))
+    c, _, _ = session()
+    assert form(released.to_json()) == form(c.coins.release().to_json()) and released == c.coins.release()
+
+
 def test_no_collection_runs_inside_the_rounds() -> None:
     seen: list[bool] = []
     c, signed, signer = session(respond=lambda i: (seen.append(gc.isenabled()), block(i))[1])

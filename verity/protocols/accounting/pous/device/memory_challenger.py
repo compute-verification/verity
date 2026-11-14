@@ -20,7 +20,8 @@ A session has four steps:
    clear.
 4. **Release.** Once the session is signed the memory challenger releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
-   `SessionCommitment`) and opens every coin it revealed (`openings`).  Both refuse before the signature.
+   `SessionCommitment`) and opens all `k` coins (`openings`, `CoinTree.release`), however the session ended.  Both
+   refuse before the signature.
 
 `verdict` is what the prover will prove about a signed session, here checked in the clear.  It checks the signature
 under a trusted key and an accepted scheme, the header against the commitment, every revealed index against its coin
@@ -176,6 +177,26 @@ class CoinOpening:
         return cls(int(doc["j"]), int(doc["index"]), bytes.fromhex(doc["salt"]), tuple(bytes.fromhex(p) for p in doc["path"]))
 
 
+@dataclass(frozen=True, slots=True)
+class Release:
+    """A coin tree released whole: the session, the tree's root and hm96 key, and all `k` coins opened in round order.
+    Its form is fixed by the tree alone, so a session that ended late releases what a complete one does."""
+
+    session: bytes
+    coin_root: bytes
+    coin_key: bytes
+    openings: tuple[CoinOpening, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {"session": self.session.hex(), "coin_root": self.coin_root.hex(), "coin_key": self.coin_key.hex(),
+                "openings": [o.to_json() for o in self.openings]}
+
+    @classmethod
+    def from_json(cls, doc: Mapping[str, Any]) -> Release:
+        return cls(bytes.fromhex(doc["session"]), bytes.fromhex(doc["coin_root"]), bytes.fromhex(doc["coin_key"]),
+                   tuple(CoinOpening.from_json(o) for o in doc["openings"]))
+
+
 class CoinTree:
     """The session's `k` coins over `blocks` blocks, sampled and committed on the device before the session and released
     after it (module docstring).  `draw` takes the challenger's own secret, never a public beacon or the server's; the
@@ -206,6 +227,9 @@ class CoinTree:
 
     def opening(self, j: int) -> CoinOpening:
         return CoinOpening(j, self.indices[j], self.salts[j], _path(self._levels, j))
+
+    def release(self) -> Release:
+        return Release(self.session, self.root, self.key, tuple(self.opening(j) for j in range(self.k)))
 
 
 def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
@@ -635,10 +659,11 @@ class MemoryChallenger:
         return self.signed
 
     def openings(self) -> tuple[CoinOpening, ...]:
-        """The coins of every revealed round, opened once the session is signed."""
+        """All `k` coins (`CoinTree.release`), opened once the session is signed: how many is fixed by `k`, never by the
+        round the session ended at."""
         if self.signed is None:
             raise RuntimeError("the coins are opened after the session, once it is signed")
-        return tuple(self.coins.opening(r.j) for r in self.rounds)
+        return self.coins.release().openings
 
 
 @contextmanager
@@ -713,7 +738,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMPLETE", "HM96", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening",
-           "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog", "SessionCommitment", "SessionLog",
+           "CoinTree", "LmsSigner", "MemoryChallenger", "Release", "Round", "SaltLog", "SessionCommitment", "SessionLog",
            "SessionLogError", "SignedSession", "Signer",
            "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
            "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
