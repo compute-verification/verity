@@ -17,7 +17,7 @@ import all Init.Data.String.Defs
 commitment, and the execution phase's context names the pass by its SHA-512. A pass salted by execution-phase coins (`MANIFEST_SCHEMA`)
 carries the execution phase's commitment, which must be the challenger's, and its salt coin's opening, opened after the weights'
 root (`coinReasonAt`); a live Pearl-C pass, whose manifest's coins are a live session's, took its salt coin from a
-salt-only session of the auditor host's challenger opened on its salt execution phase's root, which its verifier reads only through
+salt-only session of the auditor device's challenger opened on its salt execution phase's root, which its verifier reads only through
 the auditor's ledger and the session's own files (`{key, ledger, main, pins, session}`, `livePassSalt`), never the
 pass's word; a pass recorded before the execution phase's coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon. Either
 way the manifest's salt must be the execution phase's. A certified execution phase's verifier holds the network certifier's salt for

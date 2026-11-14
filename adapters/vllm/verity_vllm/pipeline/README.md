@@ -71,7 +71,7 @@ modules' tests still read through it: `INSTANCES_FORM_ENV`, `fold_summary_result
 The Commit serves a row's workload with the committer attached and holds what it committed to what it served. `commit`
 is the stage (`verity-vllm commit`), and `commit_arb` the served Commit under seeded varied traffic. Before the GPU is
 held, `commit_plan` derives the plan the Commit reads. `commit_attach` gives a built committer the classes, sources,
-taps and hooks its required-value manifest asks for; `commit_coins` takes the Commit's coins from the auditor host's
+taps and hooks its required-value manifest asks for; `commit_coins` takes the Commit's coins from the auditor device's
 challenger, one challenge phase a Commit; `gpu_lease` runs a leased Commit, whose GPU phase alone holds a GPU.
 `c2_replay` is the C2 of record of one instrumented run, the sampled replay and the boundary linkage over its
 committed store, in the Commit's process or on CPU. A Commit with `--replay-deferred` leaves a sealed bundle instead

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Publish the auditor host's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
+# Publish the auditor device's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
 # the watchers loop `challenger-publish` (infra/control/watchers.toml), so no agent VM has to be up for it:
 #
-#   verity/protocols/compose/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor host's gate, USER@HOST
+#   verity/protocols/compose/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor device's gate, USER@HOST
 #
 # Without DEST the gate is research@ the address $VY_CHALLENGER_1_HOST holds; with neither, it ends at once and says so.
 # It reads both through the gate's `ledger` and `fetch SESSION` verbs: as research, with a key the host forces to the gate (the

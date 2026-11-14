@@ -1,4 +1,4 @@
-"""`minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor host's run's end, written
+"""`minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor device's run's end, written
 only for an accepting ``VERDICT`` line of the goal's seven checks, from a research run, on a commit of main."""
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def line(verdict: str = "accept", run: str = "r-prover", **components: str) -> s
 
 
 def demo(root: Path, sha: str, *log: str) -> list[str]:
-    """The prover node's run, 06:42:19Z to 08:07:28Z, and the auditor host's, to 08:50:31Z, whose log is ``log``."""
+    """The prover node's run, 06:42:19Z to 08:07:28Z, and the auditor device's, to 08:50:31Z, whose log is ``log``."""
     out = []
     for rid, started, ended, lines in (("r-prover", "06:42:19", "08:07:28", ()),
                                        ("r-auditor", "08:10:00", "08:50:31", log)):

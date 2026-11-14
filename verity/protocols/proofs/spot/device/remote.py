@@ -1,7 +1,7 @@
 """The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
-prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor host, that port is
+prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor device, that port is
 one of the prover machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in
 this package's README); in development
@@ -47,7 +47,7 @@ a coin other than its family's next (coin i after the family's i-th root, once: 
 bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
 monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
-is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener) refuses a hello
+is written.  A session served with a `secret` (the auditor device's gate gives one to the window's opener) refuses a hello
 that doesn't carry it, so no other process that reaches the port takes the session's coins first.  `greet` reads the
 hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases nothing.
 
@@ -77,7 +77,7 @@ so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retri
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head the auditor
-host's operator published
+device's operator published
 (`ledger_lines`, `challenger.ledger_head`): the commitment the challenger signed and the roots its signed release log
 shows it received (`challenger.session_named`), its record, close and refused hellos the files the ledger's end sealed,
 against which a family's openings are `order_reason`'s.  An
@@ -763,7 +763,7 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
 
 def main_lines(path: str | os.PathLike) -> list[str]:
     """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
-    newlines; a missing or unreadable file raises `CoinError`.  The auditor host's operator writes the file at each
+    newlines; a missing or unreadable file raises `CoinError`.  The auditor device's operator writes the file at each
     re-pin from ``git rev-list --first-parent origin/main``, so its lines are main's first-parent commits.  A deployment
     that measures `pouw.credit`'s freshness floor against the checked heads instead (the commits whose own ``check``
     passed and landed them, less a reverted one's) writes those heads to the same file."""
@@ -776,7 +776,7 @@ def main_lines(path: str | os.PathLike) -> list[str]:
 def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], window: Any, key: ChallengerKey,
                     verify: Verify) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the verifier takes from the challenger's directory for window `window`, read on the auditor's side: the
-    auditor's ledger as the auditor host's operator published it, every head at `heads` checked and the longest taken
+    auditor's ledger as the auditor device's operator published it, every head at `heads` checked and the longest taken
     (`challenger.ledger_head`);
     the one session it opens for the window, under the challenger key the window's deployment pins, `key`
     (`challenger.audited_session`); its record, close and refused hellos the files the ledger's end sealed; and from that
