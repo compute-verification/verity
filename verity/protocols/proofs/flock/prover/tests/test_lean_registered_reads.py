@@ -31,7 +31,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, regi
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 FIXTURE = "art:bf70d8eb"
 STATEMENT = "verity/flock-circuit"
 UPSTREAM_STATEMENT = "verity/flock-circuit@967b8d06"
@@ -77,7 +77,7 @@ def stage(d: Path) -> SimpleNamespace:
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
     part = P.partition(program, query)
     s = InputSet.open(synthetic_set(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
@@ -598,7 +598,7 @@ def rope(tmp_path_factory):
         root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return root
 
 

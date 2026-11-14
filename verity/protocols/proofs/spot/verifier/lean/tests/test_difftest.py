@@ -4210,7 +4210,7 @@ def _second_statement(rec: dict, part: SS.Part, q: int, drawn, named: bool, regi
 
 
 def _checked_names(s) -> dict:
-    """What `flock-verify verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
+    """What `verity-verify-proof verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
     its public file's header and its registered reads by the SHA-512 of their canonical JSON, its sample, and one table,
     as the verifier runs it."""
     if not isinstance(s, dict):

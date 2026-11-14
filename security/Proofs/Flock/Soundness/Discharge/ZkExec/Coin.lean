@@ -27,7 +27,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 `repShapeZ` at every result whose Ligerito part is not a reject (`repZCAt_spineAt`), and a table that accepts has no
 such result (`accZ_lig`).
 
-* `RunsZC`: the message half, named. On every live outcome flock-verify `--zk` accepts, each rep has a `RepRun` on its
+* `RunsZC`: the message half, named. On every live outcome verity-verify-proof `--zk` accepts, each rep has a `RepRun` on its
   rounds along `repShapeZ`, with `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends.
 * `decodesZK_of_runsZC`: `RunsZC` gives `DecodesZK` at the compiled table.
 * `RunsOnZC`, `decodes_of_runsOnZC`: the same at the sampling design's samples only, for a decoder that is right only where the
@@ -69,7 +69,7 @@ variable (I : Inputs) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Tra
   (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → Cap D) (N : ℕ)
 
 /-- **The message half of `DecodesZK` at the compiled `--zk` table**: at every sample and registration, on every live
-outcome whose session directory flock-verify `--zk` accepts, each rep has a `RepRun` on its rounds along `shapeZ`, with
+outcome whose session directory verity-verify-proof `--zk` accepts, each rep has a `RepRun` on its rounds along `shapeZ`, with
 `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends, with the cap `root_B` decodes to and
 the openings the proof files decode to. -/
 def RunsZC : Prop :=
@@ -93,7 +93,7 @@ theorem decodesZK_of_runsZC (h : RunsZC A Hs T I wr opn dec fin capOf) :
     hacc⟩
 
 /-- **`RunsZC` at the sampling design's samples**: `RunsZC`'s conclusion at the samples `L.draw ω` only, on every live outcome whose
-session directory flock-verify `--zk` accepts there. -/
+session directory verity-verify-proof `--zk` accepts there. -/
 def RunsOnZC (L : Law n) : Prop :=
   ∀ ω R (o : LiveOut mPts), AcceptsZK I (wr (L.draw ω) R o) →
     ∃ pend : ZkLink.PendZ 𝔽 D Sl × ZkLink.PendZ 𝔽 D Sl,
@@ -122,7 +122,7 @@ variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fi
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the live sample under A3, from the message half**:
+/-- **The `--zk` headline at verity-verify-proof's acceptance, at the live sample under A3, from the message half**:
 `zk_headline_exec_zc_execOS` with `hrun : RunsZC …` in place of `hdec`, through `decodesZK_of_runsZC`. -/
 theorem zk_headline_exec_zc_runs (hlow : LoweringSoundZK A P (planOne T) tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

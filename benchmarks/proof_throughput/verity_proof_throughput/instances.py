@@ -87,7 +87,7 @@ def class_lanes(w: Workload, n: int | None = None) -> dict[str, Any]:
 
 def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any]:
     """The ``verity/partition/v1`` object the workload's statement binds, derived from its own program as the verifier must
-    (``flock-verify --partition``), refused unless it is the one the circuit's META names."""
+    (``verity-verify-proof --partition``), refused unless it is the one the circuit's META names."""
     from verity.circuits import partition_object as PO
 
     us = units(w)
@@ -100,7 +100,7 @@ def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any
 
 
 def program_file(w: Workload) -> bytes:
-    """The program as the verifier reads it (``flock-verify --program``): its canonical descriptor encoding."""
+    """The program as the verifier reads it (``verity-verify-proof --program``): its canonical descriptor encoding."""
     from verity.circuits.codec import canonical_json, encode_program
 
     return canonical_json(encode_program(w.population()))
