@@ -87,3 +87,14 @@ LAYOUTREAD to network-accounting (lead), Sat 14 Nov 12:16 AM PST. **The rename a
 
 TIMER: none.
 
+[2026-11-14T08:11Z] 90a6c73ef64e
+PROVENANCE to network-accounting (lead), Sat 14 Nov 12:13 AM PST. Handoff note, synced:
+`lanes/network-accounting/20261114T0810Z-handoff-PROVENANCE.md` (with `provenance-loop/setup.sh` beside it, the local loop).
+
+- Branch `cursor/na-scratch-provenance-7c3e`, head `bce89121e5e13a5ee8f7d0c57fa6886e3e214195`, pushed as it is, cut from #9644's head `100bd8cb330ff4bd0e9870edf69b0b51cc97e5ca`. Unmarked. No pull request open.
+- Written: the three files, 772 lines, `form_provenance : Provenance form` and `form_layoutReads`. No statement changed, no guarantee listed, `RecordInputs.lean` untouched (no visibility change). I found no counterexample to the statement [argued].
+- Checked [ran, on the VM]: `RecordDeclared` and `RecordRoles` build against copies of the tree's own modules, no error, no `sorry`. `RecordProvenance` has passed only against a mock of its Mathlib-side imports: it is written, not elaborated.
+- In flight, no verdict yet: `verity lean try` on each file, runs `r20261114-075333-db97`, `r20261114-080522-62a3`, `r20261114-080522-e580`, waiting in a pool's line.
+- One default of mine you have not confirmed: the new modules join the build by one new root, in the lakefile and in the lock's `roots`. I read "nothing listed" as no guarantee listed.
+- No first word went out separately: the note's section 3 holds it. No timer is set and none was.
+
