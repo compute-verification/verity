@@ -26,6 +26,7 @@ verity_vllm/ops/stoch_negatives.sh
 # --- pod runtime and acquisition gates
 verity_vllm/ops/pod_bootstrap.sh
 verity_vllm/ops/pod_gate.sh
+verity_vllm/ops/served_build.sh  # a served Build's acquire job (`verity-vllm served-match`, no Commit stage); its build.json is served_commit.sh's manifest
 
 # --- Python entry points
 verity_vllm.pipeline.research_tools

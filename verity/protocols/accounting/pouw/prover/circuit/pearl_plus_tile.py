@@ -32,10 +32,10 @@ The core, from the registry's call Definitions (`verity_vllm.definitions.registr
 The unit then opens the digest's hm96 leaf, under the private salt ``hsalt``, at ``tpos`` in the transcript tree of root
 ``troot`` and domain id ``tdomain`` along the private ``path`` (`audit.transcript_domain`: digests, so x is the digest).
 
-**No public input port.**  `flock-verify` refuses any statement with public input ports (`Flock/ProvedScope.lean`
+**No public input port.**  `verity-verify-proof` refuses any statement with public input ports (`Flock/ProvedScope.lean`
 `statementRules`), so the unit has none: every input is a registered read of the verifier's own ``--registered`` file at the
 position the Program fixes (`Flock/Registered.lean`), as H1's tile unit is (`benchmarks/pouw/h1_prove`, the route the
-one-tile measurement takes, ``flock-verify --zk --registered`` a statement).  `statement_rows` groups them:
+one-tile measurement takes, ``verity-verify-proof --zk --registered`` a statement).  `statement_rows` groups them:
 
   - **the formed rows** ``a``, ``b`` and ``y``, each a registered read opening the serve's own root at the position the
     Program fixes (`statement_rows`: one row a port).  Their roots are registered values reused from the serve's record
