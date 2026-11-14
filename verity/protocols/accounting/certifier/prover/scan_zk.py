@@ -1170,7 +1170,7 @@ def empty_start(program: str, cls: IS.Class) -> REG.Registered:
                                  REG.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
 
 
-def executionPhase_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
+def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
     """Execution phase w of `link`'s run as its rounds register it, alone: its number in the run (``number``), its rows
     of each link (``sides``), the chain's buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees
     over them, bound to the session and its own ingress head: ``state``, T leaves, leaf t the state bucket t reads and
