@@ -73,15 +73,6 @@ def wiring (doc : Json) : Except String Spot.Wires.Wiring := Spot.Wires.Wiring.o
 
 /-! ## Templates -/
 
-/-- A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself. A Tuple or a
-Record of no field is itself its one field, as the interface that writes the record takes it: that row has no bit,
-so a Definition that returns no field is refused as one whose output has no bit is (`tmplOf`). -/
-def fieldsOf (t : Ty) : List Ty :=
-  match t with
-  | .tuple fs => if fs.isEmpty then [t] else fs.toList
-  | .record fs => if fs.isEmpty then [t] else fs.toList.map (·.2)
-  | _ => [t]
-
 /-- A parameter's outer length: its outermost array's length, 1 when it is no array. -/
 def outerOf : Ty → Nat
   | .array n _ => n
@@ -98,14 +89,16 @@ structure Tmpl where
   outs : List (String × Nat)
   deriving Inhabited
 
-/-- The template of one root node's units, from its Definition's parameters and return type. Refused (`templates`)
-where a parameter is not whole 16-bit words, an output has no bit, or two ports share a name. A type's bits are read
-from its structure (`Flock.Sigma.bits`: an Array's are one element's times its length), never leaf by leaf. An
-output with no bit has no word, so no wire could read it: a wire's two rows have the same words
-(`Spot.Wires.check`), and a parameter's row has at least one. -/
+/-- The template of one root node's units, from its Definition's parameters and the fields of its return type, each
+an output (`Flock.Program.fieldsOf`). Refused (`templates`) where the return has no field, a parameter is not whole
+16-bit words, an output has no bit, or two ports share a name. A type's bits are read from its structure
+(`Flock.Sigma.bits`: an Array's are one element's times its length), never leaf by leaf. An output with no bit has no
+word, so no wire could read it: a wire's two rows have the same words (`Spot.Wires.check`), and a parameter's row has
+at least one. -/
 def tmplOf (P : Prog) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := do
   let d := (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0
   let defn := P.defs[d]!
+  if (fieldsOf defn.ret).isEmpty then throw "templates"
   let rows ← defn.params.toList.mapM fun (name, ty) =>
     let b := bits ty
     if b == 0 || b % 16 != 0 then throw "templates" else pure (name, b / 16, outerOf ty)

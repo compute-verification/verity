@@ -355,8 +355,8 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
       ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
         out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
   obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
-  have hfields : NciCheck.RecordText.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
-    (congrArg NciCheck.RecordText.fieldsOf hw).trans rfl
+  have hfields : Flock.Program.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
+    (congrArg Flock.Program.fieldsOf hw).trans rfl
   have hwidths : (Flock.Program.Ty.value w).widths = #[w] := by rw [Flock.Program.Ty.widths]
   have hrow : outRow (P.defs[sc.d]!) 0 = (0, #[w]) := by
     unfold outRow

@@ -54,7 +54,7 @@ from verity.circuits import codec
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import input_id, is_input
 from verity.circuits.refs import Affine, Concat, Explicit
-from verity.circuits.types import Array
+from verity.circuits.types import Array, RecordType, Tuple
 
 
 def _load(name: str, where: Path | None = None):
@@ -127,9 +127,13 @@ def closure_digest(desc: dict, key: str) -> str:
 
 
 def fields_of(ret) -> tuple:
-    """A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself. A Tuple or a
-    Record of no field is itself its one field, as `verity.commitments.windows.interface` takes it: a row with no bit."""
-    return tuple(f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,)))
+    """A return type's fields, each one output row (`Flock.Program.fieldsOf`): a Tuple's or a Record's fields, else the
+    type itself. A Tuple or a Record of no field has no field."""
+    if isinstance(ret, Tuple):
+        return ret.fields
+    if isinstance(ret, RecordType):
+        return tuple(t for _, t in ret.fields)
+    return (ret,)
 
 
 def template_gates(fn) -> list[str]:
@@ -173,12 +177,14 @@ class Template:
     """A template of the record: its Definition and units; its rows, each parameter's `(name, words, outer length)`; its
     outputs, each return field's `(o<j>, words)`; each port's leaves' widths, leaf by leaf (`widths`); its `closed`
     rows, the parameters whose leaves are of one bit each and none of which its Definition passes on (`passed_on`);
-    and one activation's gates (`template_gates`). `templates` where a parameter is not whole u16 words, an output
-    has no bit, or two ports share a name."""
+    and one activation's gates (`template_gates`). `templates` where the return has no field, a parameter is not
+    whole u16 words, an output has no bit, or two ports share a name."""
 
     def __init__(self, tid: str, fn, units: int) -> None:
         self.tid, self.fn, self.units = tid, fn, units
         params, ret = fn.signature()
+        if not fields_of(ret):
+            raise Malformed("templates")
         on = passed_on(fn)
         self.closed = [name for i, (name, ty) in enumerate(params) if set(ty.leaf_widths()) == {1} and i not in on]
         self.rows, self.outs = [], []

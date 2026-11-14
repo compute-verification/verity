@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 701 cases (600 random circuits,
-two in five broken in one way, and 101 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 702 cases (600 random circuits,
+two in five broken in one way, and 102 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -23,18 +23,18 @@ and input bits apart by exactly the rows no gate reads. The tenth holds the refe
 `verity.commitments.windows.interface`, the rules a lowering states a record by: the stage that refuses a record, each unit's
 slot, and `input_count`'s totals. The eleventh is that a row is declared once: the served shape's record with one
 declaration more into a row it already declares is refused, whatever the two declarations are, and the second alone
-is taken. The twelfth is that an output has a bit: a template that returns no field, or a field of no bit, is refused
-with its templates, and the interface lays out no unit of it. The thirteenth is that a root node of a composite is no
-input, whatever its key reads as: a template keyed as an input id is refused with its templates, its record alone and
-a unit of it at the root that the record does not list. The fourteenth is a block's rows: on the served shape the
-rows the reference adds up unit by unit are what the record's listing gives, a template's units in a block times its
-rows of one unit, with the rate rule's two failures in rows and the refusal of a table that lacks a template. The
-fifteenth is a history table: a table over no registered parameter, so every row read of one is fresh, whatever
-pins and registers the rest. The sixteenth is what the prover chose of an execution phase's input bits: the rows no
-declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over every
-slot's units, with an opening's ports off the count only where the opening is held. The seventeenth is that a row
-format is held to the registration log: a value read in leaves of another width than 16 bits is registered in
-leaves of that width.
+is taken. The twelfth is that an output has a bit: a template that returns no field, a Tuple's or a Record's, or a field
+of no bit, is refused with its templates, and the interface lays out no unit of it. The thirteenth is that a root node
+of a composite is no input, whatever its key reads as: a template keyed as an input id is refused with its templates,
+its record alone and a unit of it at the root that the record does not list. The fourteenth is a block's rows: on the
+served shape the rows the reference adds up unit by unit are what the record's listing gives, a template's units in a
+block times its rows of one unit, with the rate rule's two failures in rows and the refusal of a table that lacks a
+template. The fifteenth is a history table: a table over no registered parameter, so every row read of one is fresh,
+whatever pins and registers the rest. The sixteenth is what the prover chose of an execution phase's input bits: the
+rows no declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over
+every slot's units, with an opening's ports off the count only where the opening is held. The seventeenth is that a row
+format is held to the registration log: a value read in leaves of another width than 16 bits is registered in leaves of
+that width.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -122,7 +122,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 701 cases and the reference's results, byte for byte as the record pins them."""
+    """All 702 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -666,12 +666,13 @@ def test_a_row_is_declared_once(shaped):
 
 
 def test_an_output_has_a_bit(shaped):
-    """A template with an output that has no bit is refused with its templates. A return of no field is itself its
-    one output, of no bit, as the interface lays a return out, and a field of no bit is an output of no bit beside
-    one of 16. Such an output has no word, so no wire could read it, and the interface lays out no unit of such a
-    template, so no record it writes holds one."""
-    returns = {"a template that returns no field": ["Tuple", []],
-               "a return field of no bit": ["Tuple", [["Value", 16], ["Tuple", []]]]}
+    """A template whose return has no field, a Tuple's or a Record's, or has an output of no bit is refused with its
+    templates. A return of no field has no output, and a field of no bit is an output of no bit beside one of 16. Such
+    an output has no word, so no wire could read it. The interface lays a return of no field out as one output of no
+    bit, and lays out no unit of either template, so no record it writes holds one."""
+    returns = {"a template that returns no field": (["Tuple", []], []),
+               "a template that returns a Record of no field": (["Record", []], []),
+               "a return field of no bit": (["Tuple", [["Value", 16], ["Tuple", []]]], [16, 0])}
     assert set(returns) == set(vectors.BITLESS)
     for what, (name, outs, plan) in vectors.BITLESS.items():
         m = shaped[f"2x3 {what}"]
@@ -681,10 +682,10 @@ def test_an_output_has_a_bit(shaped):
         tid = codec.descriptor_id(fn)
         assert json.loads(m["case"]["instance"]["record"])["templates"] == [[tid, 2]], what
         program = json.loads(m["case"]["instance"]["program"])
-        assert program["definitions"][tid]["body"]["ret_type"] == returns[what], what
-        fields = ref.fields_of(fn.signature()[1])
-        assert [sum(t.leaf_widths()) for t in fields] == [*(16 for _ in outs[:-1]), 0], what
-        with pytest.raises(ValueError, match=f"o{len(fields) - 1}: its leaves are .* 0 in all"):
+        ret, bits = returns[what]
+        assert program["definitions"][tid]["body"]["ret_type"] == ret, what
+        assert [sum(t.leaf_widths()) for t in ref.fields_of(fn.signature()[1])] == bits, what
+        with pytest.raises(ValueError, match=f"o{max(len(bits), 1) - 1}: its leaves are .* 0 in all"):
             IF.layout(fn)
 
 

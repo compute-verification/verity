@@ -53,11 +53,12 @@ a row every unit shares, and with a row of computed gates. Then a text the form 
 record as one that lists its members, which states no wires, refused by the wires' reader; and the text of no wire
 and nothing else, which names no Program, refused with its templates. Then a row declared twice (`TWICE`): the served
 shape's record with one declaration more, into a row it already declares, a case each pair of a wire, a registered
-read, a table read, an opening's port and ingress, each refused. Then a template with an output that has no bit
-(`BITLESS`): one that returns no field, and one with a field of no bit beside a field of 16, each refused with its
-templates. Then a template keyed as an input id (`KEYED`), bound per run and bound at registration: a composite, so
-its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
-record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
+read, a table read, an opening's port and ingress, each refused. Then a template whose return has no field or an
+output of no bit (`BITLESS`): one that returns a Tuple of no field, one that returns a Record of no field, and one
+with a field of no bit beside a field of 16, each refused with its templates. Then a template keyed as an input id
+(`KEYED`), bound per run and bound at registration: a composite, so its gates are computed and a root node of it is
+no input. The record of that one template, and the served shape's record with a unit of it more at the Program's
+root that the record does not list, each refused with its templates.
 Then a row format (`FORMATS`): the scan state and a weight registered in 32-bit leaves, their formats right, taken
 with the served shape's verdict; the weight with no format, its rows fresh; and formats the log does not hold, each
 refused (`formats`), among them the two right formats where the value's entry states 16 bits over the same rows and
@@ -84,8 +85,8 @@ import verity.commitments.windows.interface as IF
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program
-from verity.circuits.refs import array_of, tuple_of
-from verity.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import array_of, record_of, tuple_of
+from verity.circuits.types import Array, RecordType, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
 
@@ -210,7 +211,7 @@ def template(name: str, params: list, outs: list, plan: list):
     the output's leaves parameter `i`'s one-bit `leaves`, at least two, passed on (`passed`; `how` one of `PASSES`,
     `"direct"` where none is given); else per output leaf `(form, r, operands)`, a primitive returning `Value<r>`
     over the parameter leaves `operands` (`(parameter, leaf)` each), called directly (`"op"`) or inside a composite
-    of its own (`"sub"`). An output of no leaf, a Tuple of no field, has no gate."""
+    of its own (`"sub"`). An output of no leaf, a Tuple or a Record of no field, has no gate."""
     ret = outs[0] if len(outs) == 1 else Tuple(*outs)
 
     def body(B, S, *args):
@@ -230,7 +231,9 @@ def template(name: str, params: list, outs: list, plan: list):
                     f = bind(CompositeDefinition(f"{name}Sub{j}x{x}", 1, (), lambda S, sig=sig: sig,
                                                  lambda B, S, *a, f=f: B.call(f, *a), register=False))
                 got.append(B.call(f, *xs))
-            hs.append(got[0] if isinstance(t, Value) else tuple_of(*got) if isinstance(t, Tuple) else array_of(got))
+            hs.append(got[0] if isinstance(t, Value) else tuple_of(*got) if isinstance(t, Tuple)
+                      else record_of(**dict(zip((k for k, _ in t.fields), got, strict=True)))
+                      if isinstance(t, RecordType) else array_of(got))
         return hs[0] if len(hs) == 1 else tuple_of(*hs)
     return bind(CompositeDefinition(name, 1, (), lambda S: (tuple(params), ret), body, register=False))
 
@@ -830,10 +833,11 @@ TWICE: dict[str, tuple] = {
     "ingress into an opened row": ("inputs", _put("ingress", _ingress(EMBED, "row")), _take("openings", EMBED, "row")),
 }
 
-#: a template with an output that has no bit: its name, its return's fields and its plan (`template`), its one
-#: parameter a word. A return of no field is itself its one output, as `verity.commitments.windows.interface` lays it out.
+#: a template whose return has no field or an output of no bit: its name, its return's fields and its plan
+#: (`template`), its one parameter a word.
 BITLESS: dict[str, tuple] = {
     "a template that returns no field": ("NoField", [], []),
+    "a template that returns a Record of no field": ("NoRecordField", [RecordType()], [[]]),
     "a return field of no bit": ("NoBit", [Value(16), Tuple()], [[("op", 16, [(0, 0)])], []]),
 }
 
@@ -971,9 +975,10 @@ def shaped() -> list[dict]:
     ingress that the circuit has a row for. Two wires into one row are refused by the wires' own check (`wires`), and
     every other pair with the declarations (`inputs`).
 
-    Then the accepted case with its Program and record those of one template with an output that has no bit
-    (`BITLESS`), a unit a slot: a template that returns no field, and one whose return has a field of no bit beside a
-    field of 16. Each is refused with its templates (`templates`).
+    Then the accepted case with its Program and record those of one template whose return has no field or an output
+    of no bit (`BITLESS`), a unit a slot: a template that returns a Tuple of no field, one that returns a Record of
+    no field, and one whose return has a field of no bit beside a field of 16. Each is refused with its templates
+    (`templates`).
 
     Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
