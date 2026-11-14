@@ -9,7 +9,6 @@ untraced = [
     "tests/test_network_certifier_link_window_lean.py",
     "tests/test_network_certifier_period.py",
     "tests/test_network_certifier_registered.py",
-    "tests/test_network_certifier_served.py",
     "tests/test_network_certifier_service.py",
     "tests/test_network_certifier_tie_service.py",
 ]

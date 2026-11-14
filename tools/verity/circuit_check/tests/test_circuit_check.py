@@ -1525,16 +1525,17 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
 
 
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
-    """A Definition a Program holds as one gate naming its circuit digest (``gated``: N2's served counts here) has that
-    digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier reads in its
-    place: its own digest passes, another fails by name, and none warns."""
+    """A Definition a Program holds as one gate naming its circuit digest (``gated``: the certifier's ingress scan bucket
+    here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
+    reads in its place: its own digest passes, another fails by name, and none warns."""
     from verity.circuits.codec import program_digest
+    from verity.circuits.defs import bind
     from verity.circuits.program import Program
-    from verity.protocols.accounting.certifier.verifier import served as SV
+    from verity.protocols.accounting.certifier.prover.ingress_scan import IngressScanBucket
 
-    d = SV.unit(8, 3, 1, 2, 2, 0)
+    d = bind(IngressScanBucket, B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
     digest = program_digest(Program(d))
-    assert SV.NetworkServedCounts.gated and PINS["digests"][d.id] == {"sha512": digest}
+    assert IngressScanBucket.gated and PINS["digests"][d.id] == {"sha512": digest}
     for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch"), (None, "unpinned")):
         F = CK.Findings()
         rec = CK.circuit_digest_pin(d, {"digests": {} if pinned is None else {d.id: {"sha512": pinned}}}, F)
