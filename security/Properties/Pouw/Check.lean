@@ -45,19 +45,19 @@ def RecordKeeps (p : Params) (c : WindowCommitmentRecord) (f : Fixed) : Prop :=
   f.rootW = (c.roots.find? (·.port = "W")).map (·.root) ∧
   (∀ kv ∈ expected p f, cs (get c.window.items kv.1) = cs kv.2) ∧
   c.population = f.work.n ∧
-  cs c.law = cs (subsetLaw f.sampling.k) ∧
+  cs c.samplingDesign = cs (subsetLaw f.sampling.k) ∧
   c.query = p.query ∧ c.scheme = p.check.scheme
 
 /-- The service accepted this record (`e` is one-stage's answer for its digest) with `prof` and `draw`: the profile
 of the registered Program over one level, the registered partition's `N` units sampled `subset:K′`, at the window's δ,
 with `K′` units sampled; and a sample `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
 def ServiceAccepted (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
-    (draw : Flock.Draw.UnitDraw) : Prop :=
+    (draw : Flock.Draw.UnitSample) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
   prof.programs = #[c.program] ∧
   prof.levels = #[{ name := unitLevel, query := some c.partition, size := f.work.n, draw := some (.subset f.sampling.k) }] ∧
   prof.delta = p.delta ∧ prof.drawn = #[(unitLevel, f.sampling.k)] ∧
-  draw.law = .subset f.sampling.k ∧ draw.population = f.work.n ∧
+  draw.samplingDesign = .subset f.sampling.k ∧ draw.population = f.work.n ∧
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
 /-- The salt the service's answer carries is the window's: a live window's (`coins` live) is its live coin's, taken
@@ -89,7 +89,7 @@ def AcceptedDraw : Prop :=
       pub.work = Work.at p.gridBits pub.work.level ∧
       PouwWindow.kPrime (toRat p.eps) (toRat p.delta) ((pub.work.credited : Int) * p.check.tileWork) pub.work.n
         p.check.tileWork = .ok pub.sampling.k ∧
-      c.population = pub.work.n ∧ cs c.law = cs (subsetLaw pub.sampling.k) ∧
+      c.population = pub.work.n ∧ cs c.samplingDesign = cs (subsetLaw pub.sampling.k) ∧
       pub.drawn.size = pub.sampling.k ∧ Ascending pub.drawn.toList ∧ ∀ u ∈ pub.drawn.toList, u < pub.work.n
 
 /-- An accepted window's outcome is the service's, for this record: one-stage's answer citing its digest, and the

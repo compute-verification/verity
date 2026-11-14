@@ -81,7 +81,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    per round (`γb` over the shape's rounds; a session's fork finder is the compiled
    verifier's `B` at a round guess among `k(x)`); `ε_bind = Pr[B_ext]`.
 5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of the frozen
-   hypotheses `Claims.Sampling` states at Flock (`DrawLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`): the second
+   hypotheses `Claims.Sampling` states at Flock (`SampleDesign`, `Refuses`, `InteriorFixed`, `SessionOpens`): the second
    stage samples the sample by the design (`draws`), in at most `n_PU` slots (`slots`); slots with one key show one
    session (`shared`), at most `n_sess` keys a sample (`keys`); the outer wait's union, over sets of proof blocks, is
    within its bits (`unions`); the verifier refuses what is out of scope (`refuses`); the interior roots precede the
@@ -444,7 +444,7 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
 /-- **The compiler's contract** at `H`: the code facts the compiler's statements read, each the generic form of a fact
 `Claims.Sampling`'s proofs take of the deployed sampled verifier (named in brackets).
 
-* `draws` (`DrawLaw`): on a statement in scope, for each set `B` of proof blocks, a weight of the coins bounds, at each,
+* `draws` (`SampleDesign`): on a statement in scope, for each set `B` of proof blocks, a weight of the coins bounds, at each,
   the probability over fresh second-stage coins that the sample misses `B`, and averages at most `P_a(B)`.
 * `slots` (the first `n_PU` slots `Claims.Sampling`'s hypotheses read): the sample has at most `n_PU` slots, so the
   extractor reads every one.
@@ -457,7 +457,7 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
 * `refuses` (`Refuses`): an accepted run's statement is in scope.
 * `interior` (`InteriorFixed`): the roots a run shows for a proof block's interior values are the same at fresh
   second-stage coins.
-* `fixed` (`DrawFixed`): a sampled proof block's session's rounds are in the second stage, and fresh coins on them keep
+* `fixed` (`SampleFixed`): a sampled proof block's session's rounds are in the second stage, and fresh coins on them keep
   the sample.
 * `runs` (`SessionRuns`, with `InnerNumbers` as the shape's equation and the error bounds): at coins `r` that sample
   `u`, the session's statement `xS` is at the block's shape, `A`'s errors there are within the block's bounds (`κb`,

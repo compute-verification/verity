@@ -22,7 +22,7 @@ from verity.circuits.evaluation import evaluate
 from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import cuda_rmsnorm as C
 from verity.definitions.registry import cuda_rmsnorm_split as NS
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 _spec = importlib.util.spec_from_file_location("rows_of_test_rmsnorm_fused_add", Path(__file__).with_name("test_rmsnorm_fused_add.py"))
 _rows_test = importlib.util.module_from_spec(_spec)

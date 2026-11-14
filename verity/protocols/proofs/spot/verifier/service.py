@@ -10,7 +10,7 @@ dockets, samples from its own randomness and keeps the record (this module); the
 verifier, verifies offline, and reads coins only from the challenger's log.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A docket is
-one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the
+one-stage's record (`one_stage.docket`, v1 or v2), and `check_public` holds each of its observable items to the
 rule: it is the service's own, a salted root of a declared Value, or an item the Spec declares in `public`.
 
 * The service's own: `format`, `protocol` and `previous` (one-stage's tags and the log's chain), `scheme` (`SCHEME`: hm96
@@ -25,7 +25,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   `words:<value>` and `word_bits:<value>` for a registered value.
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
-declares them; hiding them waits on the hidden layout (`one_stage.hidden_draw`).
+declares them; hiding them waits on the hidden layout (`one_stage.hidden_sample`).
 The `Stream` runs `check_public` by the verifier before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
@@ -166,12 +166,13 @@ import re
 import time
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
+from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.partition import Level
 from verity.circuits.program import Program
+from verity.commitments import history as HT
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
 from . import second_stage as SS, window_place as WP
@@ -966,6 +967,20 @@ def template_reads(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, int], .
                  if "read" in e and (r := _read_of(e["read"])) is not None)
 
 
+def tables_served(record: Any, tables: Iterable[tuple[str, bytes, bytes]]) -> bool:
+    """Whether each history table the interior reads is one the boundary docket served (`interior-table`): every
+    table of `tables`, `(name, root, domain)` with the root and domain id `history.roots_of` computed for it, is a port
+    of the boundary docket's record `record` of that name with that root and domain, at the port's last root
+    (`Record.byPort`, the one round 1's checks hold). The interior's copies name the tables round 2 recomputes from the
+    writers it opens; this holds each one to the table round 1 registered under its name. The Lean verifier's
+    `Run.tablesServed` is this."""
+    roots = record.get("roots") if isinstance(record, Mapping) else None
+    ports = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
+             if isinstance(r, Mapping) and isinstance(r.get("port"), str)}
+    return all((r := ports.get(name)) is not None and r.get("root") == root.hex() and r.get("domain") == domain.hex()
+               for name, root, domain in tables)
+
+
 def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
     """The second stage's count in each cell of template t, in the check's order: the rule's `k` (or its k_t), and n_t for
     a cell of fewer proof blocks (proved whole). Raises `ValueError` for a map that doesn't name each of the check's
@@ -1107,18 +1122,18 @@ def _names_place(window: Any) -> bool:
     return True
 
 
-def _registration_token(r: WindowCommitmentRecord) -> str:
+def _docket_token(r: WindowCommitmentRecord) -> str:
     """The token `_Control` and `Spot.Stream` know a docket by: equal exactly when the dockets are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
                     "salted_at": r.salted_at, "received_at": r.received_at})
 
 
 def _draw_token(d: Draw) -> str:
-    return _sha512({"registration": _registration_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
+    return _sha512({"registration": _docket_token(d.registration), "law": dict(d.law), "draw": dict(d.draw)})
 
 
 def _covered(d: Draw) -> list[Any]:
-    return [_order(d.registration), _registration_token(d.registration), _draw_token(d)]
+    return [_order(d.registration), _docket_token(d.registration), _draw_token(d)]
 
 
 def _session_digests(sessions: Any) -> list[str | None] | None:
@@ -2032,7 +2047,7 @@ class Stream:
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
                                                      v.fanout, v.rests_on_period_check, self._returned(got["program"]))
-            op["registration"] = _registration_token(got["registration"])
+            op["registration"] = _docket_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
         if d.get("refused") == ["late-registration"]:
@@ -2147,15 +2162,17 @@ class Stream:
         replay sample, `second_stage.interior_root`, so the second stage is sampled on one session with the first or
         on the session on that one root), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
-        record is the docket it follows, and the copies given here, as `register` takes them), and
-        `population-order`. Its receipt follows the log as a docket's does, and it is logged; it reads no clock.
+        record is the docket it follows, and the copies given here, as `register` takes them), `population-order`,
+        and each history table `history` names being a port of the boundary docket at the root and domain it computed
+        for it (`tables_served`: `interior-table`). Its receipt follows the log as a docket's does, and it is logged; it
+        reads no clock.
         It names no links, wires or rows, nor what the block returns: the verifier derives them from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`,
         `second_stage.replay_returns`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
-        op: dict[str, Any] = {"op": "interiors", **self._drawn_op(first)}
+        op: dict[str, Any] = {"op": "interiors", **self._sampled_op(first)}
         got: dict[str, Any] = {}
         seed_salt = self._seed_salt_of(window_root)
 
@@ -2186,12 +2203,17 @@ class Stream:
                             outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
+                tables = {} if history is None or not v.ok else HT.roots_of(leaf_layer, history)
+                served = first.registration.record
+                unserved = [n for n, rd in sorted(tables.items()) if not tables_served(served, [(n, *rd)])]
+                if unserved:
+                    v = _refuse("interior-table", {"tables": unserved}).verdict
                 got.update(program=program, earlier=earlier)
             got["checks"] = v
             if not v.ok:
                 return list(v.codes)
             got["registration"] = self._registration(record, first.registration.order, fanout=v.fanout)
-            op["interior"] = _registration_token(got["registration"])
+            op["interior"] = _docket_token(got["registration"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         reg, earlier = got["registration"], got["earlier"]
@@ -2217,11 +2239,11 @@ class Stream:
         return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
                                           values=self.values + spans)
 
-    def _drawn_op(self, draw: Draw) -> dict[str, Any]:
+    def _sampled_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its docket's order and token and its token; for a two-stage design's
         second stage, the first stage's, with `second`, its own token."""
         first = draw.replay_sample or draw
-        op = {"order": _order(first.registration), "registration": _registration_token(first.registration),
+        op = {"order": _order(first.registration), "registration": _docket_token(first.registration),
               "draw": _draw_token(first)}
         if draw.replay_sample is not None:
             op["second"] = _draw_token(draw)
@@ -2248,7 +2270,7 @@ class Stream:
                 and self._entries[o].interior == registration:
             return self._select_second(self._entries[o])
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
-                              "registration": _registration_token(registration)}
+                              "registration": _docket_token(registration)}
         got: dict[str, Any] = {}
 
         def checks() -> list[str] | None:
@@ -2317,7 +2339,7 @@ class Stream:
     def _select_second(self, e: _Entry) -> Draw:
         first, reg = e.draw, e.interior
         assert first is not None and reg is not None and isinstance(self.spec.selection, TwoStage)
-        op: dict[str, Any] = {"op": "second", **self._drawn_op(first), "interior": _registration_token(reg)}
+        op: dict[str, Any] = {"op": "second", **self._sampled_op(first), "interior": _docket_token(reg)}
         ns, ks, got = self.cells, self.counts, {}
 
         def checks() -> list[str] | None:
@@ -2386,7 +2408,7 @@ class Stream:
         after)."""
         if isinstance(draw, ProofRun):
             return self._deliver_session(draw, sessions)
-        d = self._held(self._decide({"op": "deliver", **self._drawn_op(draw), "sessions": _session_digests(sessions)},
+        d = self._held(self._decide({"op": "deliver", **self._sampled_op(draw), "sessions": _session_digests(sessions)},
                                     {"now": lambda: float(self._clock())}))
         e = self._entries[draw.registration.order]
         e.sessions = list(sessions)
@@ -2444,7 +2466,7 @@ class Stream:
                 template_circuits(proofs, self.spec.check.query)
             except ValueError as e:
                 raise _refuse("proofs", str(e)) from None
-        op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._drawn_op(draw).items() if k != "second"}}
+        op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._sampled_op(draw).items() if k != "second"}}
         got: dict[str, Any] = {}
         o = op["order"]
         held_entry = self._entries[o] if o is not None and o < len(self._entries) else None

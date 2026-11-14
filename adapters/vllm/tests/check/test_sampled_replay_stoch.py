@@ -109,7 +109,7 @@ def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registr
     assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
     from verity.definitions.registry import sampling_topp_difftest as DT
 
-    from verity_vllm.properties.admission import evaluate_spec
+    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
     rng = np.random.default_rng(11)
     lg = _logits(rng, 0)
     for S in (1, 2, 4, 8):

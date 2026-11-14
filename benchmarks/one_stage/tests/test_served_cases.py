@@ -1,10 +1,10 @@
-"""served_cases.py: one-stage v1's case (no composite's), the sampled proofs case (`verity/sampled-proofs/v1`:
+"""served_cases.py: one-stage v1's case (no composite's), SPOT case (`verity/sampled-proofs/v1`:
 v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
 same record, Pearl+'s run case from the parts its piece wrote, its commitment naming that record, and with ``--v2`` its
 bare v2 case, each in a 0700 directory beside its Lean answer, in the directory form a
 composition reads as a case (remote's three subprotocols; no composite runs v2's bare case), and every answer naming the
-window's docket's digest. A window whose a5 wrote no v2 case has no sampled proofs case, refused saying why.
+window's docket's digest. A window whose a5 wrote no v2 case has no SPOT case, refused saying why.
 
 Under H1's tie the window's record R is the Commit record H1 named before its sample coin, a v2 record chained right
 after H1's window docket W and reusing W's tables, as soundness's ``remotetie_demo.py`` builds them (`tied_serve`):
@@ -18,12 +18,12 @@ one whose verdict refused, and names the record's digest either way; the inferen
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
 check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
 names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
-does sampled proofs' Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
+does SPOT's Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
 tampered field is refused: by the Lean check (the record naming another Program, an input node in a block, θ on an
 unregistered input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
 or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
-case that isn't the audit's, which refuses sampled proofs' too), and an answer that isn't the window's record's is
+case that isn't the audit's, which refuses SPOT's too), and an answer that isn't the window's record's is
 written nowhere, its refusal saying the
 answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
 
@@ -100,7 +100,7 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
 
 
 def audited_v1_case(program, query, accepted: bool = True) -> dict:
-    """v1's case of a whole audit of ``program`` (the sampled proofs difftest's accepted case): its record over the
+    """v1's case of a whole audit of ``program`` (SPOT difftest's accepted case): its record over the
     window's ports and their window domains, a stratified sample's first proof blocks of each stratum proved, the
     verifier's receipt, and the verdict of record ``accepted``."""
     law, leaf = {"law": "stratified", "k": 2}, "ee" * 64
@@ -220,7 +220,7 @@ TABLES = ((Cr.commit_rows(0, K), f"pouw/h1/a/{K}@0", PW.chunks(K) * M), (Cr.comm
 LEDGER = "1e" * 64
 
 
-def h1_registration(previous: str | None = None, entry: int = 0) -> dict:
+def h1_docket(previous: str | None = None, entry: int = 0) -> dict:
     """H1's window docket W at the window's close (`pouw_h1_commit.registration`): a v2 record of the toy's
     tables under the H1 window Program, chained after ``previous``."""
     entries = []
@@ -272,7 +272,7 @@ def tied_serve(root: Path, commits: list | None = None) -> tuple[Path, dict, dic
     record R (``v3c-w0-…/audit``), H1's log of W then R (``h1/``), and PoUW's period case as `served_pouw.sh` has
     `pouw_piece.py period` write it (``private/pouw/period``), its windows' ``commit`` each of ``commits`` (default: one
     window naming R, its canonical JSON in hex as credit reads it). The dir, v1's case and W."""
-    w = h1_registration()
+    w = h1_docket()
     v1 = tied_v1_case(w)
     audit_dir(root / "v3c-w0-4-32-4", v1)
     h1_log(root / "h1", [(0, "registration", w), (0, "record", json.loads(bytes.fromhex(v1["commitment"])))])
@@ -312,7 +312,7 @@ def sampled_exe() -> Path:
 
 def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_path, capsys):
     """Each case is written in its own 0700 directory (files 0600) with the answer line its Lean printed, the Lean ran
-    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, sampled proofs' is v2's
+    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, SPOT's is v2's
     with the form ``one-stage`` in its params and its evidence and went to `vstar-recursive sampled check` with v2's
     blobs, v2's blobs went to its Lean, and nothing printed carries a case's bytes."""
     program, query = toy()
@@ -366,8 +366,7 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
 
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     """Without ``--v2`` no bare v2 case is made and v2's Lean never runs. A window whose a5 wrote no v2 case (a plain
-    audit's) has no sampled proofs case either, which is refused saying why (remote's composite then names sampled
-    proofs missing), and v1's and the inference-only case are still written."""
+    audit's) has no SPOT case either, which is refused saying why (remote's composite then names SPOT missing), and v1's and the inference-only case are still written."""
     program, query = toy()
     v1 = v1_case(program, query)
     private = tmp_path / "private"
@@ -382,7 +381,7 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
 def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
     """Where the tree leaves the inference-only policy out (no module `SC.POLICY`, which names the policy's Lean package
     and the Python its check is held to), the inference-only case is refused saying so, never
-    skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
+    skipped, its Lean never runs, and v1's and SPOT's cases are still written; a caller that asks for the
     package is refused the same way."""
     program, query = toy()
     v1 = v1_case(program, query)
@@ -632,7 +631,7 @@ def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     ("key", "v2's case holds exactly"),
 ])
 def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change, reason):
-    """a5's v2 case is taken only as a5 wrote it for this audit, for sampled proofs' case and with ``--v2`` for the bare
+    """a5's v2 case is taken only as a5 wrote it for this audit, for SPOT's case and with ``--v2`` for the bare
     one: none when a5 wrote its error instead (which says why) or nothing, and refused when it commits to another record,
     names a blob that isn't there or holds another key."""
     program, query = toy()
@@ -768,7 +767,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     (the record H1 named before the tie), one window of two on W, none, or a v1 record, is refused here and so is handed to
     neither product; so is a period case with no windows, no answer, another protocol's answer or another key. v1's and
     the policy's cases are still written."""
-    w = h1_registration()
+    w = h1_docket()
     on_r, on_w = tied_v1_case(w)["commitment"], codec.canonical_json(w).hex()
     commits = {"h1-registration": [on_w], "second-window": [on_r, on_w], "no-commit": [None], "no-windows": [],
                "v1-record": [codec.canonical_json({**w, "format": R.FORMAT}).hex()]}.get(change)
@@ -865,11 +864,11 @@ def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_pat
 def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_path):
     """Over a serve of several windows, each window's W then R, the log before a window's R is every record through its
     own W, which chains from the deployment's first record (null previous) to R; later windows' records aren't in it."""
-    w0 = h1_registration()
+    w0 = h1_docket()
     r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
-    w1 = h1_registration(R.digest(r0), entry=1)
+    w1 = h1_docket(R.digest(r0), entry=1)
     r1 = {"format": R.FORMAT_V2, "previous": R.digest(w1), "program": "11" * 64}
-    w2 = h1_registration(R.digest(r1), entry=2)
+    w2 = h1_docket(R.digest(r1), entry=2)
     h1_log(tmp_path, [(0, "registration", w0), (0, "record", r0), (1, "registration", w1), (1, "record", r1),
                       (2, "registration", w2)])
     assert SC.h1_log(tmp_path / "log.jsonl", r1) == [w0, r0, w1]
@@ -896,7 +895,7 @@ def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_re
     elif change == "no-file":
         (h1 / "log.jsonl").write_text(json.dumps({"digest": R.digest(w), "kind": "registration", "window": 0}) + "\n")
     elif change == "unchained":
-        h1_log(h1, [(0, "registration", h1_registration(entry=5))])
+        h1_log(h1, [(0, "registration", h1_docket(entry=5))])
     elif change == "not-json":
         (h1 / "log.jsonl").write_text("{\n")
     else:
@@ -918,7 +917,7 @@ def test_v1s_parameters_name_the_windows_tables_and_are_its_programs(change, rea
     """The policy case's parameters are the ones the rebuilt population program over v1's templates and v1's tables has:
     tables of other leaves, another template parameter's type or a table that isn't an array of values is refused, and
     so is a window Program that takes tables when v1's params name none (a5's params before the v2 params)."""
-    w = h1_registration()
+    w = h1_docket()
     v1 = tied_v1_case(w)
     ps = v1["params"]["parameters"]
     at = {n: i for i, (n, _) in enumerate(ps)}
@@ -940,7 +939,7 @@ def test_the_lean_check_accepts_the_policy_case_on_the_tied_record(tmp_path, inf
     R as chained right after it, names R's digest, and accepts at no budget with the same profile as the toy's untied
     record, so the window's tables, parameters no node reads, add no gate and no fresh-input bit. Without W in the log
     R's chain breaks, and it rejects."""
-    w = h1_registration()
+    w = h1_docket()
     v1 = tied_v1_case(w)
     case = SC.inference_only_case(v1, *SC.UNBOUNDED, [w])
     got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")

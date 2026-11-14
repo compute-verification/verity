@@ -7,7 +7,7 @@ public meta import Lean
 /-!
 # Walking a registration check's `do` block
 
-`Registration.check` and `checkRegistered` are each one `do` block whose `if`s and `match`es each leave a join point, a
+`Docket.check` and `checkRegistered` are each one `do` block whose `if`s and `match`es each leave a join point, a
 function of the codes so far, for the rest of the block. `jp_mono` proves once per join point, deepest first, that it
 keeps a nonempty code list nonempty (`jp_body`: down the join point's spine, an `if` or a `match` split, a jump the
 proof of the join point jumped to, a loop by a step that keeps a nonempty list nonempty); `jp_walk` then follows the one
@@ -20,7 +20,7 @@ block into both arms of each branch doubles at every one.
 namespace SpotFlock.RecordNames
 
 open Lean (Json)
-open Spot.Registration
+open Spot.Docket
 
 /-! ## Code lists -/
 

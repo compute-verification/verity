@@ -35,7 +35,7 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, concat, runs
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import b1
 from verity.definitions.registry import greedy_stages as G
 from verity.definitions.registry import greedy_stop as GS

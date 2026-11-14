@@ -1,4 +1,4 @@
-"""The served window's onsite configuration (`demos/onsite_served/config.toml`) and its table (`served_table.py`):
+"""The served window's onsite configuration (`demos/onsite_full.toml`) and its table (`served_table.py`):
 the file is the table's configuration byte for byte and names no host; the network certifier's and the inference-only
 policy's parties and channels are their manifests'; `verity run --dry-run` resolves every party, channel and piece with
 no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a binding the configuration
@@ -24,9 +24,8 @@ from verity.protocols.proofs.spot.verifier.service import Law
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
-DIR = ROOT / "demos" / "onsite_served"
-CONFIG = DIR / "config.toml"
-REG = R.registry((DIR, "served_table"))
+CONFIG = ROOT / "demos" / "onsite_full.toml"
+REG = R.registry()
 T = sys.modules["served_table"]
 KEY = "0" * 128
 #: every binding the pieces read, on documentation addresses (RFC 5737)

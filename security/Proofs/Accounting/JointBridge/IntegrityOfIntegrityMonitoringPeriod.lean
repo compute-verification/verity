@@ -22,7 +22,7 @@ import Proofs.Pouw.Prob
 
 At each value of the other coins, a sample of the sampled audit's own coins on which it accepts while more than `ε` of
 the units are wrong is one on which every sampling block is accepted and the incorrect proof blocks total more than
-`ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityHorizon` bounds; the realization's `law` carries the
+`ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityHorizon` bounds; the realization's `samplingDesign` carries the
 bound from the period's game to the uniform coins.
 -/
 
@@ -55,7 +55,7 @@ theorem IntegrityOfIntegrityMonitoringPeriod : Accounting.Guarantees.Bridge.Inte
       FlockSoundness.Game.value (fun l => (∀ w ∈ l, w.accepted) ∧
           Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ))
         (Flock.Guarantees.Period.run W T (R.strat ξ)) :=
-    R.law ξ fun l => (∀ w ∈ l, w.accepted) ∧
+    R.samplingDesign ξ fun l => (∀ w ∈ l, w.accepted) ∧
       Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ)
   have hsrc := Flock.SecurityProofs.IntegrityHorizon W T q δ hq hδ hqt hA3 (R.strat ξ) (hT ξ) (hL ξ)
   refine (Pouw.pr_mono hsub).trans ?_

@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Project
 public import Proofs.Properties.Verity.SampledCoins
 
 /-!
-# Sampled proofs' coupling: the coin map
+# SPOT's coupling: the coin map
 
 The coin map the projection reads (`CoinMap`, in `Proofs.Properties.Verity.Sampled.Project`) writes the live audit's
 coins into the period's tape at the projection's stops. A stop is an opening's coin node, where the device flips the
@@ -1126,7 +1126,7 @@ theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m →
   avg_byteCoins A.hA3 hL H
 
 /-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
-`srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
+`srcCoins`, the premise `coupled_sample_coins_setsUp` takes. -/
 theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
     _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) :=
@@ -1154,7 +1154,7 @@ noncomputable def sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V
   openMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ) (sampleStart V θ F c rd σ label after κ)
 
 /-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two samples
-as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
+as definitionally equal reduces their `match` and evaluates `sampleUnits`. -/
 theorem sample_extend (A : Live) (S : Widening) (ω : (A.extend S).L.Ω) : (A.extend S).L.draw ω = A.L.draw ω.1 := by
   dsimp only [Live.L, Live.extend]
 

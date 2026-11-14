@@ -13,7 +13,7 @@ blobs, the blobs' lookup tables and the session's record's sample as printed. He
 two fields no blob's digest fixes:
 
 * **The member** (`MemberAtFixed`): the two plays' `t`-th statements name one member of the parameters.
-* **The sample** (`DrawAtFixed`): the two plays' `t`-th sessions' records print one sample.
+* **The sample** (`SampleAtFixed`): the two plays' `t`-th sessions' records print one sample.
 
 Between two plays with one parameters' bytes the parameters are one (`SessionMsgs.params_eq_of_sent`), so one member
 has one partition, one program, one registered reads and one pair of digests. Its circuit file and its public file are
@@ -22,9 +22,9 @@ tables are the pinned tables its circuit file names, which every accepted play's
 list, or two blobs that collide (`names_same`, `tables_same`). A collision is the pair `Messages.blobsAlt` returns
 (`Messages.blobsAlt_of`).
 
-**Not established here**: `MemberAtFixed` and `DrawAtFixed`, hypotheses. Each is a theorem where one pair of stage
-coins carries the bytes both plays' samples read (`StageCoinsOne`, `stageCoinsOne_of_play`): `DrawAtFixed` in
-`FormDraw.lean` (`drawAtFixed_of_coins`), the model's check holding each session's sample to the verifier's own at
+**Not established here**: `MemberAtFixed` and `SampleAtFixed`, hypotheses. Each is a theorem where one pair of stage
+coins carries the bytes both plays' samples read (`StageCoinsOne`, `stageCoinsOne_of_play`): `SampleAtFixed` in
+`FormDraw.lean` (`sampleAtFixed_of_coins`), the model's check holding each session's sample to the verifier's own at
 the stage coins (`SpotFlock.sample_of_stmtOk`), and `MemberAtFixed` in `FormMember.lean` (`memberAtFixed_of_coins`),
 the model's check holding each statement's public file to its template's part and the form's check holding each
 member's public file to the member's units. `FormBytes.lean` gives the pair of stage coins from the coins the log
@@ -48,15 +48,15 @@ def MemberAtFixed (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (
 
 /-- **Each template's session's record prints one sample**: at two plays the check accepts whose logs are the
 device's, with one parameters and one log before round `stage + 1`, the records of the `t`-th of the statements'
-sessions hold samples of one printed text (`SessionMsgs.drawBytes`), template by template. -/
-def DrawAtFixed (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate) : Prop :=
+sessions hold samples of one printed text (`SessionMsgs.sampleBytes`), template by template. -/
+def SampleAtFixed (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate) : Prop :=
   ∀ o o' k k' p e e', FormAccepts C o → Good o → FormAccepts C o' → Good o' → C o = some k → C o' = some k' →
     Messages.logBefore L o (A.h.stage + 1) = Messages.logBefore L o' (A.h.stage + 1) →
     SessionMsgs.formOf k = some (p, e) → SessionMsgs.formOf k' = some (p, e') →
       ∀ t < A.h.ms.length, ∀ fs fs' record record', SessionMsgs.filesAt e t = some fs →
         SessionMsgs.filesAt e' t = some fs' → SessionMsgs.recordAt k.blobs fs = some record →
           SessionMsgs.recordAt k'.blobs fs' = some record' →
-            SessionMsgs.drawBytes record = SessionMsgs.drawBytes record'
+            SessionMsgs.sampleBytes record = SessionMsgs.sampleBytes record'
 
 /-- **The member a statement names is one of the parameters' members.** -/
 theorem memberAt_mem {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence} {t : ℕ}
@@ -91,13 +91,13 @@ theorem stmtAtCase_of_read {A : Live₂} {C : CaseOf} {S : SessionReading} {Good
   exact SessionMsgs.stmtAtCase_of_stmtsMsg hmsg hf hte
 
 /-- **`StmtAtFixed` from the member each statement names and the sample each record prints**
-(`MemberAtFixed`, `DrawAtFixed`), where each case is the one sent and the reading's statements are the case's: the
+(`MemberAtFixed`, `SampleAtFixed`), where each case is the one sent and the reading's statements are the case's: the
 circuit file, the public file and the lookup tables are the blobs', one on the two plays or two blobs with one
 SHA-512. -/
 theorem stmtAtFixed_of (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
     (L : CoinMap.Locate) (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hsent : CaseIsSent C)
     (hst : StmtsRead A C S) (hcount : StmtsCount A C Good) (hmemb : MemberAtFixed A C Good L)
-    (hdraw : DrawAtFixed A C Good L) : StmtAtFixed A C Good L := by
+    (hdraw : SampleAtFixed A C Good L) : StmtAtFixed A C Good L := by
   intro o o' k k' hA hG hA' hG' hk hk' hp hlog
   have hA₀ := hA
   have hA₀' := hA'
@@ -126,7 +126,7 @@ theorem stmtAtFixed_of (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : V
     have hmm := hmemb o o' k k' pp e e' hA hG hA' hG' hk hk' hlog hf hf' t ht
     rw [hm, hm'] at hmm
     obtain rfl : m = m' := Option.some.inj hmm
-    have hdd : SessionMsgs.drawBytes record = SessionMsgs.drawBytes record' :=
+    have hdd : SessionMsgs.sampleBytes record = SessionMsgs.sampleBytes record' :=
       hdraw o o' k k' pp e e' hA hG hA' hG' hk hk' hlog hf hf' t ht s s' record record' hs hs' hrec hrec'
     have hin : m ∈ pp.members := memberAt_mem hm
     have ht₁ := accepted_tables hA hk hdec m hin

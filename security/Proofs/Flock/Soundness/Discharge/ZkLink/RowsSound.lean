@@ -23,7 +23,7 @@ commitments are the registered ones:
 * `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
 * `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `δ_link + δ_rows` with
   `δ_rows` at most `δ_link`'s closed form;
-* `zk_flock_drawnC_rows`: `Audit.extraction_audit_drawn` at it.
+* `zk_flock_sampledC_rows`: `Audit.extraction_audit_sampled` at it.
 -/
 
 @[expose] public section
@@ -39,7 +39,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (isRead : vb.Pos → Prop) (wo : vb.Pos → vb.Opening)
 
@@ -140,7 +140,7 @@ theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [No
 `π c` times the trial's bound `Bt` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
-    (hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → Ψ ω = fun _ => 0) {Bt : ℝ} (hBt : 0 ≤ Bt)
+    (hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → Ψ ω = fun _ => 0) {Bt : ℝ} (hBt : 0 ≤ Bt)
     (htr : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), expect (trialValZC planZ R Ψ)
       (trialGZC A Hs P planZ tab vb R τ c k Rw) (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤ Bt) :
     (∑ ω : L.Ω, expect (ind (accωZC planZ R ω)) (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 *
@@ -153,11 +153,11 @@ theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
     expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k (Ψ ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ Bt + k / (Real.exp 1 * Rw) := add_nonneg hBt (by positivity)
-  have hoff' : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
+  have hoff' : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
     simp only [hf, hoff ω hω, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsSampleZ A P planZ tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff' ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -490,7 +490,7 @@ theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : 
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
 with a sampled proof block in `wrongRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
-theorem zk_flock_drawnC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
+theorem zk_flock_sampledC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t')
@@ -501,7 +501,7 @@ theorem zk_flock_drawnC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
         rowsBoundZC A Hs P planZ tab vb isRead wo k Rw M ρ t' (reg σ) (cont σ) :=
-  extraction_audit_drawn (analysisZCRows A Hs P planZ tab vb isRead wo
+  extraction_audit_sampled (analysisZCRows A Hs P planZ tab vb isRead wo
       (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
     (zc_knowledgeSound_rows A Hs P planZ tab vb isRead wo _ _ hlow hown hj)
     (zk_rowsBindSoundC A Hs P planZ tab vb isRead wo hlow hown hRw hM hρ hr hj ht) σ

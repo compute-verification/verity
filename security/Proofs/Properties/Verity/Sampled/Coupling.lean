@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
-# Sampled proofs' coupling: the target off the binding and the logged coupling
+# SPOT's coupling: the target off the binding and the logged coupling
 
 `CouplingTarget` at the leg's constructions with the messages' two-continuation finders (`Constructions.withMessages`,
 whose finders are `msgFinder` and `recordFinder`, so `couplingTarget_of_noMiss` applies by `rfl`), from three bounds on

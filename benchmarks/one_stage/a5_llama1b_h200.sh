@@ -11,7 +11,7 @@
 # sm_90 taps under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
 # while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
-# there; $OUT, published as the run's record, keeps the row's records that demos/vllm/published.sh lists (each with the
+# there; $OUT, published as the run's record, keeps the row's records that adapters/vllm/tools/served_run/published.sh lists (each with the
 # reason it holds nothing of a request) and verdicts.txt, the window's public files, a5.sh's out ($OUT/a5) and summary.txt,
 # whose A5 line is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length. Every
 # other file of the row stays on the node and the run names it: match/spec.json holds the prompts, commit/ the token record,
@@ -24,7 +24,7 @@ OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 TREE=$PWD
-. "$TREE/demos/vllm/published.sh" || exit 2
+. "$TREE/adapters/vllm/tools/served_run/published.sh" || exit 2
 H=/workspace/research/vllm-composed-h200int8
 FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
@@ -75,7 +75,7 @@ row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in
   verdicts "$D/stages.txt" "$OUT"
   return $rc
 }
-records() {  # the row's records into $OUT, which the run publishes: only the files demos/vllm/published.sh lists
+records() {  # the row's records into $OUT, which the run publishes: only the files adapters/vllm/tools/served_run/published.sh lists
   publish "$D" "$OUT"
   verdicts "$D/stages.txt" "$OUT" > /dev/null
   du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$KEPT/sizes.txt"

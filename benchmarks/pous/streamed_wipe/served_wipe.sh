@@ -22,7 +22,7 @@
 #                    and under any other pin reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
-# Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
+# Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
 # this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
@@ -60,7 +60,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
   for ((i = 0; i + 1 < ${#C[@]}; i++)); do [ "${C[$i]}" = -i ] && KEY=${C[$((i + 1))]}; done
   KEY=${KEY/#\~/$HOME}
   [ -z "$KEY" ] || [ -r "$KEY" ] || refuse "no wipe gate key $KEY on $NODE ($(hostname)): infra installs it, and its gate verb on $CH for this card"
-  if [ -z "${WIPE_PROTOCOL_EXE:-}" ] && [[ " $* " != *" --no-lean "* ]]; then
+  if [ -z "${WIPE_PROTOCOL_EXE:-}" ]; then
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
     L=verity/protocols/accounting/pous/device/lean

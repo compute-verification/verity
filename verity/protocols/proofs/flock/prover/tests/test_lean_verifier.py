@@ -184,20 +184,20 @@ def _with_coins(args):
     return args if "--stream" in args or "--stream-file" in args else [*args, "--stream", _COINS.randbytes(1 << 14).hex()]
 
 
-def _lean_draw_obj(args):
+def _lean_sample_obj(args):
     p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", *_with_coins(args)], capture_output=True,
                        text=True)
     return json.loads(p.stdout[5:]) if p.stdout.startswith("DRAW ") else None
 
 
-def _lean_draw(args):
+def _lean_sample(args):
     p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", *_with_coins(args)], capture_output=True,
                        text=True)
     return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_unit_draw_samplers_are_the_exact_reduction():
+def test_unit_sample_samplers_are_the_exact_reduction():
     import random
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     rng = random.Random(20260927)
@@ -208,15 +208,15 @@ def test_unit_draw_samplers_are_the_exact_reduction():
         if case % 4 == 0 and len(stream) >= 16:
             stream[:16] = b"\xff" * 16  # a first word above the largest multiple of n: rejected
         want = _ref_subset(k, n, bytes(stream))
-        assert _lean_draw(["--population", str(n), "--k", str(k), "--stream", stream.hex()]) == want, (n, k, case)
+        assert _lean_sample(["--population", str(n), "--k", str(k), "--stream", stream.hex()]) == want, (n, k, case)
         a, b = sorted(rng.sample(range(0, 9), 2)) if case % 5 else (0, 3)
         b = max(b, 1)
         want = _ref_bernoulli(a, b, n % 50 + 1, bytes(stream))
-        assert _lean_draw(["--population", str(n % 50 + 1), "--p", f"{a}/{b}", "--stream", stream.hex()]) == want, (a, b, case)
+        assert _lean_sample(["--population", str(n % 50 + 1), "--p", f"{a}/{b}", "--stream", stream.hex()]) == want, (a, b, case)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
+def test_a_sample_given_no_coins_is_refused_unless_it_samples_every_unit():
     """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a sample that reads coins is
     refused before any is read, whatever its sampling design, and only a sample of every unit, which reads none, is sampled."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -261,7 +261,7 @@ def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_unit_draw_check(tmp_path):
+def test_unit_sample_check(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     d = {"law": "subset", "population": 100, "k": 3, "units": [4, 17, 90]}
     bern = {"law": "bernoulli", "population": 10, "p": "1/2", "units": [0, 3, 9]}
@@ -291,7 +291,7 @@ def test_unit_draw_check(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_draw_is_held_to_its_registered_law(tmp_path):
+def test_a_sample_is_held_to_its_registered_law(tmp_path):
     """`draw --registration F` and `draw-test --registration F`: the sampling design is the one the window registered before any coin,
     so a sample at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -328,7 +328,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_a_draw_over_several_tables_has_a_count_they_split():
+def test_a_sample_over_several_tables_has_a_count_they_split():
     """`draw --tables J` refuses a sampling design whose unit count the J tables can't split evenly: a Bernoulli sample (its count is random),
     a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one sample of 4 units."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -373,7 +373,7 @@ def _stratified_agree():
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
+def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
     """`draw --program --partition --stratified K`: the strata derived from the program (one per template, ranges merged,
     in order of first unit), `k_s = max(1, round(K n_s / N))`, each stratum's `subset` on its own segment of the stream,
     and U2 on stratified samples, held to the verifier's own sampling design."""
@@ -398,12 +398,12 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
     for _ in range(20):
         src = rng.randbytes(2 * 2 * 9 + 64 + 2 * 2 * 9 + 64)
         (tmp_path / "s.bin").write_bytes(src)
-        d = _lean_draw_obj([*flags, "--stratified", "4", "--stream-file", str(tmp_path / "s.bin")])
+        d = _lean_sample_obj([*flags, "--stratified", "4", "--stream-file", str(tmp_path / "s.bin")])
         assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 6
-        assert d["units"] == ref.reference_draw(law, src)
-    d = _lean_draw_obj([*flags, "--stratified", "4"])
+        assert d["units"] == ref.reference_sample(law, src)
+    d = _lean_sample_obj([*flags, "--stratified", "4"])
     assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2
-    assert [s["k"] for s in _lean_draw_obj([*flags, "--stratified", "1"])["strata"]] == [1, 1]
+    assert [s["k"] for s in _lean_sample_obj([*flags, "--stratified", "1"])["strata"]] == [1, 1]
     bad = [{**d, "k": 5}, {**d, "strata": d["strata"][::-1]}, {**d, "units": d["units"][:-1]},
            {**d, "strata": [{**d["strata"][0], "units": [[0, 2], [2, 2], [5, 6]]}, d["strata"][1]]},
            {**d, "strata": [{**d["strata"][0], "units": [[0, 1], [1, 2], [5, 6]]}, d["strata"][1]]},
@@ -414,9 +414,9 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
     got = [json.loads(line[10:]) for line in p.stdout.splitlines()]
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
     for k in ("0", "7"):
-        assert _lean_draw_obj([*flags, "--stratified", k]) is None
+        assert _lean_sample_obj([*flags, "--stratified", k]) is None
     (tmp_path / "w.json").write_text(json.dumps({**obj, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}))
-    assert _lean_draw_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
+    assert _lean_sample_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
 
 
 def _work_program(tmp_path):
@@ -443,7 +443,7 @@ def _work_program(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_work_draw_from_the_verifiers_own_program(tmp_path):
+def test_work_sample_from_the_verifiers_own_program(tmp_path):
     """`draw --program --partition --work K --work-table F`: the stratified sampling design's strata, `k_s = min(n_s, max(f_s,
     ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work samples
     one), each stratum's `subset` on its own segment of the stream, and U2 on work samples, held to the verifier's own sampling design."""
@@ -460,13 +460,13 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     for _ in range(20):
         src = rng.randbytes(need)
         (tmp_path / "s.bin").write_bytes(src)
-        d = _lean_draw_obj([*flags, "--work", "2", "--stream-file", str(tmp_path / "s.bin")])
+        d = _lean_sample_obj([*flags, "--work", "2", "--stream-file", str(tmp_path / "s.bin")])
         assert {k: d[k] for k in ("law", "k", "strata")} == law and d["population"] == 10
-        assert d["units"] == ref.reference_draw(law, src)
+        assert d["units"] == ref.reference_sample(law, src)
     # W = 3·3 + 1·3 = 12: sized by work, floored at one, capped at n_s
     for k, want in {"1": [1, 1, 1], "4": [3, 1, 1], "10": [3, 3, 1]}.items():
-        assert [s["k"] for s in _lean_draw_obj([*flags, "--work", k])["strata"]] == want, k
-    d = _lean_draw_obj([*flags, "--work", "2"])
+        assert [s["k"] for s in _lean_sample_obj([*flags, "--work", k])["strata"]] == want, k
+    d = _lean_sample_obj([*flags, "--work", "2"])
     assert len(d["units"]) == 4 and sum(u in (0, 1, 5) for u in d["units"]) == 2 and sum(u >= 6 for u in d["units"]) == 1
     s0, s1, s2 = d["strata"]
     bad = [{**d, "k": 3}, {**d, "law": "stratified"}, {**d, "units": d["units"][:-1]},
@@ -486,8 +486,8 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
     assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
     # another table's sampling design, or the stratified one, is not this verifier's
-    other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
-    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    other = _lean_sample_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
+    strat = _lean_sample_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
     assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
     # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 samples what stratified:4 samples from it,
@@ -496,11 +496,11 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
              ({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 9}}, [1, 1, 9], [2, 1, 4]),
              ({"T0_v0": 3, "T1_v0": {"work": 1, "floor": 3}, "T2_v0": 0}, [1, 3, 1], [2, 3, 1])]
     for i, (work, floors, want) in enumerate(cases):
-        df = _lean_draw_obj([*table(f"wf{i}.json", work), "--work", "2"])
+        df = _lean_sample_obj([*table(f"wf{i}.json", work), "--work", "2"])
         assert [s["floor"] for s in df["strata"]] == floors and [s["k"] for s in df["strata"]] == want, work
-    assert _lean_draw_obj([*flags[:4], "--stratified", "4"])["strata"][2]["k"] == 2
+    assert _lean_sample_obj([*flags[:4], "--stratified", "4"])["strata"][2]["k"] == 2
     ff = table("wf.json", cases[0][0])
-    df = _lean_draw_obj([*ff, "--work", "2"])
+    df = _lean_sample_obj([*ff, "--work", "2"])
     f0, f1, f2 = df["strata"]
     # U2 refuses a floor of 0, a missing floor and a count key; floor 1 with k 1 is the rule's, and only the verifier's own
     # table refuses it
@@ -509,18 +509,18 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     assert [g["ok"] for g in check([df, *fbad], *ff, "--work", "2")] == [True] + [False] * 4
     assert [g["ok"] for g in check([df, fbad[3]])] == [True, True]
     assert [g["ok"] for g in check([df, d], *flags, "--work", "2")] == [False, True]
-    assert _lean_draw_obj([*table("wf0z.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 0}}), "--work", "2"]) is None
-    assert _lean_draw_obj([*table("wfx.json", {"T0_v0": {"work": 3, "floor": 1, "x": 1}, "T1_v0": 1, "T2_v0": 0}), "--work", "2"]) is None
+    assert _lean_sample_obj([*table("wf0z.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 0}}), "--work", "2"]) is None
+    assert _lean_sample_obj([*table("wfx.json", {"T0_v0": {"work": 3, "floor": 1, "x": 1}, "T1_v0": 1, "T2_v0": 0}), "--work", "2"]) is None
     for k in ("0", "11"):
-        assert _lean_draw_obj([*flags, "--work", k]) is None
-    assert _lean_draw_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
-    assert _lean_draw_obj([*table("w4.json", {"T0_v0": 0, "T1_v0": 0, "T2_v0": 0}), "--work", "2"]) is None
-    assert _lean_draw_obj([*flags, "--work", "2", "--stratified", "2"]) is None
-    assert _lean_draw_obj([*flags[:4], "--work", "2"]) is None
+        assert _lean_sample_obj([*flags, "--work", k]) is None
+    assert _lean_sample_obj([*table("w3.json", {"T0_v0": 3, "T1_v0": 1}), "--work", "2"]) is None
+    assert _lean_sample_obj([*table("w4.json", {"T0_v0": 0, "T1_v0": 0, "T2_v0": 0}), "--work", "2"]) is None
+    assert _lean_sample_obj([*flags, "--work", "2", "--stratified", "2"]) is None
+    assert _lean_sample_obj([*flags[:4], "--work", "2"]) is None
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
+def test_verify_takes_a_work_sample_only_from_its_own_table(tmp_path):
     """`verify` refuses a session whose record carries a work sample unless it holds its own K, work table, program and
     partition, since the sample's K, works and floors set every k_s; with all four, the sampling design must be its own derivation, so a
     sample made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
@@ -539,8 +539,8 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
             (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
         return s
 
-    at2 = session("k2", _lean_draw_obj([*flags, "--work", "2"]))
-    at1 = session("k1", _lean_draw_obj([*flags, "--work", "1"]))
+    at2 = session("k2", _lean_sample_obj([*flags, "--work", "2"]))
+    at1 = session("k1", _lean_sample_obj([*flags, "--work", "1"]))
 
     def why(s, *extra):
         p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
@@ -564,14 +564,14 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     # the floors are the verifier's too: a sample made under a table with T2's floor at 3 is refused under the verifier's
     # table (floor 1), and one made under floor 1 is refused under a table with floor 3
     floored = table("wf.json", {"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 3}})
-    at2f = session("k2f", _lean_draw_obj([*floored, "--work", "2"]))
+    at2f = session("k2f", _lean_sample_obj([*floored, "--work", "2"]))
     assert why(at2f, *flags, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
     assert why(at2, *floored, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
     assert not why(at2f, *floored, "--work", "2").startswith("setup: U2:")
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
+def test_verify_takes_a_stratified_sample_only_at_its_own_k(tmp_path):
     """`verify` refuses a session whose record carries a stratified sample unless it holds its own K (`--stratified K`),
     program and partition, since the sample's K and strata set every k_s (U2 alone accepts a sample at k = 1, and strata it
     cannot check); with all three, the sampling design must be its own derivation, so a sample at another K or over other strata is
@@ -589,9 +589,9 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
             (s / f"circuit.rep{r}.bin").write_bytes(b"\0" * 16)
         return s
 
-    d4 = _lean_draw_obj([*flags, "--stratified", "4"])
+    d4 = _lean_sample_obj([*flags, "--stratified", "4"])
     at4 = session("k4", d4)
-    at1 = session("k1", _lean_draw_obj([*flags, "--stratified", "1"]))
+    at1 = session("k1", _lean_sample_obj([*flags, "--stratified", "1"]))
     # T0's and T1's names swapped (both 3 units at k 1): well formed, and not the verifier's strata
     s0, s1, s2 = d4["strata"]
     swapped = session("swapped", {**d4, "strata": [{**s0, "template": s1["template"]}, {**s1, "template": s0["template"]}, s2]})
@@ -647,7 +647,7 @@ def test_verify_refuses_an_archived_circuit_that_does_not_hash_to_its_key(tmp_pa
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_closure_draw_proves_the_verifiers_closure(tmp_path):
+def test_closure_sample_proves_the_verifiers_closure(tmp_path):
     """`draw --work K --work-table F --closure C`: the work sample, unchanged, widened by the verifier's closure map (each
     sampled proof block's closure, less the sampled proof blocks). U2 on the closure, U3 counting the sampled proof blocks and their closure, and
     `verify` holding the closure to the verifier's own map."""
@@ -666,17 +666,17 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
 
     rng = random.Random(20260929)
     for _ in range(10):
-        plain = _lean_draw_obj([*flags, "--work", "2"])
+        plain = _lean_sample_obj([*flags, "--work", "2"])
         law = {k: plain[k] for k in ("law", "k", "strata")}
         need = sum(2 * s["k"] * ref.width(sum(hi - lo for lo, hi in s["units"])) + 64 for s in law["strata"])
         src = rng.randbytes(need)
         (tmp_path / "s.bin").write_bytes(src)
-        d = _lean_draw_obj([*flags, "--work", "2", *cl, "--stream-file", str(tmp_path / "s.bin")])
-        assert d["units"] == ref.reference_draw(law, src)
+        d = _lean_sample_obj([*flags, "--work", "2", *cl, "--stream-file", str(tmp_path / "s.bin")])
+        assert d["units"] == ref.reference_sample(law, src)
         assert d.get("closure", []) == closure_of(d["units"])
-    d = _lean_draw_obj([*flags, "--work", "2", *cl])
+    d = _lean_sample_obj([*flags, "--work", "2", *cl])
     while not d.get("closure"):
-        d = _lean_draw_obj([*flags, "--work", "2", *cl])
+        d = _lean_sample_obj([*flags, "--work", "2", *cl])
     n = len(d["units"]) + len(d["closure"])
 
     def check(cases, *extra):
@@ -692,7 +692,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
     bad = [{**d, "closure": []}, {**d, "closure": c[::-1] if len(c) > 1 else c + [c[0]]},
            {**d, "closure": sorted(c + [d["units"][0]])}, {**d, "closure": c + [10]}, {**d, "closure": ["7"]}]
     assert [g["ok"] for g in check([(x, len(x["units"]) + len(x["closure"])) for x in bad])] == [False] * len(bad)
-    strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
+    strat = _lean_sample_obj([*flags[:4], "--stratified", "2"])
     assert not check([({**strat, "closure": [9]}, len(strat["units"]) + 1)])[0]["ok"]
     # the verifier's own map: its closure is accepted, a smaller one refused, and a plain sample lacks its closure
     smaller = {**d, "closure": c[:-1]} if len(c) > 1 else {k: v for k, v in d.items() if k != "closure"}
@@ -725,7 +725,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
     assert not why(plain).startswith(("setup: U2:", "setup: U3:"))
 
 
-def _one_stage_draw():
+def _one_stage_sample():
     try:
         from verity.protocols.proofs.spot.verifier.one_stage import draw
     except ImportError:
@@ -734,9 +734,9 @@ def _one_stage_draw():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
+@pytest.mark.skipif(shutil.which("lake") is None or _one_stage_sample() is None,
                     reason="no Lean toolchain or no stratified law in core")
-def test_stratified_draw_agrees_with_core(tmp_path):
+def test_stratified_sample_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--random", "20", "--draws", "100"], capture_output=True, text=True)
