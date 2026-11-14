@@ -17,7 +17,14 @@ and every boundary between the parts, so each row is one rank's: the rank's own 
 whole where no chunk holds it), another rank's a free input under its peer's name (`NodeWindow.feed_rows`). A combine
 parameter is wired to its chunk's output row.
 
-Refused by name (`Unexpressible`): a select row other than `TokenSelect_v4` or `_v1`, a stage template the row's
+**The length check.** The request's `StopCheck_v1` node, after the last select, is a unit of `GreedyStopCheck_v1`
+(`greedy_stop`): the check over the ids, a row each wired to its select's combine, and that the last id is the last select's
+combine recomputed over that combine's own rows. A unit of `StopCheck_v1` alone is no block, nor a gather of the ids (Flock's
+composer takes a unit only with some row past 111 bytes, and an id is four); the combine's logits row is. Its bit, one u16
+word, is the check the Program returns.
+
+Refused by name (`Unexpressible`): a select row other than `TokenSelect_v4` or `_v1`, a length check whose last id is no
+lowered select's token or whose members are not that select's, a stage template the row's
 `serving_templates.unit_templates` doesn't list, and a cut past a proof block's rows (`interface.MAX_ROWS`)."""
 from __future__ import annotations
 
@@ -30,6 +37,7 @@ from verity.circuits.refs import Refs, concat, runs
 from verity.commitments.windows import interface as IF
 from verity.definitions.registry import b1
 from verity.definitions.registry import greedy_stages as G
+from verity.definitions.registry import greedy_stop as GS
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
 
@@ -40,6 +48,7 @@ from .window_builder import Row
 #: the select rows lowered as `TokenSelect_v1`'s stages: each one's function is `TokenSelect_v1{V}`'s
 ROWS = ("TokenSelect_v1", "TokenSelect_v4")
 GATHER_FAMILY = "AllGather_v1"
+STOP_ROW = "StopCheck_v1"
 
 
 def through(w: NodeWindow, refs: Refs) -> Refs:
@@ -133,11 +142,37 @@ def token_select(w: NodeWindow, j: int, node: Any) -> None:
         for param, key, _field in u.wires:
             wt, wa = at[key]
             w.feed(t, param, a, [(Row(wt, wa + m, "o0", 3),) for m in range(M)], (M,))
+    w.combines[j] = (V, N, M, grids, [(param, *at[key]) for param, key, _field in plan[-1][0].wires])
     t, a = at[plan[-1][0].key]
     w.out(j, node, [Piece(0, 2, Row(t, a, "o0", 2), 1, 1)])
 
 
-#: the select's lowering by family, beside `node_window.FAMILIES`
-FAMILIES: dict[str, Lowering] = {"TokenSelect": token_select}
+def stop_check(w: NodeWindow, j: int, node: Any) -> None:
+    """`StopCheck_v1`, the request's length check over its outputs' ids, as a unit of `GreedyStopCheck_v1` (module
+    docstring): the check and the last select's combine over the combine's own rows, its logits and its chunks' results,
+    with the ids a row each, its select's token; its bit, one u16 word, is the check the Program returns."""
+    spec, M = descriptor_id(node.fn), w.members(node)
+    if spec_base(spec) != STOP_ROW:
+        raise Unexpressible(f"{spec}: a length check the lowering doesn't take (not {STOP_ROW})")
+    space, last, *_ = list(runs(w.arg(node, 0, 0)))[-1]
+    if space != "n" or last not in w.combines:
+        raise Unexpressible(f"{w.name}: node {j} ({spec}): its last id is no lowered select's token")
+    V, N, members, grids, wires = w.combines[last]
+    if members != M:
+        raise Unexpressible(f"{w.name}: node {j} ({spec}): {M} members, its last select's {members}")
+    fn = bind(GS.GreedyStopCheck, V=V, N=N, **{k: node.fn.bindings[k] for k in GS.STATICS[2:]})
+    t, a = w.unit(_family(node), fn, M)
+    w.feed_rows(t, "logits", a, grids, (M,))
+    for param, wt, wa in wires:
+        w.feed(t, param, a, [(Row(wt, wa + m, "o0", 3),) for m in range(M)], (M,))
+    T, took = int(node.fn.bindings["T"]), w.take(node, 0)
+    if isinstance(took, _Free) or any(len(rows) != T or any(r.words != 2 for r in rows) for rows in took):
+        raise Unexpressible(f"{w.name}: node {j} ({spec}): its ids are not its {T} selects' tokens, a row each")
+    w.feed_rows(t, "ids", a, [[(rows[i],) for rows in took] for i in range(T)], (M,))
+    w.out(j, node, [Piece(0, 1, Row(t, a, "o0", 1))])
 
-__all__ = ["FAMILIES", "ROWS", "stages", "through", "token_select", "width"]
+
+#: the select's and the length check's lowerings by family, beside `node_window.FAMILIES`
+FAMILIES: dict[str, Lowering] = {"TokenSelect": token_select, "StopCheck": stop_check}
+
+__all__ = ["FAMILIES", "ROWS", "STOP_ROW", "stages", "stop_check", "through", "token_select", "width"]
