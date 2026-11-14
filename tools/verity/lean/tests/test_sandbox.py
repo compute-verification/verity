@@ -1,7 +1,8 @@
 """`tools/verity/lean/sandbox.sh`: an RW_DIR reached through a symlink stays writable. `mount --bind` and
 `/proc/self/mountinfo` name a directory by its resolved path (a slot tree `~/.cache/verity-check/lean-records/build-N` is a
 link into the node's cache root), so the mounts the script keeps writable are matched by that path. A compiler's
-temporary files go to a writable private TMPDIR: a node's TMPDIR (`/workspace/tmp`) is read-only inside."""
+temporary files go to a writable private TMPDIR: a node's TMPDIR (`/workspace/tmp`) is read-only inside. The command
+can't change a mount, however it asks."""
 
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ FAKE = {
     # the mount points mountinfo lists, one per line of $MOUNTS, as `awk '{print $5}' /proc/self/mountinfo` prints them
     "awk": '#!/bin/sh\ncat "$MOUNTS"\n',
     "mount": '#!/bin/sh\necho "$*" >> "$LOG"\nexit 0\n',
+    "setpriv": '#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n',
 }
 
 needs_unshare = pytest.mark.skipif(subprocess.run([*UNSHARE, "--", "true"], capture_output=True).returncode != 0,
@@ -30,7 +32,8 @@ needs_unshare = pytest.mark.skipif(subprocess.run([*UNSHARE, "--", "true"], capt
 
 def fake_run(tmp: Path, args: list[str], mounts: list[str], tmpdir: str | None = None) -> tuple[list[str], str]:
     """``sandbox.sh ARGS -- CMD`` with `mount` logged, mountinfo's mount points ``mounts`` and TMPDIR ``tmpdir``: the
-    `mount` calls it made, and the TMPDIR CMD got (TEMP and TMP the same)."""
+    `mount` calls it made, and the TMPDIR CMD got (TEMP and TMP the same). It runs in a user namespace of its own, whose
+    count of user namespaces the script caps."""
     bin_ = tmp / "bin"
     bin_.mkdir()
     for name, body in FAKE.items():
@@ -40,8 +43,8 @@ def fake_run(tmp: Path, args: list[str], mounts: list[str], tmpdir: str | None =
     env = {"PATH": f"{bin_}:/usr/bin:/bin", "MOUNTS": str(tmp / "mounts"), "LOG": str(tmp / "log")}
     if tmpdir is not None:
         env["TMPDIR"] = tmpdir
-    r = subprocess.run(["bash", str(SANDBOX), *args, "--", "sh", "-c", 'printf "%s\\n" "$TMPDIR" "$TEMP" "$TMP"'],
-                       env=env, capture_output=True, text=True)
+    r = subprocess.run(["unshare", "--user", "--map-root-user", "--", "bash", str(SANDBOX), *args, "--", "sh", "-c",
+                        'printf "%s\\n" "$TMPDIR" "$TEMP" "$TMP"'], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     got = r.stdout.splitlines()
     assert len(got) == 3 and len(set(got)) == 1, got
@@ -52,6 +55,7 @@ def tmpfs(log: list[str]) -> list[str]:
     return [line.rsplit(" ", 1)[1] for line in log if line.startswith("-t tmpfs ")]
 
 
+@needs_unshare
 def test_a_symlinked_rw_dir_is_bound_and_kept_by_its_resolved_path(tmp_path):
     real, link = tmp_path / "cache-root" / "build-0", tmp_path / "build-0"
     real.mkdir(parents=True)
@@ -64,6 +68,7 @@ def test_a_symlinked_rw_dir_is_bound_and_kept_by_its_resolved_path(tmp_path):
     assert read_only == ["/", str(other)]
 
 
+@needs_unshare
 @pytest.mark.skipif(not Path("/dev/shm").is_dir(), reason="no /dev/shm here")
 def test_a_symlinked_ro_dir_is_seen_by_its_resolved_path(tmp_path):
     """An RO_DIR under /dev/shm keeps /dev/shm the host's (a tmpfs would hide it), however the caller spells it."""
@@ -74,6 +79,7 @@ def test_a_symlinked_ro_dir_is_seen_by_its_resolved_path(tmp_path):
     assert "/var/tmp" in tmpfs(log) or not Path("/var/tmp").is_dir()
 
 
+@needs_unshare
 def test_a_tmpdir_under_an_rw_dir_is_kept_as_the_caller_spells_it(tmp_path):
     real, link = tmp_path / "cache-root" / "build-0", tmp_path / "build-0"
     real.mkdir(parents=True)
@@ -82,6 +88,7 @@ def test_a_tmpdir_under_an_rw_dir_is_kept_as_the_caller_spells_it(tmp_path):
     assert got == str(link / ".lake" / "tmp")
 
 
+@needs_unshare
 @pytest.mark.skipif(not Path("/dev/shm").is_dir(), reason="no /dev/shm here")
 def test_a_tmpdir_outside_the_rw_dirs_is_the_private_tmp(tmp_path):
     """The RW_DIR is under /dev/shm, so /tmp gets its tmpfs wherever pytest's tmp_path is."""
@@ -93,6 +100,7 @@ def test_a_tmpdir_outside_the_rw_dirs_is_the_private_tmp(tmp_path):
     assert got == "/tmp" and "/tmp" in tmpfs(log)
 
 
+@needs_unshare
 @pytest.mark.parametrize("tmpdir", [None, "/workspace/tmp"])
 def test_where_tmp_stays_the_hosts_tmpdir_is_a_tmpfs_in_the_first_rw_dir(tmp_path, tmpdir):
     """An RO_DIR under /tmp keeps /tmp the host's, which is read-only inside."""
@@ -120,26 +128,17 @@ def test_inside_the_sandbox_a_symlinked_rw_dir_is_writable_and_the_rest_is_not(t
 
 
 @needs_unshare
-def test_inside_the_sandbox_an_overlaid_dir_takes_writes_in_its_upper_layer_and_outside_is_never_written(tmp_path):
-    """`--overlay DIR TOP`, as `check.sampled_recompile` runs it: inside, DIR is writable and removing a file hides it; the
-    writes land in TOP/upper, and the processes outside, which read DIR meanwhile, see its files as they were."""
-    lower, top = tmp_path / "pkg" / ".lake", tmp_path / "work" / "sampled" / "0"
-    (lower / "build").mkdir(parents=True)
-    (lower / "build" / "M.olean").write_bytes(b"old")
-    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--overlay", str(lower), str(top), "--", "bash", "-c",
-                        'rm "$1/build/M.olean" && ! test -e "$1/build/M.olean" && printf new > "$1/build/N.olean"',
-                        "_", str(lower)], capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
-    assert [p.name for p in (lower / "build").iterdir()] == ["M.olean"]
-    assert (lower / "build" / "M.olean").read_bytes() == b"old"
-    assert (top / "upper" / "build" / "N.olean").read_bytes() == b"new"
-    assert not (top / "upper" / "build" / "M.olean").is_file(), "a removed file is a whiteout in the upper layer"
-
-
-def test_an_overlay_path_mount_would_misparse_is_refused(tmp_path):
-    r = subprocess.run(["bash", str(SANDBOX), "--overlay", str(tmp_path / "a,b"), str(tmp_path / "t"), "--", "true"],
+def test_inside_the_sandbox_a_read_only_dir_is_read_and_never_written(tmp_path):
+    """`--ro DIR`, as `check.sampled_recompile` passes its seal: DIR is seen inside wherever it is (under `/tmp`, the host's
+    `/tmp` is kept), and it is read-only there."""
+    seal, out = tmp_path / "seal", tmp_path / "work" / "sampled" / "0"
+    seal.mkdir()
+    (seal / "M.olean").write_bytes(b"sealed")
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(seal), str(out), "--", "bash", "-c",
+                        'cat "$1/M.olean" > "$2/got" && ! touch "$1/no" 2>/dev/null', "_", str(seal), str(out)],
                        capture_output=True, text=True)
-    assert r.returncode == 2 and "overlay" in r.stderr, r.stderr
+    assert r.returncode == 0, r.stderr
+    assert (out / "got").read_bytes() == b"sealed" and not (seal / "no").exists()
 
 
 @needs_unshare
@@ -309,6 +308,99 @@ def test_at_refuses_a_fixed_path_outside_var_tmp_a_start_outside_the_tree_and_a_
     if Path("/var/tmp").is_dir():
         assert "is not under that tree" in refused(["--at", FIXED, str(real)], tmp_path)
     assert not (real / "pkg" / "src" / "no").exists() and not Path("/var/tmp/lean-artifacts-that-need-not-exist").exists()
+
+
+@needs_unshare
+@needs_var_tmp
+def test_an_ro_dir_under_an_rw_dir_is_read_only_at_its_own_path_and_through_the_fixed_path(tmp_path):
+    """A build's fetched dependencies lie in its `.lake`, which it writes: handed as an RO_DIR, the script binds them
+    read-only before it binds the tree at FIXED, whose copy keeps them so, since the command can mount nothing itself. An
+    RO_DIR under an RW_DIR that doesn't exist is left alone."""
+    real, _ = linked_tree(tmp_path)
+    (deps := real / "pkg" / ".lake" / "packages" / "dep").mkdir(parents=True)
+    (deps / "D.olean").write_text("kept")
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(deps.parent), "--ro", str(real / "pkg" / ".lake" / "gone"),
+                        "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--", sys.executable, "-c", APPEND,
+                        f"{FIXED}/pkg/.lake/packages/dep/D.olean", str(deps / "D.olean"), f"{FIXED}/pkg/.lake/out"],
+                       cwd=real / "pkg", capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == ["EROFS", "EROFS", "written"]
+    assert (deps / "D.olean").read_text() == "kept" and (real / "pkg" / ".lake" / "out").read_text() == "x"
+    assert not (real / "pkg" / ".lake" / "gone").exists()
+
+
+#: each mount a command in the sandbox may ask for, as (its name, the shell that asks): `$AT` is FIXED, `$TREE` the tree
+#: at its own path, `$OWN` the mount that holds the tree there, and `$AT/pkg/.lake/x` a directory of the RW_DIR
+ASKS = {
+    "remount FIXED read-write": 'mount -o remount,bind,rw "$AT"',
+    "remount the tree's own mount read-write": 'mount -o remount,bind,rw "$OWN"',
+    "mount a tmpfs over a source directory": 'mount -t tmpfs tmpfs "$AT/pkg/src"',
+    "bind the RW_DIR over a source directory": 'mount --bind "$AT/pkg/.lake/x" "$TREE/pkg/src"',
+    "unmount FIXED": 'umount -l "$AT"',
+}
+#: appends to each file named, printing what each append gave
+APPEND = ("import errno, sys\nfor f in sys.argv[1:]:\n    try:\n        open(f, 'a').write('x')\n        print('written')\n"
+          "    except OSError as e:\n        print(errno.errorcode[e.errno])")
+
+
+def asked(tmp: Path, ask: str, opens: tuple[str, ...] = ()) -> list[str]:
+    """What ``ask`` gave in a sandbox with a tree bound at FIXED, run in the namespaces ``opens`` makes when it is given:
+    "not opened" where ``opens`` failed, else "made" or "refused", then what an append to a source gave through FIXED and
+    through the tree's own path. Checks that the source and its directory are as they were."""
+    real, _ = linked_tree(tmp)
+    (real / "pkg" / ".lake" / "x").mkdir(parents=True)
+    own = next(p for p in [real, *real.parents] if os.path.ismount(p))
+    script = ('if sh -c "$ASK" >/dev/null 2>&1; then echo made; else echo refused; fi; '
+              '"$PY" -c "$APPEND" "$AT/pkg/src/M.lean" "$TREE/pkg/src/M.lean"')
+    env = {**os.environ, "AT": FIXED, "TREE": str(real), "OWN": str(own), "ASK": ask, "PY": sys.executable,
+           "APPEND": APPEND}
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--",
+                        "sh", "-c", 'cd / && { "$@" sh -c "$0" || echo "not opened"; }', script, *opens],
+                       cwd=real / "pkg", env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (real / "pkg" / "src" / "M.lean").read_text() == f"source of {tmp.name}\n"
+    assert sorted(p.name for p in (real / "pkg" / "src").iterdir()) == ["M.lean", "deep"]
+    assert list((real / "pkg" / ".lake" / "x").iterdir()) == []
+    return r.stdout.splitlines()
+
+
+@needs_unshare
+@needs_var_tmp
+@pytest.mark.parametrize("ask", ["remount FIXED read-write", "remount the tree's own mount read-write"])
+def test_inside_the_sandbox_a_read_only_mount_cannot_be_remounted_writable(tmp_path, ask):
+    """Code that runs while Lean compiles may ask for any mount. The command holds no capability, so `mount -o
+    remount,bind,rw` of FIXED, or of the mount that holds the tree at its own path, is refused, and an append to a source
+    through either path still fails with EROFS."""
+    assert asked(tmp_path, ASKS[ask]) == ["refused", "EROFS", "EROFS"]
+
+
+@needs_unshare
+@needs_var_tmp
+@pytest.mark.parametrize("ask", ["mount a tmpfs over a source directory", "bind the RW_DIR over a source directory"])
+def test_inside_the_sandbox_no_mount_can_be_made_over_a_read_only_directory(tmp_path, ask):
+    """A tmpfs, or a writable directory bound over a source directory, would let the command put other sources where the
+    build reads them. Both mounts are refused."""
+    assert asked(tmp_path, ASKS[ask]) == ["refused", "EROFS", "EROFS"]
+
+
+@needs_unshare
+@needs_var_tmp
+def test_inside_the_sandbox_a_read_only_mount_cannot_be_unmounted(tmp_path):
+    """Unmounting FIXED (detached, as a busy mount is) would leave an empty directory of the sandbox's tmpfs there, for
+    the command to fill. It is refused, and FIXED stays the bound tree."""
+    assert asked(tmp_path, ASKS["unmount FIXED"]) == ["refused", "EROFS", "EROFS"]
+
+
+@needs_unshare
+@needs_var_tmp
+@pytest.mark.parametrize("ask", ASKS)
+@pytest.mark.parametrize("opens", [("unshare", "--mount"), ("unshare", "--user", "--map-root-user", "--mount")],
+                         ids=["mount", "user-and-mount"])
+def test_inside_the_sandbox_namespaces_of_the_commands_own_give_it_no_mount(tmp_path, ask, opens):
+    """The command can't get a capability back in namespaces of its own: a mount namespace needs one, and the sandbox's
+    user namespace may hold no other (a new user namespace would hold every capability over the mount namespace it
+    makes). So it never reaches its mount, and the source stays as it was."""
+    assert asked(tmp_path, ASKS[ask], opens) == ["not opened"]
 
 
 LAKEFILES = {
