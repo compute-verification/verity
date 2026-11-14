@@ -335,22 +335,20 @@ __device__ __forceinline__ void sk64_load(uint4 (&d)[MT][2], const uint4 *__rest
   }
 }
 
-// σ of the warp's blocks b0 … b0 + 16 MT − 1 into acc: lane (g, t) ends with rows 8 n + 2 t, +1 of block 16 mt + g in
-// acc[mt][n][0, 1] and of block 16 mt + g + 8 in acc[mt][n][2, 3].
-template <bool Z, int MT>
-__device__ __forceinline__ void sk64_tile(int (&acc)[MT][8][4], const uint4 *__restrict__ sg,
-                                          const uint4 *__restrict__ data, const uint4 *__restrict__ zs, u64 b0, u64 n,
-                                          int lane) {
-  const int g = lane >> 2, t = lane & 3;
+// σ of the warp's 16 MT blocks into acc, load(d, p) putting lane (g, t)'s 16 bytes at p of the warp's blocks
+// 16 mt + g (+ 8 for hi) in d[mt][hi]: lane (g, t) ends with rows 8 n + 2 t, +1 of block 16 mt + g in acc[mt][n][0, 1]
+// and of block 16 mt + g + 8 in acc[mt][n][2, 3].
+template <int MT, class Load>
+__device__ __forceinline__ void sk64_tile_of(int (&acc)[MT][8][4], const uint4 *__restrict__ sg, Load load, int lane) {
 #pragma unroll
   for (int mt = 0; mt < MT; ++mt)
 #pragma unroll
     for (int nt = 0; nt < 8; ++nt) acc[mt][nt][0] = acc[mt][nt][1] = acc[mt][nt][2] = acc[mt][nt][3] = 0;
   uint4 cur[MT][2], nxt[MT][2];
-  sk64_load<Z, MT>(cur, data, zs, b0, n, 0, g, t);
+  load(cur, 0);
 #pragma unroll 1
   for (int p = 0; p < SK64_P; ++p) {
-    if (p + 1 < SK64_P) sk64_load<Z, MT>(nxt, data, zs, b0, n, p + 1, g, t);
+    if (p + 1 < SK64_P) load(nxt, p + 1);
     const uint4 w = sg[p * 32 + lane];
     const u32 ws[4] = {w.x, w.y, w.z, w.w};
 #pragma unroll
@@ -369,6 +367,15 @@ __device__ __forceinline__ void sk64_tile(int (&acc)[MT][8][4], const uint4 *__r
 #pragma unroll
     for (int mt = 0; mt < MT; ++mt) cur[mt][0] = nxt[mt][0], cur[mt][1] = nxt[mt][1];
   }
+}
+
+// sk64_tile_of over the blocks b0 … b0 + 16 MT − 1 at data.
+template <bool Z, int MT>
+__device__ __forceinline__ void sk64_tile(int (&acc)[MT][8][4], const uint4 *__restrict__ sg,
+                                          const uint4 *__restrict__ data, const uint4 *__restrict__ zs, u64 b0, u64 n,
+                                          int lane) {
+  const int g = lane >> 2, t = lane & 3;
+  sk64_tile_of<MT>(acc, sg, [&](uint4 (&d)[MT][2], int p) { sk64_load<Z, MT>(d, data, zs, b0, n, p, g, t); }, lane);
 }
 
 template <int MT>
