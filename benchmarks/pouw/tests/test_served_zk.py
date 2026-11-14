@@ -38,6 +38,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 import of_record as OR
+import of_record_lean as ORL
 import served_commit as SC
 
 _spec = importlib.util.spec_from_file_location("certified_salt", Path(CC.__file__).resolve().parent / "tests/certified_salt.py")
@@ -284,7 +285,7 @@ def _challenger(params, units=None, coins=None, sampler=None, record=None) -> SC
     """The challenger holding the execution phase's coins (the ones that salted the execution phase's pass, by default), its salt coin opened
     after the pass's weights' root as the job opens it; `units` a stand-in for Lean's sample."""
     sampler = sampler or (SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]]))
-    ch = SC.Challenger(params, coins or _coins(), sampler, clock=lambda: 0.0, record=record)
+    ch = SC.Challenger(params, coins or _coins(), sampler, clock=lambda: 0.0, record=ORL.Record() if record is None else record)
     ch.open("salt", _salt_after(params))
     return ch
 
@@ -310,12 +311,12 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"op": "salt", "after": after.hex(), "out": f"{tmp_path}/salt.json"}) + "\n"))
     (tmp_path / "params.json").write_text(json.dumps(params))
     capsys.readouterr()
-    assert SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log", "--state", str(state)]) == 0
+    assert SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log", "--state", str(state)], record=ORL.Record) == 0
     assert capsys.readouterr().out.startswith("OPENED")
     assert json.loads((tmp_path / "log" / "coins.json").read_text()) == controller.commitment.to_json()
     assert json.loads((tmp_path / "salt.json").read_text()) == controller.open("salt", after).to_json()
     with pytest.raises(SystemExit, match="no challenger state"):
-        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")])
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")], record=ORL.Record)
 
 
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
@@ -332,7 +333,7 @@ def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, mon
     monkeypatch.setattr(SC.PV, "coins", random.Random(2).randbytes)
     (tmp_path / "params.json").write_text("{}")
     with pytest.raises(SystemExit, match="coins-without-claim"):
-        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log"])
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log"], record=ORL.Record)
     assert not (tmp_path / "log" / "coins.json").exists()
 
 
@@ -440,7 +441,7 @@ def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_n
 
     def challenger():
         t = [0.0]
-        return SC.Challenger(timed, SC.Recorded(coins.commitment, [salt]), clock=lambda: t[0]), t
+        return SC.Challenger(timed, SC.Recorded(coins.commitment, [salt]), clock=lambda: t[0], record=ORL.Record()), t
 
     ch, t = challenger()
     t[0] = 10.0
@@ -500,7 +501,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    ch = _challenger(params, record=OR.Record(lean=False))
+    ch = _challenger(params, record=ORL.Record(lean=False))
     _held(ch, "honest", rec)
     with pytest.raises(S.Refused) as e:
         _held(ch, "again", rec, stream="again")
@@ -518,7 +519,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    ch = _challenger(params, record=OR.Record(lean=False))
+    ch = _challenger(params, record=ORL.Record(lean=False))
     _held(ch, "honest", rec)
     ch.select("honest")
     with pytest.raises(S.Refused) as e:
@@ -529,7 +530,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     assert ch.select("ctl").units == ch.draws["honest"].units
 
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    old = SC.Challenger(bare, _coins(), record=OR.Record(lean=False), predates_deadline=True)
+    old = SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
     log = tmp_path / "log"
     log.mkdir()
     (log / "coins.json").write_text(json.dumps(old.coins.commitment.to_json()))
@@ -543,9 +544,9 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     (log / "requests.jsonl").write_text("".join(json.dumps({"request": json.dumps(r), "reply": x}) + "\n"
                                                 for r, x in zip(reqs, replies)))
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
-    assert SC.replay(bare, log, tmp_path / "replay", record=OR.Record(lean=False)) == []
+    assert SC.replay(bare, log, tmp_path / "replay", record=ORL.Record(lean=False)) == []
     (tmp_path / "bare.json").write_text(json.dumps(bare))
-    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"]) == 0
+    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"], record=ORL.Record) == 0
 
 
 #: the certifier's run ids, fixed so the prover can name its run in the stream it records
@@ -629,7 +630,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     for p in (0, 1):
         params, raw, rec, *_ = _certified_window(words, run, salts[p], sid, prover, p)
         live, ck = _live(tmp_path / f"w{p}.json")
-        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
+        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"w{p}.json", deployment=_deployment(client, ck),
                            opens=ledger)
         with pytest.raises(S.Refused) as e:
@@ -654,7 +655,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
         assert SC.stream_id({"deployment": f"served-zk/{run}"}, s, SC.certifier_run(client)) == sid
         params, raw, rec, *_ = _certified_window(words, run, salts[0], sid, prover)
         live, ck = _live(tmp_path / f"{s}.json")
-        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
+        ch = SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"{s}.json", deployment=_deployment(client, ck),
                            opens=ledger)
         with pytest.raises(S.Refused) as e:
@@ -701,7 +702,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
 
     def challenger(name: str, certifier=client, prover=prover, p=params, entropy=None) -> SC.Challenger:
         live, ck = _live(tmp_path / f"{name}.json", entropy)
-        return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=certifier,
+        return SC.Challenger(p, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=certifier,
                              prover=prover, coin_record=tmp_path / f"{name}.json",
                              deployment=_deployment(certifier, ck), opens=ledger)
 
@@ -743,7 +744,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     pub, op = _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)
     unread = "the window is certified, and its template's unit reads no salt"
     assert ch.check("honest", u, pub, op).startswith(unread)
-    assert SC.check(params, rec, d.draw, u, pub, op, record=OR.Record(lean=False)).startswith(unread)
+    assert SC.check(params, rec, d.draw, u, pub, op, record=ORL.Record(lean=False)).startswith(unread)
     assert held == [salt, None]
     monkeypatch.setattr(CC, "opening_twin", opening)
 
@@ -914,21 +915,21 @@ def test_check_opens_the_sampled_proof_blocks_rows_only(served, tmp_path):
     priv = SC.load(tmp_path / "p.npz")
     sample = {"law": "subset", "population": 26, "k": 3, "units": [5, 13, 25]}
     for t in sample["units"]:
-        assert SC.check(params, rec, sample, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t)) is None
+        assert SC.check(params, rec, sample, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t), record=ORL.Record()) is None
     assert SC.opening(advice, priv, params, 25)["entry_value"]["kind"] == "filler"
     op = SC.opening(advice, priv, params, 5)
-    assert "not entry 0's row" in SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 6), op)
-    assert "not drawn" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6))
-    assert SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), drawn=False) is None
-    assert "not the unit's row" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), op, drawn=False)
+    assert "not entry 0's row" in SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 6), op, record=ORL.Record())
+    assert "not drawn" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), record=ORL.Record())
+    assert SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), SC.opening(advice, priv, params, 6), drawn=False, record=ORL.Record()) is None
+    assert "not the unit's row" in SC.check(params, rec, sample, 6, _unit_pub(advice, priv, 6), op, drawn=False, record=ORL.Record())
     oparams, opublic, oadvice, opriv = _window(words, run="r-other")
     orec = _register(oparams, opublic)
-    assert "row" in SC.check(params, rec, sample, 5, _unit_pub(oadvice, opriv, 5), op)
-    assert "window" in SC.check(params, orec, sample, 5, _unit_pub(advice, priv, 5), op)
+    assert "row" in SC.check(params, rec, sample, 5, _unit_pub(oadvice, opriv, 5), op, record=ORL.Record())
+    assert "window" in SC.check(params, orec, sample, 5, _unit_pub(advice, priv, 5), op, record=ORL.Record())
     forged = {**op, "entry_value": {**op["entry_value"], "hi": op["entry_value"]["hi"] + 1}}
-    assert "not the registered window's entry" in SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 5), forged)
+    assert "not the registered window's entry" in SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 5), forged, record=ORL.Record())
     for bad in ({**op["entry_value"], "kind": "tile"}, {**op["entry_value"], "root_a": "00"}, {"kind": "call"}, None):
-        assert SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 5), {**op, "entry_value": bad}) == "the opening names no entry"
+        assert SC.check(params, rec, sample, 5, _unit_pub(advice, priv, 5), {**op, "entry_value": bad}, record=ORL.Record()) == "the opening names no entry"
 
 
 def _session(t: int) -> str:
@@ -1015,12 +1016,12 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w)
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
-    record = OR.Record(lean=False)
+    record = ORL.Record(lean=False)
     py = _challenger(params, record=record)
     o2, pub2, _ = _through(py, rec)
     assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
     t = ch.draws["honest"].units[0]
-    lean = OR.Record()
+    lean = ORL.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=lean) is None
     assert [(e["check"], e["same"], e["lean"]) for e in lean.witness] == [("opening", True, None),
@@ -1040,7 +1041,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
     law, ports = SC.law_of(params, ell), SC.ports(params, ell)
     p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
-    record = OR.Record()
+    record = ORL.Record()
 
     def codes(r) -> list[str]:
         return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None))
@@ -1062,11 +1063,11 @@ def test_r1_r6_of_a_window_are_leans(served):
 
 def test_the_record_follows_the_switch(monkeypatch):
     """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
-    assert OR.Record().lean is (OR.V.RECORD_VERDICT == "lean")
+    assert ORL.Record().lean is (OR.V.RECORD_VERDICT == "lean")
     monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
-    assert OR.Record().lean is False and OR.Record(lean=True).lean is True
+    assert ORL.Record().lean is False and ORL.Record(lean=True).lean is True
     monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
-    assert OR.Record().lean is True and OR.Record(lean=False).lean is False
+    assert ORL.Record().lean is True and ORL.Record(lean=False).lean is False
 
 
 @LEAN
@@ -1080,7 +1081,7 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     spec = SC.spec_of(params, ell)
-    record = OR.Record(lean=True)
+    record = ORL.Record(lean=True)
 
     def verdict(r: dict) -> dict:
         return record.public(OR.public_params(spec, r, S.SCHEME), lambda: S.check_public(spec, r).to_json())
@@ -1170,7 +1171,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     assert _codes(e) == {"final"}
     t = ch.draws["honest"].units[0]
     monkeypatch.setattr(OR, "py_opening", lambda x: "forced")
-    record = OR.Record()
+    record = ORL.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
                     record=record) == f"{OR.DISAGREE}: opening"
     assert record.witness[0]["python"] == "forced" and record.witness[0]["lean"] is None
@@ -1178,7 +1179,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     monkeypatch.undo()
     op, served_domain = SC.opening(advice, priv, params, t), SC.window_domain
     monkeypatch.setattr(SC, "window_domain", lambda params, ell: served_domain({**params, "context": "other"}, ell))
-    record = OR.Record()
+    record = ORL.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), op, record=record) == \
         f"{OR.DISAGREE}: prelude"
     assert [(e["check"], e["same"]) for e in record.witness] == [("opening", True), ("prelude", False)]
@@ -1255,7 +1256,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     for u in sampled:
         (tmp_path / f"pub{u}.bin").write_bytes(_unit_pub(advice, priv, u))
         (tmp_path / f"op{u}.json").write_text(json.dumps(SC.opening(advice, priv, params, u)))
-        assert SC.check(params, rec, {"units": sampled}, u, _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)) is None
+        assert SC.check(params, rec, {"units": sampled}, u, _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u), record=ORL.Record()) is None
         (tmp_path / f"open{u}.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
         (tmp_path / f"s{u}").mkdir()
         (tmp_path / f"s{u}" / "session.json").write_text(json.dumps({"unit": u}))
@@ -1282,7 +1283,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     monkeypatch.setattr(sys, "stdin", io.StringIO("".join(json.dumps(r) + "\n" for r in reqs)))
     monkeypatch.setattr(SC, "Coins", lambda epoch, entropy: _coins())   # the process's coins are the ones that salted the pass
     capsys.readouterr()
-    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)]) == 0
+    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)], record=ORL.Record) == 0
     replies = capsys.readouterr().out.splitlines()
     assert [x.split(" ", 1)[0] for x in replies] == ["COINS", "OPENED", "REFUSED", *["REFUSED"] * len(SC.CASES), "REGISTERED",
                                                      "DRAWN", "REFUSED", "PENDING", "DELIVERED", "ACCEPT", "REFUSED"]
@@ -1311,12 +1312,12 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     accepted = [e for w in witness if w["reply"] == "ACCEPT" for e in w["of_record"]]
     assert accepted and all(e in o["of_record"] for e in accepted)
 
-    assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)]) == 0
+    assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)], record=ORL.Record) == 0
     assert capsys.readouterr().out.startswith("SAME ")
     assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler)  # the twin
     forged = {**sampling, "coin": ("00" if sampling["coin"][:2] != "00" else "01") + sampling["coin"][2:]}
     (log / "openings.jsonl").write_text(json.dumps(salt) + "\n" + json.dumps(forged) + "\n")
-    assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean)]) == 1
+    assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean)], record=ORL.Record) == 1
     out = capsys.readouterr().out
     assert out.startswith("DIFFERENT ") and "does not open against" in out
 
@@ -1375,7 +1376,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
             f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
             "to the template or to Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
-        assert SC.check(params, rec, sample, t, (out / "pub.bin").read_bytes(), op) is None, t
+        assert SC.check(params, rec, sample, t, (out / "pub.bin").read_bytes(), op, record=ORL.Record()) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"
 
 

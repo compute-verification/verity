@@ -24,7 +24,6 @@ import gzip
 import hashlib
 import json
 import os
-import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -46,7 +45,9 @@ from verity_vllm.config import (
     workload_arg,
     workload_file,
 )
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import layout as build_paths
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.components import (  # noqa: F401
     component_of,
     component_provenance,
@@ -63,9 +64,11 @@ from verity_vllm.records.workload import Workload, WorkloadSampling
 
 __all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_id_of", "stop_rule", "workload_target"]
 
+logger = init_logger(__name__)
+
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
-    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
+    logger.warning("registry module unavailable (%s): components naming its Definitions will not decode", _e)
 
 
 def request_id_of(index: int) -> str:
@@ -690,9 +693,9 @@ def main(a: Options) -> int:
             return 5
     res = build(a.workload, a.derived, a.out, checkpoint_dir=a.checkpoint_dir, eos_token_ids=eos, artifact_root=a.artifact_root, early=early, canon=canon, theta_registered=a.theta_registered)
     if not res.get("ok"):
-        print(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
+        write(json.dumps({k: res[k] for k in ("reason", "message", "missing_derived") if k in res}))
         return 4
-    print(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
+    write(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
                       "requests": len(res["requests"]), "descriptor_bytes": res["descriptor"]["bytes"], "cost": res["cost"],
                       "eos_token_ids": _stated(res, "stop_rule", "eos_token_ids"),
                       "lag": _stated(res, "lag", "value"), "async_scheduling": _stated(res, "lag", "async_scheduling"),

@@ -47,7 +47,7 @@ H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -116,6 +116,7 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     from verity_vllm.program.predict import block_counts as BC
 
     from verity_vllm.definitions.boolean import gate_table
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     fn, m, steps = BC.session(doc)
     table, unpriced = gate_table([fn])

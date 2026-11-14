@@ -60,7 +60,7 @@ def rms_norm_compiled(x_bf16: np.ndarray, w_bf16: np.ndarray, eps: float, k: int
     """Model of ``triton_per_fused__to_copy_embedding_rms_norm_t_0`` on already gathered rows."""
     x = bf16_to_f32(x_bf16)
     s = ieee_inv_rms(x, eps)
-    s = ulp_offset(s, k) if np.isscalar(k) else (s.view(np.int32) + np.asarray(k, np.int32)).view(np.float32)
+    s = (s.view(np.int32) + np.asarray(k, np.int32)).view(np.float32) if isinstance(k, np.ndarray) else ulp_offset(s, k)
     return rms_rows(x, w_bf16, s)
 
 

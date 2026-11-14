@@ -9,16 +9,22 @@ record are stand-ins written by each test."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from verity import config as K
+from verity.commitments.crypto import lms
 from verity.protocol import Channel
 from verity.channel import Refused
 from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.accounting.pous.device import onsite
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import Law
 from verity_cli import run as R
@@ -115,11 +121,53 @@ def test_the_configuration_states_no_host_or_address():
 
 def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
-    assert [(p["party"], p["protocol"], p["scheme"], p["key-sha512"]) for p in cfg["pin"]] == [
-        ("memory-challenger", "pous", K.SCHEMES[0], T.PINS["pous"]),
-        ("memory-challenger", "wipe", K.SCHEMES[0], T.PINS["wipe"])]
+    assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
+        ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
+    stated = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
+    assert {p["protocol"]: p["key-sha512"] for p in cfg["pin"]} == stated
+    assert all(re.fullmatch("[0-9a-f]{128}", k) for k in stated.values()) and stated["pous"] != stated["wipe"]
+    assert T.configuration(cfg["program"]["commit"])["pin"] == cfg["pin"]   # the table states no key of its own
     bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
+
+
+def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
+    """The table's placement of a memory challenger's session: `trusted-device` holds only for the key the onsite
+    configuration pins for that protocol, under its committed hash; another protocol's pin, no key or a configuration
+    nobody committed reads rehearsal. No other party gets a placement."""
+    cfg = R.load(CONFIG, REG)
+    piece = {c: p for c in ("pous", "wipe") for p in [T.PARTIES[c]["memory-challenger"]]}
+    pin = {p["protocol"]: p["key-sha512"] for p in cfg["pin"]}
+    key = {c: "ab" * 32 + c.encode().hex() for c in pin}
+    monkeypatch.setitem(cfg, "pin", [p | {"key-sha512": hashlib.sha512(bytes.fromhex(key[p["protocol"]])).hexdigest()}
+                                     for p in cfg["pin"]])
+    monkeypatch.setattr(mc, "committed", lambda: frozenset({K.digest(cfg)}))
+    for c in ("pous", "wipe"):
+        where = T.placement(cfg, piece[c], {"public_key": key[c]})
+        assert mc.holds(where) and K.digest(cfg) in where[mc.PREMISE] and f"{c} sessions" in where[mc.PREMISE]
+        other = "wipe" if c == "pous" else "pous"
+        assert not mc.holds(T.placement(cfg, piece[c], {"public_key": key[other]}))
+        assert not mc.holds(T.placement(cfg, piece[c], None))
+    monkeypatch.setattr(mc, "committed", lambda: frozenset())
+    assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
+    assert T.placement(cfg, T.PARTIES["pous"]["prover"], {"public_key": key["pous"]}) is None
+    assert pin.keys() == {"pous", "wipe"}
+
+
+def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
+    """The run's registration reads the configuration's hash from ``run.json``: no ``run.json``, or one under another
+    hash, is refused; under this configuration's own hash it raises with its goal, since no log item names a
+    configuration yet."""
+    cfg = R.load(CONFIG, REG)
+    with pytest.raises(Refused) as no_run:
+        T.registration(cfg, tmp_path)
+    assert no_run.value.name == "registration"
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": "00" * 64}))
+    with pytest.raises(Refused):
+        T.registration(cfg, tmp_path)
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
+    with pytest.raises(NotImplementedError, match=T.REGISTRATION_GOAL):
+        T.registration(cfg, tmp_path)
 
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
@@ -215,10 +263,11 @@ def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
 
 def test_the_runners_variables_and_the_bindings_keys_are_these():
     cfg = R.load(CONFIG, REG)
-    assert T.variables(cfg, BINDINGS) == VARIABLES
+    deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg["pin"], sort_keys=True)}
+    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES)
+    assert set(unbound) == set(VARIABLES) | set(deployed)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
 
@@ -257,15 +306,66 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
 
 def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
                                                                                          monkeypatch):
-    """The prover node's and the auditor's host's runtime parties need what their machine hands them (`held`: the
-    served store, the auditor's signer and log, the party key, the request), which doesn't reach the table yet: the
-    run raises by the row's name before the served window starts."""
+    """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
+    request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
-    for machine in (T.PROVER_NODE, T.AUDITOR_HOST):
-        state = tmp_path / machine
-        with pytest.raises(NotImplementedError) as e:
-            R.run_main([str(CONFIG), "--on", machine, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
-        assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
+    state = tmp_path / T.PROVER_NODE
+    with pytest.raises(NotImplementedError) as e:
+        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)], REG)
+    assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
+
+
+def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
+                                                                                                     capsys):
+    """On the auditor's host each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
+    first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
+    request is read or any party or the served window starts."""
+    state = tmp_path / T.AUDITOR_HOST
+    run = [str(CONFIG), "--on", T.AUDITOR_HOST, "--bindings", bindings(tmp_path), "--state", str(state)]
+    assert R.run_main(run, REG) == 2 and "refused key" in capsys.readouterr().err
+    other = b"a key the auditor never pinned"
+    for component in ("pous", "wipe"):
+        mine = state / "runs" / component / T.MEMORY_CHALLENGER
+        mine.mkdir(parents=True)
+        (mine / "seed").write_bytes(bytes(lms.DEPLOYED.N))
+        lms.LeafState.create(mine / onsite.KEY_STATE, other, lms.DEPLOYED.H)
+    assert R.run_main(run, REG) == 2
+    err = capsys.readouterr().err
+    assert "refused pin" in err and hashlib.sha512(other).hexdigest() in err
+    assert not (state / "runs" / "pous" / T.MEMORY_CHALLENGER / "tree.bin").exists()
+
+
+def test_the_wipes_the_rounds_and_poubs_parties_each_have_their_protocols_start():
+    for s in (T.WIPE, T.POUS, T.POUB):
+        assert sorted(s.protocol().starts) == sorted(s.roles.values())
+
+
+def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_it(tmp_path, monkeypatch):
+    """PoUB's verifier pins the memory challenger's PoUS key, which is in that party's run on the same host: its start
+    gets that run's state directory (``challenger``) beside its bindings, and its own state directory."""
+    got = {}
+
+    def start(configuration, bound, state):
+        got.update(bound=bound, state=state)
+        raise NotImplementedError(T.NOT_YET)
+
+    monkeypatch.setitem(T.P2.STARTS, T.P2.VERIFIER, start)
+    with pytest.raises(NotImplementedError):
+        T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
+    assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
+                            "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
+    assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
+
+
+def test_the_runtime_components_channels_are_their_protocols_manifests():
+    """The configuration's channels of PoUS's rounds, the wipe and PoUB are their protocols' manifests', each role
+    under the configuration's name for its party, with the channel to onsite's verifier beside them."""
+    for component, s in (("pous", T.POUS), ("wipe", T.WIPE), ("bandwidth", T.POUB)):
+        named = {r: c for c, r in s.roles.items()}
+        mine = {(c.sender, c.receiver, c.messages, c.carries_coins) for c in T.MANIFESTS[component].channels
+                if T.VERIFIER not in (c.sender, c.receiver)}
+        assert mine == {(named[c.sender], named[c.receiver], c.messages, c.carries_coins)
+                        for c in s.protocol().manifest.channels}
 
 
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):

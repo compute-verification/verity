@@ -44,9 +44,12 @@ from verity_vllm.check.replay.population import (
     population,
     split_not_executed,
 )
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import vu_export as VX
 
 __all__ = ["after_replay"]
+
+logger = init_logger(__name__)
 
 STORE_SCHEMA = "vllm-vu-store/v1"
 SR.keep_population(True)            # the Commit imports this module before its replay: the export reuses that replay's population
@@ -172,9 +175,9 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     key = VX.selection_key(run_root)
     picked = VX.select(pool, limits, key)
     t_draw = time.perf_counter()                                             # the sampling budget starts here, never inside the build
-    print(f"[vu-export] population: {len(indices)}/{len(programs)} request Programs, {len(all_vus)} VUs, {len(picked)} sampled, "
-          f"{t_draw - t0:.0f} s" + (" (the replay's own)" if reuse else "") + (f"; {len(skipped)} Programs past the population budget" if skipped else ""),
-          flush=True)
+    logger.info("[vu-export] population: %d/%d request Programs, %d VUs, %d sampled, %.0f s%s%s", len(indices), len(programs), len(all_vus),
+                len(picked), t_draw - t0, " (the replay's own)" if reuse else "",
+                f"; {len(skipped)} Programs past the population budget" if skipped else "")
     _FORK.update(picked=picked, indices=indices, store=CommittedStore.of_record(bmap, committed, manifest), weights=weights,
                  arrivals=arrivals, key=key, limits=limits)
     digest_of = {rid: str(inst.get("digest") or "program") for rid, inst in programs.items()}
@@ -201,7 +204,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                     blob.write_bytes(b)
             units.setdefault(digest_of[unit["request"]], []).append(unit)
             if k % 100 == 0:
-                print(f"[vu-export] {k}/{len(picked)} VUs, {time.perf_counter() - t_draw:.0f} s", flush=True)
+                logger.info("[vu-export] %d/%d VUs, %.0f s", k, len(picked), time.perf_counter() - t_draw)
     finally:
         _FORK.clear()
     prov = dict(provenance or {}, run_root=bytes(run_root).hex(),
@@ -304,7 +307,7 @@ def extract(store: str | Path, out_dir: str | Path, *, where: str | None = None,
                 insts = VX.decompose(ev["family"], ev["statics"], _operands(root, ev, weights), outs, pick, limits)
             except VX.DecompositionMismatch as e:
                 by_family[f"decomposition_error:{u['family']}"] += 1
-                print(f"[vu-export] unit {u['vu']} evaluation {j}: {e}", flush=True)
+                logger.warning("[vu-export] unit %s evaluation %s: %s", u["vu"], j, e)
                 continue
             for inst in insts:
                 w = writers.get(inst.set_name) or writers.setdefault(inst.set_name, VX._SetWriter(inst.set_name, inst.relation))
@@ -389,8 +392,8 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
                        executed_prefix=replay_kw.get("executed_prefix"), program_dirs={k: v["dir"] for k, v in loaded.items() if v.get("dir")},
                        provenance=prov, limits=_limits_for(out, sr), population_of_record=kept)
     except Exception as e:  # noqa: BLE001  -- not part of the record: named, never a verdict
-        print(f"[vu-export] FAILED: {e!r}"[:400], flush=True)
+        logger.warning("[vu-export] FAILED: %s", repr(e)[:380])
         return {"ok": False, "why": repr(e)[:400]}
-    print(f"[vu-export] {len(s['sets'])} sets, {sum(x['n'] for x in s['sets'])} instances, {sum(x['bytes'] for x in s['sets'])} bytes "
-          f"in {s['wall_s']} s -> {out}", flush=True)
+    logger.info("[vu-export] %d sets, %d instances, %d bytes in %s s -> %s", len(s["sets"]), sum(x["n"] for x in s["sets"]),
+                sum(x["bytes"] for x in s["sets"]), s["wall_s"], out)
     return s

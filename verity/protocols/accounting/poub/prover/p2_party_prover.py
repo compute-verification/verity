@@ -87,11 +87,11 @@ class Prover:
 
 
 def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
-    """The prover's start on its node, from the configuration and its deploy bindings (`bound`, its
-    `[prover.bandwidth]`: the verifier's `address` it dials): its params the request `P2.request_of(node, **P2.SESSION)`
-    for the node its store was registered under, and its `store` (a `Peer`) the served C* on the card. Neither has a
-    source the runtime gives a party (the node is setup's, the store the served store's), so it raises
-    `NotImplementedError(P2.GOAL)`."""
+    """The prover's start on its node (`ProtocolDef.starts`), from the configuration and its deploy bindings (`bound`,
+    its `[prover.bandwidth]`: the verifier's `address` it dials): its params the request (`P2.deployed_request`) and
+    its `store` (a `Peer`) the served C* on the card. Neither has a source the runtime gives a party (the request's
+    node is setup's, the store the served store's), so it raises `NotImplementedError(P2.GOAL)`."""
+    P2.deployed_request(configuration, bound)
     raise NotImplementedError(P2.GOAL)
 
 

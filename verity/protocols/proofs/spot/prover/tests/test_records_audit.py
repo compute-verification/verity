@@ -1034,12 +1034,12 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
 
 def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut(written, tmp_path):
     """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
-    (`pous.period.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
+    (`pous.period_prover.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
     no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
-    from verity.protocols.accounting.pous.verifier import period as PP
+    from verity.protocols.accounting.pous.prover import period_prover
     program, root = written.rec["program"], "01" * 64
     lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
-    cut = [lines[i] for i in PP.cited([json.loads(x) for x in lines], {S1})]
+    cut = [lines[i] for i in period_prover.cited([json.loads(x) for x in lines], {S1})]
     assert lines[0] not in cut and len(cut) == len(lines) - 1
     with pytest.raises(ValueError, match="the auditor's ledger is refused"):
         RA.device_day(cut, root, key, _verify(key))
