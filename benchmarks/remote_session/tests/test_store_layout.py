@@ -28,6 +28,7 @@ sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.accounting.poub.verifier import timing  # noqa: E402
 
 import engine  # noqa: E402
 import prover  # noqa: E402
@@ -38,6 +39,7 @@ from test_session import P512, run  # noqa: E402
 
 ROLE = "synthetic-bf16"
 NODE = b"test-node"
+FIGURES = timing.RTX_PRO_6000_NODE
 B = rstore.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
 """A checkpoint of 6 weights blocks an arena, so two arenas of 7 and 2 host blocks make `test_session`'s 16-block store
@@ -130,8 +132,8 @@ def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, V
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(wire.Conn(x), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, binding=b)
+    v = verifier.Verifier(wire.Conn(x), figures=FIGURES, source=os.urandom(32), windows=3, window_ns=20, samples=6,
+                          delta=2.0 ** -40, jitter_ns=10 ** 9, log=lambda m: None, binding=b)
     refused = None
     try:
         v.register()
@@ -299,7 +301,7 @@ def test_verifier_py_refuses_a_pin_whose_files_arent_the_checkpoints_before_it_l
     try:
         sys.argv = ["verifier.py", "--out", str(out), "--model", ROLE, "--checkpoint", str(ckpt),
                     "--pin", str(pin_path), "--arena-blocks", "7", "--layout-workers", "1"]
-        assert verifier.main() == 3
+        assert verifier.main(figures=FIGURES) == 3
     finally:
         sys.argv = sys_argv
     doc = json.loads((out / "verifier.json").read_text())

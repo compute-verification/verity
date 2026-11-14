@@ -48,7 +48,8 @@ The ledger's head, a gate session's read of the ledger and the *credited* and *p
 verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
 `challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse; `verify_ledger`,
 `verify_periods`, the commit on main, *complete* and the store's binding are still the Python's alone. A served
-session's `session_of` has no Lean yet.
+session's `session_of` has no Lean yet. The Lean's answers for those but the binding have their interfaces, not yet
+written (`periods_answer`, `on_main_answer`, `complete_answer`, `served_session_answer`).
 
 **Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
 (`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
@@ -157,10 +158,15 @@ from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
 
-RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
-"""The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
-which Identity leaves in, charged in both forms as `ledger.Node`'s disks are, and its boundary links beyond them,
-link-charged (54.4e9 in all)."""
+import sheets  # noqa: E402
+
+FIGURES = sheets.figures()
+"""The node's figures, from its data sheets (`sheets.figures`)."""
+
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
+"""The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
+(the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
+them, link-charged (54.311e9 in all)."""
 BURSTS = ("stated", "none")
 """What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
@@ -342,7 +348,8 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
     if bursts == "stated":
-        node = ledger.Node.stated(disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
+        node = ledger.Node.stated(FIGURES, disk_bytes_per_s=disk_bytes_per_s,
+                                  link_bytes_per_s=link_bytes_per_s)
         out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
                 "link_burst_bytes": node.link_burst_bytes}
     return out
@@ -411,7 +418,8 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
     """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
     (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
     Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
-    return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
+    return shares_of(line_of_record(V.recorded_inputs(session, registration, figures=FIGURES,
+                                                      host_bytes=host_bytes,
                                                       rates=V.recorded_rates(session, registration, **rates),
                                                       clock=clock, transcript=transcript), lean))
 
@@ -746,6 +754,34 @@ def head_lines(heads: list[Path], key: Ch.ChallengerKey) -> list[str]:
     hl = [remote.ledger_lines(p) for p in heads]
     return coins.lean_answer("challenger_head", {"heads": hl, "key": key.to_json()},
                              {"ledger": Ch.ledger_head(hl, key, VP.lms_verify)})["ledger"]
+
+
+def periods_answer(lines: list[str], key: Ch.ChallengerKey) -> dict:
+    """The Lean verifier's read of the ledger's windows and periods (`challenger_periods`, on `{"key", "ledger"}`),
+    held to `verify_ledger`'s and `verify_periods`'s as `{"windows", "periods"}`, which `ledger_check` is to act on in
+    place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
+def complete_answer(lines: list[str], R: str, period: str, session: str | None, key: Ch.ChallengerKey) -> dict:
+    """The Lean verifier's *complete* (`challenger_complete`, on `{"key", "ledger", "window": {"root": R}, "period",
+    "session"}`): the window's end and the period's close complete, and the close listing the session's window complete,
+    held to `credit_check`'s *complete*, which is to act on it in place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
+def on_main_answer(commit: str, main: list[str] | None) -> bool:
+    """The Lean verifier's answer to whether the verifier's `commit` is on the auditor's first-parent list of main
+    (`challenger_on_main`, on `{"commit", "main"}`), held to `credit_check`'s, which is to act on it in place of the
+    Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
+def served_session_answer(key: Ch.ChallengerKey, files: dict) -> dict:
+    """The Lean verifier's read of a served session under the key its run wrote (`challenger_served`, on `{"key",
+    "session"}`, `session` being `remote.session_files`'), held to `challenger.session_of`'s, which `signed_lines` is
+    to act on in place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
@@ -1087,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
                     "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=RATES["disk_bytes_per_s"], metavar="B/S",
-                    help="the ceiling into node memory both forms charge (default: the NICs', `RATES`)")
+                    help="the disks' rate into node memory both forms charge (default: their measured read, `RATES`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=RATES["link_bytes_per_s"], metavar="B/S",
                     help="the boundary links' ceiling the link-charged form adds (default: 400 Gb/s, `RATES`)")
     ap.add_argument("--bursts", choices=BURSTS, default="stated",

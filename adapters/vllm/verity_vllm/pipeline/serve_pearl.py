@@ -84,7 +84,7 @@ def config_of(value: str | None) -> dict[str, Any]:
 
 
 def context(config: Mapping[str, Any], pouw: Mapping[str, Any] | None = None) -> Any:
-    """The window's composition at stage ``commit``: Pearl+ beside sampled proofs, the circuit cut at Pearl+'s sites, its
+    """The window's composition at stage ``commit``: Pearl+ beside SPOT, the circuit cut at Pearl+'s sites, its
     pouw settings ``config``'s with ``pouw`` (the window's transcript dir and coins) over them."""
     from verity_vllm import protocols as PO
     from verity_vllm.protocols import spot as SP

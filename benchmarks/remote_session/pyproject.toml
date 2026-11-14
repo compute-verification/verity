@@ -62,6 +62,8 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh",
           "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
+          # sheets.py: the node's figures, read from its node file and cards
+          "verity/device.py", "hardware/cards", "hardware/nodes",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit; and the
           # ledger and credit checks' Lean verifier, `sampled-proofs-verifier` (`coins.lean_answer`), with the
           # interface its package requires

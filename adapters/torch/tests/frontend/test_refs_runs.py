@@ -1,5 +1,5 @@
 """`verity.circuits.refs.runs` (the reference-run decomposition the derivation frontend and program families share) is
-pure and lives in `refs`, so `verity_vllm.program.frontend.rules.family.match_program` imports without torch."""
+pure and lives in `refs`, so `verity_torch.frontend.rules.family.match_program` imports without torch."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ def test_runs_merges_adjacent_and_keeps_order():
 def test_family_imports_without_torch():
     """`match_program` is the capture wave's M4 structure comparison, run on a laptop without torch."""
     code = ("import sys; sys.modules['torch'] = None\n"
-            "from verity_vllm.program.frontend.rules.family import match_program, expand_leaves\n"
-            "from verity_vllm.program.frontend.rules.family import _runs\n"
+            "from verity_torch.frontend.rules.family import match_program, expand_leaves\n"
+            "from verity_torch.frontend.rules.family import _runs\n"
             "from verity.circuits.refs import runs\n"
             "assert _runs is runs\n"
             "print('ok')")
