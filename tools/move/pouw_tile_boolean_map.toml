@@ -1,4 +1,4 @@
-# PoUW's tile Definitions, out of the vLLM adapter back under `verity/`: what
+# PoUW's tile Definitions and the Boolean-versions lookup, out of the vLLM adapter back under `verity/`: what
 # `tools/move/layout.py --map tools/move/pouw_tile_boolean_map.toml` moves and rewrites.
 #
 # - The four `pearl_c_*` Definition modules, with their circuit-check sidecars, go to PoUW's circuit
