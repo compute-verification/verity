@@ -1734,6 +1734,7 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     head, audit, net = by.values()
     year = doc["periods"][-1]
     assert {m["unit"] for m in by.values()} == {"GB a world year at 10% of compute"}
+    assert [m["mark"] for m in by.values()] == ["modeled"] * 3
     assert head["value"] == audit["value"] == doc["value"] == pytest.approx(YEAR_GB)
     assert net["value"] == year["together"]["scan"]["certifier_GB"] == pytest.approx(50_753_639, abs=0.5)
     assert head["inputs"][0].startswith("modeled: the headline figure, the planner's row `(ii) honest`, read where its "

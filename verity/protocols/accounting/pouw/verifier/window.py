@@ -81,29 +81,29 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains, hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.commitments.randomness import Key, derive
+from verity.protocols.proofs.spot.device import challenger as Ch
 
 GRID_BITS = 3
 
 #: (item, kind, source, reason): the execution phase's public items, in the service's `Public` form
 PUBLIC = (
     ("verdict", "output", "outcome", "what the credit rests on: every drawn tile was proved and opened, or not"),
-    ("work", "output", "window", "the credited work, as the tile count padded to a grid level: the draw ranges over its N "
-                                 "tiles and the auditor credits its work; one level, so at most log2 q bits"),
-    ("check", "structure", "parameter", "the check's identity: the tile template, its work per tile and the commitment "
-                                        "scheme fix the auditor's verifier"),
-    ("sampling", "structure", "parameter", "ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
-                                           "is stated in them"),
-    ("length", "structure", "parameter", "the rows of record's fixed length: each slot's max_tokens, served whatever it "
-                                         "samples (ignore_eos), so the useful work is public"),
+    ("work", "output", "window", ("the credited work, as the tile count padded to a grid level: the draw ranges over its N "
+                                  "tiles and the auditor credits its work; one level, so at most log2 q bits")),
+    ("check", "structure", "parameter", ("the check's identity: the tile template, its work per tile and the "
+                                         "commitment scheme fix the auditor's verifier")),
+    ("sampling", "structure", "parameter", ("ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
+                                            "is stated in them")),
+    ("length", "structure", "parameter", ("the rows of record's fixed length: each slot's max_tokens, served whatever it "
+                                          "samples (ignore_eos), so the useful work is public")),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
