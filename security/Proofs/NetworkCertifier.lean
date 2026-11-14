@@ -7,6 +7,7 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -41,6 +42,10 @@ public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
 public import Proofs.NetworkCertifier.MonitoringPeriodCheckedChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion
+public import Proofs.NetworkCertifier.MonitoringPeriodFails
+public import Proofs.NetworkCertifier.MonitoringPeriodFailsChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodLengths
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -101,7 +106,14 @@ advice bits, and `WitnessesChecked` gives its nontrivial lemma.
 `MonitoringPeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
 at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
 empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
-checked statement: which run its check is held to, and its nontrivial and honest lemmas.
+checked statement: which run its check is held to, and its nontrivial and honest lemmas. `MonitoringPeriodCheckedExclusion` shows
+the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
+`MonitoringPeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
+`MonitoringPeriodLeakFailsAtMost`, `MonitoringPeriodLeakCharged`): `MonitoringPeriodLeakChecked` at each fail pattern, at the pattern's operator and
+registered values, summed over the patterns. `MonitoringPeriodFailsChecks` checks them at a placed window whose operator follows
+the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
+`MonitoringPeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
+registered parameters (`LengthsRows.readsBy`).
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
@@ -157,6 +169,9 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.monitoringPeriodLeakChecked
+theorem MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails := NetTiming.monitoringPeriodLeakFails
+theorem MonitoringPeriodLeakFailsAtMost : NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost := NetTiming.monitoringPeriodLeakFailsAtMost
+theorem MonitoringPeriodLeakCharged : NetTiming.Guarantees.MonitoringPeriodLeakCharged := NetTiming.monitoringPeriodLeakCharged
 theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
