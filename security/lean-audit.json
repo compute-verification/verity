@@ -470,6 +470,10 @@
    "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
    "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
   },
+  "Verity.Site.HostsWhole": {
+   "owner": "@network-accounting",
+   "why": "A scope: the subtrees of the Site that hold each host with every location in it or not at all, so that what leaves one crosses a registered link; a subtree at a device or a memory leaf is outside it."
+  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7",
