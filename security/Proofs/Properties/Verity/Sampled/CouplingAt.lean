@@ -103,7 +103,7 @@ omit θ F c in
 and `roundEmptyAt`, with no bound on the stops' term (`couplingTarget_withProject_of_sample_at`), wherever the outcomes
 beside accepted plays on the joint law's support off those events are the writer's at the moves v2's files decode to
 (`hM`). -/
-theorem couplingTarget_assembled_at (K : Constructions V) (T : Pinned)
+theorem couplingTarget_assembled_at (K : Constructions V) (T : PinnedTables)
     (dev : Exchange → Properties.Challenger.History) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)

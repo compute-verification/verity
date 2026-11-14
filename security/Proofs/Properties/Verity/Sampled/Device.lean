@@ -1207,7 +1207,7 @@ accepted play whose log v2 read isn't the device's is at most as likely as the r
 forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
 and signed what the play's signatures are on (`signsPlay_dev`). -/
 theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
-    (T : Pinned) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
+    (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤
       ENNReal.ofReal ((Binding.readFinder V T (dev (P.setupOf V.families)) θ F c σ).Pr Verity.sha512Msg) +
