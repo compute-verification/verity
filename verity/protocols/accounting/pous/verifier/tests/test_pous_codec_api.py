@@ -9,9 +9,9 @@ import pytest
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.protocols.accounting.pous.device.memory_challenger import block_digest
+from verity.protocols.accounting.pous.prover.responder import HonestResponder
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.audit import (
-    HonestResponder,
     UnsignedRounds,
     challenge_key,
     run_timed,

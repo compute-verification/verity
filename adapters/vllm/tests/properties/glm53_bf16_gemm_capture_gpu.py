@@ -85,7 +85,7 @@ range, so each profiler session stays small, then `--write-routes` (`route_table
         --scratch DIR --out SCANS/MODEL-PHASE-LO     # the ranges tile 1:m_max, the router's 17:m_max; m_max the largest
                                                      # launch served
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --write-routes SCANS/*/scan.json --run-record ART \\
-        --out ../../verity/definitions/registry
+        --out verity_vllm/definitions/registry
 """
 from __future__ import annotations
 
@@ -114,8 +114,8 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.ops import gemm as CG
 from verity.circuits.ops.boolean import gemm as BG
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import ll_bf16 as LL
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import ll_bf16 as LL
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -263,7 +263,7 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     plants 2^25 in block 0, -2^25 in block 1 and +1 in block `splits`: a contiguous first chunk cancels the pair and keeps the
     +1, while the round-robin partition adds the +1 to block 0's 2^25, which absorbs it.
     """
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     if N < 3:
         raise ValueError(f"split-K probe needs at least three output rows, got {N}")
@@ -512,7 +512,7 @@ def case_key(model: str, phase: str, case: str, M: int) -> str:
 
 def expected_kernel(M: int, model: str = "glm53") -> dict[str, Any]:
     """The model's gate's kernel at M as `dispatch_sm90` names it, in the record's form."""
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     m = MODELS[model]
     kind, st = BC.dispatch_sm90(M, m.hidden, m.experts)
@@ -598,7 +598,7 @@ def _cublas_split_k(job: dict[str, Any]) -> int | None:
 
 def served_split(phase: str, M: int, K: int, N: int, scan_split: int | None = None) -> int | None:
     """The default reduce route's split count at these statics: the route table, else the scan's fit at this M."""
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     pinned = BC.default_cublas_split_k(phase, M, K, N)
     return pinned if pinned is not None else scan_split
@@ -698,7 +698,7 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
     crafted count probe atop a clone of W with an all-ones x row 0 (never for bmm), the fit's operand words, and the serial
     chain's words on the kept window."""
     import torch
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     m, top = MODELS[model], SCAN_M[-1]
     gen = torch.Generator(device="cuda").manual_seed(13000 + idx)
@@ -753,8 +753,8 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
 def scan_analyze(op: dict[str, Any], segments: list[list[dict[str, Any]]], rows: list[np.ndarray]) -> dict[str, Any]:
     """One scanned target's schedule map (module docstring, `scan`): the regimes, each regime's model read out of its kept
     words (the split count fitted behind its reduce, the serial chain without one), the model classes and the sweep."""
-    from verity.definitions.registry import bf16_gemm_check as BC
-    from verity.definitions.registry import mla_check as MK
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import mla_check as MK
 
     regimes = scan_regimes(list(SCAN_M), [scan_signature(s) for s in segments], rows)
     cache: dict[bytes, tuple[list[int], bool]] = {}                                # same kept words, same model: fit each once
@@ -879,7 +879,7 @@ def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
     process read before its first GEMM and after its last.  Raises naming the fault: a scan not ok or not at the served default,
     conditions that differ, or a shape whose runs leave a gap or an overlap, start elsewhere than M 1 (the router: past the
     ll_bf16 tier) or stop at another M than the other shapes'."""
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     conditions: dict[str, Any] | None = None
     runs: dict[str, list[list[Any]]] = {}
@@ -1127,8 +1127,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.definitions.registry import bf16_gemm_check as BC
-    from verity.definitions.registry import mla_check as MK
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import mla_check as MK
 
     a = _load(job["paths"])
     r0, r1 = job["rows"]
@@ -1192,7 +1192,7 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 def bind_check(models: list[str] | None = None, launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Every Definition binds at each model's statics (every model's when none is named), including each default split count
     pinned from the profiled route."""
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     targets = []
@@ -1324,7 +1324,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     work = Path(tmp.name)
     env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")

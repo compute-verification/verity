@@ -44,7 +44,7 @@ __all__ = ["ROUTED_FAMILIES", "check_picks", "coverage_of_unreplayable", "fold_p
 def collective_family(kind: str, world: int) -> str:
     """The received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
     selector (`b1_tp2.all_reduce` / `all_gather`): `AllReduce2_v1` / `AllGather2_v1` at world 2, `AllReduce_v2` / `AllGather_v1` beyond."""
-    from verity.definitions.registry import b1_tp2 as TP2
+    from verity_vllm.definitions.registry import b1_tp2 as TP2
     sel = {"all_reduce": TP2.all_reduce, "all_gather": TP2.all_gather}.get(kind)
     return sel(int(world), 1).id.split("{", 1)[0] if sel else kind
 EMBED_MARKERS = ("embed_tokens", "embedding", "wte")
@@ -119,10 +119,10 @@ def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, row
                     w: np.ndarray | None = None) -> tuple[np.ndarray, ...]:
     """The routed Definition's words at the picked rows: `parts` (WORLD, R, N) the ranks' partial rows `rows` of an M x N call (the flat
     M * N words a Multimem / Custom call reads, row-major).  Returns (out,), or (normed, r) for the fused norm (`res` (R, N), `w` (N))."""
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import tp_allreduce as T
-    from verity.definitions.registry import tp_allreduce_check as TC
-    from verity.definitions.registry import tp_allreduce_nodes as TN
+    from verity_vllm.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.registry import tp_allreduce as T
+    from verity_vllm.definitions.registry import tp_allreduce_check as TC
+    from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 
     parts = np.asarray(parts, np.uint16)
     W, R, N = parts.shape
@@ -278,7 +278,7 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
     """Driver side.  `dumps[rank]` = torch.load(xrank_rank<r>.pt): {"rank", "picks": [{step, site, kind, family, stratum, rows, part: Tensor|None,
     recv: Tensor|None, recv_member, why}]}.  Same pick order on every rank (same seed, same layout names).  Bit-exact rules per kind."""
     import torch
-    from verity.definitions.registry.b1_tp2 import allreduce_order
+    from verity_vllm.definitions.registry.b1_tp2 import allreduce_order
 
     res: dict[str, Any] = {"result": None, "world": world, "picks": 0, "equal": 0, "mismatches": [], "missing": [], "by_family": {}, "by_stratum": {},
                            "rule": ("per pick (site, step, row subset): all_reduce -> committed received (each rank) == bf16(f32(part_rank0) + f32(part_rank1)) elementwise "

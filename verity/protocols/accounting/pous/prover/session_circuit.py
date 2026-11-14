@@ -4,7 +4,7 @@ challenger signed.
 
     PousSessionSig_v1{N, W, H}          (key: B<16 + N>, m: B<64>, sig: B<S>) -> Array<1>
                                         S = 4 + N(1 + P + H), the signature's bytes (`lms.Params.signature_bytes`)
-    PousSessionDigest_v1{K, HEAD, LIMIT} (head: B<HEAD + HEAD mod 2>, domain: B<64>, ctx: B<106>, r0 ... rT−1: B<184>)
+    PousSessionDigest_v1{K, HEAD, LIMIT} (head: B<HEAD + HEAD mod 2>, ctx: B<106>, r0 ... rT−1: B<184>)
                                         -> (ok: Array<1>, m: B<64>, r0 ... rT−1: B<184>), T = ⌈K/2⌉
     PousRound_v1{N, SLOT}               (row: B<N>, records: B<184>, j: B<4>, i: B<8>) -> Array<1>
 
@@ -38,15 +38,14 @@ record names round j, its index is round j's coin, and its digest is that of the
 are ``PousRound_v1{2056, 0}`` and ``PousRound_v1{2056, 1}``, two Programs.
 
 **The signed digest's unit.** `PousSessionDigest_v1{K, HEAD, LIMIT}` reads the signed header (``head``, HEAD bytes and a
-zero byte when HEAD is odd), the records tree's domain id (``domain``, `memory_challenger._domain`'s 64-byte id), the
-signed context (``ctx``, `signed_context`: what `lms.memory_challenger_message` hashes before the record) and the K records
-in their rows. It outputs m, ``SHA-512(ctx ‖ u64be(64) ‖ record)`` of the record ``SHA-512(SESSION_TAG ‖ u64be(HEAD) ‖
-head ‖ root)``, root the frame-v3-sha512 root of the records (a ``PousRecordLeaf_v1`` a record, a ``PousRecordPad_v1`` a
-pad up to a power of two, ``FrameV3Node_v1{1}`` above), so m is the digest the signature's unit verifies; ok, 1 iff every
+zero byte when HEAD is odd), the signed context (``ctx``, `signed_context`: what `lms.memory_challenger_message` hashes
+before the record) and the K records in their rows. It outputs m, ``SHA-512(ctx ‖ u64be(64) ‖ record)`` of the record
+``SHA-512(SESSION_TAG ‖ u64be(HEAD) ‖ head ‖ records)``, records the ``sha512/row/v2`` digest of the K records as one
+stream (`memory_challenger.records_digest`, ``PousRowDigest_v1{92K}``), so m is the digest the signature's unit verifies;
+ok, 1 iff every
 record names its round, its receipt is not before its send and receipt − send ≤ LIMIT (``PousVerdict_v1{K, 0, LIMIT}``
 against the records' own digests); and the records rows as read. The signature's unit reads m and round j's unit its
 records row ⌊j/2⌋ by wire (`window.SessionIntegration`), so the three kinds of proof are linked only by committed rows.
-K is at most `MAX_ROUNDS`, so every rank, pad rank, level and node index is one byte of its uint.
 """
 from __future__ import annotations
 
@@ -62,25 +61,21 @@ from verity.commitments.crypto import lms as R
 from verity.commitments.gates import frame_v3 as F
 from verity.commitments.gates.lms import DIGEST, IDENT, _check as _lms_params, _group, _value, _words, _Wires, verifier
 from verity.commitments.gates.sha512 import pad_tail
-from verity.commitments.merkle import _LEAF, _PAD, _pad, _uint, frame_hash, levels, merkle_depth
 from verity.commitments.rowleaf import sha512_row_v2_digest
 
 from .answer_circuit import PousEqual, PousRowDigest
 from .circuit import _check, bits
 from .verdict_circuit import PousVerdict, verdict_value
 
-__all__ = ["CTX_BYTES", "RECORD_BYTES", "RECORDS_PER_ROW", "RECORD_SCHEMA", "SESSION_BYTES", "SESSION_TAG", "MAX_ROUNDS", "PousRecordLeaf",
-           "PousRecordPad", "PousRound", "PousSessionDigest", "PousSessionMessage", "PousSessionSig", "records_rows",
-           "head_bytes", "octets", "round_ok", "session_digest", "session_sig_ok", "signed_context"]
+__all__ = ["CTX_BYTES", "RECORD_BYTES", "RECORDS_PER_ROW", "SESSION_BYTES", "SESSION_TAG", "PousRound", "PousSessionDigest",
+           "PousSessionMessage", "PousSessionSig", "head_bytes", "octets", "records_rows", "round_ok", "session_digest",
+           "session_sig_ok", "signed_context"]
 
 #: a round record's bytes (`memory_challenger.Round.value`), and the records a registered row holds
 RECORD_BYTES, RECORDS_PER_ROW = 92, 2
 _J, _INDEX, _DIGEST = (0, 4), (4, 12), (28, 92)
-#: `memory_challenger.SESSION_TAG` and `memory_challenger.RECORD_SCHEMA`, which this place can't import
+#: `memory_challenger.SESSION_TAG`, which this place can't import
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
-RECORD_SCHEMA = "pous/round-record/v2"
-#: the most rounds the signed digest's unit takes: every rank, pad rank and node index is then one byte of its uint
-MAX_ROUNDS = 256
 #: a session id's bytes, and the known row ``ctx``'s (`signed_context`)
 _ROLE = R.ROLES["memory-challenger-record"].encode()
 SESSION_BYTES = 32
@@ -153,23 +148,6 @@ PousRound = CompositeDefinition(
         "and holds the N-byte row's sha512/row/v2 digest: R_even at SLOT 0, R_odd at SLOT 1")
 
 
-def _record_bytes(value) -> list[list]:
-    return [list(value[8 * b:8 * b + 8]) for b in range(RECORD_BYTES)]
-
-
-PousRecordLeaf = _part(
-    "PousRecordLeaf", (), lambda S: ((("domain", F.DIGEST), ("value", bits(8 * RECORD_BYTES)), ("x", bits(8))), F.DIGEST),
-    lambda C, S, *e: F._sha512(C, F._message(_LEAF, [F._bytes(e[0:8]), [list(e[9])], [list(e[9])],
-                                                    F._const_bytes(RECORD_SCHEMA.encode()), _record_bytes(e[8])])),
-    "the frame-v3-sha512 leaf of a 92-byte round record at rank = position = x under the domain id domain and "
-    "pous/round-record/v2; x one byte, LSB first", calls=True)
-
-PousRecordPad = _part(
-    "PousRecordPad", (), lambda S: ((("domain", F.DIGEST), ("x", bits(8))), F.DIGEST),
-    lambda C, S, *e: F._sha512(C, F._message(_PAD, [F._bytes(e[0:8]), [list(e[8])]])),
-    "the frame-v3-sha512 pad at rank x under the domain id domain; x one byte, LSB first", calls=True)
-
-
 def signed_context(I: bytes, session: bytes) -> bytes:
     """The known row ``ctx``: what `lms.memory_challenger_message` hashes before the record, ``u64be(len tag) ‖ tag ‖ I ‖
     u64be(40) ‖ u64be(32) ‖ session`` (its context is the session id's field, framed again)."""
@@ -182,7 +160,7 @@ def signed_context(I: bytes, session: bytes) -> bytes:
 def _message_sig(S):
     if isinstance(S.HEAD, bool) or not isinstance(S.HEAD, int) or S.HEAD < 1:
         raise ValueError(f"PousSessionMessage's HEAD is the header's bytes, an int >= 1, not {S.HEAD!r}")
-    return (("head", bits(8 * S.HEAD)), ("root", F.DIGEST), ("ctx", bits(8 * CTX_BYTES))), bits(512)
+    return (("head", bits(8 * S.HEAD)), ("records", bits(512)), ("ctx", bits(8 * CTX_BYTES))), bits(512)
 
 
 def _hash_bytes(C, data: list[list]) -> list[list]:
@@ -194,16 +172,17 @@ def _byte_order(row) -> list[list]:
 
 
 def _message_build(C, S, *e):
-    head, root, ctx = e[0], e[1:9], e[9]
-    record = _hash_bytes(C, F._const_bytes(SESSION_TAG + S.HEAD.to_bytes(8, "big")) + _byte_order(head) + F._bytes(root))
+    head, records, ctx = e
+    record = _hash_bytes(C, F._const_bytes(SESSION_TAG + S.HEAD.to_bytes(8, "big")) + _byte_order(head)
+                         + _byte_order(records))
     return [[x for b in _hash_bytes(C, _byte_order(ctx) + F._const_bytes((64).to_bytes(8, "big")) + record) for x in b]]
 
 
 PousSessionMessage = _part(
     "PousSessionMessage", ("HEAD",), _message_sig, _message_build,
     "lms.memory_challenger_message's digest SHA-512(ctx || u64be(64) || record), 64 bytes in byte order, of the record "
-    "SHA-512(SESSION_TAG || u64be(HEAD) || head || root), the session's signed record over its HEAD-byte header and its "
-    "records root", calls=True)
+    "SHA-512(SESSION_TAG || u64be(HEAD) || head || records), the session's signed record over its HEAD-byte header and "
+    "its records digest", calls=True)
 
 
 def records_rows(K: int) -> int:
@@ -217,8 +196,7 @@ def head_bytes(HEAD: int) -> int:
 
 
 def _digest_statics(S) -> None:
-    if isinstance(S.K, bool) or not isinstance(S.K, int) or not 1 <= S.K <= MAX_ROUNDS:
-        raise ValueError(f"PousSessionDigest's K is an int in 1 ... {MAX_ROUNDS}, not {S.K!r}")
+    _check("PousSessionDigest", K=S.K)
 
 
 def _digest_sig(S):
@@ -226,35 +204,17 @@ def _digest_sig(S):
     _message_sig(S)
     row = octets(RECORD_BYTES * RECORDS_PER_ROW)
     rows = tuple((f"r{t}", row) for t in range(records_rows(S.K)))
-    return ((("head", octets(head_bytes(S.HEAD))), ("domain", octets(64)), ("ctx", octets(CTX_BYTES)), *rows),
+    return ((("head", octets(head_bytes(S.HEAD))), ("ctx", octets(CTX_BYTES)), *rows),
             Tuple(bits(1), octets(64), *(row for _ in rows)))
 
 
-def _digest_body(B, S, head, domain, ctx, *rows):
+def _digest_body(B, S, head, ctx, *rows):
     X = _Wires
-    consts: dict[int, object] = {}
-
-    def const(b: int):
-        if b not in consts:
-            consts[b] = B.call(BL.constant(b)).refs[0]
-        return consts[b]
-
-    def byte(v: int):
-        return X.coll(bits(8), [const((v >> t) & 1) for t in range(8)])
-
-    recs = []
-    for t in range(S.K):
-        r = _group(X.refs(rows[t // RECORDS_PER_ROW]), 8)
-        recs.append([x for b in r[RECORD_BYTES * (t % 2):RECORD_BYTES * (t % 2 + 1)] for x in b])
-    dom = X.coll(F.DIGEST, [x for w in F._words(_group(X.refs(domain), 8)) for x in w])
-    level = [B.call(PousRecordLeaf, dom, X.coll(bits(8 * RECORD_BYTES), r), byte(t)) for t, r in enumerate(recs)]
-    level += [B.call(PousRecordPad, dom, byte(t)) for t in range(S.K, 1 << merkle_depth(S.K))]
-    node, depth = bind(F.FrameV3Node, B=1), 0
-    while len(level) > 1:
-        d = X.coll(BL.BIT, [const(0)])
-        level = [B.call(node, dom, byte(depth), byte(j), d, level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
-        depth += 1
-    m = B.call(bind(PousSessionMessage, HEAD=S.HEAD), X.coll(bits(8 * S.HEAD), X.refs(head)[:8 * S.HEAD]), level[0],
+    flat = [x for r in rows for x in X.refs(r)]
+    recs = [flat[8 * RECORD_BYTES * t:8 * RECORD_BYTES * (t + 1)] for t in range(S.K)]
+    stream = B.call(bind(PousRowDigest, N=RECORD_BYTES * S.K),
+                    X.coll(bits(8 * RECORD_BYTES * S.K), [x for r in recs for x in r]))
+    m = B.call(bind(PousSessionMessage, HEAD=S.HEAD), X.coll(bits(8 * S.HEAD), X.refs(head)[:8 * S.HEAD]), stream,
                X.coll(bits(8 * CTX_BYTES), X.refs(ctx)))
     timed = B.call(bind(PousVerdict, K=S.K, M=0, LIMIT=S.LIMIT),
                    X.coll(Array(S.K, bits(8 * RECORD_BYTES)), [x for r in recs for x in r]),
@@ -265,8 +225,8 @@ def _digest_body(B, S, head, domain, ctx, *rows):
 PousSessionDigest = CompositeDefinition(
     "PousSessionDigest", 1, ("K", "HEAD", "LIMIT"), _digest_sig, _digest_body, conformance="exact-model-tested",
     doc="(ok, m, the records rows): m the digest the session's signature signs, SHA-512(ctx || u64be(64) || record) of the "
-        "record SHA-512(SESSION_TAG || u64be(HEAD) || head || the frame-v3-sha512 root of the K records under the domain id "
-        "domain); ok 1 iff every record names its round, its receipt is not before its send and receipt - send <= LIMIT "
+        "record SHA-512(SESSION_TAG || u64be(HEAD) || head || the sha512/row/v2 digest of the K records as one stream); ok 1 "
+        "iff every record names its round, its receipt is not before its send and receipt - send <= LIMIT "
         "(PousVerdict_v1{K, 0, LIMIT} against its own digests); the records rows as read, for the rounds' units to read "
         "by wire")
 
@@ -288,21 +248,19 @@ def round_ok(N: int, SLOT: int, row: bytes, records: bytes, j: int, i: int) -> i
                and rec[slice(*_DIGEST)] == sha512_row_v2_digest(row, 8 * N))
 
 
-def session_digest(K: int, HEAD: int, LIMIT: int, head: bytes, domain: bytes, ctx: bytes, rows: Sequence[bytes]
+def session_digest(K: int, HEAD: int, LIMIT: int, head: bytes, ctx: bytes, rows: Sequence[bytes]
                    ) -> tuple[int, bytes, tuple[bytes, ...]]:
     """`PousSessionDigest_v1{K, HEAD, LIMIT}`'s outputs on its rows, ``head`` the header row (`head_bytes`): whether every
     record is on time, `lms.memory_challenger_message`'s digest under ``ctx`` of `memory_challenger.message`'s record over
-    the header and the K records the rows hold under the domain id ``domain``, and the rows."""
+    the header and the K records the rows hold, and the rows."""
     row = RECORD_BYTES * RECORDS_PER_ROW
-    if (not 1 <= K <= MAX_ROUNDS or HEAD < 1 or len(head) != head_bytes(HEAD) or len(domain) != 64 or len(ctx) != CTX_BYTES
+    if (K < 1 or HEAD < 1 or len(head) != head_bytes(HEAD) or len(ctx) != CTX_BYTES
             or [len(r) for r in rows] != [row] * records_rows(K)):
-        raise ValueError(f"the rows are a {head_bytes(HEAD)}-byte header row, a 64-byte domain id, a {CTX_BYTES}-byte ctx "
-                         f"and {records_rows(K)} records rows of {row} bytes")
+        raise ValueError(f"the rows are a {head_bytes(HEAD)}-byte header row, a {CTX_BYTES}-byte ctx and "
+                         f"{records_rows(K)} records rows of {row} bytes")
     head = head[:HEAD]
     recs = [rows[t // RECORDS_PER_ROW][RECORD_BYTES * (t % 2):RECORD_BYTES * (t % 2 + 1)] for t in range(K)]
-    leaves = [frame_hash(_LEAF, domain, _uint(t), _uint(t), RECORD_SCHEMA.encode(), r) for t, r in enumerate(recs)]
-    leaves += [_pad(domain, "sha512", t) for t in range(K, 1 << merkle_depth(K))]
-    root = levels(domain, leaves)[-1][0]
-    record = hashlib.sha512(SESSION_TAG + HEAD.to_bytes(8, "big") + head + root).digest()
+    stream = sha512_row_v2_digest(b"".join(recs), 8 * RECORD_BYTES * K)
+    record = hashlib.sha512(SESSION_TAG + HEAD.to_bytes(8, "big") + head + stream).digest()
     m = hashlib.sha512(ctx + (64).to_bytes(8, "big") + record).digest()
     return verdict_value(K, 0, LIMIT, recs, [r[slice(*_DIGEST)] for r in recs]), m, tuple(rows)

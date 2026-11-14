@@ -13,10 +13,10 @@ def _pous_roots() -> list[Any]:
     the top bits' check. The round's unit over a 264-byte row, which reaches the row digest's head, a middle compression and
     a tail with its rest, at both slots: the record's place in its row, its j and index big-endian against the public
     integers, and its digest. And R_even and R_odd as served, over the store's 2,056-byte rows, whose `digests` pins hold
-    the two Programs the session's statements name. The signed digest's unit at K = 3 over a 789-byte header (the
-    deployed header's length) and the deployed limit: three record leaves, a pad, three nodes and the two message hashes,
-    which reach the records' place in their rows (the last row half empty), the bytes of the domain id rewired into words,
-    each rank, pad rank, level and index byte, and the timing of each record."""
+    the two Programs the session's statements name. The signed digest's unit at K = 3 over a 753-byte header (the
+    v2 header's length at three rounds, odd, so its row carries a pad byte) and the deployed limit: the records' stream
+    digest over 276 bytes, a head, a middle compression and a tail, and the two message hashes, which reach the records' place in
+    their rows (the last row half empty), the header's bytes before its pad, the context and the timing of each record."""
     from verity.circuits.defs import bind
     from verity.commitments.crypto.lms import TOY_N
     from verity.protocols.accounting.pous.prover.session_circuit import PousRound, PousSessionDigest, PousSessionSig
@@ -27,5 +27,5 @@ def _pous_roots() -> list[Any]:
         bind(PousRound, N=264, SLOT=1),
         bind(PousRound, N=2056, SLOT=0),
         bind(PousRound, N=2056, SLOT=1),
-        bind(PousSessionDigest, K=3, HEAD=789, LIMIT=854_000),
+        bind(PousSessionDigest, K=3, HEAD=753, LIMIT=854_000),
     ]
