@@ -87,7 +87,7 @@ function of the observations alone: window `i`'s operator at the period's observ
 which reads only the windows before `i`, closed by then (`runsBefore`), and window `i` only through the observations
 before each step, so no window still open and none after; with the network certifier's openings `tops s` at each
 statement,
-and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
+and a network certifier that runs its code by `trusted-device` on schedules in `Ss`, each held by its record format `f`
 (`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
 

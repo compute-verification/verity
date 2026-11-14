@@ -781,6 +781,13 @@ def _registered_sub(reg: Mapping[str, Any], t: UnitType, T: float | None = None,
             "nnz_C": n * u["rows"], "nnz": nnz_AB + n * u["rows"]}
 
 
+def _fitted_sub(s: Mapping[str, Any], e: int, T: Fraction | int) -> dict[str, Fraction]:
+    """A fitted subcircuit's counts at T, ``e`` key blocks past its first: the first block's fit at T and each metric's
+    excess ``lin e + curv e (e − 1) / 2`` (:func:`block_excess`'s pair; zero where no later block was built)."""
+    lin, curv = s.get("_block") or ({m: 0 for m in METRICS}, {m: 0 for m in METRICS})
+    return {m: v + e * lin[m] + Fraction(e * (e - 1), 2) * curv[m] for m, v in at(s["_fit"], T).items()}
+
+
 def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jobs: int = 1,
               attention_t: Sequence[int] = ATTENTION_T, log: Callable[[str], None] = print,
               subs: dict[tuple, dict[str, Any]] | None = None, regs: dict[tuple, dict[str, Any]] | None = None,
@@ -806,12 +813,9 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
             per_sub: dict[str, Any] | None = None
             if "_fit" in s:
                 e = int(t.parameters["NB"]) - 1
-                lin, curv = s.get("_block") or ({m: 0 for m in METRICS}, {m: 0 for m in METRICS})
-
-                def head(T: Fraction | int) -> dict[str, Fraction]:
-                    return {m: v + e * lin[m] + Fraction(e * (e - 1), 2) * curv[m] for m, v in at(s["_fit"], T).items()}
-                per_sub = {m: float(v) for m, v in head(Fraction(t.T["mean"])).items()}
-                per_sub_range = {b: float(head(int(t.T[b]))["nnz_AB"] + head(int(t.T[b]))["ands"]) for b in ("min", "max")}
+                per_sub = {m: float(v) for m, v in _fitted_sub(s, e, Fraction(t.T["mean"])).items()}
+                ends = {b: _fitted_sub(s, e, int(t.T[b])) for b in ("min", "max")}
+                per_sub_range = {b: float(c["nnz_AB"] + c["ands"]) for b, c in ends.items()}
             elif "counts" in s:
                 per_sub = dict(s["counts"])
                 per_sub_range = None

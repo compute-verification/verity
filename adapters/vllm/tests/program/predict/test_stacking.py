@@ -11,9 +11,9 @@ import json
 import random
 
 import pytest
-from verity.circuits.program import Program
 from verity.circuits import stacking as P
 from verity.circuits.census import census, step_ends
+from verity.circuits.program import Program
 from verity.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 
 from tests.program.predict.test_predict import FIX, _phi

@@ -3,7 +3,9 @@ remote's), each a case in its protocol's formats and its answer on it. An honest
 honest period (`pouw_period_cases`) written from their inputs accept, with the digest the product binds; a served H1
 window (``fixtures/served-h1-window``, window 0's line of a served H200 run's windows.jsonl, a development window in no
 period) is MISSING from both, with why, and writes no case, so `composite.py` leaves it out and names it missing; the
-directory is private as `composite.py` reads it; and ``--exe`` is the answer of record."""
+directory is private as `composite.py` reads it; and ``--exe`` is the answer of record. The period's is the Lean's
+alone: with no ``pouw-period`` its piece is missing, never the Python reference's. Its cases here are answered by a
+stand-in ``pouw-period`` (`period_exe`), as credit's tests stand in for ``flock-verify``."""
 
 from __future__ import annotations
 
@@ -48,6 +50,25 @@ def statements(tmp_path, monkeypatch):
     return kit
 
 
+@pytest.fixture
+def period_exe(tmp_path) -> Path:
+    """A stand-in ``pouw-period``: ``check params.json commitment.bin evidence.json``, answered as the Lean answers it
+    (`period_check.case_twin`, which ``pouw-period``'s difftest holds to it), its verdict its exit."""
+    exe = tmp_path / "pouw-period"
+    exe.write_text(f"""#!{sys.executable}
+import json, sys
+from pathlib import Path
+from verity.protocols.accounting.pouw.verifier import period_check as PC
+_, params, commitment, evidence = sys.argv[1:]
+a = PC.case_twin({{"params": json.loads(Path(params).read_text()), "commitment": Path(commitment).read_bytes().hex(),
+             "evidence": Path(evidence).read_bytes().hex()}})
+print(json.dumps(a))
+sys.exit({{"accept": 0, "reject": 1, "undecided": 2}}[a["verdict"]])
+""")
+    exe.chmod(0o755)
+    return exe
+
+
 def _json(p: Path, x) -> Path:
     p.write_text(json.dumps(x))
     return p
@@ -74,31 +95,63 @@ def test_an_honest_window_is_a_v1_piece_that_accepts(tmp_path):
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in out.iterdir()} == dict.fromkeys(P.CASE_FILES, 0o600)
 
 
-def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
+def _honest_period_args(tmp_path: Path) -> tuple[dict, list[str]]:
     case = pouw_period_cases.instance(random.Random(0), "honest")
     p = case["params"]
     ledger = json.loads(bytes.fromhex(case["commitment"]))
     ev = json.loads(bytes.fromhex(case["evidence"]))
+    return case, ["--key", str(_json(tmp_path / "k.json", p["key"])),
+                  "--main", str(_lines(tmp_path / "main.txt", p["main"])), "--name", p["name"],
+                  "--ledger", str(_lines(tmp_path / "ledger.jsonl", ledger)),
+                  "--pins", str(_lines(tmp_path / "pins.jsonl", ev["pins"])),
+                  "--windows", str(_json(tmp_path / "w.json", ev["windows"]))]
+
+
+def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path, period_exe, capsys):
+    case, args = _honest_period_args(tmp_path)
+    p = case["params"]
     out = tmp_path / "period"
-    assert P.main(["period", "--out", str(out), "--key", str(_json(tmp_path / "k.json", p["key"])),
-                   "--main", str(_lines(tmp_path / "main.txt", p["main"])), "--name", p["name"],
-                   "--ledger", str(_lines(tmp_path / "ledger.jsonl", ledger)),
-                   "--pins", str(_lines(tmp_path / "pins.jsonl", ev["pins"])),
-                   "--windows", str(_json(tmp_path / "w.json", ev["windows"]))]) == 0
+    assert P.main(["period", "--out", str(out), "--exe", str(period_exe), *args]) == 0
+    assert capsys.readouterr().out.splitlines() == [f"PIECE {P.PERIOD} accept by=lean"]
     got = json.loads((out / "answer.json").read_text())
     assert got["verdict"] == "accept" and got["protocol"] == P.PERIOD
+    assert not {"registration_head", "head", "place", "part"} & set(got["public"])
     assert got["commitment"] == PC.digest(PC.commitment(bytes.fromhex(case["commitment"]))).hex()
     assert json.loads((out / "case.json").read_text())["evidence"] == case["evidence"]
+    assert json.loads((out / "case.json").read_text())["params"] == p and p["sessions"] != []
+
+
+def test_a_period_with_no_lean_executable_is_missing_not_the_python_references(tmp_path, capsys):
+    """No ``pouw-period`` (``--exe``; `served_pouw.sh` passes none where it doesn't build): the piece is MISSING, exit
+    2, holding only ``missing.json``, even over a case the Python reference accepts, and a stale case is removed."""
+    case, args = _honest_period_args(tmp_path)
+    assert PC.case_twin({k: case[k] for k in ("params", "commitment", "evidence")})["verdict"] == "accept"
+    out = tmp_path / "period"
+    out.mkdir(mode=0o700)
+    (out / "answer.json").write_text("{}\n")
+    assert P.main(["period", "--out", str(out), *args]) == 2
+    assert capsys.readouterr().out.splitlines() == [f"MISSING {P.PERIOD}: {P.NO_EXE}"]
+    assert [f.name for f in out.iterdir()] == ["missing.json"]
+    assert json.loads((out / "missing.json").read_text()) == {"protocol": P.PERIOD, "why": P.NO_EXE}
+    assert C.case_dirs([out]) == []
+
+
+def test_a_period_piece_takes_no_device(tmp_path):
+    """The period names no device, so the piece takes no registration head or place."""
+    with pytest.raises(SystemExit):
+        P.main(["period", "--out", str(tmp_path / "p"), "--head", "ab" * 64, "--place", "gpu0"])
 
 
 def _period_args(tmp_path: Path, d: dict, windows: list[dict]) -> list[str]:
     return ["--key", str(_json(tmp_path / "k.json", d["key"])), "--main", str(_lines(tmp_path / "main.txt", d["main"])),
-            "--name", d["name"], "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
+            "--name", d["name"],
+            "--ledger", str(_lines(tmp_path / "ledger.jsonl", d["ledger"])),
             "--pins", str(_lines(tmp_path / "pins.jsonl", d["pins"])),
             "--windows", str(_json(tmp_path / "w.json", windows))]
 
 
-def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier_of_record(tmp_path, statements, capsys):
+def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier_of_record(tmp_path, statements, period_exe,
+                                                                                   capsys):
     """The kit's windows are over PouwH1Tile_v1, whose per-unit noise the period's guarantee doesn't cover, so the
     case credit accepts is refused at its form, as a served window over h1zy's default tile is."""
     d, windows = statements._period(0, tmp_path / "proofs")
@@ -110,13 +163,13 @@ def test_a_period_of_statements_is_put_in_the_lean_form_by_the_verifier_of_recor
         credit, None)
     piece = tmp_path / "period"
     assert PC.form(d["name"], out).startswith("window 0 of period") and "PouwH1Tile_v1" in PC.form(d["name"], out)
-    assert P.main(["period", "--out", str(piece), *_period_args(tmp_path, d, windows)]) == 1
+    assert P.main(["period", "--out", str(piece), "--exe", str(period_exe), *_period_args(tmp_path, d, windows)]) == 1
     said = capsys.readouterr().out.splitlines()
-    assert said == [f"REFERENCE {P.PERIOD} accept", f"PIECE {P.PERIOD} reject form by=python"]
+    assert said == [f"REFERENCE {P.PERIOD} accept", f"PIECE {P.PERIOD} reject form by=lean"]
     assert json.loads(bytes.fromhex(json.loads((piece / "case.json").read_text())["evidence"]))["windows"] == out
 
 
-def test_a_rejected_live_session_is_an_outcome_the_lean_form_rejects(tmp_path, statements, capsys):
+def test_a_rejected_live_session_is_an_outcome_the_lean_form_rejects(tmp_path, statements, period_exe, capsys):
     d, windows = statements._period(1, tmp_path / "proofs")
     p = Path(windows[0]["live"]["statements"][0]["sessions"][0]) / "session.json"
     rec = json.loads(p.read_text())
@@ -127,9 +180,10 @@ def test_a_rejected_live_session_is_an_outcome_the_lean_form_rejects(tmp_path, s
     assert [x["verdict"] for x in out[0]["live"]["proofs"]][:1] == ["reject"]
     assert Cr._period_outcomes(d["key"], d["ledger"], d["pins"], d["main"], d["name"], out, CC.lms_verify)[1][0] == (
         "window")
-    assert P.main(["period", "--out", str(tmp_path / "period"), *_period_args(tmp_path, d, windows)]) == 1
+    assert P.main(["period", "--out", str(tmp_path / "period"), "--exe", str(period_exe),
+                   *_period_args(tmp_path, d, windows)]) == 1
     assert capsys.readouterr().out.splitlines() == [f"REFERENCE {P.PERIOD} reject window",
-                                                    f"PIECE {P.PERIOD} reject form by=python"]
+                                                    f"PIECE {P.PERIOD} reject form by=lean"]
 
 
 def test_statements_naming_the_same_proof_files_twice_are_refused(tmp_path, statements):

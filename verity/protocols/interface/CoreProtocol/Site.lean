@@ -37,7 +37,7 @@ open Lean (Json)
 inductive Kind
   | site
   | host
-  | device
+  | accelerator
   | memory
   | certifier
   | challenger
@@ -48,8 +48,8 @@ inductive Kind
 def Kind.parents : Kind → List (Option Kind)
   | .site => [none]
   | .host => [some .site]
-  | .device => [some .host]
-  | .memory => [some .device, some .host]
+  | .accelerator => [some .host]
+  | .memory => [some .accelerator, some .host]
   | .certifier | .challenger => [some .site]
   | .outside => []
 
@@ -350,7 +350,7 @@ def Kinds : Prop :=
 /-- `sheetDigest`: each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered
 sheet's digest. -/
 def Sheets : Prop :=
-  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .device → x.sheet ∈ (S.add e).sheets.map D.sheet
+  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .accelerator → x.sheet ∈ (S.add e).sheets.map D.sheet
 
 /-- `figures`: each new sheet is accepted against the auditor's sheet `a` for its SKU: its figures against `a`'s
 estimate, and its memory figures exactly `a`'s. -/
@@ -360,7 +360,7 @@ def Figures : Prop :=
 /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
 def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
-    ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
+    ∀ x ∈ (S.add e).locs, x.kind = .accelerator → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
 /-- `owner`: each new certifier or challenger is one of the auditor's own devices, owned by it and with its key, and
 every other new location is the prover's. -/
@@ -436,7 +436,7 @@ namespace Site
 variable (S : Site)
 
 /-- The devices, in the log's order: the locations that compute. -/
-def units : List String := (S.locs.filter (·.kind = .device)).map (·.id)
+def units : List String := (S.locs.filter (·.kind = .accelerator)).map (·.id)
 
 /-- A location or a link is registered under `i`. -/
 def registered (i : String) : Bool := S.locs.any (·.id == i) || S.links.any (·.id == i)
@@ -444,7 +444,7 @@ def registered (i : String) : Bool := S.locs.any (·.id == i) || S.links.any (·
 /-- Device `d`'s data sheet, or `none` when `d` is no device or names no registered sheet. -/
 def sheetOf (digest : Sheet → String) (d : String) : Option Sheet :=
   match S.loc? d with
-  | some x => if x.kind = .device then S.sheet? digest x else none
+  | some x => if x.kind = .accelerator then S.sheet? digest x else none
   | none => none
 
 /-- The classes of op a device model counts a tick (`Accounting.OpClass`): tensor-core MACs, CUDA-core ops and oracle
@@ -499,7 +499,7 @@ with an end in it. -/
 def part (digest : Sheet → String) (i : String) : Site :=
   let locs := S.locs.filter (S.within i (S.locs.length + 1))
   let ids := locs.map (·.id)
-  let digests := (locs.filter (·.kind = .device)).map (·.sheet)
+  let digests := (locs.filter (·.kind = .accelerator)).map (·.sheet)
   ⟨S.sheets.filter (digests.contains <| digest ·), locs,
     S.links.filter fun k => ids.contains k.ends.1 || ids.contains k.ends.2⟩
 
@@ -534,8 +534,10 @@ def GENESIS : String := "verity/registration/genesis/v1"
 def tagged (tag : String) (j : Json) : String :=
   Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ ((Flock.canon j).toOption.getD "").toUTF8))
 
+/-- A kind's word in the site format (`SITE`, `verity/registration/site/v1`). `.accelerator`'s word stays `"device"`: it
+is the format's, and every registration's digest covers it. -/
 def Kind.name : Kind → String
-  | .site => "site" | .host => "host" | .device => "device" | .memory => "memory" | .certifier => "certifier"
+  | .site => "site" | .host => "host" | .accelerator => "device" | .memory => "memory" | .certifier => "certifier"
   | .challenger => "challenger" | .outside => "outside"
 
 def Tier.name : Tier → String
@@ -645,7 +647,7 @@ def Loc.ofJson (j : Json) : V Loc := do
   exactly j ["bytes", "id", "key", "kind", "owner", "parent", "sheet", "tier"] "a location"
   let get := fun k => Flock.J.get j k "a location"
   pure { id := ← Flock.J.str j "id" "a location",
-         kind := ← byName [.site, .host, .device, .memory, .certifier, .challenger, .outside] Kind.name (← get "kind")
+         kind := ← byName [.site, .host, .accelerator, .memory, .certifier, .challenger, .outside] Kind.name (← get "kind")
            "a location's kind",
          parent := ← optOf (Flock.J.asStr · "a location's parent") (← get "parent"),
          owner := ← byName [.prover, .auditor] Owner.name (← get "owner") "a location's owner",

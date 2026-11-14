@@ -3,16 +3,21 @@ module
 public import Definitions.Pouw.Advantage
 public import Definitions.Pouw.Guarantees.Game
 public import Definitions.Pouw.Guarantees.NCP
-public import Definitions.Pouw.Guarantees.PearlC
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Game
+public import Definitions.Pouw.PearlC.Instance
 
 /-!
 # PoUW's guarantees in ε form (trusted)
 
 Each is a gap guarantee restated at the adversary's advantage `ε = g/(1 − g)` (`Pouw.Gε`, `Pouw.PearlC.Gε`,
 `Pouw.AuditGε`), with the hypotheses of its gap form: the game's end to end (`EndToEnd`), route U's game instance at
-ncp-v1 (`GapFromTTNCP_U_v1`), Pearl-C's design point at 8192³ on the RTX PRO 6000
-(`GapSm120v1LoopCast8p72Rev1Cap1000_8192`; not the served point, which is Llama 3.2 1B's linears under the H100 record)
-and Pearl-C4's headline at 8192³ (`GapFp4Sm120_8192`). Its proof is the theorem
+ncp-v1 (`GapFromTTNCP_U_v1`) and Pearl-C's design point at 8192³ on the RTX PRO 6000
+(`GapSm120v1LoopCast8p72Rev1Cap1000_8192`; not the served point, which is Llama 3.2 1B's linears under the H100 record).
+Its proof is the theorem
 `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
 -/
 
@@ -64,18 +69,3 @@ def EpsSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
       ((1648180439 / 444424569561 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
-
-/-- **Pearl-C4's headline on sm_120, 8192³, in ε form**: `GapFp4Sm120_8192` at the advantage
-`ε = g/(1 − g) = 9875013901/1366788186099` (0.72250%). Like `GapFp4Sm120_8192`, it holds only for noise the domain's
-rule allows (D-SK, `Fp4Sem.SaltKeyedB`) and says nothing yet about the deployed NVFP4 noise, at which the domain is
-empty. -/
-def _root_.Pouw.Guarantees.PearlC.EpsFp4Sm120_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S),
-    TTOutFp4Sm120W1 sha fetch salt sem (1 / 400) →
-    Pouw.PearlC.Gε (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
-    ((9875013901 / 1366788186099 : ℚ) : ℝ) δPearlC
-
-end Pouw.PearlC

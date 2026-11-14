@@ -60,7 +60,18 @@ protocol `P`: whether a unit is correct is `P`'s `Correct` on the transcript the
 - a SHA-512 compression (`sha`), at `sha512`.
 
 **Prices per device** (`W1Prices`, in the record's unit: one dense E4M3 MAC with FP32 accumulation for the FP8
-records, one NVFP4 MAC for the FP4 record):
+records, one NVFP4 MAC for the FP4 record). The unit (CMP-438): each operation is charged in seconds at its own pipe's
+data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes' ceilings. Each card's
+FP32 price is stated at two readings (the card files' `price.fp32.sm`, `price.fp32.tensor` and `price.fp32_loop`):
+the higher-ceiling one is the default, a statement over the prices reads it unless it says it rests on the other.
+- The H100 and the H200: `W1Prices.h100` (FP32 32, both pipes at `h100SmMHz`, 1980 MHz) is the default;
+  `W1Prices.h100Tensor` (FP32 `976/33` = 29.58, the tensor pipe at `h100TensorMHz`, 1830 MHz) credits more and holds
+  only if the tensor pipe never exceeds 1830 MHz.
+- The RTX PRO 6000: `W1Prices.sm120` (FP32 8, the add at its pipe's issue ceiling, both pipes on the one SM clock) is
+  the default; `W1Prices.sm120Loop` (FP32 8.376, the add in a timed loop at a locked 2,100 MHz) holds for an add issued
+  in that loop.
+
+The prices:
 - `W1Prices.sm120`: node 2's RTX PRO 6000 at locked 2,100 MHz (every
   SASS, identity and numeric gate passed): QMMA E4M3 m16n8k32 1 per MAC, OMMA NVFP4 m16n8k64 0.5, HMMA BF16 m16n8k16
   2; FADD and FFMA 8.00 issue-bound (8.376 in the measured loop: `W1Prices.sm120Loop`); a cast 16 per F2FP instruction
@@ -72,6 +83,8 @@ records, one NVFP4 MAC for the FP4 record):
   price per register meets the nominal one (m64n8k32 measured 144 per register). INT8's 1 is also the data sheets'
   (the H100 whitepaper's Table 1 and the H200 data sheet: INT8 TOPS equal to FP8 TFLOPS); only `W1Device.s8H100` has
   its fragments, and it is the H200's setting too.
+- `W1Prices.h100Tensor`: `h100` at the tensor-clock reading, FP32, a cast and INT32 times `61/66` (the card file's
+  1830 MHz tensor clock over its 1980 MHz SM clock).
 - `W1Prices.fp4Sm120`: `sm120Loop` in FP4 units (an FP8 unit is 2), the record `devFp4Sm120` uses.
 
 `sha512` (a compression) and `fetch` (a first-fetched word) are unmeasured on both devices, so the records take them as
@@ -159,7 +172,8 @@ structure W1Prices where
   fetch : ℚ
 
 /-- **sm_120's W1 prices**, issue-bound (node 2, locked 2,100 MHz):
-E4M3 1, BF16 2 and NVFP4 0.5 per MAC; FP32 8; a cast 16 per instruction (8 per code); INT32 16.
+E4M3 1, BF16 2 and NVFP4 0.5 per MAC; FP32 8; a cast 16 per instruction (8 per code); INT32 16. FP32's 8 is the default
+reading (the card file's `price.fp32.sm`): the add at its pipe's issue ceiling, both pipes on the one SM clock.
 
 S8 is 1 per MAC, from the data sheet; those runs did not measure it. NVIDIA's RTX PRO Blackwell GPU Architecture
 whitepaper v1.1, Appendix A, Table 4 (the RTX PRO 6000 Blackwell Workstation Edition, the same 188-SM GB202; the source
@@ -176,11 +190,16 @@ def W1Prices.sm120 (sha fetch : ℚ) : W1Prices where
   sha512 := sha
   fetch := fetch
 
-/-- sm_120's W1 prices with FP32 at the measured loop's `1047/125 = 8.376`. -/
+/-- sm_120's W1 prices with FP32 at the measured loop's `1047/125 = 8.376`, the second reading (the card file's
+`price.fp32_loop`): an add in a loop of 64 adds and 3 loop instructions at a locked 2,100 MHz, which holds for an add
+issued in that loop. A statement at these prices rests on that reading. -/
 def W1Prices.sm120Loop (sha fetch : ℚ) : W1Prices := { W1Prices.sm120 sha fetch with fp32 := 1047 / 125 }
 
 /-- **The H100's W1 prices** (`Dimension.H100.h100Nominal`, the datasheet): E4M3 1, BF16 2 and S8 1 per MAC (the H100
 has no E2M1 fragment, so that price is never read); FP32 32; a cast 64 per instruction (32 per code); INT32 64.
+
+These are the default reading (CMP-438; the card file's `price.fp32.sm`): both pipes at `h100SmMHz`, 1980 MHz, the higher
+tensor ceiling. A unit is an FP8 MAC's time at 1980 MHz, and an SM-pipe instruction 32 MACs' time at the same clock.
 
 S8's 1 (`nominalMac .s8`) is the data sheets' ratio, the same on the H100 and the H200 (one GH100; they differ in memory
 and its bandwidth, which W1 does not price). NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 1, H100
@@ -194,6 +213,19 @@ def W1Prices.h100 (sha fetch : ℚ) : W1Prices where
   int32 := 64
   sha512 := sha
   fetch := fetch
+
+/-- **The H100's W1 prices at the tensor-clock reading** (CMP-438; the card file's `price.fp32.tensor`):
+`W1Prices.h100` with FP32, a cast and INT32 times `h100TensorMHz / h100SmMHz` (1830/1980 = 61/66, the card file's
+`clock.tensor` over `clock.sm`): FP32 `976/33` (29.58), a cast `1952/33` per instruction and INT32 `1952/33`; the
+tensor-core prices, a compression and a first fetch are `W1Prices.h100`'s. A unit is an FP8 MAC's time with the tensor
+pipe at 1830 MHz, and an SM-pipe instruction, at 1980 MHz, takes `32 · 1830/1980 = 976/33` of those units. This
+reading credits more than the default `W1Prices.h100` and holds only if the tensor pipe never exceeds 1830 MHz, so a
+statement at it says it rests on it. -/
+def W1Prices.h100Tensor (sha fetch : ℚ) : W1Prices :=
+  { W1Prices.h100 sha fetch with
+    fp32 := 32 * h100TensorMHz / h100SmMHz
+    cvt := 64 * h100TensorMHz / h100SmMHz
+    int32 := 64 * h100TensorMHz / h100SmMHz }
 
 /-- Every price times `c` (a change of unit). -/
 def W1Prices.scale (c : ℚ) (pr : W1Prices) : W1Prices :=

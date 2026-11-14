@@ -37,7 +37,7 @@ import functools
 import hashlib
 import struct
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, cast
 
 from verity.protocols.accounting.pouw.verifier.serving import (
     SCHEDULES,
@@ -49,7 +49,9 @@ from verity.protocols.accounting.pouw.verifier.serving import (
 
 from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
-from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream
+from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _Lane, _stream
+
+__all__ = ["whole_options"]
 
 #: each call step's group (`verity.protocols.accounting.pouw.verifier.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
@@ -318,7 +320,7 @@ class LaneCalls(_RunState):
             with torch.cuda.stream(lane) if g is not None else nullcontext():
                 for i, f in enumerate(steps):
                     if i == cut and cuda:
-                        tl.event.record(lane)
+                        cast("_Lane", tl).event.record(lane)    # a cut is of a tree aside, which took its lane above
                     f()
             if tl is not None:
                 self.kernel.dev.stream = tl.raw
@@ -332,8 +334,9 @@ class LaneCalls(_RunState):
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
                         self.roots_buf[nb * p:nb * (p + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
-                    to.tree_event.record(tl.stream)
+                    cast("_Lane", to).tree_event.record(tl.stream)   # a tree lane is taken with the call's side lane
             if side:
+                to = cast("_Lane", to)              # the call's side lane, taken above with its side steps
                 self.kernel.dev.stream = to.raw
                 with torch.cuda.stream(to.stream) if g is not None else nullcontext():
                     if cuda:
@@ -368,8 +371,7 @@ class LaneCalls(_RunState):
         where A's tree is aside, side lane `tl` (`to`, or from `TREE_APART_ROWS` the one after it) replays the tree graph
         after the main graph's own event past the per-row keying; side lane `to` replays the side graph after the main
         graph, then waits for the tree where `tl` is another; the caller waits for the main lane."""
-        D = self.driver
-        assert D is not None
+        D = cast("_Driver", self.driver)    # no driver is unchecked: its first call fails
         lane = main.raw if main is not None else raw
         done = sh.done[j]
         if done is not None:

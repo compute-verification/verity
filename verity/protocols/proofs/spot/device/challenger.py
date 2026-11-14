@@ -26,7 +26,7 @@ challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`),
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
 challenger is auditor-trusted, the auditor's device on a machine the developer doesn't control, under the named assumption
-`trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+`trusted-device`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 **A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
 `withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
@@ -87,7 +87,7 @@ when the run ends.  `rec-compose` refuses unless each part has exactly one sessi
 parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
 coin tree's, sampled at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
 The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
-it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
+it answers is the auditor-trusted challenger's (`trusted-device`).  The live challenger keeps it one event a line: its
 operator stages the record before any session and closes it after the last, and Flock's `flock-circuit serve --zk
 --rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
 can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
@@ -163,7 +163,7 @@ pins the open's commit (`pins_reason`), and that commit is on main's first-paren
 (`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
 prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
 main's history, but main's check ran on the merge's tree, never on the branch commit's.  That the host ran the commit
-its open names is the auditor-trusted device's word (`trusted-host`).  Every path that credits a session reads it
+its open names is the auditor-trusted device's word (`trusted-device`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
@@ -1837,7 +1837,7 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take the auditor host's operator's newest published pins log")
+                "take the auditor device's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
@@ -2027,7 +2027,7 @@ class LiveRecord:
     def log(self) -> tuple[dict[str, Any], ...]:
         """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
         "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
-        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-host`'s."""
+        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-device`'s."""
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:

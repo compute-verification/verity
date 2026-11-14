@@ -15,6 +15,7 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -38,6 +39,8 @@ from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, Coin
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
+
+__all__ = ["joined"]
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
@@ -297,6 +300,8 @@ class _Ring:
     """Pinned host bytes handed out in order and given back in any order: a region is free again once it and every region
     handed out before it are given back."""
 
+    live: deque[list]
+
     def __init__(self, n: int):
         import torch
         self.buf, self.n, self.head, self.live = torch.empty(n, dtype=torch.uint8, pin_memory=True), n, 0, deque()
@@ -329,6 +334,8 @@ class _Arena:
     made at the first take; a copy past half a ring gets pinned memory of its own.  A take waits for a give where no ring
     has room."""
 
+    rings: list[_Ring]
+
     def __init__(self, ring_bytes: int, rings: int):
         self.ring_bytes, self.count, self.rings, self.cv = ring_bytes, rings, [], threading.Condition()
 
@@ -344,7 +351,7 @@ class _Arena:
                 for ring in self.rings:
                     got = ring.take(size)
                     if got is not None:
-                        return (lambda: self._give(ring, got[0])), got[1]
+                        return partial(self._give, ring, got[0]), got[1]
                 self.cv.wait()
 
     def _give(self, ring: _Ring, region: list) -> None:
@@ -406,8 +413,8 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     digest's ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its
     `also` tensors (uint8 host tensors, copied with it) once they are written.  `fresh` and `here`: `_Copies.start`'s."""
     import torch
-    files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
-    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
+    each = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
+    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in each for s in (t, *also)]
     if srcs and srcs[0].is_cuda:
         hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh, here)
     else:
@@ -416,7 +423,7 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
         _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
     entries, batch, at = [], [], 0
-    for path, _, digest, then, also in files:
+    for path, _, digest, then, also in each:
         k = 1 + len(also)
         entry = _entry(path, hosts[at].numel())
         batch.append((path, hosts[at:at + k], digest, entry, then))

@@ -105,9 +105,9 @@ from typing import Any, NamedTuple
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
 from verity.circuits.ops.fp32 import f32_sub_bits as sub
+from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.definitions.registry import boolean_rope as BR
 from verity.definitions.registry import dsa
 from verity.definitions.registry import ref_prims as RP

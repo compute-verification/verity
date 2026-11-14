@@ -1,6 +1,6 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case`
+`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case_twin`
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
 names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
@@ -303,7 +303,7 @@ INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 
 @functools.cache
 def _period_answer(case: str) -> str:
-    return canonical(period_check.case(json.loads(case)))
+    return canonical(period_check.case_twin(json.loads(case)))
 
 
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each

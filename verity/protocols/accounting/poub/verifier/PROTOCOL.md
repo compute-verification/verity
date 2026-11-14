@@ -1024,7 +1024,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
   observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
   passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
-  (`IngressCounted`, `trusted-host`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
+  (`IngressCounted`, `trusted-device`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
   `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
   `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
   the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
@@ -1035,7 +1035,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
   file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
   session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
-  (`trusted-host`), that label's name for what the lockdown doesn't close, in C's place.
+  (`trusted-device`), that label's name for what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).

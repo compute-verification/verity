@@ -11,7 +11,7 @@ session, and `verity/protocols/compose/device/live_challenger/coin_link.py` runs
 ### The path
 
 The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor device, the device that
-runs the server's network certifier (`trusted-host`). A window's session takes this path:
+runs the server's network certifier (`trusted-device`). A window's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
 2. `serve.py` signs the challenger's record, which states the session's coin commitment, then listens on the host's

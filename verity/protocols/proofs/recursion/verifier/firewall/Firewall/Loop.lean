@@ -1,4 +1,11 @@
-/-
+module
+
+public import Firewall.Release
+public import Flock.Firewall.Session
+public import Flock.Firewall.Values
+public import Std.Time
+
+/-!
 # The release side around the session loop (`core-firewall session`, live PROTOCOL.md §10.5)
 
 `Flock.Firewall.Session`'s loop, each of its sessions one outer session of the recursive session `--session` at the
@@ -28,12 +35,6 @@ state directory: each registration takes the next number on the record and is ap
 `record.lock`, in the step that numbers it (`register`), an interior session's with the session's own key. That key is
 witness, so before it serves, the service makes the state directory its own OS user's alone.
 -/
-module
-
-public import Firewall.Release
-public import Flock.Firewall.Session
-public import Flock.Firewall.Values
-public import Std.Time
 
 @[expose] public section
 

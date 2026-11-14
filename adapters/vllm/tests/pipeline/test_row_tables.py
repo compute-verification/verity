@@ -18,10 +18,10 @@ import numpy as np
 import pytest
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
+from verity.circuits.ops import gemm as OG
 from verity.commitments import row_table as RT
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import tables as TB
-from verity.circuits.ops import gemm as OG
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R

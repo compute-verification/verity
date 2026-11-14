@@ -22,7 +22,7 @@ before.
 | --- | --- | --- | --- |
 | `setup` | the node's CPUs | the environment a window needs: the pinned vLLM in a venv, the model at its pinned revision and FlashInfer's sampling kernels | under `$WORK` |
 | `window` | 8 leased GPUs, timing on the first | the timed window: the card's identity, the shipped kernel tree against its manifest, the device check, then `e2e.py`; `MODE=smoke`, `profile` and `perplexity` are its untimed forms | `e2e.json` (or `smoke.json`, `profile.json`, `quality.json`); the retained passes under `$WORK/passes/<run id>` |
-| `verify` | CPUs, after the window | `verify_run.py` on each retained pass; exits non-zero unless prefill and decode are accepted and every control is rejected | `<pass>-verify.json` and `<pass>-manifest.json` |
+| `verify` | CPUs, after the window | Pearl+'s verdict on each retained pass in Lean (`served_passes.py lean`), beside the Python twin it is held to (`served_passes.py verify`); exits non-zero unless the Lean accepts prefill and decode and rejects every control | `<pass>-lean-check.json`, `<pass>-lean.json`, `<pass>-verify.json` and `<pass>-manifest.json` |
 | `served_passes serve`, `verify` | one leased GPU, then CPUs | one served run through `verity_vllm.LLM` with every pass retained, then each replayed (`served_passes.py`) | `served.json`, `verify.json` |
 | `served_inputs` | CPUs, after a pass | a retained pass's inert work per input against the scheme's bound, by census or sample, or by fresh trials | a directory of `inputs.json` and the tiles' lines, which `served_table.py` reads |
 | `served_step` | one leased GPU, then CPUs | where a served decode step's time goes, one engine process an arm, under Nsight Systems or not (`served_step.py`) | a directory an arm and `breakdown.md` |

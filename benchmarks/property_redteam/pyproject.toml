@@ -19,9 +19,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
 # PoUW's words) and the Definitions' integer, gather and cast primitives (`verity.definitions.registry`, which imports
-# their twins in `verity.definitions.numerics`; both read `verity.definitions.evidence` and its `evidence.json`),
-# and the integration's quarantine, difftest and relation modules. `demo.py`'s registry walk reads
-# `verity.definitions.boolean` too.
+# their twins in `verity.definitions.numerics`; both read `verity.definitions.evidence` and its `evidence.json`).
+# `demo.py`'s registry walk reads `verity.definitions.boolean` too.
 # The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/channel.py",
@@ -31,23 +30,13 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py",
-          "verity/protocols/accounting/pouw/prover/__init__.py",
-          "verity/protocols/accounting/pouw/prover/circuit", "adapters/vllm/verity_vllm/__init__.py",
-          "adapters/vllm/verity_vllm/program/__init__.py", "verity/definitions/__init__.py",
+          "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/accounting/pouw/prover/circuit",
+          "verity/definitions/__init__.py",
           "verity/definitions/registry",
           "verity/definitions/numerics", "verity/definitions/evidence.py",
           "verity/definitions/evidence.json", "verity/definitions/boolean.py",
-          "adapters/vllm/verity_vllm/commit/__init__.py",
-          "adapters/vllm/verity_vllm/commit/challenge.py",
-          "adapters/vllm/verity_vllm/program/quarantine",
-          "adapters/vllm/verity_vllm/program/mla_capture.py",
-          "adapters/vllm/verity_vllm/program/moe_difftest.py",
-          "adapters/vllm/verity_vllm/program/layer_norm_difftest.py",
-          "adapters/vllm/tests/program/sampling_rng.py",
-          "adapters/vllm/verity_vllm/program/gemm_target_correspondence.py",
-          "adapters/vllm/verity_vllm/program/compiled_relations.py",
           "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py",
           "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
-          "verity/protocols/accounting/poub/__init__.py",
-          "verity/protocols/accounting/pouw/__init__.py",
-          "verity/hardware/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py"]
+          "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
+          "verity/hardware/__init__.py", "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/proofs/spot/device/__init__.py"]

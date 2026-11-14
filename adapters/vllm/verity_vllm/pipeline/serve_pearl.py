@@ -111,7 +111,7 @@ def refusal(opts: Any) -> str | None:
                 "(--challenger-gate, --challenger-peer, --challenger-lane) or in-process (serve_pearl)")
     if len({bool(getattr(g, f)) for f in GATE}) > 1:
         return ("--challenger-gate, --challenger-peer and --challenger-lane go together under Pearl+: the gate's command, "
-                "this machine's name in the auditor host's peers, and the lane whose gate key the command holds, whose open "
+                "this machine's name in the auditor device's peers, and the lane whose gate key the command holds, whose open "
                 "period each window's salt-only session joins")
     if opts.precision != PRECISION:
         return (f"--protocols {ENTRY} serves the BF16 checkpoint's linears as Pearl+'s FP8 product: it needs --precision "

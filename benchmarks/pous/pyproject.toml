@@ -50,6 +50,7 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "benchmarks/census/deployments.json",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py",
           "verity/protocols/accounting/pouw/verifier/coins.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
+          "verity/protocols/accounting/pouw/verifier/verifier.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registration.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",

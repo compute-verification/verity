@@ -112,7 +112,7 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   does (`PouwCheck.liveSaltCheck`, `Properties.Pouw.LiveSalt`). A window whose check item names no coin mode is seeded,
   its answer carries no salt, and `Scope`'s `Declared.Live` and `LayerCommitted` fail of the circuit it runs. No path
   that serves H1 windows takes its salt from such a session yet: `window_salt.issue` opens one, on the auditor's
-  challenger (a `trusted-host` machine) or on a development gate on the issuing machine, and the H200 per-call tiles
+  challenger (a `trusted-device` machine) or on a development gate on the issuing machine, and the H200 per-call tiles
   still stand in a SHA-512 of the step's salt key for the salt. What remains: the served windows' salt from the
   auditor's challenger, and a tie of the proved tiles to that salt (their salt port is still a value the prover
   records).

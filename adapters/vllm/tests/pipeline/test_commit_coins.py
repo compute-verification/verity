@@ -278,7 +278,7 @@ def test_coins_held_in_the_commits_process_credit_nothing(tmp_path, monkeypatch)
     assert CC.replay_challenge(rc, "abcd") == ("abcd", {"source": "flag"})
     assert CC.replay_challenge(rc, None)[1] == {"source": CC.IN_PROCESS, "family": CC.REPLAY, "index": None}
     assert _reason(auditor, [rc.extra["coins"]], roots, sid) == (
-        "the Commit's coins were drawn in its own process, not by the auditor host's challenger: a measurement, which "
+        "the Commit's coins were drawn in its own process, not by the auditor device's challenger: a measurement, which "
         "credits nothing")
     assert _reason(auditor, [*records, rc.extra["coins"]], [*roots, roots[0]], sid).startswith(
         "the Commit's coins were drawn in its own process")

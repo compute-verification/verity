@@ -17,7 +17,7 @@ published, once, and only until its reveal deadline on its own clock after p's e
   (`Proxy.commit_weights`, which takes only a record the prover registered with the certifier signed), given on
   `reveal`'s conditions but the once (`Proxy.committed`), or `Unrevealed` (uncommitted): the `pouw_record` of the
   weights' root, the stream and the prover, or the lead's `lead_record`. The salt binds no weights, so a certified
-  execution phase passes only weights, a stream and a prover recorded before its salt (`core_check.pass_epoch`).
+  execution phase passes only weights, a stream and a prover recorded before its salt (`core_check.pass_epoch_twin`).
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in execution phase p, the one function that states its form,
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
   64-byte id of the prover whose key the certifier verifies records under.
@@ -29,7 +29,7 @@ published, once, and only until its reveal deadline on its own clock after p's e
   PoUW execution phase.
 * `window_open_root(weights_root, requests_root, session)` is a live execution phase's open root: what the auditor's gate opens
   the execution phase's challenger session on and its salt coin opens after, which the verifier recomputes from the execution phase's
-  record and the session the gate reserved (`core_check.salt`).
+  record and the session the gate reserved (`core_check.salt_of_record`).
 """
 from __future__ import annotations
 
@@ -161,7 +161,7 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
     alone), `requests_root` the root of the execution phase's round-0 request table, committed before its salt, and `session` the
     id the auditor's gate assigned when it reserved the execution phase's challenger session, which the prover can't relabel. The gate opens that session on this root (``open --session S --root R``), its
     challenger opens the salt coin only after it, and the verifier recomputes it from the execution phase's record and the
-    session its signed reserve names (`core_check.salt`). Each session has its own root, and a root fixes one execution phase's
+    session its signed reserve names (`core_check.salt_of_record`). Each session has its own root, and a root fixes one execution phase's
     weights and requests, so one session salts one execution phase."""
     if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
         raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
@@ -269,7 +269,7 @@ class WindowOpens:
 
 def context(prefix: str, window: int, manifest: str) -> str:
     """The served execution phase's context for PoUW execution phase `window`, whose pass's manifest has SHA-512 `manifest` (lowercase
-    hex): `core_check.pass_epoch` reads the manifest's digest off its last segment, `window_of` the execution phase off the one
+    hex): `core_check.pass_epoch_twin` reads the manifest's digest off its last segment, `window_of` the execution phase off the one
     before."""
     return f"{prefix}/{WINDOW_SEGMENT}/{_window(window)}/{manifest}"
 

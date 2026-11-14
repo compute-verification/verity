@@ -1206,7 +1206,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
-                   "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
+                   "gate:USER@HOST (the auditor device through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--deployed-key", action="store_true",
                    help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
                    "its whole tree made over this machine's cores")

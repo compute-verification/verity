@@ -153,7 +153,7 @@ class ReleaseOrder:
         raw = headers.get(RELEASE_HEADER)
         if raw is None:
             return None
-        if not raw.strip().isdigit():
+        if not raw.strip().isdecimal():
             raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
         run, n = headers.get(RUN_HEADER, ""), int(raw)
         if run != self.run:
@@ -288,10 +288,10 @@ def release_of(headers: Mapping[str, str]) -> tuple[str, int, int | None] | None
     raw = headers.get(RELEASE_HEADER)
     if raw is None:
         return None
-    if not raw.strip().isdigit():
+    if not raw.strip().isdecimal():
         raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
     bucket = headers.get(BUCKET_HEADER)
-    if bucket is not None and not bucket.strip().isdigit():
+    if bucket is not None and not bucket.strip().isdecimal():
         raise ValueError(f"{BUCKET_HEADER}: a non-negative integer, not {bucket!r}")
     return headers.get(RUN_HEADER, "").strip(), int(raw), None if bucket is None else int(bucket)
 

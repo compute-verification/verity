@@ -80,6 +80,13 @@ def test_the_window_is_fixed_before_its_salt():
         rec.salted(SALT)
 
 
+def test_the_salt_is_the_records_and_salted_returns_nothing():
+    """`salted` keeps the salt as the record's ``salt`` and returns nothing: whoever needs the salt reads the record."""
+    rec = record()
+    assert rec.salted(SALT) is None
+    assert rec.salt == SALT
+
+
 def test_a_call_past_the_windows_count_is_refused():
     rec = salted(calls=2)
     rec.a_root(Call(3, 0, 0, 4, 32, 8), ROOT)

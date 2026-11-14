@@ -26,7 +26,7 @@ weights were served.  Pearl-C commits one pass per engine step, a step held to w
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.accounting.pouw.verifier.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.protocols.accounting.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside sampled proofs only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
@@ -51,7 +51,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from verity.commitments import MerkleTree
@@ -555,7 +555,7 @@ def ncp_linear_op() -> Any:
     return torch.ops.verity_pouw.ncp_linear
 
 
-def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
+def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int, _orig: Any):
     if isinstance(run, _CircuitRun):
         op = ncp_linear_op()
 
@@ -627,8 +627,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
         key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
-        device_roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
-                                        scheme, salt_key=key)
+        device_roots = PPD.weight_roots(PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
+                                        {w: m.weight for w, m in enumerate(layers)}, scheme, salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
@@ -687,7 +687,7 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     with PHW.closed_on_error(session):
         if device:
-            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
+            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                       schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
@@ -701,7 +701,7 @@ def install(scheme: str, target: Target) -> Option:
             _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
-            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+            h.wrap(layer.quant_method, "apply", functools.partial(_executor, run, w))
         if device:
             PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir, settings.runner)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=end_pass,
@@ -741,7 +741,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
-    shapes = [(int(n), int(k)) for n, k in (m.weight.shape for m in layers)]
+    shapes = cast("list[tuple[int, int]]", [tuple(int(d) for d in m.weight.shape) for m in layers])
     modules = {w: f"linear {w}" for w in roots} | _named(target.model, layers)
     wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
                                                               target.context.stage != "capture")) or weights_root(roots)

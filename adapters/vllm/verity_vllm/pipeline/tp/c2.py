@@ -22,6 +22,7 @@ from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
 __all__ = ["DEFER_WORLDS"]
 
 DEFERRED = "replay_deferred.json"
+RANK_RESULT = "sampled_replay_p{pair}_rank{rank}.json"      # a rank's replay of its sealed bundle, as `tp-commit-replay` writes it
 SCHEMA = TP_REPLAY_DEFERRED_SCHEMA
 #: the worlds whose Commit defers its ranks' C2 replay, each proven by a row whose deferred arm (the Commit's bundles, then
 #: `tp-commit-replay` on CPU) gave the in-process arm's picks, per-rank records, verdict and run root; any other world replays in process
@@ -47,6 +48,14 @@ def write_atomic(p: Path, text: str) -> None:
     tmp = p.with_name(p.name + ".tmp")
     tmp.write_text(text)
     os.replace(tmp, p)
+
+
+def remove_earlier(out: Path) -> None:
+    """In a used ``out``, where a Commit writes its `versions.json`: an earlier Commit's rows and verdict go (its `runs.jsonl`, its
+    `summary.json`, its deferred record and each rank's replay result), so what stands beside `versions.json` is that Commit's or
+    nothing.  The bundles the earlier Commit sealed stay."""
+    for earlier in (out / "runs.jsonl", out / "summary.json", out / DEFERRED, *out.glob(RANK_RESULT.format(pair="*", rank="*"))):
+        earlier.unlink(missing_ok=True)
 
 
 def per_rank_of(row: dict) -> dict:

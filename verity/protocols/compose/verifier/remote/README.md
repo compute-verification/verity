@@ -35,7 +35,7 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 - **The auditor** has two parts, both on auditor devices that the developer doesn't control: its **challenger** (the
   live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each sampled
   proof block, and `remote check` for the verdict). The challenger is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. The verifier may also use its own coins
+  (`trusted-device`); the verifier is the auditor's own check. The verifier may also use its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
@@ -51,7 +51,7 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/recursion/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| Sampled proofs ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../accounting/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../../policy/inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `NciCheck.Protocol.protocol` (`inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
@@ -464,7 +464,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
   (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
-- `trusted-host` (`Verity.Assumptions.TrustedDevice`, `Definitions/Core/Assumptions.lean`): the challenger is
+- `trusted-device` (`Verity.Assumptions.TrustedDevice`, `Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedDevice`.
 - `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices

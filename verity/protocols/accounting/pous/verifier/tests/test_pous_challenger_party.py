@@ -5,7 +5,7 @@ the honest prover and refuses it against one that answers zeros. The warm-ups be
 and neither timed nor judged. The prover answers with the collector paused, as the challenger does. The deployment
 layer's runtime, running the same two parties on the same coins and clock readings, signs the session the stream
 does. The runtime's `Side.of` reads `period.json`'s challenger host for `command`, and `placement` says whether
-`trusted-host`'s premise holds."""
+`trusted-device`'s premise holds."""
 
 from __future__ import annotations
 

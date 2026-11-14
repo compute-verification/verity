@@ -25,11 +25,12 @@ import json
 import os
 import threading
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import canonical_json
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 __all__ = ["Answers", "key", "verdict"]
 
@@ -128,7 +129,8 @@ class Answers:
         self.verify = verify or (lambda proof, **kw: PF.verify(proof, **kw))
         self.exe = exe or (lambda: PF.executable())
         self.memo: dict[str, dict[str, Any]] = {}
-        self.ran, self.unkeyed, self.taken = 0, 0, {}
+        self.ran, self.unkeyed = 0, 0
+        self.taken: dict[str, int] = {}
         if directory is not None:
             old = os.umask(0o077)
             try:

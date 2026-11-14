@@ -57,10 +57,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as G, registration as R
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.windows import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.checkpoint_index import read_safetensors_header
 from verity_vllm.config import UsageError, group, option
@@ -185,18 +187,19 @@ class Tie:
                         wires.append(IF.Wire(tid, "carry", prev[0], "o1", i, (1,), prev[1], (0,)))
                 reads.append(IF.Read(tid, "data", p, i, (1,), int(j) * self.entries[p]["words"], (0,)))
                 prev = (tid, i)
-            reads.append(IF.Read(prev[0], "o0", f"{c.name}/sha512", prev[1], (1,), 0, (0,)))
+            end = steps[-1]
+            reads.append(IF.Read(end[1], "o0", f"{c.name}/sha512", end[2], (1,), 0, (0,)))
         params = {**{p: e["leaves"] * e["words"] for p, e in self.entries.items()},
                   **{n: len(row) for c in self.chains for n, row in c.supplied().items()}}
         tables = tuple(IF.Table(p, p, 0, e["words"], e["leaves"]) for p, e in self.entries.items() if _table(p))
-        wires = tuple(IF.coalesce(wires))
+        runs = tuple(IF.coalesce(wires))
         starts: dict[str, list[int]] = {}
         for steps in plan:
             for _fn, tid, i, _h, _p, _j in steps:
                 starts.setdefault(tid, []).append(i)
-        return IF.Circuit(NAME, tuple(templates), wires=wires,
+        return IF.Circuit(NAME, tuple(templates), wires=runs,
                           registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))),
-                          order=IF.ordered({IF.descriptor_id(fn): n for fn, n in templates}, wires, starts) if wires else None)
+                          order=IF.ordered({IF.descriptor_id(fn): n for fn, n in templates}, runs, starts) if runs else None)
 
     def window(self, design: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
         """The tie's window under ``design`` in members of at most ``cap`` units, ``values`` the committed weights (the
@@ -244,7 +247,7 @@ class Tie:
                 cv, pend = SS.row_reference(cv, pend, data.tolist())
                 if k == len(steps) - 1:
                     d = c.digest if forge_digest else SS.end_reference(cv, pend, c.length)
-                    outs = [np.frombuffer(d, ">u8").astype(np.uint64)]
+                    outs: list[np.ndarray] = [np.frombuffer(d, ">u8").astype(np.uint64)]
                 else:
                     outs = [np.array(cv, np.uint64), *([np.array(SS.carry_words(pend), np.uint16)] if pend else [])]
                 got[tid][0].append(ins)
@@ -504,4 +507,4 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     return 0
 
 
-__all__ = ["NAME", "TIE_TAG", "Chain", "Tie", "audit_inputs", "checked_pins", "commit", "tie"]
+__all__ = ["COMMANDS", "NAME", "TIE_TAG", "Chain", "Tie", "audit_inputs", "checked_pins", "commit", "main", "tie"]

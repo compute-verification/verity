@@ -19,6 +19,7 @@ def _stamp(monkeypatch):
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
                                                     "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    monkeypatch.delenv("OUT", raising=False)       # a research run's OUT, which `_ran` sets where a test needs it
 
 
 def test_run_launches_run_py_s_run_with_the_job_wrapped(capsys) -> None:
@@ -54,10 +55,14 @@ class _Job:
         return self.rc
 
 
-def _ran(tmp_path: Path, monkeypatch, result: dict | None, rc: int = 0) -> tuple[int, dict, _Job]:
+def _ran(tmp_path: Path, monkeypatch, result: dict | None, rc: int = 0, out: bool = False) -> tuple[int, dict, _Job]:
+    """`record.py job` in a research run whose job.sh is `_Job`; `out`: OUT set to the run's out/, as research run sets it,
+    else unset (the run's out/ by default)."""
     run_dir = tmp_path / "run"
     run_dir.mkdir(parents=True)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    if out:
+        monkeypatch.setenv("OUT", str(run_dir / "out"))
     fake = _Job(run_dir / "out", result, rc)
     monkeypatch.setattr(REC.subprocess, "Popen", fake)
     monkeypatch.setattr(REC.signal, "signal", lambda sig, handler: handler(sig, None))
@@ -69,14 +74,18 @@ def test_the_job_records_its_numbers_partial_until_the_run_is_whole(tmp_path: Pa
     """In a research run, `record.py job` runs job.sh with its arguments, forwards a SIGTERM to it, and then writes
     `METRICS` from job.sh's result: the headline's seconds of one recursive run and of its Lean step, partial while a
     step one recursive run needs didn't run and measured once every one did, the validation the table's verdict, and
-    job.sh's exit status as its own."""
+    job.sh's exit status as its own. While a step is missing, the run's seconds have no value, and why names the steps:
+    the headline's sum would be only the steps that ran."""
     doc = RP.read(job(tmp_path / "a"))
     h = doc["headline"]
     rc, got, fake = _ran(tmp_path / "partial", monkeypatch, doc, rc=3)
     assert rc == 3 and fake.argv[1:] == [str(REC.HERE / "job.sh"), "K=4096", "N=2"] and fake.signals == [signal.SIGTERM]
     assert not h["complete"] and [m["name"] for m in got["measurements"]] == list(REC.METRICS)
     run_s, lean_s = got["measurements"]
-    assert (run_s["value"], run_s["unit"], run_s["mark"]) == (h["pipeline_sum_s"], "s", "partial")
+    missing = [x for x in RP.E2E_STEPS if not doc["steps"].get(x)]
+    assert missing and h["pipeline_sum_s"] > 0
+    assert (run_s["value"], run_s["unit"], run_s["mark"]) == (None, "s", "partial")
+    assert run_s["why"] == f"the run is missing {', '.join(missing)}: its pipeline_sum_s would sum only the steps that ran"
     assert (lean_s["value"], lean_s["mark"]) == (h["pipeline"]["Lean step_s"], "partial") and lean_s["value"] > 0
     assert run_s["shape"] == "K = 4096, N = 2" and got["measurement_files"] == ["out/recursion_e2e.json"]
     assert got["validation"] == {"status": "failed", "checker": "rec_profile.headline", "evidence": ["out/recursion_e2e.json"],
@@ -88,8 +97,11 @@ def test_the_job_records_its_numbers_partial_until_the_run_is_whole(tmp_path: Pa
     (vcap / "out").mkdir(parents=True)
     (vcap / "rc").write_text("0\n")
     (vcap / "time-step.txt").write_text(timev("0:05.00"))
-    rc, got, _ = _ran(tmp_path / "whole", monkeypatch, RP.read(o))
+    whole = RP.read(o)
+    rc, got, _ = _ran(tmp_path / "whole", monkeypatch, whole, out=True)
     assert rc == 0 and [m["mark"] for m in got["measurements"]] == ["measured", "measured"]
+    assert got["measurements"][0]["value"] == whole["headline"]["pipeline_sum_s"] > 0
+    assert got["measurement_files"] == ["out/recursion_e2e.json"]
     assert got["validation"]["status"] == "failed" and "not accepted" in got["validation"]["detail"]
 
 

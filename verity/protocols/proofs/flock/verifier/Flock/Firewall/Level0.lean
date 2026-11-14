@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Firewall.Link
+
+/-!
 # A table's level 0, as the session loop holds it
 
 The session loop samples each firewalled table's level-0 hiding itself, from the operating system (as it samples `Hello`'s
@@ -24,9 +28,6 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
 The prover gets the samples back (`drawsOf`), and the mask slot's words, to run its own commitment over the same codeword;
 what leaves is the loop's.
 -/
-module
-
-public import Flock.Firewall.Link
 
 @[expose] public section
 

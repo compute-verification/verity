@@ -40,7 +40,6 @@ and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import shlex
@@ -53,15 +52,9 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.check import gates as G
 from verity_vllm.config import RowEngine, UsageError, option, workload_arg
-from verity_vllm.engine.served import (
-    ENFORCE_EAGER as ENFORCE_EAGER,  # read through this module
-)
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline.match_fold import (
-    INSTANCES_FORM_ENV as INSTANCES_FORM_ENV,  # read through this module
-)
 from verity_vllm.pipeline.match_fold import (
     _jsonable,
     fold_summary_result,
@@ -75,9 +68,6 @@ from verity_vllm.pipeline.match_workload import (
     _workload_execution,
     _workload_expected_steps,
     fold_construction_args,
-)
-from verity_vllm.pipeline.match_workload import (
-    _workload_moe_construction as _workload_moe_construction,  # read through this module
 )
 from verity_vllm.records.schema_ids import MATCH_RUN_SCHEMA, MATCH_STAGES_SCHEMA
 
@@ -272,13 +262,6 @@ def profile_config(name: str) -> dict | None:
 # ---------------------------------------------------------------------------------------------------------
 # running
 # ---------------------------------------------------------------------------------------------------------
-
-
-def _sha256_file(p: Path) -> str | None:
-    try:
-        return hashlib.sha256(p.read_bytes()).hexdigest()
-    except OSError:
-        return None
 
 
 def _hf_config_of(a: Options, C: dict | None) -> dict | None:

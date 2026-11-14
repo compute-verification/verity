@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.DeriveCheck
+
+/-!
 `flock-rows TYPES --root DIGEST --name NAME [--in-split A,B..] [--out-split A,B..] [--leaves FILE] [--cut FILE] [--logical]`:
 the rows `Flock.Derive.derive` gives the type `DIGEST`, as `flock-ir-unit/v2` on stdout, or with `--logical` its logical list
 (`Derive.logicalText`). `TYPES` is `{"types": [content, ...]}`,
@@ -6,9 +10,6 @@ callees before callers, each checked as `flock-verify circuit-type` checks it. `
 the lowering's `LEAVES` and `CUT` JSON, which are passed through. The Python layout is a mirror held to this output
 (`backends/flock/tests/test_flock_rows.py`).
 -/
-module
-
-public import Flock.DeriveCheck
 
 @[expose] public section
 

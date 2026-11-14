@@ -107,7 +107,6 @@ from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Pri
 
 NAME = "pearl-c-h100-v0"
 R = P.R
-WINDOW = P.WINDOW                  # 128 products: four k32 atoms per promotion
 SLICE = 32
 PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
 TILE = 64
@@ -213,10 +212,6 @@ def sample_line(seed: bytes, side: int, factor: int, line: int, norm: float = P.
 @lru_cache(maxsize=64)
 def _s512_line_key(seed: bytes) -> bytes:
     return s512("noise-line", seed)
-
-
-def _word(x: float) -> int:
-    return P.f32_bits(x)
 
 
 def _check_finite(word: int) -> int:
@@ -356,16 +351,6 @@ def peel_factors_b(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[in
             mid.append(_bf16_of_word(_check_finite(fp32.add(acc, fp32.neg(chain(row, fa_cols[q], device))))))
         rows.append(mid + [x ^ 0x8000 for x in be])
     return rows
-
-
-def peel_a(built: P.Built, e_rows: Sequence[Sequence[int]], seed_b: bytes, k: int) -> list[list[int]]:
-    """v0's P_A rows: [bf16(β_A·E_A) ‖ RNE_bf16(A′·F_B)]."""
-    return peel_factors_a(built.codes, scaled_noise(built, e_rows), seed_b, k)
-
-
-def peel_b(built: P.Built, e_rows: Sequence[Sequence[int]], seed_b: bytes, k: int) -> list[list[int]]:
-    """v0's P_B rows: [RNE_bf16((β_B·E_B)·G − B̃·F_A) ‖ −bf16(β_B·E_B)]."""
-    return peel_factors_b(built.codes, scaled_noise(built, e_rows), seed_b, k)
 
 
 # ---- forming v1 (§5) ------------------------------------------------------------------------------------------------
@@ -525,7 +510,7 @@ class PearlC:
                         *(f"stand-in: {s}" for s in device.standins))
         if self.census_ks:
             hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
-                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's debit within ρr of its cells' credit and the "
+                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's inert work within ρr of its cells' credit and the "
                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
         self.certificate = Certificate(
             conjecture="tt-out",

@@ -3,11 +3,14 @@
 Each case proves passes on the CPU as verify_run's tests do (`test_pearl_c_vllm.proved_pass`: the H100 record's -h3 scheme
 at k = 128 in 16 x 16 tiles, a call with filler rows and an excluded row, y committed), changes them as those tests do, and
 holds the Lean's verdict to the Python's on the same files and coin: the verdict, the reason, the refusal, the run's
-commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at Pearl's assumption,
+commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at its scheme's named assumption,
 `credit_at_assumption`: the credited MACs, tiles and MACs, ρ, ε and the samples over the inert-work bound) under each
 `over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`,
 and the window record W it held the passes to (`verify_run.tie`, ``--tie W``: each call's A rows and y, and each
-weight's B rows at the root PoUW's weights tree commits them under).
+fixed operand's B rows at the root PoUW's fixed operands' tree commits them under), with the class whose fixed load it held them at
+(`verify_run.held_to_load`, ``--class``). Held to a class, the work is in the grid form on both sides (`verify_run.grid_work`,
+`PouwPearlPlus/Grid.lean`: the structural credit, MACs and tiles, and the give-up padded up to H1's window grid), with the
+exact credit it replaces beside it (``exact_work``).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
 read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
@@ -70,13 +73,14 @@ def exe() -> Path:
 
 def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE, record: Path | None = None,
          coins: Path | None = None, over_cap: str | None = None, test_instance: bool = False, tie: Path | None = None,
-         of_record: bool = False) -> dict:
+         of_record: bool = False, load: tuple[int, int, int] | None = None) -> dict:
     argv = [str(exe), "--coins", str(coins or paths[0].parent / "coins.json"), "--draws", str(draws)]
     argv += [] if source is None else ["--source", source.hex()]
     argv += [] if record is None else ["--record", str(record)]
     argv += [] if over_cap is None else ["--over-cap", over_cap]
     argv += ["--test-instance"] if test_instance else []
     argv += [] if tie is None else ["--tie", str(tie)]
+    argv += [] if load is None else ["--class", ",".join(map(str, load))]
     argv += ["--of-record"] if of_record else []
     p = subprocess.run([*argv, *map(str, paths)], capture_output=True, text=True)
     assert p.returncode in (0, 1) and not p.stderr, p.stderr
@@ -93,23 +97,26 @@ def answer(out: dict) -> dict:
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
             "commitment": out.get("commitment"), "source": out.get("source"),
             "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
-            "work": None if work is None else {"over_cap_draws": 0, **work}, "tie": out.get("tie")}
+            "work": None if work is None else {"over_cap_draws": 0, **work},
+            "exact_work": (out["answer"]["profile"] or {}).get("exact_work"), "tie": out.get("tie")}
 
 
 def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None,
          over_cap: str | None = None, test_instance: bool = True, tie: Path | None = None, rounds: list[int] | None = None,
-         dropped: tuple[int, ...] = (), draw=None, of_record: bool = False) -> dict:
-    """The Python's verdict on `paths` (under their coins file, held to the window record at `tie`, the passes rounds
-    `rounds` and `dropped`, sampled by `draw`), asserted to be the Lean's; the Lean reads the record the Python wrote, if
-    any, and its rounds. ``over_cap`` None is each side's default; the passes are a test instance's unless
+         dropped: tuple[int, ...] = (), draw=None, of_record: bool = False,
+         load: tuple[int, int, int] | None = None) -> dict:
+    """The Python's verdict on `paths` (under their coins file, held to the window record at `tie` and to the class
+    `load`'s fixed load, the passes rounds `rounds` and `dropped`, sampled by `draw`), asserted to be the Lean's; the Lean
+    reads the record the Python wrote, if any, and its rounds. ``over_cap`` None is each side's default; the passes are a test instance's unless
     ``test_instance`` is false."""
     rule = {} if over_cap is None else {"over_cap": over_cap}
     window = None if tie is None else json.loads(tie.read_text())
     want = answer(VR.verify_passes(paths, draws, 1, "test", VR.epoch_coins(paths[0].parent / "coins.json"), source,
                                    window=window, rounds=rounds, dropped=dropped, record=record,
-                                   test_instance=test_instance, **rule, **({} if draw is None else {"draw": draw})))
+                                   test_instance=test_instance, window_class=load, **rule,
+                                   **({} if draw is None else {"draw": draw})))
     got = lean(exe, paths, draws, source, record, over_cap=over_cap, test_instance=test_instance, tie=tie,
-               of_record=of_record)
+               of_record=of_record, load=load)
     assert got == want
     return got
 
@@ -148,7 +155,7 @@ def test_an_honest_pass(exe, tmp_path):
 
 
 def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
-    """The band rule on both sides: weight 1's row 20 fails liveness, so it is excluded and takes its block of 64 columns,
+    """The band rule on both sides: fixed operand 1's row 20 fails liveness, so it is excluded and takes its block of 64 columns,
     all 32 of the second call's.  That call has no ticket and no credited cell, its exclusion tile is opened and passes,
     and the run's credited cells' MACs (``macs``; a test instance's credit is 0) are the first call's alone, its 19
     credited rows x 16 columns at |K| = 128."""
@@ -252,7 +259,7 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
 
 
 def test_openings_that_fail(exe, tmp_path):
-    """A weight row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
+    """A fixed-operand row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
     SHA-256 isn't its manifest entry's; and records that leave out the excluded row."""
     path = T.proved_pass(tmp_path, H100)[0]
     man = json.loads(path.read_text())
@@ -319,7 +326,7 @@ def test_a_served_y_row_that_ends_before_its_tiles_columns(exe, tmp_path):
 
 
 def test_a_layer_past_k_max(exe, tmp_path):
-    """A weight of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
+    """A fixed operand of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
     records root the pass publishes over them: the pass load refuses it (`DomainError`, k ≤ 2^16 among the domain's
     bounds) before the coin, in both; `checkTile` refuses the same past any load."""
     path = T.proved_pass(tmp_path, H100)[0]
@@ -360,7 +367,7 @@ def test_an_epochs_passes(exe, tmp_path):
 
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
     """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
-    64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other weights under the one coin), each
+    64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other fixed operands under the one coin), each
     holding calls 0 and 1, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
     wide = T.proved_pass(tmp_path / "wide", H100, tile=(64, 64))[0]
@@ -464,10 +471,10 @@ def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
 
 
 def test_a_run_tied_to_its_window_record(exe, tmp_path):
-    """A window record W registering each call's A rows and y and each weight's B rows once: the Lean holds the passes to W as the Python does and
+    """A window record W registering each call's A rows and y and each fixed operand's B rows once: the Lean holds the passes to W as the Python does and
     prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
     record's rounds and dropped, which the Python wrote). A W that states no version (version 1, the run of record's,
-    registering the calls alone) accepts in both on the calls' tables, the tie naming its weights untied."""
+    registering the calls alone) accepts in both on the calls' tables, the tie naming its fixed operands untied."""
     warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
     got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
@@ -483,10 +490,61 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
                                                          "weights": VR.WEIGHTS_UNTIED}
 
 
+def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
+    """With the window's class (``--class``, `verify_passes`' ``window_class``) the Lean holds the tied passes to the class's
+    fixed load as the Python does. Passes that are the class's (2 slots of 8 prompt ids and 2 outputs: round 0's calls of
+    16 rows, round 1's of 2 in 16) accept in both, the tie naming the class, also with a round dropped before the coin
+    (the coin record's rounds, which the Python wrote), and their work is in the grid form in both: the passes' whole
+    records' MACs and tiles, the give-up the excluded rows' credit padded up to the grid, and the exact credit beside it
+    (``exact_work``); without the class the work is the exact credit and there is no ``exact_work``. Passes of another load (a round short or over, the rounds in
+    another order, a call of other rows or of other committed rows) are refused before the coin in both, in the same
+    words, the class's alone, also over a retention whose rounds a coin record names. The Lean takes ``--class`` only
+    beside ``--tie``, and only as three positive integers."""
+    cls = (2, 8, 2)
+    a = T.proved_pass(tmp_path / "a", H100, (0, 1), load=(16, 16))[0]
+    b = T.proved_pass(tmp_path / "b", H100, (2, 3), load=(2, 16))[0]
+    wide = T.proved_pass(tmp_path / "wide", H100, (4, 5), load=(2, 32))[0]
+
+    def w(*paths: Path) -> Path:
+        (f := tmp_path / f"w{len(list(tmp_path.glob('w*.json')))}.json").write_text(json.dumps(T.window_record(*paths)))
+        return f
+    wab = w(a, b)
+    got = same(exe, [a, b], 8, tie=wab, load=cls, record=tmp_path / "coin.json")
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(wab.read_text())), "tables": 10,
+                                                         "load": [2, 8, 2]}
+    passes = [VR.load(x, VR.epoch_coins(x.parent / "coins.json")) for x in (a, b)]
+    work, kept = got["work"], got["exact_work"]
+    exact = VR.credit_at_assumption(passes, 8, VR.DELTA, work["over_cap_draws"])
+    whole = VR.structural_credit(passes, 8, VR.DELTA, work["over_cap_draws"])
+    assert kept == {"credited": 0, "credited_tiles": exact["credited_tiles"], "macs": exact["macs"]}
+    assert work == {**whole, "credited": 0, "give_up": Wd.pad(whole["credited"] - exact["credited"])}
+    assert work["macs"] > kept["macs"] and work["credited_tiles"] >= kept["credited_tiles"] and work["give_up"] > 0
+    got = same(exe, [a, b], 8, tie=wab, record=tmp_path / "coin.json")
+    assert got["verdict"] == "accept" and "load" not in got["tie"]
+    assert got["exact_work"] is None and got["work"] == {**exact, "credited": 0}
+    got = same(exe, [b], 8, tie=wab, load=cls, rounds=[1], dropped=(0,), record=tmp_path / "coin1.json")
+    assert got["verdict"] == "accept" and got["tie"]["load"] == [2, 8, 2]
+    assert got["work"]["macs"] == VR.pass_macs(VR.whole_pass(passes[1])) > got["exact_work"]["macs"] == VR.pass_macs(passes[1])
+    cases = [([a, b], wab, (2, 8, 3), {}), ([a, b], wab, (2, 8, 1), {}), ([a, b], wab, (4, 4, 2), {}),
+             ([a, b], wab, (2, 4, 2), {}), ([a, b], wab, (1, 16, 2), {}), ([b, a], w(b, a), cls, {}),
+             ([a, wide], w(a, wide), cls, {}),
+             ([b], wab, (2, 8, 3), {"rounds": [1], "dropped": (0,), "record": tmp_path / "coin1.json"})]
+    for paths, tie, c, kw in cases:
+        got = same(exe, paths, tie=tie, load=c, **kw)
+        why = f"ValueError: {VR.off_load(c)}"
+        assert (got["verdict"], got["reason"], got["refused"], got["tie"], got["commitment"]) == (
+            "reject", why, None, None, None), got
+    coins = ["--coins", str(a.parent / "coins.json"), "--draws", "3", "--source", SOURCE.hex(), "--test-instance"]
+    for argv in (["--class", "2,8,2"], ["--tie", str(wab), "--class", "2,8"], ["--tie", str(wab), "--class", "2,0,2"],
+                 ["--tie", str(wab), "--class", "2,8,x"]):
+        p = subprocess.run([str(exe), *coins, *argv, str(a), str(b)], capture_output=True, text=True)
+        assert p.returncode != 0 and not p.stdout.strip() and "--class" in p.stderr, (argv, p.stderr)
+
+
 def test_a_pass_that_is_not_ws(exe, tmp_path):
-    """W whose entry for a call or a weight has another root (B another weight's: a foreign rootB) or domain, or lacks
-    one, or registers a call or weight the run doesn't have, or one twice, or registers no weight at all at version 2
-    (every call's entry right: untied, not a tie), or states no version (version 1) and registers a weight, or states a
+    """W whose entry for a call or a fixed operand has another root (B another fixed operand's: a foreign rootB) or domain, or lacks
+    one, or registers a call or fixed operand the run doesn't have, or one twice, or registers no fixed operand at all at version 2
+    (every call's entry right: untied, not a tie), or states no version (version 1) and registers a fixed operand, or states a
     version other than 2, or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the
     Python does."""
     a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))

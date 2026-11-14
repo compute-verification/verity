@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             "validation": {"status": "passed" if ok else "failed",
                            "checker": "the step root equals verity.commitments.row_table.commit_step's over the same rows and salts",
                            "detail": "ok" if ok else f"reference root {ref.hex()[:16]}", "evidence": []},
-            "measurements": [{"name": f"step_roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
+            "measurements": [{"name": f"proofs/step-roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
             + [{"name": f"step_roots.w{w}.cold_seconds", "value": v["cold_s"], "unit": "s"} for w, v in by_workers.items()]
             + ([{"name": "step_roots.w1.cpu_seconds", "value": by_workers[1]["cpu_s"], "unit": "s"}] if 1 in by_workers else [])
             + [{"name": f"sha512_floor.w{w}.seconds", "value": v, "unit": "s"} for w, v in floor.items()]

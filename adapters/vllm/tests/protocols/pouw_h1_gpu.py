@@ -131,7 +131,11 @@ import torch
 from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import salt_of
-from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.coins import (
+    Challenger,
+    CoinCommitment,
+    CoinOpening,
+)
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
@@ -1562,7 +1566,7 @@ def main(argv: list[str] | None = None) -> int:
                          "hf_overrides={\"num_hidden_layers\": L} serves a model's first L layers")
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
-    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
+    ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor device's "
                                                               "challenger (verity/protocols/compose/device/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")
