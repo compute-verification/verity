@@ -3635,6 +3635,7 @@
     {"file": "adapters/vllm/tests/program/test_dense_rows.py", "count": 4},
     {"file": "adapters/vllm/tests/program/test_derive.py", "count": 1},
     {"file": "adapters/vllm/tests/program/test_derive_negative.py", "count": 3},
+    {"file": "adapters/vllm/tests/program/test_derived_rows.py", "count": 1},
     {"file": "adapters/vllm/tests/program/test_dsa_norm.py", "count": 1},
     {"file": "adapters/vllm/tests/program/test_dsv4_indices.py", "count": 2},
     {"file": "adapters/vllm/tests/program/test_fa2_softcap.py", "count": 46},
