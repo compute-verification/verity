@@ -82,7 +82,8 @@ register's text doesn't.
 An install never takes a machine out of a list unasked. The machines a file names are the register's names (live, released or
 broken) that its lines hold as whole words, comments apart; `install` refuses when the text it would write lacks one the
 installed file names, or has fewer lines, and says which machines would go and what the register says of each. `--allow-shrink`
-installs it all the same. Without `--apply` it prints how many machines the file names now and after. An install of a whole
+installs it all the same. Without `--apply` it prints how many machines the file names now and after and, where the text would
+shorten the file, each of its lines that goes, by its number and what it names, never by its text. An install of a whole
 node (no PATH) never replaces a list written by hand and never refuses for a list: it leaves such a file, and one it would take
 a machine out of, as it is, says why, and installs the node's other files; naming the file, or `roll`, is how either is done.
 An entry's `accept` is a public key on the node (`/home/research/.ssh/vy-cluster.pub`): before the list is written, the
@@ -155,13 +156,23 @@ def tree_files(top):
 '''
 
 def named(text, words):
-    """How many lines of `text` say something (not blank, no `#` comment) and which of `words` those lines hold as whole words:
-    the machines a list names, however its lines are written. It runs here on the text the register gives and, as source, on the
-    node over the installed file (PROBE), so the two are counted one way."""
+    """How many lines of `text` say something (not blank, no `#` comment), which of `words` those lines hold as whole words,
+    and each such line as [its number, its digest, the words of `words` it holds, else its first word when that is a plain
+    name]: the machines a list names, however its lines are written, and its lines told apart without their text, which holds
+    addresses. It runs here on the text the register gives and, as source, on the node over the installed file (PROBE), so the
+    two are counted one way. Lines end at a newline only."""
+    import hashlib
     import re
-    body = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
-    held = set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._-]*", "\n".join(body)))
-    return len(body), sorted(w for w in words if w in held)
+    word, plain = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*"), re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+    rows, held = [], set()
+    for i, ln in enumerate(text.split("\n"), 1):
+        if ln.strip() and not ln.lstrip().startswith("#"):
+            has = set(word.findall(ln))
+            held |= has
+            first = ln.split()[0]
+            rows.append([i, hashlib.sha256(ln.encode()).hexdigest(),
+                         sorted(w for w in words if w in has) or ([first] if plain.fullmatch(first) else [])])
+    return len(rows), sorted(w for w in words if w in held), rows
 
 
 # Runs on the node (stdlib): each path's git blob, mtime, the oldest start of a process whose argv names it and every such
@@ -192,7 +203,7 @@ for p in req["paths"]:
         files[p] = {"blob": blob(p), "mtime": st.st_mtime}
         if p in req.get("words", {}):
             with open(p, errors="replace") as f:
-                files[p]["rows"], files[p]["names"] = named(f.read(), req["words"][p])
+                files[p]["rows"], files[p]["names"], files[p]["lines"] = named(f.read(), req["words"][p])
     except FileNotFoundError:
         files[p] = None
     except OSError as e:
@@ -1197,21 +1208,24 @@ def restart(node: Node, plan: dict[str, list[str]], run: Runner, apply: bool) ->
 
 def listed(node: Node, e: Entry, now: dict | None, new: Made, reg: Register, allow_shrink: bool) -> dict:
     """What an install of the register-made `e` does to the machines its file names on the node (`now`: the probe's reading of
-    the installed file, None when there is none): {"now", "after", "added", "dropped", "says"}, counts and names. Refused,
+    the installed file, None when there is none): {"now", "after", "added", "dropped", "says", "gone"}, counts and names;
+    `gone`, when the install shrinks the file, is each installed line the new text lacks, [its number, what it names]. Refused,
     naming what would go, when the new text lacks a machine the installed file names or has fewer lines, unless
     `allow_shrink`; and when the installed file can't be read, since what would go can't be told."""
-    rows, after = named(new.data.decode(), reg.names())
+    rows, after, lines = named(new.data.decode(), reg.names())
     if now is None:
-        return {"now": None, "after": len(after), "added": after, "dropped": [], "says": {}}
+        return {"now": None, "after": len(after), "added": after, "dropped": [], "says": {}, "gone": []}
     if "names" not in now:
         if not allow_shrink:
             raise Refused(f"{e.path} on {node.name} can't be read ({now.get('error', 'the probe gave no names')}), so the "
                           "machines an install would take out of it can't be told. Nothing changed; `--allow-shrink` installs "
                           "it all the same")
-        return {"now": None, "after": len(after), "added": after, "dropped": [], "says": {}}
+        return {"now": None, "after": len(after), "added": after, "dropped": [], "says": {}, "gone": []}
     dropped = sorted(set(now["names"]) - set(after), key=natural)
+    kept = {h for _, h, _ in lines}
     out = {"now": len(now["names"]), "after": len(after), "added": sorted(set(after) - set(now["names"]), key=natural),
-           "dropped": dropped, "says": {n: reg.says(n) for n in dropped}}
+           "dropped": dropped, "says": {n: reg.says(n) for n in dropped},
+           "gone": [[i, what] for i, h, what in now.get("lines", []) if h not in kept] if dropped or rows < now["rows"] else []}
     if (dropped or rows < now["rows"]) and not allow_shrink:
         gone = [f"{n} ({reg.says(n)})" for n in dropped] or [f"{now['rows'] - rows} line(s) that name no machine of the register"]
         raise Refused(f"{e.path} on {node.name} names {out['now']} machines in {now['rows']} lines, and the register gives "
@@ -1225,7 +1239,7 @@ def differs(now: dict | None, new: Made, reg: Register) -> str:
     those the register's text names. Names and counts, never an address."""
     if not now or "names" not in now:
         return ""
-    rows, after = named(new.data.decode(), reg.names())
+    rows, after, _ = named(new.data.decode(), reg.names())
     lacks = sorted(set(after) - set(now["names"]), key=natural)
     extra = [f"{n} ({reg.says(n)})" for n in sorted(set(now["names"]) - set(after), key=natural)]
     if not lacks and not extra:
@@ -1374,8 +1388,9 @@ def told(f: dict) -> list[str]:
     if m := f.get("machines"):
         now = "isn't installed" if m["now"] is None else f"names {m['now']} machines now"
         drops = ", ".join(f"{n} ({why})" for n, why in m["says"].items())
+        gone = ", ".join(f"line {i}" + (f" ({' '.join(what)})" if what else "") for i, what in m.get("gone", []))
         out.append(f"{now}, {m['after']} after" + (f"; adds {', '.join(m['added'])}" if m["added"] and m["now"] is not None else "")
-                   + (f"; drops {drops}" if drops else ""))
+                   + (f"; drops {drops}" if drops else "") + (f"; the lines that go: {gone}" if gone else ""))
     if a := f.get("accept"):
         out.append(f"its key can't be read here ({a['unread']})" if "unread" in a else
                    "its key is taken from anywhere already (its line has no from=), and stays so" if a.get("anywhere") else

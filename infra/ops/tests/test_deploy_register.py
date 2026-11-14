@@ -5,6 +5,7 @@ one at a time. The register is a directory of this test's, and each node is a di
 `/NODE/` into the node's own directory, so one manifest path is a different file on each."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -205,12 +206,19 @@ def test_an_install_never_takes_a_machine_out_of_a_list_unasked_and_says_which_w
 
     path.write_text(hand)
     assert _main(fleet, "install", "a", "--by", "lane-x", "--allow-shrink", "/NODE/etc/peers") == 0
-    assert "names 5 machines now, 4 after; drops vy-n-1 (released in the register)" in capsys.readouterr().out
+    assert ("names 5 machines now, 4 after; drops vy-n-1 (released in the register); the lines that go: line 6 (vy-n-1)"
+            in capsys.readouterr().out)
     assert path.read_text() == hand
+    path.write_text(LIST.replace("-i /k ", "", 1) + "vy-cpu-77 research@192.0.2.77\n192.0.2.78 research\n")    # each line that
+    assert _main(fleet, "install", "a", "--by", "lane-x", "--allow-shrink", "/NODE/etc/peers") == 0    # goes, by its number and
+    out = capsys.readouterr().out                                                                      # name, never its address
+    assert "the lines that go: line 2 (vy-n-2), line 6 (vy-cpu-77), line 7\n" in out and "192.0.2.7" not in out
+    path.write_text(hand)
     assert _install(fleet, allow_shrink=True)["files"][0]["machines"]["dropped"] == ["vy-n-1"] and path.read_text() == LIST
 
     path.write_text(LIST.replace("vy-cpu-10 -i /k research@192.0.2.20\n", ""))       # a list that grows needs no leave
-    assert _install(fleet)["files"][0]["machines"] == {"now": 3, "after": 4, "added": ["vy-cpu-10"], "dropped": [], "says": {}}
+    assert _install(fleet)["files"][0]["machines"] == {"now": 3, "after": 4, "added": ["vy-cpu-10"], "dropped": [], "says": {},
+                                                       "gone": []}
     assert path.read_text() == LIST
 
 
@@ -243,9 +251,14 @@ def test_an_install_of_the_whole_node_leaves_a_list_written_by_hand_or_one_it_wo
 
 
 def test_the_machines_a_file_names_are_whole_words_of_its_lines_comments_apart():
-    text = "# vy-cpu-1 in a comment\n\nvy-cpu-10 -i /k research@192.0.2.20\n  Host n2 vy-n-2 x\n{\"vy-gate\": 1}\n"
+    """A line ends at a newline only: a carriage return or a form feed inside one is no second line."""
+    text = "# vy-cpu-1 in a comment\n\nvy-cpu-10 -i /k research@192.0.2.20\r\n  Host n2 vy-n-2 x\x0cvy-x\n{\"vy-gate\": 1}\n"
+    digest = [hashlib.sha256(ln.encode()).hexdigest() for ln in text.split("\n")]
     assert deploy.named(text, ["vy-cpu-1", "vy-cpu-10", "vy-n-2", "vy-gate", "research", "absent"]) == \
-        (3, ["research", "vy-cpu-10", "vy-gate", "vy-n-2"])
+        (3, ["research", "vy-cpu-10", "vy-gate", "vy-n-2"],
+         [[3, digest[2], ["research", "vy-cpu-10"]], [4, digest[3], ["vy-n-2"]], [5, digest[4], ["vy-gate"]]])
+    assert deploy.named("192.0.2.9 x\nvy-old y\n", [])[2] == [[1, hashlib.sha256(b"192.0.2.9 x").hexdigest(), []],
+                                                             [2, hashlib.sha256(b"vy-old y").hexdigest(), ["vy-old"]]]
 
 
 def test_a_released_machine_leaves_a_pattern_and_is_refused_by_name_and_a_stopped_one_keeps_its_line(fleet):
