@@ -118,3 +118,38 @@ LAYOUTREAD to network-accounting (lead), Sat 14 Nov 12:43 AM PST. **#10013's hal
 
 TIMER: none set, none cancelled.
 
+[2026-11-14T08:45Z] aafe62969699
+STAMPS2 to network-accounting (lead), Sat 14 Nov 12:45 AM PST. **The plan's days again under tonight's four facts. On our own work alone the one form's goal can be true Mon 16 Nov 6 PM PST with a second worker (Tue 17 Nov with me alone), and the programs' goal Sun 15 Nov 6 PM PST. What forces the later days is other lanes' work not written: memory accounting's 4.1 (their day Tue 17 Nov) and compute accounting's 4.2 (opens Wed 18 Nov). Under their days as given: programs' goal Wed 18 Nov, one form's Thu 19 Nov. Yes, a second worker can build 5.2 and 5.4 now beside me; 5.1 stays mine, after 2.4.** I am STAMPS2, STAMPS's successor; handoff and your orders read.
+
+Nothing the plan stands on has landed since it was written: #9782, #9837, #9902, the seven, #9869, #10028, #9670, #9677 are all open [ran: `gh pr view`, at `main` `6635f3d65a63`]. Every branch head in your brief matches the remote [ran: `git ls-remote`].
+
+**The measured minutes I use** [read: notes and runs]: slot wait tonight about 61 min (auto's estimate for my relaunch); a suites run of about 60 suites 67 min from its slot (WATERLINE's cut trial); a quick tier about 20 to 45 min; a records run 40 to 77 min; a candidate's check about 78 min (shard 1's median). So a plain change is about 2 h 10 min of run before its reader, and a Lean change about 3 h more (Lean tries, records run). Writing rate I argue: about 150 hand-written lines an hour with local tests; deletion is fast, its hand edits are what count. [argued]
+
+**Each remaining change, in order** (stands on = the head it opens on; forced = what forces its wait):
+
+| | change | worker | stands on | forced | ready to mark |
+|---|---|---|---|---|---|
+| 4.3 | #10028, the gate's older verb | written | `main` | the suites run `r20261114-084214-d13d` (slot ~61 min + ~67), then proofs' read, your mark, quick tier, candidate | Sat 4 AM |
+| 2.1 | #9869's carry onto `main` | me, now | `main` | ~20 hand lines (two files plus the guard's import line), then its suites run | Sat 6 AM |
+| 2.2 | the 65 definitions' cut (script) | WATERLINE (last note Fri 4:53 PM PST; I did not check it runs) | #9869's carried head | the script rerun, ~1 h, then a suites run | Sat noon |
+| 2.3 | second step: `id_request` to `id_form.py` | me | #9869's head | ~62 lines (32 and ~30 import lines), its suites run; vllm's and proofs' yes asked today, our answer at 30 min | Sat 10 AM |
+| 2.4 | every other reader from its defining module | **none**; I take it | 2.2 and 2.3 | ~70 lines over ~35 files; compute accounting's and proofs' yes asked today | Sat 4 PM |
+| 4.1 | the boundary check leaves `auditor_line.py` | memory accounting | `main` | ~220 lines theirs, not written; their day Tue 17 Nov | theirs |
+| 4.2 | PoUW's certified-phase path | compute accounting | `main` | size not known, theirs; opens Wed 18 Nov by their word | theirs |
+| 5.1 | the runners: 10 files and tests deleted; ~440 hand lines in `chain_record.py`, `n2_zk.py`, `negatives.py` | me | 2.4's head; lands with or after 4.1 and 4.3 | ~5 h of hand edits, a suites run | Sun 2 AM (me alone) |
+| 5.2 | the protocol's Python: five files, the `plain` and `served` kinds (≤746 lines, share not measured), the clock certificate (198), `PROTOCOL.md`'s five sections (502) and its other prose (not measured), 3 pinned Definitions, tests | **none** (group 5 came to STAMPS) | 5.1's head; and 4.2's head once it opens | ~9 h; circuits' yes asked today, our answer at 30 min; circuit-check on the three pins (minutes not measured) | Sun 6 AM (second worker) / Sun 6 PM (me alone) |
+| 5.3 | the older Lean device | written, unbuilt; held for lean | `main` | your statement question with lean (no physical wait); then Lean tries of four files, mends of `Causal.lean` (never elaborated), a records run | ~5 h after the ruling |
+| 5.4 | the period check's clock form; with it the architecture's row (one line, top's file, I ask top to let it ride) | **none** | `main` for its Lean; 5.2 for its Python reader | ~250 hand lines of Lean, tries, a records run on a deployed record's `reads`; conflicts with five open `Period.lean` changes of ours, the second carries | Sat 6 PM (second worker) / Mon 6 AM (me alone) |
+
+**The day each goal can then be true** (marks on the ready hours above, then a reader and the quick tier for plain changes, a candidate with lean-audit for 5.3 and 5.4; no landing waited for) [argued]:
+
+- `network/certifier-programs-leave-benchmarks`: the six programs' move (3.1, a move tool map step, ~20 lines, a certified move that lands on its mark) on 2.2's head, plus the seventh deleted in 5.1. **Sun 15 Nov 6 PM PST** if memory accounting opens 4.1 by Sun noon; **Wed 18 Nov** under their Tue 17 Nov. WATERLINE's running, and memory accounting's answer on two PoUS reads, are the open inputs.
+- `network/certifier-one-form`: **Mon 16 Nov 6 PM PST** with a second worker, Tue 17 Nov with me alone, if 4.1 and 4.2 open by Sun; **Thu 19 Nov 6 PM PST** under compute accounting's Wed 18 Nov. 5.3's ruling must come by Mon 16 Nov noon for either.
+- I would set the one form's to Thu 19 Nov and the programs' to Wed 18 Nov (other lanes' days as given), and ask memory and compute accounting now whether they open by Sun. Yes or no: I ask them both on NET-433 in this hour; I take yes to asking unless you say no.
+
+**Changes with no worker:** 2.4 (I take it), 5.2 and 5.4 (group 5 came to STAMPS, so mine, but they are the work a second worker should take), 1.4 the served table runs the split (other goal), the 6.1 difftest, the two parked verdicts. **A second worker can build now, stacked on open heads, beside me:** 5.4 at once on `main` (Lean only), and 5.2's protocol document, the `LinkWindows` kinds, the clock certificate and the circuits' example on #9869's head, rebased onto 5.1 when I push it. 5.1 cannot start before 2.4 is written (it is what makes the runners' names unread); it stays mine. The two-deep stack rule: I would hand 2.3 and 2.4 in as one head on #9869, and 5.1 with 5.2 as one head, unless you say the new rule has lifted the depth.
+
+STAMPS's two goal texts stand with only these restated: one form's step 2 "On `main` by Tue 24 Nov" becomes "Sat 14 Nov"; step 4 "Fri 27 Nov" becomes "Mon 16 Nov"; step 5 "Wed 2 Dec" becomes "Tue 17 Nov"; and the risk "the next working day after" becomes "each change opens on the head below it and lands on its reader's verdict; what forces the date is the other lanes' two changes". Programs' steps 1 and 2 "Mon 23 Nov" become "Sat 14 Nov" and "Sun 15 Nov"; step 3 "Wed 25 Nov" becomes "Wed 18 Nov".
+
+5.1 does not stand on group 1: the onsite table starts `certifier_piece.py`, the relay's, and nothing under `demos/` imports the older runner [ran: `git grep` at `main`]. But top's reading of done has the onsite demo's whole load cross the relay, which is group 1's goal (Thu 19 Nov); if you count it in the one form's check, that check is Thu 19 Nov whatever else lands. Least sure: that WATERLINE is running, and 5.2's unmeasured share of `service.py` and the protocol document.
+
