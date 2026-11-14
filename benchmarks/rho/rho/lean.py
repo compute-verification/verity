@@ -54,6 +54,17 @@ def status(name: str) -> str:
     return "absent"
 
 
+@cache
+def premises(statement: str, locks: tuple[Path, ...] = LOCKS) -> dict[str, str]:
+    """Each premise the lock's record of a proof of `statement` takes, by its section (`assumptions`, `domain`,
+    `open`); empty where no lock records a proof of it."""
+    for path in locks:
+        for entry in json.loads(path.read_text())["guarantees"].values():
+            if any(s.rsplit(" : ", 1)[-1] == statement for s in entry.get("signature", ())):
+                return {p: section for section, names in (entry.get("premises") or {}).items() for p in names}
+    return {}
+
+
 def weakest(names: Iterable[str]) -> str:
     """`proved`, `conditional` (proved under named assumptions), `draft` or `absent`: the weakest of `names`."""
     s = max((s for s in map(status, names) if s != "evidence"), key=ORDER.index, default="proved")

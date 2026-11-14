@@ -634,6 +634,47 @@ def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cov
         assert x["parts"]["setter"] == y["parts"]["setter"] == "min-cut"
         assert x["slowdown"] == pytest.approx(y["slowdown"], rel=1e-12) and 2.9 < x["slowdown"] < 3.1
         assert x["scaled"]["per_window_share"] < 1e-5 < 0.99 < x["scaled"]["routes_share"]
+        assert x["scaled"]["period"] is None
+        p = y["scaled"]["period"]
+        assert p["bound"] == periods.PERIOD_BOUND and [k for k, _ in p["premises"].values()] == ["open"] * 5
+        assert (p["tail"], p["p_evade"]) == (0.0, 0.0)
+        assert p["windows"]["year"] == [8760, pytest.approx(8760 * p["window_ks"])]
+    assert f": the terms of `{periods.PERIOD_BOUND}`, one statement pooled over the period" in text
+    assert "`PouwPerWindow` (open; `ε'` and `p/ε'`)" in text and "year 8.76e+03, 1.59e-08" in text
     monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", names[1]])
     periods.main()
     assert "--bounds" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("fleet", ["reference-h200", "world-h200"])
+@pytest.mark.parametrize(("name", "sampled"), [("reference-remote-h200", False), ("reference-remote-h200-sampled", True)])
+def test_a_remote_period_row_cites_dampener_remote_period_with_its_tail_and_windows(name, sampled, fleet):
+    """A remote row's pool and routes are `DampenerRemotePeriod`'s terms: each of the five premises the lock's record
+    of it takes, by section; the escape's tail within `p_evade` (0 where every unit is proved); and the windows'
+    knowledge errors, `⌈period / window_s⌉ window_ks`, the term the row's `δ_crypto` holds."""
+    import periods
+
+    (row,) = periods.evaluate(REG, names=(name,), fleets=((fleet, fleet),), periods=("year",))
+    p = row["scaled"]["period"]
+    assert {n: k for n, (k, _) in p["premises"].items()} == {n: lean.premises(periods.PERIOD_BOUND)[n]
+                                                             for n in periods.PERIOD_PREMISES}
+    assert (p["tail"] > 0) == sampled and p["tail"] <= p["p_evade"]
+    r = build(REG.override(periods.choices(name, fleet, "year")), name)
+    assert p["windows"]["year"][1] == pytest.approx(r.regime.delta(r.context).by["windows"][1])
+
+
+def test_a_remote_period_row_refuses_a_premise_neither_its_list_nor_the_per_block_record_names(monkeypatch):
+    """The period statement's premises are `PERIOD_PREMISES` and the ones it shares with `DampenerRemote`'s record: one
+    the lock's record adds beyond both is refused, naming the fix, and the row counts the shared ones from the
+    records."""
+    import periods
+    from rho import analysis
+
+    r = analysis.result(REG, "reference-remote-h200")
+    p = periods.pooled(r)
+    record, shared = lean.premises(periods.PERIOD_BOUND), lean.premises(periods.PER_BLOCK_BOUND)
+    assert (p["recorded"], p["shared"]) == (len(record), len(set(record) & set(shared)))
+    grown = dict(record) | {"Nci.Assumptions.Unnamed": "open"}
+    monkeypatch.setattr(lean, "premises", lambda name: grown if name == periods.PERIOD_BOUND else shared)
+    with pytest.raises(ValueError, match=r"\['Nci.Assumptions.Unnamed'\].*add each to PERIOD_PREMISES"):
+        periods.pooled(r)
