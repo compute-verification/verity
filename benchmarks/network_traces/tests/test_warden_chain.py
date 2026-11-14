@@ -24,11 +24,12 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_scan_zk import published, sz  # noqa: E402
 
-import warden_chain as WC  # noqa: E402
+from benchmarks.network_traces import warden_chain as WC  # noqa: E402
 
 
 def _load(name: str):

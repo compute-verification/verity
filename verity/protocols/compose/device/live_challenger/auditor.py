@@ -1748,9 +1748,7 @@ def _after_load(spent: int) -> str:
 
 def _load_relay():
     """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
-    if (here := str((TREE / "benchmarks/network_traces/load_relay.py").parent)) not in sys.path:
-        sys.path.insert(0, here)
-    import load_relay
+    from benchmarks.network_traces import load_relay
     return load_relay
 
 
