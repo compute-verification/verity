@@ -3303,6 +3303,11 @@
       "paths": {
         "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py": "adapters/torch/verity_torch/dsa_table.circuit-check.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/correspondence/test_descriptor_annotation_stream.py": "adapters/torch/tests/correspondence/test_descriptor_annotation_stream.py"
+      }
     }
   ]
 }
