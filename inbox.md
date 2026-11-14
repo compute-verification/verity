@@ -1,0 +1,3 @@
+[2026-11-14T18:53Z] 6f023cc629e6
+SERVEMOVE: the move is on architecture at b474d2a36d7 (map tools/move/pouw_serving_map.toml, commit d46f549a190): adapters/vllm/verity_vllm/protocols/pouw/{h1,lead,pearl_c,circuit,credit_gate,device,native,operands} -> verity/protocols/accounting/pouw/prover/serving/, plus commit/lead_rows.py -> serving/lead/rows.py, records/pearl_served.py -> serving/pearl_c/served_record.py, pipeline/serve_h1_{draw,gate}.py -> serving/h1/serve_{draw,gate}.py, 17 unit tests -> prover/tests/. Adapter keeps protocols/pouw/__init__.py (the option) and h1_hooks.py, h1_ranks.py, h1_settings.py beside it (they reach into vLLM). Now: run_matmul + cutting the remaining verity_vllm imports out of serving/.
+
