@@ -45,7 +45,7 @@ from `table_knowledge_sound_joint_tight`, with no named assumption. The binding 
 stays a named hypothesis (`BindSound`) until the link theorem, under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
-`flock_compiled_count`: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
+`flock_compiled_count`: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks(σ) + ε_bind(σ)`.
 -/
 
 @[expose] public section

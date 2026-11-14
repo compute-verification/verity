@@ -154,7 +154,7 @@ theorem monitoringPeriodLeak_fixed (h : Guarantees.MonitoringPeriodLeakAccepted)
       (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
       {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))
       (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
-      (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
+      (hβ : ∀ i, ∀ F ∈ incorrectSets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
       {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
       (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
       (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
@@ -177,7 +177,7 @@ theorem monitoringPeriodLeak_fixed (h : Guarantees.MonitoringPeriodLeakAccepted)
           {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
               ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
             Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
-              reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞)) := by
+              reg (sw i)).card * (incorrectSets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞)) := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
     arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
   exact h H D hks L K S lay k δ hδ reg Dj sw Pw hPw ρ (fun i _ => op i) β hβ arr f tap run htrust

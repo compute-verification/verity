@@ -131,11 +131,11 @@ before it, number at most `executionPhasesCount` at `reg ∪ chk`. At the incorr
 such a record is a run over the empty pool that restarts at no window (`leakAtCarried_of_leakAtChecked`), and
 `encard_carried_le` counts those at each family `F`; the families are the product of the windows' possible incorrect
 sets, and the sum over them of the per-family products is the product of the per-window sums
-(`Finset.prod_univ_sum`), each at most `#faultySets_i · 2^β_i` times the window's other factors. -/
+(`Finset.prod_univ_sum`), each at most `#incorrectSets_i · 2^β_i` times the window's other factors. -/
 theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (δ : ℝ) (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
+    (hβ : ∀ i, ∀ F ∈ incorrectSets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     (hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
     (ρ : Fin n → ℕ → Bool) (op : Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) :
@@ -161,38 +161,38 @@ theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement 
   have hsub : {o : Fin n → List (Obs L K S) | ∀ i, o i ∈ AccSeqsChecked (sw i).prog (Pw i) (sw i).design
         (lay (sw i)) (k (sw i)) (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) δ
         (op i (runsBefore o i)) Dj} ⊆
-      ⋃ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ), Sq F := by
+      ⋃ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ), Sq F := by
     intro o ho
     have ho' : ∀ i, (o i).length = k (sw i) ∧ (∀ y ∈ o i, y.jitter < Dj) ∧
-        ∃ F ∈ faultySets (sw i).design (Pw i) δ, AcceptedChecked (sw i).prog (Pw i) (lay (sw i)) (k (sw i))
+        ∃ F ∈ incorrectSets (sw i).design (Pw i) δ, AcceptedChecked (sw i).prog (Pw i) (lay (sw i)) (k (sw i))
           (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) F
           (op i (runsBefore o i)) (o i) := fun i => ho i
     choose hl hj F hF hacc using ho'
     exact Set.mem_iUnion₂.2 ⟨F, Fintype.mem_piFinset.2 hF, fun _ => [], fun _ => [], fun _ => by simp [poolOpen],
       fun i => leakAtCarried_of_leakAtChecked
         (show LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (F i) (o i) from
-          ⟨hfits i, disjoint_of_mem_faultySets (hF i), hl i, hj i, hacc i⟩)⟩
-  have hi : ∀ i, ∑ F ∈ faultySets (sw i).design (Pw i) δ,
+          ⟨hfits i, disjoint_of_mem_incorrectSets (hF i), hl i, hj i, hacc i⟩)⟩
+  have hi : ∀ i, ∑ F ∈ incorrectSets (sw i).design (Pw i) δ,
         c i * (2 ^ faultyBits (sw i).prog (Pw i) F * Dj ^ k (sw i)) ≤
-      c i * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i) := fun i =>
+      c i * (incorrectSets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i) := fun i =>
     (Finset.sum_le_card_nsmul _ _ (c i * (2 ^ β i * Dj ^ k (sw i))) fun F hF =>
       Nat.mul_le_mul_left _ (Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (hβ i F hF)))).trans
       (le_of_eq (by rw [smul_eq_mul]; ring))
-  have hps : ∏ i, ∑ F ∈ faultySets (sw i).design (Pw i) δ,
+  have hps : ∏ i, ∑ F ∈ incorrectSets (sw i).design (Pw i) δ,
         c i * (2 ^ faultyBits (sw i).prog (Pw i) F * Dj ^ k (sw i)) =
-      ∑ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ),
+      ∑ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ),
         ∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) := Finset.prod_univ_sum ..
-  have hnat : ∑ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ),
+  have hnat : ∑ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ),
         ∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) ≤
       executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β := by
     refine hps.symm.le.trans ?_
     unfold executionPhasesCount
     exact Finset.prod_le_prod fun i _ => hi i
-  calc _ ≤ (⋃ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ), Sq F).encard :=
+  calc _ ≤ (⋃ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ), Sq F).encard :=
         Set.encard_le_encard hsub
-    _ ≤ ∑ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ), (Sq F).encard :=
+    _ ≤ ∑ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ), (Sq F).encard :=
         encard_biUnion_le _ _
-    _ ≤ ∑ F ∈ Fintype.piFinset (fun i => faultySets (sw i).design (Pw i) δ),
+    _ ≤ ∑ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ),
           ((∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) : ℕ) : ℕ∞) :=
         Finset.sum_le_sum fun F _ => hSq F
     _ ≤ _ := by exact_mod_cast hnat
@@ -344,7 +344,7 @@ theorem rLeakCertifierChecked_of (H : Msg → Msg) (D : Compiled Coin A) {L K S 
   obtain rfl := Option.some.inj hs₂
   rw [hP] at hP₁
   obtain rfl := Option.some.inj hP₁
-  have hF := faulty_mem_faultySets hM (disjoint_allSlots hδ hM)
+  have hF := faulty_mem_incorrectSets hM (disjoint_allSlots hδ hM)
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
   refine ⟨s, P, hs, hP, fun op o htap hcov hl hD => ?_⟩
   have hag := hagree s hs htap.1

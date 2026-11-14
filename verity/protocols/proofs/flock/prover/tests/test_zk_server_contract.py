@@ -42,7 +42,7 @@ def lean():
     return str(BIN)
 
 
-def test_a_commit_item_is_the_row_the_coin_server_receives():
+def test_a_commit_item_is_the_row_the_live_coin_part_receives():
     """A commit item's message is the bytes the registered row's digest hashes, and the ZK server's ``b || c`` is hm96-sha512's
     commit string of that digest: what `Flock.ZkServer.Contract.commitBC` recomputes."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
@@ -224,7 +224,7 @@ def test_the_inner_sessions_coins_are_live():
 
 
 def test_each_coin_item_opens_its_commitment_in_the_public_input():
-    """A challenger that commits to every round's coins before the session (`rec_live.CoinServer.commit_coins`): the public
+    """A challenger that commits to every round's coins before the session (`rec_live.LiveCoinPart.commit_coins`): the public
     input holds one commitment a round, the link points as round 0 of ``link``, and each coin item of the committed
     transcript opens its own under the salt sent with it (`rec_live.coin_commitment`, `Flock.ZkServer.Contract.commitBC` of
     `coinMsg`). The challenger's salts are its own: none is the ZK server's, and none opens two rounds."""

@@ -69,7 +69,7 @@ registered inputs `reg`, checked inputs `chk` and each statement's check `valid`
   sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is
   among the sequences `AccSeqsChecked` counts at the registration's values;
 * on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ`, those sequences number at most
-  `2^#(freeInputs \ (reg ∪ chk)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible incorrect
+  `2^#(freeInputs \ (reg ∪ chk)) · #incorrectSets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible incorrect
   set. -/
 def SampledLeakChecked : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -86,8 +86,8 @@ def SampledLeakChecked : Prop :=
         ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
           (AccSeqsChecked s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) δ op
               Dj).encard ≤
-            ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s)).card * (faultySets s.design P δ).card *
-              2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) * Dj ^ k s : ℕ) : ℕ∞)
+            ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s)).card * (incorrectSets s.design P δ).card *
+              2 ^ ((incorrectSets s.design P δ).sup (faultyBits s.prog P)) * Dj ^ k s : ℕ) : ℕ∞)
 
 end Sampled
 

@@ -823,7 +823,7 @@ def markdown(c: dict) -> list[str]:
                       + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
                       + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items()
                                 if a.get("advice_held_by")) + "." + gaps]
-        lines += ["", "| arm | ok | rank | audit accepted | units | drawn | wrong units at most | negatives refused | "
+        lines += ["", "| arm | ok | rank | audit accepted | units | drawn | incorrect proof blocks at most | negatives refused | "
                   "forged unit refused | s | prove s a drawn unit | Lean verify s a drawn unit | proof bytes | source |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
