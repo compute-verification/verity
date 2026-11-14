@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import sys
 import types
 from pathlib import Path
@@ -308,19 +309,37 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
 def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
     over 40 units a sample that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
-    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a sample
-    that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
-    `a5.draw_ran_out`). A sampling design that doesn't apply refuses every member, recorded with why."""
+    so it is recorded refused, and not at four. One of 8, or of 4 at two a proof block, is recorded refused too: a
+    sample that ends can miss it, its fewest none. Under `subset:2` a sample that ends holds at most 2 of a member, one
+    count of link points, and can miss each of the three, so each is recorded refused (one that runs out of coins fails
+    the window: `a5.draw_ran_out`). Under `subset:39` a sample that ends misses none and gives each one count, so none
+    is. A sampling design that doesn't apply refuses every member, recorded with why. The registration's check is
+    handed those members (`a5.link_members`), and refuses the recorded ones, where the audit's case is of the
+    per-member form (`a5.per_member`): several members under `--zk` sessions, where `a5.members_proof` writes one."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
     ms = [member(0, "t", 0, 28, 1), member(1, "u", 28, 8, 1), member(2, "v", 36, 4, 2)]
+
+    def row(k: int, fewest: int, most: int) -> dict:
+        m = ms[k]["m"]
+        return {"member": f"m{k}", "template": m.template, "n": m.n, "vus_per_block": ms[k]["st"]["meta"]["vus_per_block"],
+                "fewest": fewest, "most": most}
+
     assert a5.link_points({"k": 20, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
-        {"member": "m0", "template": "t", "n": 28, "vus_per_block": 1, "fewest": 8, "most": 20}]}
+        row(0, 8, 20), row(1, 0, 8), row(2, 0, 4)]}
     assert a5.link_points({"k": 20, "law": "subset"}, 40, [member(0, "t", 0, 28, 4)]) == {"members": 1, "refused": []}
-    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
+    assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": [
+        row(0, 0, 2), row(1, 0, 2), row(2, 0, 2)]}
+    assert a5.link_points({"k": 39, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
+    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+
+    assert a5.link_members(ms) == [([[0, 28]], 1), ([[28, 36]], 1), ([[36, 40]], 2)]
+    assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0, 1, 2]
+    assert [a5.per_member(ms[:n], zk) for n in (1, 2, 3) for zk in (True, False)] == [False, False, True, False, True, False]
+    assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 
 
 def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
@@ -357,7 +376,8 @@ def staged(tmp_path: Path, k: int, key: str, base: int, n: int, *, lookups: str 
     if reads is not None:
         st["registered_file"] = d / "registered.json"
         st["registered_file"].write_text(json.dumps(reads))
-    return {"k": k, "m": types.SimpleNamespace(n=n, base=base, key=key), "st": st, "pin": f"{k:02x}" * 64}
+    return {"k": k, "m": types.SimpleNamespace(n=n, base=base, key=key), "st": st, "pin": f"{k:02x}" * 64,
+            "circuit": d / "circuit.txt"}
 
 
 def session(tmp_path: Path, mm: dict, *names: str) -> dict:
@@ -434,6 +454,31 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
         tmp_path / "m0" / "circuit.txt", tmp_path / "m0" / "pub-3.bin", s0 / "session.json", s0 / "rep-0.bin",
         tmp_path / "m2" / "circuit.txt", tmp_path / "m2" / "pub-4.bin", s2 / "session.json", s2 / "rep-0.bin",
         tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-2.bin")]
+
+
+def test_a_templates_members_name_its_one_circuit_file_and_the_case_lists_it_once(tmp_path, RP):
+    """a5 composes a template's circuit once, in its first member's directory, and a later member that is not sampled
+    has none of its own, nor its tables: each member names its template's file, the tables the template's circuit looks up
+    are the ones beside that file, and the case lists each path once."""
+    mms = [staged(tmp_path, 0, "t/c0", 0, 3, lookups='{"rcp": {}}'), staged(tmp_path, 1, "t/c1", 3, 2),
+           staged(tmp_path, 2, "t/c2", 5, 4), staged(tmp_path, 3, "u/c0", 9, 1)]
+    for mm in mms[1:3]:
+        (mm["st"]["dir"] / "circuit.txt").unlink()
+        shutil.rmtree(mm["st"]["dir"] / "tables")
+        mm["circuit"] = mms[0]["circuit"]
+    done = [session(tmp_path, mms[3], "a")]
+    names = [sha(done[0]["sdir"] / "sessions" / "a" / "session.json")]
+    evidence = {"proved_units": [9], "sessions": names, "verdicts": {}}
+    case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {}}
+    proof = a5.members_proof(mms, done, zk=True)
+    assert [m.proof.circuit for m in proof["members"]] == [tmp_path / "m0" / "circuit.txt"] * 3 + [
+        tmp_path / "m3" / "circuit.txt"]
+    assert proof["tables"] == [tmp_path / "m0" / "tables" / "rcp.u32"]
+    blobs = a5.case_members(case, **proof)["blobs"]
+    assert len(blobs) == len(set(blobs)) and all(Path(b).is_file() for b in blobs)
+    assert blobs.count(str(tmp_path / "m0" / "circuit.txt")) == 1
+    assert [b for b in blobs if b.endswith(".bin") and "/pub-" in b] == [
+        str(tmp_path / f"m{k}" / f"pub-{n}.bin") for k, n in ((3, 1), (0, 3), (1, 2), (2, 4))]
 
 
 def test_case_members_refuses_sessions_out_of_the_members_order(tmp_path, RP):

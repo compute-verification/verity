@@ -80,6 +80,8 @@ from verity_config.settings import of
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path.insert(0, str(HERE.parent))
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -1038,7 +1040,7 @@ def perplexity(args) -> int:
     ctx, t0 = mp.get_context("spawn"), time.perf_counter()
     d = args.out.parent
     windows = wikitext_windows(args.model, args.ppl_windows)
-    quality = QUALITY[Path(getattr(args, "kernel", None) or HERE.parent / "pearl_c_sm120").name]
+    quality = QUALITY[Path(getattr(args, "kernel", None) or SM120).name]
     groups = [("fp8", "base", None, ("fp8",)), ("v1", "arm", quality["pearlc-v1"], ("bf16", "pearlc-v1"))]
     if "pearlc-v2" in quality:
         groups.append(("v2", "arm", quality["pearlc-v2"], ("pearlc-v2",)))
@@ -1088,7 +1090,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
-    ap.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"), help="GPU 1's kernel directory (run.py, fixture.py)")
+    ap.add_argument("--kernel", default=str(SM120), help="GPU 1's kernel directory (run.py, fixture.py)")
     ap.add_argument("--cubin", help="build.sh's pearl_c_sm120.cubin (default: the kernel directory's)")
     ap.add_argument("--out", type=Path, default=Path(settings.RESEARCH_RUN_DIR or ".") / "e2e.json")
     ap.add_argument("--reps", type=int, default=3)

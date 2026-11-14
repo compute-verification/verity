@@ -124,7 +124,7 @@ difftest only.
 | The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
 | A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
 | A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
-| Passes credited together | `credit.passes_distinct` | `PouwPearlPlus.passesDistinct`, which nothing here reaches yet | `passes_distinct_twin` |
+| Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
 `opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s

@@ -670,13 +670,13 @@ def _get(d: Any, *keys: str) -> Any:
 def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool:
     """Whether the run's record on the remote holds its dirty source: job.json names a capture (`store.dirty_capture`, cli.py) of the
     digest its conditions record, and the run's valid `.custody` (store.custody) lists that file at the capture's size and sha256."""
-    cap = _get(job, "store", "dirty_capture")
+    capture = _get(job, "store", "dirty_capture")
     digest = src.get("dirty_digest")
-    if not isinstance(cap, dict) or not digest or digest == "too-large" or cap.get("dirty_digest") != digest:
+    if not isinstance(capture, dict) or not digest or digest == "too-large" or capture.get("dirty_digest") != digest:
         return False
     marker = _doc(_text(rd / ".custody"))
     files = marker.get("files") if isinstance(marker, dict) and marker.get("preserved") is True else None
-    return isinstance(files, dict) and files.get(cap.get("path")) == [cap.get("bytes"), cap.get("sha256")]
+    return isinstance(files, dict) and files.get(capture.get("path")) == [capture.get("bytes"), capture.get("sha256")]
 
 
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,

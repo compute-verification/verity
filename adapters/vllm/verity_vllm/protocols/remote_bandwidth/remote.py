@@ -75,6 +75,8 @@ REMOTE_SESSION = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/
 #: kv.cu's launchers over torch (``paged.py``, with ``kv_bench.py`` beside it), the remote session's device encode.
 VLLM_ENCODED = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent
 
+__all__ = ["CommitSession", "StoreBackend", "prove"]
+
 
 def address(value: str) -> tuple[str, int]:
     """``HOST:PORT``, the verifier's listening address."""

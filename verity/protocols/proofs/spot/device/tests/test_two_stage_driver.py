@@ -904,7 +904,7 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
             return manager, turns, finisher
         monkeypatch.setattr(AC, "start", start)
         a = _args(out, stage1=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
-                  rids=None, proofs=None, unlinked=False, stop=json.dumps(STOP.to_json()), **more)
+                  rids=None, proofs=None, unlinked=False, kept=None, stop=json.dumps(STOP.to_json()), **more)
         assert TS._second(a) == 1
         return json.loads((out / "summary.json").read_text())
 

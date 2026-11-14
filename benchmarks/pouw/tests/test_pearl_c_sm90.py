@@ -27,6 +27,7 @@ from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+POUW = Path(__file__).resolve().parents[1]
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
@@ -196,7 +197,7 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
         else:
             monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
         assert anew("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
-        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+        assert of(POUW / "settings.py").PEARLC_BF16_ROWS is on
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 
@@ -431,7 +432,7 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
     assert f'void {RUN.PDL_ENTRY_MARK}() {{}}' in SOURCE
-    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/hash_decode.cuh"')
+    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
     entry = pd[pd.index("DEV void pd_commit_t("):]
     entry = entry[:entry.index("#endif")]

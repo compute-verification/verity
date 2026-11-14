@@ -1,7 +1,7 @@
 module
 
 public import CoreProtocol.Cli
-public import CoreProtocol.Registration
+public import RegistrationLog
 
 @[expose] public section
 

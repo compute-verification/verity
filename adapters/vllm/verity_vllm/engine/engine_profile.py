@@ -29,8 +29,6 @@ __all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profi
 
 logger = init_logger(__name__)
 
-DECLARED_ENV = env.ENGINE
-
 MAX_MODEL_LEN = 4096
 GPU_MEMORY_UTILIZATION = 0.80
 
@@ -157,12 +155,13 @@ def gpu_info() -> dict[str, Any]:
 
     props = torch.cuda.get_device_properties(0)
     drv = _run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"])
+    pod = settings.raw("RUNPOD_POD_ID")
     return {
         "name": props.name,
         "count": torch.cuda.device_count(),
         "driver": drv,
         "compute_capability": f"{props.major}.{props.minor}",
-        "pod": os.environ.get("RUNPOD_POD_ID", os.uname().nodename),
+        "pod": os.uname().nodename if pod is None else pod,
         "total_memory_gb": round(props.total_memory / 2**30, 2),
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
@@ -328,8 +327,8 @@ def _backends_probe(worker: Any) -> dict[str, Any]:
             "quick_allreduce": getattr(comm, "qr_comm", None) is not None and not getattr(getattr(comm, "qr_comm", None), "disabled", True),
             "flashinfer_allreduce": getattr(comm, "fi_allreduce_fusion", None) is not None,
             "pynccl": getattr(comm, "pynccl_comm", None) is not None and not getattr(getattr(comm, "pynccl_comm", None), "disabled", True),
-            "nccl_env": {k: os.environ.get(k) for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
-                                                      "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if os.environ.get(k) is not None},
+            "nccl_env": {k: held for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
+                                           "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if (held := settings.raw(k)) is not None},
         }
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)

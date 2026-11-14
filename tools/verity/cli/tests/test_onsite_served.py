@@ -96,8 +96,18 @@ def test_the_configuration_states_no_host_or_address():
     cfg = K.parse(CONFIG.read_text())
     assert not [(p["name"], f) for p in cfg["party"] for f in p if f in K.TRANSPORT]
     assert not [(c["from"], c["to"], f) for c in cfg["channel"] for f in c if f in K.TRANSPORT]
+    assert all(set(p) == set(K.PIN) for p in cfg["pin"])
     assert {p["machine"] for p in cfg["party"]} == {T.PROVER_NODE, T.GATE_HOST, T.AUDITOR_HOST}
     assert all(p["machine"] == T.PROVER_NODE for p in cfg["party"] if p["principal"] == "developer")
+
+
+def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
+    cfg = R.load(CONFIG, REG)
+    assert [(p["party"], p["protocol"], p["scheme"], p["key-sha512"]) for p in cfg["pin"]] == [
+        ("memory-challenger", "pous", K.SCHEMES[0], T.PINS["pous"]),
+        ("memory-challenger", "wipe", K.SCHEMES[0], T.PINS["wipe"])]
+    bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
+    assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():

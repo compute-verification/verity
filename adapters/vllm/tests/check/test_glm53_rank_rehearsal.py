@@ -255,7 +255,7 @@ def test_the_progressions_compare_never_expands_a_strided_weight_read(rank, monk
 
 def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     """[799e16bad] Each token row's W_UV read after the first is an alias of the first: the compact load splices it in one list copy,
-    so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias (51 % of GM-01's fold load)."""
+    so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias."""
     calls, progression = [0], K._Acc.progression
 
     def counting(self, *a):
