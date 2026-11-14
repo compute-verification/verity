@@ -82,8 +82,6 @@
     {"file": "tests/program/test_derive_negative.py", "kind": "override", "symbol": "DataDependentSlice.forward", "detail": ""},
     {"file": "tests/program/test_derive_realhf.py", "kind": "assignment", "symbol": "<module>", "detail": "", "count": 2},
     {"file": "tests/program/test_derive_realhf.py", "kind": "attr-defined", "symbol": "_probe_patches", "detail": ""},
-    {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "CubeNorm.forward", "detail": ""},
-    {"file": "tests/program/test_norm_chain.py", "kind": "override", "symbol": "LlamaStyleNorm.forward", "detail": ""},
     {"file": "tests/program/test_superseded_kept.py", "kind": "arg-type", "symbol": "test_the_pinned_versions_are_the_migration_script_s_kept_list", "detail": ""},
     {"file": "tests/program/test_superseded_kept.py", "kind": "union-attr", "symbol": "test_the_pinned_versions_are_the_migration_script_s_kept_list", "detail": "", "count": 3},
     {"file": "tests/program/test_superseded_kept.py", "kind": "var-annotated", "symbol": "<module>", "detail": ""},
