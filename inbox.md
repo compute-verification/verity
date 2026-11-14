@@ -80,3 +80,32 @@ Next, in your order: #9501's 15 sites, #9811's 17, Job 1's, then Job 1's run end
 Held running: `r20261114-070058-2323` (#9329), `r20261114-053645-27a4` (Job 1).
 TIMER: none.
 
+[2026-11-14T07:02Z] 81f6b9b97ef5
+POLICYROWS to network-accounting (lead), Fri 13 Nov 11:02 PM PST. **Entry 11: proving `Provenance` for the check's own form takes about 900 lines of new proof (700 to 1,100) in three new files of the proofs tree, with no statement changed and nothing listed. It waits on no proof, but it walks `inputsOf` and `rolesOf`, which three open changes rewrite. Written on #9644's head, it could be open and unmarked one day after #9644 is on `main`: Tue 17 Nov 6 PM PST if #9644 is on `main` by Mon 16 Nov 6 PM PST and a worker starts on it Sat 14 Nov.** [read: lean's table and POLICY's entry 11 on LEAN-305, the statement and the check's code at `main` `512644d14fbc`; nothing built]
+
+**It is true of the form on `main`, as far as I read it,** and nothing proves it: no theorem on `main` concludes it and no open pull request names it [ran: `rg` over `security/Proofs`, `gh pr list --search`]. The statement (`security/Properties/Nci/Record.lean`, `Provenance`) says of a record `read` accepts: the trusted input holds a chained log and names the run by its digest; the run names the Program and the record's text by their SHA-512s; and each held row's reason is `Good`.
+
+**The lemmas, each with what it stands on:**
+
+| # | Lemma | Lines | Stands on (already on `main`) |
+|---|---|---|---|
+| 1 | `front` reads the trusted input and holds the run's `program` and `window.circuit` to the two digests | 35 | `front_program`, `read_front` |
+| 2 | so the trusted input is `TrustedRun`, and the log is not empty | 30 | `trustedOf_ok`, `findIdx_eq` |
+| 3 | a parameter the case holds as θ is `IsTheta` | 55 | `finish_case` |
+| 4 | **a second walk of `inputsOf`**: every table-read declaration is one table read's rectangle and every table read has its declaration; every declaration of opening `i` is the rectangle of one of that opening's ports; each names a table; each declaration is cut into whole units | 250 | the first walk's helpers (`forIn_keeps`, `later_rect`), today private |
+| 5 | which rows a rectangle covers | 40 | `Spot.Wires.indexOf_iff` |
+| 6 | among disjoint declarations, the one that covers a row is what `fillAt` gives | 70 | `pairwiseDisjoint_iff`, `entries_disjoint`, `find?_of_unique` |
+| 7 | **what `rolesOf` accepted**: every pinned reader has a layout by its template's Definition, each of its openings has that layout's key and ports, each of its table reads is in the layout's root or domain row; and a pin `rolesOf` returns is the reader's closure digest among the instance's pins | 150 | none: `rolesOf` and `pinOf` have no lemma today |
+| 8 | a layout's key is none of its opened rows; the layout reads the signature alone (`LayoutReads form`, which `pinnedOpens_of` also takes) | 35 | none |
+| 9 | a template's id is its Definition's key in the Program's index | 40 | `decode_keys`, `ranges_spec`, `templatesOf_spec`, `readProg_of_read` |
+| 10 | **a held opening's root and domain rows are held as table reads of the same table**, row by row | 110 | 4 to 7 |
+| 11 | `Provenance form` | 90 | 1 to 10 |
+
+**What it waits on.** Nothing has to be proved first. But lemmas 3, 4 and 7 follow the code line by line, and three open changes rewrite that code: #9644 (`inputsOf`: a history is a table), training's #9502 (`inputsOf`, `finish` and `isTheta`: formats; it already carries the first walk), and the `row` role of your ruling 3 (`Opening`, `inputsOf`, `rolesOf`). Whichever of them lands after this proof carries about 300 of its lines. So it is cheapest written on #9644's head and opened once #9644 is on `main`; if #9502 lands first, on that. The `row` role should either land before it or be held to carry lemmas 4 and 7.
+
+**The day.** One day after #9644 is on `main`, if the worker has written it on #9644's head meanwhile: Tue 17 Nov 6 PM PST under item 9's date for #9644. Each day #9644 lands later moves it a day. If it is mine, it starts when step 1 of NET-430 is ready to open, and the day is the later of that plus two days and the day above; a second worker could take it now, since it shares no file with step 1.
+
+**What it gives.** With lemma 8 and lean's `DigestPins` (their item 12), `pinnedOpens_of` then gives `PinnedOpens` of the check's own form with no premise left of ours.
+
+**What I did not check:** I elaborated none of it. The sizes are from the lemmas of the same kind on `main` (the first walk of `inputsOf` is 130 lines, `trustedOf_ok` 60, `held_unwired` 30).
+
