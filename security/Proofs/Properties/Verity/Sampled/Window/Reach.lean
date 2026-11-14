@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Stops
 /-!
 # Sampled proofs' coupling over a window: each member's session's trace in the window's
 
-The joint law's support over a window (`WindowReaches`, `SeqReach`) nests each member's session's trace in what
+The joint distribution's support over a window (`WindowReaches`, `SeqReach`) nests each member's session's trace in what
 follows it. Here it is read a member at a time, each session's trace from the position it starts at to the position
 it ends at, which the next member's session starts from:
 
@@ -25,7 +25,7 @@ it ends at, which the next member's session starts from:
   `MemberReach.inv`, `MemberReach.past`, `MemberReach.keeps`).
 * **The members' traces in order** (`SeqChain`): each member's from where the one before it ended, with its
   transcript, and no trace at a member with no proof block in the sample, where the next member's starts from the
-  same position; the sessions' joint law's support is such a chain, beside the tape at its end (`SeqReach.chain`,
+  same position; the sessions' joint distribution's support is such a chain, beside the tape at its end (`SeqReach.chain`,
   `SeqChain.le`, `SeqChain.inv`, `SeqChain.past`).
 * **A property of every member's transcript, a member at a time** (`SeqChain.forall₂`): from an invariant `I` of the
   position each member's session starts at, kept by each member's trace and at each member with none.
@@ -290,7 +290,7 @@ inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g �
       (hd : memberDrawn S m = false) (hl : SeqChain (i + 1) l p ts r) :
       SeqChain i (m :: l) p (m.wr (m.part S) Rg (idleOut (memberTabs S Rg m) pts) :: ts) r
 
-/-- **The sessions' joint law's support off the held-off events is the members' traces in order**, beside the tape
+/-- **The sessions' joint distribution's support off the held-off events is the members' traces in order**, beside the tape
 at the position the last ends at. -/
 theorem SeqReach.chain : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R))
     (o : List Transcript × CoinTape g σ), SeqReach D M BL B S Rg i l p o →
@@ -391,7 +391,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 variable {V θ F c} in
-/-- **The joint law's support off the held-off events is the members' traces in order** from the play's start on the
+/-- **The joint distribution's support off the held-off events is the members' traces in order** from the play's start on the
 coin map's tape at some widened coins, at the decoded registration and those coins' sample, beside the tape at the
 position the last ends at. -/
 theorem WindowReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
@@ -447,7 +447,7 @@ structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Pr
 
 /-- **The decoders' premise at the window, a member at a time** (`WindowDecodes`): it holds wherever the decoders'
 premise holds at each member's session (`MemberDecodes`), at any invariant of the position a member's session starts
-at. The joint law's support is the members' traces in order, each from where the one before it ended, and the tape an
+at. The joint distribution's support is the members' traces in order, each from where the one before it ended, and the tape an
 accepted play is on is the one at the position the last ends at. -/
 theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)

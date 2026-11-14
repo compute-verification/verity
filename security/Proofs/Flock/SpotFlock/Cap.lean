@@ -32,7 +32,7 @@ open Lean (Json)
 
 /-! ## The first stage's count -/
 
-/-- The `K` of the first stage's law over the population, where Flock reads it as a uniform `K`-subset. -/
+/-- The `K` of the first stage's sampling design over the population, where Flock reads it as a uniform `K`-subset. -/
 def firstKOf (g : Reg) : Option ℕ :=
   match Spot.Partition.units g.program g.query with
   | .ok n =>

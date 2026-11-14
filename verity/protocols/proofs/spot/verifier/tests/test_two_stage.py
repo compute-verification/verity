@@ -28,8 +28,7 @@ from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
-from verity.protocols.proofs.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
-                                                            verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.commitments.window import window_binding
 
 import fake_challenger as FC
@@ -302,20 +301,30 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
 
 
 def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
-    """`second_stage.complete`: true only when the two-stage form is allowed, the replay block is the registered request
+    """`second_stage.complete_twin`: true only when the two-stage form is allowed, the replay block is the registered request
     Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
     off, as `FORM` is; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
     say; no record at all. An argument that is not the boolean true counts as missing."""
     whole = {"accepted": True, "complete": True}
     assert SS.FORM is False
-    assert SS.complete(True, True, [whole, whole]) is True and SS.complete(True, True, [whole]) is True
-    assert not SS.complete(SS.FORM, True, [whole, whole])
-    assert not SS.complete(True, False, [whole, whole])
+    assert SS.complete_twin(True, True, [whole, whole]) is True and SS.complete_twin(True, True, [whole]) is True
+    assert not SS.complete_twin(SS.FORM, True, [whole, whole])
+    assert not SS.complete_twin(True, False, [whole, whole])
     for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
                    {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
-        assert not SS.complete(True, True, [whole, record])
-    assert not SS.complete(True, True, [])
-    assert not SS.complete(1, True, [whole]) and not SS.complete(True, "yes", [whole])
+        assert not SS.complete_twin(True, True, [whole, record])
+    assert not SS.complete_twin(True, True, [])
+    assert not SS.complete_twin(1, True, [whole]) and not SS.complete_twin(True, "yes", [whole])
+
+
+def test_no_python_decides_a_two_stage_outcome():
+    """Round 2's check and a two-stage outcome's completeness of record are the Lean's, which no interface here reaches:
+    each raises naming the goal (`verifier.not_written`), and their Python twins answer only beside it."""
+    whole = {"accepted": True, "complete": True}
+    for call in (lambda: SS.check(True, None, None), lambda: SS.complete(True, True, [whole])):
+        with pytest.raises(NotImplementedError, match=V.GOAL):
+            call()
+    assert V.GOAL == "proofs/spot-two-stage-sound"
 
 
 def _linked(s: dict, shift: int = 0, **ports) -> dict:
@@ -701,7 +710,7 @@ def _registered_codes(monkeypatch):
     reads)``, the reference's reads of the linked ports (`READS`'s when None), and whether the verifier fills the two
     values itself (``filled``) or the prover registers them."""
     seen = []
-    check = SS.check
+    check = SS.check_twin
     monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
@@ -717,7 +726,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(SS.check(True, o, [stmt]).codes)
+        return list(SS.check_twin(True, o, [stmt]).codes)
     return codes
 
 
@@ -777,13 +786,14 @@ TWO_TABLES = {**READ_FILLED, "root": [[{"bytes": T_ROOT}], [{"bytes": U_ROOT}]],
 
 
 def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
-             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES) -> SS.Own:
+             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES, tables=()) -> SS.Own:
     """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
     design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, the reference
-    reads, round 1's record `boundary`, and the templates the params record as `reads`."""
+    reads, round 1's record `boundary`, the templates the params record as `reads`, and the tables they pin."""
     return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, boundary, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
-                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads))
+                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads),
+                  tables=tuple(tables))
 
 
 READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
@@ -866,6 +876,62 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     assert SS.inputs_failure(own) == value
     found = dict(SS._interior_failures(own)).get("second-inputs")
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+#: The tables' registration's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
+PINNED = (("t", {"value": "t", "root": T_ROOT, "leaves": 8, "words": 2, "domain": T_DOMAIN}),
+          ("u", {"value": "u", "root": U_ROOT, "leaves": 8, "words": 2, "domain": U_DOMAIN}))
+NO_RECORD = {"roots": []}
+
+
+@pytest.mark.parametrize("own,value", [
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary={"roots": READ_RECORD["roots"][1:]}, supplied=TWO_TABLES, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[1:]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "root": "c3" * 64}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "domain": U_DOMAIN}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": 16}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": "8"}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, rows=READ_ROWS[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, reads=()), "row"),
+    (_holding(READ_VALUES[1:], READ_LINKS[1:], boundary=NO_RECORD, tables=PINNED), "row"),
+])
+def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(own, value):
+    """`second_stage._one_table` beside round 1's record: a read's root and domain may be one table's of the tables
+    the auditor's params pin before any coin (`Own.tables`, the tables' registration's entries), so a read's row,
+    salt and path pass with round 1's record registering no table, or with it registering one of two tables filled
+    row by row and the params pinning the other. Refused, the row named, with `second_stage.INPUTS_WHY`: a table
+    neither pinned nor registered, a pin whose root, domain id or count of leaves is another than the one the verifier
+    filled, and a pin that leaves the read's other conditions unmet (its rows, its record as a read, its key)."""
+    assert SS.inputs_failure(own) == value
+    found = dict(SS._interior_failures(own)).get("second-inputs")
+    assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+def test_the_params_pin_registered_tables_beside_the_circuit_files():
+    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' registration's
+    entries by parameter, which it pinned before any coin; the verifier takes them in the parameters' order and the
+    circuit files as without them, and refuses an entry not exactly the registration's form (`service._table_entry`)
+    and tables that are not an object."""
+    entry = dict(PINNED[0][1])
+    pinned = {**_circuits(), "tables": {"u": {**entry, "value": "u"}, "t": entry}}
+    assert S.template_circuits(pinned, WINDOW_QUERY) == S.template_circuits(_circuits(), WINDOW_QUERY)
+    assert S.pinned_tables(pinned) == (("t", entry), ("u", {**entry, "value": "u"}))
+    assert S.pinned_tables(_circuits()) == () == S.pinned_tables(None)
+    assert S.template_circuits({**_circuits(), "tables": {"t": {**entry, "word_bits": 8}}}, WINDOW_QUERY)
+    for bad in ({**entry, "value": "u"}, {**entry, "root": "AB" * 64}, {**entry, "domain": "ab" * 32},
+                {**entry, "leaves": 0}, {**entry, "words": True}, {**entry, "word_bits": 0}, {**entry, "x": 1},
+                {k: v for k, v in entry.items() if k != "words"}, [entry]):
+        with pytest.raises(ValueError, match="a pinned table's entry is exactly"):
+            S.template_circuits({**_circuits(), "tables": {"t": bad}}, WINDOW_QUERY)
+    for bad in ([entry], "t", None):
+        with pytest.raises(ValueError, match="the params' proofs are"):
+            S.template_circuits({**_circuits(), "tables": bad}, WINDOW_QUERY)
 
 
 def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():
@@ -1349,12 +1415,12 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     for registered, returns in (([{"value": "w"}, {"value": 5}, {}], (BOUT,)), (5, (BOUT,)), ([{"value": BOUT}], ()),
                                 ([{"value": BX}], (BOUT,))):
         assert SS.returns_ok(own(registered, returns))
-        assert "second-return" not in SS.check(True, own(registered, returns), None).codes
+        assert "second-return" not in SS.check_twin(True, own(registered, returns), None).codes
     refused = own([{"value": "w"}, {"value": BOUT}])
-    v = SS.check(True, refused, None)
+    v = SS.check_twin(True, refused, None)
     assert not SS.returns_ok(refused) and "second-return" in v.codes and not v.ok, v
     assert v.to_json()["detail"]["second-return"] == SS.RETURN_WHY
-    assert SS.check(False, refused, None).codes == v.codes
+    assert SS.check_twin(False, refused, None).codes == v.codes
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():

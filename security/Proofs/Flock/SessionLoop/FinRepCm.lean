@@ -55,13 +55,13 @@ theorem commit0Cut_tree (lv : Level) (src : TabSrc) :
 
 end FlockComplete
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 /-- **A table from a level 0 keeps its commitment** as `commitOf` reads it off. -/
-theorem tabOfLevel0_cm0 {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Level0.Level0}
-    {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
+theorem tabOfLevel0_cm0 {st : _root_.Flock.Setup} {l : _root_.Flock.ZkServer.Level0.Level0}
+    {t : _root_.Flock.ZkServer.Finish.Tab} (h : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
     t.cm0 = commitOf l := by
-  unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h
+  unfold _root_.Flock.ZkServer.Finish.tabOfLevel0 at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
@@ -79,7 +79,7 @@ theorem tabOfLevel0_cm0 {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Lev
     subst h
     rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace Claims.ZKMal
 
@@ -95,15 +95,15 @@ theorem leafAt_linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (cz : ∀ j
     (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals) (j : Fin (jOf x)) {q : ℕ} (hq : q < 2 ^ (lv0 x j).d) :
     leafAt PE x cz (swCutAt (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1
         (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1)) j q =
-      (_root_.Flock.Firewall.Link.leaves (lv0 x j) (zkTab x j).tPad (linkIn x w t j))[q]! := by
+      (_root_.Flock.ZkServer.Link.leaves (lv0 x j) (zkTab x j).tPad (linkIn x w t j))[q]! := by
   obtain ⟨-, -, -, -, hd, -⟩ := tabC_z PE x j
   have hq' : q < (tabC PE x j).z.nS + (tabC PE x j).z.nU := lt_of_lt_of_eq hq hd.symm
-  rw [_root_.Flock.Firewall.Link.leaves_getElem! _ _ _ hq]
+  rw [_root_.Flock.ZkServer.Link.leaves_getElem! _ _ _ hq]
   refine (leafAt_swCutAt PE x cz (wtOf PE x w) v (UE.tape x t).1
     (swExeOf (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1) j hq').trans
     ((swExeOf_inl (tabC PE x) cz (wtOf PE x w) v (UE.tape x t).1 (UE.tape x t).2.1 j ⟨q, hq'⟩).trans
     ((exeOf_inl PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w t cz j ⟨q, hq'⟩).trans ?_))
-  rw [rows_linkIn, salt_linkIn x w t j hq, _root_.Flock.Firewall.Link.rows_eq] <;> rfl
+  rw [rows_linkIn, salt_linkIn x w t j hq, _root_.Flock.ZkServer.Link.rows_eq] <;> rfl
 
 end Masked
 
@@ -125,13 +125,13 @@ theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hS : Loop.Level0Src src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
     tb.cm0.layers = (Array.range ((Masked.lv0 x j).d - (Masked.lv0 x j).cap + 1)).map
-        (_root_.Flock.Firewall.Link.layer (Masked.lv0 x j).d fun q =>
-          (_root_.Flock.Firewall.Link.leaves (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j))[q]!) ∧
-      tb.cm0.cap = _root_.Flock.Firewall.Link.layer (Masked.lv0 x j).d (fun q =>
-          (_root_.Flock.Firewall.Link.leaves (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j))[q]!)
+        (_root_.Flock.ZkServer.Link.layer (Masked.lv0 x j).d fun q =>
+          (_root_.Flock.ZkServer.Link.leaves (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j))[q]!) ∧
+      tb.cm0.cap = _root_.Flock.ZkServer.Link.layer (Masked.lv0 x j).d (fun q =>
+          (_root_.Flock.ZkServer.Link.leaves (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j))[q]!)
         ((Masked.lv0 x j).d - (Masked.lv0 x j).cap) := by
   obtain ⟨l, hl, hin⟩ := hS ν t j r
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) (Masked.lt_of_jOf j))
@@ -151,8 +151,8 @@ theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
     · rename_i tb' htb
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, -⟩ := h
-      rw [_root_.Flock.Firewall.Finish.tabOfLevel0_cm0 htb]
-      obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, hlay, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
+      rw [_root_.Flock.ZkServer.Finish.tabOfLevel0_cm0 htb]
+      obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, hlay, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
       have hm' : l.m = (Masked.stAt x j).m := by
         rw [show l.m = l.toIn.m from rfl, hin]
         rfl
@@ -160,12 +160,12 @@ theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
         rw [show l.wideLeaf = l.toIn.wideLeaf from rfl, hin]
         rfl
       rw [hm] at hm'
-      rw [_root_.Flock.Firewall.Level0.ofDraws_wideLeaf hl] at hw'
+      rw [_root_.Flock.ZkServer.Level0.ofDraws_wideLeaf hl] at hw'
       rw [hm', hw'] at hz
       obtain ⟨hs', ht'⟩ := Prod.mk.inj (Except.ok.inj (hz.symm.trans (Masked.zkTab x j).hz))
       have hlv' : l.lv = Masked.lv0 x j := by rw [hlv, hs']; rfl
       rw [hlv', ht', hin] at hlay
-      unfold _root_.Flock.Firewall.Finish.commitOf
+      unfold _root_.Flock.ZkServer.Finish.commitOf
       refine ⟨hlay, ?_⟩
       show l.layers.back?.getD #[] = _
       rw [hlay, Array.range_succ (n := (Masked.lv0 x j).d - (Masked.lv0 x j).cap), Array.append_singleton,
@@ -249,12 +249,12 @@ theorem cms_cm0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
   obtain ⟨hly, hcp⟩ := Level0Src.realOf_cm0 hS ν t ⟨k / 2, hj⟩ ⟨k % 2, Nat.mod_lt _ (by omega)⟩ hr
   have hL : FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) (Masked.lv0 x ⟨k / 2, hj⟩).d
       (finSrc vs x w ν t ops (k / 2)).leaf0 =
-      _root_.Flock.Firewall.Link.layer (Masked.lv0 x ⟨k / 2, hj⟩).d (fun q =>
-        (_root_.Flock.Firewall.Link.leaves (Masked.lv0 x ⟨k / 2, hj⟩) (Masked.zkTab x ⟨k / 2, hj⟩).tPad
+      _root_.Flock.ZkServer.Link.layer (Masked.lv0 x ⟨k / 2, hj⟩).d (fun q =>
+        (_root_.Flock.ZkServer.Link.leaves (Masked.lv0 x ⟨k / 2, hj⟩) (Masked.zkTab x ⟨k / 2, hj⟩).tPad
           (Masked.linkIn x w t ⟨k / 2, hj⟩))[q]!) := by
     funext h'
-    rw [_root_.Flock.Firewall.Link.layer_eq]
-    refine _root_.Flock.Firewall.Link.layerOf_congr _ _ (fun q hq => ?_) h'
+    rw [_root_.Flock.ZkServer.Link.layer_eq]
+    refine _root_.Flock.ZkServer.Link.layerOf_congr _ _ (fun q hq => ?_) h'
     rw [finSrc_leaf0 vs x w ν t ops hj]
     exact Masked.leafAt_linkIn x w t _ _ ⟨k / 2, hj⟩ hq
   rw [hci, (hcm (k / 2)).2.1, (hcm (k / 2)).2.2, hlv, hL]

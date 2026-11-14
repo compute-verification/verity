@@ -60,13 +60,13 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 /-- A sampled level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`). -/
 theorem Loop.level0Of_root {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
-    {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array Stmt} {j : ℕ} {l : _root_.Flock.Firewall.Level0.Level0}
-    (h : Loop.level0Of src x w ρ sts j = .ok l) : l.root = _root_.Flock.Firewall.Link.root l.toIn := by
+    {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array Stmt} {j : ℕ} {l : _root_.Flock.ZkServer.Level0.Level0}
+    (h : Loop.level0Of src x w ρ sts j = .ok l) : l.root = _root_.Flock.ZkServer.Link.root l.toIn := by
   unfold Loop.level0Of at h
   rcases hs : src x w ρ (2 * j) with e | ⟨g, d, hi⟩
   · rw [hs] at h; cases h
   · rw [hs] at h
-    exact (_root_.Flock.Firewall.Level0.ofDraws_ok h).2.2.2.2.2
+    exact (_root_.Flock.ZkServer.Level0.ofDraws_ok h).2.2.2.2.2
 
 /-- The link's level 0 is rep stream `2j`'s (`Loop.level0At`). -/
 theorem Loop.level0Of_eq_level0At {R : Type}
@@ -95,7 +95,7 @@ theorem linkIs_ofLoop
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (hL : L₀.link = fun x w ρ _ => Loop.linkOf src x w ρ) {x : Msg} (hx : Live x) {w : Flock.Wit}
     (hs : Loop.LinkLevel0 src x w) : LinkIs Loop.loopNr (ofLoop dataE L₀ real) x w := by
   intro ν t m₀ ρ₀ _ _
@@ -130,7 +130,7 @@ theorem linkRoundEq_ofLoop (vs : (session Loop.loopNr dataE).SwVals)
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (hL : L₀.link = fun x w ρ _ => Loop.linkOf src x w ρ) {x : Msg} (hx : Live x) {w : Flock.Wit}
     (hs : Loop.LinkLevel0 src x w) : LinkRoundEq (session Loop.loopNr dataE) vs (ofLoop dataE L₀ real) x w :=
   linkRoundEq_of_linkIs Loop.loopNr vs _ x w (linkIs_ofLoop L₀ src real hL hx hs)
@@ -144,7 +144,7 @@ theorem linkRoundEq_ofLoopLink (vs : (session Loop.loopNr dataE).SwVals)
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hs : Loop.LinkLevel0 src x w) :
     LinkRoundEq (session Loop.loopNr dataE) vs (ofLoopLink L₀ src real) x w :=

@@ -6,7 +6,7 @@ run recorded.
 * **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage registration or audit
   records): each run's art, the registration formats it holds and the Python verdicts it recorded.
 * **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
-  `OneStage.paramsOfJson` reads them (its own program descriptor, query, law, scheme, ports, leaf layer, log, partition,
+  `OneStage.paramsOfJson` reads them (its own program descriptor, query, sampling design, scheme, ports, leaf layer, log, partition,
   delta), the registration record as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   sample), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
@@ -56,14 +56,20 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as DR,
+    partition as P,
+    docket as R,
+    verifier as V,
+)
 from verity.circuits import codec, partition_object as PO
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.definitions.registry import catalog
 
-import r2_population as R2
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"
@@ -1287,8 +1293,8 @@ def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict,
 def a4(run: Run) -> Iterator[Case]:
     """A4 (`a4.py`): the Llama-3.2-1B row's layer 0 on serving's own roots: the layout of record's members as one population (the
     canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
-    the agreement's law, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
-    SHA-512 of the map from template to its public file's SHA-512, one sample by the verifier's law with each member served
+    the agreement's sampling design, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
+    SHA-512 of the map from template to its public file's SHA-512, one sample by the verifier's sampling design with each member served
     its share. Before 9515b4d4f the audit took neither the served sample nor the sessions' roots (and the run recorded no
     `audit_negatives`)."""
     base = "out/a4"
@@ -1552,7 +1558,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
 
 
 #: what the era's code imports from a run's commit
-ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "benchmarks/pouw/served_zk")
+ERA_PATHS = ("verity", "catalog/verity_catalog", "kernels/verity_kernels", "verity/protocols/accounting/pouw/prover/kernels/served_zk")
 
 
 def era_tree(run: Run, commit: str) -> Path:
@@ -1582,7 +1588,7 @@ def era_python(tree: Path, code: str, *args: str) -> Any:
 #: served_zk's verifier copies at each level, by the era's own `served_commit`
 SERVED_ZK_ERA = r'''
 import json, sys
-sys.path.insert(0, "benchmarks/pouw/served_zk")
+sys.path.insert(0, "verity/protocols/accounting/pouw/prover/kernels/served_zk")
 import served_commit as SC
 from verity.protocols.verification.spot.one_stage import partition as PT
 from verity.primitives.circuits.codec import encode_program
@@ -1619,7 +1625,7 @@ SERVED_OUTSIDE = (
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof system (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
+    """served_zk's window through the proof system (`verity/protocols/accounting/pouw/prover/kernels/served_zk`): the request's registration of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the sampling design of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
@@ -1761,7 +1767,7 @@ def served_window(run: Run) -> Iterator[Case]:
         run.outside.append({"run": run.id, "driver": "served-window", "name": name, "why": why})
 
 
-#: served_zk's first window's registered scheme, law and δ (`served_commit.SCHEME`, `LAW`, `DELTA` before `params.json`)
+#: served_zk's first window's registered scheme, sampling design and δ (`served_commit.SCHEME`, `LAW`, `DELTA` before `params.json`)
 SERVED_ZK_V0_SCHEME = "verity/pouw/served-zk/hm96-sha512+frame-v3-sha512/v0"
 SERVED_ZK_V0_LAW = {"k": 1, "law": "subset"}
 SERVED_ZK_V0_DELTA = 0.05
@@ -1779,10 +1785,10 @@ def served_audit(run: Run) -> Iterator[Case]:
     from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
-    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],
+    src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py"],
                          capture_output=True, text=True) if commit else None
     if src is None or src.returncode != 0:
-        raise Missing(f"benchmarks/pouw/served_zk/served_commit.py at {commit} (git history)")
+        raise Missing(f"verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py at {commit} (git history)")
     binding_run = "def run_of" in src.stdout
     prov0: dict = {"commit": commit, "program": "P.population_program(pc8 tile template, the statement's tiles, the record's "
                                                 "version)",

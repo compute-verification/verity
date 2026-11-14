@@ -13,10 +13,10 @@ tampered window's member, whose proof must not be accepted.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since Flock's statement is a whole member. Checks: the bundle's own check
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
-  replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
+  replayed, and the sample's sampling design the registered one); the bundle's run, registration digest and partition are the
   window's; each sampled member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
   one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
-  the bundle's units under the registered law over the registered population (`draw.check_draw`).
+  the bundle's units under the registered sampling design over the registered population (`draw.check_draw`).
 * **Staging** as a5 stages a sampled member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
   held to the registration's roots and domains, and the prover's file is made under the same header.
@@ -54,11 +54,11 @@ REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "benchmarks" / "one_stage" / "interfaces"),
                 str(REPO / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement")]
 
-import a0  # noqa: E402
-import a5 as A5  # noqa: E402
-import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.windows import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402

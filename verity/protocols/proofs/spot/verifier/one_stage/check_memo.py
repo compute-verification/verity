@@ -28,7 +28,7 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
-import a0
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 
 PURE = ("check", "check_public", "select", "audit_record")
 
