@@ -208,4 +208,4 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.FormRounds", "Proofs.Properties.Verity.SampledTwo.FormAgreed",
   "Proofs.Properties.Verity.SampledTwo.FormRecords", "Proofs.Properties.Verity.SampledTwo.FormVerdicts",
   "Proofs.Properties.Verity.SampledTwo.FormSetup", "Proofs.Properties.Verity.SampledTwo.FormCount",
-  "Proofs.Properties.Verity.SampledTwo.FormCircuit"]
+  "Proofs.Properties.Verity.SampledTwo.FormStmts", "Proofs.Properties.Verity.SampledTwo.FormCircuit"]
