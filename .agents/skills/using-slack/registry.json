@@ -936,7 +936,6 @@
       "owns": [
         "benchmarks/hash/",
         "benchmarks/kernels/",
-        "benchmarks/moe_align/",
         "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
