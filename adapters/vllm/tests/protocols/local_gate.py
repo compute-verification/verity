@@ -34,7 +34,7 @@ import shlex
 import subprocess
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 CONFIG = "gate.json"
@@ -67,7 +67,7 @@ def _params(cfg: dict):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _lock(d: Path, session: str) -> Path:
@@ -93,9 +93,10 @@ def _start(d: Path, A):
     """`auditor.start_unit`: returns once the unit holds its lock (systemd's Type=exec), so the gate sees it active."""
     def start(session: str) -> None:
         (d / "units").mkdir(exist_ok=True)
-        log = open(d / "units" / f"{session}.log", "ab")
-        p = subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), str(d), "run", session],
-                             stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, stderr=log, start_new_session=True)
+        with open(d / "units" / f"{session}.log", "ab") as log:
+            p = subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), str(d), "run", session],
+                                 stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, stderr=log, start_new_session=True)
+        assert p.stdout is not None, f"session {session}'s unit was started without the pipe its first line comes on"
         line = p.stdout.readline()
         p.stdout.close()
         if line != b"running\n":

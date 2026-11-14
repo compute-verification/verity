@@ -45,7 +45,6 @@ import math
 import os
 import sys
 import tempfile
-import time
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
@@ -233,7 +232,7 @@ def session(name: str, make: Callable[[int, sw.WipeMemoryChallenger], Any], *, n
     for start, data in c.fill(1 << 14):
         prover.receive(start, data)
     c.run(prover.answer)
-    signed = c.close(egress_bits=0)
+    signed = c.close()
     v, sides = judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=decide)
     kept = prover.keep()
     out = {"prover": name, "labels": n, "k": k, "limit_ns": limit_ns, "ended": signed.ended,
@@ -279,7 +278,7 @@ def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, de
             "expected": sessions * p, "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
 
 
-def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = time.perf_counter_ns,
+def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = sw.raw_clock_ns,
         untimed_tries: int = UNTIMED_TRIES, sample_n: int = 4096, sample_k: int = 12, sample_sessions: int = 600,
         judge: Callable[..., Any] | None = None, coin_secret: bytes | None = None) -> dict[str, Any]:
     """Every prover's session at `N = n`, `k` reads, then `sample_sessions` of `sampling` (none at 0)."""
