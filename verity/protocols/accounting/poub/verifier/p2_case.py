@@ -136,6 +136,20 @@ def judged(case: Mapping[str, Any], session: Mapping[str, Any], exe: str | os.Pa
     return serve(exe, [case])[0] if exe is not None else answer(case, session)
 
 
+#: why a case no `remote-audit-p2-protocol` answered is undecided where its session accepted (`unjudged`)
+NO_JUDGE = ("no remote-audit-p2-protocol answered the case: the Lean decides it, and the session's own accept decides "
+            "nothing alone")
+
+
+def unjudged(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
+    """The case's answer with no Lean to ask: `answer`'s reject or undecided, which the Python may give alone, and
+    undecided for its accept (`NO_JUDGE`)."""
+    a = answer(case, session)
+    if a["verdict"] != "accept":
+        return a
+    return a | {"profile": None, "public": None, "reason": NO_JUDGE, "verdict": "undecided"}
+
+
 def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) -> Path:
     """``case.json`` and ``answer.json`` into ``private`` (0700, each file 0600): the piece composite.py reads."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)

@@ -18,7 +18,7 @@ What code outside this directory may use. Everything else here is internal.
 | Entry point | What it is |
 |---|---|
 | `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` | The timed rounds' memory challenger as a process of its own, for the challenger host. It reads one JSON line on stdin. A salt request `{"salt": {"audit", "commitment"}}` it answers with `{"source": HEX}`, logged in its salt log. A run's request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` it answers by printing `{"listening": PORT}`, serving one prover and printing its report `{"host", "public_key", "session", "session_id", "warmups"}`. A refusal prints `{"refused": REASON}` and exits 1. Its key, session log and salt log are in `DIR`, and it keeps each run it completes in `DIR/setups/`. `challenger_party.PROTOCOL` is the same two parties as a `ProtocolDef` of the deployment layer (`verity.runtime`). |
-| `python verity/protocols/accounting/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. It exits 0 when every audit accepted and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
+| `python verity/protocols/accounting/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. Every P2 v4 document is judged by the Lean, `pous-timed-audit` (at `--lean-exe PATH`, else `pous_check`'s), whose verdict is the record's: where it can't run, every audit is undecided and no profile is issued. A scheme no Lean judges (the band's) is measured, its verdict `unjudged`, with no profile. It exits 0 when the Lean accepted every audit and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
 From Python there are four modules, each imported by its path.
@@ -31,15 +31,15 @@ the challenger's host: the two sides and their frames, the request and its ids (
 `side_of`), the node's calls (`salt`, `session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
 `challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
-record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`
-and `lean_verdict`, and the clocks, counters and parameters a harness reads beside them.
+record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `accepted`,
+`verdict`, `lean_verdict`, `run_lean` and `lean_judges`, and the clocks, counters and parameters a harness reads beside them.
 
 Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
 challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in
 Python, which is the reference. `verity/protocols/accounting/pous/verifier/check/timed_audit.py` is the Python beside PoUS's Lean
 check: its `lean_verdict` gives the same verdict by the Lean executable `pous-timed-audit`, and its two commands hold
 the Lean to the reference, `--generated` on records it builds and `--replay RUN_DIR` on a run's. This directory's
-`lean_verdict` calls that one and loads its file by path (`pous_check`), the one load of a file by path in the device's
+`lean_verdict` runs an executable it is given (`run_lean`), else calls that one and loads its file by path (`pous_check`), the one load of a file by path in the device's
 modules. An import by name cannot reach it: the Lean check is a tree with an import root of its own (`distribution` in
 `tests/import_order.toml`) that reads `verity_difftest`, and `verity` imports no other distribution. The check's other
 Python is `verity/protocols/accounting/pous/verifier/check/interop.py --all`, which holds the Lean to the P2 wire's Python

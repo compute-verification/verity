@@ -193,7 +193,10 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     assert m["step_floor"] is None and m["nvme"]["block_read_s"]["n"] == 8 and not list(nvme.iterdir())
     names = {r["name"] for r in body["measurements"]}
     assert {"encode_GBps", "decode_overhead_T1", "decode_overhead_T8", "audit_margin_min_s", "nvme_block_read_p99.9_s"} <= names
-    assert body["profile"] is not None and not body["profile"]["certified"]
+    from verity.protocols.accounting.pous.device.timed_audit import NO_LEAN
+
+    assert honest["verdict"] == gates["timed_audit"]["verdict"] == {"by": None, "unjudged": NO_LEAN}   # measured, not judged
+    assert gates["timed_audit"]["rc"] == 1 and honest["profile"] is None and body["profile"] is None
 
 
 def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
@@ -290,7 +293,7 @@ def test_the_harness_runs_the_band_at_d6_and_records_d(tmp_path):
     body = _bench().BandGpu().run(_args(tmp_path, band_d=6), WS, tmp_path, backend=_backend(harness.with_in_degree(params, 6)),
                                   base=params, vectors=_vectors(params))
     gates, m = body["gates"], body["metrics"]
-    assert body["scheme"] == "band-chain/d6/v1" and body["scheme_params"]["d"] == 6 and body["profile"]["params"]["d"] == 6
+    assert body["scheme"] == "band-chain/d6/v1" and body["scheme_params"]["d"] == 6 and body["profile"] is None
     for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control"):
         assert gates[g]["passed"], (g, gates[g])
     assert gates["vector"]["d"] == 12                                       # the pinned vector, at the registered d

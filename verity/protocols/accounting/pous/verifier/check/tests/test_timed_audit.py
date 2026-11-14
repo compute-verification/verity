@@ -103,24 +103,22 @@ def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
 
 @pytest.mark.slow
 def test_the_strict_memory_challengers_documents_are_judged_alike(tmp_path):
-    """`judge` by either verdict gives the same document, the one the memory challenger wrote: accepted at the RTT cap,
-    refused before any challenge one microsecond past it, and rejected where the responder serves zeros for every index
-    divisible by 7 (each audit of 105 challenges meets one but with probability (6/7)^105 < 2^-23)."""
+    """`judge` gives the document the memory challenger wrote, under the Lean's verdict, which is the Python's: accepted
+    at the RTT cap, refused before any challenge one microsecond past it, and rejected where the responder serves zeros
+    for every index divisible by 7 (each audit of 105 challenges meets one but with probability (6/7)^105 < 2^-23)."""
     from verity.protocols.accounting.pous.verifier.schemes import p2
 
     cap = 500_000 + p2.RTT_ALLOWANCE_CAP_NS
     honest = lambda i: False  # noqa: E731
     for limit, wrong, accepted in [(cap, honest, 2), (cap + 1_000, honest, 0), (cap, lambda i: i % 7 == 0, 0)]:
         live, ready, leaves, doc = _live(tmp_path, limit, wrong)
-        by = {name: live.judge(ready, leaves, doc, by=name) for name in ("python", "lean")}
-        assert live.judge(ready, leaves, doc)["verdict"]["by"] == live.VERDICT == "lean"
-        assert by["python"]["verdict"].pop("by") == "python" and by["lean"]["verdict"].pop("by") == "lean"
-        assert by["python"] == by["lean"]
-        assert by["python"]["verdicts"] == {"lean": by["python"]["verdict"], "python": by["python"]["verdict"]}
-        judged = {k: v for k, v in by["python"].items() if k not in ("verdict", "verdicts")}
-        assert judged == doc and by["python"]["audits_accepted"] == accepted
+        out = live.judge(ready, leaves, doc)
+        assert out["verdict"].pop("by") == live.VERDICT == "lean"
+        assert out["verdicts"] == {"lean": out["verdict"], "python": out["verdict"]}
+        judged = {k: v for k, v in out.items() if k not in ("verdict", "verdicts")}
+        assert judged == doc and out["audits_accepted"] == accepted
         assert (doc.get("wrong", 0) > 0) == (wrong is not honest)
-        assert ("refused" in by["python"]["verdict"]) == (limit != cap)
+        assert ("refused" in out["verdict"]) == (limit != cap)
 
 
 @pytest.fixture(scope="module")
@@ -136,12 +134,11 @@ def strict_doc(tmp_path_factory):
     return live, ready, leaves, doc, bad
 
 
-@pytest.mark.parametrize("record", ["lean", "python"])
 @pytest.mark.parametrize("forced", ["lean", "python"])
-def test_a_disagreement_between_the_verdicts_rejects_the_document(strict_doc, forced, record, monkeypatch):
+def test_a_disagreement_between_the_verdicts_rejects_the_document(strict_doc, forced, monkeypatch):
     """`forced`'s verdict flips its accept bit (rejecting the honest document the other accepts, and accepting the flipped
     one the other rejects): the document accepts nothing, its verdict names the disagreement and both outcomes, and both
-    verdicts are kept, whichever one accepted and whichever is the record's."""
+    verdicts are kept, whichever one accepted."""
     live, ready, leaves, honest, bad = strict_doc
     real = live.VERDICTS[forced]
 
@@ -152,24 +149,26 @@ def test_a_disagreement_between_the_verdicts_rejects_the_document(strict_doc, fo
     monkeypatch.setitem(live.VERDICTS, forced, flipped)
     other = "python" if forced == "lean" else "lean"
     for doc, accepts in ((honest, other), (bad, forced)):
-        out = live.judge(ready, leaves, doc, by=record)
+        out = live.judge(ready, leaves, doc)
         v, both = out["verdict"], out["verdicts"]
-        assert set(v) == {"by", "rejected"} and v["by"] == record and v["rejected"].startswith(live.DISAGREE + ": lean {")
+        assert set(v) == {"by", "rejected"} and v["by"] == "lean" and v["rejected"].startswith(live.DISAGREE + ": lean {")
         assert both[accepts]["accepted"] and not both[forced if accepts == other else other]["accepted"]
         assert out["audits_accepted"] == 0 and out["profile"] is None and not out["audit_of_record"]["accepted"]
 
 
-def test_without_the_lean_the_python_is_the_records_and_a_lean_failure_rejects(strict_doc, monkeypatch):
-    """Where the Lean can't run (the GPU pods' venv), the Python's verdict is the record's and the Lean's is marked
-    unavailable, for `--replay`; asked for the Lean's there, nothing is accepted.  Where the Lean should run and raises,
-    the document is rejected for the disagreement."""
+def test_without_the_lean_nothing_is_accepted_and_a_lean_failure_rejects(strict_doc, monkeypatch):
+    """Where the Lean can't run, the document is undecided: the Python's accept is kept beside the Lean's `unavailable`,
+    for `--replay`, and decides nothing, so no audit is accepted and no profile issued.  Where the Lean should run and
+    raises, the document is rejected for the disagreement."""
     live, ready, leaves, honest, _ = strict_doc
-    monkeypatch.setattr(live, "lean_unavailable", lambda: "lake is not on the PATH")
+    monkeypatch.setattr(live, "lean_unavailable", lambda exe=None: "lake is not on the PATH")
     out = live.judge(ready, leaves, honest)
-    assert out["verdict"]["by"] == "python" and out["verdict"]["accepted"] and out["audits_accepted"] == 2
-    assert out["verdicts"]["lean"] == {"unavailable": "lake is not on the PATH"}
-    assert live.judge(ready, leaves, honest, by="lean")["audits_accepted"] == 0
-    monkeypatch.setattr(live, "lean_unavailable", lambda: None)
+    assert set(out["verdict"]) == {"by", "undecided"} and out["verdict"]["by"] == "lean"
+    assert "lake is not on the PATH" in out["verdict"]["undecided"]
+    assert out["audits_accepted"] == 0 and out["profile"] is None and not out["audit_of_record"]["accepted"]
+    assert out["verdicts"] == {"lean": {"unavailable": "lake is not on the PATH"}, "python": live.verdict(ready, leaves, honest)}
+    assert out["verdicts"]["python"]["accepted"] and not live.accepted(out)
+    monkeypatch.setattr(live, "lean_unavailable", lambda exe=None: None)
 
     def broken(*args):
         raise RuntimeError("pous-timed-audit failed (2)")
@@ -181,16 +180,33 @@ def test_without_the_lean_the_python_is_the_records_and_a_lean_failure_rejects(s
     assert out["audits_accepted"] == 0
 
 
-def test_the_lean_is_unavailable_without_lake_or_its_server(monkeypatch):
-    """The Lean runs where `lake` is on the PATH and `verity_difftest` imports; otherwise `lean_unavailable` says which."""
+def test_the_lean_is_unavailable_without_lake_or_its_server(monkeypatch, tmp_path):
+    """The Lean runs where `lake` is on the PATH and `verity_difftest` imports; otherwise `lean_unavailable` says which.
+    Given a built executable, it runs where that is an executable file, whatever `lake` and `verity_difftest` are."""
     live = ta.challenger()
     monkeypatch.setattr(shutil, "which", lambda name: None)
     assert live.lean_unavailable() == "lake is not on the PATH"
+    exe = tmp_path / "pous-timed-audit"
+    assert live.lean_unavailable(exe) == f"{exe} is not an executable file"
+    exe.write_text("#!/bin/sh\n")
+    assert live.lean_unavailable(exe) == f"{exe} is not an executable file"
+    exe.chmod(0o755)
+    assert live.lean_unavailable(exe) is None
     monkeypatch.setattr(shutil, "which", lambda name: f"/opt/elan/bin/{name}")
     monkeypatch.setitem(sys.modules, "verity_difftest", None)
     assert live.lean_unavailable().startswith("verity_difftest is not importable here (")
     monkeypatch.delitem(sys.modules, "verity_difftest")
     assert live.lean_unavailable() is None
+
+
+def test_a_built_executable_judges_as_pous_checks_does(strict_doc):
+    """`--lean-exe`'s path: `pous-timed-audit` run directly (`run_lean`), with no `verity_difftest`, gives what
+    `pous_check`'s does, on an accepted document and a rejected one."""
+    live, ready, leaves, honest, bad = strict_doc
+    exe = ta.build(ta.HERE, ta.EXE)
+    for doc in (honest, bad):
+        assert live.judge(ready, leaves, doc, exe) == live.judge(ready, leaves, doc)
+    assert live.accepted(live.judge(ready, leaves, honest, exe)) and not live.accepted(live.judge(ready, leaves, bad, exe))
 
 
 def test_a_replay_writes_out_and_holds_the_recorded_verdicts_to_its_own(strict_doc, tmp_path, capsys):
@@ -199,7 +215,7 @@ def test_a_replay_writes_out_and_holds_the_recorded_verdicts_to_its_own(strict_d
     live, ready, leaves, honest, _ = strict_doc
     bench = tmp_path / "run" / "bench"
     bench.mkdir(parents=True)
-    judged = live.judge(ready, leaves, honest, by="python")
+    judged = live.judge(ready, leaves, honest)
     (bench / "ready-p2-honest.json").write_text(json.dumps(ready))
     (bench / "audit-p2-honest.json").write_text(json.dumps(judged))
     (bench / "leaves-p2.bin").write_bytes(leaves)
