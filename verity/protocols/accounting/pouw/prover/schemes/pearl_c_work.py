@@ -127,3 +127,6 @@ def pad_weight(rows: Sequence[bytes], tile_n: int) -> tuple[list[bytes], tuple[i
 def records_root(salt: bytes, weights_root: bytes, splits: Mapping[int, Split], records: Sequence[UnitRecord]) -> bytes:
     return tagged(RECORDS_TAG, salt, weights_root, *(p for w in sorted(splits) for p in (w, splits[w].encode())),
                   *(r.encode() for r in records))
+
+
+__all__ = ["ALIGN", "BAND", "Split", "UnitRecord", "pad_weight", "records_root"]
