@@ -142,7 +142,7 @@
         "security/Proofs/Hash/",
         "verity/protocols/interface/world/",
         "verity/hardware/record.py",
-        "verity/hardware/registration.py",
+        "verity/protocols/accounting/registration/verifier/registration.py",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
