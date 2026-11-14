@@ -260,7 +260,7 @@ if sys.argv[1:3] == ["pods", "ssh"] and "--print" in sys.argv:
         sys.exit(f"research pods ssh: no machine named {sys.argv[3]!r}")
     print(os.environ["FAKE_SSH"])
 elif sys.argv[1:3] == ["pods", "ssh"]:
-    print(os.environ.get("FAKE_UNIT", "active"))
+    print(os.environ.get("FAKE_UNIT", "activating"))
 """
 FAKE_MERGE = """import json, os
 def push_mirror(repo, sha, name):
@@ -347,7 +347,7 @@ def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts
     assert r.returncode == 0, r.stdout + r.stderr
     assert fake.made() == [["push_mirror", str(clone.resolve()), sha, "vy-nebius-cpu-4"], start]
     lines = log.read_text().splitlines()
-    assert re.fullmatch(rf"\S+Z publish {sha[:12]} on vy-nebius-cpu-4", lines[0]) and lines[-1] == "start: active"
+    assert re.fullmatch(rf"\S+Z publish {sha[:12]} on vy-nebius-cpu-4", lines[0]) and lines[-1] == "start: activating"
     assert r.stdout.splitlines() == lines[-3:]
     r = publish(sha, FAKE_UNIT="failed")
     assert r.returncode == 1 and fake.made()[-1] == start and r.stdout.splitlines()[-1] == "start: failed"
@@ -358,6 +358,31 @@ def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts
     assert publish(sha, VQ_LEAN_NODE="vy-other").returncode == 0
     pushed, started = fake.made()
     assert pushed[3] == started[2] == "vy-other"
+
+
+def started(unit: Path) -> set[str]:
+    """What `systemctl is-active` says of ``unit`` once started and still running: a oneshot is `activating` until its command
+    exits, and `active` only after it, with RemainAfterExit=yes; a unit of any other type is `active`."""
+    service = unit.read_text().partition("[Service]")[2].partition("\n[")[0]
+    keys = dict(ln.split("=", 1) for ln in service.splitlines() if "=" in ln and not ln.lstrip().startswith("#"))
+    if keys.get("Type", "simple") != "oneshot":
+        return {"active"}
+    return {"activating", "active"} if keys.get("RemainAfterExit", "no") in {"yes", "true", "1", "on"} else {"activating"}
+
+
+def test_the_lean_publish_holds_the_publisher_started_by_the_states_its_unit_file_gives(tmp_path):
+    """The publisher's unit, as the tree installs it on the cache's machine, decides what a started publisher reports: the
+    wrapper succeeds on those states and fails on every other, so a unit that ran and ended (or never ran) is no success."""
+    unit = deploy.MANIFEST.parent / "vy-lean-cache-daily.service"
+    fake, clone = Research(tmp_path), tmp_path / "clone"
+    subprocess.run(["git", "init", "-q", str(clone)], check=True)
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(clone), "commit", "-q",
+                    "--allow-empty", "-m", "x"], check=True)
+    running = started(unit)
+    for state in ("active", "activating", "inactive", "failed", "deactivating", "unknown"):
+        r = subprocess.run([str(VQ / "lean_publish.sh"), "HEAD"], cwd=clone, env={**fake.env, "FAKE_UNIT": state},
+                           capture_output=True, text=True)
+        assert (r.returncode == 0) == (state in running), (state, running)
 
 
 def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothing(node):

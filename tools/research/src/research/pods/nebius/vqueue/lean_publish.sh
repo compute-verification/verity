@@ -20,7 +20,8 @@ sys.exit(0 if push_mirror(Path.cwd(), sys.argv[2], sys.argv[1]) else 1)' "$node"
   state=$(timeout 120 "$py" -m research pods ssh "$node" -- \
     'sudo -n systemctl start --no-block vy-lean-cache-daily.service; systemctl is-active vy-lean-cache-daily.service')
   echo "start: $state"
-  case $state in active|activating) ;; *) return 1 ;; esac
+  # the unit is Type=oneshot without RemainAfterExit: activating while it runs, never active, inactive or failed once ended
+  [ "$state" = activating ]
 }
 
 publish "$1" >> "$log" 2>&1
