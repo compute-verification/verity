@@ -812,6 +812,26 @@ def test_a_file_the_branch_grew_past_the_scripts_limit_is_rewritten_as_the_move_
     assert show(r, got["result"], "tools/move/layout.py") == LIMITED and got["steps"][1]["restored"] == []
 
 
+def test_a_move_of_the_move_tool_itself_crosses_with_the_scripts_limit_back_where_the_move_put_it(tmp_path):
+    """A map that moves `tools/move/` moves the script with it: the crossing puts the limit it lifted back in the moved copy,
+    or the move it regenerates isn't the move's commit and no branch crosses."""
+    r = tmp_path / "self"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    commit(r, "old", {"app/__init__.py": "", "app/util.py": UTIL, "app/main.py": MAIN})
+    git(r, "branch", "pr")
+    moves_itself = 'skip = ["layout.py", "layout_map.toml"]\n' + edit(MAP, "[paths]\n", '[paths]\n"tools/move" = "infra/move"\n')
+    commit(r, "base", {"tools/move/layout.py": LIMITED, "tools/move/layout_map.toml": moves_itself})
+    git(r, "tag", "base")
+    git(r, "tag", "move", generate(r))
+    assert "TEXT_LIMIT = 400\n" in show(r, "move", "infra/move/layout.py")
+    on(r, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    got = RS.restack("pr", "move", cwd=str(r))
+    assert got["status"] == "clean", got
+    assert show(r, got["result"], "infra/move/layout.py") == show(r, "move", "infra/move/layout.py")
+    assert "return 50" in show(r, got["result"], "app/core/util.py")
+
+
 def test_a_move_that_left_a_file_over_its_limit_as_it_was_is_not_crossed(tmp_path):
     """A crossing treats a file as the move did: where the move passed over one for its size, no branch crosses."""
     r = _limited(tmp_path, **{"docs/big.md": "`app.util` is the module\n" * 20})

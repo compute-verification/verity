@@ -37,8 +37,10 @@ The record is `exfiltration.served_share`'s object, with what the audit showed b
 * ``run`` and ``commit``, the second stage's run and the commit it ran; ``runs``, each of the four runs' id and
   commit (`run_of`).
 * ``audit``, what the audit showed (`shown`): the class the second stage audited, as its summary names the first
-  stage's file (``class``, the directory that holds it), and the digest of the registration it read
-  (``registration``); the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it
+  stage's file (``class``, the directory that holds it), that class as the serve files it (``served_class``,
+  ``w<window>/p<P>-o<O>[-nostop]`` as `exfiltration.CLASS_NAME` reads it: the directories of the serve's
+  ``commit.json`` that equals the first stage's commitment, None without a serve or without that file), and the
+  digest of the registration it read (``registration``); the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it
   held (``held``), the stream's outcome with its codes and whether it says it is complete (``complete``, false where
   the outcome carries none), the layout the serve committed, what the interior registered, the first stage's
   sample and check, what holds the runs' files to each other (`ties`), the sessions' seconds as the files hold
@@ -201,11 +203,22 @@ def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publis
              "holds": None if stage1 is None or published is None else published is not False}]
 
 
+def served_class(commit: Path | None, name: str | None) -> str | None:
+    """The class ``name`` as the serve files it, from where its ``commit`` is: ``w<window>/<name>``, the adapter's
+    boundary directories (`exfiltration.CLASS_NAME`). None for no file, or one not filed under ``name``."""
+
+    if commit is None or name is None:
+        return None
+    full = f"{commit.parent.parent.name}/{commit.parent.name}"
+    return full if commit.parent.name == name and E.CLASS_NAME.match(full) else None
+
+
 def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any, machine: Path | None,
-          first_class: str | None = None) -> dict:
+          first_class: str | None = None, commit: Path | None = None) -> dict:
     """What the audit showed, as its files hold it: counts and codes, no verdict of the reader's own. Its ``class``
     is the one the second stage's summary names its first stage's file by, else the first stage's run's
-    (``first_class``)."""
+    (``first_class``); its ``served_class`` is that class as the serve filed ``commit``, the ``commit.json`` it
+    published equal to the first stage's commitment (`served_class`)."""
 
     audit = summary.get("audit") or {}
     inner, timing = audit.get("audit") or {}, audit.get("timing") or {}
@@ -242,8 +255,9 @@ def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publi
     cores = None
     if machine is not None and (words := machine.read_text().split()) and words[0].isdigit():
         cores = int(words[0])
+    name = _class(summary.get("stage1")) or first_class
     return {
-        "class": _class(summary.get("stage1")) or first_class,
+        "class": name, "served_class": served_class(commit, name),
         "registration": (summary.get("first_stage") or {}).get("registration"),
         "ties": ties(summary, stage1, check, published, first_class),
         "first_stage": None if stage1 is None else {
@@ -351,14 +365,16 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
     check = None
     if first is not None and Path(first).is_dir():
         check = check_of(next((p for pattern in CHECK for p in sorted(Path(first).glob(pattern))), None))
-    published = None
+    published, at = None, None
     if serve is not None:
         commits = ([Path(serve)] if Path(serve).is_file() else
                    [p for pattern in COMMITS for p in sorted(Path(serve).glob(pattern))])
         if not commits:
             raise ValueError(f"{serve} holds none of {', '.join(COMMITS)}: it is not a serve's run")
         wanted = (stage1 or {}).get("commit")
-        published = next((c for c in map(_json, commits) if wanted is None or c == wanted), False)
+        found = next(((p, c) for p, c in ((p, _json(p)) for p in commits) if wanted is None or c == wanted), None)
+        published = False if found is None else found[1]
+        at = None if found is None or wanted is None else found[0]
     machine = next((p for p in (file.parent / MACHINE, file.parent.parent / MACHINE) if p.is_file()), None)
 
     record = {"run": run, "commit": mine.get("commit"), "runs": runs, "prove": prove, SOURCE: source, "staging": staging,
@@ -366,7 +382,7 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
     if record["stock"] is None and serving_cost is not None:
         record |= {"serving_cost": serving_cost, "serving_cost_source": serving_cost_source}
     record["audit"] = shown(summary, stage1, check, published, machine,
-                            None if its is None or Path(first).is_file() else _class(its, Path(first)))
+                            None if its is None or Path(first).is_file() else _class(its, Path(first)), at)
     return record, absent
 
 

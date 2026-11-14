@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics import rows as RK
 
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import linkage as LK

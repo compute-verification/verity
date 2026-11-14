@@ -258,7 +258,7 @@ def fanout (j : Json) : V Json := do
     ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
-(`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the record.
+(`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
 With `"members"` (`LinkPoints.membersOfJson`), the per-member form's members, the check holds them to `link-points`
 after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. It is SPOT's check
 alone: the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the pool's marks and
@@ -270,16 +270,16 @@ def registration (j : Json) : V Json := do
     | some ms => LinkPoints.membersOfJson ms
     | none => pure #[]
   let v := { v with members }
-  let cs := (Registration.check (getD j "record") v).map Json.str
-  let through := Registration.tiedThrough v
+  let cs := (Docket.check (getD j "record") v).map Json.str
+  let through := Docket.tiedThrough v
   return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList
     ++ (if through.isEmpty then [] else [("rests_on_period_check", Lean.toJson through)]))
 
-/-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
+/-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Docket.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
 def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
-  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Registration.ownEntries v)
+  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Docket.ownEntries v)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
 `"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
@@ -727,7 +727,7 @@ def checkPublic (j : Json) : V Json := do
   let declared ← ps.mapM fun
     | .str s => pure s
     | _ => throw "a declared item is not a string"
-  let query ← Registration.queryDigest (getD j "query")
+  let query ← Docket.queryDigest (getD j "query")
   return (← Service.checkPublic (getD j "record") (getD j "scheme") query values declared).toJson
 
 /-- `{"verdicts", "sessions", "outputs"}` to the outcome's verdict checks' `{"ok", "codes", "detail"}`

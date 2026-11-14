@@ -29,7 +29,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
+| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, `FixedMachine` and `InitialBudget` not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
 | HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-device`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
@@ -238,7 +238,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "train" for a batch of PRs landed on one check | candidate |
 | "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
 | "components", "product" for a composite's parts and their joining, and the Lean's and the channels' message format's names | subprotocols; composition |
-| "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
+| "firewall"; the record ids and domain tags `firewall/v0` and `verity/firewall-*`, the party name `firewall` and the message type `Firewall`, until a format version; `benchmarks/`'s `MODES=firewall`, `--firewall`, `FC_FIREWALL*` and `flock-firewall`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |

@@ -1467,10 +1467,12 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
         (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [handoff["read"], coins.read.hex()]},
                                                    indent=1, sort_keys=True))
         if "handed" in s:
-            import sampled_two_case as SC
-            with SC.capture(out / "run-input.json") if getattr(a, "form_case", False) else contextlib.nullcontext():
+            form_case = getattr(a, "form_case", False)
+            if form_case:
+                import sampled_two_case as SC
+            with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
-            if getattr(a, "form_case", False):
+            if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
         return done(0 if ok else 1, held=ok)

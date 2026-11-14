@@ -1,4 +1,4 @@
-"""vLLM serving under the remote bandwidth audit: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
+"""vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
 with `verity_vllm.protocols.remote_bandwidth.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
 `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
@@ -200,7 +200,7 @@ def main() -> int:
 
     from verity_vllm.protocols.remote_bandwidth import remote
     from verity_vllm.protocols.remote_bandwidth.binder import Binder
-    from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
+    from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
 
     store = NodeMemory()
     binder = Binder(store, passes=False).install()

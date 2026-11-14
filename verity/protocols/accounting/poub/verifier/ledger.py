@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile
@@ -65,6 +65,9 @@ def _rate(x: object, what: str) -> float:
     if type(x) not in (int, float) or not 0 <= x < math.inf:
         raise ValueError(f"{what} is a finite nonnegative rate")
     return float(x)
+
+
+TIER_KEYS = ("devices", "spec_bytes_per_s", "read_bytes_per_s", "chip_bytes")
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,14 +152,19 @@ class Node:
         rate, which is a highest second; its link burst `figures.link_window_bytes` when the links are charged.  Its
         tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
         f = figures
-        measured = max(f.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
         link = (f.link_window_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
                  "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
-        return cls(max(f.spec_bytes_per_s, measured), measured, f.chip_bytes, f.squarings_per_s, f.sha512_per_s,
+        return cls(f.spec_bytes_per_s, f.read_bytes_per_s, f.chip_bytes, f.squarings_per_s, f.sha512_per_s,
                    f.gpu_write_bytes_per_s, f.host_write_bytes_per_s, disk_bytes_per_s, link_bytes_per_s,
-                   float(f.chip_bytes), disk, link, sketch_outside, tiers)
+                   float(f.chip_bytes), disk, link, sketch_outside, tiers).raised(reported_read_bytes_per_s)
+
+    def raised(self, reported_read_bytes_per_s: float) -> Node:
+        """The node with R measured raised to the prover's reported read and R at spec to that, which a report can
+        only raise: a prover reporting a slower read can't shrink a term.  No tier is raised."""
+        measured = max(self.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
+        return replace(self, spec_bytes_per_s=max(self.spec_bytes_per_s, measured), read_bytes_per_s=measured)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
@@ -171,7 +179,22 @@ class Node:
                 "link_bytes_per_s": self.link_bytes_per_s, "read_bytes_per_s": self.read_bytes_per_s,
                 "rebuild_burst_bytes": self.rebuild_burst_bytes, "sha512_per_s": self.sha512_per_s,
                 "sketch_outside": self.sketch_outside, "spec_bytes_per_s": self.spec_bytes_per_s,
-                "squarings_per_s": dict(self.squarings_per_s)}
+                "squarings_per_s": dict(self.squarings_per_s),
+                "tiers": {name: {f: getattr(t, f) for f in TIER_KEYS} for name, t in self.tiers.items()}}
+
+    @classmethod
+    def of_json(cls, j: object) -> Node:
+        """The node's capacities handed in as a parameter, in `to_json`'s form, which the ledger publishes them in:
+        exactly its keys, and each tier's, each value as `__post_init__` holds it."""
+        keys = sorted(cls.stated(timing.RTX_PRO_6000_NODE).to_json())
+        if type(j) is not dict or sorted(j) != keys:
+            raise ValueError(f"a node's capacities are an object of exactly {', '.join(keys)}")
+        if type(j["squarings_per_s"]) is not dict:
+            raise ValueError("squarings_per_s maps each codec width to its squaring ceiling")
+        tiers = j["tiers"]
+        if type(tiers) is not dict or not all(type(t) is dict and sorted(t) == sorted(TIER_KEYS) for t in tiers.values()):
+            raise ValueError(f"tiers maps each memory tier's name to an object of exactly {', '.join(TIER_KEYS)}")
+        return cls(**{**j, "tiers": {name: Tier(**t) for name, t in tiers.items()}})
 
 
 def sketch(record: audit.Record, node: Node) -> float:
@@ -514,4 +537,4 @@ def declared(record: audit.Record, node: Node, *,
 
 
 __all__ = ["DELTA_FORM", "DELTA_PARTS", "FORMS", "NAMED_TERMS", "Node", "PRF_CLAIM", "REJECTION_LOG2", "SNAPSHOT",
-           "TIME_HELD", "Tier", "binding_over", "hiding_over", "window_receipts"]
+           "TIER_KEYS", "TIME_HELD", "Tier", "binding_over", "hiding_over", "window_receipts"]

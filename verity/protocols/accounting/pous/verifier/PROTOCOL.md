@@ -366,8 +366,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
     either way;
-  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key` and `responder` wrap the modules
-    below;
+  - `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor` and `challenge_key` wrap the modules below; the honest
+    responder is the prover's (`verity/protocols/accounting/pous/prover/responder.py`);
   - every coin comes from `verity.commitments.randomness` through `setup` and `audit`, and a scheme flips none.
 - **Segment tags must be injective across all segments.** This is a hard requirement of every implementation:
   segment `s` is keyed by `tag_s = salt ‖ u64 s` (`labels.tag`), or by one salt with global indices.
@@ -534,8 +534,10 @@ written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
 
 **Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory challenger, as `holds`
-only when the session was signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's host. Under any other
-key, a key the run pinned for itself included, it reads `rehearsal: key not the auditor's pinned key, no bound`, and
+only under a committed configuration (`tools/verity/cli/verity_cli/configurations.toml`) when the session was signed under a key its
+`[[pin]]` entries give the memory challenger for the wipe (`memory_challenger.trusted_device`). Under any other
+configuration it reads `rehearsal, no bound: the configuration is not a committed one`, and under any other key, a key
+the run pinned for itself included, `rehearsal: key not the auditor's pinned key, no bound`; either way
 the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
 `prover-node`), a label and never the reason. Which keys the verifier accepts is the run's pin, and a separate matter.
 `verity/protocols/accounting/pous/device/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
@@ -712,12 +714,12 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `layout` | `TensorLayout.of(params, [(name, size)], align)`, `TensorLayout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
+| `audit` | `challenge_key`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `WipeMemoryChallenger(secret, server, session, params, signer, log=, mark_source=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close()` (one signature, `SignedWipe`, which holds no egress count) and `coins()`; `start_message(commitment)` and `end_message(signed)`, the two marks' messages, and `mark_of`, which reads a start mark's hex; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict alone), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; `egress_units`, the unit the wipe's check takes its egress in; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the

@@ -481,7 +481,7 @@ def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held
     """Each of `tied`'s Input gates where R8 may let it through, else None: a parameter of the program that the verifier
     neither expects registered nor holds, whose gates are one non-empty interval (`registered.held_gates`) of run Input
     nodes (`partition.run_inputs`). A tied Input is never a registered value: R7 holds nothing of it. The Lean's
-    `Registration.tiedGate` is this."""
+    `Docket.tiedGate` is this."""
     fixed = {*registered, *held}
     out: list[range | None] = []
     for t in tied:
@@ -530,7 +530,7 @@ def refuse_unwindowed(again: Sequence[str]) -> None:
 
 def last_digest(log: Sequence[Mapping[str, Any]]) -> str:
     """The previous record's digest, the one R6 holds `previous` to: the log's last record's, and empty, which names no
-    record, when the log is empty (`Registration.lastDigest`)."""
+    record, when the log is empty (`Docket.lastDigest`)."""
     if not log:
         return ""
     try:
@@ -773,14 +773,14 @@ def _verdicts(verdicts: Any, what: str = "the verdicts") -> dict[str, bool]:
 
 def refused(verdicts: Mapping[str, bool], d: str) -> bool:
     """Whether the verdict log names the verifier's run on record `d` refused; a record it holds no verdict for is not
-    refused (`Registration.refusedIn`)."""
+    refused (`Docket.refusedIn`)."""
     return verdicts.get(d) is False
 
 
 def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the verifier refused the window `lag` windows of record before this one (Pool chain): its verdict log
     (`verdicts`) names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
-    verdict for, is not refused, so where every run accepted the chain never restarts (`Registration.Pool.refused`)."""
+    verdict for, is not refused, so where every run accepted the chain never restarts (`Docket.Pool.refused`)."""
     lag = pool["lag"]
     if len(log) < lag:
         return False
@@ -794,7 +794,7 @@ def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> b
 def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the week's one reset is spent before this window (Pool chain): the log's last record, the previous window
     of record, names it spent (`POOL_SPENT`) in the verifier's week (`POOL_WEEK`), so a week starts unspent
-    (`Registration.Pool.spentBefore`)."""
+    (`Docket.Pool.spentBefore`)."""
     last = log[-1] if log else None
     w = last.get("window") if isinstance(last, Mapping) else None
     return isinstance(w, Mapping) and w.get(POOL_SPENT) is True and _names(w.get(POOL_WEEK), pool["week"])
@@ -803,7 +803,7 @@ def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]])
 def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
     """Whether the window carries the previous window's pool (Pool chain): neither the verifier refused the window the
     public lag back (`pool_refused`) nor serving reset it (`reset`), and the log's last record, the previous window of
-    record, registered its program (`Registration.Pool.chains`). Otherwise it opens the empty pool."""
+    record, registered its program (`Docket.Pool.chains`). Otherwise it opens the empty pool."""
     last = log[-1] if log else None
     return (not pool["reset"] and not pool_refused(pool, log) and isinstance(last, Mapping)
             and last.get("program") == P.program_digest(program))
@@ -837,7 +837,7 @@ def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program,
     """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
     last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the
     domain the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
-    (`registered.supplied_root`); where there is none, why (`Registration.poolOpen`, none there)."""
+    (`registered.supplied_root`); where there is none, why (`Docket.poolOpen`, none there)."""
     if pool_chains(pool, log, program):
         es = log[-1].get("registered")
         hits = [e for e in es if isinstance(e, Mapping) and e.get("value") == pool["pout"]] if isinstance(es, list) else []
@@ -933,7 +933,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
-#: `OneStageZk.TABLE_PORT`, the port a registration names a window's row tables' root at
+#: `OneStageZk.TABLE_PORT`, the port a docket names a window's row tables' root at
 TABLE_PORT = "row-table"
 #: `OneStageZk.ROW_TABLES`
 ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "

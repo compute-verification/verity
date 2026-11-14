@@ -1,14 +1,16 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import RemoteAudit.Difftest
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import RemoteAudit.Difftest
 
 /-!
-# A remote bandwidth session as a core protocol
+# A PoUB session as a core protocol
 
 The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
 the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
@@ -169,8 +171,22 @@ def protocol : Core.Protocol where
   publicJson := Public.toJson
   profileJson := id
 
+/-- **What a session accounts for** (`Core.Account`): the reads of the node's memory its openings certify (`q_bytes`),
+verified from below at `eps`, over the session. A session the pooled bound refuses publishes 0 reads at `eps` 0, a true
+lower bound, so nothing is flagged.
+
+Its answers name no auditor's device's key, so they are of the whole site (`witness`), and no span: the session
+publishes none. Its part is the session ledger's two tiers, the node's GPUs' memory and its host's DRAM; the answer
+names neither (`tiers`). The bytes the node held through the session are the ledger's line, not this answer. -/
+def account : Core.Account :=
+  { protocol := ID, witness := none
+    amounts := [{ metric := "reads", part := .read [.hbm, .dram], key := .published "q_bytes",
+                  unit := Core.Account.bytes, side := .verified, time := .unstated, error := .published "eps",
+                  uncertified := .safe }] }
+
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
+#guard account.Formed ∧ account.protocol = protocol.id
 #guard (ratio DELTA).toString == "1/1099511627776"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
