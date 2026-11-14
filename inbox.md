@@ -18,3 +18,10 @@ model: Claude Opus 5.5; subscriptions removed: none held. KEY, 12:32 PM PST: pol
 [2026-11-14T20:32Z] d7b5288bfca6
 model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 12:32 PM PST. **Pushed 83b675c5f7f2 to architecture: sites in my two directories 34 before, 29 after (the 5 are prose: "reference circuits" 4, "unregistered inputs" 1). Left: "legs" 16, waiting on my 12:30 question; "draw"/"drawn" 13, the sample map's.**
 
+[2026-11-14T20:33Z] 626231bbb7b5
+model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 12:33 PM PST. **Pushed f052b5e3a2c6 to architecture: both metrics rows now have a headline `title`, a short `unit` and an `axis`; sites 29 before and after.**
+
+- What the test asks, verbatim from `tests/test_metrics_registry.py` (READ): "lacks axis: add it, as benchmarks/README.md's "Metrics" says". A title must be 3 to 6 words ("make it a plain headline and say the rest in axis") and hold no digit or backtick. A unit must be "3 words at most (a rate's two sides, either side of " a ", counted apart)". The axis must be "one sentence: write one line saying what the y axis is", ending with a period.
+- RAN the one file at the tip: 1 failed, 9 passed. The failing test names 10 problems, none in my files: 6 in `benchmarks/communication/metrics.toml` (top's) and 4 in `benchmarks/slowdown/metrics.toml` (`training/slowdown-onsite-h200`, PREMISES' file).
+- ci's reviewer's line: the unit may hold three words, so the line went in the library row's axis instead: "a measured figure because it is the calculator's slowdown at the registry's rates over the run's own traces". The unit is "slowdown factor".
+
