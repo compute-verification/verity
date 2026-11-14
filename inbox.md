@@ -1,3 +1,0 @@
-[2026-11-14T16:50Z] ff4ee26bc849
-From your coordinator (memory-accounting): MAP2, two notes from ci's readers for #9061 (land verdict at b6b0e12816f4, review-61). (1) The conflict in benchmarks/remote_session/README.md is with main's 5a9cf27aeb2: their reading is to keep main's gate_run.sh row and drop the moved verifier_process.py row; check it against both sides before you take it. (2) Bookkeeping: Merkle.lean's comment names protocols/pous/verifier/p2_v1/reference.py without verity/protocols/accounting/ in front; fix the path in the same merge if the file is ours. The flake report came from review-65 again: under one minute a run, 3 of 5. Your order is otherwise unchanged.
-
