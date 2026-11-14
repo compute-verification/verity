@@ -59,7 +59,7 @@ open RecDeploy.HonestHalf
 /-- **The two reps' tops differ at every level above the cap** (the tape exception, `honest_half_tops`'s `hTops`): where
 the stager's inputs at the inner prover `Ir`'s run (`srcOf`, at the inner witness `w`, tape `ρ` and inner rounds `hist`)
 are read, the two reps' committed tops at each level `l > 0` are not one top (`VStar.In.sameTop`). A fact of the run's
-tape, not of the honest prover: witnessed on `HonestFixture`'s run. -/
+tape, not of the honest prover: `HonestFixture` takes it of its run. -/
 def TopsAt (Ir : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : (Ir.fit x).Tape) (hist : List (Msg × Msg)) : Prop :=
   ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ l, 0 < l → ∀ a b,
     (src.tops[0]!)[l]? = some a → (src.tops[1]!)[l]? = some b → _root_.VStar.In.sameTop a b = false
@@ -72,47 +72,45 @@ rounds before the last (`hist.take (kI x - 1)`) the reps' tops differ (`TopsAt`)
 `IrDep x`: the rows `rec_live` commits and the openings, salts, κ, eq(α) and v `rec_vstage`, `rec_vstar` and
 `verifier_rows` build, at Flock's proofs.
 
-The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
-16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
-on it:
-* `HonestRunAccepted`: the compiled `flock-verify` printed `VERDICT {"accepted":true}` (why `""`) on each of the 10 V\*
-  parts (L0–L3, alg-p0, alg-p1, cap, cap-L1–L3) and on the inner session, and the parts that read a flipped challenge
-  or query coin refused it.
-* `TopsAt`: holds on the run's tree (the reps' tops differ at levels 1–3).
-* `HonestWitSatisfies`: passed on the same tree (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
-  --session`): all 10 parts, each at the table `verify --zk` sets up at the sample its session records, under the zero
-  mask and a random one, 20 of 20 lines with no bad rows, pin or region bits.
-* `NoCollAt`: passed (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
-  --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input
-  bytes): 44,952 calls, 32,323 distinct outputs for 32,323 distinct inputs. A planted pair (a recorded output under an
-  input one byte longer) is caught. The calls are a superset of `NoCollAt`'s: every hm96 salt and row call the part's
-  trace computes at every port and instance slot (padding included, each row digest held to the trace's own last
-  compression), not only `layR`'s recorded ones; and for `vcallsAt`, every input the verifier's setup hashes at the
-  part's statement and sample, logged by the logging oracle's setup (`setupLogged`), which is proved equal to the fast
-  one.
+How the witness is reproduced. The fixture is one session of the recursive audit that `benchmarks/recursion_e2e`
+generates in its one-pass mode on the CPU prover, under the ZK server (`--e2e --cpu`, with `KEEP_DATA=1`, which keeps
+the session's data): the toy deployment at K = 64 and N = 4, its challenge tree sampled by the node's operating system
+(`--tree-test-os`), a test stand-in for a challenger's device. The data holds the inner session, V\*'s staged
+statements (each part's `inst.bin`, with `fold.json`, `points.json` and `acc-salts.bin`) and each part's proved
+session. The session the tests below read is the one
+`verity/protocols/proofs/recursion/verifier/vstar_cli/tests/recursive_data.json` names, or any other the generator
+kept. Each conjunct on it:
+* `HonestRunAccepted`: the whole-session tests of
+  `verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py`, which run only under
+  `VERITY_VSTAR_RECURSIVE_DATA` (the check's opt-in tier). V\*'s compiled check over the whole session
+  (`vstar-recursive verdicts`) and Flock's compiled verifier at each part's flags accept every V\* part, each part's
+  verdict the same in both; and over the inner session with one challenge flipped, some part refuses, the same parts
+  in both.
+* `TopsAt`, `HonestWitSatisfies` and `NoCollAt`: taken of the same session, and no test in the tree checks them on it.
+  A check of `HonestWitSatisfies` holds each part's trace (`VStar.Trace.assign`) to the table the compiled verifier
+  sets up at the sample the part's session records; one of `NoCollAt` finds no two inputs with one SHA-512 output
+  among the calls each part records (`findColl`); one of `TopsAt` reads the two reps' committed tops at each level
+  above the first.
 
-16a44e3b86's verifier has `checkRoundWords`, `VStar/In` and `VStar/Trace`, and beside `DAt`'s it only refuses more
-(`checkEndReads`, and `--ks-form`'s port roots, which the run doesn't pass). What the run witnesses is weaker than the
-Prop in two ways: only Python joins the 10 per-part verdicts (no single compiled verdict exists), and its prover is
+What the tests witness is weaker than the Prop in two ways: the verdicts are the compiled programs' on the session's
+files, with no Lean term `x` formed, so they are not `DAt`'s verifier evaluated at one; and the session's prover is
 Python's builder with Flock's CPU prover, not `refP`.
 
-What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
-`bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
-whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
-block and range for range, on parts Python's `rec_vstage.stage` staged:
-* `test_the_recorded_plain_leaf_sessions_traces` (at 547915a62c)
-  passed on all 10 staged statements of `rec-coins`' recorded (16,16,8) session at 64 instances (L0–L3, alg/p0, alg/p1,
-  cap, cap/L1–L3);
-* `vstar-trace --sat` (at 93dac12374) checks the trace against the table `verify --zk` sets up:
-  its sampled level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
-  session (`test_the_recorded_plain_leaf_sessions_satisfy`).
+What ties the two provers is `verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_trace_difftest.py`.
+`refP`'s V\* parts are `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs
+(`VStar.In.partIn`, whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace
+difftest holds `VStar.Trace.assign` (`vstar-trace`) to Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`,
+`unit_inputs`, `converge`, `witness`), block for block and range for range, on parts Python's `rec_vstage.stage`
+staged: on the small sessions it stages itself (`test_the_trace_is_the_deployed_provers`) and, under
+`VERITY_VSTAR_IN_DEPLOYED`, on every staged statement of a recorded session
+(`test_the_recorded_plain_leaf_sessions_traces`).
 
-The checks of `TopsAt`, `HonestWitSatisfies` and `NoCollAt` run on the run's own tree. Neither difftest compares
-`refP`'s inner rounds with Python's builder; `verity/protocols/recursion/verifier/vstar_cli/tests/test_irdep_difftest.py` does, on the
-run's own tree: `IrDep x`'s rows at every inner round, openings, running-sum salts, κ, eq(α) and v, evaluated by
-`IrDepSession.lean` (the setup-level copies `IrDep.lean` proves equal to `IrDep`'s own), are what `rec_live`,
-`rec_vstar` and `rec_vstage` built there, and a planted byte in any of them is refused. -/
+Neither difftest compares `refP`'s inner rounds with Python's builder;
+`verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_irdep_difftest.py` does, on a session's own tree
+(`VERITY_IRDEP_TREE`, with `IrDepSession.lean`'s output at it as `VERITY_IRDEP_LEAN`): `IrDep x`'s rows at every inner
+round, openings, running-sum salts, κ, eq(α) and v, evaluated by `IrDepSession.lean` (the setup-level copies
+`IrDep.lean` proves equal to `IrDep`'s own), are what `rec_live`, `rec_vstar` and `rec_vstage` built there, and a
+planted byte in any of them is refused. -/
 def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
