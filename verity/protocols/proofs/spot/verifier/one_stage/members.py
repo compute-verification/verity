@@ -17,8 +17,8 @@ Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `pro
 Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
 the reads Lean's `Member.statement` makes of them, then what a session's verdict checks of the files alone
 (`files_why`, Lean's `StepAt.filesHeld`), a refusal naming the member. A member the sample missed is refused there as
-one it holds is. The form the sampled audit's knowledge soundness covers is the Flock verifier's own there too
-(`flock_form`: its executable's ``ks-form``).
+one it holds is. The form the sampled audit's knowledge soundness covers is the Flock verifier's own there too, and so
+is what a session's setup takes of the public file's header and rows (`flock_form`: its executable's ``ks-form``).
 
 Where it is not Lean's step for step, each on a case neither side accepts:
 
@@ -459,8 +459,10 @@ def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, S
 def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) -> str | None:
     """The Flock verifier's check of a statement's form on its files, with no session: its executable's ``ks-form`` on
     the circuit and public files with the lookup tables `tables` (``--tables``), which is `Flock.KsScope.checkOf`
-    without a sample and so, at the one table of a member's session, `KsScope.filesOf`. None where they pass, else the
-    refusal. `Outside` where the verifier answers neither."""
+    without a sample and so, at the one table of a member's session, `KsScope.filesOf`, then
+    `Flock.PortRoots.headerOf`: a header naming ``public_inputs`` where the circuit's META names none, and a public
+    file whose rows are not its header's (``frame_v3``'s frame, row key, schemas and roots, and the pinned dummy
+    rows). None where they pass, else the refusal. `Outside` where the verifier answers neither."""
     with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
@@ -478,7 +480,8 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
     """`OneStageZk.StepAt.filesHeld` as far as this answers it (module docstring): why the files of a member of the
     units `units` are refused with no session, the first of Lean's that applies, None where none does. A circuit that
     does not parse or a public file that does not load (`form`'s refusal, which is the scope's word for word,
-    `UNREAD`), the template's refusals (`proofs.template_why`), the rest of the form without a sample (`form`), then
+    `UNREAD`), the template's refusals (`proofs.template_why`), the rest of the form without a sample and the public
+    file's header and rows (`form`, Lean's `ksForm` then `header`), then
     the member's population check at the registration's `strata` and the member's slice `slice_` (`population_why`).
     `Outside` where the strata or the public file's header are not read."""
     formed = form(circuit, public, tables)

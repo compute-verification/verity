@@ -21,6 +21,12 @@ needs a statement Lean sets up, on real files, under a release log this file's c
 `test_challenger_difftest.py` holds the two sides of the trees' check with and without the length. A member whose
 circuit parses and is outside the scope's rules, or whose ports' roots are, which Lean refuses with its files and the
 twin leaves to the member's session, needs real files too.
+
+One row puts real files at the first member, which has no session there: a circuit a prover staged
+(`tests/fixtures/form-refusals`'s honest case, a fetched fixture) and its public file, as staged and with its header
+or a row changed. Lean holds the public file's header and rows with the member's files
+(`Flock.PortRoots.headerOf`, `StepAt.header`) and the twin through the verifier's form check (`members.flock_form`),
+and each changed file is refused by both with one reason, the staged one passing both to the population check.
 """
 from __future__ import annotations
 
@@ -48,6 +54,14 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 A, B = f"{PAIR.id}/c0", f"{TRIPLE.id}/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
 DESIGN = {"k": 2, "law": "subset"}
+#: the honest case of the form refusals' fetched fixture: a circuit a prover staged and its public file
+STAGED = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "form-refusals" / "honest"
+#: `Flock.ProvedScope.refusal`'s tail, and `Flock.PortRoots.INPUTS_WHY` and `HEADER_WHY`
+FORM = ": a statement form the soundness proof does not cover"
+INPUTS_WHY = "a public file whose header names public_inputs at a circuit whose META names none"
+HEADER_WHY = "a public file whose rows are not its header's"
+#: `Flock.HmOut.checkPublic`'s refusal of another frame or row key
+NOT_FRAMED = "the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key"
 
 
 def _sha(b: bytes) -> str:
@@ -212,6 +226,50 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     why, (run, refused) = a.ask(tmp_path / "no-statement")
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
+
+
+def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_both(tmp_path):
+    """A window audited with a statement of its second member alone, its first member's files a circuit a prover
+    staged and that circuit's public file: Lean holds the public file's header and rows as a session's setup takes
+    them, with no session (`StepAt.header`, `Flock.PortRoots.headerOf`), and the twin answers the Flock verifier's
+    own check (`members.flock_form`). The file as staged passes both, which then refuse the member at its population
+    check, its units not the file's. A header naming ``public_inputs`` (the circuit's META names none), a changed row,
+    and another ``frame``, ``row_key_sha512`` or ``schemas`` entry are each refused by both with one reason, before
+    any session.
+
+    Each row parses the staged circuit, the smallest the fixture holds, in Lean's check and in the twin's form check,
+    so the test takes minutes. What it catches that the form check's own tests
+    (``tests/test_form_refusals.py``) can't: that Lean's files pass makes the check for a member no session samples,
+    and that the twin's reason is Lean's there."""
+    assert (STAGED / "pub-4.bin").is_file(), (
+        f"{STAGED.parent} is not fetched: `uv run research data fetch-fixtures "
+        f"{STAGED.parent.relative_to(Path(__file__).resolve().parents[7])}`")
+    a = Audit("members-twin-header", opened=(B,))
+    circuit = a.put((STAGED / "stage" / "circuit.txt").read_bytes())
+    line, body = (STAGED / "pub-4.bin").read_bytes().split(b"\n", 1)
+
+    def held(header=None, rows=None) -> str:
+        h = json.loads(line)
+        if header is not None:
+            header(h)
+        public = a.put(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+                       + (body if rows is None else rows(body)))
+        why, (run, refused) = a.ask(tmp_path / "held", params=a.members(A, circuit=circuit, public=public,
+                                                                         vus_per_block=2))
+        assert run is None and why == M.run_reason(run, refused), (why, refused)
+        assert why.startswith(f"proofs: member {A}: "), why
+        return why.removeprefix(f"proofs: member {A}: ")
+
+    assert held() == M.MEMBER_UNITS
+    assert held(header=lambda h: h.update(public_inputs=[])) == f"refused: {INPUTS_WHY}{FORM}"
+    row = held(rows=lambda b: bytes([b[0] ^ 1]) + b[1:])
+    assert row.startswith(f"refused: {HEADER_WHY} (row ") and row.endswith(
+        f": the rows' b || c do not hash to the header's frame-v3-sha512 root){FORM}"), row
+    assert held(header=lambda h: h["frame_v3"].update(frame="frame-v3")) == f"refused: {HEADER_WHY} ({NOT_FRAMED}){FORM}"
+    assert held(header=lambda h: h["frame_v3"].update(row_key_sha512="00" * 64)) == (
+        f"refused: {HEADER_WHY} ({NOT_FRAMED}){FORM}")
+    assert held(header=lambda h: h["frame_v3"]["schemas"].update(r0="hm96-sha512/row/v1")) == (
+        f"refused: {HEADER_WHY} (row r0: schema is not hm96-sha512/row/v2){FORM}")
 
 
 def test_a_member_no_statement_names_is_held_to_the_blobs_lookup_tables(tmp_path):

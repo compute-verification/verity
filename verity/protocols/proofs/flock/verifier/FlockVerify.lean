@@ -1283,11 +1283,12 @@ def agreeCmd (args : List String) : IO UInt32 := do
   verifyCmd args (some verdicts)
 
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
-(`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample, as one
+(`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a sample,
+then what its setup holds of the public file's header and rows with no session (`PortRoots.headerOf`), as one
 line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit carries its template
 (`ProvedScope.circuitOf`), and the check reads its form off the template (`KsScope.unitWhy`); what passing establishes is
-`KsScope.checkOf_ok`'s. It accepts no session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held
-to. -/
+`KsScope.checkOf_ok`'s and `PortRoots.headerWhy_none`'s. It accepts no session: its form check is the one the Python
+mirror (`one_stage.proofs.ks_form_why`) is held to, and the header's has no mirror. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -1300,7 +1301,7 @@ def ksFormCmd (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
   let ksParsed := if tags.hiddenOutputs then ProvedScope.circuitOf tags circuitB tables else HmOut.parse tags circuitB tables
-  match KsScope.checkOf ksParsed tags pubB count none with
+  match KsScope.checkOf ksParsed tags pubB count none >>= fun _ => PortRoots.headerOf ksParsed tags pubB with
   | .ok () => IO.println "KS-FORM ok"; return 0
   | .error why => IO.println s!"KS-FORM {why}"; return 1
 
