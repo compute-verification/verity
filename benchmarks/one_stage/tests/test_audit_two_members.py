@@ -296,13 +296,14 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     self-check off, ``--forged``): every check before the sample passes, both members are sampled, the ZK server releases
     no proof of the changed member, so its session ends with none and each of its verdicts refuses, the other member's
     accept, and the audit record rejects. Lean refuses the changed member's session for want of its proof file, a
-    verdict on no proof, so the audit passes on the proof held back and ``lean_refused`` has no value."""
+    verdict on no proof, so the audit passes on the proof held back and ``lean_refused`` has no value. No registered read
+    is refused, so ``read_refused`` is false."""
     window = _window(tmp_path / "window", flipped=True)
     rc, row, out, said = _audit(tmp_path, window, binaries, "--forged")
     assert rc == 0 and row.get("ok") is True, said
     forged = row["forged"]
     assert forged["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
-                                "lean_refused": None}, forged
+                                "lean_refused": None, "read_refused": False}, forged
     assert forged["passes_on"] == "no_proof_released" and forged["sessions"]["m0"]["prover_stopped"] is None, forged
     assert forged["sessions"]["m1"]["proofs"] == 0, forged
     assert forged["sessions"]["m1"]["prover_stopped"].startswith(RA.ZK_SERVER_REFUSED), forged
