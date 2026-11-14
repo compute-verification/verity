@@ -69,7 +69,7 @@ signal ignores the oracle, and `audit_ingress` reads HBM's widths as ingress fro
 
 `splits_of_links` derives `Splits` when every wire into the chip runs on a port of HBM, of the rest or of the oracle:
 the rest's ports from the model's `Alphabet` (their signals at a tick are one of `2^{βs}`, `βs` their capacities summed),
-and the other two from the chip's ports' constraints (`Security/Definitions/Poub/Bandwidth/Causal.lean`):
+and the other two from the chip's ports' constraints (`security/Definitions/Poub/Bandwidth/Causal.lean`):
 - `PassiveMemory`: HBM's ports deliver a function of the store and of what the chip did, at most `2^{wd}` signals for
   each such `a`, `wd` the width the chip's requests fix;
 - `OracleLocation`: the oracle's ports deliver a function of what the chip did and of the oracle's answers to the
@@ -78,7 +78,7 @@ and the other two from the chip's ports' constraints (`Security/Definitions/Poub
 with only `HearsChip` (HBM's ports deliver a function of the store and of what the chip did) in place of
 `PassiveMemory`: with HBM's links alphabets it gives passive memory at `βm` bits a tick (`passiveMemory_of_hearsChip`),
 and the bound holds at `βm T` in place of `∑ wd`. The four are the guarantees `Bandwidth.Guarantees.B3`, `B3RO`,
-`B3Capacity` and `B3CapacityRO` (`Security/Definitions/Poub/Guarantees/Bandwidth/Causal.lean`).
+`B3Capacity` and `B3CapacityRO` (`security/Definitions/Poub/Guarantees/Bandwidth/Causal.lean`).
 -/
 
 @[expose] public section

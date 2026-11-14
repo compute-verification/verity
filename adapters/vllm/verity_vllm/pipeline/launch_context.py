@@ -33,6 +33,7 @@ from typing import Any
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.engine.arrivals import realized_arrive_steps
+from verity_vllm.pipeline.cli import write
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
 __all__ = ["Options", "bad_chunks", "batch_dispatch", "batch_dispatch_of", "main", "missing_batch", "rows_at",
@@ -175,8 +176,8 @@ def main(a: Options) -> int:
     with open(a.workload) as f:
         w = json.load(f)
     if a.LP is not None and a.T is not None:
-        print(spec_for(w, a.LP, a.T, a.C))
+        write(spec_for(w, a.LP, a.T, a.C))
         return 0
     for s, v in sorted(shape_contexts(w).items()):
-        print(f"{shape_name(s)} {v if isinstance(v, str) else _spec(w, v)}")
+        write(f"{shape_name(s)} {v if isinstance(v, str) else _spec(w, v)}")
     return 0

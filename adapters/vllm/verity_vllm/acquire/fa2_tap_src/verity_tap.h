@@ -23,7 +23,7 @@
  *
  * P1 output: per (bidb, bidh, m_block, warp) 4 x uint32 = 16 bytes, i.e. 64 bytes per
  * (batch, head, 64-query block) for kNWarps = 4, written once at kernel end.
- * P0 output: flat fp32 buffer, planes described in verity_p0_layout() (bench_fa2_tap.py mirrors it).
+ * P0 output: flat fp32 buffer, planes described by Verity_p0_layout below.
  *
  * All helpers are __forceinline__ and only touch registers already live in the kernel.
  ******************************************************************************/

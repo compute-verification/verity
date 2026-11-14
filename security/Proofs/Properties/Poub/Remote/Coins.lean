@@ -2,7 +2,6 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Proofs.Properties.Poub.Remote.Sample
-public import Proofs.Properties.Poub.Remote.Sample
 public import Proofs.Properties.Poub.Remote.Run
 public import Proofs.Properties.Poub.Remote.Window
 public import Properties.Poub.Remote.Coins

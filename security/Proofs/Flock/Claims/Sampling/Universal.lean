@@ -42,7 +42,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The universal unit's gates run its private circuit
 
-`universalProg c`: the universal unit of the size class `c` (`verity.ml.private_circuits.universal`, `build`) as a
+`universalProg c`: the universal unit of the size class `c` (`verity.circuits.private_circuits.universal`, `build`) as a
 program of the Boolean profile. Its inputs are the private circuit's `(op, src, out)` arguments and then `x`, in leaf
 order (`PrivateCircuit.args`); after them, the constant `0` that fills every multiplexer tree. Each source and each
 output is a multiplexer tree over the wires it may read (`gather.gather`), selecting by the index's bits least

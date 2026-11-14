@@ -16,7 +16,7 @@ the credit pricing (a gate's credit, the target multiply-adds its class stands f
 those gates and the verifier's use of values placed on neither. These are completeness: `Placement.actual` takes the
 placement's leaf and ticks as given, its operations are constants, it has no outputs and the coins aren't its gates, so
 they say what a node that runs `W` as placed is credited and helped, not what a node that passes PoUW ran. Their proofs
-are in `Security/Proofs/Pouw/RequirementPouw.lean`.
+are in `security/Proofs/Pouw/RequirementPouw.lean`.
 
 * `RequirementCredits`: the node's credits at a coin are the work of `W`'s region `W[X, [ts, td))` outside the marking.
 * `RequirementHelp`: the help the node takes in at a coin is `W`'s ingress `in_{X ∪ V}([ts, td))`, for a topological

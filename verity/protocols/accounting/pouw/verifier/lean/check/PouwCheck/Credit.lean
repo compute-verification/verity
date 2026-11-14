@@ -23,7 +23,7 @@ public import Identity.Domains.Pouw
 /-!
 # A served execution phase's credited set, its sampled proof blocks and their outcome, its A rows and its period (`credit.py`)
 
-The verifier of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
+The verifier of `verity/protocols/accounting/pouw/verifier/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
 
 **`executionPhase` and `periodCredit` are the only entries.** On one execution phase's evidence and one round log, `executionPhase` runs every

@@ -50,11 +50,11 @@ from verity.circuits.boolean.forms import Circuit, and_reduce
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.commitments.gates.frame_v3 import _part
+from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.protocols.accounting.certifier.verifier import head_check as HC, replay_chain as RC
 from verity_vllm.compiler import served_rows as SR
 from verity_vllm.compiler import served_tie as ST
-from verity.protocols.accounting.certifier.verifier.head_check import BIT
+from verity.circuits.boolean import BIT
 
 STATICS = ("R", "G", "IW", "L", "T")
 STEP = ("R", "L", "T")
@@ -105,12 +105,12 @@ def _sig(S):
 
 def _body(B, S, pub, srb):
     Z, K = widths(S), HC._Consts(B)
-    pr, sr = HC._refs(pub), HC._refs(srb)
+    pr, sr = _refs(pub), _refs(srb)
     step = bind(ServedStaticsStep, **{k: getattr(S, k) for k in STEP})
     counts, poss = [], []
     for g in range(S.G):
         tie = ST._tie(S, sr[g * Z.SB:(g + 1) * Z.SB])
-        o = HC._refs(B.call(step, HC._coll(Array(Z.TB, BIT), tie), HC._coll(Array(Z.TB, BIT), pr[g * Z.TB:(g + 1) * Z.TB])))
+        o = _refs(B.call(step, HC._coll(Array(Z.TB, BIT), tie), HC._coll(Array(Z.TB, BIT), pr[g * Z.TB:(g + 1) * Z.TB])))
         counts.append(o[0])
         poss.append(o[1])
     return HC._coll(Array(16, BIT), [ST._all(B, counts), ST._all(B, poss), *K.bits(0, 16 - len(FLAGS))])

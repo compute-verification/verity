@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 # The premises a leaf's group of linked sessions takes
 
 The named premises a statement about a leaf proved as a group of Flock sessions takes, one premise over all the
-group's sessions each: `shape.premises` in `Security/lean-audit.json` names this module. Each is the named assumption
+group's sessions each: `shape.premises` in `security/lean-audit.json` names this module. Each is the named assumption
 it abbreviates at every proof's every session, unchanged:
 
 * `SessionsCR` (`Flock.SoundAtBridge.RowsSession.CR`): Flock's `EndToEndRegisteredRows`' named assumptions,
@@ -48,7 +48,7 @@ it abbreviates at every proof's every session, unchanged:
 * `GroupRealizes` (`Accounting.Assumptions.TS.GroupRealizes`, `accounting-ts-group-realizes`): at every proof, the
   group's circuits realize the leaf's relation at the rows its sessions open.
 
-They belong in `Security/Definitions/`, but they read `RowsSession`, which is in the proofs package, so they are here
+They belong in `security/Definitions/`, but they read `RowsSession`, which is in the proofs package, so they are here
 until Flock's spec is extracted, as `Accounting.Assumptions.TS`'s other session premises are.
 -/
 

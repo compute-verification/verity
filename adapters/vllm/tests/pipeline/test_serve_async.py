@@ -28,13 +28,12 @@ from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_admit import Admission
 from verity_vllm.protocols.pouw import h1_hooks as H1H
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
 
 class Engine:
     """vLLM's ``LLMEngine`` over its engine core, synchronous or with the batch queue (module docstring). FCFS, at most
     ``seqs`` requests running and ``budget`` tokens a schedule, a new request's whole prompt in its first; its rows in Model
-    Runner V2's batch order (`requests.sort_batch_req_ids`); each sample a function of the request's ids. ``calls`` holds each
+    Runner V2's batch order (`h1_hooks.sort_batch_req_ids`); each sample a function of the request's ids. ``calls`` holds each
     ``step``'s (the forward it ran, the forward whose outputs it returned), None for none."""
 
     def __init__(self, runner: Any, *, async_scheduling: bool, seqs: int, budget: int) -> None:
@@ -76,7 +75,7 @@ class Engine:
     def _launch(self) -> tuple[int | None, list[tuple[str, int]]]:
         rows, new = self._schedule()
         name = {self.reqs[e]["internal"]: e for e in rows}
-        live = [name[i] for i in RQ.sort_batch_req_ids({i: len(rows[e][0]) for i, e in name.items()}, {}, 1)]
+        live = [name[i] for i in H1H.sort_batch_req_ids({i: len(rows[e][0]) for i, e in name.items()}, {}, 1)]
         ids, qsl, pos = [], [0], []
         for e in live:
             ids += rows[e][0]

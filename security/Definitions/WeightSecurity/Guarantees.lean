@@ -23,7 +23,7 @@ is an honest-use party that sees, when `s` is the datacenter's, exactly what the
 success is at most the sum over `s` of theirs.
 
 `TheftHonest` and `TheftNontrivial` are its witnesses, at the toy instance (`Definitions.WeightSecurity.Toy`), where a
-lemma, `TheftTight` (`Security/Proofs/WeightSecurity/Lemmas.lean`), shows the factor `|S|` is attained.
+lemma, `TheftTight` (`security/Proofs/WeightSecurity/Lemmas.lean`), shows the factor `|S|` is attained.
 
 `TheftServed` is `Theft` at an audited deployment (`Definitions.WeightSecurity.Served`). The channel is the served one:
 advice, timing buckets, the overwrites the audit lets through and the halt. The leakage term is the probability `δ` that
