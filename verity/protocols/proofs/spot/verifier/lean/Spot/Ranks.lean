@@ -26,8 +26,8 @@ own copy and each rank's registration, and runs no join.
   `ranks-wires` and `ranks-reads` hold the joined record to the ranks' records, all fixed before the serve: they run
   each round until the verifier has a step where a class is registered, and then there, once.
 
-No body is built yet: each check refuses with its code (`NOT_BUILT`), so nothing passes, and no guarantee reads this
-module.
+Built: the field's reader (`Ranks.ofJson?`) and the segments (`Ranks.segment`). Every other check refuses with its code
+(`NOT_BUILT`) until built, so nothing passes, and no guarantee reads this module.
 -/
 module
 
@@ -90,8 +90,34 @@ def Ranks.segment (rs : Ranks) (t : String) (r : Nat) : Nat × Nat :=
   let lo := ((rs.of.extract 0 r).map (·.unitsOf t)).foldl (· + ·) 0
   (lo, lo + ((rs.of[r]?).map (·.unitsOf t)).getD 0)
 
-/-- The ranks of the record's `ranks` field (`Ranks.of_doc`). Not built: none. -/
-def Ranks.ofJson? (_ : Json) : Option Ranks := none
+/-- One rank of the record's `ranks` field: exactly `units`, `window` and `wires`, its window 128 lowercase hex digits,
+its units an object of naturals and its wires a natural; `none` otherwise. -/
+def Rank.ofJson? (j : Json) : Option Rank := do
+  if keys? j != some #["units", "window", "wires"] then none
+  let .str w := getD j "window" | none
+  if !(w.length == 128 && isHex w) then none
+  let .obj us := getD j "units" | none
+  let units ← us.toArray.mapM fun (t, n) => (nat? n).map fun k => (t, k)
+  let wires ← nat? (getD j "wires")
+  pure ⟨w, units, wires⟩
+
+/-- The ranks of the record's `ranks` field (`Ranks.of_doc`): exactly `of` and `prefix`, the prefix `PREFIX`, and at
+least one rank (`Rank.ofJson?`); `none` otherwise, which `ranks-shape` refuses. -/
+def Ranks.ofJson? (j : Json) : Option Ranks := do
+  if keys? j != some #["of", "prefix"] then none
+  let .str p := getD j "prefix" | none
+  if p != PREFIX then none
+  let .arr rs := getD j "of" | none
+  if rs.isEmpty then none
+  let of ← rs.mapM Rank.ofJson?
+  pure ⟨of⟩
+
+#guard
+  let rank (w : String) := Json.mkObj [("units", Json.mkObj [("T", 3)]), ("window", Json.str w), ("wires", 2)]
+  let field (w p : String) := Json.mkObj [("of", Json.arr #[rank w]), ("prefix", Json.str p)]
+  (Ranks.ofJson? (field ("".pushn 'a' 128) PREFIX)).map (fun rs => (rs.of.size, rs.segment "T" 0, rs.segment "T" 1))
+      == some (1, (0, 3), (3, 3)) &&
+    (Ranks.ofJson? (field ("".pushn 'A' 128) PREFIX)).isNone && (Ranks.ofJson? (field ("".pushn 'a' 128) "r/")).isNone
 
 /-- The member of rank registrations `regs` that holds unit `u` of template `t` of the joined circuit (the module's
 unit-to-member rule). Not built: none. -/
