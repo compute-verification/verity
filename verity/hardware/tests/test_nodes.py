@@ -21,7 +21,7 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import (OUTSIDE, TICK, TIERS, Auditor, Entry, Link, Loc, Malformed, Refused, Registration,
+from verity.device import (OUTSIDE, TICK, TIERS, Auditor, Entry, Link, Loc, Malformed, Refused, Registration,
                                   Sheet, check, refusal)
 
 HOST = "host0"

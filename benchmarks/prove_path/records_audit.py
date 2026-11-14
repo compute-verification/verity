@@ -175,7 +175,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.hardware import site as ST  # noqa: E402
+from verity import device as ST  # noqa: E402
 from verity.hardware import registration as G  # noqa: E402
 from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.pouw.verifier import credit as CR  # noqa: E402

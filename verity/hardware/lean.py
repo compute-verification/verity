@@ -11,7 +11,7 @@ it, so a number written another way, or an arm moved, is a changed record though
   of its clock;
 - a per-SM store is ``SMs * the entry``; a store in bytes is the bytes in binary units (``binary``) over the bytes of a
   word, and ``text`` the same over an instruction's bytes; device memory is ``store.dram_installed``, the memory on the
-  board, the entry a registered sheet reads (``verity.hardware.site.Sheet.of_file``), in ``size`` and in ``text``;
+  board, the entry a registered sheet reads (``verity.device.Sheet.of_file``), in ``size`` and in ``text``;
 - a field's arms are in the card file's order, and constructors whose arms read the same share the first one's
   (``arms``); ``weight``'s arms are the formats whose weight is not 1, in ``FORMATS``' order, and the rest are its
   default.
