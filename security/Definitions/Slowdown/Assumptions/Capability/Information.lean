@@ -9,8 +9,8 @@ public import Mathlib.Basic.Real.ENatENNReal
 /-!
 # Local bounds: information premises
 
-What a block can't cheaply hold. Each premise prices a selection of an item family (`InferenceOnly.Capability.Items`); with a
-reconstruction bound it gives each block a budget (`InferenceOnly.Guarantees.HeldBudget`, `StatHeldBudget`, `RecoveredBudget`).
+What a block can't cheaply hold. Each premise prices a selection of an item family (`Slowdown.Capability.Items`); with a
+reconstruction bound it gives each block a budget (`Slowdown.Guarantees.HeldBudget`, `StatHeldBudget`, `RecoveredBudget`).
 The two measures make different scientific claims:
 
 * `DescriptionHard` (computational): the values are **expensive to recompute**. Time-bounded description length: a
@@ -27,9 +27,9 @@ or both in one budget (one family holding both, joint hardness).
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
-open Verity Finset InferenceOnly.Capability
+open Verity Finset Slowdown.Capability
 open scoped ENNReal
 
 /-- NEW PREMISE. **Description hardness** ([DESCRIPTION-HARD]) of the item family `X` with deficit `Λ`, within `t` steps
@@ -94,4 +94,4 @@ def Recovers (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (e
   ∀ a, R.Honest a → ∀ u, ∃ s : List Bool, (s.length : ℝ) ≤ ℓz - βv * J u + amb ∧
     M.run r (blockProgram R e (R.d.D.eval a) u ++ s) τ = some (z (R.d.D.eval a))
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

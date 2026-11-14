@@ -15,7 +15,9 @@ circuit is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` fo
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+open InferenceOnly
+
+namespace Slowdown.Guarantees
 
 open Verity
 
@@ -46,4 +48,4 @@ def ReferenceThreaded : Prop :=
   ∀ (c : RegisteredCircuit) (T : Threading c), Assumptions.ReferenceLayered c T →
     ∀ (Γ : ℕ) (S : ℝ), S ≤ 2 * 10 ^ 7 → T.Threaded Γ S 10 2328
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

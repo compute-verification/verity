@@ -17,7 +17,7 @@ Section 1 of the training formalism v2, on core's one circuit type `Verity.Circu
   the values read by gates of `S` that no gate of `S` computes; `|S|` is `S.card`. `in(C)` is `C`'s inputs (`inputs`),
   so the computed values `S` reads are `in(S) \ in(C)`;
 * the **reconstruction** of `S` from `x` (`reconstruct`) evaluates `S`'s gates once each, in increasing order, reading
-  every other value from `x`; the reconstruction lemma (`InferenceOnly.Formalism.reconstruction`, in
+  every other value from `x`; the reconstruction lemma (`Slowdown.Formalism.reconstruction`, in
   `Security/Proofs/Slowdown/Formalism/Reconstruction.lean`) says it recovers every value `S` computes from the values of
   `in(S)`, so `S` itself is the witness.
 
@@ -27,7 +27,7 @@ Core's circuits are more general than §1's: values of any width, output gates, 
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (Circuit)
@@ -60,4 +60,4 @@ predecessors left, starting from `x`; every value outside `S` keeps `x`'s. -/
 def reconstruct (C : Circuit) (S : Finset (Fin C.N)) (x : C.Trace) : C.Trace :=
   (S.sort (· ≤ ·)).foldl (fun y g => Function.update y g (C.op g y)) x
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

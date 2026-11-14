@@ -25,7 +25,7 @@ carrying a parameter across steps is counted once for it:
 
 @[expose] public section
 
-namespace InferenceOnly.Threading
+namespace Slowdown.Threading
 
 open Verity Finset
 
@@ -70,4 +70,4 @@ def threadSlots (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin σ.p) := (T
 
 end Slots
 
-end InferenceOnly.Threading
+end Slowdown.Threading

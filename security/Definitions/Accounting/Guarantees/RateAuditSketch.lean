@@ -12,7 +12,7 @@ The game is `Security/Definitions/Accounting/RateAuditSketch.lean`; proofs are i
 `Security/Proofs/Accounting/RateAudit/Sketch.lean`, `SketchHonest.lean`, `SketchRank.lean` and `SketchTable.lean`. No
 named assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at
 `c_tag` per tag and `c_enc` per rebuilt sector) and its class, a device that obtains sectors only whole and verbatim, define what the guarantees quantify over;
-the claims registry carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
+a deployment premise carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
 
 * `RateAuditSketch`: in one window, for any digest, an accepted device's footprint reaches the floor except with
   probability `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.

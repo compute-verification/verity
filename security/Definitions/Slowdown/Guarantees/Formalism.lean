@@ -6,18 +6,18 @@ public import Definitions.Assumptions
 # The training formalism v2: its theorems
 
 The theorems of the training formalism v2 (`Definitions.Slowdown.Formalism`), §5, proved in
-`InferenceOnly.Formalism.SecurityProofs`. Its two lemmas, reconstruction (§1) and the three kinds of a block's inputs (§2), are
-`InferenceOnly.Formalism.reconstruction` and `InferenceOnly.Formalism.reads_split` in `Security/Proofs/Slowdown/Formalism/Reconstruction.lean`.
+`Slowdown.Formalism.SecurityProofs`. Its two lemmas, reconstruction (§1) and the three kinds of a block's inputs (§2), are
+`Slowdown.Formalism.reconstruction` and `Slowdown.Formalism.reads_split` in `Security/Proofs/Slowdown/Formalism/Reconstruction.lean`.
 
 A lower bound on `ρ` is stated, as each is proved, for every partition `𝓘` of `C` into inference blocks:
-`X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`InferenceOnly.Formalism.le_slowdown_iff`). The slowdown is one counting bound over kinds
+`X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`Slowdown.Formalism.le_slowdown_iff`). The slowdown is one counting bound over kinds
 of work, its factors explicit, and it reads the upper bounds A1 gives, never best-known values:
 
 * **The counting lemma over kinds** (`Counting`, no assumption): for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K`
   on the gates of `B_K` an inference block holds (`Caps`), and kinds `J` whose work is amortized over the partition,
   each with a bound `Λ_J` for the whole partition (`PartitionBound`),
   `ρ ≥ max(max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`. A cap a block is the special case: it gives the kind's bound
-  for the whole partition (`InferenceOnly.Formalism.partitionBound_kindBound`). The lemma reads nothing of the circuit beyond the
+  for the whole partition (`Slowdown.Formalism.partitionBound_kindBound`). The lemma reads nothing of the circuit beyond the
   caps and the partition-level bounds. Training's slowdown code's kinds are the unreachable token work, gradient
   reductions, update application and decoding; the token kind's cap is a theorem here from a named assumption, and the
   others' caps are premises. The bound is a maximum: kinds whose work shares blocks are not added, which would need a
@@ -48,11 +48,11 @@ lemma (`Definitions.Slowdown.Guarantees.Formalism.Witnesses`).
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism.Guarantees
+namespace Slowdown.Formalism.Guarantees
 
 open Finset
 open Verity (RegisteredCircuit Partition)
-open InferenceOnly.Formalism InferenceOnly.Formalism.Assumptions
+open Slowdown.Formalism Slowdown.Formalism.Assumptions
 open scoped NNReal ENNReal
 
 /-- **The counting lemma over kinds**: for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K` on the gates of `B_K`
@@ -125,4 +125,4 @@ def Security : Prop :=
     max (kindBound r.d c X capX) (max (⨆ K, kindBound r.d c (B K) (cap K)) (⨆ J, Λ J)) * ENNReal.ofReal p *
       honestCost methods ℓ ℓstar ≤ ((N * n * c : ℕ) : ℝ≥0∞)
 
-end InferenceOnly.Formalism.Guarantees
+end Slowdown.Formalism.Guarantees

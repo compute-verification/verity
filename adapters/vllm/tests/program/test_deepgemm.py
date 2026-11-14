@@ -28,7 +28,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.numerics import deepgemm_twins as T
 from verity_vllm.definitions.numerics import derived_rows as R
 from verity_vllm.definitions.registry import boolean_deepgemm as BDG

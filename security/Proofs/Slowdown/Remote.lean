@@ -15,7 +15,7 @@ identity's faulty blocks at or after its first detected one all lie within `Δ` 
 `escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
 sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `SlowdownRemote` reads the residual's
 hypothesis outside both events as `SlowdownThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, bounds the
-declared computation by its count verdict (`InferenceOnly.Cut.SecurityProofs.CountHE`, read at `ρ = C/X`: `declaredShare_div`),
+declared computation by its count verdict (`Slowdown.Cut.SecurityProofs.CountHE`, read at `ρ = C/X`: `declaredShare_div`),
 and sums the sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
 hardware-multiple forms (`remote_core`); the union of the two events has probability at most the sum of theirs
 (`prob_or_le`), so the complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ`
@@ -26,9 +26,9 @@ summing to 1 (`prob_add_not`).
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity InferenceOnly.Slowdown
+open Verity Slowdown.Slowdown
 
 /-- `prob` is monotone in the event. -/
 theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h : ∀ ω, E ω → F ω) :
@@ -330,4 +330,4 @@ theorem SlowdownRemote : Guarantees.SlowdownRemote := by
   rw [residualShare_sub hC, declaredShare_div hC hU] at h1 h2
   exact ⟨h1, h2⟩
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

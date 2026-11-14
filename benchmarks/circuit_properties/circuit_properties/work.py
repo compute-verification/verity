@@ -1589,7 +1589,7 @@ def boolean_gates(program) -> int:
     none, summed once per Definition and multiplied through batches and scans. `NoBooleanVersion` names every
     primitive that has none."""
     from verity.circuits.evaluation.bits import compile as compile_bits
-    from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
+    from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     memo: dict = {}

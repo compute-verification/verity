@@ -18,6 +18,8 @@ Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, prov
 
 @[expose] public section
 
+open Slowdown
+
 namespace InferenceOnly.Guarantees
 
 open Verity

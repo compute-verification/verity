@@ -7,7 +7,7 @@ statement (`Flock.Registered.checkComplete`); each unit's one public output, its
 renders a row), read off a value the verifier registers itself at known content, every word 1. Standalone: no Spec
 holds these units yet (`verity.protocols.accounting.certifier.prover.egress`).
 
-    python verity/protocols/accounting/certifier/prover/egress_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
+    python benchmarks/network_traces/zk_drivers.py egress_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
 
 * **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
   (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
@@ -28,7 +28,7 @@ holds these units yet (`verity.protocols.accounting.certifier.prover.egress`).
   Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
   swapped to match, so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each
   is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved ``--zk``
-  behind the ZK server (``FC_FIREWALL=1``)
+  behind the ZK server (``FC_ZK_SERVER=1``)
   and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
   its public salt.
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
@@ -49,19 +49,16 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
+from verity.protocols.accounting.certifier.prover import proof_drivers, warden_zk as WZ
+from verity.circuits.defs import bind
+from verity.commitments.crypto import lms
+from verity.protocols.accounting.certifier.prover import egress as EG
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-import warden_zk as WZ  # noqa: E402
-from verity.circuits.defs import bind  # noqa: E402
-from verity.commitments.crypto import lms  # noqa: E402
-from verity.protocols.accounting.certifier.prover import egress as EG  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
-
-_TRAFFIC = HERE.parents[1] / "verity/protocols/accounting/certifier/verifier/tests/egress_traffic.py"
+_TRAFFIC = Path(__file__).resolve().parents[1] / "verifier/tests/egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
@@ -221,8 +218,7 @@ def opened(m: dict, units) -> list[int | None]:
 def verdict_bcs(m: dict) -> list[bytes]:
     """Each proof block's ``o0`` b‖c from the public file: a shared-row file holds them port-major (each port's table
     rows in turn, `shared_rows` counting them), and proof block i's ``o0`` row is its table row i."""
-    from verity_flock.circuit import BC_BYTES as w
-
+    w = proof_drivers.drivers().circuit.BC_BYTES
     head, body = (m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)
     rows = json.loads(head)["shared_rows"]
     at = sum(rows[p.name] for p in m["ports"][:[p.name for p in m["ports"]].index("o0")])
@@ -306,7 +302,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=WZ.firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=WZ.zk_server(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

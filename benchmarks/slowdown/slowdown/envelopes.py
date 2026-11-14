@@ -128,7 +128,7 @@ class Pouw:
     #: (`GLOSSARY.md`), 1 without that assumption
     host: float = 0.0
 
-    CITES = ("InferenceOnly.Assumptions.PouwSound", "InferenceOnly.Guarantees.CertificateSlack")
+    CITES = ("Slowdown.Assumptions.PouwSound", "Slowdown.Guarantees.CertificateSlack")
 
     def audited(self, loc: Location) -> float:
         """`r̂ = 1 − W_cert/C`: the GPUs' uncredited share, their clock above the credited one, and the host CPUs."""
@@ -173,7 +173,7 @@ class Detection:
     #: `χ` given directly, in place of SPOT's closed form (None: the closed form)
     cheat: float | None = None
 
-    CITES = ("InferenceOnly.Assumptions.TerminalDetection", "InferenceOnly.Assumptions.SampledDetection", "InferenceOnly.Guarantees.VerdictLag")
+    CITES = ("Slowdown.Assumptions.TerminalDetection", "Slowdown.Assumptions.SampledDetection", "Slowdown.Guarantees.VerdictLag")
 
     def __post_init__(self) -> None:
         unset = [k for k in SAMPLING if self.sampled and not math.isfinite(getattr(self, k))]
@@ -498,9 +498,9 @@ class Remote:
     window_s: float = math.nan
     window_ks: float = 0.0
 
-    #: the inference cut: the remote composition, `InferenceOnly.Guarantees.SlowdownRemote`, term for term, its envelopes'
+    #: the inference cut: the remote composition, `Slowdown.Guarantees.SlowdownRemote`, term for term, its envelopes'
     #: premises, and the registration
-    CITES = ("InferenceOnly.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
+    CITES = ("Slowdown.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the server-block bound each of its cuts is an argument of: the inference-block yield alone
     BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection

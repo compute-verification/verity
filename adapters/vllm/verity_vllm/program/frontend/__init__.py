@@ -32,9 +32,9 @@ What the translator imports from the rest of the adapter. Its modules are those 
 
 Of the served kernels' circuits (`verity_vllm.definitions`), which the translator binds a graph's launches to:
 
-    verity_vllm.definitions.boolean.boolean_function                    a derived Program's function on bits,
-    verity_vllm.definitions.boolean.NoBooleanVersion                    why a word Definition has no Boolean version,
-    verity_vllm.definitions.boolean.sigma_check                         and the check of bits against σ of the words
+    verity.circuits.ops.boolean.versions.boolean_function                    a derived Program's function on bits,
+    verity.circuits.ops.boolean.versions.NoBooleanVersion                    why a word Definition has no Boolean version,
+    verity.circuits.ops.boolean.versions.sigma_check                         and the check of bits against σ of the words
     verity_vllm.definitions.replay.replayer                             the body builder that re-emits a recorded body
     verity_vllm.definitions.numerics.fa3_model                          FlashAttention-3's CPU model, a target's FA3 tile
     verity_vllm.definitions.registry.prims                              the B1 profile's primitives, a target's steps,

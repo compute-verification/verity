@@ -82,7 +82,7 @@ def test_the_served_vocabulary_binds_v2():
 
 
 def test_the_served_kind_has_its_boolean_version():
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
 
     assert BB.boolean_version(bind(SiluMul, I=8)).id == "SiluMul_v4{I=8}"
     assert BB.boolean_version(SiluMulBf16).id == "SiluMulBf16_v4"

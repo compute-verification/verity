@@ -25,7 +25,7 @@ Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped
 sources.
 
 The witnesses, `SlowdownRemoteMonitoringPeriod_honest` and `SlowdownRemoteMonitoringPeriod_nontrivial`, are at constructed instances of one
-window with no incorrect proof block, the first with one declared day (the toy `InferenceOnly.Cut.Toy`), the second with none,
+window with no incorrect proof block, the first with one declared day (the toy `Slowdown.Cut.Toy`), the second with none,
 where each event holds on every run or on none. The `example` at
 the end applies `SlowdownRemoteMonitoringPeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
 -/
@@ -34,9 +34,9 @@ the end applies `SlowdownRemoteMonitoringPeriod` to the nontrivial lemma's conju
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity InferenceOnly.Slowdown FlockSoundness.Audit.Periods
+open Verity Slowdown.Slowdown FlockSoundness.Audit.Periods
 open FlockSoundness.Game (avg prCoin avg_mono avg_const prCoin_mono)
 open scoped ENNReal
 
@@ -442,7 +442,7 @@ theorem prob_uniform_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → P
 /-- **`SlowdownRemoteMonitoringPeriod`'s premises hold where its conclusion says something** (`SlowdownRemoteMonitoringPeriod_honest`): one
 window run by one identity, its certificate right (`incorrect` empty) at capacity `C = 100`, all of the monitored compute
 certified (`W_cert = 100`), no incorrect proof block, unmonitored compute `U = 100` at `MFU₀ = 1/2`, `κ = 2`, and one
-declared day, the toy `InferenceOnly.Cut.Toy` at `CompliesAtMost 1 2 2`, (H) at unit costs and (E) at `b = 2`, so `α = 1` and the
+declared day, the toy `Slowdown.Cut.Toy` at `CompliesAtMost 1 2 2`, (H) at unit costs and (E) at `b = 2`, so `α = 1` and the
 day's bound is `X = 2 (2 + 1) + √4 = 8`, its two MACs the run's counted multiplications; at `p = 3 · 2⁻⁴⁰`,
 `ε' = 2p/10⁻⁶`, `q = 1`, `K = 0` and `ks = 0`. Then `δ = 1/(2 · 10⁶)`, as at any other `p > 0`, and the overhead bound
 on the hardware multiple is `1/(1/2 + ε' + 2/25)`, in `(1, 2]`, the run's own multiple being 50. -/
@@ -521,4 +521,4 @@ example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),
     ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty d n 1 1 Unit Unit Wk val 1 1 1 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12
     h13 h14 h15 h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31 h32)
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

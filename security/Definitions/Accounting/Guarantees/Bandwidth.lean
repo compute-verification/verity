@@ -15,7 +15,7 @@ The game is `Security/Definitions/Accounting/Bandwidth/Game.lean`; proofs are in
 The game's guarantee, `AuditRO` below, is PoUB's per-pass lemma, `Accounting.Guarantees.Remote.AuditRO`
 (`RemotePass.lean`); this file holds its forms for other devices.
 No named assumption: the device's bounds (on-chip state `S`, side-source bits `c`, regenerations `G`, oracle queries
-`q`) define the class of devices the guarantee quantifies over, and the claims registry names, for a deployed device,
+`q`) define the class of devices the guarantee quantifies over, and deployment premises name, for a deployed device,
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
 model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for the stored blocks).
 -/
