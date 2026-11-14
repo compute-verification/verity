@@ -392,6 +392,12 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   Site" because a commitment tree has subtrees too. A place is a registered location or the outside (`Site.places`): a
   gate of the actual circuit is placed at one and a link ends at one. A subtree's egress limit is the capacity of the
   registered links with exactly one end in it (`Accounting.Guarantees.EgressRegistered`).
+- **Record limit** and **sealed sink** (`Accounting.Guarantees.LeakParts`, `LeakPartsRegistered`): a device's record
+  limit `K` is a cap on the values its record takes over a window, whatever the developer's hardware sends
+  (`Accounting.RecordsWithin`); a record of a stated format has it at its size in bits. A subtree's leak limit sums it
+  over the subtree's trusted devices. A sealed sink is a memory challenger every registered link of which ends in the
+  subtree: it is part of the location, nothing is asked of what it does, and it adds no term. A memory challenger linked
+  outside the subtree as well is shared, and is a trusted device with a record limit of its own.
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
   and they change freely while every guarantee proves the same statement.
 - **Spec**: all of a Lean package that a reader must trust to read its guarantees (`AGENTS.md`, "Lean").
