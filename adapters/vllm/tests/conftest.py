@@ -17,7 +17,7 @@ import shutil
 import subprocess
 
 import pytest
-from verity.protocols.accounting.pouw.prover.serving import use_int8_arm
+from verity.protocols.accounting.pouw.prover.serving import use_h1_device, use_int8_arm, use_tensors
 
 #: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
@@ -35,6 +35,9 @@ KNOWN_FAILURES = {
 
 #: PoUW's H1 checks the int8 arm's records with the arm's own GEMM and dequantization, as the option hands them in at install
 use_int8_arm(lambda: importlib.import_module("verity_vllm.engine.int8_exact"))
+#: and reads the served buffers, and runs H1's device half, through the PyTorch adapter's, as the adapter hands them in
+use_tensors(lambda: importlib.import_module("verity.protocols.accounting.pouw.prover.serving.tensors_device").TENSORS)
+use_h1_device(lambda: importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1.h1_device").H1)
 
 
 def pytest_configure(config) -> None:

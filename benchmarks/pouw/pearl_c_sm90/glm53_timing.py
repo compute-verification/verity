@@ -250,15 +250,16 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     from verity.protocols.accounting.pouw.verifier import verifier
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 
     dev = torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(KERNEL), cubin)
     salt_key = PPD.new_salt_key(scheme)
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     ch = Challenger(EPOCH, verifier.coins)
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
+    run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, ch.commitment,
                               ch.open("salt", weights_root(roots)), salt_key=salt_key, schedule=schedule, graphs=graphs)
     return run, weights, kernel, gen
 

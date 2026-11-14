@@ -13,7 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.protocols.accounting.pouw.prover.schemes import get
+from verity.protocols.accounting.pouw.prover.schemes import EXPERIMENTAL, get
 from verity.protocols.accounting.pouw.verifier import identifier as I
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
@@ -48,9 +48,13 @@ def epoch_of(case: str, matmuls) -> Epoch:
 
 
 def case_vector(case: str, scheme: str, matmuls) -> dict:
-    epoch, s = epoch_of(case, matmuls), get(scheme)
-    for u in epoch.workload.matmuls:
-        s.check(u)
+    """A case's vector; its matmuls are checked against its scheme here unless an experimental package brings the scheme
+    (`schemes.EXPERIMENTAL`), whose own tests check them (Pearl-C4's: ``test_pouw_pearl_c4``)."""
+    epoch = epoch_of(case, matmuls)
+    if scheme not in EXPERIMENTAL:
+        s = get(scheme)
+        for u in epoch.workload.matmuls:
+            s.check(u)
     wb, ib = I.workload_bytes(epoch), I.identifier_bytes(scheme, epoch)
     return {
         "case": case, "scheme": scheme,

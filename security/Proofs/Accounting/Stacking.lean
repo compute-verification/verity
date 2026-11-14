@@ -2,8 +2,8 @@ module
 
 public import Mathlib
 public import Definitions.Accounting.Guarantees.Stacking
-public import Proofs.Accounting.RateAudit.DeployedSketchSum
-public import Proofs.Accounting.RateAudit.DeployedRelay
+public import Proofs.Poub.RateAudit.DeployedSketchSum
+public import Proofs.Poub.RateAudit.DeployedRelay
 public import Proofs.Accounting.Requirement
 public import Proofs.Accounting.Gates
 import Proofs.Pous.Prob

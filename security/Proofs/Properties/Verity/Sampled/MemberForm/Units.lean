@@ -95,7 +95,7 @@ theorem run_units {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.On
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
     {r : _root_.Spot.OneStageZk.Run} (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r)
     (hr : r.all = true) :
-    ∃ roots held U, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+    ∃ roots held U, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
       List.Forall₂ (ProvedAt c.record roots bs) (sts.zip held).toList U ∧
       ∀ x, x ∈ e.base.provedUnits ↔ ∃ us ∈ U, x ∈ us := by
@@ -125,7 +125,7 @@ theorem run_over {F : Array ByteArray} {W : ExecutionPhase} (hlaid : W.Laid) {ms
     {e : _root_.Spot.OneStageZk.Evidence} {sts : Array _root_.Spot.OneStageZk.StatementFiles}
     {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) (hr : r.all = true) :
-    ∃ roots held U, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+    ∃ roots held U, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
       List.Forall₂ (ProvedAt c.record roots bs) (sts.zip held).toList U ∧
       UnitsOver (fun vm : _root_.Spot.OneStageZk.Member => vm.first) (fun vm => vm.first + vm.count) vms
@@ -260,7 +260,7 @@ theorem member_session {F : Array ByteArray} {W : ExecutionPhase} (hlaid : W.Lai
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
     {r : _root_.Spot.OneStageZk.Run} (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r)
     (hr : r.all = true) {S : Finset (Fin W.nJ)} (hS : ∀ v, v ∈ S ↔ v.val ∈ e.base.provedUnits) :
-    ∃ roots held, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+    ∃ roots held, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧ sampledBefore W.ms S W.ms.length = sts.size ∧
       ∀ i m, W.ms[i]? = some m → (m.part S).Nonempty →
         ∃ vm st a s keys record spec tabs rest proofs units, MemberOn F vm m ∧

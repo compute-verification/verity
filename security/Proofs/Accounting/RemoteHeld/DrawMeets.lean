@@ -40,8 +40,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Bandwidth.Chip
-import Proofs.Accounting.RateAudit.Pooled
+import Proofs.Poub.Bandwidth.Chip
+import Proofs.Poub.RateAudit.Pooled
 import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Pouw.Prob
 

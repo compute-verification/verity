@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.HMu
+public import Definitions.Pouw.Guarantees.HMu
 
 /-!
 # (H-μ⁺) from the coins: Lemma B, the point mass of fresh noise, and Lemma B′ for persistent patterns: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.HMu` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Pouw.Guarantees.HMu` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 

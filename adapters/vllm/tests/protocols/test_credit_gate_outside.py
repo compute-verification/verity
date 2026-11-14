@@ -1,4 +1,4 @@
-"""`credit_gate.outside`: the ops inside it are not the trace's, and H1's hook records a call whose z the arm handed over
+"""`credit_gate_device.outside`: the ops inside it are not the trace's, and H1's hook records a call whose z the arm handed over
 outside the trace with the same verdicts, tables and records as inside it, while a call without z stays in it."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 else:
     TorchDispatchMode = importlib.import_module("torch.utils._python_dispatch").TorchDispatchMode
 OPS = importlib.import_module("verity_vllm.engine.int8_ops")
-CG = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.credit_gate")
+CG = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.credit_gate_device")
 PH = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1")
 PHK = importlib.import_module("verity_vllm.protocols.pouw.h1_hooks")
 SV = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1.served")
