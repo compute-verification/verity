@@ -28,6 +28,8 @@ META `program_sha512`), and `f` then projects a declaration to its program.
   boundary links with a certifier at an end, each with the key pinned for its certifier.
 * `Registration.RootIsRegistered`: a θ entry an answer names, root, rows and domain, is the one θ registers for its
   value.
+* `Registration.KeyIsRegistered`: the key an answer's check ran under is an auditor's device's registered key at the
+  head the answer's window's record fixes.
 
 Each is a predicate on a view (`…In`), and the tie is it at a head of the log's chain. None is read by a theorem yet, and no code checks any of them: each docstring says which check would make it a lemma.
 -/
@@ -127,6 +129,23 @@ def RootIn (t : Theta) (v : View) : Prop :=
 heads (`AtHead`). -/
 def RootIsRegistered (t : Theta) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
   AtHead D c log h (RootIn t)
+
+/-- **A key an answer names is an auditor's device's**: the key `k` an answer's check ran under is the registered key
+of an auditor's device in the view's Site (`Site.Loc.key`, a network certifier's or a memory challenger's,
+`Kind.auditor`; `NamesRegistered`, `f` the key). Keys are registered only for the auditor's devices, so this is the
+registration side of the account's lookup (`Site.holder`). -/
+def KeyIn (k : String) (v : View) : Prop :=
+  NamesRegistered {x | x ∈ v.site.locs ∧ x.kind.auditor = true} Site.Loc.key k
+
+/-- **An answer's key was registered at the head its window fixes**: `KeyIn` at the view of the prefix of the log `h`
+heads (`AtHead`), with `h` the head the record of the answer's window fixes. It is the composite's tie. The period's
+account (`Core.Account`) looks an answer's key up in the Site at the period's last head and doesn't check when the key
+was registered, so a key registered later in the period than the answer is still found there.
+
+No theorem reads it, and no code checks it. It becomes a lemma when the composite's check refuses an answer whose key
+the prefix its window's head names doesn't register, or when the account looks the key up at that prefix. -/
+def KeyIsRegistered (k : String) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
+  AtHead D c log h (KeyIn k)
 
 end Registration
 

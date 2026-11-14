@@ -10,7 +10,8 @@ No registration entry retires anything: a site entry adds sheets, locations and 
 and a declaration adds a day's circuit. So what the view of a prefix of the log holds, the view of every longer prefix
 holds too (`view_take_prefix`): its θ, its declarations and its Site's sheets, locations and links extend. A part of the
 registered hardware registered at a prefix is registered at every longer one (`parts_take_mono`), and each tie that
-holds at the view of a prefix holds at the view of every longer one (`declaredIn_take_mono`, `rootIn_take_mono`),
+holds at the view of a prefix holds at the view of every longer one (`declaredIn_take_mono`, `rootIn_take_mono`,
+`keyIn_take_mono`),
 since the set it reads only grows (`NamesRegistered.mono`). The certified links only grow too
 (`certifiedKeys_take_mono`), but `CertifiedIn` is an equality with them, so it holds at the prefix its head names and
 not at every longer one.
@@ -103,6 +104,13 @@ theorem rootIn_take_mono (t : Theta) (D : Digests) (c : Composite) (log : Regist
   refine hr.mono fun x hx => ?_
   simp only [Set.mem_ofPred_eq] at hx ⊢
   exact ⟨hθ.subset hx.1, hx.2⟩
+
+theorem keyIn_take_mono (k : String) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}
+    (h : n ≤ m) (hk : KeyIn k (view D c (log.take n))) : KeyIn k (view D c (log.take m)) := by
+  obtain ⟨-, -, -, hl, -⟩ := view_take_prefix D c log h
+  refine hk.mono fun x hx => ?_
+  simp only [Set.mem_ofPred_eq] at hx ⊢
+  exact ⟨hl.subset hx.1, hx.2⟩
 
 end Registration
 
