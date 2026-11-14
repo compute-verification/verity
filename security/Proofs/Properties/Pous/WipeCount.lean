@@ -96,7 +96,7 @@ theorem wipeCountTied_honest :
       (prof : StreamedWipe.Params × Int),
       Lms.keygen Lms.deployed seed = .ok k ∧
         WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
-          ⟨some (measuredSession (measuredDigest K c) k.publicKey sig)⟩ = .accept out prof ∧
+          ⟨some (measuredSession (measuredDigest K c) k.publicKey sig), none⟩ = .accept out prof ∧
         CountRan markedCount () (fun _ _ => False) markedDevice ∧ SentWithinCapacity markedDevice ∧
           MarksOnce markedDevice := by
   obtain ⟨seed, K, c, k, sig, out, prof, hk, h⟩ := wipeSigned_honest
