@@ -73,10 +73,10 @@ from verity_vllm.check.result import (
     worst,
 )
 from verity_vllm.check.verdict_names import GROUPS
-from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.property_record import citations
 
 __all__ = ["REQUIRED_CLASSES_DEFAULT", "commit_verdict", "from_record"]
 
@@ -365,7 +365,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         treatment = [(r, r.commit) for r in runs if r.arm != "control" and r.commit is not None]
     if min_openings is None:
         es = _d(execution.get("engine_settings"))
-        min_openings = min(64, _int(es.get("openings"), 64)) if es.get("openings") is not None else 64
+        min_openings = min(64, _int(es.get("openings"), "engine_settings.openings", "the Commit's execution configuration")) if es.get("openings") is not None else 64
     ctx: dict[str, Any] = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
                            "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
     required_classes = vd.get("required_classes")
@@ -399,14 +399,15 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         outcome = NOT_RUN
         notes.append("no instrumented run on the record (control arm only, or the Commit never ran)")
     rc_v = rc if rc is not None else (_d(summary).get("rc") if summary else None)
-    if rc_v is not None and _int(rc_v) != 0 and outcome == PASS:
+    exited = rc_v is not None and _int(rc_v, "rc", "commit_summary.json" if rc is None else "the caller of build") != 0
+    if exited and outcome == PASS:
         outcome = INSUFFICIENT
         notes.append(f"commit_delta exited rc={rc_v}: the stage did not close although every graded rule passed (crash / timeout / verify)")
     commit_pass = vd.get("commit_pass")
     if commit_pass is None and treatment:
         passes = [c.commit_pass for _, c in treatment]
         commit_pass = all(passes) if None not in passes else None
-    if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not (rc_v is not None and _int(rc_v) != 0):
+    if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not exited:
         notes.append(f"RECONSTRUCTION MISMATCH: recorded commit_pass={commit_pass} but the rule-by-rule outcome is {outcome}; the recorded decision stands")
         outcome = PASS if commit_pass else (FAIL if outcome == PASS else outcome)
     if mv_rule is not None and mv_rule.outcome != NOT_RUN and treatment:
@@ -472,7 +473,8 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         for path in sorted(glob.glob(str(d / "build_*" / "result.json"))):
             w = os.path.basename(os.path.dirname(path))
             try:
-                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.loads(Path(path).read_text())
+                with open(path) as f:
+                    results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(f)
             except (OSError, ValueError) as e:
                 unreadable.append(f"{os.path.relpath(path, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,

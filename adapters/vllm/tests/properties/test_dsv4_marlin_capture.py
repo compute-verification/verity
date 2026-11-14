@@ -22,7 +22,7 @@ from verity.definitions.numerics import marlin_moe_rows as MR
 
 from tests import fake_vllm
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 E, K, N, SMS = 8, 256, 128, 3
 #: the config the stand-in kernel runs: TK 64 (two warp rows), TN 128, 4 blocks per SM, so GRID 12 splits K
@@ -428,7 +428,7 @@ def test_a_case_s_records_read_its_two_runs(tmp_path, M: int) -> None:
         X.case_launches(tmp_path, "decode2", M, "uniform", _tensor(ids), launches[:3], W, 132, TYPES)
 
 
-def test_two_align_draws_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> None:
+def test_two_align_runs_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> None:
     """decode460 and hot1024 were NO-GO on the v2 whole-output comparison at zero word mismatches
     against the twin, because `moe_align_block_size` places a multi-block expert's pairs across its blocks in atomic arrival order
     and a pair's words read its block's k-slice schedule (the capture's module docstring, Replay determinism).  Two runs whose

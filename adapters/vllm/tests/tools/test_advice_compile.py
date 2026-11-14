@@ -14,6 +14,8 @@ from typing import Any
 import pytest
 
 from tests.pipeline.test_window_advice import W1, W2
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+from verity_vllm.engine.served_seed import DEFAULT_SEED, derived
 from verity_vllm.pipeline import window_advice as WA
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_compile.py"
@@ -67,13 +69,14 @@ def _served(out: Path, **kw: Any) -> tuple[Path, dict, WA.Advice]:
 @pytest.mark.usefixtures("code_versions_stood_in")
 def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_windows_coin_to_the_seed_it_committed(tmp_path):
     """Serving derives the seed from the window's seed coin and the body's ``user``, the window's line names the coin, and
-    `compile_steps` given that coin as the window's seed salt (`window_coin`) and the certified body derives the seed the window
+    the compile given that coin as the window's seed salt (`window_coin`) and the certified body derives the seed the window
     committed. Another coin gives another seed for the same id, the rest of the body none; a window whose line names no coin (a
-    server that filled in `DEFAULT_SEED`) is refused by name, and a seed of the engine's own is not the one the compile derives."""
+    server that filled in `DEFAULT_SEED`) is refused by name, and a seed of the engine's own is not the one the compile derives.
+    The compile is read at its plan (`plan_steps`: `compile_steps` up to building Programs), which settles each request's seed
+    and refuses a request that has none; the test below builds the Program."""
     from tests.program.predict.test_steps import _registered
-    from verity_vllm.engine.served_seed import derived
     from verity_vllm.program.predict.build import Unexpressible
-    from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.predict.steps import plan_steps
 
     (tmp_path / "ok").mkdir()
     run, rec, advice = _served(tmp_path / "ok")
@@ -81,27 +84,41 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
     coin = AC.window_coin(run, 0)
     assert "seed" not in bodies["q0"] and coin["source"] == "in-process" and rec["ingress"]["seed_rule"] == "derived"
     reg, key = _registered(), bytes.fromhex(coin["coin"])
-    assert compile_steps(reg, advice, bodies, salt=key).requests[0].seed == rec["committed_seeds"][0] == derived(key, "q0")
-    other = compile_steps(reg, advice, bodies, salt=bytes(64) + b"\x01").requests[0].seed
+    assert plan_steps(reg, advice, bodies, salt=key).requests[0].seed == rec["committed_seeds"][0] == derived(key, "q0")
+    other = plan_steps(reg, advice, bodies, salt=bytes(64) + b"\x01").requests[0].seed
     assert other == derived(bytes(64) + b"\x01", "q0") != rec["committed_seeds"][0]
     body = {**bodies["q0"], "temperature": 0.5, "max_tokens": 3, "prompt": [9, 8, 7, 6, 5]}
-    assert compile_steps(reg, advice, {"q0": body}, salt=key).requests[0].seed == rec["committed_seeds"][0]
+    assert plan_steps(reg, advice, {"q0": body}, salt=key).requests[0].seed == rec["committed_seeds"][0]
     lines = [json.loads(x) for x in (run / "windows.jsonl").read_text().splitlines()]
     (run / "windows.jsonl").write_text("".join(json.dumps({k: v for k, v in w.items() if k != "seed_coin"}) + "\n" for w in lines))
     assert AC.window_coin(run, 0) is None
     with pytest.raises(Unexpressible, match=r"request 0 \('q0'\): stochastic with no seed in its certified body, and the compile has "
                                             r"no window seed salt to derive one from: a seed serving fills in "
                                             r"\(`served_seed.DEFAULT_SEED`\)"):
-        compile_steps(reg, advice, bodies, salt=None)
+        plan_steps(reg, advice, bodies, salt=None)
     (tmp_path / "own").mkdir()
     run, rec, advice = _served(tmp_path / "own", seed_override=7)
     key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
     assert rec["committed_seeds"] == [7] and not rec["check"]["passed"]
-    assert compile_steps(reg, advice, AC.served_inputs(run, 0)[2], salt=key).requests[0].seed == derived(key, "q0") != 7
+    assert plan_steps(reg, advice, AC.served_inputs(run, 0)[2], salt=key).requests[0].seed == derived(key, "q0") != 7
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("code_versions_stood_in")
+def test_the_session_compiled_under_the_windows_coin_carries_the_seed_the_window_committed(tmp_path):
+    """`compile_steps` on the same inputs builds the request's Program, seconds in a process that has built none, and hands
+    on its plan's seed: the Program is of the window's one request, whose `seed` Input takes the seed the window committed."""
+    from tests.program.predict.test_steps import _registered
+    from verity_vllm.program.predict.steps import compile_steps
+
+    run, rec, advice = _served(tmp_path)
+    key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
+    compiled = compile_steps(_registered(), advice, AC.served_inputs(run, 0)[2], salt=key)
+    (unit,) = compiled.requests
+    assert unit.seed == rec["committed_seeds"][0] == derived(key, "q0") and set(compiled.programs) == {unit.digest}
 
 
 def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_another_is_refused():
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
     assert AC.registered_seed({"default_seed": DEFAULT_SEED}) == DEFAULT_SEED
     for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
         why = f"filled in default seed {seed!r}, and the registered one is engine.served_seed."
@@ -127,13 +144,19 @@ def _launched(**engine_kwargs: Any) -> dict:
             "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048, **engine_kwargs}}}
 
 
+def _kv_refused(cache: str, model_type: str | None, cc: tuple[int, ...] | None) -> str:
+    return (f"engine kv_cache_dtype={cache!r} for model_type {model_type!r} on cc {cc!r}: a request Program models the KV cache of a "
+            "launch at kv_cache_dtype auto or bfloat16, and at kv_cache_dtype 'fp8' only glm_moe_dsa's on cc 9.0 (its layout "
+            "fp8_ds_mla), so the compile of this launch would be Programs it did not run. Serve with kv_cache_dtype at vLLM's "
+            "default to compile it")
+
+
 @pytest.mark.parametrize("cache", ["fp8", "fp8_e4m3", "fp8_ds_mla"])
 def test_a_launch_that_names_another_kv_cache_format_is_refused_by_its_setting(cache):
-    """φ carries no KV cache format, so such a launch would compile to the Programs of a launch at the default, which it did
-    not run: the registration refuses it by the setting. The default, by either name or left out, compiles as before."""
-    why = (f"engine kv_cache_dtype={cache!r}: a request Program models the KV cache of a launch at kv_cache_dtype auto or bfloat16 "
-           "and no other format (an FP8 KV cache is not modelled), so the compile of this launch would be Programs it did not run. "
-           "Serve with kv_cache_dtype at vLLM's default to compile it")
+    """φ states an FP8 cache only as the layout of the one model and target it is stated for, so a launch at another format,
+    or at that one with no model and target to state it for, would compile to the Programs of a launch at the default, which
+    it did not run: the registration refuses it by the setting. The default, by either name or left out, compiles as before."""
+    why = _kv_refused(cache, None, None)
     with pytest.raises(ValueError, match=re.escape(why)):
         AC.engine_of(_launched(kv_cache_dtype=cache), 0)
     with pytest.raises(ValueError, match=re.escape(why)):
@@ -164,7 +187,6 @@ def test_a_launch_that_decodes_speculatively_is_refused_by_its_setting(setting):
 def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set():
     """A run whose engine record has the environment its build set states the DSA top-k's, set or not, and nothing else of it:
     `predict.dsa` compiles a row past INDEX_TOPK only under the canonical row, and refuses it for an engine built without."""
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict import build
 
     kw = {"tensor_parallel_size": 8, "max_model_len": 131072}
@@ -189,7 +211,6 @@ H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, 
 
 
 def test_an_fp8_checkpoint_reaches_predict_dsa_as_float8_e4m3fn_and_a_config_stating_none_is_refused_as_before():
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict import build, dsa
     from verity_vllm.program.predict.build import Unexpressible
 
@@ -205,6 +226,52 @@ def test_an_fp8_checkpoint_reaches_predict_dsa_as_float8_e4m3fn_and_a_config_sta
     with pytest.raises(Unexpressible, match=re.escape("vocabulary cannot express: checkpoint dtype None (float8_e4m3fn only)")):
         build.decoder(bare)
     assert AC.checkpoint_dtype({"quantization_config": {"quant_method": "fp8", "fmt": "e5m2"}}) is None
+
+
+def _glm53_launch(target: dict | None = None, **engine_kwargs: Any) -> dict:
+    return {"model": GLM53[0], "revision": GLM53[1], "target": H200 if target is None else target, "execution": "eager",
+            "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048, **engine_kwargs}}}
+
+
+def test_an_fp8_launch_of_glm53_on_cc_9_0_states_the_fp8_ds_mla_layout_and_no_decoder_models_it_yet():
+    """GLM-5.3 at ``--kv-cache-dtype fp8`` on cc 9.0, the cache vLLM's FlashMLA sparse backend stores as ``fp8_ds_mla``: φ's
+    engine states that layout, so its digest is not the default launch's, which is as before. Every other format, model or
+    capability is refused by the setting, and so is the fp8 launch beside another attention backend or with layers skipped.
+    No decoder models the layout yet: `build.decoder` refuses that φ by the engine arg, so no Program of a launch at the
+    default stands in for it."""
+    from verity_vllm.program.predict import build, dsa
+    from verity_vllm.program.predict.build import Unexpressible
+
+    hf = json.loads(pinned_hf_config(*GLM53).read_text())
+    fp8, bf16 = AC.phi_of(_glm53_launch(kv_cache_dtype="fp8"), hf, 3), AC.phi_of(_glm53_launch(), hf, 3)
+    assert fp8.engine == {"max_model_len": 2048, "kv_cache_dtype": "fp8_ds_mla"} and bf16.engine == {"max_model_len": 2048}
+    assert AC.engine_of(_glm53_launch(kv_cache_dtype="fp8"), 3, hf) == ({"world": 8, "rank": 3}, fp8.engine)
+    assert fp8.digest() != bf16.digest()
+    assert {AC.phi_of(_glm53_launch(kv_cache_dtype=c), hf, 3).digest() for c in (None, "auto", "bfloat16")} == {bf16.digest()}
+    assert AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", attention_backend="FLASHMLA_SPARSE", kv_cache_dtype_skip_layers=[]),
+                     hf, 3).digest() == fp8.digest()
+    for cache in ("fp8_e4m3", "fp8_e5m2", "fp8_ds_mla"):
+        with pytest.raises(ValueError, match=re.escape(_kv_refused(cache, "glm_moe_dsa", (9, 0)))):
+            AC.phi_of(_glm53_launch(kv_cache_dtype=cache), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", "glm_moe_dsa", (10, 0)))):
+        AC.phi_of(_glm53_launch({**H200, "compute_capability": [10, 0]}, kv_cache_dtype="fp8"), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", "glm_moe_dsa", None))):
+        AC.phi_of(_glm53_launch({k: v for k, v in H200.items() if k != "compute_capability"}, kv_cache_dtype="fp8"), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", "llama", (9, 0)))):
+        AC.phi_of(_glm53_launch(kv_cache_dtype="fp8"), {**hf, "model_type": "llama"}, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", None, (9, 0)))):
+        AC.engine_of(_glm53_launch(kv_cache_dtype="fp8"), 3)
+    with pytest.raises(ValueError, match=re.escape(
+            "engine attention_backend='FLASH_ATTN_MLA_SPARSE' at kv_cache_dtype='fp8': a request Program models that cache in "
+            "FLASHMLA_SPARSE's layout fp8_ds_mla, which another backend does not store it in. Leave the backend to vLLM to compile it")):
+        AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", attention_backend="FLASH_ATTN_MLA_SPARSE"), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(
+            "engine kv_cache_dtype_skip_layers=['0'] at kv_cache_dtype='fp8': a request Program models every layer's cache in the "
+            "layout fp8_ds_mla, and those layers keep the default's. Serve with no layer skipped to compile it")):
+        AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", kv_cache_dtype_skip_layers=["0"]), hf, 3)
+    assert isinstance(build.decoder(bf16), dsa.Net)
+    with pytest.raises(Unexpressible, match=re.escape("vocabulary cannot express: engine arg kv_cache_dtype='fp8_ds_mla' (not modelled)")):
+        build.decoder(fp8)
 
 
 def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):

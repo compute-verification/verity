@@ -364,6 +364,36 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
     assert HT.roots_of(leaf, hist) == {n: (hs[n].root, hs[n].domain.domain_id) for n in names}
 
 
+def test_the_params_record_a_read_only_where_the_verifiers_check_accepts_its_circuit_file(tmp_path, monkeypatch):
+    """`read_record`, what the params record of a template beside its circuit file's SHA-512: a table read's rows and
+    words a row where ``flock-read-tmpl check V H`` accepts the file, asked once; nothing where it refuses it, and
+    nothing for a Definition that is no read, which it is never asked about. The file is the one of the SHA-512 the
+    params name, else an error. `service.template_reads` reads the record back as the read's rows."""
+    from verity_flock import read_tmpl
+
+    circuit, asked = tmp_path / "circuit.txt", tmp_path / "args"
+    circuit.write_bytes(b"a circuit file")
+    sha = hashlib.sha512(b"a circuit file").hexdigest()
+
+    def stand_in(body: str) -> None:
+        exe = tmp_path / "flock-read-tmpl"
+        exe.write_text(f"#!/bin/sh\necho \"$@\" >> {asked}\n{body}\n")
+        exe.chmod(0o755)
+        monkeypatch.setattr(read_tmpl, "EXE", str(exe))
+
+    stand_in("echo 'ok EmbeddingRead_v1(V=8,H=2)'")
+    assert TS.read_record(E.read(8, 2), circuit, sha) == {"V": 8, "H": 2}
+    assert asked.read_text() == f"check 8 2 {circuit}\n"
+    assert TS.read_record(PAIR, circuit, sha) is None and asked.read_text() == f"check 8 2 {circuit}\n"
+    entry = {"template": E.read(8, 2).id, "circuit": sha, "header": {}, "registered": None}
+    assert S.template_reads({"templates": [{**entry, "read": TS.read_record(E.read(8, 2), circuit, sha)}]}) == (
+        (E.read(8, 2).id, 8),)
+    with pytest.raises(ValueError, match="is not the circuit file of SHA-512"):
+        TS.read_record(E.read(8, 2), circuit, "00" * 64)
+    stand_in("echo 'flock-read-tmpl: it does not parse as a templated statement' >&2; exit 1")
+    assert TS.read_record(E.read(8, 2), circuit, sha) is None
+
+
 @pytest.mark.slow
 def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name():
     """Round 2's read check (`second_stage._read_ok`) on a table read's ``root`` and ``domain`` ports, from a record the
@@ -856,8 +886,8 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     directory that holds no challenger, `second` is refused before it reads the class."""
     c = _stop_class(False)
     monkeypatch.setattr(AC, "start", _start(OneSession("first")))
-    (stage1,) = TS._first_all(_args(tmp_path), [json.loads(json.dumps(c.public()))], PAIR, RULE, None, STOP)
-    assert len(stage1["units"]) == Q and sorted(stage1["evidence"]) == ["ledger", "main", "pins", "segment", "session"]
+    (first,) = TS._first_all(_args(tmp_path), [json.loads(json.dumps(c.public()))], PAIR, RULE, None, STOP)
+    assert len(first["units"]) == Q and sorted(first["evidence"]) == ["ledger", "main", "pins", "segment", "session"]
     monkeypatch.setattr(TS, "template_fn", lambda t: PAIR)
     monkeypatch.setattr(BR, "reopen", lambda *a, **k: c)
     opened: list[dict] = []
@@ -865,7 +895,7 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     def second(name: str, handoff: dict, key: Ch.ChallengerKey | None = None, **more: object) -> dict:
         out = tmp_path / name
         out.mkdir()
-        (out / "stage1.json").write_text(json.dumps(handoff))
+        (out / "handoff.json").write_text(json.dumps(handoff))
         real = _start(OneSession(name), key)
 
         def start(*a: object, **k: object):
@@ -873,7 +903,7 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
             opened.append({"name": name, "turns": turns})
             return manager, turns, finisher
         monkeypatch.setattr(AC, "start", start)
-        a = _args(out, stage1=str(out / "stage1.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
+        a = _args(out, stage1=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
                   rids=None, proofs=None, unlinked=False, stop=json.dumps(STOP.to_json()), **more)
         assert TS._second(a) == 1
         return json.loads((out / "summary.json").read_text())
@@ -881,23 +911,23 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     def replay(*a: object, **k: object):
         raise ValueError("the replay is reached")
     monkeypatch.setattr(TS, "replayed", replay)
-    assert second("same", stage1)["refused"] == "ValueError: the replay is reached"
+    assert second("same", first)["refused"] == "ValueError: the replay is reached"
     assert "error" not in opened[-1]["turns"].evidence()
 
     monkeypatch.setattr(TS, "replayed", lambda *a, **k: pytest.fail("a refused hand-off reached the replay"))
     other = replace(FC.pinned_key(), public=bytes(x ^ 1 for x in FC.pinned_key().public))
-    named = {**stage1, "evidence": {**stage1["evidence"], "key": FC.pinned_key().to_json()}}
-    for name, handoff, key, why in (("other-key", stage1, other, "the first stage's coins: "),
+    named = {**first, "evidence": {**first["evidence"], "key": FC.pinned_key().to_json()}}
+    for name, handoff, key, why in (("other-key", first, other, "the first stage's coins: "),
                                     ("names-its-key", named, None, f"the first stage's coins: {CC.DRAW_FORM}"),
-                                    ("names-another", {**stage1, "evidence": {**stage1["evidence"], "key": other.to_json()}},
+                                    ("names-another", {**first, "evidence": {**first["evidence"], "key": other.to_json()}},
                                      None, CC.DRAW_FORM),
-                                    ("no-evidence", {**stage1, "evidence": None}, None, CC.DRAW_FORM)):
+                                    ("no-evidence", {**first, "evidence": None}, None, CC.DRAW_FORM)):
         got = second(name, handoff, key)
         assert got["refused"].startswith(f"{TS.FIRST_COINS}: ") and why in got["refused"] and got["held"] is False, name
         assert "was not opened" in opened[-1]["turns"].evidence()["error"], name
 
     sessions = len(opened)
-    assert TS.NO_HOST in second("no-host", stage1, challenger="local")["refused"]
+    assert TS.NO_HOST in second("no-host", first, challenger="local")["refused"]
     (tmp_path / "empty").mkdir()
-    got = second("empty-host", stage1, challenger="local", challenger_host=str(tmp_path / "empty"))
+    got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
     assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"
