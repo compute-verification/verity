@@ -24,7 +24,7 @@ ENV = "REC_CIRCUIT_CACHE"
 @cache
 def code_digest() -> str:
     """SHA-256 over every source a V* circuit text is built from: this package's modules, `verity.circuits` and the
-    partition and program code of sampled proofs. Any change to them is a new key, so no text outlives the code that wrote it."""
+    partition and program code of SPOT. Any change to them is a new key, so no text outlives the code that wrote it."""
     import verity.circuits as C
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 

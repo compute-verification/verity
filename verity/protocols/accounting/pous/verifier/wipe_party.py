@@ -19,10 +19,11 @@ interval a network certifier counts the session's egress over.
 [--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
-report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `side_of(period, node, device)` is
-where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the prover's: it starts the
-side, connects to it, answers from `prover` (`answer`) and adds the connection's two addresses as it saw them. The
-wipe's two parties as the deployment layer runs them are `wipe_parties`.
+report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `command(device, extra)` is the argv
+that starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts
+it, and `session(side, request, prover)` is the prover's: one session with the side, answered from `prover` (`answer`),
+with the connection's two addresses as it saw them. The wipe's two parties as the deployment layer runs them speak
+`wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations
@@ -37,9 +38,8 @@ import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Protocol, TypeVar
 
-from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 from . import period, wipe_stream
@@ -182,17 +182,23 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
                          bytes.fromhex(j["signature"]))
 
 
+T = TypeVar("T")
+
+
+class Side(Protocol):
+    """The wipe challenger's side as what starts a run hands it over (the runtime's `Side` is one): the machine it runs
+    on, and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the side's
+    report back with what `drive` returned."""
+
+    host: str
+
+    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
+
+
 def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
     """The argv that starts the challenger's side as a process on this machine, its key and session log in `device`,
     `extra` more of `main`'s arguments (`--streamer build`)."""
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0", *extra)
-
-
-def side_of(period: Mapping[str, Any], node: str, device: str | Path, extra: Sequence[str] = ()) -> Side:
-    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-    node (with `extra`), else `challenger.wipe`'s `command` and `address`, which infra writes once the host serves the
-    challenger's side."""
-    return Side.of(period, node, "wipe", command(device, extra), "the wipe")
 
 
 def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
@@ -298,7 +304,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "answer", "command", "commitment_of", "link",
-           "main", "params_of", "placement", "report", "request_of", "serve", "session", "side_of", "signed_of", "utc"]
+           "main", "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())
