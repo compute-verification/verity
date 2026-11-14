@@ -210,7 +210,7 @@ class Detection:
 
     def tail(self) -> float:
         """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`: the chance some identity's faulty blocks escape past `K`
-        (`DampenerRemotePeriod`'s escape term); 0 where every unit is proved."""
+        (`SlowdownRemoteMonitoringPeriod`'s escape term); 0 where every unit is proved."""
         if not self.sampled:
             return 0.0
         k = self.luck * math.log(1 / self.p_evade) / self.q()
@@ -494,13 +494,13 @@ class Remote:
     pouw: Pouw
     detection: Detection
     #: a window, one round of the deployment's live coins, in seconds, and its sampled proofs' knowledge error
-    #: `ks_t = ε_ks + δ_link`: `DampenerRemotePeriod`'s `δ` sums it over the period's windows
+    #: `ks_t = ε_ks + δ_link`: `SlowdownRemoteMonitoringPeriod`'s `δ` sums it over the period's windows
     window_s: float = math.nan
     window_ks: float = 0.0
 
-    #: the inference cut: the remote composition, `InferenceOnly.Guarantees.DampenerRemote`, term for term, its envelopes'
+    #: the inference cut: the remote composition, `InferenceOnly.Guarantees.SlowdownRemote`, term for term, its envelopes'
     #: premises, and the registration
-    CITES = ("InferenceOnly.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
+    CITES = ("InferenceOnly.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
     #: the server-block bound each of its cuts is an argument of: the inference cap alone
     BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
@@ -510,11 +510,11 @@ class Remote:
         return {"pouw": self.pouw, "detection": self.detection}
 
     def slack(self, ctx: Context) -> dict[str, float]:
-        """Shares of a location's capacity no inference block constrains, by route (`DampenerRemote`'s terms)."""
+        """Shares of a location's capacity no inference block constrains, by route (`SlowdownRemote`'s terms)."""
         return self.pouw.slack(ctx.location) | self.detection.slack(ctx)
 
     def uncertified(self, ctx: Context) -> float:
-        """The share of capacity `DampenerRemote` leaves uncertified: `r̂ + ε_W W_cert/C + ε' + JΔ/H + θ`, and `χ`."""
+        """The share of capacity `SlowdownRemote` leaves uncertified: `r̂ + ε_W W_cert/C + ε' + JΔ/H + θ`, and `χ`."""
         return math.fsum(self.slack(ctx).values())
 
     def blocks(self, ctx: Context, gates: float) -> Blocks:
@@ -539,7 +539,7 @@ class Remote:
         return math.ceil(ctx.period.seconds / self.window_s)
 
     def knowledge(self, ctx: Context) -> dict[str, tuple[float, float]]:
-        """`Σ_t ks_t`, the windows' knowledge errors, in `δ`'s cryptography (`DampenerRemotePeriod`)."""
+        """`Σ_t ks_t`, the windows' knowledge errors, in `δ`'s cryptography (`SlowdownRemoteMonitoringPeriod`)."""
         return {"windows": (0.0, self.windows(ctx) * self.window_ks)}
 
     def delta(self, ctx: Context) -> Delta:

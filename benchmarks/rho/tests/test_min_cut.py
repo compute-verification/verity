@@ -649,7 +649,7 @@ def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cov
 @pytest.mark.parametrize("fleet", ["reference-h200", "world-h200"])
 @pytest.mark.parametrize(("name", "sampled"), [("reference-remote-h200", False), ("reference-remote-h200-sampled", True)])
 def test_a_remote_period_row_cites_dampener_remote_period_with_its_tail_and_windows(name, sampled, fleet):
-    """A remote row's pool and routes are `DampenerRemotePeriod`'s terms: each of the five premises the lock's record
+    """A remote row's pool and routes are `SlowdownRemoteMonitoringPeriod`'s terms: each of the five premises the lock's record
     of it takes, by section; the escape's tail within `p_evade` (0 where every unit is proved); and the windows'
     knowledge errors, `⌈period / window_s⌉ window_ks`, the term the row's `δ_crypto` holds."""
     import periods
@@ -664,7 +664,7 @@ def test_a_remote_period_row_cites_dampener_remote_period_with_its_tail_and_wind
 
 
 def test_a_remote_period_row_refuses_a_premise_neither_its_list_nor_the_per_block_record_names(monkeypatch):
-    """The period statement's premises are `PERIOD_PREMISES` and the ones it shares with `DampenerRemote`'s record: one
+    """The period statement's premises are `PERIOD_PREMISES` and the ones it shares with `SlowdownRemote`'s record: one
     the lock's record adds beyond both is refused, naming the fix, and the row counts the shared ones from the
     records."""
     import periods
