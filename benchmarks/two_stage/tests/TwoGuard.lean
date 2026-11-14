@@ -60,7 +60,10 @@ def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArr
   match decode x, jsonMsg m₁, secondDrawAt h s₀ s₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOfAt h st rec draw s₀
-    Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
+    Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
+      (Spot.SecondStage.inputsFailure own).isNone &&
+      Spot.SecondStage.designOk (partsAt h own.sample.size) own &&
+      ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
 theorem readsOk_eq (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
@@ -88,12 +91,24 @@ theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ : FlockDeploy.C
   unfold stmtOk runOkAt parse
   cases decode x <;> cases stmtsOf m₂ <;> simp [regOk, readsOk_eq, Bool.and_assoc]
 
+/-- **The registered wiring's clauses that read the registration's description alone**: every member's circuit is in
+the scope Flock's hidden-output proof covers (`membersScoped`), and of `wiringOk`: each name is one template's, each
+wire's writer's part is before its reader's, each wire's reader port is like its writer's output port, each reference
+read at a port no link or wire names reads a port of the interior registration, and the interior registration
+registers no value. Not the clauses that pass over every source bit or written bit of the members' programs
+(`sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired`, `writtenRead`). -/
+def wiringSizedOk (h : Held) : Bool :=
+  membersScoped h && namesOnce h && writersFirst h && wiresAlike h && refReadsOwn h &&
+    h.interiorNames.values.isEmpty
+
 /-- **`two`'s conjuncts on the members' files**, at the members `ms` (`h.ms`): the replay layout and the first stage's
-design exist, the layout fits the members' files (`filesOk`), and each template's reference statement reads as a
-member's (`templateOk`). Not `scopeOk`, whose program is the members' circuits unrolled (`bitsProgs`). -/
+design exist, the layout fits the members' files (`filesOk`), each template's reference statement reads as a
+member's (`templateOk`), and the registered wiring passes the clauses that read the description alone
+(`wiringSizedOk`). Not `scopeOk`, whose program is the members' circuits unrolled (`bitsProgs`), and not the wiring's
+clauses over every bit. -/
 def twoFilesOk (h : Held) (ms : Spot.Bits.Members) : Bool :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
-  | some l, some _ => filesOk h.reg ms l h.k && (List.range ms.length).all (templateOk h)
+  | some l, some _ => filesOk h.reg ms l h.k && (List.range ms.length).all (templateOk h) && wiringSizedOk h
   | _, _ => false
 
 /-! ## The auditor's copies -/
@@ -170,7 +185,10 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
     let h₀ : Held :=
       { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,
         xS₀_ok := refAt_ok refs hz,
-        refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode, more := 0,
+        refReads := fun t => reads.getD t .null,
+        refHeaders := fun t =>
+          ((FlockDeploy.decode (refAt refs t)).bind fun w₀ => headerOf w₀.publicFile).getD .null,
+        frame := SamplingDeploy.toyCode, more := 0,
         reg := { first := { verifier, rule, closure := none }, ns := ns.toArray, ks := ks.toArray,
                  blockOf := fun _ _ _ => 0, always := fun _ => false } }
     let ms := h₀.ms
@@ -262,6 +280,10 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
           boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
           rows := h.rows, refs, refReads }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
+      let _ ← timed s!"t{t} namesOk" (fun _ => Spot.SecondStage.namesOk own) b
+      let _ ← timed s!"t{t} inputsFailure" (fun _ => Spot.SecondStage.inputsFailure own) (·.getD "none")
+      let _ ← timed s!"t{t} designOk" (fun _ =>
+        Spot.SecondStage.designOk (partsAt h own.sample.size) own) b
       let (S?, _) ← timed s!"t{t} stmtJsonOf" (fun _ => stmtJsonOf h t w) (fun S => b S.isSome)
       if let some S := S? then
         let _ ← timed s!"t{t} codes, as codesOk reads them" (fun _ =>
@@ -278,6 +300,13 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
   | _, _ => say "layout or replayDesign: none"
   for t in List.range ms.length do
     let _ ← timed s!"t{t} templateOk" (fun _ => templateOk h t) b
+  for t in List.range ms.length do
+    let _ ← timed s!"t{t} scopeOkH" (fun _ => _root_.Flock.ProvedScope.scopeOkH (memberCircuit h t)) b
+  let _ ← timed "namesOnce" (fun _ => namesOnce h) b
+  let _ ← timed "writersFirst" (fun _ => writersFirst h) b
+  let _ ← timed "wiresAlike" (fun _ => wiresAlike h) b
+  let _ ← timed "refReadsOwn" (fun _ => refReadsOwn h) b
+  let _ ← timed "the interior registration registers no value" (fun _ => h.interiorNames.values.isEmpty) b
 
 def main (args : List String) : IO UInt32 := do
   let (dir :: mode :: rest) := args
@@ -328,7 +357,8 @@ def main (args : List String) : IO UInt32 := do
   let res := Json.mkObj [("held", Lean.toJson true), ("runOk", Lean.toJson run), ("runOk_ms", Lean.toJson runMs),
     ("recordsOk", Lean.toJson records), ("runOk_at_own_names", rest),
     ("twoFilesOk", Lean.toJson files), ("twoFilesOk_ms", Lean.toJson filesMs), ("members", Json.arr sizes.toArray),
-    ("not_evaluated", Lean.toJson "partition's membersPart and two's scopeOk, over bitsProgs")]
+    ("not_evaluated", Lean.toJson "partition's membersPart and two's scopeOk, over bitsProgs; the wiring's clauses \
+      over every source bit and written bit")]
   IO.println s!"GUARD-RESULT {res.compress}"
   return if run && files then 0 else 1
 

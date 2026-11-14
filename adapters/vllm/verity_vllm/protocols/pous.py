@@ -135,6 +135,7 @@ def _package(name: str, directory: Path) -> None:
     init = directory / "__init__.py"
     if init.exists():
         spec = importlib.util.spec_from_file_location(name, init, submodule_search_locations=[str(directory)])
+        assert spec is not None, f"{init} ends in .py, which importlib has a loader for"
     else:
         spec = importlib.machinery.ModuleSpec(name, None, is_package=True)
         spec.submodule_search_locations = [str(directory)]
@@ -476,11 +477,13 @@ class PousOption(Option):
         (out / "pous.case.json").write_text(json.dumps(got.case, sort_keys=True))
         if fresh:
             (out / "pous-setup.case.json").write_text(json.dumps(got.setup_case, sort_keys=True))
-        q = self.store.params
+        store = self.store
+        assert store is not None, "the audit above refuses an option that holds no store"
+        q = store.params
         (out / "pous.json").write_text(json.dumps({
             "answer": answer, "blocks": q.blocks, "eps": str(got.eps), "lean": lean, "placement": where,
             "rounds_answered": self.answered - answered, "s_bits": got.public("s_bits"), "seconds": seconds,
-            "setup": {"fresh": fresh, "encode": self.store.encode if fresh else None}, "w_bytes": q.w_bytes},
+            "setup": {"fresh": fresh, "encode": store.encode if fresh else None}, "w_bytes": q.w_bytes},
             sort_keys=True, indent=1))
         return answer
 

@@ -74,8 +74,8 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 DEPENDENCIES = {"numpy"}
 #: Where ``verity``'s Python imports none of them either, only the standard library and ``verity``: every verifier's and
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
-#: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and a
-#: protocol's manifest with the monitoring periods.  Within them, what may use numpy.
+#: the hardware's cards, the Site's types, SPOT's planning beside its verifier, and a protocol's manifest with the
+#: monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/proofs/spot",
                "verity/protocol.py")
@@ -159,8 +159,10 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
-    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
+    "adapters/vllm/tests/engine/fattn_oracle.py": "circuits (vllm): the int8 attention's oracle "
+                                                  "(`benchmarks/pouw/edited_gemm/fattn_ref.py`)",
+    "adapters/vllm/tests/engine/int8_kscale_gpu.py": "circuits (vllm): the K scales' calibration windows "
+                                                     "(`benchmarks/ppl/methodology.py`, `windows.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "

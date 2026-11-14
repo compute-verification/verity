@@ -49,8 +49,8 @@ def _lowering(template: str, input_set):
 
 class KeyClass:
     """A key-count class (``flock-ir-class/v1``) of a template whose module defines ``class_manifest`` (attention): the input
-    set's instances span T values of one class; each sub-batch is one T, proved with that T's netlist under the class pin (the
-    manifest's sha256; ``flock-ir-frame --class``)."""
+    set's instances span T values of one class; each sub-batch is one T, proved with that T's circuit description under the class
+    pin (the manifest's sha256; ``flock-ir-frame --class``)."""
 
     def __init__(self, mod, input_set, out: Path):
         self.mod, self.sub, self.out = mod, input_set.subcircuit, out

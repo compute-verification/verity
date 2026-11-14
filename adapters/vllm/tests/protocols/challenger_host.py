@@ -440,7 +440,7 @@ class Host:
         ours, theirs = socket.socketpair()
         self.reason: str | None = None
         self._ended = False
-        self._thread = threading.Thread(target=self._serve, args=(ours, session_))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session_), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
 

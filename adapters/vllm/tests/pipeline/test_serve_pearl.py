@@ -25,9 +25,18 @@ import pytest
 import torch
 from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, weights_root
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    Workload,
+    activation_binding,
+    commit_rows,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+
+from tests.pipeline import predicted
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_openai as so
@@ -40,9 +49,6 @@ from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
-
-from tests.pipeline import predicted
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
 
 CLASS, PEARL = WindowClass(1, 27, 2), PearlTables(SPL.SCHEME, words=64)
 #: a round's calls: the layer's q/k/v, o, gate/up and down

@@ -16,8 +16,9 @@
   keeps what it prints. There is no console script.
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
-- **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, `verity.hardware` (`registration`),
-  `verity.protocols.proofs.spot.verifier` and PoUB's `timing` and `codec` (`verity.protocols.accounting.poub.verifier`).
+- **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, the registration log
+  (`verity.protocols.accounting.registration.verifier`), `verity.protocols.proofs.spot.verifier` and PoUB's `timing`
+  and `codec` (`verity.protocols.accounting.poub.verifier`).
 
 ## Overview
 

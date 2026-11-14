@@ -80,7 +80,7 @@ rehearsal's ``out/program/``), its circuit files' directory (``--circuits``), an
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
       --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
-      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
+      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes GATE_LOGIN" \\
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
 
@@ -424,7 +424,9 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())
     c = record["commitment"]
-    sid, R = c["session"]["session"], c["session"]["root"]
+    sid = c["session"]["session"]
+    if "root" not in c["session"]:
+        raise KeyError("root")
     weights, table = c["weights_root"], c["requests_root"]
     other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
     g = out / "gate"

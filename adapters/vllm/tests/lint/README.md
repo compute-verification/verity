@@ -62,6 +62,10 @@ failure message carries its fix.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
+- **What the lints keep** (`conftest.py`, held by `test_caches.py`): the rules share one parsed tree of each library
+ file, in `functools` caches of this directory's modules. They are emptied when a test process leaves this directory, so
+ a process that goes on to other tests does not hold the parsed library, which its cyclic collector would walk in every
+ full collection. `conftest.py` finds a cache where a module names it at its top level: cache a top-level function.
 
 **The rule on every change: no growth.** No PR adds a ratchet
 exception or raises a recorded count: against the commit below it (in a candidate, its `Queue: #N` merge against the merge
@@ -145,12 +149,15 @@ To retire an entry, fix what it allows and delete it: its rule's stale-entry che
 `test_ratchet.py` holds every lint to having one that takes no fixture, to a `NAME` that is a string literal, and to
 importing only the standard library and this directory.
 
-**What other code reads from these tests.** A test in another directory of `tests/` imports four modules. Three name what
-they offer in `__all__`: `tests.fake_vllm` (`install`, `FakeVllm`, `Module`, `Unset`: vLLM stood in for a test, built from
-`vllm_surface.py`), `tests.regression.store_io` (`fetch`, `reachable`, `StoreUnavailable`: a fixture read from the evidence
-store, which `verity/circuits/evaluate`'s difftest loads by path too) and `tests.regression.checks.attempt_provenance`
-(`DEFAULT_QUERY`). The fourth is this directory's `_imports`, for `core` and `core_less_definitions` (which modules of
-`verity` are core), which `conftest.py`'s guard and the four boundary tests of `tests/program/` read. Two files run as
+**What other code reads from these tests.** A test imports five modules of this directory, of `tests/regression/` and of
+`tests/` itself from outside that directory. Three name what they offer in `__all__`: `tests.fake_vllm` (`install`,
+`FakeVllm`, `Module`, `Unset`: vLLM stood in for a test), `tests.regression.store_io` (`fetch`, `reachable`,
+`StoreUnavailable`: a fixture read from the evidence store, which `verity/circuits/evaluate`'s difftest loads by path too)
+and `tests.regression.checks.attempt_provenance` (`DEFAULT_QUERY`). Two are this directory's: `_imports`, for `core` and
+`core_less_definitions` (which modules of `verity` are core), which `conftest.py`'s guard and the four boundary tests of
+`tests/program/` read, and `vllm_surface`, for `SURFACE` (what the library imports from vLLM), which the stand-in is
+built from and `tests/test_fake_vllm.py` imports entry by entry. `core` answers from a table of prefixes, and
+`test_core_modules.py` warns on a row that names no package or module of the tree. Two files run as
 commands: `python -m tests.regression.rebaseline run`, from `verity_vllm/ops/epoch_row.sh`, and
 `tests/lint/merge_allowlist.py`, git's merge driver for the lists (`.gitattributes`).
 The check runs `tests/regression` by its marks: the T0 tier in `check`, and the checks marked `rebuild` once per landing

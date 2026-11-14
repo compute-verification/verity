@@ -12,12 +12,14 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.program import Program
 from verity.commitments import row_table as RT
+from verity.commitments.windows import rows as CS
+from verity.commitments.windows import tables as TB
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R
-from verity.commitments.windows import rows as CS, tables as TB
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 from .test_row_tables import DEFN, UNITS, committed
 

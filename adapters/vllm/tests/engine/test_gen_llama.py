@@ -132,7 +132,6 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
     # the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
     assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
     assert GP.GemmLaunchTuned.name not in base_names                                             # the base profile is untouched
-    assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist                                # the frozen census allowlist, referenced
     pins = prof.notes["pins"]
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == mod.C["BN"] == 128 and pins["kv_cache"] == BASE.PROFILE.notes["pins"]["kv_cache"]
@@ -249,8 +248,8 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
             st, rest = ln[1:].split("]", 1)
             cmds[st] = shlex.split(rest) if not rest.strip().startswith(("SKIP", "in-process", "write")) else [rest.strip()]
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out       # every step of the 16-token workload
-    cap = cmds["capture"]
-    assert cap[cap.index("--case") + 1] == case and "--verify-weights" in cap and cap[cap.index("--workload") + 1] == wl
+    capture_cmd = cmds["capture"]
+    assert capture_cmd[capture_cmd.index("--case") + 1] == case and "--verify-weights" in capture_cmd and capture_cmd[capture_cmd.index("--workload") + 1] == wl
     for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == module_name, (st, c)

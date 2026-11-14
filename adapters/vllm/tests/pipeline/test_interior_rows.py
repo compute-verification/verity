@@ -17,21 +17,25 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
+from verity.commitments.windows import rows as CS
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.registry import dead_free as DF
-from verity.commitments.windows import rows as CS
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import interior_rows as IR
+from verity_vllm.pipeline import serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
 PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
@@ -169,7 +173,7 @@ def _boundary_window(n: int, block=BLOCK) -> CS.Binding:
 
 
 def _ids(ids) -> np.ndarray:
-    a = np.zeros(64, dtype=np.uint16)
+    a: np.ndarray = np.zeros(64, dtype=np.uint16)
     w = np.asarray(ids, dtype="<u4").view("<u2")
     a[:w.size] = w
     return a
@@ -188,7 +192,7 @@ def _boundary(world, block=BLOCK) -> tuple[dict, dict, str]:
 
 
 def _spec(member: CS.Member, unit=UNIT, block=BLOCK, n_rho: int = N_RHO) -> S.Spec:
-    names = {}
+    names: dict[str, tuple[str, str]] = {}
     for phase, w in (("serve", _boundary_window(len(PROMPTS), block)), ("interior", IR.interior_window(member, n_rho, "00", [0]))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
     public = (S.Public("population", "structure", "N, the sample's range"),
@@ -366,7 +370,7 @@ NAN, NEG_NAN, NEG_ZERO, NEG_INF, INF, ONE, NEG_ONE = 0x7FC0, 0xFFC0, 0x8000, 0xF
 def _select_rows(V: int) -> np.ndarray:
     """Logits rows of random words, then of edge cases: none above -inf, a NaN logits[0], a tie across chunks, -0 before
     +0, +inf last, and NaNs but one number in the last chunk."""
-    edge = np.full((6, V), NEG_INF, dtype=np.uint16)
+    edge: np.ndarray = np.full((6, V), NEG_INF, dtype=np.uint16)
     edge[1, :], edge[1, 0] = ONE, NAN
     edge[2, [5, V // 2 + 5]] = ONE
     edge[3, 3], edge[3, 4] = NEG_ZERO, 0

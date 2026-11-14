@@ -317,7 +317,7 @@ def test_produce_prints_a_line_a_case_a_line_a_drain_batch_and_the_totals(produc
     assert all(len(json.loads(line)["kept"]) == min(8, size) for line, size in zip(lines[5:-1], sizes, strict=True))
     npz = produced.out / "fixture.npz"
     assert lines[-1] == f"cases 6 -> {npz} {npz.stat().st_size / 1024:.0f} KB {2 * TICK:.1f}s"
-    assert produced.flushes == len(lines) - 1                        # each line but the totals is flushed as it is printed
+    assert produced.flushes == len(lines)                            # each line is flushed as it is printed
 
 
 def test_without_a_record_no_record_case_is_made_and_nothing_is_tempered(monkeypatch, tmp_path, capsys):

@@ -54,7 +54,7 @@ Registered functions (`Name_v1` but where a version is written):
   DsaIndexerQHead{D,ROPE,NH}                (q: D bf16, cs: ROPE bf16, w: bf16) -> (q: D e4m3, w: f32): one (token, head)
   DsaIndexerQ{H,D,ROPE}                     (q: H x D bf16, cs: ROPE bf16, w: H bf16) -> (q: H x D e4m3, w: H f32): one token
   DsaMqaLogit_v3{H,D}                       (q: H x D e4m3, w: H f32, k: D e4m3, ks: f32) -> f32: one logit (v1: refuted)
-  DsaMqaLogits_v3{N,H,D}                    (q, w, k: N x D e4m3, ks: N f32) -> N f32: one query token over N keys (v1: refuted)
+  DsaMqaLogits_v3{N,H,D}                    (q, w, k: N x D e4m3, ks: N f32) -> N f32: one query token over N keys
   DsaTopKShortRow{TOPK}                     (len: i32) -> TOPK i32
 
 `cs` is the rotary cache row at the token's position, [cos 0..ROPE/2-1 | sin 0..ROPE/2-1] bf16 (`get_rope` builds it in the default
@@ -382,12 +382,6 @@ def DsaMqaLogit(B, S, q, w, k, ks):
     return mqa_logit(word_ops(B), S.H, S.D, q, w, k, ks)
 
 
-@composite("DsaMqaLogits", 1, ["N", "H", "D"], _logits_sig, conformance=_LOGIT_V1_CONF)
-def DsaMqaLogits(B, S, q, w, k, ks):
-    """One query token's logits over N keys: logit[n] = `DsaMqaLogit_v1{H, D}`(q, w, k[n], ks[n])."""
-    return B.batch(bind(DsaMqaLogit, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
-
-
 @composite("DsaMqaLogit", 3, ["H", "D"], _logit_sig, conformance=_LOGIT_CONF)
 def DsaMqaLogitV3(B, S, q, w, k, ks):
     """One logit of DeepGEMM's sm90 MQA logits as the SASS computes it: `DsaMqaLogit_v1` but for each lane's first two heads.  The
@@ -423,5 +417,5 @@ def DsaTopKShortRow(B, S, n):
     return Coll(Array(S.TOPK, I32), concat([w.refs for w in topk_short(word_ops(B), S.TOPK, n)]))
 
 
-DSA_COMPOSITES = [DsaUe8m0Scale, DsaUe8m0Quant, DsaIndexerKRow, DsaIndexerQHead, DsaIndexerQ, DsaMqaLogit, DsaMqaLogits,
-                  DsaMqaLogitV3, DsaMqaLogitsV3, DsaTopKShortRow]
+DSA_COMPOSITES = [DsaUe8m0Scale, DsaUe8m0Quant, DsaIndexerKRow, DsaIndexerQHead, DsaIndexerQ, DsaMqaLogit, DsaMqaLogitV3,
+                  DsaMqaLogitsV3, DsaTopKShortRow]
