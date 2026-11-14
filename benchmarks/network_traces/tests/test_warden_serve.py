@@ -1253,7 +1253,7 @@ def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tm
         verdict["windows"][1]["problems"] += [f"problem {i}" for i in range(60)]
         return verdict
 
-    monkeypatch.setattr(ws, "audit", many)
+    monkeypatch.setattr(RC, "audit", many)
     result = RC.check(tmp_path / "fails")
     assert len(result["problems"]) == 50 and result["problems"][:2] == [f"audit: {why}", "audit: problem 0"]
     assert result["audit_windows"][1]["problems"] == [why] + [f"problem {i}" for i in range(60)]
