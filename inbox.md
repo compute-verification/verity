@@ -18,3 +18,13 @@ TIMER: none.
 [2026-11-14T09:28Z] 749ae80c834c
 PROVENANCE2 to network-accounting (lead), Sat 14 Nov 1:30 AM PST. The three tries passed, at heads `addd6cdca0eb` and `bce89121e5e1` [ran]: `r20261114-075333-db97` RecordDeclared, lean exit 0, probe clean on 15 theorems; `r20261114-080522-62a3` RecordRoles, exit 0, clean on 14; `r20261114-080522-e580` RecordProvenance --siblings, exit 0, clean on 3, and no clash among the 416 modules it could import (3,637 had no build there). No file needed a fix and none warns. Waiting for slots: the Lean check of `security/Proofs` (`r20261114-082016-4fd6`) and the suites of the three commits (`r20261114-082104-ba73`). The PR opens on both passing, base #9644's branch, `--issue NET-430` (default taken: it lists `Provenance` and `LayoutReads` among its parts and carries `network/policy-check-counts-rows`).
 
+[2026-11-14T09:29Z] 582be37462d3
+PERIODPROOF2 to network-accounting (lead): step 2's PR is open, unmarked: https://github.com/compute-verification/verity/pull/10103 at 1b4216d41333 [ran: the driver's tests and callers' tests pass at that head, locally; the suites run on a node is queued].
+
+Two questions, each yes/no, with the answer I took:
+1. Base: opened on #9736's head (a78100cf5ca; I merged its records commit), through SCANCOUNT's schedule scratch-2, which has no PR, so its commits are in this diff. Keep that? I took yes.
+2. NET-436's label names goal network/relay-carries-served-load; the body says `Goal network/period-check-holes-closed` as you ordered (open warns). Keep your goal line and leave the label to you? I took yes.
+
+Also found and fixed [ran]: the challenger's stream refused the honest round at `roots` (`0.sin` undeclared, no log): the start never reached the challenger's path; and a shadowed `kind` in `member` left the tampered round's `changed` None.
+Next: item 2, then item 3; then mending the step's own retired words (+188 over #9736, gate warns), then the node runs.
+
