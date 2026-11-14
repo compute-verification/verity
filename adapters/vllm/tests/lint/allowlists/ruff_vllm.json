@@ -499,7 +499,6 @@
     {"file": "tests/protocols/test_pouw_lead.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/protocols/test_pouw_pearl_c_window.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/protocols/test_pouw_pearl_c_window.py", "kind": "ISC004", "symbol": "test_w_is_refused_for_rounds_it_cant_register", "detail": "Unparenthesized implicit string concatenation in collection"},
-    {"file": "tests/protocols/test_protocol_options.py", "kind": "ISC004", "symbol": "test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites", "detail": "Unparenthesized implicit string concatenation in collection", "count": 2},
     {"file": "tests/query/test_units_canonical.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/build.py", "kind": "T201", "symbol": "build_engine", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/engine/int8_fused.py", "kind": "E741", "symbol": "exactlin_silu_mul_quant", "detail": "Ambiguous variable name: `I`"},
@@ -540,6 +539,7 @@
     {"file": "verity_vllm/protocols/pouw/pearl_c/host.py", "kind": "B023", "symbol": "_Arena.take", "detail": "Function definition does not bind loop variable `got`"},
     {"file": "verity_vllm/protocols/pouw/pearl_c/host.py", "kind": "B023", "symbol": "_Arena.take", "detail": "Function definition does not bind loop variable `ring`"},
     {"file": "verity_vllm/protocols/pouw/pearl_c/served_y.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/protocols/pouw/pearl_c/window.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
+    {"file": "verity_vllm/protocols/pouw/pearl_c/window.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/protocols/test_protocol_options.py", "kind": "ISC004", "symbol": "test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites", "detail": "Unparenthesized implicit string concatenation in collection", "count": 2}
   ]
 }

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import a0  # noqa: E402
+import a0
 
 TMPL = "verity/flock-circuit/tmpl"
 

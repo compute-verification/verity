@@ -598,6 +598,7 @@ def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -
     return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "DERIVATIONS", "GRAM", "GRID_ROLES", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "ProofBlock",
-           "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "ok_word", "query", "templates", "unit_cut",
+__all__ = ["ATOM", "BASIS", "BLOCK", "DERIVATIONS", "DIGESTS", "DNF_LOW", "F32_MAX", "GRAM", "GRID_ROLES", "LINE",
+           "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "UE4M3_MIN_WORD", "RowK", "Shape", "ProofBlock", "basis_fa",
+           "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "ok_word", "query", "templates", "unit_cut",
            "units", "weight"]
