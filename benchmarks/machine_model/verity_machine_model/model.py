@@ -151,7 +151,7 @@ def card(data: Path = DATA, of: str = "card") -> dict:
 
     sku = tomllib.loads((data / "model.toml").read_text()).get(of)
     if sku is None:
-        raise SystemExit(f"{data / 'model.toml'} names no {of}; add {of} = \"SKU\", a file of verity/hardware/cards/")
+        raise SystemExit(f"{data / 'model.toml'} names no {of}; add {of} = \"SKU\", a file of hardware/cards/")
     try:
         return load(sku)
     except KeyError as e:
