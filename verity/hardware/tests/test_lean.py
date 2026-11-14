@@ -22,7 +22,7 @@ import pytest
 
 from verity.errors import InvalidArtifact
 from verity.hardware import lean
-from verity.hardware.cards import load, number, skus
+from verity.device import load_card, number, skus
 from verity.hardware.lean import table
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -111,7 +111,7 @@ def disagreements(card: dict, text: str) -> list[str]:
 
 @pytest.mark.parametrize("sku", LEAN)
 def test_lean_table_agrees_with_the_card_file(sku: str) -> None:
-    card = load(sku)
+    card = load_card(sku)
     found = disagreements(card, (ROOT / card["lean"]).read_text(encoding="utf-8"))
     assert not found, (f"{card['lean']} and hardware/cards/{sku}.toml disagree; change the card file or the "
                        f"generator, then write the table: `{lean.COMMAND}`\n" + "\n".join(found))
@@ -125,7 +125,7 @@ def test_the_b200_sheet_agrees_with_its_card_file() -> None:
     """``Accounting.TS.Sheets.B200`` states the B200 card's clock, SMs and pipe widths, and each format's peak as
     ``rate.tensor`` over that format's weight. The sheet's implied and FP64 clocks, its FP6 peak and its uniform pipe
     have no key in the card file."""
-    card = load("b200-sxm-180gb")
+    card = load_card("b200-sxm-180gb")
     sheet = dict(re.findall(r"^def (\w+) : ℝ := (.+)$", SHEET.read_text(encoding="utf-8"), re.M))
     keys = {"fmaxMHz": ("clock", "sm"), "smCount": ("sm", "count"), "widthAlu": ("rate", "alu"),
             "widthImad": ("rate", "imad"), "widthShfl": ("rate", "shfl")}
@@ -138,7 +138,7 @@ def test_the_b200_sheet_agrees_with_its_card_file() -> None:
 
 def test_a_changed_number_is_a_disagreement() -> None:
     """The check above isn't vacuous: one changed rate, a changed default weight and a dropped arm are each reported."""
-    card = load("rtx-pro-6000-server")
+    card = load_card("rtx-pro-6000-server")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert disagreements(card, text) == []
     faster = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
@@ -155,7 +155,7 @@ def test_the_tensor_runs_at_its_own_clock_where_the_card_has_one() -> None:
     """The H200's card file and its Lean table price the tensor at the 1830 MHz ``clock.tensor`` and every other resource
     at the 1980 MHz SM clock, and a tensor arm at the SM clock disagrees. The same card without ``clock.tensor`` prices
     the tensor at the SM clock, and disagrees with that table on the clock and the tensor arm."""
-    card = load("h200-sxm-141gb")
+    card = load_card("h200-sxm-141gb")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert card_table(text)[0] == table(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1830 * 10 ** 6}
     assert table(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1830 * 10 ** 6
@@ -196,7 +196,7 @@ def test_a_generated_table_is_the_generators_output(path: str) -> None:
 def test_a_generated_table_declares_the_names_its_importers_read() -> None:
     """Each card's table is the module its card file names, a module of the definitions tree, and declares its
     namespace, its clocks and ``card``: a renamed or dropped one fails here before a Lean build does."""
-    assert sorted(GENERATED) == sorted(load(sku)["lean"] for sku in LEAN)
+    assert sorted(GENERATED) == sorted(load_card(sku)["lean"] for sku in LEAN)
     assert all(path.startswith("security/Definitions/") for path in GENERATED)
     found = {sku: re.findall(r"^(?:namespace|def|abbrev|theorem|lemma|instance|structure) (\S+)", lean.render(sku), re.M)
              for sku in LEAN}
@@ -219,7 +219,7 @@ def test_a_generated_table_follows_its_card_file() -> None:
     """The generator isn't a copy of today's tables: a changed entry of the card file is a changed arm, which the old
     card file disagrees with; a fractional rate or weight is written ``p / q``; and a card without ``clock.tensor``
     gets no ``tensorClock`` and a tensor at the SM clock."""
-    was = load("h200-sxm-141gb")
+    was = load_card("h200-sxm-141gb")
     card = copy.deepcopy(was)
     card["rate"]["issue"]["value"], card["rate"]["sfu"]["value"], card["weight"]["s8"]["value"] = 5, "0.5", "0.75"
     text = lean.render(card)
@@ -240,7 +240,7 @@ def test_a_generated_table_has_one_shape() -> None:
     assert [lean.binary(Fraction(n), nat="n") for n in (50 * 2 ** 20, 2 ** 27, 141 * 2 ** 30, 3 * 2 ** 10, 1000)] == [
         "50 * 2 ^ 20", "128 * 2 ^ 20", "141 * 2 ^ 30", "3 * 2 ^ 10", "1000"]
     assert lean.arms([("a", "1"), ("b", "2"), ("c", "1")], "0") == ["    | .a | .c => 1", "    | .b => 2", "    | _ => 0"]
-    card = copy.deepcopy(load("h200-sxm-141gb"))
+    card = copy.deepcopy(load_card("h200-sxm-141gb"))
     card["weight"]["u8"]["value"], card["weight"]["nvf4"]["value"], card["weight"]["s8"]["value"] = 3, "0.5", 3
     text = lean.render(card)
     assert text.split("  weight\n")[1].split("  exact")[0].splitlines() == [
@@ -267,7 +267,7 @@ def test_a_generated_table_has_no_truncating_division(section: str, key: str, va
         _, fields = card_table(lean.render(sku))
         divided = [arm for arm in [*fields["size"].values(), fields["exact"], fields["text"]] if "/" in arm]
         assert divided and all(evaluate(arm, nat=True).denominator == 1 for arm in divided)
-    card = copy.deepcopy(load("h200-sxm-141gb"))
+    card = copy.deepcopy(load_card("h200-sxm-141gb"))
     card[section][key]["value"] = value
     with pytest.raises(InvalidArtifact, match=f"{re.escape(named)} is .*not a whole number"):
         lean.render(card)

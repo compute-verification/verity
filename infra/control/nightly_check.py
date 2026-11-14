@@ -110,7 +110,7 @@ BY_PART = ("pytest", "lean-suites", "lean-audit")
 RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox", "build_threads", "peak_gib",
                         "replay_cache", "facts_cache", "facts_key", "judged_from"})
 VERDICTS = ("passed", "failed")
-LOST = ("launcher-exited", "runner-gone")       # a run that ended leaving no status (research.cli.ENDED)
+LOST = ("launcher-exited", "runner-gone")       # a run that ended leaving no status (research.runs.ENDED)
 OUTCOMES = ("passed", "contradicted", "failed", "error")
 RINGS = OUTCOMES[1:]
 RING_OF = {"ring": "infra", "ring_ci": "ci"}    # a report's rings, as the night's state names them, and whose inbox each rings
