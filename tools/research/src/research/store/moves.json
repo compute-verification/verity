@@ -3176,6 +3176,13 @@
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py": "verity/protocols/accounting/poub/prover/node_store/registry.py",
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/verify.py": "verity/protocols/accounting/poub/prover/node_store/verify.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py": "verity/protocols/accounting/poub/tests/test_registry.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_memory_map.py": "verity/protocols/accounting/poub/tests/test_memory_map.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "verity/protocols/accounting/poub/tests/test_remote_session.py"
+      }
     }
   ]
 }

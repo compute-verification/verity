@@ -53,7 +53,7 @@ from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
-VLLM = Path(__file__).resolve().parents[3]
+VLLM = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
 
 
 class PassClock:
