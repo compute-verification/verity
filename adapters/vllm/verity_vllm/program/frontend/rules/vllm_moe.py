@@ -173,7 +173,7 @@ def _launch_pins(node, meta, sc) -> str | None:
     for nm in MOE_GEMM_PINS["none_ptrs"]:
         if sc.get(nm) is not None or launch_tensor(node, meta, nm) is not None:
             return f"numerics_unregistered: {nm} is set (bias / scale epilogue is a different numeric)"
-    if (r := _pinned_tile_refusal(sc, meta.get("geometry") or {})) is not None:
+    if (r := _pinned_tile_refusal(sc, meta["geometry"])) is not None:
         from verity_vllm.program.frontend import targets as T
         if T.moe_tuned_tile_refusal(active_target_profile(), sc.get("BLOCK_SIZE_K")) is not None:
             return r
@@ -432,7 +432,7 @@ class FusedMoeKernelRule(InPlaceRule):
         ctx.record(self, node, {"E": E, "K": K, "N": N, "pairs": nv, "top_k": top_k, "MUL_ROUTED_WEIGHT": mrw,
                                 "schedule": "naive" if sc.get("naive_block_assignment") is True else "sorted",
                                 "tiles": {k: sc.get(k) for k in ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M")},
-                                "num_warps": (meta.get("geometry") or {}).get("num_warps"), "src_sha256": meta.get("src_sha256"),
+                                "num_warps": meta["geometry"].get("num_warps"), "src_sha256": meta.get("src_sha256"),
                                 "W_is_parameter": wl.name if wl else None}, emitted=f"{fn.id} x{nv}")
 
 
@@ -751,7 +751,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
             emitted = "PaddedDown marker (W2 bound; the M calls are emitted at moe_sum)"
         ctx.record(self, node, {"E": E, "K": K, "N": N, "pairs": nv, "top_k": sc["top_k"], "MUL_ROUTED_WEIGHT": mrw, "schedule": sched,
                                 "tiles": {k: sc.get(k) for k in ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M")},
-                                "num_warps": (meta.get("geometry") or {}).get("num_warps"), "src_sha256": meta.get("src_sha256"),
+                                "num_warps": meta["geometry"].get("num_warps"), "src_sha256": meta.get("src_sha256"),
                                 "W_is_parameter": wl.name if wl else None, "moe_construction": PADDED}, emitted=emitted)
 
 
