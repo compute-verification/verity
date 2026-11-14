@@ -2,6 +2,8 @@ module
 
 public import Properties.Nci.Opening
 public import Properties.Nci.RecordForm
+public import NciCheck.Baseline
+public import Base.Bytes
 public import Properties.Flock.Circuit.UnitInst
 public import Properties.Verity.Sha512
 public import Definitions.Hash.EmbeddingRead
@@ -15,8 +17,13 @@ public import Flock.ReadNet.Template
 the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill row, or a SHA-512 collision;
 `PinnedReadBinds`, that a pinned read returns its row; `PinnedReadNontrivial`, that at the verdict bit 0 some pinned
 read does not; `PinnedReadHonest`, that the check's own form (`NciCheck.Record.SecurityProofs.form`) has a pinned
-read; and `OpenedRowReturned`, that an opening's declared row is the row its reader returns. The proofs are
-`Proofs.Properties.Nci.Lemmas.Opening`'s.
+read; `OpenedRowReturned`, that an opening's declared row is the row its reader returns; `ThetaRootRowRegistered`,
+that the unit's root and domain id gates hold the ones registered for the opening's parameter; and
+`PinnedReadRegistered`, the two together: the unit returns the row of the table registered under that parameter. The
+proofs are `Proofs.Properties.Nci.Lemmas.Opening`'s.
+
+A pinned read is a read by a pinned reader: the pin is the closure digest of the reader's Definition
+(`NciCheck.Record.pinOf`), and pins no table and no root.
 -/
 
 @[expose] public section
@@ -102,7 +109,11 @@ the verdict bit be 1; and let `table` be committed under the root and the domain
 (`PinnedRead`). Then the row `u` returns in its local evaluation is `table`'s row at the key its key gates hold
 there, or the fill row where the key is at or past the table's count (`Hash.EmbeddingRead.h`), or SHA-512 collides on
 what the unit's check and `table`'s opening at the key hashed (`ReturnsRow`). A read inside a fused block is outside it:
-its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it. -/
+its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it.
+
+By itself it fixes no table: `table` is whatever is committed under the root and domain id the unit's gates hold in
+`Yc`, and no hypothesis ties those to a registered root. The open premise `ThetaRootRowRegistered` ties them to the
+ones registered for the opening's parameter, and `PinnedReadRegistered` is what the two give together. -/
 def PinnedReadBinds : Prop :=
   ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
@@ -114,9 +125,12 @@ def PinnedReadBinds : Prop :=
       ReturnsRow ct hB n u q Yc table
 
 /-- **The verdict bit does the work**: some form, record, circuit file and transcript meet every hypothesis of
-`PinnedRead` but the verdict bit, which is 0 (`PinnedReadAt` at `false`), and the unit returns neither its table's row
-nor the fill row, with no collision (`¬ ReturnsRow`). Not proved: it needs a circuit file that parses and a template
-the read's check accepts, runs of code on a file, which the kernel does not evaluate. -/
+`PinnedRead` but the verdict bit, which is 0 (`PinnedReadAt` at `false`); the opening the unit's gates hold is
+`table`'s own at the index, and the row the unit returns is neither that opening's row nor the fill row. It shows the
+first disjunct of `ReturnsRow` failing at an opening equal to the table's, and says nothing of the collision
+disjuncts, which no kernel proof can exclude: at that opening each is a collision among one opening's own hashed
+inputs. Not proved: it needs a circuit file that parses and a template the read's check accepts, runs of code on a
+file, which the kernel does not evaluate. -/
 def PinnedReadNontrivial : Prop :=
   ∃ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
@@ -125,7 +139,11 @@ def PinnedReadNontrivial : Prop :=
     (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
     (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
     PinnedReadAt F c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table false ∧
-      ¬ ReturnsRow ct hB n u q Yc table
+      q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) =
+        table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ∧
+      q.hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) ≠
+        Hash.EmbeddingRead.h q.count q.words (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
+          (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)))
 
 /-- **An honest pinned read**: of the check's own form (`NciCheck.Record.SecurityProofs.form`), some instance, record,
 circuit file and transcript meet `PinnedRead`, so `PinnedReadBinds` is not vacuous of it. So that it does not hold
@@ -165,5 +183,64 @@ def OpenedRowReturned : Prop :=
     NciCheck.Record.SecurityProofs.form.layout dfn = some ro →
     readRows dfn ro out count words = true →
     NciCheck.Record.SecurityProofs.form.openedRow c r = some o → o = out
+
+/-- **A θ table read's root and domain id rows hold the registered ones** (an open premise): where the check's own form
+holds a pinned read of row `r`, opened from the table `name` of the parameter `p`, and classes every row of the same
+unit's root port as a table read of that table's root and every row of its domain id port as one of its domain id,
+the root the unit's root gates hold in `Yc` is the one the run's own record registers `p` under
+(`window.registered_roots`, the root `IsTheta` reads), and the domain id its domain gates hold is the one the log's
+first record registers for `p` (its last `registered` entry of that value, whose root `IsTheta` reads), each as its
+lower-case hex. The check classes those rows and holds no row to a value, so this is not the check's; what would give
+it is that a θ table read's rows, the values a window supplies for `p`'s root and domain id, are opened against the
+registered root at those gates. Not proved, and stated nowhere else. -/
+def ThetaRootRowRegistered : Prop :=
+  ∀ (c : NciCheck.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
+    (dfn : Defn) (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) (ct : Flock.Circuit) (tu : Flock.TmplUnit)
+    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) (ok : Bool)
+    (log : Array Json) (run e : Json) (R D : String),
+    PinnedReadAt NciCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
+      consts u q Yc table ok →
+    (∀ row < (NciCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.root,
+      NciCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.root, row⟩ = some (.table name p true)) →
+    (∀ row < (NciCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.domain,
+      NciCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.domain, row⟩ = some (.table name p false)) →
+    TrustedRun tr log run →
+    NciCheck.Baseline.strAt (NciCheck.Baseline.getD (NciCheck.Baseline.getD run "window") "registered_roots") p =
+      some R →
+    NciCheck.Baseline.lastWith log[0]! "registered" "value" p = some e → NciCheck.Baseline.strAt e "domain" = some D →
+    Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.rootOf Yc)).toArray) = R ∧
+      Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.domainOf Yc)).toArray) = D
+
+/-- **A pinned read returns the row of the table registered under its parameter**: with the hypotheses of
+`PinnedReadBinds` at the check's own form and those of `ThetaRootRowRegistered`, the unit's root and domain id gates
+hold the root and domain id registered for the opening's parameter `p`, so `table`, committed under them
+(`PinnedRead`), is the table registered under `p`; and the unit returns its row (`ReturnsRow`). It follows from
+`ThetaRootRowRegistered` and `PinnedReadBinds` (`pinnedReadRegistered`), and holds no further than the open premise. -/
+def PinnedReadRegistered : Prop :=
+  ∀ (c : NciCheck.Record.SecurityProofs.form.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ)
+    (dfn : Defn) (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) (ct : Flock.Circuit) (tu : Flock.TmplUnit)
+    (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening)
+    (log : Array Json) (run e : Json) (R D : String),
+    PinnedRead NciCheck.Record.SecurityProofs.form c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n
+      consts u q Yc table →
+    (∀ row < (NciCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.root,
+      NciCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.root, row⟩ = some (.table name p true)) →
+    (∀ row < (NciCheck.Record.SecurityProofs.form.wiring c).cutsOf r.tid ro.domain,
+      NciCheck.Record.SecurityProofs.form.held c ⟨r.tid, r.unit, ro.domain, row⟩ = some (.table name p false)) →
+    TrustedRun tr log run →
+    NciCheck.Baseline.strAt (NciCheck.Baseline.getD (NciCheck.Baseline.getD run "window") "registered_roots") p =
+      some R →
+    NciCheck.Baseline.lastWith log[0]! "registered" "value" p = some e → NciCheck.Baseline.strAt e "domain" = some D →
+    Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.rootOf Yc)).toArray) = R ∧
+      Flock.hexOf (ByteArray.mk (Verity.Digest.bytes (q.domainOf Yc)).toArray) = D ∧
+      ReturnsRow ct hB n u q Yc table
 
 end NciCheck.Properties.Record

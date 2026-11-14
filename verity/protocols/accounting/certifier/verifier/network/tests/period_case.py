@@ -1710,7 +1710,7 @@ def _egress_sig(S):
     return tuple(zip(S.NAMES, (Array(S.WORDS, U16_BITS),))), Tuple(U16_BITS, Array(S.ROW, BYTE_BITS))
 
 
-def _start(B, S, sin):
+def _start_unit(B, S, sin):
     return tuple_of(B.batch(MIX, sin[0], sin[0], axes=(None, None), n=S.OUT))
 
 
@@ -1730,7 +1730,7 @@ def _egress(B, S, state):
 #: `IngressScanBucket` and `EgressBucket` have them at small widths, in the Boolean profile's types: each unit computes
 #: and returns its rows. The start unit takes a state of `STATE` bits and returns one of `OUT`.
 _STATICS = ("NAMES", "ROW", "STATE", "PROG", "VIEW")
-START_UNIT = CompositeDefinition("NetworkPeriodScanStart", 0, ("NAMES", "STATE", "OUT"), _start_sig, _start,
+START_UNIT = CompositeDefinition("NetworkPeriodScanStart", 0, ("NAMES", "STATE", "OUT"), _start_sig, _start_unit,
                                  register=False)
 INGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanIngress", 1, _STATICS, _ingress_sig, _ingress, register=False)
 EGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanEgress", 1, ("NAMES", "WORDS", "ROW"), _egress_sig, _egress,
