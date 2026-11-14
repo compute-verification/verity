@@ -1,6 +1,7 @@
-"""Proposition 2 and the certifier's semantics. By name, the tests mirror Proposition 2's ten statements
-(`NetTiming.SecurityProofs.CardFree` and the rest, proved in `NetTiming.SecurityProofs.Occupancy`) and that module's
-three proved lemmas without a record, `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`. The certifier tests
+"""Proposition 2 and the certifier's semantics. By name, the tests mirror Proposition 2's five statements
+(`NetTiming.SecurityProofs.CardCountsLeLe` and the rest) and the lemmas of `NetTiming.SecurityProofs.Occupancy` that
+prove them or stand without a record, among them `card_free`, `card_leftPacked`, `card_counts_eq_le` and
+`encard_fifoGrids`. The certifier tests
 check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""
 
 import itertools
@@ -66,7 +67,7 @@ def test_exists_fill_of_leftPacked():
 def test_card_counts(T, r):
     vectors = list(itertools.product(range(r + 1), repeat=T))
     for M in range(T * r + 1):
-        assert sum(sum(n) == M for n in vectors) <= capacity.all_released_patterns(T, M)  # SecurityProofs.CardCountsEqLe
+        assert sum(sum(n) == M for n in vectors) <= capacity.all_released_patterns(T, M)  # card_counts_eq_le
         assert sum(sum(n) <= M for n in vectors) <= capacity.available_patterns(T, M)  # SecurityProofs.CardCountsLeLe
 
 

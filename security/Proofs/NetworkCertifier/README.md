@@ -176,8 +176,7 @@ WitnessesCarried.lean  SampledLeakCarried's honest lemma, at the toy code with a
     at its input gates, and the nontrivial lemmas of SampledLeakCarried and
     PooledLeakCarried; PooledLeakCarried's honest lemma waits on a deployed check
 WitnessToys.lean  what holds at those instances, which the count and period witnesses conclude from
-CountWitnesses.lean  the thirteen counts' pairs, seven egress and six ingress: the honest run is accepted at
-    `fxRate` or at `sampProg`, or has every status complete, and each bound is
+CountWitnesses.lean  the six ingress counts' pairs: the honest run has every status complete, and each bound is
     false at the verifier that accepts everything (`acceptAll`)
 PeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
     false at one incorrect proof block
@@ -249,7 +248,7 @@ monitoring period: `E` execution blocks, each of `g·T` buckets, and block `e`'s
 ticks, `frames ins e (a e) ℓ`, read from the ingress and `e`'s own advice. A frame is handed at
 `h(k) = max(send(k), h(k−1))` and released by `fifoGrid`, with the FIFO empty at each execution block's first bucket.
 Its advice type is `Fin E → Adv`, the protocol's `Adv` the `|a|`-bit strings, so Theorem 3's `2^(E·k)` form holds for
-it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`). The check is this Program as one execution
+it with no dataflow hypothesis (`encard_accSeqs_le_constantRate`, a lemma). The check is this Program as one execution
 block of its `W` windows (`CodeAcceptedConstantRate`).
 
 ## The trusted layer (`NetTiming.Assumptions`)
@@ -277,23 +276,21 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 ## The records
 
-The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarantees.lean`, the sampled audit's charge
+The lock (`lean-audit.json`'s `guarantees`) holds the 6 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
 (`Guarantees/Period.lean`), the monitoring period's incorrect proof blocks
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `pooledIncorrectBlocks` and `pooledLeak`). All 28 are under `shape.frozen` as
+last two by `pooledIncorrectBlocks` and `pooledLeak`). All 16 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
-program implements yet), not over the network check's code, and an accepted run reaches the first 18 through
-`AcceptedRunsAreProgramRuns`. Three are the
+program implements yet), not over the network check's code, and an accepted run reaches the first 6 through
+`AcceptedRunsAreProgramRuns`. Two are the
 theorems whose bounds the calibration reports (`verity.protocols.accounting.certifier.verifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
 
-- egress over a monitoring period, for the reference schedule (`NetTiming.SecurityProofs.Schedule`):
-  `EncardDecodableLeConstantRate`;
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerExecutionPhase`.
 
@@ -304,17 +301,8 @@ forms give only the `W`-window total, `EncardAcceptedObservationsLe`'s, so the f
 hand ticks, which a window's sync moves only at or after the window's start (`ExpectedGridCausal`). A window's bits
 given the run before it have no Lean statement for the check: the queue and the hand ticks carry across windows.
 
-The other 25 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The other 14 are the rest of the Capacity table's bounds:
 
-- **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
-  `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
-- **Theorem 3, `k` advice bits per execution block** (`NetTiming.SecurityProofs.Advice`,
-  `NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`): `EncardAccSeqsLeAdviceBits` for any
-  Program, and for the constant-rate Program `EncardAccSeqsLeConstantRate`, `ExpectedRowCausal`,
-  `EncardAccSeqsLeConstantRateExecutionPhases`, `EncardAccSeqsLeConstantRatePerExecutionPhase` and, through the wire,
-  `EncardDecodableLeConstantRatePerExecutionPhase`. Advice of any finite type is
-  `EncardAccSeqsLeAdvice` (`Lemmas.lean`), which the check's count (`EncardAcceptedObservationsLe`) reads at its clock
-  syncs.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerExecutionPhase`.
@@ -450,35 +438,29 @@ no record. Each is still `SecurityProofs.G : Guarantees.G`, built and checked li
   `EncardObsDecodableLe`, `EncardDecodableLe`, `NoFaultOfAccepted`.
 - **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `RecordedRowEqFill`, `EncardAccSeqsLeAdvice`.
 
-So are the 10 witnesses, checked tests rather than guarantees, under their own names (`NetTiming.SecurityProofs.Sanity`,
-and the last in `NetTiming.SecurityProofs.Schedule`):
+So are the 9 witnesses, checked tests rather than guarantees, under their own names (`NetTiming.SecurityProofs.Sanity`):
 `witnessCertifier_assumptions`, `witnessCertifier_jitter_varies`, `zP_accepts_one`, `zP_constOp_accepts_one`,
-`ingress_witness`, `ingress_witness_tight`, `allocated_witness`, `allocated_witness_tight`, `toy_leftPacked`,
-`constantRate_joint_witness`; and
+`ingress_witness`, `ingress_witness_tight`, `allocated_witness`, `allocated_witness_tight`, `toy_leftPacked`; the
+lemmas of Proposition 2's counts, `card_free`, `card_leftPacked`, `card_counts_eq_le`,
+`encard_fifoGrids_le_of_available` and `encard_fifoGrids`, and of Theorem 3's at `k` advice bits,
+`encard_accSeqs_le_adviceBits`, and at the constant-rate Program, `encard_accSeqs_le_constantRate`,
+`constantRate_rows_causal` and `encard_accSeqs_le_constantRate_executionPhases`; and
 `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`). They use only the
 three axioms, but they have no record in `lean-audit.json`, so no citation may call them guarantees. Listing one is an
 `--update` like any other.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 ingress bound's statements were frozen before their proofs as well; the review of the first two is on the pull request
-that added them, and the review of the content versions is on the one stacked on it. The
-constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
-their proofs. Their statement review gave GO with one change: the four counts take
-`n ≤ W·T`. All 38 statements (25 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
-implementation, `verity/protocols/accounting/certifier` (`verity.protocols.accounting.certifier.verifier`), mirrors 19 of the statements and the three
-lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
+that added them, and the review of the content versions is on the one stacked on it. Every
+statement, lemma and witness here is proved. The reference implementation, `verity/protocols/accounting/certifier`
+(`verity.protocols.accounting.certifier.verifier`), mirrors statements and lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks
 
 1. **Steps are buckets across all of ∂X.** The note states its bounds per execution phase of a link. The guarantees
    count steps, and Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read a monitoring period
-   of whole blocks, each with its parent's hypotheses at that length and no other. The reference schedule's bound is
-   `(2^k · D^(g·T))^m` over any `m` execution blocks of `g·T` buckets from block `e₀`, for the runs that agree on
-   everything observed before block `e₀` (`EncardAccSeqsLeConstantRatePerExecutionPhase`,
-   `EncardDecodableLeConstantRatePerExecutionPhase`; at `e₀ = 0` the run's first `m` blocks). It holds whatever came before
-   because each block's rows read only its own advice and its FIFO starts empty, so a temporal unit that starts later
-   is bounded by its own blocks. The ingress bound is `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the
-   first `m` periods of `T` buckets, `n = m·T` (`EncardIngressObsDecodableLePerExecutionPhase`, and its `Contents` version);
+   of whole blocks, each with its parent's hypotheses at that length and no other. The ingress bound is
+   `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m` periods of `T` buckets, `n = m·T` (`EncardIngressObsDecodableLePerExecutionPhase`, and its `Contents` version);
    `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
@@ -513,7 +495,7 @@ The ingress bound adds these:
     (`EncardIngressObsDecodableLePerExecutionPhase`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
-    length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`, read for the ingress
+    length and the FIFO rule are not used; the FIFO certifier attains the bound (`encard_fifoGrids`, read for the ingress
     grid).
 
 The constant-rate Program adds these:
