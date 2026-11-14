@@ -5053,7 +5053,7 @@
     {"file": "security/Proofs/Poub/RemoteHeld/Draw.lean", "count": 51},
     {"file": "security/Proofs/Poub/RemoteHeld/DrawMeets.lean", "count": 17},
     {"file": "security/Proofs/Poub/RemoteHeld/Line.lean", "count": 48},
-    {"file": "security/Proofs/Poub/RemoteHeld/Meets.lean", "count": 1},
+    {"file": "security/Proofs/Poub/RemoteHeld/Meets.lean", "count": 2},
     {"file": "security/Proofs/Poub/RemoteHeld/SketchLine.lean", "count": 1},
     {"file": "security/Proofs/Poub/Stacking.lean", "count": 15},
     {"file": "security/Proofs/Properties/Poub/Remote.lean", "count": 7},
@@ -5086,11 +5086,6 @@
     {"file": "benchmarks/one_stage/prove_subprotocol.sh", "count": 82},
     {"file": "benchmarks/one_stage/tests/test_prove_subprotocol_served.py", "count": 4},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "count": 58},
-    {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean", "count": 81},
-    {"file": "security/Definitions/Compose/Assumptions/RemoteHeld.lean", "count": 6},
-    {"file": "security/Definitions/Compose/Guarantees/RemoteHeld.lean", "count": 4},
-    {"file": "security/Proofs/Compose/RemoteHeld/Meets.lean", "count": 2},
-    {"file": "security/Proofs/Properties/Compose/Remote/SharedLink.lean", "count": 216},
-    {"file": "security/Properties/Compose/Remote/Line/Record.lean", "count": 30}
+    {"file": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean", "count": 81}
   ]
 }
