@@ -262,8 +262,8 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     run.main()
     text = capsys.readouterr().out
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
-            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
-            "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
+            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the network "
+            "certifier form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
             "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
     assert "line rate, 5.01e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1
@@ -271,7 +271,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert record["reference-remote-h200"]["certified"] is None
     certified = record["onsite-w63"]["certified"]
     assert certified["r_in"] == pytest.approx(91_075) and certified["window_buckets"] == 32
-    assert certified["faulty_unit_bits"] == 356_592
+    assert certified["incorrect_block_bits"] == 356_592
     reference = run.certified(build(REG, "reference-onsite-h200"))
     assert not reference["declared"] and reference["intake"] == 1
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "

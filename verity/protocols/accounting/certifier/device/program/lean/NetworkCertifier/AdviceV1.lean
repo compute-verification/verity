@@ -31,7 +31,7 @@ def MAX_TOTAL : Nat := 2 ^ 16
 /-- `K_MAX`: the scalings one symbol may take. -/
 def K_MAX : Nat := 18
 
-/-- `CW`: the count's width, a window's charge below `2^CW`. -/
+/-- `CW`: the count's width, a executionPhase's charge below `2^CW`. -/
 def CW : Nat := 20
 
 /-- `KW`: a KT count's width. -/
@@ -44,7 +44,7 @@ structure Tally where
   used : Bool
   bits : Nat
 
-/-- A window's first state (`Tally()`). -/
+/-- A executionPhase's first state (`Tally()`). -/
 def Tally.fresh : Tally := ⟨0, TOP, false, 0⟩
 
 /-- The interval scales: E1 or E2, or E3. -/
@@ -89,7 +89,7 @@ def ktBump (c : Nat × Nat) (b : Bool) : Nat × Nat :=
 def ktRaise (counts : List (Nat × Nat)) (ctx : Nat) (b : Bool) : List (Nat × Nat) :=
   counts.set ctx (ktBump (counts.getD ctx (0, 0)) b)
 
-/-- What a window carries to the next for the decisions (`Carry`). -/
+/-- What a executionPhase carries to the next for the decisions (`Carry`). -/
 structure Carry where
   counts : List (Nat × Nat)
   run : Nat
@@ -128,19 +128,19 @@ def arrive (bk : Book) (n : Nat) : Option Tally :=
   (countStep Tally.fresh (bk.arrived.take (bitlen n)).sum (bk.arrived.getD (bitlen n) 0) bk.total).bind fun st =>
     if 2 ≤ bitlen n then countStep st (n - 2 ^ (bitlen n - 1)) 1 (2 ^ (bitlen n - 1)) else some st
 
-/-- One window's charge (`reference_charge`, `ChargeCount_v1{N}`), and the next window's carry. -/
-def window (bk : Book) (N : Nat) (cy : Carry) (ds : List Bool) : Option (Nat × Carry) :=
+/-- One executionPhase's charge (`reference_charge`, `ChargeCount_v1{N}`), and the next executionPhase's carry. -/
+def executionPhase (bk : Book) (N : Nat) (cy : Carry) (ds : List Bool) : Option (Nat × Carry) :=
   if ds.length ≤ N ∧ cy.run < 3 then
     (arrive bk ds.length).bind fun st =>
       (decisions st cy ds).bind fun p => ((zeros p.1 bk.zeros).bind finish).map fun L => (L, p.2)
   else none
 
-/-- A run's charges: each window's, the carry passed along. -/
+/-- A run's charges: each executionPhase's, the carry passed along. -/
 def session (bk : Book) (N : Nat) : Carry → List (List Bool) → Option (List Nat)
   | _, [] => some []
-  | cy, ds :: ws => (window bk N cy ds).bind fun p => (session bk N p.2 ws).map fun ls => p.1 :: ls
+  | cy, ds :: ws => (executionPhase bk N cy ds).bind fun p => (session bk N p.2 ws).map fun ls => p.1 :: ls
 
-/-- The run's charges per window, from the book's priors and run 0. -/
+/-- The run's charges per executionPhase, from the book's priors and run 0. -/
 def charges (bk : Book) (N : Nat) (ws : List (List Bool)) : Option (List Nat) :=
   session bk N ⟨bk.priors, 0⟩ ws
 

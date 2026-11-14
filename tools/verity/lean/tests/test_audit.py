@@ -8012,7 +8012,7 @@ def test_an_equation_lemma_two_modules_realize_counts_as_declared_by_the_importe
 
 #: a package under the module system. `k.eq_1` is realized in `T`'s proof, which leaves it a theorem in `T`'s public
 #: part, and in the bodies of `E`'s and `F`'s exposed definitions, which leave it an axiom in theirs (as
-#: `Circuit.computed.eq_1` in `Definitions.InferenceOnly.Dark` and `Proofs.Core.Circuit`). `W1` and `W2` each declare `w`, on a
+#: `Circuit.computed.eq_1` in `Definitions.Slowdown.Dark` and `Proofs.Core.Circuit`). `W1` and `W2` each declare `w`, on a
 #: `sorry` and on an axiom hidden in their private parts. `P` and `Q` declare `t` with different statements, `G1` and
 #: `G2` the definition `g : Nat` with different bodies, `O1` and `O2` the opaque `o : Nat`, `X` the axiom `u` and `Y`
 #: the theorem `u`.

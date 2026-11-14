@@ -79,7 +79,7 @@ class Profile:
     beta_v: float | None = None
     #: `d`: an output map's width, the products one value read reaches (Proposition 6b)
     map_width: float | None = None
-    #: `d_in`: the narrowest output map's input width, which sets Proposition 6b's cap `k*`
+    #: `d_in`: the narrowest output map's input width, which sets Proposition 6b's threshold `k*`
     map_width_min: float | None = None
     #: `h_eff`: bits per accumulated partial sum a block must hold (Corollary 4a)
     h_eff: float | None = None
@@ -96,7 +96,7 @@ class Profile:
     #: bits of state one token's computation carries between blocks (`U_token`, `benchmarks/nci`): its updated weights
     #: and, inside an optimizer step, the gradient accumulators a block hands on
     token_state_bits: float | None = None
-    #: the reference circuit's FLOPs per token
+    #: the reference training algorithm's FLOPs per token
     flops_per_token: float | None = None
     #: bits per token crossing a shard boundary (crossings times the cut's width)
     cut_bits: float | None = None

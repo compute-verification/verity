@@ -55,7 +55,7 @@ it would not carry the bound: the two runs differ at a gate the network certifie
 
 **The count.** With the record read back under a parameter of the registered set `Θ`, a secret whose every window
 meets its good event is recovered from one parameter and the windows' records, each a sequence its window's Program
-accepts with a valid run. So the secrets number at most `#Θ` times the windows' count (`windowsCount`) with the
+accepts with a valid run. So the secrets number at most `#Θ` times the windows' count (`executionPhasesCount`) with the
 registered and the checked inputs pinned; no factor counts the schedules or a connection's cells.
 
 **The registered inputs.** `reg` is as `MonitoringPeriodLeakAccepted` has it. The good event (`ExecutionPhaseGoodChecked`, stated here:
@@ -108,7 +108,7 @@ set_option linter.unusedVariables false
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits, with the checked
 inputs left out.** At every compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds and the
 trace's commitment binds (`CommitmentScheme.Binds`), over a monitoring period of `n` windows registered as `sw i`
-(`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of each of its possible incorrect sets; its
+(`ExecutionPhasesPlaced`: partition `Pw i`, and `β i` bounding the committed bits of each of its possible incorrect sets; its
 registered values `ρ i`), each window's two checks together pinning its checked inputs (`CheckedUnique`); with an
 operator `op` fixed before the period and the covert sender's secrets, window `i`'s reading only the windows before
 `i`, closed by then (`runsBefore`); with the network certifier's openings `tops s` at each statement, and a network
@@ -127,7 +127,7 @@ a decoder recovers from the client's view of the server side (`MonitoringPeriodC
     and each window's record is a sequence its registered Program accepts with a valid run at the registration's
     values (`AccSeqsChecked`);
   * **counted**: they number at most
-    `#Θ · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · #faultySets_i(δ) · 2^β_i · Dj^k_i` (`windowsCount`). -/
+    `#Θ · ∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i)) · #faultySets_i(δ) · 2^β_i · Dj^k_i` (`executionPhasesCount`). -/
 def MonitoringPeriodLeakChecked : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
@@ -135,7 +135,7 @@ def MonitoringPeriodLeakChecked : Prop :=
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg chk : AuditStatement → Finset ℕ)
     (valid₁ valid₂ : AuditStatement → (ℕ → Bool) → Prop) (ε₁ ε₂ : Claims.Msg → ℝ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (β : Fin n → ℕ)
-    (hplaced : WindowsPlaced D.partition δ sw Pw β)
+    (hplaced : ExecutionPhasesPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
     (ρ : Fin n → ℕ → Bool) (op : Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
@@ -172,6 +172,6 @@ def MonitoringPeriodLeakChecked : Prop :=
                   (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
           {z | z ∈ Zs ∧ ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
-            Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞))
+            Θ.encard * ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞))
 
 end NetTiming.Guarantees

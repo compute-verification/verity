@@ -41,6 +41,7 @@ rest:
 from __future__ import annotations
 
 import argparse
+import functools
 import gzip
 import hashlib
 import importlib.util
@@ -136,6 +137,16 @@ def _lower(k: int, r: int, c: int, bind: dict, path: Path, j10r: bool = False) -
 def _h1_live():
     spec = importlib.util.spec_from_file_location("h1_prove_live", H1_PROVE / "live.py")
     assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'live.py'} is no module"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@functools.cache
+def stagers():
+    """``h1_prove/stagers.py``: the stagers ``h1_prove/drawn.py`` hands drawn's ``stage`` (``recomposed``, ``file_stager``)."""
+    spec = importlib.util.spec_from_file_location("h1_prove_stagers", H1_PROVE / "stagers.py")
+    assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'stagers.py'} is no module"
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

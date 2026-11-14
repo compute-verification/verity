@@ -31,7 +31,7 @@ file states both; `TileGap` proves the gap from them.
 - **Blank units** are the ones the prover leaves uncommitted. Their tiles are never checked and never credited.
 - **`GGapSampled`:** for every adversary, the probability that the audit accepts and the credited work, less `ε_s` of the
   layout's, exceeds `T/(1 − g)`, `g` the gap, is at most `(1 − ε_s)^t + δ(q, N)`. The sample is independent of the oracle and the salt,
-  so its source must be fixed only after the transcript's commitment.
+  so its source must be fixed only after the trace's commitment.
 -/
 
 @[expose] public section
@@ -95,17 +95,17 @@ def TileGood (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q �
 open Classical in
 /-- The good tiles of `τ`. -/
 noncomputable def goodTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : Finset ℕ :=
+    (τ : Trace) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U H s g c
 
 open Classical in
 /-- The tiles of the units `τ` leaves blank (declared uncredited): the audit never checks them, and they earn nothing. -/
-noncomputable def blankTiles (TR : TileRules Q R S) (U : Workload) (τ : Transcript) : Finset ℕ :=
+noncomputable def blankTiles (TR : TileRules Q R S) (U : Workload) (τ : Trace) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g => τ ((TR.tiling U.layout).unit g) = none
 
 /-- The work `τ` claims: the `W_ref` of the credited rows of the tiles of the units it commits. -/
-noncomputable def claimedWref (TR : TileRules Q R S) (U : Workload) (τ : Transcript) : ℝ :=
+noncomputable def claimedWref (TR : TileRules Q R S) (U : Workload) (τ : Trace) : ℝ :=
   ∑ g ∈ range (TR.tiling U.layout).NT \ blankTiles TR U τ,
     TR.Wcred U.layout g (actOf τ ((TR.tiling U.layout).unit g))
 
@@ -117,7 +117,7 @@ def AdmitsRefTile (CM : CostModel Q R S) (P : Protocol Q R S) (TR : TileRules Q 
     (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
-      CM.run prog H U act [] s = honestTranscript P H s U act ∧
+      CM.run prog H U act [] s = honestTrace P H s U act ∧
       CM.cost prog H U act [] s ≤ tileWrefTotal TR U.layout ∧
       CM.calls prog H U act [] s ≤ qref U
 
@@ -131,15 +131,15 @@ def GGapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AuditAccepts (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
+          AuditAccepts (goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
+          T < (1 - g) * (claimedWref TR U (A.trace U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 open Classical in
 /-- The tiles of the units `τ` commits whose inert work (the replayed debit) exceeds its bound: the tolerant audit
 accepts a sampled one and credits it nothing. -/
-noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.capOK H s U g c.act
 
@@ -157,11 +157,11 @@ def GGapSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Cos
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
     ∀ (t : ℕ) (u : ℕ → ℝ) (δ : ℝ), MissBound t u δ →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AuditAcceptsTol (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-              blankTiles TR U (A.transcript U x.1 x.2.1))
-            (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
-            u (drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
+          AuditAcceptsTol (goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+              blankTiles TR U (A.trace U x.1 x.2.1))
+            (overCapTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
+          T < (1 - γ) * (claimedWref TR U (A.trace U x.1 x.2.1) -
+            u (drawsIn (overCapTiles TR U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
         ≤ δ + η q U.layout.N
 
 /-! ## Pearl-C's tiles -/

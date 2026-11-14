@@ -91,7 +91,7 @@ the mean sample times that bound, and a bound on the mean over all coins does no
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn wrongAllAt wrongAllAt_subset gateBlock)
+open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn incorrectAllAt incorrectAllAt_subset gateBlock)
 
 /-! ## Averages -/
 
@@ -817,9 +817,9 @@ theorem eventTwo_split_acc {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (tr : ℕ → Option Bool) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r)) ≤
+      ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r)) ≤
       Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part tr (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part tr (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
@@ -840,11 +840,11 @@ theorem eventTwo_split_acc {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
         (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
           L.OffIreg H P x ω d.part rc.1 rc.2)))
   refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-    ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
+    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (L.iregVal H P x ω r))).symm.trans_le
       (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
   obtain ⟨hacc, v, hvl, hvF⟩ := hrc
   obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1)
-    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (wrongAllAt_subset s Pt d.part _ _ hw)) hvl hvF
+    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (incorrectAllAt_subset s Pt d.part _ _ hw)) hvl hvF
   obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
   rcases regTwo_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu tr huF i₀ u₀ hlead hu₀ with h | h | h | h
   · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
@@ -869,19 +869,19 @@ theorem eventTwo_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS
     (hN : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (run H P L.V x q.1 q.2.1).out = .acc ∧
       L.OffIreg H P x q.1 d.part q.2.1 q.2.2) ≤ bN) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-        ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (tr p.1) (L.iregVal H P x p.1 p.2)) ≤
+        ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (tr p.1) (L.iregVal H P x p.1 p.2)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + bI + bB + bN := by
   have hSK : L.toCompiled.SessionKS H := Compiled.sessionKS_of hA ⟨hS.fixed, hS.runs⟩
   obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
   have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
     Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
-      (fun ω r => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.iregVal H P x ω r))))
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.iregVal H P x ω r))))
       (fun ω r e => by simp only [iregVal_forkOn]) fun ω r sl => hκ ω r sl
   have hB' : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧

@@ -14,8 +14,8 @@ inputs = [
   "verity/__init__.py",
   "verity/circuits",
   "security/lean-audit.json",
-  "security/Definitions/InferenceOnly/Assumptions/Layered.lean",
-  "security/Definitions/InferenceOnly/Guarantees/Layered.lean",
+  "security/Definitions/Slowdown/Assumptions/Layered.lean",
+  "security/Definitions/Slowdown/Guarantees/Layered.lean",
   "verity/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the RTX PRO 6000 Server Edition's card file, and CREDITED_CLOCK_HZ the card file's clock.sm, read
   # through verity.device (test_tiers.py)

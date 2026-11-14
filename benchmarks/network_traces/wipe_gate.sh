@@ -68,7 +68,7 @@ release() {   # on every exit: the leak guard on the run dir and the hold, which
     exit "$rc"
   fi
   [ -z "$RUN" ] || [ ! -e "$KEEP/$RUN/fetch.tar.gz" ] || gates=(--gates "$KEEP/$RUN/fetch.tar.gz")
-  "${PY:-python3}" benchmarks/network_traces/leak_guard.py "${RESEARCH_RUN_DIR:-$(dirname "$PUB")}" "$Q" \
+  "${PY:-python3}" verity/protocols/accounting/certifier/device/leak_guard.py "${RESEARCH_RUN_DIR:-$(dirname "$PUB")}" "$Q" \
     ${gates[@]+"${gates[@]}"} --hold "$HELD" --release-to "$PUB" --report "$PUB/leak-guard.json"
   g=$?
   if [ -n "$SIGNALED" ]; then echo "wipe gate: $SIGNALED ended the leak guard (exit $g): nothing more released"; exit 143
@@ -122,7 +122,7 @@ with tarfile.open(sys.argv[2], "r:gz") as tar, tarfile.open(sys.argv[3], "w:gz")
 with tarfile.open(sys.argv[3], "r:gz") as tar:
     dep = json.load(tar.extractfile(next(m for m in tar if m.name.endswith("/out/deployment.json"))))
 n, w = dep["windows"], dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
-print(json.dumps({"run": end.get("run"), "rc": end.get("rc"), "ended_utc": end.get("ended_utc"),
+print(json.dumps({"run": end.get("run"), "rc": end.get("rc"),
                   "accepted": (end.get("verdict") or {}).get("accepted"), "origin_unix": dep["origin_unix"],
                   "windows": n, "session_s": round(n * w, 1)}))
 sys.exit(end.get("rc") or 0)
