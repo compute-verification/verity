@@ -215,7 +215,7 @@ theorem sameAt_coin {lg : β → List Verity.Release} {C : Type} {iF : Fintype C
     exact ⟨rfl, hrec x (t'.2 x)⟩
   exact key (w t'.1) (w' t'.1) fun y hy => hw t'.1 y hy
 
-/-- The prefix sampling design along `relK k`, at every layout, trees, releases before and continuation that records them. -/
+/-- The prefix distribution along `relK k`, at every layout, trees, releases before and continuation that records them. -/
 def RecSame (lg : β → List Verity.Release) {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) : Prop :=
   ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β),
     Records lg f pre → ∀ (s : Strategy (relK k fs ts f)) (τ : Tape (relK k fs ts f) s) (r r' : Fin K → FlockDeploy.Coin),
