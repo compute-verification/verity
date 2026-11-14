@@ -80,6 +80,9 @@ TMPL_SECTION = "TEMPLATE"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
+#: The key of a header ``registered`` entry naming the table rows it gives (the Lean verifier's
+#: ``Registered.TABLE_ROWS_KEY``)
+TABLE_ROWS = "table_rows"
 #: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
 #: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
 BINDING_TAG = "verity/flock-circuit/binding/v2"
@@ -1211,7 +1214,9 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the rows whose table rows are rows of a
     registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3 path to the
     registered root (``verity.protocols.proofs.spot.verifier.one_stage.registered``, committed in the port's row format: its
-    ``schema``); the header's ``registered``. A port
+    ``schema``); the header's ``registered``. An entry may name ``table_rows`` (``TABLE_ROWS``), strictly increasing rows
+    of its table among which is every row an instance reads: then ``positions[k]`` and ``paths[k]`` are row
+    ``table_rows[k]``'s, and the rows it doesn't name have none (``Registered.listed``). A port
     is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
     instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
@@ -1262,8 +1267,15 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
         by_name = {p.name: p for p in ports}
         for name, e in registered.items():
             rows_p = n if by_name[name] in orows else len(np.asarray(tables[name]).reshape(-1, by_name[name].words))
-            if set(e) != {"value", "positions", "paths"} or len(e["positions"]) != rows_p or len(e["paths"]) != rows_p:
-                raise ValueError(f"registered port {name}: a value, and one position and path per table row")
+            listed = [int(r) for r in e[TABLE_ROWS]] if TABLE_ROWS in e else None
+            given = rows_p if listed is None else len(listed)
+            if set(e) - {TABLE_ROWS} != {"value", "positions", "paths"} or len(e["positions"]) != given or len(e["paths"]) != given:
+                raise ValueError(f"registered port {name}: a value, and one position and path per table row (or per row "
+                                 f"of its {TABLE_ROWS})")
+            if listed is not None and (any(a >= b for a, b in zip(listed, listed[1:])) or min(listed, default=0) < 0
+                                       or max(listed, default=0) >= rows_p):
+                raise ValueError(f"registered port {name}: its {TABLE_ROWS} are strictly increasing rows of its "
+                                 f"{rows_p}-row table")
     if tables is not None:
         if set(tables) != {p.name for p in ins} or set(refs) != {p.name for p in ins}:
             raise ValueError("tables and refs: one per input port")
@@ -1282,6 +1294,9 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows, meta.get("out_row_ports"))}
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
+    for name, e in (registered or {}).items():
+        if TABLE_ROWS in e and not {int(r) for r in refs[name]} <= {int(r) for r in e[TABLE_ROWS]}:
+            raise ValueError(f"registered port {name}: an instance reads a table row its {TABLE_ROWS} do not name")
     check_shared_reads(meta, n, {p.name: len(rows[p.name]) for p in ins} if refs is not None else None, refs)
     if salts is None:
         salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
@@ -1302,7 +1317,9 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     if identifier is not None:
         head["identifier"] = identifier
     if registered is not None:
-        head["registered"] = {name: {"value": e["value"], "positions": [int(x) for x in e["positions"]], "paths": list(e["paths"])}
+        head["registered"] = {name: {"value": e["value"],
+                                     **({TABLE_ROWS: [int(x) for x in e[TABLE_ROWS]]} if TABLE_ROWS in e else {}),
+                                     "positions": [int(x) for x in e["positions"]], "paths": list(e["paths"])}
                               for name, e in registered.items()}
     if refs is not None:
         head["shared_rows"] = {p.name: len(rows[p.name]) for p in ports}

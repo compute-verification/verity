@@ -131,4 +131,112 @@ def twicePorts : Json :=
 #guard (match Registered.ofJson twicePorts with | .error e => e | .ok _ => "") ==
   "registered reads: port a0 twice: a verdict reports one port per name, and each check reads a name's port"
 
+/-! ### An entry that names its `table_rows`
+
+Port `a0`'s table is all four rows of A, in order (row `r` at position `r`, as a shared table such as a RoPE table is),
+and the sampled instances 0 and 1 (units 0 and 1) read only table rows 1 and 3. An entry naming `table_rows` gives a
+position and a path for those rows alone; the rows no instance reads need none, and are not opened. -/
+
+namespace Sampled
+
+def circuit : Circuit := { (default : Circuit) with ports := #[aPort "a0"] }
+
+/-- The verifier's `--registered` file: port `a0` of `h1/a`, unit 0 reading row 1 and unit 1 row 3. -/
+def file : Json :=
+  Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("a0", Json.mkObj [
+    ("value", Json.str "h1/a"), ("root", Json.str (hexOf (root 1))), ("leaves", Lean.toJson (4 : Nat)),
+    ("words", Lean.toJson (32 : Nat)), ("domain", Json.str (hexOf dom)), ("row_schema", Json.str v2),
+    ("reads", Lean.toJson [1, 3])])])]
+
+/-- Today's entry: a position and a path for each table row. -/
+def full : Json :=
+  Json.mkObj [("value", Json.str "h1/a"), ("positions", Lean.toJson [0, 1, 2, 3]),
+    ("paths", Json.arr (#[0, 1, 2, 3].map fun p => Json.str (hexOf (path 1 p))))]
+
+/-- An entry naming `table_rows` `rows`, at positions `ps`, with the paths of positions `via`. -/
+def listing (rows ps : List Nat) (via : List Nat := ps) : Json :=
+  Json.mkObj [("value", Json.str "h1/a"), (Registered.TABLE_ROWS_KEY, Lean.toJson rows), ("positions", Lean.toJson ps),
+    ("paths", Json.arr (via.map fun p => Json.str (hexOf (path 1 p))).toArray)]
+
+/-- The shared-row statement: table row `r` value `tags[r]`'s row `r`, instance `i` reading table row `2i + 1`, the
+header's `registered` entry `e`, its `shared_rows` naming `a0`'s four rows unless `shared` is false. -/
+def pub (e : Json) (tags : List Nat := [1, 1, 1, 1]) (shared : Bool := true) : Public :=
+  { header := Json.mkObj ([("units", Json.mkObj [("indices", Lean.toJson [0, 1])]),
+      ("registered", Json.mkObj [("a0", e)])] ++
+      (if shared then [("shared_rows", Json.mkObj [("a0", Lean.toJson (4 : Nat))])] else [])),
+    n := 2, digests := (tags.mapIdx fun r tag => bc tag r).toArray, outputs := #[], sha := .empty,
+    tables := some { counts := #[4], starts := #[0], refs := #[1, 3] } }
+
+def run (p : Public) : Except String Unit := do
+  Registered.check circuit p (some (← Registered.ofJson file)) true
+
+def passes (p : Public) : Bool := (run p).toBool
+
+def why (p : Public) : String :=
+  match run p with
+  | .error e => e
+  | .ok () => ""
+
+-- today's full header, accepted as before
+#guard passes (pub full)
+
+-- a header giving only the sampled rows, accepted; the unread rows 0 and 2 are not opened, so rows of another value
+-- there pass, where today's full header holding them is refused
+#guard passes (pub (listing [1, 3] [1, 3]))
+#guard passes (pub (listing [1, 3] [1, 3]) (tags := [2, 1, 2, 1]))
+#guard !passes (pub full (tags := [2, 1, 2, 1]))
+#guard why (pub full (tags := [2, 1, 2, 1])) ==
+  "registered reads: port a0: table row 0 does not open h1/a's registered root at position 0"
+-- naming every row is today's entry by another name
+#guard passes (pub (listing [0, 1, 2, 3] [0, 1, 2, 3]))
+
+-- a row an instance reads with no position and path: refused
+#guard !passes (pub (listing [1] [1]))
+#guard why (pub (listing [1] [1])) ==
+  "registered reads: port a0: instance 1 reads table row 3, and the header gives no position and path for it"
+#guard why (pub (listing [3] [3])) ==
+  "registered reads: port a0: instance 0 reads table row 1, and the header gives no position and path for it"
+#guard why (pub (listing [0, 2] [0, 2])) ==
+  "registered reads: port a0: instance 0 reads table row 1, and the header gives no position and path for it"
+
+-- a wrong path, or a listed row of another value: refused, as today
+#guard !passes (pub (listing [1, 3] [1, 3] (via := [1, 1])))
+#guard why (pub (listing [1, 3] [1, 3] (via := [1, 1]))) ==
+  "registered reads: port a0: table row 3 does not open h1/a's registered root at position 3"
+#guard why (pub (listing [1, 3] [1, 3]) (tags := [1, 2, 1, 1])) ==
+  "registered reads: port a0: table row 1 does not open h1/a's registered root at position 1"
+-- a listed row no instance reads is opened all the same
+#guard why (pub (listing [0, 1, 3] [0, 1, 3]) (tags := [2, 1, 1, 1])) ==
+  "registered reads: port a0: table row 0 does not open h1/a's registered root at position 0"
+
+-- a listed row at a position the verifier's program does not read for its unit: refused, as today
+#guard why (pub (listing [1, 3] [3, 1])) ==
+  "registered reads: port a0: table row 1 does not open h1/a's registered root at position 3"
+#guard why { pub (listing [1, 3] [3, 1]) with digests := #[bc 1 0, bc 1 3, bc 1 2, bc 1 1] } ==
+  "registered reads: port a0: unit 0 reads position 3, and the verifier's program reads 1"
+
+-- the listing itself: strictly increasing, inside the table, one position and one path per listed row
+#guard why (pub (listing [3, 1] [3, 1])) ==
+  "registered reads: port a0: its table_rows are not strictly increasing"
+#guard why (pub (listing [1, 1, 3] [1, 1, 3])) ==
+  "registered reads: port a0: its table_rows are not strictly increasing"
+#guard why (pub (listing [1, 4] [1, 3])) ==
+  "registered reads: port a0: its table_rows name a row past its table's 4"
+#guard why (pub (listing [1, 3] [1])) ==
+  "registered reads: port a0: one position and one path per row of its table_rows"
+#guard why (pub (listing [1, 3] [1, 3] (via := [1]))) ==
+  "registered reads: port a0: one position and one path per row of its table_rows"
+#guard why (pub (listing [1, 3] [1, 3]) (shared := false)) ==
+  "registered reads: a registered port is a table of a shared-row file"
+-- a table longer than the header says: the spread entry is not one position per table row
+#guard why { pub (listing [1, 3] [1, 3]) with tables := some { counts := #[5], starts := #[0], refs := #[1, 3] } } ==
+  "registered reads: port a0: one position and one path per table row"
+
+-- the rows an entry gives (`opened`, what a verdict reports), and `gives` agreeing with it at every row
+#guard Registered.opened none 4 == [0, 1, 2, 3] && Registered.opened (some #[1, 3]) 4 == [1, 3]
+#guard [none, some #[], some #[1, 3], some #[0, 1, 2, 3], some #[2], some #[0, 5, 9, 12, 40]].all fun sel =>
+  (List.range 48).all fun r => Registered.gives sel r == (Registered.opened sel 48).contains r
+
+end Sampled
+
 end Flock.Test.RegRows

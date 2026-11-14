@@ -205,6 +205,19 @@ def test_shared_rows_as_given_keep_equal_rows_apart(tmp_path):
                  **shared)
     with pytest.raises(ValueError, match="some rows' tables"):
         FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered={"nope": reg["cs"]}, **shared)
+    sparse = {"x": {"value": "v", FC.TABLE_ROWS: [0, 1], "positions": [5, 7], "paths": ["33" * 64, "44" * 64]}}
+    reads_01 = {**shared, "refs": {**refs, "x": [0, 1, 0, 1]}}
+    head = FC.write(text, s, 0, 4, None, tmp_path / "sparse.bin", salts=salts, registered=sparse, **reads_01)
+    assert head["registered"] == sparse, "an entry naming its table_rows gives a position and path for those rows alone"
+    with pytest.raises(ValueError, match="an instance reads a table row its table_rows do not name"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts, registered=sparse, **shared)
+    for bad in ([1, 0], [0, 0], [0, 3]):
+        with pytest.raises(ValueError, match="its table_rows are strictly increasing rows of its 3-row table"):
+            FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts,
+                     registered={"x": {**sparse["x"], FC.TABLE_ROWS: bad}}, **reads_01)
+    with pytest.raises(ValueError, match="or per row of its table_rows"):
+        FC.write(text, s, 0, 4, None, tmp_path / "bad.bin", salts=salts,
+                 registered={"x": {**sparse["x"], "positions": [5]}}, **reads_01)
 
 
 def test_registered_reads_refuse_a_circuit_naming_a_port_twice():

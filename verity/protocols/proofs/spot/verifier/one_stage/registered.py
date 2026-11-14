@@ -37,10 +37,12 @@ that is an array of whole rows (H1's tile reads R rows of A) reads each element'
 circuit's port of that row, and the Lean verifier holds each such port as its own registered port. A statement
 that reads row `r` commits it with the registration's salt, so its `b || c` is the registered one, and opens it: header
 `registered: {port: {"value", "positions", "paths"}}`, each of the port's table rows its position and its frame-v3 path
-(the siblings, leaf level first, 64 bytes each, hex). The verifier checks the port's row width, each path to the
-registered root and each instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`,
-all from its own program but the root); a statement that commits a registered row under fresh salts has no path and is
-refused.
+(the siblings, leaf level first, 64 bytes each, hex). An entry may instead name `table_rows`, strictly increasing rows of
+the port's table, `positions[k]` and `paths[k]` row `table_rows[k]`'s: the rows no instance reads then need none. The
+verifier checks the port's row width, each path the entry gives to the registered root, that every instance reads a row
+the entry gives, and each instance's position against its own read map (`reads_file`, the Lean verifier's
+`--registered`, all from its own program but the root); a statement that commits a registered row under fresh salts has no
+path and is refused.
 
 A *supplied value* is a registered value the verifier fills itself, from what it holds before the sample: each row is the
 bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
