@@ -1,6 +1,6 @@
 """The test-file family: one task per test file of every suite, which `runners/test_file.py` runs alone under the suites' read guard.
 
-Suites are what `tools/verity/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
+Suites are what `tools/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
 repository's own at the root, but those check runs after its Lean steps (`build.lean_suites`, `suites.AFTER_LEAN`), which the
 build family's lean-suites tasks run whole once lean-build has built what they need. A suite's test files are its `test_*.py`
 under its `testpaths`, outside a data directory
@@ -72,8 +72,8 @@ from pathlib import Path
 
 KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
-GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
-         "tools/verity/check/guard/child/verity_suite_reads.py")
+GUARD = ("tools/check/guard/verity_suite_guard.py", "tools/check/guard/child/sitecustomize.py",
+         "tools/check/guard/child/verity_suite_reads.py")
 REGISTRY = "artifacts.json"
 #: what `suites.py`'s guard lets every suite read besides its inputs (`suites.STORE_READS`; every pyproject.toml and the lockfile,
 #: `suites.metadata`, are the tree's `pyprojects` and the py env's spec)
@@ -641,7 +641,7 @@ class Imports:
 
     def named(self, path: str) -> list[str]:
         """The repository files under the paths file ``path`` names: string parts joined by `/` or one string holding one
-        (`"verity" / "core"`, `"tools/verity/check"`), each from its directory or the nearest one above it, and string parts
+        (`"verity" / "core"`, `"tools/check"`), each from its directory or the nearest one above it, and string parts
         joined to a path it builds (`VERIFIER / "agree.py"`, `VERIFIER = HERE.parent / "verifier"`)."""
         if (got := self._paths.get(path)) is None:
             text = self.tree.text(path)

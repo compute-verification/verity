@@ -91,7 +91,7 @@ and says so on stderr.
 - `run.py`: the command.
 - `references.json`: the two references' runs.
 - `tests/`: the printer, the three ways in and the references, against records built in the tests, a stand-in for the
-  store and one for the processes; no session runs in the suite (`uv run tools/verity/check/suites.py
+  store and one for the processes; no session runs in the suite (`uv run tools/check/suites.py
   benchmarks/memory`).
 
 **Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs

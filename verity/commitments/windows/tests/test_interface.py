@@ -1342,6 +1342,10 @@ def test_a_joined_circuit_states_its_ranks_and_names_its_free_rows():
     one = I.input_count(declared().description(), pins=PIN, roots=PIN)
     assert I.input_count(rec, pins=RANK_PINS, roots=RANK_PINS) == {k: 2 * v for k, v in one.items()}
     assert I.Free.of({**rec["free"][0], "cut": [0, 1]}) == replace(c.free[0], cut=(0, 1))
+    split = sliced(free=(I.Free(G8ID, "x", 0, 6, "peer"), I.Free(G8ID, "w", 0, 6, "weights"),
+                         I.Free(GID, "w", 0, 3, "weights"), I.Free(GID, "x", 0, 3, "peer", cut=(1, 1))),
+                   wires=(replace(sliced().wires[0], radix=(3, 1), step=(2, 1), cut=(0, 1)),))
+    assert split.description()["free"][-1]["cut"] == [1, 1]
     with pytest.raises(ValueError, match="no window: each rank commits its own"):
         I.Window(joined(), RUN, LAW, 4)
 
@@ -1373,6 +1377,7 @@ def test_ranks_and_free_rows_that_dont_fit_the_circuit_are_refused_by_name():
         (dict(free=(replace(joined().free[0], kind="other"), joined().free[1])), "of a kind of"),
         (dict(free=(replace(joined().free[0], cut=(1, 1)), joined().free[1])), r"rows \[c0, c0 \+ C\)"),
         (dict(free=(replace(joined().free[0], at=6), joined().free[1])), r"units \[6, 7\)"),
+        (dict(free=(replace(joined().free[0], cut=(0, 1)), joined().free[1])), "no cut where they are the whole port"),
     ]:
         with pytest.raises(ValueError, match=why):
             joined(**edit)
