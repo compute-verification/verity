@@ -61,13 +61,13 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from verity.commitments.scheme import DIGEST_BYTES
-from verity.protocol import Channel, Manifest, Role
-from verity.runtime import sources
-from verity.party import Finish, Identity, LogEntry, Received, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Int, Json, Message, Schema, Str
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.party import Finish, Identity, LogEntry, Received, Send
+from verity.protocol import Channel, Manifest, Role
 from verity.protocols.proofs.spot.verifier.parties import MAX_PROOF, MAX_REGISTRATION, MAX_SAMPLE, Unavailable
+from verity.runtime import sources
+from verity.runtime.runner import ProtocolDef
 
 from . import coins as Co
 from .protocol import DomainError

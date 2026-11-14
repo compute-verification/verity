@@ -60,6 +60,14 @@ COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
 LAW = "stratified:2"
 RUN = "ab" * 64
+
+
+def _rate(window: Path) -> str:
+    """The rule a test's audit states for the window it wrote under `LAW`: a stratified rate, at which the window's own
+    proof blocks register that design."""
+    return f"stratified-rate:2/{json.loads((window / 'registration.json').read_text())['population']}"
+
+
 COMPILER = {"name": "test/compiler", "digest": "cd" * 64}
 ADVICE = bytes(range(40))
 
@@ -554,7 +562,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
         RA.pinned({**got.pin, "program": "test/other"})
     with pytest.raises(ValueError, match="a pin is"):
         RA.pinned({"values": {}})
-    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
+    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
             "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
@@ -613,7 +621,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     for p, r in ((None, roots), ({"w": "cd" * 64}, roots), (pin, {})):
         free = RA.declared_count(ldoc, 0, pins=p, roots=r)
         assert (free["registered"], free["free"], free["unpinned"]) == (0, count["free"] + 8 * 8 * K, ["w"])
-    base = ["audit", "--window", str(listed.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
+    base = ["audit", "--window", str(listed.dir), "--law", _rate(listed.dir), "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
             ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local",
             "--main", "m.txt"]
     assert RA.main(base) == 1
@@ -739,23 +747,37 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
                            rec=json.loads((d / "registration.json").read_text()))
 
 
-@pytest.mark.parametrize("text, population, rule", [
-    ("stratified:1", 561, "stratified-rate:1/561"), ("subset:3", 40, "rate:3/40"), ("subset:9", 4, "rate:4/4"),
-    ("work:2", 10, "work-rate:2/10"), ("bernoulli:1/8", 10, "bernoulli:1/8"),
-])
-def test_the_audits_rule_is_the_rate_of_the_windows_design_which_a_stream_takes(text, population, rule):
-    """A stream's rule is a rate (`service.Law` refuses a fixed count), so the audit states the window's fixed design K of
-    N as the rate K/N of its kind (`rule_of`), which over N proof blocks samples K: one a stratum at ``stratified:1``."""
-    from verity.protocols.proofs.spot.verifier import service as S
-
-    assert RA.rule_of(D.parse_design(text), population) == rule
-    assert S.Law(rule).text == rule
+@pytest.mark.parametrize("fixed", ["subset:2", "stratified:2", "work:2"])
+def test_the_audit_refuses_a_fixed_count_as_its_rule_by_name(written, tmp_path, fixed):
+    """The audit's ``--law`` is the rule its stream states, a rate. A fixed count is refused by name before the verifier's
+    window is built, since K of N falls as the prover pads the N it registers: the audit's summary says so and it exits 1,
+    and ``warm`` refuses the same text. The audit never restates a count as K over the N the window registers."""
+    with pytest.raises(ValueError, match="a fixed count") as e:
+        RA.verifier_window(written.dir, fixed, None)
+    assert repr(fixed) in str(e.value)
+    assert RA.main(["audit", "--window", str(written.dir), "--law", fixed, "--circuit", written.rec["window"]["circuit"],
+                    "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out",
+                    str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]) == 1
+    why = json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    assert "a fixed count" in why and repr(fixed) in why
     with pytest.raises(ValueError, match="a fixed count"):
-        S.Law(text if not text.startswith("bernoulli") else "subset:1")
-    if text.startswith("subset"):
-        assert S.selection_law(S.Law(rule), population) == {"law": "subset", "k": min(int(text.split(":")[1]), population)}
-    if text == "stratified:1":
-        assert S.selection_law(S.Law(rule), population, [1, 200, 360]) == D.parse_design(text)
+        RA.main(["warm", "--window", str(written.dir), "--law", fixed, "--compose-cache", str(tmp_path / "cache")])
+    assert not hasattr(RA, "rule_of")
+
+
+def test_the_windows_design_is_the_one_the_stated_rate_names_over_its_own_proof_blocks(written):
+    """Under a rate, the verifier's window takes the sampling design that rate names over the window's own N proof blocks
+    (`a5.rated`, as the stream derives it): at 2 in 5 the window's 5 register the design they were committed under, and
+    at half that rate another design, which the stream then holds the registration to and refuses. The rate is its
+    caller's constant: the window's records change nothing but the design's K."""
+    committed, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
+    assert committed.population == 5 and written.rec["law"]["k"] == 2
+    for rate, design in (("stratified-rate:2/5", {"law": "stratified", "k": 2}), ("stratified-rate:2/10", {"law": "stratified", "k": 1}),
+                         ("rate:2/5", {"law": "subset", "k": 2}), ("rate:1/1", {"law": "subset", "k": 5})):
+        mine, _doc, _sets = RA.verifier_window(written.dir, rate, None)
+        assert mine.law == design and mine.work_table is None
+        assert (mine.members, mine.partition_digest, mine.run) == (committed.members, committed.partition_digest, RUN)
+    assert RA.verifier_window(written.dir, _rate(written.dir), None)[0].law == committed.law
 
 
 def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch, capsys):
@@ -774,7 +796,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
         seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"], declared=a.declared)
-        ruled.append((a.rule, A5.rated(mine, a.rule) == mine, mine.population))
+        ruled.append((a.rule, mine.law))
         return {"audit": {"accepted": True}}, True
 
     def output_class(circuit, given=(), own=frozenset()):
@@ -788,7 +810,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", output_class)
-    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
             "local", "--main", "m.txt"]
     for extra, why in (([], "tie the audit to it"), (["--tie", str(got.w_file)], "give --tie-prefix"),
@@ -799,8 +821,9 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert RA.main([*base, "--out", str(tmp_path / "out"), "--tie", str(got.w_file), "--tie-prefix", "h1/"]) == 1
     tied, pins = RA.tie_of(json.loads((got.dir / "circuit.json").read_text()), got.w, "h1/")
     assert seen["tie"] == tied and tied["log"] == [got.w] and pins == {got.name: {**got.entry, "value": got.name}}
-    (rule, same, n), = ruled
-    assert rule == f"stratified-rate:2/{n}" and same, "the stream's rule is a rate, and its design the window's own"
+    (rule, design), = ruled
+    assert rule == _rate(got.dir) and design == D.parse_design(LAW), \
+        "the stream's rule is the rate the audit was given, and the window's design the one that rate names"
     assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
     assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
                                                  and f["ports"]["wrow"]["domain"] == got.entry["domain"]
@@ -1098,7 +1121,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", lambda circuit, given=(), own=frozenset(): [])
-    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
             "local", "--main", "m.txt"]
     assert RA.main([*base, "--out", str(tmp_path / "out")]) == 1
@@ -1311,7 +1334,7 @@ def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segme
 
 
 def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
-    base = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", "00" * 64, "--m0-pythonpath", ".", "--bin", "b",
+    base = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", "00" * 64, "--m0-pythonpath", ".", "--bin", "b",
             "--lean", "l", "--firewall", "f", "--out", "o"]
     with pytest.raises(SystemExit) as e:
         RA.main(base)
@@ -1338,7 +1361,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5_coins as AC
 
-    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+    args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"), "--main", "main.txt"]
     for bad in (["--peer", "vy-nebius-1"], ["--challenger-key", "key.json"]):
@@ -1407,7 +1430,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
     monkeypatch.setattr(RA, "free_ports", free_ports)
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    args = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+    args = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
             "--challenger", "local", "--main", "m.txt"]
     for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
@@ -1442,7 +1465,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"audit": {"accepted": True}}, True))
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     capsys.readouterr()
-    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
+    assert RA.main(["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", rec["window"]["circuit"], "--run", RUN,
                     "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
                     "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
     rows = dict(IF.layout(COORD).rows)
@@ -1472,7 +1495,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
 
     monkeypatch.setattr(A5, "warm", warm)
     cache = str(tmp_path / "cache")
-    assert RA.main(["warm", "--window", str(written.dir), "--law", LAW, "--compose-cache", cache, "--jobs", "2"]) == 0
+    assert RA.main(["warm", "--window", str(written.dir), "--law", _rate(written.dir), "--compose-cache", cache, "--jobs", "2"]) == 0
     assert seen == {"cache": cache, "jobs": 2, "members": [TID, TID],
                     "inputs": {TID: ["unit/window", written.doc["statements"][TID]]}}
     lines = capsys.readouterr().out.splitlines()
@@ -1490,7 +1513,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+    args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
     for extra, want in ((["--compose-cache", cache], cache), ([], None)):
