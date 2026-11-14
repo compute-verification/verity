@@ -1617,11 +1617,11 @@ def one_session(s: str) -> int:
 #: the ZK server, which `ONE_AT_A_TIME` doesn't cover, so more at once is the flag's to give
 LEAN_WORKERS = 1
 #: a Lean check's memory estimate per byte of its member's circuit file, which Lean's verify (`a0.lean_verify`) reads,
-#: hashes and parses whole
+#: hashes and parses whole. Provisional: no measured peak sets it yet
 LEAN_BYTES_PER_CIRCUIT_BYTE = 5
 #: a member's session's memory estimate per byte of its circuit file (its prover, its server and the audit's Python at
 #: their peak), which the Lean checks beside it leave it (`LeanPool.session`). A node the audit shares still runs one check
-#: at a time (served_verdicts.sh)
+#: at a time (served_verdicts.sh). Provisional: no measured peak sets it yet
 SESSION_BYTES_PER_CIRCUIT_BYTE = 20
 
 
@@ -1751,7 +1751,7 @@ def cgroup_room(cgroup: Path = Path("/proc/self/cgroup"), root: Path = Path("/sy
 def memory_limit(level: Path) -> int | None:
     """A cgroup's memory limit in bytes: the lesser of its `memory.high`, past which the kernel throttles and reclaims
     it, and its `memory.max`, at which it kills in it, where each is a number; None where neither is (`max`, or no such
-    file). A scope started with a limit alone (systemd's `MemoryMax=` and no `MemoryHigh=`, as a pool job's is) has
+    file). A scope started with a limit alone (systemd's `MemoryMax=` and no `MemoryHigh=`) has
     `memory.high` at `max`, so its limit is `memory.max`."""
     stated = [(level / f).read_text().strip() for f in ("memory.high", "memory.max") if (level / f).is_file()]
     return min((int(x) for x in stated if x != "max"), default=None)
@@ -2107,8 +2107,9 @@ def lean_options(p: argparse.ArgumentParser) -> None:
                    help=f"Lean checks of finished members at once, beside the next member's session (sessions stay one at a "
                         f"time); default {LEAN_WORKERS}, one check at a time")
     p.add_argument("--audit-mem-gb", type=float,
-                   help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
-                        f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
+                   help=f"the audit's memory, which admits a start and limits nothing that runs: a Lean check starts "
+                        f"only while its estimate fits within it beside the running session's, estimated at "
+                        f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks', each at "
                         f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available, read as the sessions start and "
                         f"again as the negatives' workers and the registered reads' pool are made, the least of the "
                         f"node's MemAvailable and the room under each cgroup memory limit over the audit, its file "

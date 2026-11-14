@@ -112,11 +112,12 @@
 #     samples one proof block of class 4,32,4's window, under H1_TIE one of each template's, on V3C_CHALLENGER's coins
 #     (below, Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's)
 #     and proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`), its sessions one at a time and
-#     Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a time, default 1 on every path: on a node it
-#     shares within V3C_AUDIT_MEM_GB beside the running session's estimate (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`); in a
-#     follow-on, which passes the flag only where V3C_LEAN_WORKERS is set and else leaves a5's own default
-#     (`a5.LEAN_WORKERS`, 1), within the V3C_AUDIT_MEM_GB its command sets, else what its node has free, beside
-#     that estimate (`a5.LeanPool`). What the audit reads as free (`a5.available_memory`) is the least of two: its
+#     Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a time, default 1 on every path, each started
+#     only while its memory estimate fits: on a node it shares, with the running session's estimate
+#     (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`) within V3C_AUDIT_MEM_GB; in a follow-on, which passes the flag only where
+#     V3C_LEAN_WORKERS is set and else leaves a5's own default (`a5.LEAN_WORKERS`, 1), with that estimate within the
+#     V3C_AUDIT_MEM_GB its command sets, else what its node has free (`a5.LeanPool`). The estimates admit a start
+#     and limit nothing that runs: no limit is set on a check, and one over the budget runs alone. What the audit reads as free (`a5.available_memory`) is the least of two: its
 #     node's MemAvailable, and under each cgroup memory limit over it (the lesser of memory.high and memory.max) the
 #     limit less what the cgroup holds that the kernel can't give back at once. A cgroup's file cache (memory.stat's
 #     inactive_file and active_file, less file_dirty, file_writeback and file_mapped) is counted free, as MemAvailable
