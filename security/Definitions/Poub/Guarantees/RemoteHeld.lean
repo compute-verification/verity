@@ -21,7 +21,7 @@ node's disks, and `B = B_r + B_d` blocks at once beyond that rate, one maximal r
   whose passes read it wrong, or read wrong in every pass of each group it is absent across, each wrong receipt of
   group `g` accounting for at most `v_g` ticks (`Pace.rate`, `Pace.fill`).
 * **HeldOverTimeLinks**: the same without Identity, the node's boundary links charged at their ceiling `β_l` and one
-  link window `B_l`, at `X = s/E + β + β_l` and `B = B_r + B_d + B_l`.
+  link burst `B_l`, at `X = s/E + β + β_l` and `B = B_r + B_d + B_l`.
 
 Known limits, each a premise a real node may fail rather than a gap in the bound:
 

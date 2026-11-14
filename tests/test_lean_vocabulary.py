@@ -60,7 +60,7 @@ EXCLUDED_FILES = re.compile(r"(^test_.*\.py|^conftest\.py|Difftest.*\.lean|TestM
 FIX = "see AGENTS.md 'One vocabulary' and this module's docstring"
 
 #: The concepts held to one canonical object each.
-CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", "Coins", "CoinTree", "Draw", "SamplingDesign", "Stmt",
+CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "PrivateCircuit", "Partition", "Coins", "CoinTree", "Draw", "SamplingDesign", "Stmt",
             "Statement", "Witness", "Digest", "Commitment", "Merkle", "Collision", "Device", "InteractiveDevice", "Dag",
             "Transcript", "Hash", "Signature",
             "Site", "Layout", "Hardware", "Machine", "Node", "Card", "Link", "Registration", "Registry", "Period",
@@ -106,7 +106,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": (),  # nothing in scope declares it
+    "PrivateCircuit": ("verity/circuits/private_circuits/universal.py::PrivateCircuit",
+                       "security/Definitions/Claims/Sampling.lean::Claims.Sampling.PrivateCircuit"),
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
