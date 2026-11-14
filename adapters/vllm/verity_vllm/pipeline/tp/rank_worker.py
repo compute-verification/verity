@@ -1183,7 +1183,7 @@ class TP2CaptureWorkerExtension:
         """Openings sampled from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
         this rank's map digest + salt, from the pair's identities coin `source_hex`, sampled after that root: `pipeline.commit_coins`;
         forced late step + one per family), opened against the rank's retained tree and verified
-        with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
+        with the serving core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
         binding counts as a failed opening (fail-closed)."""
         import time as _t
 
@@ -1213,7 +1213,7 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_open(self, *, positions_by_rank: dict, claimed_roots: dict | None = None) -> dict[str, Any]:
         """Open THIS rank's challenged positions (`positions_by_rank[str(rank)]`, sampled by the driver from the COMBINED run root) against
-        the rank's retained tree; verify each opening with the production core against the CLAIMED root for this rank
+        the rank's retained tree; verify each opening with the serving core against the CLAIMED root for this rank
         (`claimed_roots[str(rank)]`: the driver's commitment-vector entry; absent = the worker's own).  A rank without a commitment reports, never raises."""
         import statistics
         import time as _t

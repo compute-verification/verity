@@ -36,7 +36,7 @@ H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"), ("ir_lower.standalone", "IL.standalone"),
           ("ir_lower.lower_gates", "IL.lower_gates"), ("ir_lower.layout", "IL.layout"),
           ("fast_stage.ands_layout", "fast_stage.ands_layout"), ("Program", "CS.Program"), ("program_digest", "CS.program_digest"),
-          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.netlist", "FC._write_netlist"),
+          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.circuit_description", "FC._write_circuit_description"),
           ("compose.dummy", "FC._dummy"), ("circuit.digests", "FC._file_digests"), ("circuit.meta_of", "FC.meta_of"))
 CENSUS = ("ir_lower.lower_gates", "fast_stage.ands_layout")
 GIB = 1 << 30

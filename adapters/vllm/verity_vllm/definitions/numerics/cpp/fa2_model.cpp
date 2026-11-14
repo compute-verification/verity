@@ -13,7 +13,7 @@
 //     order (lane q of the quad owns columns 8*nj + 2q + j, j fastest) where, as COMPILED, the rescale of
 //     the running partial sum is contracted into the first add of the block: l = FFMA(scores_scale, l,
 //     p[first col]) (nvcc fmad contraction across `row_sum *= scores_scale; reduce_sum(...)`, verified in
-//     the production SASS), P rounded to BF16 (RNE) before the PV MMA;
+//     the serving SASS), P rounded to BF16 (RNE) before the PV MMA;
 //   * the epilogue (normalize_softmax_lse): quad allreduce (l0 + l2) + (l1 + l3), inv = 1/sum via
 //     MUFU.RCP (1.0 when sum == 0 or NaN), O *= inv (FMUL), RNE to BF16;
 //   * every FP32 op with FTZ (--use_fast_math: .ftz on FADD/FMUL/FFMA; MUFU.EX2/RCP are the
@@ -162,7 +162,7 @@ void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16
             float sc = mufu_ex2(fmul_ftz(fsub_ftz(m, cur), C.scale_log2), C.ex2_tab);
             if (m != -INFINITY) chk(sc);  // (-inf - cur) -> ex2(-inf) = 0 is the kernel's own first-block path
             // The compiled kernel contracts `row_sum *= scores_scale; row_sum += p[first col]` into ONE FFMA per
-            // lane (nvcc fmad contraction across the inlined statements; confirmed in the production SASS:
+            // lane (nvcc fmad contraction across the inlined statements; confirmed in the serving SASS:
             // `FFMA.FTZ R118, R100, R171, R118` = scores_scale * l_old + p_first).  So the rescaled partial sum
             // is never rounded on its own.  Variant bit 128 restores the source-literal FMUL-then-FADD form.
             if (C.variant & 128) { for (int i = 0; i < 4; ++i) l[i] = fmul_ftz(l[i], sc); }
@@ -242,7 +242,7 @@ void fa2_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, 
     // 2 PV k-steps reversed; 4 QK k-steps reversed; 8 single sequential row sum (no lanes); 16 row sum over
     // BF16-rounded P; 32 FMUL+FSUB instead of FFMA for the exp2 argument; 64 blocks ascending; 128 source-literal
     // row-sum rescale (FMUL then FADD) instead of the compiled FFMA contraction.  Every bit was measured to be
-    // WRONG against the production kernel on the natural fixture (see results/<id>/dataflow_variants.json).
+    // WRONG against the serving kernel on the natural fixture (see results/<id>/dataflow_variants.json).
     Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, variant, &AMPERE_BF16, 1.f};
 #pragma omp parallel for schedule(dynamic, 1)
     for (int i = 0; i < nrows; ++i) {

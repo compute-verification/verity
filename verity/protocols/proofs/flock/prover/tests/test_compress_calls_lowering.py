@@ -14,7 +14,7 @@ from verity.circuits.boolean.forms import const_bits
 from verity.circuits.defs import bind
 from verity.commitments.gates import embedding as E, frame_v3 as F, hm96 as H, rowleaf as R
 from verity.commitments.gates.sha512 import IV, Sha512CompressFolded
-from verity_flock.ir_lower import _sha256, layout, netlist_pieces, whole
+from verity_flock.ir_lower import _sha256, layout, circuit_description_pieces, whole
 
 ROW = "hm96-sha512/row/v2"
 #: target -> (useful rows, circuit description sha256) with the compressions' gates written out
@@ -49,7 +49,7 @@ def test_a_call_trace_lowers_to_the_whole_circuit(name: str) -> None:
     U = whole(_target(name))
     lay = layout(U.circuit(), [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))])
     h = hashlib.sha256()
-    for piece in netlist_pieces(lay, "unit"):
+    for piece in circuit_description_pieces(lay, "unit"):
         h.update(_sha256(piece).digest())
     assert (lay.useful, h.hexdigest()) == PINS[name]
 

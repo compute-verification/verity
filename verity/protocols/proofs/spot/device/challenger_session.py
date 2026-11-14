@@ -14,9 +14,9 @@ of record, from whose coins each rank's docket samples once (`spot.coins.Challen
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
-  peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
-  secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
-  deployment's record (`served_h1.coins.key_record`), never the session's key.json. Either way the session is a withheld
+  peer, `open` on the TP run root (`GateClient.open`), the client on the peer's 127.0.0.1:PORT with the session's
+  secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins` (`challenger_gate`); the verifier's
+  key is then the deployment's record (`challenger_gate.key_record`), never the session's key.json. Either way the session is a withheld
   one (`reserve --withhold`; the sample's verifier takes only such a session's coins, `challenger.withheld_on`): the gate
   hands out no coin commitment root before the session's end, its hello answers the layout alone, each coin comes as its
   raw bytes, and at the close the challenger releases its commitment and every coin's full opening, which the client
@@ -73,7 +73,7 @@ from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC, remote as R
+from verity.protocols.proofs.spot.device import challenger as Ch, challenger_gate as G, coins as CC, remote as R
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.circuits.program import Program
@@ -99,11 +99,6 @@ def _module(name: str, path: Path):
     module = sys.modules[name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def served_h1():
-    """PoUW's served window's coins (`benchmarks/pouw/served_h1/coins.py`): the gate's calls and the key record."""
-    return _module("a5_served_h1_coins", TREE / "benchmarks/pouw/served_h1/coins.py")
 
 
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
@@ -439,12 +434,12 @@ def local_key(host: str | Path, params: tuple[int, int] = LOCAL_PARAMS) -> Ch.Ch
 
 def verifier_key(key_record: str | None, host: str | Path | None) -> Ch.ChallengerKey:
     """The challenger's key as a verifier holds it when it reads the samples of a session it did not open: the
-    deployment's key record at `key_record` (`served_h1.coins.key_record`), or the development host's at `host`
+    deployment's key record at `key_record` (`challenger_gate.key_record`), or the development host's at `host`
     (`local_key`). Exactly one names it."""
     if (key_record is None) == (host is None):
         raise Ch.CoinError("the verifier holds the challenger's key from one place: --challenger-key, the deployment's "
                            "key record, or --challenger-host, the development challenger the audit's first command kept")
-    return served_h1().key_record(key_record) if key_record is not None else local_key(host)
+    return G.key_record(key_record) if key_record is not None else local_key(host)
 
 
 class _Manager(BaseManager):
@@ -614,7 +609,7 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
     if got.get("withheld", False) is not withhold:
         return f"the gate opened a {'plain' if withhold else 'withheld'} session, not a {'withheld' if withhold else 'plain'} one"
     if not withhold:
-        return "its challenger signed no commitment" if got.get("commitment") is None else None
+        return None if re.fullmatch(r"[0-9a-f]{128}", str(got.get("commitment"))) else "its challenger signed no commitment"
     if got.get("commitment") is not None:
         return "the gate handed out a withheld session's coin commitment before its end"
     return None if got.get("signed") is True else "its challenger signed no record"
@@ -704,9 +699,8 @@ class GateClient:
     records at `key_record`; `main` is the verifier's copy of main's first-parent line."""
 
     def __init__(self, gate: str, ssh_key: str | None, peer: str, key_record: str, main: list[str]) -> None:
-        self.H1 = served_h1()
-        self.gate, self.peer, self.ssh = gate, peer, self.H1.ssh_args(ssh_key)
-        self.key = self.H1.key_record(key_record)
+        self.gate, self.peer, self.ssh = gate, peer, G.ssh_args(ssh_key)
+        self.key = G.key_record(key_record)
         self.main = main
         self.session: str | None = None
 
@@ -728,14 +722,11 @@ class GateClient:
                                f"verifier's copy ({len(self.main)} commits from {self.main[0][:10] if self.main else None}): "
                                "repin the host to a commit on it (vy-challenger-pin), or refresh --main, before spending the "
                                "root's one session")
-        got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", scheme, "--families",
-                                            json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes),
-                                            *(["--withhold"] if withhold else [])], self.ssh)
+        got = G.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", scheme, "--families",
+                                      json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes),
+                                      *(["--withhold"] if withhold else [])], self.ssh)
         self.session = got["session"]
-        if not withhold:
-            session, _ = self.H1.open_window(self.gate, self.session, bytes.fromhex(root), self.ssh)
-            return session.address, session.secret.hex(), session.commitment
-        got = self.H1.gate_call(self.gate, ["open", "--session", self.session, "--root", root], self.ssh)
+        got = G.gate_call(self.gate, ["open", "--session", self.session, "--root", root], self.ssh)
         secret = got.pop("secret", None)
         if (got.get("session") != self.session or got.get("root") != root or type(got.get("port")) is not int
                 or not (isinstance(secret, str) and re.fullmatch(r"[0-9a-f]{64}", secret))):
@@ -743,14 +734,14 @@ class GateClient:
                                f"secret: {json.dumps(got)}")
         if (why := opened_reason(got, withhold)) is not None:
             raise Ch.CoinError(f"infra's gate opened {self.session}, and {why}: `status {self.session}` says why")
-        return f"127.0.0.1:{got['port']}", secret, None
+        return f"127.0.0.1:{got['port']}", secret, None if withhold else got["commitment"]
 
     def finish(self, dest: Path, minutes: int = MINUTES) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
         """Once the gate's ledger has the session's end: its fetched directory, the ledger and the host's pins log in `dest`, and
         the key."""
         assert self.session is not None
         deadline = time.monotonic() + 60 * (minutes + 5)
-        while self.H1.gate_call(self.gate, ["status", self.session], self.ssh).get("end") is None:
+        while G.gate_call(self.gate, ["status", self.session], self.ssh).get("end") is None:
             if time.monotonic() > deadline:
                 raise Ch.CoinError(f"session {self.session} has no end entry in the gate's ledger after {minutes + 5} minutes")
             time.sleep(10)
@@ -759,7 +750,7 @@ class GateClient:
             tar.extractall(dest, filter="data")
         (dest / "windows.jsonl").write_bytes(self._raw("ledger"))
         (dest / "pins.jsonl").write_bytes(self._raw("pins"))
-        return self.H1.published(dest / self.session), dest / "windows.jsonl", dest / "pins.jsonl", self.key
+        return G.published(dest / self.session), dest / "windows.jsonl", dest / "pins.jsonl", self.key
 
 
 class Loopback:

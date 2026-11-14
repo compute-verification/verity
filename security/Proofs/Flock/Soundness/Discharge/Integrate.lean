@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 /-!
 # The headline at the executable, composed
 
-`Prog.flock_headline_live` (`Discharge/Exec`'s salted, one-table headline at verity-verify-proof's verdict) at the production program,
+`Prog.flock_headline_live` (`Discharge/Exec`'s salted, one-table headline at verity-verify-proof's verdict) at the proving program,
 with every guarantee the merged branches prove discharged and every other one a named hypothesis:
 * `Sites`: the session's table at each sample (`SampleSetup`, `tableAt`: setupH's statement at a sample it sets up, an
   unsatisfiable one elsewhere), each sampled proof block's site at its rank in the sample (`sitesAt`, distinct units at distinct

@@ -112,13 +112,13 @@ from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F
 
 
 def _tensors() -> Any:
-    from verity.protocols.accounting.pouw.prover.serving.tensors_device import TENSORS
+    from verity_torch.pouw.tensors_device import TENSORS
 
     return TENSORS
 
 
 def _h1_device() -> Any:
-    from verity.protocols.accounting.pouw.prover.serving.h1.h1_device import H1
+    from verity_torch.pouw.h1.h1_device import H1
 
     return H1
 
