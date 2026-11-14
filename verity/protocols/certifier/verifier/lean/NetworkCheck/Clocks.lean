@@ -127,10 +127,10 @@ def openingRefusals (s : Openings) : Array (Option String) :=
     if r.isSome then r else if (salts.get? o.salt.data).any (·.2) then some "salt" else none
 
 /-- Link-windows in order: by link, then by window. -/
-def linkWindowOrder (a b : String × Nat) : Ordering := (compare a.1 b.1).then (compare a.2 b.2)
+def transferBlocksOrder (a b : String × Nat) : Ordering := (compare a.1 b.1).then (compare a.2 b.2)
 
 /-- What the openings that hold sign, by link-window: the first one's sync, and whether another signs another sync. -/
-abbrev Signed := Std.TreeMap.Raw (String × Nat) (ClockSync × Bool) linkWindowOrder
+abbrev Signed := Std.TreeMap.Raw (String × Nat) (ClockSync × Bool) transferBlocksOrder
 
 /-- The openings that hold (`codes` none), keyed by link-window once, so that `signedSyncs` and `split` take n log n
 steps in the openings. -/
@@ -152,7 +152,7 @@ def signedSyncs (s : Openings) (signed : Signed) : Array ClockSync := Id.run do
   return out
 
 /-- The link-windows, of any link, that the holding openings sign two or more syncs for, which have none, in
-`linkWindowOrder`. -/
+`transferBlocksOrder`. -/
 def split (signed : Signed) : Array (String × Nat) :=
   signed.foldl (init := #[]) fun acc k (_, two) => if two then acc.push k else acc
 

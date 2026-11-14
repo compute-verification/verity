@@ -98,7 +98,7 @@ def ExpectedRowCausal : Prop :=
 /-- **`|a|` bits per execution block opened.** If the monitoring period's first `n` steps lie within its first `m`
 execution blocks (`n ≤ m·(g·T)`), the constant-rate Program's accepted sequences number at most
 `2^(min(E, m)·k) · D^n`: only the advice of blocks those steps reach counts, however many blocks the advice covers. -/
-def EncardAccSeqsLeConstantRateWindows : Prop :=
+def EncardAccSeqsLeConstantRateExecutionPhases : Prop :=
   ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
     (n D m : ℕ) (hn : n ≤ E * (g * T)) (hm : n ≤ m * (g * T)),
@@ -120,11 +120,11 @@ def EncardDecodableLeConstantRate : Prop :=
 
 /-- **`|a|` bits per execution block, from any block's start.** Fix what a run showed through its first `e₀` execution
 blocks, `p`, and take the `m` blocks after them, within the `E` blocks (`hn` is
-`EncardAccSeqsLeConstantRateWindows`'s `n ≤ E·(g·T)` for the monitoring period's first `n = (e₀ + m)·(g·T)` steps). The
+`EncardAccSeqsLeConstantRateExecutionPhases`'s `n ≤ E·(g·T)` for the monitoring period's first `n = (e₀ + m)·(g·T)` steps). The
 constant-rate Program's accepted sequences of that length with jitter below `D` that continue `p` number at most
 `(2^k · D^(g·T))^m`: `|a| + g·T·log2 D` bits per execution block, `|a|` under J (`D = 1`), whatever came before. At
 `e₀ = 0` they are the monitoring period's first `m` blocks. -/
-def EncardAccSeqsLeConstantRatePerWindow : Prop :=
+def EncardAccSeqsLeConstantRatePerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {In : Type} (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
     (e₀ m D : ℕ) (hn : (e₀ + m) * (g * T) ≤ E * (g * T)) (p : List (Obs L K S)),
@@ -136,7 +136,7 @@ show the same observations `p` through the first `e₀` execution blocks, each a
 them. A decoder of the wire through those blocks recovers at most `(2^k · D^(g·T))^m` of them: whatever the first `e₀`
 blocks showed, a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` more bits through egress timing and
 content advice over the next `m` blocks. At `e₀ = 0` they are the monitoring period's first `m` blocks. -/
-def EncardDecodableLeConstantRatePerWindow : Prop :=
+def EncardDecodableLeConstantRatePerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire : Type}
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (e₀ m D : ℕ)
@@ -212,7 +212,7 @@ def EncardIngressDecodableLeContents : Prop :=
 monitoring period's first `m` whole windows of `T` buckets, its first `n = m·T` steps: for one content assignment `c`,
 at most `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each link-window contributes the factor `(r ℓ + 1)^T`, its
 `T·log2(r ℓ + 1)` bits, and each window `D^T` of jitter, 1 under J. -/
-def EncardIngressObsDecodableLePerWindow : Prop :=
+def EncardIngressObsDecodableLePerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)
     (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
@@ -225,7 +225,7 @@ def EncardIngressObsDecodableLePerWindow : Prop :=
 /-- **Content plus timing, per execution phase.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows
 of `T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
 `T·Σ_ℓ log2(r ℓ + 1)` bits of timing and `T·log2 D` of jitter per window. -/
-def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
+def EncardIngressObsDecodableLeContentsPerExecutionPhase : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)
     (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
@@ -305,11 +305,11 @@ the ingress grid, and their content is exempt.
 
 - **Timing.** The coin link is one more ingress link, at τ_in and an allocation r_coin. It adds a factor
   `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per execution phase, the K
-  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`). r_coin isn't calibrated. At r_coin = 1, one 4
+  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`). r_coin isn't calibrated. At r_coin = 1, one 4
   KiB frame per bucket, it is 600 bits per execution phase (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is
   on top of the `requests` link's 3,077.6 bits per execution phase (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a
   day in all.
-- **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` charges `log2 #Cs` for the
+- **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase` charges `log2 #Cs` for the
   content, where `Cs` is one set of content assignments covering every message counted. Conditioned on the
   challenger's coins, which is how the model treats a randomized outside party, the coin link's content is one fixed
   stream `c_coin`: the challenger's coin tree, read in order. So `Cs = Cs_requests × {c_coin}`, and the coins add
