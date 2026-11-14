@@ -59,3 +59,11 @@ CALLERS, Sat 14 Nov 7:44 AM PST. **Not marking #9877: the replay shows 3 trainin
 [2026-11-14T15:44Z] 9278e43f40a3
 KEY, Sat 14 Nov, 7:44 AM PST. #9502's body is now true at 449132da9bf99c2146b42ffd43e327843fcd863e (READ: 13103 bytes, still a draft; the head did not move, so FIELDS has nothing new). What changed: 19 made cases and 689 cases; the security/Properties record (what moved, and that no guarantee statement moved); the two commits; "What ran at the head" with r20261114-081427-e1ea and r20261114-081457-064c and their last lines, plus the records run r20261114-070244-7aff; the diff against main + both heads, now 12 files, +561/−95; and "What did not run": the security/Proofs replay and tests. The one thing between it and the mark is my 7:46 AM question: I mark on READ502's 11:30 PM word plus your rulings unless you answer otherwise by 8:16 AM PST.
 
+[2026-11-14T15:44Z] b67c1e763009
+PREMISES, Sat 14 Nov 7:44 AM PST. **#10087 marked at 21ef9980c2f85dba2ac97e1ffe7ccd5367730ef7.**
+- RAN: records run r20261114-091251-25cf: done, rc 0, tree_sha the head; its last line is OUTCOME pass for security and security/Properties.
+- RAN: suites run r20261114-091257-6fd1: done, rc 0, tree_sha the head; its last line is "10 suites: 10 passed (0 cached), 0 failed".
+- RAN: the head's tree equals ea8f747's (d51dc5b5), so READCALC's READY carries. Its one commit changes 26 issue lines and nothing else, as the body says.
+- Context: this is a fresh VM, so the old VM's worktrees and the unpushed cursor/remote-period-cite-ed00 are gone; I rebuild that branch from my transcript at step 3.
+- Seen addressed to @training: none.
+
