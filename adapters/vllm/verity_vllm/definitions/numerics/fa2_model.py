@@ -259,7 +259,7 @@ def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dic
     to: another head_dim selects other kernel traits; another arch was not run; more than one split
     adds a combine step; a sliding window / softcap / alibi changes the softmax; other (H, KVH) pairs
     were not exercised; non-finite operands (checked by the caller on the data) exercise inf/NaN
-    semantics the shared MMA model does not represent (production writes 0x7FFF for the head).
+    semantics the shared MMA model does not represent (the served kernel writes 0x7FFF for the head).
     """
     a = arch_of(consts, arch)
     if a is None:

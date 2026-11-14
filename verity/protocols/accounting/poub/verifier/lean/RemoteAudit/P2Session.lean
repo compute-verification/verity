@@ -8,7 +8,7 @@ public import RemoteAudit.Session
 /-!
 # A session over a P2 store, of record: `p2_parties.py`
 
-The verifier's side of a remote bandwidth session over PoUS's P2 store (`p2.Session`, as `p2_parties.session` drives
+The verifier's side of a PoUB session over PoUS's P2 store (`p2.Session`, as `p2_parties.session` drives
 it), read from the bytes it holds and the prover sends, and decided here:
 
 * the auditor's registration file (`heldOf`, `p2_parties.registration_json`'s bytes): its fields' registration, its
@@ -47,7 +47,7 @@ def LIFETIME_NS : Nat := 30 * 10 ^ 9
 /-- `audit.lifetime_windows(window_ns)`: the session's lifetime cap, which nothing in a P2 session reaches (it appends
 nothing), and which its record states. -/
 def lifetime (windowNs : Nat) : Nat := max 1 (LIFETIME_NS / windowNs)
-/-- `audit.DELTA`, 2^-40: the pooled bound's δ. -/
+/-- `p2_party.DELTA`, 2^-40: PoUB-P2's δ, the pooled bound's. -/
 def DELTA : Rat := 1 / ((2 ^ 40 : Nat) : Rat)
 
 /-- What the verifier holds of the store: its registration and the plan every pass reads. -/

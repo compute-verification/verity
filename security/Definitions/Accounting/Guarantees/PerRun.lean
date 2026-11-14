@@ -2,6 +2,8 @@ module
 
 public import Definitions.Accounting.PerRun
 public import Definitions.Accounting.Pouw
+public import Definitions.Assumptions.Accounting
+public import Definitions.Assumptions.Pouw
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.Assumptions.Game
@@ -36,7 +38,8 @@ so `PearlCStopEndToEndPerRun` and `ComputeOfPearlCStopPerRunPriced` rest on `GGa
 choose no budget, which runs, costs and calls as at `CM`, so a run that realizes Pearl-C's audit at `CM` realizes it on
 the stopping machine (`Accounting.RealizesPearlCPriced.withStop`), and `ComputeOfPearlCStopPerRunPriced` covers every
 run `ComputeOfPearlCPerRunPriced` covers, whether or not the device ever stops one. At W1 priced (`w1Priced`) the one
-open hypothesis is `GGapPerCoin`, a conjecture (claim `pouw-gamma-per-coin`). PoUW's reads and the bandwidth audit's window reads are different device-model
+hypothesis is `GGapPerCoin`, a named conjecture (claim `pouw-gamma-per-coin`, in `Definitions.Assumptions.Pouw`).
+PoUW's reads and the bandwidth audit's window reads are different device-model
 accounts' over one window (`Accounting.Run.ReadsAttributed`), so no bit read is certified twice (`JointPerRunPriced`),
 and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)` (`CovertResidualPerRunPriced`). The
 unpriced statements stay: a compute guarantee on the work alone gives the priced one at any `pRead ≥ 0`

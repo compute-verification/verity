@@ -110,14 +110,18 @@ theorem verdict_run (q : Dep) (hG : AccOfAccepts q) (V : Vocab d α) (k : Verity
   cases hp'
   cases ev with
   | inl e₀ =>
-      change VStar.Recursive.Sampled.checkBlobs (.inr p) c' (.inl e₀)
+      change VStar.Recursive.Sampled.checkBlobs (.inr (.inl p)) c' (.inl e₀)
         (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof at hch
       simp [VStar.Recursive.Sampled.checkBlobs] at hch
   | inr e =>
-      have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof :=
+    rcases e with e | e₂
+    · have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof :=
         hch
       obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp he
       exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
+    · change VStar.Recursive.Sampled.checkBlobs (.inr (.inl p)) c' (.inr (.inr e₂))
+        (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof at hch
+      simp [VStar.Recursive.Sampled.checkBlobs] at hch
 
 /-- **The recursive session's plays** (`Majority.Plays` at the session `S` and the reading `readX`): the samples `ξ`,
 a run with the extractor's seed at each (`Dep.Sample`), the run's accept, the units `ξ` samples, the extractor's

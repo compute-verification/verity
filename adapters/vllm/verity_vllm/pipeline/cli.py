@@ -8,7 +8,8 @@ parses a command line: it builds the parser from the dataclass fields, takes the
 (`option(env=...)`), and reports a `config.UsageError`, the command's or an option type's, as a usage error with its message
 (exit 2).  A process it starts refuses a `VERITY_*`
 variable nothing in the tree reads (`settings.validate_environ`), naming it, also exit 2.  `python -m verity_vllm.pipeline.cli`
-is the same program, for interpreters without the `verity-vllm` launcher.
+is the same program, for interpreters without the `verity-vllm` launcher.  A command prints what it says to its reader (a
+record, a card, a plan) with `write`, on stdout; its diagnostics go to its logger (`verity_vllm.log`), on stderr.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import UsageError
 
-__all__ = ["main", "parse"]
+__all__ = ["main", "parse", "write"]
 
 PROG = "verity-vllm"
 
@@ -127,6 +128,11 @@ def usage() -> str:
     lines = [f"usage: {PROG} COMMAND [SUBCOMMAND] [options]", "", "commands:"]
     lines += [f"  {name:{w}s}  {help_}" for name, (_, help_) in COMMANDS.items()]
     return "\n".join(lines)
+
+
+def write(text: str, end: str = "\n") -> None:
+    """``text`` and ``end`` on stdout, as the stream is at the call, flushed: a command's output for its reader."""
+    print(text, end=end, file=sys.stdout, flush=True)
 
 
 def _doc(cls: type) -> str | None:

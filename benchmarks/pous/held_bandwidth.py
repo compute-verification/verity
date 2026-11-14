@@ -1,4 +1,4 @@
-"""PoUB-P2's session over the ``C*`` the PoUS piece holds (`served_piece.py`): the remote bandwidth audit's prover
+"""PoUB-P2's session over the ``C*`` the PoUS piece holds (`served_piece.py`): PoUB's prover
 (`p2_party_prover.prove`) over PoUS's store as the vLLM adapter encoded it on the card, run by the same process after PoUS's
 session and before the store is released, so both audits are of one store that one process holds, and no second store
 is encoded.
@@ -70,7 +70,7 @@ SCOPE = ("beside the served window: the session ran on the card after window {k}
 
 
 class Held:
-    """`p2_party_prover.Peer` over the adapter's store ``store`` (`verity_vllm.protocols.pous._Store`): ``C*``'s rows on
+    """`p2_party_prover.Peer` over the adapter's store ``store`` (`weight_store.Store`): ``C*``'s rows on
     their device, the challenger's table of their digests, setup's salt, commitment and root, under the node ``node``."""
 
     def __init__(self, store: Any, node: bytes, *, chunk: int = 1 << 16, spot: int = 16,

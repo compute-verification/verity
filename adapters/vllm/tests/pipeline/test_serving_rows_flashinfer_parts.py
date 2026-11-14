@@ -14,8 +14,6 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch
@@ -31,6 +29,7 @@ from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
+from verity_flock.class_statement import UnitStager
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
