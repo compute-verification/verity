@@ -5,11 +5,11 @@ model runner's ``execute_model``, which hands each step's admissions to the wind
 from __future__ import annotations
 
 import weakref
-from contextlib import nullcontext
 from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving import observe_matmul
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
 
@@ -100,16 +100,13 @@ def expert_names(layers: list[Any]) -> dict[int, str]:
 
 
 def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
-    """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
-    wrote, if it hands one over (`H1Run.record`: ``scaled_mm_zy``'s z/y records, the tensor itself). A record given z writes
-    neither y nor z and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM
-    a retaining record runs is seen."""
+    """Layer `w`'s ``observe``: the arm's own, then the call handed to the run (`serving.observe_matmul`, `H1Run.observe`)
+    with the layer's weight and the z the arm's kernel wrote, if it hands one over (``scaled_mm_zy``'s z/y records, the
+    tensor itself)."""
 
     def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
         orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
-        if run.commit:
-            with CG.outside() if z is not None else nullcontext():
-                run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
+        observe_matmul(run, w, xq, layer.weight, y, x_scale=s_a, weight_scale=layer.weight_scale, z=z)
     return observe
 
 
