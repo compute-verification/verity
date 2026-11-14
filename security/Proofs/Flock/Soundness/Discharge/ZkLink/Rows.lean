@@ -6,7 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 /-!
 # The rows link at the compiled `--zk` value layer
 
-`wrongRegZ` says a unit is right when it is correct in the committed transcript and some opening per commit string
+`incorrectRegZ` says a unit is right when it is correct in the committed transcript and some opening per commit string
 carries the program's evaluation; under a hiding commitment that opening exists whatever the row, so it binds no row.
 This file names what binds the rows instead, at the plurality value layer (`XplurZC`), given a registrant's opening of
 some of the commit strings (`isRead`, `wo`):

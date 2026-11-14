@@ -4,8 +4,8 @@
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
-a_out, a_in and |𝒥| per position: the slowdown calculator's `fanout`, `legs` and active layer products, as recorded for the model in
-benchmarks/slowdown/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
+a_out, a_in and |𝒥| per position: the slowdown calculator's `fanout`, `fanin` and active layer products, as recorded for the model in
+benchmarks/slowdown/data/models.toml when it has a row, and as `derived_fanout` / `derived_fanin` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
 DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
@@ -37,13 +37,13 @@ def slowdown_shapes(name: str, C: dict) -> dict:
         "attention": tuple(I.Matrix(n, a, b, NL, NL) for n, a, b in
                            (("q", H, NH * D), ("k", H, KVH * D), ("v", H, KVH * D), ("o", NH * D, H))),
         "dense": tuple(I.Matrix(n, a, b, NL, NL) for n, a, b in (("gate", H, IM), ("up", H, IM), ("down", IM, H)))})
-    out = {"config": {"fanout": I.derived_fanout(own), "legs": I.derived_legs(own),
+    out = {"config": {"fanout": I.derived_fanout(own), "fanin": I.derived_fanin(own),
                       "layer_products": own.active(I.LAYERED) / NL}}
     reg = Registry.load()
     if name in reg.names("model"):
         m = I.model(reg, name)
-        out["models.toml"] = {"fanout": m.fanout, "legs": m.legs, "derived_fanout": I.derived_fanout(m),
-                              "derived_legs": I.derived_legs(m), "layer_products": m.active(I.LAYERED) / m.layers}
+        out["models.toml"] = {"fanout": m.fanout, "fanin": m.fanin, "derived_fanout": I.derived_fanout(m),
+                              "derived_fanin": I.derived_fanin(m), "layer_products": m.active(I.LAYERED) / m.layers}
     return out
 
 
@@ -63,10 +63,10 @@ def row(name: str, program, source: str, T: int, shapes: dict | None) -> dict:
         out["rho"] = shapes
         cmp = {}
         for src, r in shapes.items():
-            cmp[src] = {"a_out": m.a_out == r.get("fanout"), "a_in": m.a_in == r.get("legs"),
+            cmp[src] = {"a_out": m.a_out == r.get("fanout"), "a_in": m.a_in == r.get("fanin"),
                         "products": m.products // T == r["layer_products"]}
             if "derived_fanout" in r:
-                cmp[src].update(derived_a_out=m.a_out == r["derived_fanout"], derived_a_in=m.a_in == r["derived_legs"])
+                cmp[src].update(derived_a_out=m.a_out == r["derived_fanout"], derived_a_in=m.a_in == r["derived_fanin"])
         out["agrees"] = cmp
     return out
 

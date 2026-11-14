@@ -89,15 +89,15 @@ theorem FilesPass.ready {nJ : ℕ} {m : Member nJ} (h : FilesPass m) : Commit.Re
 
 /-- **Flock's window's members' reads are the vocabulary's read of the committed files, in order**, at a window on
 the files, at every cost. -/
-theorem WindowOn.reads_toV5 {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) (t : ℕ) :
+theorem ExecutionPhaseOn.reads_toV5 {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+    (h : ExecutionPhaseOn V θ F W) (t : ℕ) :
     (W.ms.map fun m => m.toV5 t).map (·.fileRead) = (V.read θ F).first :: (V.read θ F).rest := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
   have e₁ : (W.ms.map fun m => m.toV5 t).map (·.fileRead) = W.ms.map fileRead :=
     List.map_map.trans (List.map_congr_left fun _ _ => rfl)
   have e₂ : W.ms.map fileRead = fileRead m₀ :: rest.map fileRead := congrArg (List.map fileRead) hW
   have e₃ : (V.read θ F).first :: (V.read θ F).rest = fileRead m₀ :: rest.map fileRead :=
-    congrArg (fun R : Verity.WindowFiles => R.first :: R.rest) hread
+    congrArg (fun R : Verity.ExecutionPhaseFiles => R.first :: R.rest) hread
   exact (e₁.trans e₂).trans e₃.symm
 
 /-- **At a window the verifier sets up, every member of Flock's window opens only at its own files' places**, at
@@ -117,6 +117,6 @@ theorem MembersSetUp.opensWith {V : Vocab d α} {θ : ByteArray} {F : Array Byte
     (h : MembersSetUp V θ F W) (c : ByteArray)
     (hplace : ∀ g, V.place θ F c g = placeOfFiles (V.read θ F) g) (t : ℕ) :
     OpensWith (V.read θ F).first (V.read θ F).rest (V.Opens θ F c) (W.ms.map fun m => m.toV5 t) :=
-  opensWith_read V θ c F hplace _ (h.toWindowOn.reads_toV5 t) fun _ hM => h.opensOwn t hM
+  opensWith_read V θ c F hplace _ (h.toExecutionPhaseOn.reads_toV5 t) fun _ hM => h.opensOwn t hM
 
 end Verity.Sampled.MemberForm

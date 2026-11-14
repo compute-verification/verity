@@ -129,7 +129,7 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) 
     """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`): the session
     on the period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
     (`side_of(period, node, key, local)`, which the caller that starts the run hands in, the runtime's `Side.of`; on
-    this node by default, as a process of its own, with its own coins) and the prover here. With `remote-audit-protocol`
+    this node by default, as a process of its own, with its own coins) and the prover here. With `poub-protocol`
     among the period's tools the Lean verifier answers and must agree with the Python; it writes
     `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host ran each party, and whether
     `trusted-device`'s premise holds (`verifier_party.placement`), go in `bandwidth.json` and in an accepted answer's
@@ -145,10 +145,10 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Any]) 
     seconds = round(time.monotonic() - t, 2)
     where = verifier_party.placement(node, party.host)
     answer_, lean = period.answer, None
-    if "remote-audit-protocol" in tools:
-        lean = P.serve(tools["remote-audit-protocol"], [period.case])[0]
+    if "poub-protocol" in tools:
+        lean = P.serve(tools["poub-protocol"], [period.case])[0]
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer_.items() if k != "reason"}:
-            raise RuntimeError(f"remote-audit-protocol answered {lean}, the Python {answer_}")
+            raise RuntimeError(f"poub-protocol answered {lean}, the Python {answer_}")
         answer_ = lean
     if answer_["profile"] is not None:
         answer_ = answer_ | {"profile": answer_["profile"] | {"placement": where}}

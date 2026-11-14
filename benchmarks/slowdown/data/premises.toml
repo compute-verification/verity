@@ -60,7 +60,7 @@ credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstr
 lean = "InferenceOnly.Cover.Assumptions.BlockFits"
 standing = "assumed"
 beyond = "assumed"
-credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: the reference circuit's widest gate w0 and registered width with w0 c + S + width(theta) <= s, which no data here states", status = "derived" }
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: the reference training algorithm's widest gate w0 and registered width with w0 c + S + width(theta) <= s, which no data here states", status = "derived" }
 
 [premise.baseline-registered]
 lean = "InferenceOnly.Assumptions.ThetaRegistered"
@@ -98,9 +98,9 @@ standing = "assumed"
 beyond = "contested"
 credible_bits = { value = 7.2e6, unit = "bit", source = "E1 Proposition 6b: k* = 0.9-23 MB at FP8 (beta_w 0.06-0.19, F_in 2.7-6.2 kbit, beta_v^R 0.18-0.63), the low end; recipe-kept tiles at NVFP4 reach 0.39-0.97 of the beta_v count (measured)", status = "derived" }
 
-# The elementary uncertified cap's premise (slowdown/classes.py Structure): q_U(U) = omega_max U / s_times counts an
-# uncertified or unregistered gate's operations at s_times gates each only if no counted operation has gates on both sides of
-# the certified boundary. Not in Lean; an operation split across it is counted by neither side's cap.
+# The elementary free-compute yield's premise (slowdown/classes.py Structure): q_U(U) = omega_max U / s_times counts a
+# free-compute gate's operations at s_times gates each only if no counted operation has gates on both sides of the
+# certified boundary. Not in Lean; an operation split across it is counted by neither side's yield.
 [premise.no-straddle]
 lean = "draft:no-straddle"
 standing = "assumed"

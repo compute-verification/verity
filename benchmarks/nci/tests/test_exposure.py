@@ -54,19 +54,19 @@ def test_the_memory_cap_has_unit_elasticities_once_it_binds():
     p = T.DEFAULTS | X.SCENARIOS["served today, R_wipe 4 GB"] | X.KEYED
     for key in ("d", "b_w", "b_a", "kappa"):
         assert X.elasticity(p, key, "T4") == pytest.approx(-1, rel=0.02), key
-    assert X.elasticity(p, "residual", "T4") == pytest.approx(0, abs=1e-9)
+    assert X.elasticity(p, "free", "T4") == pytest.approx(0, abs=1e-9)
 
 
-def test_at_the_design_eta_is_the_residual():
+def test_at_the_design_eta_is_the_free_compute():
     p = T.DEFAULTS | X.DESIGN | X.KEYED
-    r = T.residual_share(p)
+    r = T.free_share(p)
     assert X.elasticity(p, "host_share", "T1") == pytest.approx(p["host_share"] * (1 - p["eps_w"]) / r, rel=0.01)
     assert X.elasticity(p, "pous_rounds", "T4") == 0
 
 
 @pytest.mark.parametrize("scenario, key, tier, rising", [
-    ("defaults", "residual", "T1", True),
-    ("defaults", "unmonitored", "T4", True),
+    ("defaults", "free", "T1", True),
+    ("defaults", "unregistered", "T4", True),
     ("served today", "K", "T4", True),
     ("served today", "b_a", "T4", False),
     ("served today", "d", "T4", False),
@@ -87,11 +87,11 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
     assert edges == sorted(edges, reverse=not rising)
 
 
-def test_the_residual_threshold_is_the_closed_form():
+def test_the_free_compute_threshold_is_the_closed_form():
     """At T1, 1/eta < X once r_gpu > (1/X - eps_W - eps' - nu) / (1 - eps_W) - host_share - clock_share: eta is
     r-hat + eps_W (1 - r-hat) + eps' + nu."""
     p = T.DEFAULTS | X.DESIGN | {"lag_s": 0.0}
-    th = X.thresholds(p, "residual", "T1")
+    th = X.thresholds(p, "free", "T1")
     for level in (10.0, 2.0):
         (a, _), = th[level]
         edge = (1 / level - p["eps_w"] - p["eps_agg"] - X.nu(p)) / (1 - p["eps_w"]) - p["host_share"] - p["clock_share"]

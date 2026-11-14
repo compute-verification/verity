@@ -29,7 +29,7 @@ to the schedule (each list after its length, a block's tag before its write's st
 two facts off `malformed` finding nothing (`wf_of_malformed`): a freed block's free comes after its write, so its tag
 `f − w + 1` is at least 2, and the steps increase, so their rises give them back.
 
-From the code to the model, at the verifier's layout (`sessionLayout`, where `ScheduleLayoutGap` holds by definition,
+From the code to the model, at the verifier's layout (`runLayout`, where `ScheduleLayoutGap` holds by definition,
 `scheduleLayoutGap_code`): a layout the check accepted at the cap `a` the session committed before its coins is the
 verifier's plan of a well-formed schedule of at most `a` bits
 (`scheduleDeterministic_of_checked`; the cap is one `a` at every coin, where the bits of each coin's own schedule
@@ -59,11 +59,11 @@ lemmas): the lock's `witnesses`.
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-open private RemoteAudit.endsOf from RemoteAudit.Plan
+open private Poub.endsOf from Poub.Plan
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 theorem check_ok {sc : Schedule.Schedule} {blocks cap : Nat} {passes : Array (Nat × Array (Nat × Nat))}
     {appends : Array (Nat × Nat)} {b : Nat} (h : Schedule.check sc blocks cap passes appends = .ok b) :
@@ -450,15 +450,15 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
   dsimp only
   rw [hstep]
 
-/-- **`ScheduleLayoutGap` holds of the verifier's layout**: `sessionLayout` is `codeLayout` of the session's appends and
+/-- **`ScheduleLayoutGap` holds of the verifier's layout**: `runLayout` is `codeLayout` of the session's appends and
 the runs the pass sent, at every prefix and coin. -/
 theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt : Pfx → Fin N ↪ Fin T × Fin M)
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) :
-    ScheduleLayoutGap (fun c => codeLayout blocks (dflt c)) appended sent (sessionLayout blocks dflt appended sent) :=
+    ScheduleLayoutGap (fun c => codeLayout blocks (dflt c)) appended sent (runLayout blocks dflt appended sent) :=
   fun _ _ => rfl
 
 /-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, at the verifier's own
-layout** (`sessionLayout`, where `ScheduleLayoutGap` holds by definition, `scheduleLayoutGap_code`). `a` is the cap
+layout** (`runLayout`, where `ScheduleLayoutGap` holds by definition, `scheduleLayoutGap_code`). `a` is the cap
 the session's parameters committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it
 is the same at every prefix and coin. -/
 theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
@@ -466,7 +466,7 @@ theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : 
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ steer : Pfx → Y → Pous.Bits (a + 1),
-      Accounting.Assumptions.SteeredLayout (sessionLayout blocks dflt appended sent) steer :=
+      Accounting.Assumptions.SteeredLayout (runLayout blocks dflt appended sent) steer :=
   have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
   steered_of_scheduleDeterministic
     (scheduleDeterministic_of_checked (idx := idx) (scheduleLayoutGap_code blocks dflt appended sent) checked)
@@ -474,7 +474,7 @@ theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : 
 /-! ## The verifier's layout is where it checks -/
 
 theorem make_ends {runs : Array (Int × Int)} {blocks : ℕ} {pl : Plan} (h : Plan.make? runs blocks = some pl) :
-    pl.ends = RemoteAudit.endsOf pl.runs := by
+    pl.ends = Poub.endsOf pl.runs := by
   unfold Plan.make? at h
   simp only [Bool.not_eq_true', Option.bind_eq_bind, Option.bind_none] at h
   split at h
@@ -530,7 +530,7 @@ theorem whole_prefix (blocks : ℕ) : PrefixSums #[blocks] ((#[(0, blocks)] : Ar
 theorem planBlocks : PlanBlocks := by
   refine ⟨fun runs blocks pl h => ?_, fun blocks => planBlocks_of blocks #[(0, blocks)] #[blocks] (whole_prefix blocks)⟩
   obtain ⟨b, rs, ends⟩ := pl
-  have he : ends = RemoteAudit.endsOf rs := make_ends h
+  have he : ends = Poub.endsOf rs := make_ends h
   subst he
   exact planBlocks_of b rs _ (endsOf_prefix rs)
 
@@ -768,8 +768,8 @@ whose receipt tree holds the zero block's receipt at position 0, accept the open
 after the key is sampled; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
 deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
 
-theorem size_sha512 (b : ByteArray) : (RemoteAudit.sha512 b).size = 64 := by
-  unfold RemoteAudit.sha512 Flock.Sha512.hash
+theorem size_sha512 (b : ByteArray) : (Poub.sha512 b).size = 64 := by
+  unfold Poub.sha512 Flock.Sha512.hash
   exact Array.size_ofFn
 
 theorem size_frameHash (tag : String) (parts : List ByteArray) : (Flock.FV3.Sha512.hash tag parts).size = 64 := by
@@ -937,7 +937,7 @@ def honestCodec : Codec.Codec := ⟨Codec.P1024, 3, true⟩
 of `rows` rows, and a payload tree holding `zeroPayload` at block 0. -/
 def honestReg (node codecSeed : ByteArray) (rows : ℕ) : Registration :=
   let key := Codec.key codecSeed honestCodec
-  let pd := Flock.FV3.Sha512.Domain.make (RemoteAudit.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
+  let pd := Flock.FV3.Sha512.Domain.make (Poub.sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 130023424
   { node, blocks := 130023424, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
     codecSeed, codec := honestCodec, receipt := .sketch, rows, key }
 
@@ -1080,23 +1080,23 @@ theorem tileAt_coinRun : ∀ (y : Fin 3) (i : Fin 1),
     tileAt 3 #[] (coinRun () y) i = some (((threeLayout y i).1 : ℕ), ((threeLayout y i).2 : ℕ)) := by
   decide
 
-theorem sessionLayout_coinRun (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) (y : Fin 3) :
-    sessionLayout 3 dflt noAppends coinRun () y = threeLayout y :=
+theorem runLayout_coinRun (dflt : Unit → Fin 1 ↪ Fin 1 × Fin 3) (y : Fin 3) :
+    runLayout 3 dflt noAppends coinRun () y = threeLayout y :=
   codeLayout_eq (threeLayout y) (runBlocks_coinRun y) (tileAt_coinRun y)
 
 /-- **`steered_of_checked` fails without the schedule check.** A verifier that accepted every session would meet its
 premise for the pass that reads the block a coin `y ∈ {0, 1, 2}` names, at cap 0; the verifier's layout there takes
 three values, which no one bit steers. The real check refuses every schedule at cap 0 and a coin-steered plan at any
 cap (`coinPasses_refused`). Stated at the default layout of block 0; the layout there is the plan's whatever the
-default (`sessionLayout_coinRun`). -/
+default (`runLayout_coinRun`). -/
 theorem steered_of_checked_nontrivial :
     ∀ steer : Unit → Fin 3 → Pous.Bits (0 + 1),
       ¬ Accounting.Assumptions.SteeredLayout
-        (sessionLayout 3 (fun _ : Unit => (⟨fun _ => (0, 0), fun _ _ _ => Subsingleton.elim _ _⟩ : Fin 1 ↪ Fin 1 × Fin 3))
+        (runLayout 3 (fun _ : Unit => (⟨fun _ => (0, 0), fun _ _ _ => Subsingleton.elim _ _⟩ : Fin 1 ↪ Fin 1 × Fin 3))
           (fun (_ : Unit) (_ : Fin 3) => (#[] : Array (ℕ × ℕ))) (fun (_ : Unit) (y : Fin 3) => #[((y : ℕ), 1)]))
         steer := by
   intro steer hs
-  change Accounting.Assumptions.SteeredLayout (sessionLayout 3 (fun _ => threeLayout 0) noAppends coinRun) steer at hs
+  change Accounting.Assumptions.SteeredLayout (runLayout 3 (fun _ => threeLayout 0) noAppends coinRun) steer at hs
   obtain ⟨slot, h⟩ := hs
   have key : ∀ y y' : Fin 3, steer () y 0 = steer () y' 0 → y = y' := by
     intro y y' hs
@@ -1105,9 +1105,9 @@ theorem steered_of_checked_nontrivial :
       obtain rfl : i = 0 := by omega
       exact hs
     exact congrArg (fun e : Fin 1 ↪ Fin 1 × Fin 3 => (e 0).2)
-      ((sessionLayout_coinRun (fun _ => threeLayout 0) y).symm.trans ((h () y).trans
-        ((congrArg (slot ()) hs').trans ((h () y').symm.trans (sessionLayout_coinRun (fun _ => threeLayout 0) y')))))
+      ((runLayout_coinRun (fun _ => threeLayout 0) y).symm.trans ((h () y).trans
+        ((congrArg (slot ()) hs').trans ((h () y').symm.trans (runLayout_coinRun (fun _ => threeLayout 0) y')))))
   obtain ⟨y, y', hne, he⟩ := Fintype.exists_ne_map_eq_of_card_lt (fun y : Fin 3 => steer () y 0) (by simp)
   exact hne (key y y' he)
 
-end Properties.RemoteAudit
+end Properties.Poub

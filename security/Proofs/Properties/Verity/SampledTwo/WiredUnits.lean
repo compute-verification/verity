@@ -35,7 +35,7 @@ theorem unitsAreReplay_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)) :
     UnitsAreReplay V θ F c H Cm s Pt dd readX := by
   refine ⟨e, fun w u hu => ?_⟩
-  simp only [wrongReplay, Finset.mem_filter, Finset.mem_range]
+  simp only [incorrectReplay, Finset.mem_filter, Finset.mem_range]
   exact ⟨hlen u, fun hc => hread w u hc hu⟩
 
 /-- **`UnitsWired` from a labelling into the session's design and the reading**, at what the session's verifier

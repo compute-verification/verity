@@ -84,7 +84,7 @@ theorem atStratum_perm {C : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB →
 
 /-- **The period's salt is its live coin on stratum `s`'s view.** -/
 theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin nB → Fin mB) (s : Fin mB)
-    (ws : CreditWindows (StrataCoin C 1 σ) n) {enc : C → ByteArray}
+    (ws : CreditExecutionPhases (StrataCoin C 1 σ) n) {enc : C → ByteArray}
     (hs : Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc) :
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf (creditAt h σ s ws)) enc := by
   intro y w
@@ -96,7 +96,7 @@ relation is one `Credit.window` credits with that tile's window proof block amon
 `StrataSampleIsCoin` puts every stratum's sampled proof blocks there, which stratum `s`'s `TileServiceSound` bounds. -/
 theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ}
     (hM : Cd.rounds = m) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-    (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (ws : CreditWindows (StrataCoin C m σ) n)
+    (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (ws : CreditExecutionPhases (StrataCoin C m σ) n)
     (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) {δks : ℝ}
@@ -116,7 +116,7 @@ theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0
 /-- **Stratum `s`'s live words on its view** are its `creditLive` at the period's `Credit.window` inputs there. -/
 theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB) (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
-    (ws : CreditWindows (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) Cd.rounds σ s) n) :
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) Cd.rounds σ s) n) :
     stratumLive Sc Cd hM σ s Wp ws ((pathsAt C hM σ s n).symm y) = creditLive Sc Cd Wp (creditAt hM σ s ws) y := by
   unfold stratumLive
   simp only [Equiv.apply_symm_apply]
@@ -124,7 +124,7 @@ theorem stratumLive_symm {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m n
 
 /-- **The period's accepted prefix on stratum `s`'s view** is the view's. -/
 theorem prefixLen_symm {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB → Fin mB) (s : Fin mB)
-    (ws : CreditWindows (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) r σ s) n) :
+    (ws : CreditExecutionPhases (StrataCoin C m σ) n) (y : Paths (Coin C (Rest σ s) r σ s) n) :
     ws.prefixLen ((pathsAt C h σ s n).symm y) = (creditAt h σ s ws).prefixLen y :=
   rfl
 
@@ -136,7 +136,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ}
     (hn : 0 < n) (hN : Cd.units ≤ tileCount σ s) (hr : 0 < Cd.rounds) (hM : Cd.rounds = 1) (hKd : 1 ≤ k s)
-    (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
+    (ws : CreditExecutionPhases (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C 1 σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop)
     (Wp : ExecutionPhasePlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)

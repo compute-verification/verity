@@ -32,7 +32,7 @@ import pytest
 
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
 from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer, LmsSigner
@@ -46,8 +46,8 @@ from verity.protocols.proofs.spot.prover.audit import prove_path as PP  # noqa: 
 
 with PP.network_traces():
     import certifier_piece as CP
-    import warden_chain as WCH
-    import warden_serve as WS
+    from benchmarks.network_traces import warden_chain as WCH
+    from verity.protocols.accounting.certifier.device import warden_serve as WS
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> Any:
@@ -93,8 +93,8 @@ def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambd
         for kind, rec, grid in (("ingress", served.ingress[w], params.grid), ("egress", served.egress[w], params.grid),
                                 ("failed", served.failed[w], params.fails_grid)):
             pub.keep(records(kind, rec), grid)
-    dep = WS.deployment_record(params, signer.public_key(), SESSION, origin_unix=0.0, windows=2,
-                               listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32))
+    dep = WS.deployment_record(params, signer.public_key(), SESSION, origin_unix=0.0, windows=2, slack=0.025,
+                               run_id=bytes(32))
     (run / "deployment.json").write_text(json.dumps(deployment(dep)))
     serve = d / "serve"
     (serve / CP.PRIVATE / "RUN").mkdir(parents=True)

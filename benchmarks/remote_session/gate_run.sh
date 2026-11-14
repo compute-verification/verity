@@ -22,7 +22,7 @@
 #                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to the verifier host's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
-#                  COMMIT's remote_bandwidth tree, no model), the host's run, period-close, auditor.sh (the
+#                  COMMIT's poub tree, no model), the host's run, period-close, auditor.sh (the
 #                  line of record, its auditor_line.json and credit.md in the fire run's out/).
 #   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.

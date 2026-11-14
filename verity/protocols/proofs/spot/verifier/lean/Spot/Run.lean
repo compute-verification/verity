@@ -33,7 +33,7 @@ check the stream ran on it, in the stream's order.
   public-items rule on the interior values, the population (else `interior-population`), its strata those parts, the
   check's templates in its order and each one range (else `interior-parts`, `cellParts`), its window (else
   `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
-  digest and the sample, `interiorWindowOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
+  digest and the sample, `interiorRunOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
   `population-order`, each history table its copies name being a port of the boundary registration's record at the
   root and domain they computed for it (`tablesServed`: `interior-table`), and its receipt; and `second`: the second
   stage on its own
@@ -277,7 +277,7 @@ boundary registration's digest `digest` (lowercase hex) and the replay sample (`
 and `interior` are the two registrations' window roots as the verifier holds them. So one session samples both stages,
 or the second stage's is the session on the one root the boundary registration and its sample name: the second stage
 is sampled on no other window. -/
-def interiorWindowOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
+def interiorRunOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
   interior == boundary || (interior.isSome && interior == SecondStage.interiorRoot digest sample)
 
 /-- **The parts the replay block's cells give** a sample of `q` replay blocks: the templates `ids`, in that order,
@@ -306,7 +306,7 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   if SecondStage.parts sample.size strata ≠ some (cellParts sample.size ids ns) then
     return .error ("interiors", #["interior-parts"])
   let boundary ← Docket.digestHex i.record
-  if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
+  if !interiorRunOk i.params.verifier.windowRoot v.windowRoot boundary sample then
     return .error ("interiors", #["interior-window"])
   let v := { v with samplingDesign := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Docket.check it.record v

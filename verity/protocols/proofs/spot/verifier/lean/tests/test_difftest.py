@@ -8431,13 +8431,14 @@ def test_round_two_takes_a_value_of_the_interior_registration_only_as_the_verifi
 def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_the_verifier_holds(pieces):
     """The one input of a replay block the interior docket may give (`second-inputs`, `openedRow`), Lean's the
     Python's whole: a read's row, its salt and its path, where the auditor's params record the template as a read, the
-    verifier fills the read's root and domain with the root and the domain id round 1's record registers for one
-    table of the read's rows, the read's key is a value the verifier holds or a port of round 1's record, and the
+    verifier fills the read's root and domain with the root and the domain id of one table of the read's rows that
+    round 1's record registers or the auditor's params pin before any coin (`Own.tables`), the read's key is a value the verifier holds or a port of round 1's record, and the
     read's verdict port reads, in its reference statement's reads, a value the verifier fills with 1 at every row
     (`_read_opening`). The row is refused by name where the key is unlinked, the root is unlinked, the verdict reads a
     value with a row that is not 1, with no row, one the verifier pinned or doesn't fill, or none, where another
     template or another port of the read reads the row too, by a link or, with none, by its reference statement's
-    reads; where the root and the domain are not one table's of round 1's record row by row, or their ports' rows are
+    reads; where the root and the domain are not one table's of round 1's record or of the pins row by row (a pin of
+    another root, domain id or count of leaves), or their ports' rows are
     missing or place a unit differently; where the params record no read of the template, or one of another count of
     rows than the table's leaves; the key or the root is, where the prover registers it or the root is left
     as a table's name; a value no link names is; and the salt is,
@@ -8449,7 +8450,7 @@ def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_th
         case = _read_opening(honest, x)
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (x, got)
-        want = None if x in (0, 2, 4, 28) else f"{OPENING}/{others.get(x, 'row')}"
+        want = None if x in (0, 2, 4, 28, 36, 37) else f"{OPENING}/{others.get(x, 'row')}"
         assert got["codes"] == [*([] if want is None else ["second-inputs"]), "second-links",
                                 *(["second-wires"] if x == 3 else [])], (x, got)
         why = SS.KEY_WHY if x == 3 else SS.INPUTS_WHY
