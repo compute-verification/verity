@@ -102,7 +102,10 @@ class CapacityBound:
     A server that holds fewer than `⌊rho · |C|⌋` bits when the challenges arrive, and answers each within `rounds`
     sequential calls of at least `call_ns` each using at most `work` calls, passes `k` challenges with probability at
     most `delta + 2^eps_log2`.  This is `theorem`, given the open named `hypotheses`, under `claims`; where a claim is
-    refuted (`feistel-indifferentiability` at the reference `Π₂`), it holds only in the model the others name.
+    refuted (`feistel-indifferentiability` at the reference `Π₂`), it holds only in the model the others name.  Where
+    `claims` list `prf/sha-512`, `2^eps_log2` is that claim's advantage, assumed at that figure
+    (`Hash.Assumptions.Sha512Prf` takes it as a parameter, which no model fixes), and `delta` is the theorem's whole
+    bound; elsewhere `2^eps_log2` is a term of the theorem's bound.
 
     `cliff` is the most rounds the structure tolerates at any `k`, or None when security degrades gracefully past
     `rounds`.  The band has its cliff at its in-degree `d`.  `segments` is the number of segments of `W` the theorem is
@@ -330,8 +333,9 @@ class StorageProfile:
         if not self.certified:
             return f"{head}{self.scheme}, {self.k} challenges within {self.limit_ns:,} ns: not certified ({'; '.join(self.gaps)})."
         given = f", given {', '.join(cert.hypotheses)}" if cert.hypotheses else ""
+        assumed = f", assuming ε_prf ≤ 2^{cert.eps_log2} under prf/sha-512" if "prf/sha-512" in cert.claims else ""
         return (f"{head}A server holding fewer than {self.state_bound_bits:,} bits of state passes {self.k} challenges "
-                f"within {self.limit_ns:,} ns with probability at most {cert.delta} + 2^{cert.eps_log2} "
+                f"within {self.limit_ns:,} ns with probability at most {cert.delta} + 2^{cert.eps_log2}{assumed} "
                 f"({cert.theorem}{given}; under {', '.join(cert.claims)}).")
 
     def to_json(self) -> dict[str, Any]:

@@ -269,7 +269,9 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `p2-16448/v4` and `p2-16448/v2`, **experimental** (one module, two key expanders).
 - **`protocol.CapacityBound`** is what an audit at the scheme's parameters establishes, Lean's
   `Meets S .sequential D Q k ε`. It holds:
-  - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
+  - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`; where `claims` list `prf/sha-512`,
+    `2^eps_log2` is that claim's advantage, assumed at that figure (`Hash.Assumptions.Sha512Prf` takes it as a
+    parameter, which no model fixes), and `delta` is the theorem's whole bound;
   - `cliff`: the most rounds the structure tolerates at any `k`;
   - `segments`: how many segments of `W` the theorem is about;
   - `theorem`, and its open `hypotheses`;
@@ -352,7 +354,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 
   `research=True` runs a refused audit anyway, except past the cliff, with the first certificate's refusals as gaps.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
-  `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
+  `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate, and its statement says
+  "assuming ε_prf ≤ 2^eps_log2 under prf/sha-512" where that term is the claim's assumed advantage. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
   other than the theorem's. The band's certificate covers every segment count from 1 to 2^64, and dense's one segment.
   `to_json` writes `verity-pous/storage-profile/v1`.

@@ -604,9 +604,10 @@ def test_p2_wide_certificate_is_period_held_at():
 
 def test_p2_wide320_certificate_is_the_320_read_window():
     """`p2.wide320_certificate` is `Pous.SecurityProofs.ObligationWide320`: the wide certificate's audit at k = 320,
-    with `δ` the window's `2^-20` and `2^eps_log2` the `ε_prf = 2^-127` that `Hash.Assumptions.Sha512Prf` adds at the
-    memory challenger's SHA-512 indices, under `WIDE_CLAIMS` and `prf/sha-512`, over the same 2^19 to 2^27 blocks; none
-    elsewhere."""
+    with `δ` the window's `2^-20`, the theorem's whole bound at uniform indices, and `2^eps_log2 = 2^-127` the advantage
+    of `prf/sha-512` for the memory challenger's SHA-512 indices, assumed at that figure (`Hash.Assumptions.Sha512Prf`
+    takes it as a parameter, which no model fixes), which its profile's statement says; under `WIDE_CLAIMS` and
+    `prf/sha-512`, over the same 2^19 to 2^27 blocks; none elsewhere."""
 
     assert CERT_K_WIDE320 == 320 and (*WIDE_CLAIMS, "prf/sha-512") == WIDE320_CLAIMS
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 1038), (1 << 16, 1 << 11)):
@@ -618,6 +619,11 @@ def test_p2_wide320_certificate_is_the_320_read_window():
         assert cert.delta + Fraction(1, 2 ** -cert.eps_log2) == Fraction(1, 1 << 20) + Fraction(1, 1 << 127)
         assert all(protocol.claim(c).id == c for c in cert.claims)
         assert cert.refusals(319, 0) == ("k = 319 is below the certificate's 320",)
+        said = protocol.StorageProfile("p2-16448/v4", {}, q.blocks, 16448, 320, 0, cert).statement()
+        assert (f"with probability at most 1/{2 ** 20} + 2^-127, assuming ε_prf ≤ 2^-127 under prf/sha-512 "
+                "(Pous.SecurityProofs.ObligationWide320; under ") in said
+        assert "assuming" not in protocol.StorageProfile("p2-16448/v4", {}, q.blocks, 16448, 105, 0,
+                                                         wide_certificate(q)).statement()
     for q in (P2Params(16448, 21065, (1 << 16) - 1, 8), P2Params(16448, 21065, 1 << 16, (1 << 11) + 1),
               P2Params(1024, 105, 1 << 16, 1038), P2Params(16448, 21065, 1 << 16, 1038, CHACHA8)):
         assert wide320_certificate(q) is None, q
