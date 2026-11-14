@@ -131,49 +131,49 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     `filled` names the settings the built engine will supply (`pouw.fills`), read as set."""
     out = []
     if scheme == H1_SCHEME and (settings.rows is None or settings.steps is None):
-        out.append(f"{scheme}: the static layout's public parameters are the pouw settings 'rows' (T, vLLM's "
+        out.append("the static layout's public parameters are the pouw settings 'rows' (T, vLLM's "
                    "max_num_batched_tokens) and 'steps' (S, the window's engine steps)")
     elif scheme != H1_SCHEME and (settings.rows is not None or settings.steps is not None):
-        out.append(f"{scheme}: the pouw settings 'rows' and 'steps' are H1's ({H1_SCHEME})")
+        out.append(f"the pouw settings 'rows' and 'steps' are H1's ({H1_SCHEME})")
     runner = settings.runner is not None or "runner" in filled
     rounds = settings.rounds is not None or "rounds" in filled
     if scheme == H1_SCHEME and stage != "capture" and (not runner or (not rounds and settings.challenger is None)):
-        out.append(f"{scheme}: each admitted request's entry goes under the root of the round that admits it, before "
+        out.append("each admitted request's entry goes under the root of the round that admits it, before "
                    "that round's coin: the pouw settings 'runner' (the engine's model runner, where its scheduler's "
                    "admissions arrive) and 'challenger' (the auditor device's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
     elif scheme != H1_SCHEME:
         if settings.runner is not None and scheme not in PEARL_C_SCHEMES:
-            out.append(f"{scheme}: the pouw setting 'runner' is H1's ({H1_SCHEME}) and Pearl-C's device path's, which "
+            out.append(f"the pouw setting 'runner' is H1's ({H1_SCHEME}) and Pearl-C's device path's, which "
                        "ends each pass at its execute_model")
         if settings.rounds is not None or settings.admission is not None or settings.served is not None:
-            out.append(f"{scheme}: the pouw settings 'rounds', 'admission' and 'served' are H1's ({H1_SCHEME})")
+            out.append(f"the pouw settings 'rounds', 'admission' and 'served' are H1's ({H1_SCHEME})")
     if scheme != H1_SCHEME and (settings.unit is not None or settings.ks is not None):
-        out.append(f"{scheme}: the pouw settings 'unit' and 'ks' are H1's ({H1_SCHEME})")
+        out.append(f"the pouw settings 'unit' and 'ks' are H1's ({H1_SCHEME})")
     if settings.commit_record is not None and (scheme != H1_SCHEME or settings.served is None):
-        out.append(f"{scheme}: the pouw setting 'commit_record' names H1's ({H1_SCHEME}) Commit record, one reusing the "
+        out.append(f"the pouw setting 'commit_record' names H1's ({H1_SCHEME}) Commit record, one reusing the "
                    "tables its 'served' registers")
     if scheme not in CHALLENGED and settings.challenger is not None:
-        out.append(f"{scheme}: the pouw setting 'challenger' is for {', '.join(CHALLENGED)} only")
+        out.append(f"the pouw setting 'challenger' is for {', '.join(CHALLENGED)} only")
     if (settings.session is not None or settings.gate is not None) and settings.challenger is None:
-        out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
+        out.append("the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
         out += window_refusals(scheme, settings, stage, opens=OPENS.get(scheme))
     if settings.draw_session is not None and (scheme != H1_SCHEME or settings.challenger is None):
-        out.append(f"{scheme}: the pouw setting 'draw_session' is the draw session of H1's window ({H1_SCHEME}) on the "
+        out.append(f"the pouw setting 'draw_session' is the draw session of H1's window ({H1_SCHEME}) on the "
                    "challenger at 'challenger'")
     elif scheme == H1_SCHEME and settings.challenger is not None and stage != "capture" and settings.draw_session is None:
-        out.append(f"{scheme}: {NO_DRAW_SESSION}")
+        out.append(NO_DRAW_SESSION)
     if scheme in PEARL_C_SCHEMES and settings.challenger is not None and settings.session is not None:
         why = period_reason(settings.period, settings.session)
-        out += [] if why is None else [f"{scheme}: {why}"]
+        out += [] if why is None else [why]
     elif settings.period is not None:
-        out.append(f"{scheme}: the pouw setting 'period' is the lane's open period that a Pearl-C install's reserved "
+        out.append("the pouw setting 'period' is the lane's open period that a Pearl-C install's reserved "
                    f"session joins, so it goes with 'challenger' and 'session', for {', '.join(PEARL_C_SCHEMES)} only")
     if scheme == H1_SCHEME and settings.rounds is not None and settings.steps is not None:
         have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
         if have < settings.steps:
-            out.append(f"{scheme}: the round coins have {have} unopened coins, fewer than the window's {settings.steps} "
+            out.append(f"the round coins have {have} unopened coins, fewer than the window's {settings.steps} "
                        "rounds")
     return out
 
