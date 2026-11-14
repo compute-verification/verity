@@ -9,6 +9,7 @@ import csv
 import io
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import clocks
@@ -608,3 +609,15 @@ def test_sm89_ji_points_join_only_their_own_family(tmp_path):
     (m, x, name), = pts["ffma"]
     assert name == f"j32_fmuli_q112_a2u2_w2@{RUN}" and m == pytest.approx(0.125) and x == pytest.approx(0.125 * 233 / 16)
     assert [n.split("@")[0] for *_, n in pts["iadd3"]] == [n.split("@")[0] for *_, n in pts["lop3"]] == ["j32_axi_q64_a3u1_w2"]
+
+
+def test_clock_ceiling_refuses_without_the_memory_clock_before_the_build(tmp_path):
+    """The memory clock clock_ceiling.sh relocks on exit is the card's `clock.memory`, which it takes as a required
+    argument and never states: without CLOCK_RELOCK_MEM_MHZ it stops before it builds or writes anything."""
+    out = tmp_path / "out"
+    out.mkdir()
+    done = subprocess.run(["bash", str(POUW / "opcode_probe" / "clock_ceiling.sh")],
+                          env={"PATH": "/usr/bin:/bin", "OUT": str(out)}, capture_output=True, text=True, check=False)
+    assert done.returncode != 0
+    assert "clock.memory" in done.stderr
+    assert not any(out.iterdir())
