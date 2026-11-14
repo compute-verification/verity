@@ -14,7 +14,7 @@ from research import vqueue, vqueue_slim
 from research.digest import REVERT_SUBJECT
 from research.merge import REVERTS
 from research.queue import DRIVE_FLAGS
-from test_queue import _git
+from test_queue import AUTHORED, NAMED, OWN, _git, _who
 from test_vqueue_loop import NEW, Env, Runs, _acts, _main_to, _row
 
 #: drive.toml on `main` in these tests: the low-risk lane on, keeping Lean and the verifiers off it
@@ -167,13 +167,17 @@ def test_under_gate_verdict_a_plain_candidate_falls_back_to_the_whole_check_once
     assert logged and logged[0]["record"]["gate"] == "check" and len(_shards_of(runs, sha)) == 3
 
 
+@pytest.mark.parametrize("rules, who", [(None, OWN), (AUTHORED, NAMED)], ids=["as its own", "as the rules' author"])
 def test_under_gate_verdict_a_red_of_main_s_check_naming_one_pr_reverts_it_and_holds_the_ready_prs_meeting_its_failure(
-        env, monkeypatch):
+        env, monkeypatch, rules, who):
     """Two PRs land on the quick tier; `main`'s whole check on their tip then fails suite pkg's new test, whose reads only #2's
     change meets.  The loop reverts #2's merge on `main` (`git revert -m 1`, git's message, which drive's readers read),
     pushed as it lands a candidate, with a `revert` line saying why; rings ci and #2's owner; and holds the ready PR whose
     change meets what the failure read until `main`'s check passes again, building the other.  Once the revert's check
-    passes, the held PR is built."""
+    passes, the held PR is built.  The revert is the queue's own commit, or the author's the rules at `main` name
+    (`Rules.author`), as its merges are."""
+    if rules:
+        _main_to(env, {"ci/queue.toml": rules})
     seen: list = []
     loop, runs, quick, below, sha = _landed(env, monkeypatch, {1: {"a.txt": "1\n"}, 2: FAILING},
                                             decide=lambda s: seen.append(s) or vqueue.decide(s))
@@ -189,6 +193,7 @@ def test_under_gate_verdict_a_red_of_main_s_check_naming_one_pr_reverts_it_and_h
     assert (rev["red"], rev["passed"], rev["number"], rev["merge"], rev["landed"]) == (sha, below, 2, two, [1, 2])
     assert rev["why"] == "#2's change meets what step pytest read, and no other's landed since" and rev["done"]
     assert env.main() == rev["sha"] and _git(env.o.origin, "rev-parse", f"{rev['sha']}^@").split() == [sha]
+    assert _who(env.o.origin, rev["sha"]) == _who(env.o.origin, two) == who
     message = _git(env.o.origin, "log", "-1", "--format=%B", rev["sha"])
     assert REVERT_SUBJECT.match(message) and REVERT_SUBJECT.match(message)[1] == "2" and REVERTS.findall(message) == [two]
     assert f"changes made to {_git(env.o.origin, 'rev-parse', f'{two}^1')}." in message

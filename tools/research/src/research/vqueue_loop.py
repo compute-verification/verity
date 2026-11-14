@@ -221,8 +221,8 @@ from . import carry, policy, vqueue, vqueue_records
 from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, authed, cancel_runs, gating, merge_thread_post
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (IDENTITY, LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member,
-                    Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
+from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member, Queue,
+                    QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
                     label_verifier, lands_on_mark, lean_change, listed, lowrisk, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
 from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why, merge_main
@@ -1572,14 +1572,15 @@ class World:
         """A commit on ``main`` undoing the queue's merge ``merge`` as `git revert -m 1` does, with git's message (`Revert
         "SUBJECT"`, `This reverts commit MERGE, reversing changes made to PARENT.`, which `digest.REVERT_SUBJECT` and
         `merge.REVERTS` read) and ``why`` below it, made without a worktree (`git merge-tree` from ``merge`` onto ``main`` of its
-        first parent), as the queue (`IDENTITY`); None when it doesn't apply cleanly."""
+        first parent), as the queue's commits are (`Queue.identity`: the author its repository's rules name); None when it
+        doesn't apply cleanly."""
         parent = _out(self.repo, "rev-parse", f"{merge}^1")
         r = _git(self.repo, "merge-tree", "--write-tree", f"--merge-base={merge}", main, parent, check=False)
         if r.returncode:
             return None
         subject = _out(self.repo, "log", "-1", "--format=%s", merge)
         msg = f'Revert "{subject}"\n\nThis reverts commit {merge}, reversing\nchanges made to {parent}.\n\n{why}\n'
-        return _git(self.repo, "commit-tree", r.stdout.split()[0], "-p", main, "-m", msg, env=IDENTITY).stdout.strip()
+        return _git(self.repo, "commit-tree", r.stdout.split()[0], "-p", main, "-m", msg, env=self.q.identity).stdout.strip()
 
     def recommitted(self, sha: str, tip: str, parent: str, base: str = "", members: list[Member] | None = None) -> bool:
         """Whether ``sha`` is records commit ``tip`` made before on ``parent`` (pushed with no line in the log, as a tick cut off
