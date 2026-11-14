@@ -30,7 +30,7 @@ contents are a circuit's values, which depend on the encodings only through the 
   carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
   Its store is one for the session, made by the same rule.
 * `StackedRequirementSketchDeployed` and `StackedRequirementRelay`: the same sessions, with the shortfall read against a
-  declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) instead of the store: when the memory
+  registered circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) instead of the store: when the memory
   map and every pass's plan hold `W`'s credited blocks at each step the passes are bound to (`Requirement.StoreMatches`,
   `Requirement.PlanMatches`), an accepted session read at least `(1 − γ)` of the live bits the audit credits over
   those steps (`Requirement.creditedBits`: `W`'s live values in complete blocks) and of the bits `W` reads from
@@ -263,9 +263,9 @@ def StackedRunConservationRelay : Prop :=
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 
-/-- **Stacked PoUB at the deployed parameters with a store per pass, read against a declared circuit's
+/-- **Stacked PoUB at the deployed parameters with a store per pass, read against a registered circuit's
 requirement.** `StackedRunConservationSketchDeployed`'s session, hypotheses and bound, with the session's shortfall
-measured against a declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win`
+measured against a registered circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win`
 of engine steps. The window has at most `n·P` steps, one for each pass the session's passes are bound to (a pass names
 the step whose reads it covers). At each of its steps the memory map `mm` holds `W`'s credited blocks
 (`Requirement.StoreMatches`: every block holding a live value the audit credits, `W`'s live values in complete blocks,
@@ -306,7 +306,7 @@ Proof: `Accounting.SecurityProofs.StackedRequirementSketchDeployed`, from
 store's by `Accounting.SecurityProofs.RequirementHeld` and `Accounting.SecurityProofs.RequirementMoved`.
 
 Frozen (no-function, hash): `StackedRunConservationSketchDeployed`'s game, with its shortfall read against a
-declared circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal
+registered circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal
 encoding models, under the per-pass hash budget, `SquaringFloor`, `ChainSum` and `KeyBinding`. -/
 def StackedRequirementSketchDeployed : Prop :=
   ∀ (n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω]
@@ -345,9 +345,9 @@ def StackedRequirementSketchDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
-/-- **Stacked PoUB with relaying side sources, read against a declared circuit's requirement.**
+/-- **Stacked PoUB with relaying side sources, read against a registered circuit's requirement.**
 `StackedRunConservationRelay`'s session, hypotheses and bound, with the session's tier reads measured against a
-declared circuit `W`'s requirement over a window `win` of at most `n·P` engine steps, as in
+registered circuit `W`'s requirement over a window `win` of at most `n·P` engine steps, as in
 `StackedRequirementSketchDeployed`: at each step the memory map `mm` holds `W`'s credited blocks
 (`Requirement.StoreMatches`, in blocks of `b` bits) with at most `N` blocks resident, and the plan of the pass bound to
 it covers `W`'s reads from complete blocks (`Requirement.PlanMatches`), of at most `N` blocks. For every `m`, the
@@ -375,7 +375,7 @@ Proof: `Accounting.SecurityProofs.StackedRequirementRelay`, from
 `Accounting.SecurityProofs.StackedRunConservationRelay`, with `W`'s credited live and read bits at most the store's
 by `Accounting.SecurityProofs.RequirementHeld` and `Accounting.SecurityProofs.RequirementMoved`.
 
-Frozen (no-function, hash): `StackedRunConservationRelay`'s game, with its shortfall read against a declared
+Frozen (no-function, hash): `StackedRunConservationRelay`'s game, with its shortfall read against a registered
 circuit's requirement by counting bounds over its wiring, execution and store, in the random-oracle and ideal encoding
 models, under `SquaringFloor`, `ChainSum` and `KeyBinding`. -/
 def StackedRequirementRelay : Prop :=

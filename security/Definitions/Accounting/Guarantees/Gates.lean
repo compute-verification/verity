@@ -52,7 +52,7 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   floor). `SquaringFloor` adds to it at `c = 0` the square's data products, and `ChainSum` composes it over the chain.
 * `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
   drops, is the Legendre symbol of `x`.
-* `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
+* `EncodeBudget`: the connection. For a registered circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the samples number at most
   `(budget)/E + (run-input bits)/(n − 1)`, under `SquaringFloor` at `e` and `ChainSum` with `E ≤ k · S · e`: the
   budget is the caps (rational nonlinear units per certified byte, data products among them) times the
@@ -209,7 +209,7 @@ def RhoPairs : Prop :=
   ∀ p x : ℕ, p.Prime → p % 4 = 3 → 0 < x → x < p →
     rho p (p - x) = p - rho p x ∧ (rho p x % 2 = 1 ↔ ¬ ∃ y, y ^ 2 % p = x)
 
-/-- **The encode budget: what the stacking property bounds.** For a declared circuit `W` in the restricted class
+/-- **The encode budget: what the stacking property bounds.** For a registered circuit `W` in the restricted class
 (`Restricted B`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
 distinct words `words` on more than `ε` of the fresh samples, its inputs and budgeted gates but gathers there in
