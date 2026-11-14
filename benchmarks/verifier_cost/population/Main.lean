@@ -1,8 +1,8 @@
 import Spot
 
 /-!
-`population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (which runs
-as `unitGatesFast`), `Slots.popOk` (the run's `population-order` check, which runs from the ranges as
+`population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (a range at
+a time, `TemplateQuery.unitGates`), `Slots.popOk` (the run's `population-order` check, which runs from the ranges as
 `Slots.popOkRanges`), the one-stage check's call of it (`OneStageZk.popHeld`, as `Spot/OneStageZkStatement.lean`
 compiles it, on a record that names the population; its row carries the root's input gates, counted and never built)
 and, unless

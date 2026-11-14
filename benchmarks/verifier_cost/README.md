@@ -122,7 +122,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
-`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
+`Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
 `popOk_eq_popOkRanges`: no replay unit and no input gate is built), the one-stage check's call of it
 (`OneStageZk.popHeld`, compiled in `Spot/OneStageZkStatement.lean`, which imports `Spot.PopOrder` so that it runs from
 the ranges too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every

@@ -12,8 +12,8 @@ from verity.commitments.windows import rows as CS
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))

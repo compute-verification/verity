@@ -60,7 +60,7 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 
 namespace Verity.Sampled
 
-open Properties.NetworkCertifier.Bytes (bs bs_length)
+open Properties.Certifier.Bytes (bs bs_length)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 

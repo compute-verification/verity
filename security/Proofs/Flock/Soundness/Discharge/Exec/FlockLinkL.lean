@@ -131,16 +131,30 @@ noncomputable def cTL (t' : ℝ) (e : TrialOutL L D Sl) : ℝ :=
   t' * (1 + if accωL plan R e.1 e.2.1 then (e.2.2.map (waitCost (accωL plan R e.1))).sum else 0)
 
 open Classical in
-/-- An opening a trial found for value `v` at `c`, when it found one. -/
-noncomputable def opOfVL (c : vb.Pos) (e : TrialOutL L D Sl) (v : vb.Val) : vb.Opening :=
-  Classical.epsilon fun o => accωL plan R e.1 e.2.1 ∧
-    ∃ bs, firsts (accωL plan R e.1) e.2.2 = some bs ∧ OpensAtL P H E Lf plan tab vb R τ e.1 bs c v o
+/-- **The openings of `c` after an extraction from the reruns `bs`**, each with its value: one for each sampled proof
+block that reads `c` and whose table settles on a message (`candL`), in the blocks' order. -/
+noncomputable def opensL (ω : L.Ω) (bs : List (List (OutCL 𝔽 D Sl))) (c : vb.Pos) : List (vb.Val × vb.Opening) :=
+  (List.finRange n).filterMap fun u =>
+    if u ∈ L.draw ω ∧ P.Reads plan tab vb u c then
+      (candL H E Lf plan tab R τ ω u bs).map fun M =>
+        (vb.val (vb.opening (L.draw ω) R u M c), vb.opening (L.draw ω) R u M c)
+    else none
 
-/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
-the trials its cost charges. -/
+open Classical in
+/-- **The openings a trial found at `c`**, each with its value: nothing unless the fresh session accepts and every wait
+finds an accepted rerun; then the openings of the extraction from those reruns (`opensL`). The list the finder's
+output searches. -/
+noncomputable def opsTL (c : vb.Pos) (e : TrialOutL L D Sl) : List (vb.Val × vb.Opening) :=
+  if accωL plan R e.1 e.2.1 then
+    (firsts (accωL plan R e.1) e.2.2).elim [] fun bs => opensL P H E Lf plan tab vb R τ e.1 bs c
+  else []
+
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOfOps`), from
+the trials its cost charges. It searches the openings those trials found (`opsTL`) and chooses none; the message each
+opening is of is the one the extraction settles on (`candL`), which is still chosen. -/
 noncomputable def outCL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl)) :
     Option (List UInt8 × List UInt8) :=
-  outOf (rdTL P H E Lf plan tab vb R τ c) (opOfVL P H E Lf plan tab vb R τ c) vb.collide x
+  outOfOps (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -179,31 +193,69 @@ theorem opensAt_specL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.P
   rw [hgc] at h1
   exact h1
 
-theorem opOfVL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
-    (hv : v ∈ rdTL P H E Lf plan tab vb R τ c e) :
-    vb.com (opOfVL P H E Lf plan tab vb R τ c e v) = vb.cs R c ∧
-      vb.val (opOfVL P H E Lf plan tab vb R τ c e v) = v := by
+/-- The listed openings of `c` are the extraction's openings of it. -/
+theorem mem_opensL {ω : L.Ω} {bs : List (List (OutCL 𝔽 D Sl))} {c : vb.Pos} {p : vb.Val × vb.Opening} :
+    p ∈ opensL P H E Lf plan tab vb R τ ω bs c ↔ OpensAtL P H E Lf plan tab vb R τ ω bs c p.1 p.2 := by
+  classical
+  unfold opensL OpensAtL
+  rw [List.mem_filterMap]
+  constructor
+  · rintro ⟨u, -, hu⟩
+    by_cases h : u ∈ L.draw ω ∧ P.Reads plan tab vb u c
+    · rw [ite_eq_left h] at hu
+      obtain ⟨M, hM, rfl⟩ := Option.map_eq_some_iff.1 hu
+      exact ⟨u, h.1, h.2, M, hM, rfl, rfl⟩
+    · rw [ite_eq_right h] at hu
+      exact absurd hu (by simp)
+  · rintro ⟨u, hu, hr, M, hM, ho, hv⟩
+    refine ⟨u, List.mem_finRange u, ?_⟩
+    rw [ite_eq_left ⟨hu, hr⟩, hM]
+    show some (vb.val (vb.opening (L.draw ω) R u M c), vb.opening (L.draw ω) R u M c) = some p
+    rw [← ho, hv]
+
+/-- Every opening a trial lists at `c` is an opening of `c`'s registered commit string, of the value it is listed
+with. -/
+theorem opsTL_spec {c : vb.Pos} {e : TrialOutL L D Sl} {p : vb.Val × vb.Opening}
+    (hp : p ∈ opsTL P H E Lf plan tab vb R τ c e) : vb.com p.2 = vb.cs R c ∧ vb.val p.2 = p.1 := by
+  classical
+  unfold opsTL at hp
+  by_cases hacc : accωL plan R e.1 e.2.1
+  · rw [ite_eq_left hacc] at hp
+    cases hf : firsts (accωL plan R e.1) e.2.2 with
+    | none => simp [hf] at hp
+    | some bs =>
+        simp only [hf, Option.elim_some] at hp
+        exact opensAt_specL P H E Lf plan tab vb R τ ((mem_opensL P H E Lf plan tab vb R τ).1 hp)
+  · rw [ite_eq_right hacc] at hp
+    simp at hp
+
+/-- Every value a trial reads at `c` is listed with an opening. -/
+theorem opsTL_of_mem_rdTL {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
+    (hv : v ∈ rdTL P H E Lf plan tab vb R τ c e) : ∃ o, (v, o) ∈ opsTL P H E Lf plan tab vb R τ c e := by
   classical
   unfold rdTL at hv
-  split_ifs at hv with hacc
-  · cases hf : firsts (accωL plan R e.1) e.2.2 with
+  unfold opsTL
+  by_cases hacc : accωL plan R e.1 e.2.1
+  · rw [ite_eq_left hacc] at hv
+    rw [ite_eq_left hacc]
+    cases hf : firsts (accωL plan R e.1) e.2.2 with
     | none => simp [hf] at hv
     | some bs =>
         simp only [hf, Option.elim_some] at hv
+        simp only [Option.elim_some]
         unfold readsAtL at hv
         obtain ⟨o, ho⟩ := (Finset.mem_filter.1 hv).2
-        have hex : ∃ o, accωL plan R e.1 e.2.1 ∧ ∃ bs, firsts (accωL plan R e.1) e.2.2 = some bs ∧
-            OpensAtL P H E Lf plan tab vb R τ e.1 bs c v o := ⟨o, hacc, bs, hf, ho⟩
-        obtain ⟨-, bs', -, hop⟩ := Classical.epsilon_spec hex
-        exact opensAt_specL P H E Lf plan tab vb R τ hop
-  · simp at hv
+        exact ⟨o, (mem_opensL P H E Lf plan tab vb R τ (p := (v, o))).2 ho⟩
+  · rw [ite_eq_right hacc] at hv
+    simp at hv
 
 /-- **Every success of the finder outputs a collision.** -/
 theorem outC_specL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl))
     (hS : Succ (rdTL P H E Lf plan tab vb R τ c) x) :
     ∃ a b, outCL P H E Lf plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec (rdTL P H E Lf plan tab vb R τ c) (opOfVL P H E Lf plan tab vb R τ c) vb.collide
-    (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfVL_spec P H E Lf plan tab vb R τ hv)
+  outOfOps_spec (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide
+    (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hp => opsTL_spec P H E Lf plan tab vb R τ hp)
+    (fun _ _ hv => opsTL_of_mem_rdTL P H E Lf plan tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 
 /-! ## The trial's expectations -/

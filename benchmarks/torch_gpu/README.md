@@ -37,10 +37,10 @@ which it isn't builds no ship. A library a job builds off the card outside a shi
 compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
 doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
 
-- `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
-  frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.
-- `sha512_rows/`: the SHA-512 compression engine that `commit_slots` runs on: row digests, hm96-sha512 leaves and
-  frame-v3-sha512 levels. `gpu.sh` holds every variant to `verity.commitments`' reference, bit for bit.
+- `commit_slots/`: what measures the serve-time commit call (`verity/commitments/cuda/commit_slots/`). `gpu.sh` holds
+  the GPU's roots to the CPU reference's and times the call.
+- `sha512_rows/`: what measures the SHA-512 engine the call runs on (`verity/commitments/cuda/sha512_rows/`). `gpu.sh`
+  holds every variant to `verity.commitments`' reference, bit for bit, and times it.
 - `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with PoUB's
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
@@ -59,9 +59,5 @@ without a word to another directory.
 | `p2_stage/full.py` | `Segments`, `sync`, `DEVICE` | `benchmarks/pous/p2_v1/bandwidth.py` |
 | `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
 | `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `benchmarks/pous/p2_v1/store.py` |
-| `commit_slots/slots.py` | the commit call's layout, domains and trees: `CommitShape`, `Group`, `Part`, `Row`, `ROW_SCHEMA`, `layout_digest`, `row_salts`, `slot_domain`, `step_domain`, `unit_domain`, `step_tree` | `benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py` |
 
-That bundle check also reads two private names of `slots.py`, `_unit_tree` and `_strings`; a private name is not an
-interface. `verity/commitments/layout.py` names `commit_slots/README.md` as the commit call's specification. A test
-of `benchmarks/pouw` loads `s8_linear/sass_gate.py` by file, which fixes its path, nothing more.
-`commit_slots/fixtures/families-shared.layout.json` is the path a registered fixture is fetched to; it is not tracked.
+A test of `benchmarks/pouw` loads `s8_linear/sass_gate.py` by file, which fixes its path, nothing more.

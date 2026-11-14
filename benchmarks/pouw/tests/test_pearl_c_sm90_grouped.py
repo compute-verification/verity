@@ -17,10 +17,10 @@ torch = pytest.importorskip("torch")
 from verity.protocols.accounting.pouw.verifier.audit import weights_root  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import grouped as PG  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import joined  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
