@@ -30,6 +30,12 @@ what the bound rests on. The session signs no egress, and this check holds the e
 count whoever writes the evidence gives. That it is the network certifier's count over the span between the session's
 two marks is for the check that composes the wipe with the network certifier to establish.
 
+`named` and `outcome_counted` are the wipe's half of that check (`MemoryChallenger/WipeCount.lean`). `named` is what a
+composition's tie reads off the wipe's case: the session's start mark, the 64 bytes its two marks open to, and the
+evidence's count. `outcome_counted` is `outcome` that publishes `certify` at the evidence's count, for a composition
+that holds `named` to the network certifier's count over the span between those marks; it rejects an evidence with no
+count and a session with no start mark. Nothing here calls it: on its own it certifies on what the evidence states.
+
 `leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
 (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
 device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory outside the
@@ -99,6 +105,10 @@ EXPERIMENTAL = (
 OTHER = "the wipe's commitment is not of the period's server and session"
 EGRESS_RANGE = "the evidence's egress is {} MiB, outside 0 to {}"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
+#: The id of the wipe's component whose count a composition holds (`MemoryChallenger.WipeProtocol.COUNTED_ID`).
+COUNTED = "verity/wipe/counted/v0"
+NO_COUNT = "the evidence gives no egress count: a counted wipe is held to the network certifier's count over its span"
+NO_MARK = "the session names no start mark: the memory challenger held no start certificate, so no count is of its span"
 
 
 def params_for(segments: int = SEGMENTS, *, k: int = READS, limit_ns: int = LIMIT_NS, tier: str = TIER,
@@ -240,6 +250,45 @@ def answer(server: bytes, session: bytes, trusted: Collection[bytes], commitment
     public, prof, reason = (*rest, None) if verdict == "accept" else (None, None, rest[0])
     return {"commitment": digest(commitment).hex(), "profile": prof, "protocol": protocol, "public": public,
             "reason": reason, "verdict": verdict}
+
+
+def named(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None,
+          egress_mib: int | None) -> dict[str, Any] | None:
+    """`MemoryChallenger.WipeProtocol.named`, what a composition's tie reads off the wipe's case: the start mark the
+    signed message names, the session's start and end messages (`streamed_wipe.start_message` and `end_message`, the
+    64 bytes the memory challenger hands the network certifier for each of its two marks) and the evidence's count in
+    whole MiB. None while the session is unsigned or the evidence gives no count. It raises what `end_message` raises
+    where the signed session's message can't be formed (a batch record past a field's width), as no session `outcome`
+    accepts is. It names no device, link or key."""
+    if signed is None or egress_mib is None:
+        return None
+    return {"start_mark": signed.start_mark, "start_message": sw.start_message(commitment),
+            "end_message": sw.end_message(signed), "egress_mib": egress_mib}
+
+
+def counted_profile(p: sw.WipeParams, egress_mib: int) -> dict[str, Any]:
+    """`MemoryChallenger.WipeProtocol.countedProfileJson`: `profile` whose gaps are the bound's alone (`gaps`), the
+    count being no gap once a composition holds it."""
+    return profile(p, egress_mib) | {"gaps": gaps(p, egress_mib)}
+
+
+def outcome_counted(server: bytes, session: bytes, trusted: Collection[bytes], commitment: sw.WipeCommitment,
+                    signed: sw.SignedWipe | None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES, *,
+                    egress_mib: int | None) -> tuple:
+    """`MemoryChallenger.WipeProtocol.checkCounted`, the check with its count held by a composition: `outcome`'s
+    refusals, then a rejection of an evidence that gives no count (`NO_COUNT`) and of a session that names no start
+    mark (`NO_MARK`), and on acceptance `certify` at the evidence's count with `counted_profile`. It holds the count
+    to nothing, as `outcome` does: only under a composition that ties `named` to the network certifier's count over
+    the span between the session's two marks is the count the certifier's."""
+    out = outcome(server, session, trusted, commitment, signed, schemes, egress_mib=egress_mib)
+    if out[0] != "accept":
+        return out
+    n = named(commitment, signed, egress_mib)
+    if n is None:
+        return ("reject", NO_COUNT)
+    if len(n["start_mark"]) != sw.MARK_BYTES:
+        return ("reject", NO_MARK)
+    return ("accept", certify(commitment.params, n["egress_mib"]), counted_profile(commitment.params, n["egress_mib"]))
 
 
 class Keeping(sw.Prover):
@@ -724,10 +773,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 __all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT_NS", "LINK_KEYS", "MAX_READS",
            "NOT_DISKS", "PROTOCOL", "READS", "SAMPLING_BITS", "SEGMENTS", "SEGMENT_BYTES", "Keeping", "Wipe", "answer",
-           "case", "certify", "config", "digest", "disk_gaps", "disks", "dram_available", "egress_of", "foreign_bits",
-           "foreign_labels", "gaps", "keeping", "leg",
-           "main", "memory_bits",
-           "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
+           "case", "certify", "config", "counted_profile", "digest", "disk_gaps", "disks", "dram_available", "egress_of",
+           "foreign_bits", "foreign_labels", "gaps", "keeping", "leg",
+           "main", "memory_bits", "named",
+           "outcome", "outcome_counted", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve",
+           "store_of", "summary",
            "timing", "uncertified", "uncounted", "undeclared", "writer_gap"]
 
 if __name__ == "__main__":

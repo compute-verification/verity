@@ -8,6 +8,7 @@
   "MemoryChallenger.WipeVerdictMain": "the streamed-wipe-verdict executable's entry point, one line; it serves MemoryChallenger.StreamedWipe.verdictFn, audited under MemoryChallenger, through the difftest server's line protocol",
   "MemoryChallenger.WipeProtocolMain": "the wipe-protocol executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.WipeProtocol.protocol, audited under MemoryChallenger",
   "MemoryChallenger.WipeProtocolTestMain": "the wipe-protocol-test executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.WipeProtocol.testProtocol, audited under MemoryChallenger",
+  "MemoryChallenger.WipeCountTestMain": "the wipe-count-test executable's entry point, one line; its command is Core.Protocol.main of MemoryChallenger.WipeProtocol.countedTest, audited under MemoryChallenger",
   "MemoryChallenger.DifftestMain": "the memory-challenger-difftest executable's entry point, one line; it serves MemoryChallenger.Difftest.table, audited under MemoryChallenger, a test and not a proof"
  },
  "layers": {

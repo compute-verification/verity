@@ -6,7 +6,9 @@ mirror, `answer` (and `reference(id, schemes)`), and its cases, `build`, `case` 
 input exactly the canonical JSON of what it decodes to (the commitment and the signed session as `wipe_cases` decodes
 them, the evidence's egress null or an integer of either sign), and checks with the period hook's own Python, `wipe_period.outcome` over `streamed_wipe.verdict`. Its verdict,
 public, profile and digest are the Lean's exactly, and past decoding its reasons are the Lean's word for word. `answer`
-is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol's.
+is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol's. `counted_test_answer` is the
+wipe's component with its count held (`MemoryChallenger.WipeProtocol.countedTest`), under the test signers' schemes:
+the same formats, its check `wipe_period.outcome_counted`.
 
 `build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
@@ -115,6 +117,21 @@ def reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
 
 answer = reference(ID, mc.SCHEMES)
 test_answer = reference(TEST_ID, M.ts.SCHEMES)
+
+
+def counted_reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
+    """`MemoryChallenger.WipeProtocol.mkCounted protocol_id schemes` in Python: the wipe's formats and digest, its
+    check `wipe_period.outcome_counted`."""
+
+    def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
+        return WP.outcome_counted(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
+
+    return lambda case: P.answer(protocol_id, case, params=decode_params, commitment=decode_commitment,
+                                 evidence=decode_evidence, check=check, digest=digest)
+
+
+COUNTED_TEST_ID = mc.TEST_PREFIX + WP.COUNTED
+counted_test_answer = counted_reference(COUNTED_TEST_ID, M.ts.SCHEMES)
 
 # --- wipes -------------------------------------------------------------------------------------------------------------
 
