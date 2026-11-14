@@ -1,0 +1,95 @@
+# The retired word "law" outside the proof system's paths, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/law_words_map.toml` renames. GLOSSARY.md: "law", "draw law", `law` identifiers, the Lean's `Law` -> the
+# sampling design. A name takes `design` (as `parse_design` and `design_object` already do), prose "sampling design".
+# It renames the names whose definitions are on this side (the PoUW plan's `WorkLaw`, `CountLaw`, `TileLaw` and
+# `window_laws`, the configuration's `default_law`, the adapter's `window_law` module and its `law_of`, the served
+# commit's `law_of`, test constants `LAW`) and prose that names the sampling design by a possessive or a qualifier.
+# Left by this map:
+# - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, `benchmarks/one_stage/`,
+#   `benchmarks/remote_session/`), and the names defined there (`Law`, `selection_law`, `params_law`, `second_law`,
+#   `core_law`, one-stage's `law_of`, `V3C_LAW`, `FLOCK_DRAW_LAW`): a use here takes proofs' spelling after its map;
+# - the bare `law` in code and every Lean name, which follow proofs' map and lean's names move;
+# - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the key `law`, `sqrt_law`), reason
+#   codes (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`;
+# - another sense: a probability law (`noise_law`, `_below_law`), a scaling, power or size law, a law of the courts;
+# - the network certifier's files and network-accounting's benchmarks, until that lane reads this map;
+# - records of what was: GLOSSARY.md's table, the retired-terms lint, its allowlists and tests, the move tool's tests.
+
+[words]
+"test_handoff_work_law_draws_the_plans_k_and_its_windows_are_integrity_period_logs" = "test_handoff_work_design_draws_the_plans_k_and_its_windows_are_integrity_period_logs"
+"test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_design"
+"test_a_bernoulli_law_is_the_single_unit_case" = "test_a_bernoulli_design_is_the_single_unit_case"
+"test_exhaustive_facts_travel_with_the_law" = "test_exhaustive_facts_travel_with_the_design"
+"the registration's law" = "the registration's sampling design"
+"the partition file's law" = "the partition file's sampling design"
+"proof system's law" = "proof system's sampling design"
+"the partition's law" = "the partition's sampling design"
+"the sample's law" = "the sample's sampling design"
+"the plan's law" = "the plan's sampling design"
+"one-stage audits' law" = "one-stage audits' sampling design"
+"one-stage's law object" = "one-stage's design object"
+"`reusing`'s R's law" = "`reusing`'s R's sampling design"
+"A4 P6's law" = "A4 P6's sampling design"
+"serving rows' window law" = "serving rows' window sampling design"
+"under another law" = "under another sampling design"
+"by another law" = "by another sampling design"
+"any other law" = "any other sampling design"
+"any of its laws" = "any of its sampling designs"
+"`draw.py` laws" = "`draw.py` sampling designs"
+"`work:1` law" = "`work:1` sampling design"
+"``work`` law" = "``work`` sampling design"
+"every bernoulli law" = "every bernoulli sampling design"
+"first default law" = "first default sampling design"
+"the laws of `Achievability`" = "the sampling designs of `Achievability`"
+"the cost the laws pay" = "the cost the sampling designs pay"
+"draw-law seam" = "sampling-design seam"
+"work-law budget" = "work sampling design's budget"
+"law-level bound" = "design-level bound"
+"window_laws" = "window_designs"
+"default_law" = "default_design"
+"law_name" = "design_name"
+"sqrt_law" = "sqrt_design"
+"WorkLaw" = "WorkDesign"
+"CountLaw" = "CountDesign"
+"TileLaw" = "TileDesign"
+"a4_law" = "a4_design"
+
+[[words_in]]
+files = ["adapters/vllm/**", "benchmarks/pouw/**"]
+[words_in.words]
+"window_law" = "window_design"
+"law_of" = "design_of"
+
+[[words_in]]
+files = ["demos/onsite_served/served_table.py"]
+[words_in.words]
+"_law" = "_design"
+
+[[words_in]]
+files = ["verity/commitments/windows/tests/test_blocks.py", "verity/commitments/windows/tests/test_interface.py",
+         "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py",
+         "adapters/vllm/tests/pipeline/test_tp_wires.py", "adapters/vllm/tests/pipeline/served_rope.py",
+         "adapters/vllm/tests/pipeline/test_edge_history.py", "adapters/vllm/tests/pipeline/served_experts.py",
+         "adapters/vllm/tests/pipeline/test_serving_rows_bundle.py",
+         "adapters/vllm/tests/pipeline/test_serving_rows_boolean.py",
+         "adapters/vllm/tests/program/predict/test_window_circuit_pearl.py",
+         "adapters/vllm/tests/program/predict/test_window_rows.py", "adapters/vllm/verity_vllm/protocols/spot.py"]
+[words_in.words]
+"REUSING_LAW" = "REUSING_DESIGN"
+"LAW" = "DESIGN"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "**/*.lean", "**/lean-audit.json", "**/lakefile.*", "**/lake-manifest.json",
+           "verity/protocols/proofs/**", "benchmarks/one_stage/**", "benchmarks/remote_session/**",
+           "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**", "security/*/Spot.lean",
+           "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**",
+           "verity/protocols/accounting/certifier/**", "benchmarks/network_traces/**", "benchmarks/prove_path/**",
+           "benchmarks/certifier_term/**", "benchmarks/network_e2e/**", "benchmarks/network_sim/**",
+           "benchmarks/certifier_timing/**", "benchmarks/scan_cost/**", "benchmarks/datacenter/**",
+           "benchmarks/nci/**", "**/vectors/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py",
+           "tests/test_lean_vocabulary.py", "tools/verity/check/tests/test_move_check.py"]
+
+[keep]
+patterns = ['"[a-z0-9_./-]*laws?[a-z0-9_./-]*"', "'[a-z0-9_./-]*laws?[a-z0-9_./-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
+            'cursor/[\w./-]+']
