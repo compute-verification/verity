@@ -193,6 +193,10 @@ archive, is recorded as **no_step**, rung to top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it, and a coordinator working only in Slack makes no note or push for hours.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
+The open PRs of `--git-remote` are read from GitHub with the token `--gh-token-cmd` prints, run at each read, so the watch
+holds no token from its start. A read GitHub refuses (HTTP 401 or 403), or a command that gives no token, is recorded
+once as **github_refused**, which the relay rings infra for with what to do, and again only after a read that worked;
+meanwhile the last read's PR branches still count.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
 does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, deployed as `/data/agent-watch/nodes.json`: the
@@ -426,7 +430,9 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage", "archived", "unplaced", "handin_waiting", "unjudged", "continued_itself")
+                "outage", "archived", "unplaced", "handin_waiting", "unjudged", "continued_itself", "github_refused")
+GH_REFUSED = (401, 403)         # GitHub's answers to a token it doesn't take, or that may not read what was asked
+GH_REFUSED_KEY = "github_refused:prs"   # in `done` while the open PRs' read is refused
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -999,24 +1005,43 @@ def signer(name: str) -> str:
     return m[1] if m else ""
 
 
-def github_prs(remote: str, env_file: Path, pages: int = 10) -> Callable[[], list[dict]]:
+class GitHubRefused(ValueError):
+    """GitHub refused a read (HTTP 401 or 403), or the token command gave no token to read with."""
+
+
+def token_command(cmd: str, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd) -> Callable[[], str]:
+    """A source of GitHub tokens: `cmd` (a command line, `--gh-token-cmd`'s) run at each call, what it prints being the token
+    of the moment. Its stderr says why it gave none; its output is never quoted."""
+    argv = shlex.split(cmd)
+
+    def token() -> str:
+        rc, out, err = sh(argv, None, 120)
+        if rc != 0 or not out.strip():
+            raise GitHubRefused(f"`{cmd}` gave no token (exit {rc}: {err.strip()[-300:] or 'nothing on stderr'})")
+        return out.strip()
+    return token
+
+
+def github_prs(remote: str, token: Callable[[], str], pages: int = 10) -> Callable[[], list[dict]]:
     """A reader of `remote`'s open PRs on GitHub (`{"branch", "body"}` each, newest first, up to `pages` of 100), with the token
-    `env_file`'s `GH_TOKEN=` line holds, read at each call so a rotated token needs no restart."""
+    `token` gives at each read (`token_command`), so a watch that runs for weeks never reads with one from its start."""
     m = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", remote)
     if not m:
         raise ValueError(f"--git-remote {remote!r} names no GitHub repository")
 
     def read() -> list[dict]:
-        token = next((v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in env_file.read_text().splitlines())
-                      if k.strip().removeprefix("export ").strip() == "GH_TOKEN" and v.strip()), None)
-        if not token:
-            raise ValueError(f"no GH_TOKEN in {env_file}")
+        bearer = token()
         out: list[dict] = []
         for page in range(1, pages + 1):
             req = urllib.request.Request(f"https://api.github.com/repos/{m[1]}/pulls?state=open&per_page=100&page={page}",
-                                         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
-            with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (a literal https URL)
-                got = json.loads(r.read())
+                                         headers={"Authorization": f"Bearer {bearer}", "Accept": "application/vnd.github+json"})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (a literal https URL)
+                    got = json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                if e.code in GH_REFUSED:
+                    raise GitHubRefused(f"GitHub answered HTTP {e.code} to the read of {m[1]}'s open PRs") from None
+                raise
             out += [{"branch": (p.get("head") or {}).get("ref") or "", "body": p.get("body") or ""} for p in got]
             if len(got) < 100:
                 break
@@ -2286,7 +2311,7 @@ class Watch:
     def read_prs(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
         every agent its body names, so a worker on a branch named another way (`cursor/lean-...-fc8d`) isn't judged silent. A
-        failed read keeps the last one."""
+        failed read keeps the last one, and one GitHub refused is recorded `github_refused` once, until a read works again."""
         if self.open_prs is None or t - self.prs_read < HEADS_EVERY_S:
             return
         self.prs_read = t
@@ -2294,7 +2319,16 @@ class Watch:
             prs = self.open_prs()
         except (OSError, ValueError, urllib.error.URLError) as e:
             self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
+            if isinstance(e, GitHubRefused):
+                first = GH_REFUSED_KEY not in self.done
+                self.done[GH_REFUSED_KEY] = t           # kept for as long as GitHub refuses: once per spell, however long
+                if first:
+                    self.save()
+                    self.record("github_refused", Run("", "", ""), judged=False, owner="infra", what="the open PRs",
+                                why=str(e), every_min=HEADS_EVERY_S // 60)
             return
+        if self.done.pop(GH_REFUSED_KEY, None) is not None:
+            self.save()
         named: dict[str, set[str]] = {}
         lanes: dict[str, set[str]] = {}
         for pr in prs:
@@ -3266,9 +3300,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="Verity's remote, for `git ls-remote --heads` (pushes; without it nobody is judged silent)")
     lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
                     help="the nodes whose ended runs ring their sender's handle (no file: none)")
+    lp.add_argument("--gh-token-cmd", default=None,
+                    help="a command that prints a GitHub token, run at each read of --git-remote's open PRs, whose bodies name "
+                         "the agents their pushes count for (without it they aren't read)")
     lp.add_argument("--gh-env", type=Path, default=None,
-                    help="a file with a GH_TOKEN= line (--git-remote's open PRs, whose bodies name the agents their pushes count "
-                         "for) and the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
+                    help="a file with the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
                          "issues integrators take hand-ins on, and a shared team's issues' lane labels)")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
@@ -3301,7 +3337,7 @@ def main(argv: list[str] | None = None) -> int:
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
                   worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher,
-                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None,
+                  open_prs=github_prs(ns.git_remote, token_command(ns.gh_token_cmd)) if ns.gh_token_cmd and ns.git_remote else None,
                   linear=Linear(ns.gh_env, ns.log.with_name("linear-token.json")) if ns.gh_env else None)
     if ns.dry_run:
         watch.launch = lambda argv, env: (print(f"dry-run: {shlex.join(argv)}", file=sys.stderr, flush=True), (1, "", "dry-run"))[1]
