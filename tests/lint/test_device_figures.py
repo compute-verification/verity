@@ -51,7 +51,8 @@ ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 REGISTRY = ".agents/skills/using-slack/registry.json"
 CARDS, NODES = "hardware/cards/", "hardware/nodes/"
-#: the readings of a GPU's tensor clock its card states: the tensor's own, then the SM clock
+#: the readings of a GPU's tensor clock its card states: the tensor's own, then the SM clock (``verity.device.READINGS``;
+#: each peak below is ``verity.device.readings(card, fmt=...)``'s, a card without ``clock.tensor`` reading ``clock.sm``)
 READINGS = ("tensor", "sm")
 #: the names an SM count is bound to, in lower case
 SMS = frozenset({"sms", "num_sms", "sm_count"})

@@ -3,12 +3,12 @@
   "entries": [
     {"file": "adapters/vllm/manifests/capture-maps/deepseek-v4-eager-hopper-tp8-v0.json", "count": 2, "lane": "circuits"},
     {"file": "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json", "count": 2, "lane": "circuits"},
+    {"file": "adapters/vllm/tools/description_sizes.json", "count": 18, "lane": "vllm", "why": "a template's description size in bytes (1830), not a clock"},
     {"file": "adapters/vllm/tools/wgbench/wgbench.py", "count": 1, "lane": "vllm"},
     {"file": "benchmarks/census/hardware.json", "count": 3, "lane": "compute-accounting"},
     {"file": "benchmarks/census/workloads.json", "count": 2, "lane": "compute-accounting"},
     {"file": "benchmarks/compile_cost/run.py", "count": 1, "lane": "circuits"},
     {"file": "benchmarks/datacenter/datacenter/examples.py", "count": 3, "lane": "network-accounting"},
-    {"file": "benchmarks/harness/verity_bench/overhead.py", "count": 1, "lane": "benchmarks"},
     {"file": "benchmarks/inference_only/built.py", "count": 1, "lane": "training"},
     {"file": "benchmarks/int8_class_rate/run.sh", "count": 1, "lane": "compute-research"},
     {"file": "benchmarks/int8_class_rate/summarize.py", "count": 1, "lane": "compute-research"},
