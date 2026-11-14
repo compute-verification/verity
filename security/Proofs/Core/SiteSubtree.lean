@@ -105,8 +105,7 @@ subtree at any other place. -/
 theorem outside_notMem_under (hno : ∀ x ∈ S.locs, x.id ≠ outside) {i : String} (hi : i ≠ outside) :
     outside ∉ S.under i := by
   intro h
-  unfold under at h
-  rcases Relation.ReflTransGen.cases_tail (Finset.mem_filter.1 h).2 with h | ⟨c, -, x, hx, hxo, -⟩
+  rcases Relation.ReflTransGen.cases_tail (S.mem_under.1 h).2 with h | ⟨c, -, x, hx, hxo, -⟩
   · exact hi h.symm
   · exact hno x hx hxo
 

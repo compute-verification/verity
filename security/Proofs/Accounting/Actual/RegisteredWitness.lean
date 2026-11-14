@@ -4,6 +4,7 @@ public import Definitions.Accounting.Guarantees.RegisteredSite
 public import Definitions.Accounting.RecordsToy
 public import Proofs.Core.Site
 public import Proofs.Core.SiteSubtree
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Set.Card
 
