@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.accounting.certifier.verifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
+from verity.protocols.accounting.certifier.verifier import active as A, id_form as IDF, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
@@ -501,7 +501,7 @@ def test_errors_and_whole_response(tmp_path):
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
     """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
-    return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
+    return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
                         offset=0)
 
 

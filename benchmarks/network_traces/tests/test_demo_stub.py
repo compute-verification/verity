@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active as A, io_tie as IT
+from verity.protocols.accounting.certifier.verifier import active as A, id_form as IDF, io_tie as IT
 from verity.protocols.accounting.certifier.verifier.release import with_release
 
 HERE = Path(__file__).resolve().parents[1]
@@ -58,7 +58,7 @@ def respond(request: bytes, shape: S.Shape = S.Shape()) -> bytes:
 def ids_request(**kw) -> bytes:
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "temperature": 0.0, "top_p": 1.0,
               "seed": 12345} | kw
-    return A.id_request(**fields, frame_bytes=P + A.HEADER.size, offset=0)
+    return IDF.id_request(**fields, frame_bytes=P + A.HEADER.size, offset=0)
 
 
 def refused(data: bytes) -> str:
@@ -115,9 +115,9 @@ def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_on
     forwarded copy whose release header isn't where the network certifier puts it, a vLLM-shaped body and another path
     are none of the network certifier's id requests."""
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "seed": 12345}
-    assert len(ids_request()) < P and A.id_request(**fields, frame_bytes=4096, offset=0) == ids_request()
+    assert len(ids_request()) < P and IDF.id_request(**fields, frame_bytes=4096, offset=0) == ids_request()
     moved = ids_request().replace(b"\r\n\r\n", b"\r\nx-verity-release: 3\r\n\r\n", 1)
-    for other in (A.id_request(**fields, frame_bytes=256, offset=0), moved,
+    for other in (IDF.id_request(**fields, frame_bytes=256, offset=0), moved,
                   ws.http_request({"model": NAME, "prompt": PROMPT, "max_tokens": 24}, "h"),
                   ids_request().replace(b"POST /v1/completions", b"POST /v1/chat/completions", 1)):
         assert other != ids_request() and S.warden_request(other) is None

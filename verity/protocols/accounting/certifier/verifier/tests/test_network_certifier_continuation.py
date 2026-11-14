@@ -35,7 +35,8 @@ from verity.protocols.accounting.certifier.verifier import continuation as C
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import PAD, id_request
+from verity.protocols.accounting.certifier.verifier.active import PAD
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.grid import Reason, Status
 
 B = 512

@@ -66,7 +66,7 @@ from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.grid import Certifier
 from verity.protocols.accounting.certifier.verifier.id_form import (ID_BODY_AT, ID_DIGITS, ID_FIELD_BYTES, ID_NAME_BYTES, ID_REQUEST_HEAD,
                                                     MAX_TOKENS_KEY, u32_field)

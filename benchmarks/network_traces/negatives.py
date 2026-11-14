@@ -102,9 +102,8 @@ sys.path.insert(0, str(HERE))
 import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
-                                                     compact_finish_violations, compact_record_data, decode_frame,
-                                                     encode_frame, id_event_data, id_request)
+from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES, compact_finish_violations, compact_record_data, decode_frame, encode_frame, id_event_data  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
 from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W  # noqa: E402

@@ -129,7 +129,8 @@ import negatives as N  # noqa: E402
 import warden_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, WardenParams, read_cell  # noqa: E402
 
 #: the classes in the order they are tried: the control first, and the one with the longest try last

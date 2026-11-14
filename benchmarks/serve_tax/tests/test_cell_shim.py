@@ -13,7 +13,8 @@ import json
 import cell_shim as C
 import pytest
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock, id_request
+from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.warden import Warden, WardenParams, audit
 
 PARAMS = WardenParams(cell_bytes=256, slots=1, bucket_ms=100, delay=4, lanes=2, queue=2, window=40, ingress_cells=8,

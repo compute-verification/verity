@@ -158,7 +158,7 @@ import stall_probe
 from active_replay import _quiet_runtime, _usage, pack_record, unpack_record
 from certifier_serve import certified_from_json, certified_json, served_model
 from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
 from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD

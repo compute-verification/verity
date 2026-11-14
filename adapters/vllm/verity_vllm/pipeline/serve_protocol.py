@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.certifier.verifier import active as A, io_tie as IT, release as REL
+from verity.protocols.accounting.certifier.verifier import active as A, id_form as IDF, io_tie as IT, release as REL
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -235,7 +235,7 @@ def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
     try:
         b = json.loads(body)
         got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-        canonical = A.id_request(**got, frame_bytes=payload + A.HEADER.size, offset=0)
+        canonical = IDF.id_request(**got, frame_bytes=payload + A.HEADER.size, offset=0)
         return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else None
     except (ValueError, KeyError, TypeError):
         return None

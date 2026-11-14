@@ -56,7 +56,7 @@ import json
 from typing import Collection, NamedTuple, Sequence
 
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD

@@ -522,7 +522,7 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
     request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
     record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
-    from verity.protocols.accounting.certifier.verifier.active import id_request
+    from verity.protocols.accounting.certifier.verifier.id_form import id_request
 
     brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [

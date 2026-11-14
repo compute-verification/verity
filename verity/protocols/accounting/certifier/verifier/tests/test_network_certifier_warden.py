@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active, io_tie as IT
+from verity.protocols.accounting.certifier.verifier import active, id_form as IDF, io_tie as IT
 from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.pacer import Report
@@ -252,10 +252,9 @@ def expected_egress(s: int, n: int, last: int = END) -> list[tuple[int, int]]:
 
 # --- the relay's files and the older form's --------------------------------------------------------------------------
 
-#: what a file of the relay still imports from the older form's file, by the file: the relay's own its sleep, and the id
-#: form's files the id request's writer. Each leaves that file in a change of its own, so this only shrinks.
-OLDER_FORM_READS = {Path(inspect.getfile(audit)).stem: {"precise_sleep"}, "io_request": {"id_request"},
-                    "content_rows": {"id_request"}, "continuation": {"id_request"}}
+#: what a file of the relay still imports from the older form's file, by the file: the relay's own its sleep. It leaves
+#: that file in a change of its own, so this only shrinks.
+OLDER_FORM_READS = {Path(inspect.getfile(audit)).stem: {"precise_sleep"}}
 
 
 def package_imports(path: Path, package: str) -> dict[str, set[str]]:
@@ -650,7 +649,7 @@ CAPPED = dataclasses.replace(GATED, max_tokens_cap=4)
 
 def id_req(max_tokens: int) -> bytes:
     """An id request in the network certifier's cells (offset 0), of two cells at GB."""
-    return active.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
+    return IDF.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
 
 
 def capped(request_bytes: bytes, response: bytes, params: WardenParams = CAPPED):
