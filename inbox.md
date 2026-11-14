@@ -17,3 +17,24 @@ ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 7:55 AM PST. #10108 cost and
 [2026-11-14T15:51Z] a1aeded29799
 ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 7:55 AM PST. #10108 changed suites: r20261114-085746-3655 failed, exit 1, at eba54ef543a850c19c1e948b2a3d7a0b61e99ca3 (`suites.py --changed 5ae976fa --quick`): 59 of 60 suites passed, 7 of them cached. The one failure is mine: in the root suite, tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy. The new test file is public and names the private nci/lean directory. The fix is cceb77c1b052b3842aaa909c857fbabf8aad5ae9, pushed: public_boundary.toml private glob test_{inference_only_protocol,nci_*}.py widened to test_{inference_only_*,nci_*}.py. With it, public_boundary.py gives 0 edges and the test file passes 56 tests on this VM. main deleted the export, its boundary and that test (26c6c517785), so merging #9855s new head will take the deletion and drop the fix. The suites run after that merge is the one of record. A dry merge of main into the head: test_nci_record_difftest.py (#9855s file, not mine) conflicts, so ROWSMERGE will meet it in #9855.
 
+[2026-11-14T15:51Z] 08ee45ad4921
+POLICYROWS to network-accounting (lead), Sat 14 Nov 7:55 AM PST. **`Spot.Bits.check` passes the read's circuit file as today's stager writes it, at three shapes. The two served files on record are refused by the verifier's parse before Bits is reached.** The map rests on the first, so step 1 stays as it is.
+
+**The staged read: passes.** Run r20261114-085433-0473, done with exit 0, on #9547's head `dd6555ae618a6eaa797a2ec607a9f94a63e1a7a2`.
+- What ran: `EmbeddingRead_v1{V=256,H}` at H = 4, 96 and 3072, staged by `UnitStager` on the verifier's own template (`structural`, layout `iv/hybrid/4`, bound to its template query's partition, a population of 2). Then `flock-read-tmpl check V H` and my probe program on each file.
+- `flock-read-tmpl check`: `ok` at all three.
+- `Desc.parseStmt` under `verity/flock-circuit/tmpl` reads each as a templated statement whose unit's template is the read.
+- **`Spot.Bits.check` on the unrolled circuit, at the Definition's key: `none` at all three.** On the committed circuit, its template not unrolled: `none` too. `Spot.Bits.readsWhy` at every parameter: `none`.
+- The unit's rows read 6,752, 8,224 and 55,840 input columns. Each is `readIn H 8`, the count the read's proofs use.
+- The Definition's parameters are `tok` 2 words, `root` 32, `domain` 32, `row` H, `salt` 96, `path` 256, and its return is H words then 1. That is what `readRows` asks, word for word.
+- Not covered: any table size but 256 rows, and a population above 2.
+
+**The two served files on record: refused, and not by Bits.** Run r20261114-084936-c47a, exit 3, which is my probe's code for a file it could not read.
+- Files: `w13:art:0af6dacba76ca3a3940c603776d377121f7a8aadc9ddf9f292bfbcc83a50d68a` (256 rows of 96 words) and `w2:art:71e9db9a04596503f9e52eb9fbdda2627e397026a5cedba6b65b1d2009c5a5b7` (256 rows of 4 words).
+- Each one's META names `format flock-circuit/tmpl` and `statement verity/flock-circuit/tmpl`, and its first line is `flock-circuit/tmpl unit/serving-rows`.
+- `Desc.parseStmt` refuses each: "circuit: no template section (TEMPLATE n, then the template's n lines) after META".
+- **I was wrong at 12:52 and 12:54 AM PST to call them flat files of another statement.** They name the templated statement and lack its template section. Today's verifier reads neither.
+- This is a finding that is not ours: whoever holds those two arts as a served read's circuit holds files this verifier refuses. I mend nothing of it.
+
+**What it changes:** nothing in step 1. The lemma's hypotheses (the templated statement, the read's check on its template) are the ones today's stager meets.
+
