@@ -257,8 +257,9 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time (default 1), each starting
   only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`);
   without the flag that memory is what is free as the sessions start, the least of the node's `MemAvailable` and
-  the room under each cgroup memory limit over the audit, a cgroup's file cache counted free and its shared memory
-  not (`a5.available_memory`); each pool prints the two terms and which binds, and once what held a start back.
+  the room under each cgroup memory limit over the audit (the lesser of `memory.high` and `memory.max`), a cgroup's
+  file cache counted free less its dirty, writeback and mapped pages, and its shared memory not
+  (`a5.available_memory`); each pool prints the two terms and which binds, and once what held a start back.
   Its negatives after the audit record run one after another, or `--negative-workers` at a time, each in a worker process
   forked from the audit with its own Lean verifier process, started only while its memory estimate, read then, fits
   (`a5.NegativeWorkers`); the negatives' file is the same either way, and nothing is retried.

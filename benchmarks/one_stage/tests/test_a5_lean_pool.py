@@ -179,7 +179,8 @@ def _machine(tmp_path: Path, free_gb: int, here: str | None, levels: dict[str, t
     """A machine's three readings as files: MemAvailable of ``free_gb``, the process's cgroup v2 line for ``here`` (None:
     no such file), and under the hierarchy's mount each of ``levels`` (its path from the mount, "" the mount itself)
     with its `memory.max`, its `memory.current` in GB and, where a third is given, a `memory.stat` holding that many GB
-    of file cache, split between its two lists, beside as much shared memory."""
+    of file cache, split between its two lists, beside as much shared memory; a fourth, a dict, is more of the level's
+    files by name (`memory.high`) and more lines of its `memory.stat` by key, each in bytes."""
     meminfo, cgroup, root = tmp_path / "meminfo", tmp_path / "cgroup", tmp_path / "sys"
     meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {free_gb * GB // 1024} kB\n")
     if here is not None:
@@ -188,9 +189,15 @@ def _machine(tmp_path: Path, free_gb: int, here: str | None, levels: dict[str, t
         (root / path).mkdir(parents=True, exist_ok=True)
         (root / path / "memory.max").write_text(f"{limit}\n")
         (root / path / "memory.current").write_text(f"{used * GB}\n")
-        for gb in cache:
+        for gb in cache[:1]:
             (root / path / "memory.stat").write_text(f"anon {GB}\nfile {2 * gb * GB}\nshmem {gb * GB}\n"
                                                      f"inactive_file {gb * GB - GB // 2}\nactive_file {GB // 2}\n")
+        for name, value in (cache[1] if cache[1:] else {}).items():
+            if name.startswith("memory."):
+                (root / path / name).write_text(f"{value}\n")
+            else:
+                with (root / path / "memory.stat").open("a") as f:
+                    f.write(f"{name} {value}\n")
     return meminfo, cgroup, root
 
 
@@ -243,6 +250,44 @@ def test_a_scope_without_a_memory_stat_counts_all_it_holds_and_a_file_that_does_
     (root / "job.slice/audit.scope/memory.current").write_text("\n")
     with pytest.raises(ValueError):
         a5.available_memory(meminfo, cgroup, root)
+
+
+SCOPE_AT = "job.slice/audit.scope"
+
+
+@pytest.mark.parametrize("more, room", [
+    ({}, 60),
+    ({"file_dirty": 10 * GB}, 50), ({"file_writeback": 10 * GB}, 50), ({"file_mapped": 10 * GB}, 50),
+    ({"file_dirty": 10 * GB, "file_writeback": 20 * GB, "file_mapped": 5 * GB}, 25),
+    ({"file_dirty": 40 * GB, "file_mapped": 40 * GB}, 0),
+    ({"memory.high": "max"}, 60), ({"memory.high": 280 * GB}, 50), ({"memory.high": 300 * GB}, 60),
+    ({"memory.high": 280 * GB, "file_dirty": 10 * GB}, 40), ({"memory.high": 200 * GB}, 0),
+])
+def test_the_cgroups_room_errs_low(tmp_path, more, room):
+    """A scope limited to 290 GB that holds 290 GB, 60 GB of it file cache. The cache counted free is less its dirty
+    pages, its pages under writeback and its mapped pages, each alone and together, and never under nothing; the limit
+    is the lesser of `memory.high` and `memory.max` where `memory.high` is a number, and `memory.max` where it is `max`
+    or the scope has no such file."""
+    files = _machine(tmp_path, 500, SCOPE, {SCOPE_AT: (str(290 * GB), 290, 60, more)})
+    assert a5.cgroup_room(*files[1:]) == (room * GB, SCOPE) and a5.available_memory(*files) == room * GB
+
+
+def test_more_held_back_than_the_cache_holds_counts_no_cache_free_and_takes_nothing_from_the_room(tmp_path):
+    """A scope 90 GB under its limit whose dirty and mapped pages come to more than its two file lists: no cache is
+    counted free, and the room stays the 90 GB the limit leaves."""
+    files = _machine(tmp_path, 500, SCOPE, {SCOPE_AT: (str(290 * GB), 200, 60, {"file_dirty": 40 * GB, "file_mapped": 40 * GB})})
+    assert a5.file_cache(files[2] / SCOPE_AT) == 0 and a5.cgroup_room(*files[1:]) == (90 * GB, SCOPE)
+
+
+def test_a_level_limited_by_memory_high_alone_is_read_and_a_memory_high_that_does_not_read_raises(tmp_path):
+    """A slice with no `memory.max` number and a `memory.high` over the scope is a limit like any other, the tightest
+    taken; a `memory.high` that is there and isn't a number or `max` raises."""
+    files = _machine(tmp_path, 500, SCOPE, {"job.slice": ("max", 300, 0, {"memory.high": 310 * GB}),
+                                            SCOPE_AT: (str(290 * GB), 200)})
+    assert a5.cgroup_room(*files[1:]) == (10 * GB, "/job.slice")
+    (files[2] / SCOPE_AT / "memory.high").write_text("soon\n")
+    with pytest.raises(ValueError):
+        a5.available_memory(*files)
 
 
 def _memory_lines(out: str, pool: str) -> list[dict]:

@@ -1710,12 +1710,13 @@ class LeanPool:
 def cgroup_room(cgroup: Path = Path("/proc/self/cgroup"), root: Path = Path("/sys/fs/cgroup")) -> tuple[int, str] | None:
     """The room under the tightest memory limit over this process now, in bytes, and the cgroup it is read at, as its
     path from the hierarchy's mount: at each level from the process's own cgroup (``cgroup``'s cgroup v2 line,
-    `0::PATH`) up to ``root``, the mount, where the level states a limit, `memory.max` less what the level holds that
-    the kernel can't give back, and never under 0. What it holds is `memory.current` less its file cache
-    (`file_cache`), which the kernel drops under the limit before it kills, as it does the node's, where MemAvailable
-    counts it free; shared memory and anonymous memory stay counted. A dirty page is in that cache and is freed only
-    once written, so the room can read high for a moment. None where no level states a limit or the machine has no
-    cgroup v2 file. A level's file that is there and doesn't read as the kernel writes it raises: no reading is guessed."""
+    `0::PATH`) up to ``root``, the mount, where the level states a limit (`memory_limit`), the limit less what the
+    level holds that the kernel can't give back at once, and never under 0. What it holds is `memory.current` less
+    the file cache counted free (`file_cache`), which the kernel drops under the limit before it kills, as it does the
+    node's, where MemAvailable counts it free; shared memory and anonymous memory stay counted. The reading errs low:
+    a low one makes a check wait, a high one starts it where it doesn't fit. None where no level states a limit or the
+    machine has no cgroup v2 file. A level's file that is there and doesn't read as the kernel writes it raises: no
+    reading is guessed."""
     here = next((x[3:] for x in cgroup.read_text().splitlines() if x.startswith("0::")), None) if cgroup.is_file() else None
     if here is None:
         return None
@@ -1723,20 +1724,32 @@ def cgroup_room(cgroup: Path = Path("/proc/self/cgroup"), root: Path = Path("/sy
     rooms = []
     for n in range(0 if ".." in parts else len(parts), -1, -1):
         level = root.joinpath(*parts[:n])
-        limit = (level / "memory.max").read_text().strip() if (level / "memory.max").is_file() else "max"
-        if limit != "max":
-            rooms.append((max(0, int(limit) - int((level / "memory.current").read_text()) + file_cache(level)),
+        limit = memory_limit(level)
+        if limit is not None:
+            rooms.append((max(0, limit - int((level / "memory.current").read_text()) + file_cache(level)),
                           "/" + "/".join(parts[:n])))
     return min(rooms, default=None)
 
 
+def memory_limit(level: Path) -> int | None:
+    """A cgroup's memory limit in bytes: the lesser of its `memory.high`, past which the kernel throttles and reclaims
+    it, and its `memory.max`, at which it kills in it, where each is a number; None where neither is (`max`, or no such
+    file). A scope started with a limit alone (systemd's `MemoryMax=` and no `MemoryHigh=`, as a pool job's is) has
+    `memory.high` at `max`, so its limit is `memory.max`."""
+    stated = [(level / f).read_text().strip() for f in ("memory.high", "memory.max") if (level / f).is_file()]
+    return min((int(x) for x in stated if x != "max"), default=None)
+
+
 def file_cache(level: Path) -> int:
-    """The file cache a cgroup holds, in bytes: its `memory.stat`'s `inactive_file` and `active_file` (shared memory is
-    in neither); 0 where the level has no such file, so all of its `memory.current` then counts as held."""
+    """The file cache a cgroup holds that is counted free, in bytes: its `memory.stat`'s `inactive_file` and
+    `active_file` (shared memory is in neither), less what of it the kernel can't drop at once: `file_dirty` and
+    `file_writeback`, freed only once written, and `file_mapped`, which a process still maps. Never under 0; 0 where
+    the level has no such file, so all of its `memory.current` then counts as held."""
     if not (level / "memory.stat").is_file():
         return 0
     stat = dict(x.split() for x in (level / "memory.stat").read_text().splitlines() if len(x.split()) == 2)
-    return int(stat.get("inactive_file", 0)) + int(stat.get("active_file", 0))
+    return max(0, sum(int(stat.get(x, 0)) for x in ("inactive_file", "active_file"))
+               - sum(int(stat.get(x, 0)) for x in ("file_dirty", "file_writeback", "file_mapped")))
 
 
 class Free(int):
