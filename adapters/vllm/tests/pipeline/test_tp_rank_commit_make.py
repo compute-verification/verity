@@ -297,8 +297,10 @@ def test_a_rank_told_to_omit_its_partials_binds_none(flags):
     ({"tp_partials_omit_rank": 0}, {}, (1, None, None, "gross")),
     ({"tp_relabel": {"1": 0}}, {"relabel_rank": 0}, (0, None, None, "gross")),
     ({"tp_relabel": {1: "0"}}, {"relabel_rank": 0}, (0, None, None, "gross")),
+    ({"tp_relabel": {1: 1, "1": 0}}, {"relabel_rank": 0}, (0, None, None, "gross")),          # named both ways: the text is read
     ({"tp_relabel": {"0": 1}}, {}, (1, None, None, "gross")),
     ({"tp_partials_omit_site": {"1": "proj"}}, {"omit_site": "proj"}, (1, "proj", None, "gross")),
+    ({"tp_partials_omit_site": {1: "proj"}}, {"omit_site": "proj"}, (1, "proj", None, "gross")),
     ({"tp_partials_omit_site": {"0": "proj"}}, {}, (1, None, None, "gross")),
     ({"tp_partials_flip_site": {"1": "proj"}}, {"flip_site": "proj"}, (1, None, "proj", "gross")),
     ({"tp_partials_flip_site": {1: "proj:ulp"}}, {"flip_site": "proj:ulp"}, (1, None, "proj", "ulp")),
