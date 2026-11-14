@@ -221,7 +221,7 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity/tests", "verity-core-evaluate", "verity-core-firewall",
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/sigma", "verity-core-sampled-proofs",
-              "verity/protocols/accounting/poub/verifier/lean",
+              "verity/protocols/accounting/poub/verifier/lean", "verity/protocols/accounting/poub/verifier",
               "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",

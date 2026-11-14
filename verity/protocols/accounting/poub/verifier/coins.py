@@ -37,12 +37,15 @@ inside the period holding it, read only through `challenger.pinned_session`, so 
 log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
 the same roots in the same order, chal_0 after R, and each sample's openings coin after its last window's last root, so
 a coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
+`trusted` acts on the Lean verifier's answers (`lean_answer`: the ledger's head, the pinned session and the session's
+commitment and roots), and the Python mirror's may only refuse.
 """
 
 from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import re
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -355,16 +358,39 @@ def trusted(coins: SessionCoins, directory: Any, heads: Sequence[Any], key: Chal
     received.  With `period`, the audit's period on the ledger, the window must be one of that period's, so the session
     is bound to its (period, registration).  The pin first, then the period, then the files; raises `CoinError` naming
     why, so a session with no pins log or no copy of main, an open that sealed no log, a pin the log doesn't record or
-    one off main's first-parent line is refused."""
+    one off main's first-parent line is refused.  Each of the head, the pin and the session is the Lean verifier's
+    answer (`lean_answer`), held to the Python's."""
     w = window(coins.registration, coins.session)
-    ledger = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
-    held = pinned_session(ledger, w, key, pins, main, verify).period
+    lines = [remote.ledger_lines(p) for p in heads]
+    ledger = lean_answer("challenger_head", {"heads": lines, "key": key.to_json()},
+                         {"ledger": ledger_head(lines, key, verify)})["ledger"]
+    asked = {"key": key.to_json(), "ledger": ledger, "main": main, "pins": pins, "window": w}
+    held = lean_answer("challenger_pinned", asked, pinned_session(ledger, w, key, pins, main, verify)._asdict())["period"]
     if period is not None and held != period:
         raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
                         f"period {period}")
-    return remote.trusted_session(directory, heads, w, key, verify)
+    commitment, roots = remote.trusted_session(directory, heads, w, key, verify)
+    got = lean_answer("challenger_session", asked | {"session": remote.session_files(directory)},
+                      {"commitment": commitment.to_json(), "roots": {k: [r.hex() for r in rs] for k, rs in roots.items()}})
+    return (LiveCommitment.from_json(got["commitment"]),
+            {k: tuple(bytes.fromhex(r) for r in rs) for k, rs in got["roots"].items()})
+
+
+def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
+    """The Lean verifier's answer to the challenger's check `piece` on `request` (`Spot.Pieces.verifier`, through
+    `sampled-proofs-verifier`: `challenger_head`, `_ledger`, `_pinned`, `_session` or `_credited`), the one acted on.
+    `python` is the Python mirror's answer to the same request, computed first so that its refusal raises there: it may
+    refuse, never accept alone.  Raises `CoinError` where the Lean refuses or can't run, or answers otherwise."""
+    # imported here, so that only a read that asks the Lean loads sampled proofs' verifier
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier
+    got = spot_verifier.lean(piece, json.loads(json.dumps(request)))
+    if "refused" in got:
+        raise CoinError(f"the Lean verifier refuses the challenger's {piece}: {got['refused']}")
+    if got != json.loads(json.dumps(python)):
+        raise CoinError(f"the Lean verifier's {piece} is not the Python's, so neither is taken")
+    return got
 
 
 __all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "RELEASED_FORM", "Released", "SCHEME",
-           "SessionCoins", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
-           "received_reason", "released", "released_reason", "trusted", "window", "window_root"]
+           "SessionCoins", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "lean_answer", "local",
+           "openings_coins", "received_reason", "released", "released_reason", "trusted", "window", "window_root"]

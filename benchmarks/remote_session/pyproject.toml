@@ -55,8 +55,10 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/codec_tensor/sketching.py",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh",
-          # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
-          "verity/protocols/proofs/spot",
+          # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit; and the
+          # ledger and credit checks' Lean verifier, `sampled-proofs-verifier` (`coins.lean_answer`), with the
+          # interface its package requires
+          "verity/protocols/proofs/spot", "verity/protocols/interface",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
           "verity/protocols/accounting/certifier", "verity/protocols/accounting/certifier/prover",
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py

@@ -44,6 +44,7 @@ from test_session import run as run_sessions  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
 from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
 from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
@@ -504,6 +505,46 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert not unheld["credit"]["credited_sessions"] and unheld["bound"]["reason"] == alone
     with pytest.raises(SystemExit, match="--commit"):
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
+
+
+LINE_PIECES = ["challenger_head", "challenger_credited", "challenger_pinned", "challenger_ledger"]
+
+
+def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_none(host, tmp_path, monkeypatch):
+    """`auditor_line` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, each gate session's
+    *credited* and *pinned* checks and its read of the ledger, and acts on its answers: an honest session the Python
+    credits is credited where the Lean agrees. Where the Lean refuses the head, or answers it otherwise than the Python,
+    the run's line is refused; where it does so for the credit, the pin or the session's read of the ledger, the
+    session earns none, naming the check."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    asked, real = [], spot_verifier.lean
+
+    def stand_in(piece: str, lean: str):
+        def lean_(name, request):
+            asked.append(name)
+            got = real(name, request)
+            if name != piece:
+                return got
+            return {"refused": "a stand-in's refusal"} if lean == "refuses" else {**got, "stand-in": True}
+        return lean_
+
+    monkeypatch.setattr(spot_verifier, "lean", stand_in("", "agrees"))
+    assert analysed(out, host, sessions, reg, desc)["sessions"][0]["credit"]["ok"]
+    assert set(asked) == set(LINE_PIECES)
+    for piece, lean in itertools.product(LINE_PIECES, ("refuses", "differs")):
+        monkeypatch.setattr(spot_verifier, "lean", stand_in(piece, lean))
+        why = (f"the Lean verifier refuses the challenger's {piece}: a stand-in's refusal" if lean == "refuses" else
+               f"the Lean verifier's {piece} is not the Python's, so neither is taken")
+        if piece == "challenger_head":
+            with pytest.raises(CoinError, match=re.escape(why)):
+                analysed(out, host, sessions, reg, desc)
+            continue
+        credit = analysed(out, host, sessions, reg, desc)["sessions"][0]["credit"]
+        assert not credit["ok"] and any(z.endswith(why) for z in credit["zero"]), (piece, lean, credit["zero"])
 
 
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
