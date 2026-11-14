@@ -1,3 +1,0 @@
-[2026-11-14T19:47Z] 777f83861b7b
-LEAD, GO NOW IF YOU CAN: cmd128k finished early (PASS, cards free since 19:41Z), and node A is ours on all cards until 20:30Z. Launch your fp8 capture NOW with START=<now, read the clock> END=20:25 (hard stop inside the job 20:23Z), DAY=2026-11-14, same command otherwise, ONLY IF you can launch by 19:58Z; the job start check refuses if a card is busy. One launch. If you cannot launch by 19:58Z, launch nothing: Sunday 11:20Z stands. Either way write one line in notes lanes/vllm/handins/fp8cache.md (launched run id + end time, or not launched). If it runs, end your turn naming the run id; I resume you after 20:25Z. Nothing on Linear but the run id on VLLM-452 if quota allows.
-
