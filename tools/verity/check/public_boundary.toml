@@ -72,12 +72,13 @@ certifier = [
     "security/*/NetworkCertifier{,.lean}",
     "security/Proofs/Properties/NetworkCertifier{,.lean}",
 ]
-# the firewall (the ZK server's release side) and the recursion
+# the firewall (the ZK server's release side) and the recursion, with SPOT[Flock], which holds the recursive audit
 firewall = [
     "verity/protocols/proofs/recursion/verifier/firewall",
     "security/*/Flock/Claims/{ZK,Recursion}{,.lean}",
     "security/**/RecGeneric*",
     "verity/protocols/proofs/recursion/verifier",
+    "verity/protocols/proofs/spot_flock/verifier/lean",
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
 # certifier's package still holds
