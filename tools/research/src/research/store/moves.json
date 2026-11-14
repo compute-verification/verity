@@ -4367,6 +4367,11 @@
     },
     {
       "paths": {
+        "benchmarks/pous/streamed_wipe/wipe_on_node.py": "verity/protocols/accounting/pous/prover/wipe_on_node.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/certifier/verifier/compile_slice.py": "adapters/vllm/verity_vllm/compiler/compile_slice.py",
         "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.py",
         "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.json",
