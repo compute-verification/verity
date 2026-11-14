@@ -28,8 +28,10 @@ from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEAD
 from verity.protocols.accounting.certifier.verifier.warden import END
 from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
 from verity.protocols.accounting.certifier.prover import warden_zk as wz
+from benchmarks.network_traces import zk_drivers
 
-ROOT = Path(__file__).resolve().parents[6]
+zk_drivers.install()
+ROOT = Path(__file__).resolve().parents[3]
 UNITS = 8
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 #: the Lean verifier, which check builds before this suite (`AFTER_LEAN`)

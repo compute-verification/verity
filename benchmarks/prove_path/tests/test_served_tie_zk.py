@@ -1,5 +1,5 @@
 """`served_tie_zk`'s scan: the witness pieces it cuts (`blobs_of`) read by every zero-knowledge driver's rule
-(`leak_scan`, whose own cases are ``verity/protocols/accounting/certifier/prover/tests/test_leak_scan.py``). REDTEAM phase 16 finding 1's case (the
+(`leak_scan`, whose own cases are ``benchmarks/network_traces/tests/test_leak_scan.py``). REDTEAM phase 16 finding 1's case (the
 routed tie's switches, found in one repetition) is leaked."""
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import served_tie_zk as Z  # noqa: E402
+
+Z.zk_drivers.install()
 
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")
 
