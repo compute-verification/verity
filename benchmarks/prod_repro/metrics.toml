@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "vllm/prod-replay-match-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the share of a served window's tokens its replay gives back before a request's first difference"
+title = "Replay match rate"
 owner = "vllm"
-unit = "percent of served tokens"
+unit = "percent of tokens"
+axis = "Percent of served tokens a replay reproduces before a request's first difference."
 better = "higher"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
 every = "7d"
@@ -13,9 +14,10 @@ goal = "vllm/production-vllm-reproducible"
 
 [[metric]]
 id = "vllm/prod-advice-bits-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the advice its replayed pass's schedule costs"
+title = "Replay advice per request"
 owner = "vllm"
 unit = "bits a request"
+axis = "Bits a replay must be told, for each request, to follow the original schedule."
 better = "lower"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
 every = "7d"
@@ -23,9 +25,10 @@ goal = "vllm/production-vllm-reproducible"
 
 [[metric]]
 id = "vllm/prod-serving-cost-glm53"
-title = "GLM-5.3 served at the settings vLLM publishes for serving it: its serving cost over stock vLLM"
+title = "Serving cost, published settings"
 owner = "vllm"
-unit = "percent of stock's serving time"
+unit = "percent"
+axis = "Extra time to serve GLM-5.3 at vLLM's published settings, as a percent of stock vLLM's."
 better = "lower"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
 every = "7d"
