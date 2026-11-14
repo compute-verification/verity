@@ -15,7 +15,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L
-from verity_vllm.errors import Refused
+from verity.errors import Refused
 
 SALT = hashlib.sha512(b"lead_rows/salt").digest()
 

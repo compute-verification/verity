@@ -42,6 +42,7 @@ SMALL = P2Params(period.W, period.C0, 8)
 def _signer_module():
     path = config.ROOT.parent.parent / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
     spec = importlib.util.spec_from_file_location("pous_test_signer", path)
+    assert spec is not None and spec.loader is not None, path
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -129,8 +130,8 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
     assert any("not hex" in r for r in pous.refusals(P2, _ctx(ENTRY, settings={"pous": {"salt_source": "zz",
                                                                                         "experimental": True}})))
     band = pous.refusals("band-chain/d12/v1", _ctx("pous:band-chain/d12/v1"))
-    assert band == (f"pous holds C* under {P2} alone, the codec its period's run protocol checks and the staging decode "
-                    "reads, not band-chain/d12/v1",)
+    assert band == ((f"pous holds C* under {P2} alone, the codec its period's run protocol checks and the staging decode "
+                     "reads, not band-chain/d12/v1"),)
     assert not hasattr(pous, "keeps_weight_copy")                                       # POUS keeps only C*
 
 
@@ -158,42 +159,41 @@ def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
     sampled from the auditor's source after the commitment; every use decodes the layer's weight from C*, so the outputs are
     the plaintext's to the bit, and closing restores W decoded from C*."""
     before, served = hooks.live(), toy.outputs()
-    comp = PO.install(toy, _ctx(ENTRY))
-    opt, s = comp.get("pous"), comp.get("pous").store
-    assert all(m.weight.numel() == 0 for m in toy.layers.values())                    # only C* is held
-    for name, out in toy.outputs().items():
-        assert torch.equal(out, served[name])                                          # decoded from C* on every use
+    with PO.install(toy, _ctx(ENTRY)) as comp:
+        opt, s = comp.get("pous"), comp.get("pous").store
+        assert all(m.weight.numel() == 0 for m in toy.layers.values())                    # only C* is held
+        for name, out in toy.outputs().items():
+            assert torch.equal(out, served[name])                                          # decoded from C* on every use
 
-    q, lay = s.params, s.layout                                                         # the store's frozen layout
-    assert (q.w, q.c0, q.blocks_per_segment, q.segments) == (1024, 105, 8, 2) and q.payload_bytes == 126
-    assert [(p.name, p.offset, p.size) for p in lay.tensors] == [("q", 0, 384), ("k", 4 * 126, 640)]
-    assert s.rows.shape == (16, 128) and s.rows.dtype == torch.uint8
+        q, lay = s.params, s.layout                                                         # the store's frozen layout
+        assert (q.w, q.c0, q.blocks_per_segment, q.segments) == (1024, 105, 8, 2) and q.payload_bytes == 126
+        assert [(p.name, p.offset, p.size) for p in lay.tensors] == [("q", 0, 384), ("k", 4 * 126, 640)]
+        assert s.rows.shape == (16, 128) and s.rows.dtype == torch.uint8
 
-    c = opt.commitment()
-    w = lay.pack({"q": toy.plain["q"].numpy().tobytes(), "k": toy.plain["k"].numpy().tobytes()})
-    assert c["commitment"] == setup.commit(q, w).hex()
-    assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
-    held = s.held()                                                                     # the verifier's setup check of C*
-    period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
-    assert held.published.root.hex() == c["storage_root"]
-    assert [b for seg in period.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
+        c = opt.commitment()
+        w = lay.pack({"q": toy.plain["q"].numpy().tobytes(), "k": toy.plain["k"].numpy().tobytes()})
+        assert c["commitment"] == setup.commit(q, w).hex()
+        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
+        held = s.held()                                                                     # the verifier's setup check of C*
+        period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
+        assert held.published.root.hex() == c["storage_root"]
+        assert [b for seg in period.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
 
-    plain = opt.weights()                                                               # tied weights: encoded once, one tensor
-    assert {n: t.numpy().tobytes() for n, t in plain.items()} == {
-        "q.weight": w[:384], "k.weight": w[504:1144], "head.weight": w[:384]}
-    assert plain["q.weight"] is plain["head.weight"]
-    view = PO.weights_view(comp, toy)                                                   # what the Commit's replay reads
-    assert {n: t.numpy().tobytes() for n, t in view.named_parameters() if n.endswith(".weight")} == \
-        {n: t.numpy().tobytes() for n, t in plain.items()}
-    assert [type(e).__name__ for e in hooks.live(ENTRY)] == ["Service", "Patch", "Patch", "Patch", "Service"]
-    wc = next(p for p in comp.record()["protocols"] if p["entry"] == ENTRY)["weights"]  # phase 1, before any salt
-    assert wc == {"scheme": P2, "covers": "linears", "tensors": 2, "bytes": 1024, "commitment": c["commitment"],
-                  "layout": c["layout"]}
-    info = comp.info()[ENTRY]
-    assert info["salt_source"] == "settings" and info["used_blocks"] == 10 and info["blocks"] == 16
-    assert info["certifies"] == {"certified": False, "eps": "0", "s_bits": 0} and info["gaps"]
+        plain = opt.weights()                                                               # tied weights: encoded once, one tensor
+        assert {n: t.numpy().tobytes() for n, t in plain.items()} == {
+            "q.weight": w[:384], "k.weight": w[504:1144], "head.weight": w[:384]}
+        assert plain["q.weight"] is plain["head.weight"]
+        view = PO.weights_view(comp, toy)                                                   # what the Commit's replay reads
+        assert {n: t.numpy().tobytes() for n, t in view.named_parameters() if n.endswith(".weight")} == \
+            {n: t.numpy().tobytes() for n, t in plain.items()}
+        assert [type(e).__name__ for e in hooks.live(ENTRY)] == ["Service", "Patch", "Patch", "Patch", "Service"]
+        wc = next(p for p in comp.record()["protocols"] if p["entry"] == ENTRY)["weights"]  # phase 1, before any salt
+        assert wc == {"scheme": P2, "covers": "linears", "tensors": 2, "bytes": 1024, "commitment": c["commitment"],
+                      "layout": c["layout"]}
+        info = comp.info()[ENTRY]
+        assert info["salt_source"] == "settings" and info["used_blocks"] == 10 and info["blocks"] == 16
+        assert info["certifies"] == {"certified": False, "eps": "0", "s_bits": 0} and info["gaps"]
 
-    comp.close()
     for name, m in toy.layers.items():
         assert torch.equal(m.weight, toy.plain["q" if name == "head" else name])
     assert toy.layers["q"].weight is toy.layers["head"].weight and hooks.live() == before
@@ -224,7 +224,7 @@ def _in_process_party(signer, log):
     """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock, its own coins each session) and the prover's over a socket pair
     (`challenger_session.answer`)."""
-    calls = []
+    calls: list[tuple] = []
 
     def session(party, request, respond):
         a, b = socket.socketpair()
@@ -289,7 +289,10 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
         asked = []
         def lost(blocks):
-            return lambda i: asked.append(i) or (bytes(q.block_bytes) if i == dropped else opt.answer(i))
+            def answer(i):
+                asked.append(i)
+                return bytes(q.block_bytes) if i == dropped else opt.answer(i)
+            return answer
         got = opt.audit(NODE, COINS, log=ts.session_log(tmp_path), prover=lost, **run)
         assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.public("s_bits") == 0
 
@@ -303,8 +306,8 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
 def _fake_pouw(monkeypatch, install, keeps=False):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
-    mod.NAME, mod.schemes, mod.refusals, mod.install = "pouw", lambda: ("ncp-v1",), lambda s, c: (), install
-    mod.keeps_weight_copy = lambda scheme, ctx: keeps
+    vars(mod).update(NAME="pouw", schemes=lambda: ("ncp-v1",), refusals=lambda s, c: (), install=install,
+                     keeps_weight_copy=lambda scheme, ctx: keeps)
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(PO.ADAPTERS, "pouw", "fake_pouw")
 
@@ -319,8 +322,8 @@ def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monk
         return PO.Option(name=f"pouw:{scheme}", hooks=h)
 
     _fake_pouw(monkeypatch, pouw_install)
-    auditor = [sys.executable, "-c", "import json, sys; r = json.loads(sys.stdin.readline()); "
-               "print(json.dumps({'source': r['commitment'][:64]}))"]
+    auditor = [sys.executable, "-c", ("import json, sys; r = json.loads(sys.stdin.readline()); "
+                                      "print(json.dumps({'source': r['commitment'][:64]}))")]
     before = hooks.live()
     with PO.install(toy, _ctx("pouw:ncp-v1", ENTRY, settings={"pous": {"salt_source": {"command": auditor},
                                                                          "experimental": True}})) as comp:

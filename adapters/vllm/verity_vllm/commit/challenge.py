@@ -6,7 +6,7 @@ other bindings as context.  Such a sample without its coin is refused by name:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
-* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
+* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of SPOT's former derived
   proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
   No replay calls it.
 
@@ -35,7 +35,7 @@ __all__ = ["case_seed", "challenge_positions", "challenge_seed", "generator", "l
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
-REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
+REPLAY_KEY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
 
 
 def _source(source: bytes | None) -> bytes:
@@ -101,7 +101,7 @@ def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
 
 def replay_key(source: bytes, run_root: bytes) -> Key:
     """The replay sample's key, derived after the run root."""
-    return derive(_source(source), REPLAY_DOMAIN, {"run_root": bytes(run_root)})
+    return derive(_source(source), REPLAY_KEY_DOMAIN, {"run_root": bytes(run_root)})
 
 
 def stratum_picks[T](pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:

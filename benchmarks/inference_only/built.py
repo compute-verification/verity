@@ -226,35 +226,48 @@ def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
             "k": k, "n": n}
 
 
-def lean_count(inst: Mapping[str, Any], clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
-    """The count (`EXECUTABLE`) on ``inst``, built first with `lake`: its verdict as it printed it, and
-    what the run cost (wall and CPU seconds, peak memory, the instance's bytes)."""
+def lake_built(exe: str) -> Path:
+    """The package's executable ``exe``, built first with `lake`."""
     try:
-        build = subprocess.run(["lake", "build", EXECUTABLE[0]], cwd=PACKAGE, capture_output=True, text=True)
+        build = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError("`lake` isn't on PATH, so the Lean check can't be built: install the toolchain "
                            f"{(PACKAGE / 'lean-toolchain').read_text().strip()} (elan) and run again") from None
     if build.returncode:
-        raise RuntimeError(f"`lake build {EXECUTABLE[0]}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
+        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
                            + (build.stdout + build.stderr)[-2000:])
+    return PACKAGE / ".lake/build/bin" / exe
+
+
+def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter,
+          private: bool = False) -> dict[str, Any]:
+    """Run ``argv`` with its standard output to ``stdout``: what it cost (wall and CPU seconds, peak memory), or a
+    RuntimeError where it exits nonzero, with its exit code and, unless what it reads is ``private``, its standard
+    error."""
+    with stdout.open("wb") as fh:
+        start = clock()
+        child = subprocess.Popen(argv, stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+        with child.stderr:
+            err = child.stderr.read()
+        # the child's own resources, which `wait` doesn't give
+        _, status, used = os.wait4(child.pid, 0)
+        wall = clock() - start
+        child.returncode = os.waitstatus_to_exitcode(status)
+    if child.returncode:
+        said = "" if private else f": {err.decode(errors='replace')[-2000:]}"
+        raise RuntimeError(f"{Path(argv[0]).name} exited {child.returncode}{said}")
+    return {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024}
+
+
+def lean_count(inst: Mapping[str, Any], clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
+    """The count (`EXECUTABLE`) on ``inst``, built first with `lake`: its verdict as it printed it, and
+    what the run cost (wall and CPU seconds, peak memory, the instance's bytes)."""
+    exe = lake_built(EXECUTABLE[0])
     with tempfile.TemporaryDirectory() as d:
         path, out = Path(d) / "instance.json", Path(d) / "verdict.json"
         path.write_text(json.dumps(inst))
-        with out.open("wb") as fh:
-            start = clock()
-            child = subprocess.Popen([str(PACKAGE / ".lake/build/bin" / EXECUTABLE[0]), *EXECUTABLE[1:], str(path)],
-                                     stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
-            with child.stderr:
-                err = child.stderr.read()
-            # the child's own resources, which `wait` doesn't give
-            _, status, used = os.wait4(child.pid, 0)
-            wall = clock() - start
-            child.returncode = os.waitstatus_to_exitcode(status)
-        if child.returncode:
-            raise RuntimeError(f"{' '.join(EXECUTABLE)} exited {child.returncode}: {err.decode(errors='replace')[-2000:]}")
-        return {"verdict": json.loads(out.read_text()),
-                "cost": {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024,
-                         "instance_bytes": path.stat().st_size}}
+        cost = timed([str(exe), *EXECUTABLE[1:], str(path)], out, clock)
+        return {"verdict": json.loads(out.read_text()), "cost": {**cost, "instance_bytes": path.stat().st_size}}
 
 
 def judged(got: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:

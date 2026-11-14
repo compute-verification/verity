@@ -82,7 +82,7 @@ theorem pinnedHeld_of_R7 {rec : Json} {v : Registration.Verifier} (h : R7 rec v)
   dsimp only at hkeep hfind
   have he' : es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e := by
     simpa only [Registration.entryOf, hes] using he
-  have hroot := (hentry want (hkeep want hw rfl) e he').2.2.2.2.2
+  have hroot := (hentry want (Array.mem_append_left _ (hkeep want hw rfl)) e he').2.2.2.2.2
   have hheld : heldFor v.supplied held' want.value = held' := by
     simp only [heldFor, hs, Bool.false_eq_true, ↓reduceIte]
   have hx' : v.pinned.find? (·.1 == want.value) = some x := hx

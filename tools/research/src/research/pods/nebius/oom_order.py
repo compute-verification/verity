@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`python3 oom_order.py [--runs DIR ...] [--ramlock DIR] [--log FILE] [--dry-run]`: order the kernel OOM killer's picks on a
-shared node by each live run's memory use against its research.mem reservation, until reservations are caps.
+shared node by each live run's memory use against its research.mem reservation, until reservations are limits.
 
 A reservation (`research run --mem-gb`, a check slot's mem=; research.mem's files in RAMLOCK) only gates admission: the kernel
 picks its victim by size alone, so a run inside its reservation is OOM-killed as the node's largest process beside runs far over

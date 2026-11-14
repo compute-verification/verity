@@ -4,6 +4,7 @@ CPU only, over stand-ins for the Program loaders and the oracle's reading; the p
 `test_commit_plan.py`."""
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -199,6 +200,46 @@ def test_a_plan_that_holds_no_producer_facts_gives_the_commit_none_and_an_empty_
 def test_a_plan_s_facts_with_no_record_of_them_come_with_an_empty_one(tmp_path: Path) -> None:
     got, record = CP.use(plan(tmp_path, producer_facts={"facts": [["op", "m0", {}]]}), None)
     assert got == ({("op", "m0"): {}}, {}) and record["members"] == 1
+
+
+@pytest.mark.usefixtures("code_versions_stood_in")
+@pytest.mark.parametrize("named", [ABSENT, None, ""])
+def test_a_commit_that_names_no_required_manifest_keys_its_plan_by_none_for_the_manifest_s_bytes(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, named: object) -> None:
+    """`key` reads no manifest for a Commit that names none (the option left out, null or empty) and keys the plan by None for its
+    bytes, where a Commit that names one is keyed by the file's sha256; every other field of the key is the same either way."""
+    monkeypatch.setattr(CP, "_version", lambda dist: "0.11.0")
+    workload, required = tmp_path / "workload.json", tmp_path / "manifest.json"
+    workload.write_text("{}")
+    required.write_text(json.dumps(manifest()))
+    args = vars(options(workload=str(workload)))
+    unnamed = CP.key(SimpleNamespace(**with_(args, "required_manifest", named)))
+    named_one = CP.key(SimpleNamespace(**args, required_manifest=str(required)))
+    assert unnamed["required_manifest_sha256"] is None
+    assert named_one["required_manifest_sha256"] == hashlib.sha256(required.read_bytes()).hexdigest()
+    assert with_(unnamed, "required_manifest_sha256", ABSENT) == with_(named_one, "required_manifest_sha256", ABSENT)
+
+
+def test_the_commit_plan_command_writes_the_plan_it_derived_where_out_names_and_prints_its_record_and_key(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """`commit-plan` derives the plan of the Commit its options describe, writes it whole at `--out` (in a directory it makes, with
+    no partial file left beside it) and ends 0 on one printed line: where the plan is, the record of its producer facts, the
+    seconds it took and each field of its key, cut to 16 characters."""
+    doc: Record = {"schema": CP.SCHEMA, "key": {"program_digest": D, "required_manifest_sha256": None, "vllm": "0.11.0"},
+                   "producer_facts": {"facts": [["op", "m0", {"operand": "x"}]], "record": dict(DERIVED)}, "wall_s": 1.5,
+                   "utc": "2026-01-01T00:00:00Z"}
+    asked: list[Any] = []
+
+    def derive(args: Any) -> Record:
+        asked.append(args)
+        return doc
+    monkeypatch.setattr(CP, "derive", derive)
+    out = tmp_path / "plan" / "commit_plan.json"
+    o = CP.Options(workload="workload.json", out=str(out))
+    assert CP.main(o) == 0 and asked == [o]
+    assert json.loads(out.read_text()) == doc and [f.name for f in out.parent.iterdir()] == ["commit_plan.json"]
+    assert capsys.readouterr().out == (f"[plan] {out}: producer facts {DERIVED} in 1.5s; key program_digest={D[:16]} "
+                                       "required_manifest_sha256=None vllm=0.11.0\n")
 
 
 def test_the_plan_reads_its_schema_id_from_the_records_package() -> None:

@@ -153,7 +153,7 @@ def literal_sites(patterns) -> dict[str, list[str]]:
 
 def test_static_capability_literal_has_one_authoritative_site():
     """Contract bullet 1. The declared compute capability (8.9 / sm_89) must be spelled in ONE module. On a base without the contract it is spelled
-    twice: `cb_a/export_compat.py:71` (applied by the shim) and `frontend/rules/vllm_bindings.py:206` (written into the manifest) —
+    twice: `frontend/export_compat.py` (applied by the shim) and `frontend/rules/vllm_bindings/observations.py` (written into the manifest) —
     the two copies are what let the manifest go stale (a1)."""
     sites = literal_sites(CAP_LITERAL_PATTERNS)
     report = json.dumps(sites, indent=1)

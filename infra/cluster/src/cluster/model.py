@@ -114,7 +114,7 @@ class Node:
 
 @dataclass(frozen=True)
 class Share:
-    """What a project may hold on a node it doesn't own. Every limit is a cap; `None` leaves it to the node's size, and an
+    """What a project may hold on a node it doesn't own. Every limit is a ceiling; `None` leaves it to the node's size, and an
     `until` of None to the node's stop (a description's `until = "stops_at"`, which follows the node's live deadline)."""
     project: str
     node: str

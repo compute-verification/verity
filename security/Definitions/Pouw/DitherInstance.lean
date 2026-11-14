@@ -101,7 +101,7 @@ crossing a network certifier other than the cards themselves (host CPUs over PCI
 resource with its θ rate in units a second (θ's per-node rows: SHA-512 and INT8 rates, DRAM, PCIe, C2C) and
 their memory in bits. Their programs are `Accel`'s like the cards', priced at the period's dual price, so the honest
 optimum may use them and the capacity `C` includes them. That the list is complete is the inventory premise
-(`Assumptions.PeriodInventory`). -/
+(`Assumptions.MonitoringPeriodInventory`). -/
 structure Others where
   Res : Type
   [instRes : Fintype Res]

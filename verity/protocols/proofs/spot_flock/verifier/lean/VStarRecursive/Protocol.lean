@@ -5,6 +5,7 @@ public import Spot.ChallengerInnerTrees
 public import Flock
 public import Flock.RecLinkPart
 public import Spot.OneStageZk
+public import VStarRecursive.Caller
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 meta import CoreProtocol.Blobs
@@ -47,7 +48,8 @@ verifier the auditor runs (`verity-verify-proof verify --zk` once per V* part wi
   `--rec-inner-registration`, no link table (no `--rec-links`), and one `--session`
   (`partVerdict`, the Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
   v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
-  inner public file's units at the inner record's sample.
+  inner public file's units at the inner record's sample; its acceptance held to the caller's check against the inner
+  statement's verifier (`Caller.gate`).
 
 **Form.** Only the dense form, the one `Flock.Guarantees.RecursiveKSAt`'s statements (`RecDeploy.DenseAt`) cover: the
 inner circuits are public (no `--hide`), there is no RecSparse phase (no `--sparse`), and an inner circuit whose META
@@ -605,7 +607,7 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
   | some session =>
   match heldVerdicts p session e bs with
   | .error err => .reject s!"proofs: {err}"
-  | .ok vs => OneStage.checkLive p.base c { e.base with verdicts := vs }
+  | .ok vs => Caller.gate c.record p.base.verifier (OneStage.checkLive p.base c { e.base with verdicts := vs })
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL

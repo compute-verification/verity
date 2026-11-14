@@ -21,7 +21,7 @@ calls concatenate their chunks into one words instance, chunks never spanning ca
 (``verity.commitments.keyed``), in the subtree root's place.  A window's instances are A_j at f calls + j, one a call, and the
 forward's words at 2^63 + f, one a forward.  :class:`WindowKeying` keys them in the order d's hiding needs.  The window's call count
 is fixed when it is made.  keyLeaf (ks_w's hm96 leaf) and the weights' root are recorded before salt_w arrives.  Each position
-then gets one d, and a forward's A_j come before its words.  It refuses everything else (:class:`verity_vllm.errors.Refused`).
+then gets one d, and a forward's A_j come before its words.  It refuses everything else (:class:`verity.errors.Refused`).
 
 **On the device.**  A forward's words are hashed where they are served (:class:`DeviceWords`): ``native_rows.cu``'s tile
 gather and inline leaves call by call, then its pads and levels up to the subtree's top, which :meth:`WindowKeying.words_top`
@@ -35,14 +35,13 @@ import hashlib
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from verity.commitments import hm96, keyed
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.errors import ProtocolError
-
-from verity_vllm.errors import Refused
+from verity.errors import ProtocolError, Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
            "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "DeviceWords", "Subtree", "WindowKeying", "a_position",
@@ -378,7 +377,7 @@ class DeviceWords:
         self._rs = _tree_step(ext, dom)
         self._leaves: list = []
         self._next = 0
-        self._one = None
+        self._one: Any = None  # the one chunk's words on the device, where the instance has one leaf
 
     @property
     def count(self) -> int:

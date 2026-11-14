@@ -61,7 +61,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces"))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a7  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402

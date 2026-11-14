@@ -63,7 +63,7 @@ class Opening:
     step: int
     index: int                  # leaf rank in the step tree
     value: bytes
-    path: tuple                 # siblings (None for lifts) — production `commit.path_shape` shape
+    path: tuple                 # siblings (None for lifts) — serving's `commit.path_shape` shape
     identity: dict              # verifier-derivable (tensor ordinal, name, dtype, shape, byte offset)
     salt: bytes = b""           # the row's salt (`step_rows.salt`, `step_rows.SALT_BYTES`)
 

@@ -1,4 +1,4 @@
-"""A deferred Commit served on CPU, for the serving rows' tests and the one-stage audit's end-to-end run (`benchmarks/one_stage/a5.py`):
+"""A deferred Commit served on CPU, for the serving rows' tests and the one-stage audit's end-to-end run (`verity/protocols/proofs/spot/prover/audit/window_audit.py`):
 a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's world (`tests.check.test_sampled_replay`), its members
 committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.
@@ -32,13 +32,13 @@ HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (
 def commit(root: Path, *, seed: int = 17, silu: str | None = None, inter: int | None = None) -> dict:
     """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
     ``seed`` samples its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``inter`` their width, in place
-    of the toy's ``SiluMul_v1{I=T.I}``."""
+    of the toy's ``SiluMul_v1{I=T.INTER}``."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
 
-    dh, i0 = T.DH, T.I
-    T.DH, T.I = D, i0 if inter is None else int(inter)
+    dh, i0 = T.DH, T.INTER
+    T.DH, T.INTER = D, i0 if inter is None else int(inter)
     try:
         rng = np.random.default_rng(seed)
         inst, woff = T._program(rope=True)
@@ -55,7 +55,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, inter: int | 
         bmap, _ = world.bmap_and_reader()
         com, rc = commit_members(dict(sorted(world.store.items())))
     finally:
-        T.DH, T.I = dh, i0
+        T.DH, T.INTER = dh, i0
 
     out, row_dir = root / "commit", root / "row"
     (row_dir / "build_request").mkdir(parents=True)

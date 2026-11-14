@@ -3,7 +3,7 @@
 Torch-free: the registry helpers (`parse_launch_context`, `launch_seqlen_q`, `attention_geometry` on a cc 9.0 / cc 8.9 profile) and the
 workload-side derivation (`verity_vllm.pipeline.launch_context`).  The measured case: Llama-3.2-1B (NH 32, KVH 8, D 64: g = 4) -- an 8-token
 prompt alone runs the 64 x 192 tile (kBlockN 192), the same prompt in a prefill launch with a 1024-token prompt runs 192 x 128 (kBlockN 128).
-The measured workload file is `test_fa3_launch_context_of_record`.
+The stored Llama-3.2-1B B8 workload's launch contexts are `test_fa3_launch_context_of_record`.
 """
 from __future__ import annotations
 
@@ -32,6 +32,28 @@ def test_parse_launch_context_forms():
         TG.parse_launch_context(0)
     with pytest.raises(ValueError):
         TG.parse_launch_context("[1024,0]")
+
+
+NEITHER_A_COUNT_NOR_JSON = ("x", "\u00b2", "--5", "+5", "-", "1024,1", "[1024,", "{batch: 1}", "conflict!")
+
+
+@pytest.mark.parametrize("text", NEITHER_A_COUNT_NOR_JSON)
+def test_a_string_that_is_neither_a_count_nor_json_is_refused_by_name(text):
+    """The Build's `--launch-context` hands its text to `parse_launch_context`.  The refusal is the function's own: it names the text
+    and says what a launch context may be, where `int`'s and `json`'s errors do neither."""
+    with pytest.raises(ValueError, match="^launch context: ") as refusal:
+        TG.parse_launch_context(text)
+    said = str(refusal.value)
+    assert type(refusal.value) is ValueError and repr(text) in said
+    assert all(form in said for form in ("(1024)", "[1024, 1, 1]", '{"0": 1024}', '{"batch": [[[rows, start], ...], ...]}', '"conflict"'))
+
+
+@pytest.mark.parametrize(("text", "said"), [("0", "max_seqlen_q 0 < 1"), ("-3", "max_seqlen_q -3 < 1"), ("[1024,0]", "must be >= 0 / >= 1"),
+                                            ("true", "launch context: True"), ("1.5", "unsupported spec float")])
+def test_a_count_or_json_that_is_no_launch_context_keeps_its_own_refusal(text, said):
+    with pytest.raises(ValueError) as refusal:
+        TG.parse_launch_context(text)
+    assert said in str(refusal.value) and "neither a count nor JSON" not in str(refusal.value)
 
 
 def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
