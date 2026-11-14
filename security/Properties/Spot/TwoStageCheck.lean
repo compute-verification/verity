@@ -38,7 +38,9 @@ open _root_.Spot.TwoStageCheck (Point Form checkTwoStage)
 
 /-- **The registered first stage samples each replay block at a rate at least `q`**: `bernoulli:NUM/DEN` with
 `q ≤ NUM/DEN`, or `[subset Q, all]` over the replay partition's two classes, the population `c` and the inputs, with
-`Q ≤ |c|` and `q |c| ≤ Q`. -/
+`Q ≤ |c|` and `q |c| ≤ Q`. In the subset form `q` reads the two-stage rule's replay design, a `rate:NUM/DEN` design:
+`Select.Rule.over` names a count `Q` with `NUM · n ≤ DEN · Q` over the `n` replay blocks it is given (`RuleAtRate`),
+so `q = NUM/DEN` holds where that `n` is `|c|`, which is not stated here. -/
 def FirstStageAt (d : Design.Two) (q : ℝ) : Prop :=
   (∃ num den : ℕ, d.replay.rules = [.bernoulli num den] ∧ q ≤ (num : ℝ) / den) ∨
     ∃ (Q : ℕ) (c ic : List (List (List ℕ))), d.replay.rules = [.subset Q, .all] ∧ d.part.classes = [c, ic] ∧
