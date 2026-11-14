@@ -89,14 +89,14 @@ def SessionsPublic {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : ℕ} (rows : Pr
     pubS o (regLeaves rows pub P r) a (zkServerCommits (msgs P w r a p) y)
 
 /-- Obligation (V*'s staging, the tables): each of V*'s session tables is `coinedOf` at table `tab` of `verify --zk`'s
-hidden-output session of the data `D` at a sample, where `verify --zk` sets that table up (`ZkHidden.DrawSetupZHJ` at the
+hidden-output session of the data `D` at a sample, where `verify --zk` sets that table up (`ZkHidden.SampleSetupZHJ` at the
 table's inputs and part of the sample), so it passes `CoinedOK` (`OuterZK.tablesOK_of_sessions`). -/
 def SessionsCoined {Ctx Pub : Type} (V : OuterZK.Sessions Ctx Pub) : Prop :=
   ∃ (P : Composed.LigProver) (Vs : Fin V.S → VStmt) (Reg' : Type)
     (D : Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → (j : Fin V.S) → (Vs j).OuterD Reg')
     (draw : (j : Fin V.S) → Pub → (Fin V.n₂ → ZkView.Bits × ByteArray) → Finset (Fin (Vs j).nv))
     (tab : ∀ j pc l, Fin (Composed.nTab (D pc l j).I))
-    (y : ∀ j pc l, ZkHidden.DrawSetupZHJ (Composed.inputsJ (D pc l j).I (tab j pc l)) (Vs j).mPts
+    (y : ∀ j pc l, ZkHidden.SampleSetupZHJ (Composed.inputsJ (D pc l j).I (tab j pc l)) (Vs j).mPts
       (Composed.partS (D pc l j).I ((D pc l j).dj (draw j pc l)) (draw j pc l) (tab j pc l))
       (Composed.drawJ (D pc l j).I ((D pc l j).dj (draw j pc l)) (tab j pc l))),
     ∀ j pc l, V.C j pc l =
@@ -126,8 +126,8 @@ noncomputable def fwRealPr {Prog Wit Rv Ωa Ωp Pub : Type} [Fintype Ωa] [Finty
   avg fun r : Fin nr → ZkView.Salt => prCoin fun z : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × V.Ωo =>
     E (regLeaves rows pub P r, z.1.1.1,
       Flock.ZkServer.run s (reqs P w r z.1.1.1 z.1.1.2 (zkServerStrings (msgs P w r z.1.1.1 z.1.1.2)
-          fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)))
-        (List.ofFn fun i => FlockSoundness.Audit.Law.streamOf (z.1.2 i)),
+          fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)))
+        (List.ofFn fun i => FlockSoundness.Audit.SamplingDesign.streamOf (z.1.2 i)),
       V.view prover (OuterZK.hctxAt msgs P w r z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i)) z.2)
 
 /-- **The simulated view at the ZK server**, the probability of the event `E`: the simulator registers the fixed private

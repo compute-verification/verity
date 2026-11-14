@@ -236,11 +236,11 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     rw [e, hst]
     all_goals rfl
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src (realOf src) ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hst
-  have hd := LeanRelease.draws_ofLoopLink (L₀ := L₀) src (realOf src)
+  have hd := LeanRelease.samples_ofLoopLink (L₀ := L₀) src (realOf src)
   have hz := hS.size (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hlay
   have hpads := hS.pads (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hlay
     (Masked.UE.tapeZk t)
-  have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).drawsAt x (ν, t) (Loop.frepOf (k / 2) (k % 2)) := by
+  have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).samplesAt x (ν, t) (Loop.frepOf (k / 2) (k % 2)) := by
     rw [hk2, hqd]
     show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x k)
       (L₀.draws (ν, t) k)

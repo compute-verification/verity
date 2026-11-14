@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import slots as S
+from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments import hm96
 from verity.commitments import layout as L
 from verity.commitments.merkle import tree_levels

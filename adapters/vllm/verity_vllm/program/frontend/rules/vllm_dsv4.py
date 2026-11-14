@@ -33,9 +33,9 @@ from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import dsv4_qnorm_insert as Q
 from verity.definitions.registry.flashmla import FLASHMLA_DSV4
 
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import call_args, known, shape
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import OpRule, RuleInfo, StateRule
+from verity_torch.frontend.rules.common import call_args, known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_sequences_of,

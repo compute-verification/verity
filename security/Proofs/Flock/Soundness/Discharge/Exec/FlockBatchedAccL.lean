@@ -45,7 +45,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- The probability that the session accepts, after `Commit`. -/
 noncomputable abbrev accProbL {S : Finset (Fin n)} {R : Reg}
@@ -145,7 +145,7 @@ theorem flock_batched_countEL
 
 /-- **Sampled proof blocks of the batched Flock audit, with the expected-time extractor**, are correct up to
 `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_batched_drawnEL
+theorem flock_batched_sampledEL
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
@@ -155,7 +155,7 @@ theorem flock_batched_drawnEL
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
-  extraction_audit_drawn (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)
+  extraction_audit_sampled (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)
     (flock_batched_knowledgeSoundEL P H E Lf plan tab decode Xc hk hr hlow) hlink σ
 
 end FlockSoundness.Discharge.Exec

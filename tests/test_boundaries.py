@@ -150,6 +150,10 @@ BENCHMARKS_IMPORTERS = {
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     "adapters/vllm/tests/engine/ppl_oracle.py": "circuits (vllm): the int8 step's oracle (`benchmarks/ppl/steps.py`)",
+    "adapters/vllm/tests/engine/fattn_oracle.py": "circuits (vllm): the int8 attention's oracle "
+                                                  "(`verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py`)",
+    "adapters/vllm/tests/engine/int8_kscale_gpu.py": "circuits (vllm): the K scales' calibration windows "
+                                                     "(`benchmarks/ppl/methodology.py`, `windows.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
@@ -1671,8 +1675,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     hold_distributions = functools.partial(_hold_distributions, neither=(check,))
     hold_distributions(tree.dirs, [x for x in loads if "package_above" not in x.loader], held)
     pair = ("verity/circuits", "verity/definitions")
-    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
-        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
+    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/periods -> tools'\]"):
+        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/periods", "tools"): {"verity/commitments/periods/rows.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):

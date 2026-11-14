@@ -142,10 +142,10 @@ theorem SampleAfterRecorded_honest :
       prCoin (fun ω : Fin 2 → Bool => ∃ c, [ω 0, ω 1][1]? = some c ∧
         1 ≤ ((Log.before [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)] 1).coins.map
           (!·)).toFinset.card ∧
-        Disjoint (({ Ω := Bool, draw := fun c => {c} } : Law Bool).draw c)
+        Disjoint (({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).draw c)
           ((Log.before [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)] 1).coins.map
             (!·)).toFinset)
-        ≤ ({ Ω := Bool, draw := fun c => {c} } : Law Bool).miss 1 := by
+        ≤ ({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).miss 1 := by
   have hlog : ChallengerLogsCoins
       (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) := fun ω => by
     simp [Log.coins, List.ofFn_succ]
@@ -162,7 +162,7 @@ theorem SampleAfterRecorded_honest :
   have hread : VerifierReadsLog (fun ω : Fin 2 → Bool => [ω 0, ω 1])
       (fun ω : Fin 2 → Bool => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) := fun ω => by
     simp [Log.coins]
-  exact ⟨hlog, hflip, hread, SampleAfterRecorded ({ Ω := Bool, draw := fun c => {c} } : Law Bool) 2 _ _ 1
+  exact ⟨hlog, hflip, hread, SampleAfterRecorded ({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool) 2 _ _ 1
     (fun l => ((Log.coins l).map (!·)).toFinset) 1 hlog hflip hread⟩
 
 /-- The challenger of `SampleAfterRecorded_nontrivial`: it flips one fair bit, records a commitment naming the other
@@ -186,15 +186,15 @@ theorem SampleAfterRecorded_nontrivial :
     ¬ prCoin (fun ω : Fin 1 → Bool => ∃ c, [ω 0][0]? = some c ∧
         1 ≤ (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}
           else {false} : Finset Bool).card ∧
-        Disjoint (({ Ω := Bool, draw := fun c => {c} } : Law Bool).draw c)
+        Disjoint (({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).draw c)
           (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}
             else {false}))
-      ≤ ({ Ω := Bool, draw := fun c => {c} } : Law Bool).miss 1 := by
+      ≤ ({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).miss 1 := by
   intro h
   have hall : ∀ ω : Fin 1 → Bool, ∃ c, [ω 0][0]? = some c ∧
       1 ≤ (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}
         else {false} : Finset Bool).card ∧
-      Disjoint (({ Ω := Bool, draw := fun c => {c} } : Law Bool).draw c)
+      Disjoint (({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).draw c)
         (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}
           else {false}) := fun ω =>
     ⟨ω 0, rfl, by split_ifs <;> simp, by
@@ -204,13 +204,13 @@ theorem SampleAfterRecorded_nontrivial :
   have h1 : prCoin (fun ω : Fin 1 → Bool => ∃ c, [ω 0][0]? = some c ∧
       1 ≤ (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}
         else {false} : Finset Bool).card ∧
-      Disjoint (({ Ω := Bool, draw := fun c => {c} } : Law Bool).draw c)
+      Disjoint (({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).draw c)
         (if Entry.recorded true ∈ Log.before [Entry.recorded (!ω 0), Entry.released (ω 0)] 0 then {true}
           else {false})) = 1 := by
     unfold prCoin
     simp only [hall, ite_true]
     exact avg_const 1
-  have hmiss : ({ Ω := Bool, draw := fun c => {c} } : Law Bool).miss 1 ≤ 2⁻¹ := by
+  have hmiss : ({ Ω := Bool, draw := fun c => {c} } : SamplingDesign Bool).miss 1 ≤ 2⁻¹ := by
     refine iSup₂_le fun B hB => ?_
     obtain ⟨b, hb⟩ := Finset.card_pos.mp hB
     refine le_trans (prCoin_mono (q := fun c : Bool => c ≠ b) fun c hc hcb => ?_) ?_

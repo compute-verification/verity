@@ -6,7 +6,7 @@ from collections import Counter
 from contextlib import contextmanager
 
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.frontend.outcomes import refuse
+from verity_torch.frontend.outcomes import refuse
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 __all__ = ["launch_batch_declared", "launch_region", "traced_launch_tokens"]

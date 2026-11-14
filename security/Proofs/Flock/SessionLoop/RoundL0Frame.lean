@@ -135,13 +135,13 @@ theorem release_l0_at {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hh 
       0 :: FlockComplete.LigLock.l0BodyAt coin p0 P T cap sch t b lay (L.cfg x ρ hh).h rep extra nonce i := by
   subst hlay
   have hc : ∀ q, q < (L.cfg x ρ hh).order.size → (L.cfg x ρ hh).order[q]! < (L.cfg x ρ hh).h.size :=
-    Claims.ZKServer.ofDraws_order (L.lay x (L.rep x hh.length)) (L.draws ρ (L.rep x hh.length))
+    Claims.ZKServer.ofSamples_order (L.lay x (L.rep x hh.length)) (L.draws ρ (L.rep x hh.length))
       (L.slot x (L.rep x hh.length))
   have hosz : (L.cfg x ρ hh).order.size =
       (_root_.Flock.ZkServer.Frame.absorbed (L.lay x (L.rep x hh.length))).size := rfl
   have hnp : (L.cfg x ρ hh).nPiop =
       absPos (L.lay x (L.rep x hh.length)) ((L.lay x (L.rep x hh.length)).lgOod 0) :=
-    nPiop_ood (L.lay x (L.rep x hh.length)) (L.drawsAt x ρ (L.rep x hh.length)) (L.slot x (L.rep x hh.length))
+    nPiop_ood (L.lay x (L.rep x hh.length)) (L.samplesAt x ρ (L.rep x hh.length)) (L.slot x (L.rep x hh.length))
       (by omega)
   have hpv := check_none_passes hck
   rcases Nat.lt_or_ge i (sch.k0 + 3) with h3 | h3
@@ -152,7 +152,7 @@ theorem release_l0_at {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (hh 
           (Array.replicate len 0) rep extra nonce i)
         (FlockComplete.LigLock.l0BodyAt coin p0 P T cap sch t b (L.lay x (L.rep x hh.length)) (L.cfg x ρ hh).h rep
           extra nonce i) :=
-      FlockComplete.LigLock.l0Sent_at (lay := L.lay x (L.rep x hh.length)) (d := L.drawsAt x ρ (L.rep x hh.length))
+      FlockComplete.LigLock.l0Sent_at (lay := L.lay x (L.rep x hh.length)) (d := L.samplesAt x ρ (L.rep x hh.length))
         (mk := L.slot x (L.rep x hh.length)) (by omega) hood hlk.symm len h1 (by omega)
     obtain ⟨G, H, hR, hBz, -⟩ := id hS
     obtain ⟨hk2, h0, hnc⟩ := l0K_ok i
@@ -472,7 +472,7 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hxX : xs = XS := hxs.trans hXSd.symm
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have htw : tb.st.wideLeaf = (Masked.stAt x j).wideLeaf := by rw [hts']; rfl
   have htp' : _root_.Flock.Zk.schedule tb.st.wideLeaf tb.st.m = .ok (tb.sch, tp) := by
     rw [htm, htw, ← hst]

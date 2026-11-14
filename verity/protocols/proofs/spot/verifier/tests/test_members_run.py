@@ -4,7 +4,7 @@ after its evidence; the verifier's verdict and its check of a member's files' fo
 and the read of the auditor's ledger (`challenger.trusted_session_of`, which its own tests hold) is taken as passed.
 The run refuses a statement of a member the sample holds no unit of, then holds every member's files before any
 session, a member with no statement as one with a session, and refuses a member whose public file is not its slice of
-the registration; it credits each accepted session its member's units, refuses proved units other than the evidence's
+the docket; it credits each accepted session its member's units, refuses proved units other than the evidence's
 and a verdict naming another program, and is no verdict: a run of sessions that all accepted is what v1's check at the
 coins then reads."""
 
@@ -199,7 +199,7 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
 ])
 def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_without_a_session(tmp_path, change, why):
     """The first member's public file names other units than the member's, in another order or none, or another scheme,
-    root, domain or count than the member's roots of the registration, ports bare: the run refuses the member with the
+    root, domain or count than the member's roots of the docket, ports bare: the run refuses the member with the
     reason before any session is verified, and as it does where the member has no statement."""
     for k, sessions in enumerate(((A, B), (B,))):
         (tmp_path / str(k)).mkdir()
@@ -326,7 +326,7 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
 
 def test_a_members_slice_outside_the_run_is_the_runs_own():
     """`slices`, which an audit outside the run reads a member's slice by: each member's count of units, its roots of
-    the registration with its name taken off, and the scheme, at which its honest header holds; a root the record names
+    the docket with its name taken off, and the scheme, at which its honest header holds; a root the record names
     under a member that its header does not is refused there (a port wired to another member's tree, named under its
     reader, is in the reader's slice and so must be in its header); and where the run refuses the record, so does it,
     with the run's reason."""

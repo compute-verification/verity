@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.OneStage
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -33,7 +33,7 @@ namespace FlockSoundness.Audit
 open Game
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- A per-unit quantity at the unit a rule picks, and zero when it picks none or an unsampled one. -/
 noncomputable def atTgt (S : Finset (Fin n)) (t : Option (Fin n)) (f : Fin n → ℝ≥0∞) : ℝ≥0∞ :=
@@ -52,7 +52,7 @@ theorem atTgt_le {S : Finset (Fin n)} {f : Fin n → ℝ≥0∞} {c : ℝ≥0∞
 /-- What the analysis of an audit fixes when extraction is randomized: the committed transcript,
 and for each sampled proof block the joint probabilities of the two ways its table can accept while it is
 wrong. -/
-structure ExtractionAnalysis (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
+structure ExtractionAnalysis (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool)
     where
   Tr : Type
   wrong : Tr → Finset (Fin n)
@@ -193,7 +193,7 @@ theorem extraction_audit_count (A : ExtractionAnalysis L Reg session)
       (prCoin_false.le.trans (zero_le))
 
 /-- **Sampled proof blocks, with a randomized extractor**, are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_drawn (A : ExtractionAnalysis L Reg session)
+theorem extraction_audit_sampled (A : ExtractionAnalysis L Reg session)
     {εks δlink : (R : Reg) → Cont L Reg session R → ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.wrong (A.committedOf σ)) o.2) (audit L Reg session) σ ≤

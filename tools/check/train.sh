@@ -26,7 +26,7 @@
 # --deferred alone) is ratchet-gate's base in place of it (`check.py --record --ratchet-base`): drive sends the tip of its last
 # run whose ratchet-gate gave a verdict, so a step red elsewhere doesn't make each run re-judge every landing since.
 # `--bookkeeping-warn` (with --deferred, unsharded, without --no-regenerate: drive's lock run) has lean-audit repair a lock's
-# bookkeeping and the caps it breaks and warn, rather than fail (`check.py --bookkeeping-warn`); on a COMMIT whose check.py
+# bookkeeping and the limits it breaks and warn, rather than fail (`check.py --bookkeeping-warn`); on a COMMIT whose check.py
 # predates it, the run goes without it.
 #
 # `--shard K/N`: shard K of ci.toml's plan with N shards (`check.py --shard`): with `--deferred`, only those steps' parts in

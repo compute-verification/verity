@@ -75,7 +75,7 @@ EOF
 step store $?
 if [ -n "$RECEIPTS" ]; then
   "$PY" -c 'import os, sys; sys.path.insert(0, os.environ["D"]); import sketch as K
-K.receipts_lib(os.environ["ARCH"]); K.SE.device_lib(os.environ["ARCH"])' > "$O/build.log" 2>&1
+K.receipts_lib(os.environ["ARCH"]); K.TE.device_lib(os.environ["ARCH"])' > "$O/build.log" 2>&1
   step build $?
 fi
 grep -qE "^(ship|store|build) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt" "$O/store-check.txt"; exit 2; }

@@ -190,7 +190,7 @@ def OutputsCommitted : Prop :=
     tags.typed = false → tags.isTmpl = false →
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    ∀ {D : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     st.c.outNet = st.c.unitNet →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
@@ -222,8 +222,8 @@ def OutputsBinding : Prop :=
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
+    ∀ {D D' : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    Draw.UnitSample.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     st.c.outNet = st.c.unitNet →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),

@@ -179,7 +179,7 @@ set_option maxHeartbeats 1000000 in
 /-- **The switched session's pads root at rep stream `2i + r` is the frame's**: where the rows hold at its base and the
 frame samples the tape's pads (`Loop.RepSrc`), the pads commitment of the switched source's rep is the masked prover's on
 the tape's pads (`Masked.padsTreeCut_srcV`, its leaves the views', `swSrcE_padLeaf`), whose root is that of the frame's
-samples (`padsRoot_tapeOfDraws`). -/
+samples (`padsRoot_tapeOfSamples`). -/
 theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -206,7 +206,7 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     rfl
   have hz := hS.size Lr hd ν t ⟨i, hi⟩ ⟨r, hr⟩ hlay
   have hpads : FlockComplete.padsOf (Masked.UE.tapeZk t) i r (Masked.layE x ⟨i, hi⟩) =
-      FlockComplete.padsOf (tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) i r
+      FlockComplete.padsOf (tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) i r
         (Masked.layE x ⟨i, hi⟩) :=
     hS.pads Lr hd ν t ⟨i, hi⟩ ⟨r, hr⟩ hlay (Masked.UE.tapeZk t)
   have hpdH : ((FlockComplete.padsOf (Masked.UE.tapeZk t) i r (Masked.layE x ⟨i, hi⟩)).h ++
@@ -218,13 +218,13 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
       (FlockComplete.padsOf (Masked.UE.tapeZk t) i r (Masked.layE x ⟨i, hi⟩))
       ((Masked.UE.tapeZk t).innerSalt i r) : V FlockComplete.InnerCommit) =
       FlockComplete.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-        (FlockComplete.padsOf (tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) i r
+        (FlockComplete.padsOf (tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) i r
           (Masked.layE x ⟨i, hi⟩))
-        ((tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt i r) := by
+        ((tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt i r) := by
     rw [FlockComplete.innerCommitP_salt_congr (M := V) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
       (FlockComplete.padsOf (Masked.UE.tapeZk t) i r (Masked.layE x ⟨i, hi⟩))
       (salt := (Masked.UE.tapeZk t).innerSalt i r)
-      (salt' := (tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt i r)
+      (salt' := (tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt i r)
       (fun q hq => hS.innerSalt Lr hd ν t ⟨i, hi⟩ ⟨r, hr⟩ hlay (Masked.UE.tapeZk t) q
         (by rw [hpdH] at hq; exact hq)), hpads]
   have hpl : ((Masked.swSrcE x C w (vs x w ν C (finS.seenOf x t)) t i).rep r).padLeaf = ((Masked.srcV x C w t i).rep r).padLeaf :=
@@ -240,9 +240,9 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     hTape] at hic1
   have hic2 := congrArg Prod.fst hic1
   cases hT : (FlockComplete.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-      (FlockComplete.padsOf (tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) i r
+      (FlockComplete.padsOf (tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf) i r
         (Masked.layE x ⟨i, hi⟩))
-      ((tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt i r) :
+      ((tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt i r) :
       V FlockComplete.InnerCommit) with
   | error e =>
     rw [hT] at hic2
@@ -251,7 +251,7 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     rw [hT] at hic2
     simp only [Except.map, Except.ok.injEq] at hic2
     subst hic2
-    have hroot := padsRoot_tapeOfDraws (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf i r hz
+    have hroot := padsRoot_tapeOfSamples (Masked.UE.tapeZk t) (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf i r hz
       (ic := icT) (by rw [hlay]; exact hT)
     rw [hlay] at hroot
     exact hroot.symm
@@ -512,7 +512,7 @@ theorem zcBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hc : ∀ p, p < ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size →
       ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[p]! <
         ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.size :=
-    Claims.ZKServer.ofDraws_order _ _ _
+    Claims.ZKServer.ofSamples_order _ _ _
   obtain ⟨o, tq, hro, ho⟩ := roundFree_zcHead_out ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops))
     { m with stopped := false } tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) _ hc hm0.1 hm0.2.1
     hm0.2.2.1 hdg hTcap hdom (by show m.pos ≤ _; rw [hm0.2.2.2]; exact Nat.zero_le _)
@@ -595,11 +595,11 @@ theorem release_sched_zcBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.W
   rw [hjh, hrh] at hdom0
   -- the session's round, its cap and its pads root
   obtain ⟨ic, hic, henc⟩ := Loop.enc_zcBind vs w hx hsx ν t (Loop.finS.pad (K := refK x) cs) j r (by omega) hN0
-  have hroot := Loop.root_zcBind vs hSc hR hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t
+  have hroot := Loop.root_zcBind vs hSc hR hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t
     (Loop.finS.pad (K := refK x) cs) j.isLt r.isLt hlay hRows hout' hic
   have hcfg : ((ofLoopLink L₀ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).root = ic.root := by
     rw [cfg_root, hrep']
-    unfold LeanRelease.drawsAt
+    unfold LeanRelease.samplesAt
     rw [hlay]
     exact hroot.symm
   rw [hreal] at hre

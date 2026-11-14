@@ -107,7 +107,7 @@ def h1Reg (context format program partition : String) (bytes : ByteArray) : Wind
   partition := partition
   scheme := PouwCheck.scheme
   population := 144
-  law := subsetLaw 24
+  samplingDesign := subsetLaw 24
   roots := #[]
   window := ⟨"served", context, h1Items, none, none⟩
 
@@ -126,7 +126,7 @@ def h1Profile (program partition : String) : Core.Integrity where
 def h1Evidence (c : WindowCommitmentRecord) (units : Array Nat) : Evidence where
   protocol := oneStage
   commitment := some (Flock.hexOf c.digest)
-  said := .accept (h1Profile c.program c.partition) { law := .subset 24, population := 144, units }
+  said := .accept (h1Profile c.program c.partition) { samplingDesign := .subset 24, population := 144, units }
 
 end Properties.Pouw.Period.SecurityProofs.Accept
 

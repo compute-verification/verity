@@ -165,7 +165,7 @@ theorem askOf_vals_fc {q₀ : RepIn} {fc : ℕ} (i : ℕ) (a : F128) (h : fc < q
     (askOf q₀ fc i a).vals[fc]! = a :=
   Array.getElem!_set!_self q₀.vals fc a h
 
-theorem askOf_draws (q₀ : RepIn) (fc i : ℕ) (a : F128) : (askOf q₀ fc i a).draws = q₀.draws := rfl
+theorem askOf_samples (q₀ : RepIn) (fc i : ℕ) (a : F128) : (askOf q₀ fc i a).draws = q₀.draws := rfl
 
 open Classical in
 /-- **The rounds the loop's finish hands a rep's frame for its inner proof** on the history `h` at `x`, the witness `w`

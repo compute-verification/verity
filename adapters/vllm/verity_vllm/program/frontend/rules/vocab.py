@@ -54,9 +54,9 @@ from verity.definitions.registry import tp_allreduce as _tp_allreduce
 from verity.definitions.registry import value_inputs as _vi
 from verity.definitions.registry.dsv4_decode_indices import gather_i32
 
-from verity_vllm.program import dsa_table as _dsa_table
+from verity_torch import dsa_table as _dsa_table
 from verity_vllm.program.frontend import targets as _targets
-from verity_vllm.program.frontend.rules import ref_kinds as R
+from verity_torch.frontend.rules import ref_kinds as R
 
 
 @dataclass

@@ -23,7 +23,7 @@ public import Spot.OneStageZkStatement
 public import Spot.OneStageZk
 public import Spot.MembersParse
 public import Spot.Rate
-public import Spot.HiddenDraw
+public import Spot.HiddenSample
 public import Spot.Select
 public import Spot.Slots
 public import Spot.PopOrder
@@ -44,7 +44,7 @@ public import Spot.Challenger
 public import Spot.ChallengerRecord
 public import Spot.ChallengerSession
 public import Spot.ChallengerCoins
-public import Spot.ChallengerDraw
+public import Spot.ChallengerSample
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
 public import Spot.MonitoringPeriod
@@ -55,7 +55,7 @@ public import Spot.WiresSpan
 public import Spot.WiresOrder
 public import Spot.WiresSound
 public import Spot.WiresComplete
-public import Spot.WiresDrawn
+public import Spot.WiresSampled
 public import Spot.Interval
 public import Spot.FactorUpper
 public import Spot.TwoStageCheck

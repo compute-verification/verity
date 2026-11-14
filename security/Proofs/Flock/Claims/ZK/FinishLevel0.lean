@@ -41,15 +41,15 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 
 The finish on the session loop's frames port reads table `i`'s level-0 commitment off the loop's `Level0`
 (`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-zk-server finish`'s `table` path). Here the
-two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
+two are one, wherever the loop drew that `Level0` (`Level0.ofSamples`):
 
 * `commitRowsP_tree`: through `Hashes` whose node and leaf are functions, `FlockComplete.commitRowsP` returns, its
   layers are the tree's layers from the leaves to the cap and its cap the top one (`commitRowsP_cap_eq`'s, with the
   layers).
 * `commitRows_tree`: so the port's `commitRows` keeps `Link.layer`'s layers over the rows' `hm96-sha512/v1` leaves
   (`commitRowsP_eq`).
-* **`commitOf_eq`**: a `Level0` that `ofDraws` returns commits as `commit0` at its own level, `t_pad` and table
-  (`Level0.ofDraws_ok`: its rows and layers are `Link`'s of `toIn`).
+* **`commitOf_eq`**: a `Level0` that `ofSamples` returns commits as `commit0` at its own level, `t_pad` and table
+  (`Level0.ofSamples_ok`: its rows and layers are `Link`'s of `toIn`).
 -/
 
 @[expose] public section
@@ -113,12 +113,12 @@ theorem commitRows_tree (lv : Level) (rows : Array (Array F128)) (salt : ℕ →
   rw [hlay] at hly hcp
   exact ⟨hly, hcp⟩
 
-/-- **The session loop's level 0 is `commit0`'s**: where `ofDraws` returns `l`, the commitment read off it
+/-- **The session loop's level 0 is `commit0`'s**: where `ofSamples` returns `l`, the commitment read off it
 (`commitOf`) is `commit0`'s at its level, `t_pad` and table, so the loop's finish proves at the commitment the `table`
 path commits. -/
-theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofDraws wideLeaf m g d = .ok l) :
+theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofSamples wideLeaf m g d = .ok l) :
     commitOf l = commit0 l.lv l.tPad l.toIn := by
-  obtain ⟨-, -, -, hrows, hlayers, -⟩ := Level0.ofDraws_ok h
+  obtain ⟨-, -, -, hrows, hlayers, -⟩ := Level0.ofSamples_ok h
   obtain ⟨hly, hcp⟩ := commitRows_tree l.lv (Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad) l.toIn.salt
   have hlf : (Link.layer l.lv.d fun q => (Link.leaves l.lv l.tPad l.toIn)[q]!) =
       Link.layer l.lv.d fun q => MerkleScheme.hm96Sha512.leaf

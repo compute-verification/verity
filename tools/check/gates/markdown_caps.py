@@ -1,4 +1,4 @@
-"""The Markdown caps as a warn gate: a change that leaves a Markdown file over its cap (`tests/test_repository.py`'s
+"""The Markdown size limits as a warn gate: a change that leaves a Markdown file over its limit (`tests/test_repository.py`'s
 `markdown_cap`, the rule `test_markdown_size_caps` holds the tree to) is named, with how far over and the fix, and lands all
 the same.
 
@@ -6,17 +6,17 @@ the same.
 
 Only the change's own effect is judged, against the commit below it: when TOP is the queue's merge of a PR (two parents, a
 ``Queue: #N`` subject: `research.queue._message`), its first parent, the tip of `next` it merged onto; else TOP's merge base
-with BASE.  Each ``.md`` file that differs between the two (deletions aside) fails when it is over its cap in TOP and the
-change put it there: it was within the cap (or absent) below, or it grew.  One already over below that doesn't grow passes,
-with a note, so a file over its cap on `main` or in a member below is never laid on every PR above it.  The caps and fixes are
+with BASE.  Each ``.md`` file that differs between the two (deletions aside) fails when it is over its limit in TOP and the
+change put it there: it was within the limit (or absent) below, or it grew.  One already over below that doesn't grow passes,
+with a note, so a file over its limit on `main` or in a member below is never laid on every PR above it.  The limits and fixes are
 BASE's ``tests/test_repository.py`` (read with ``git show`` and run with the standard library alone), so a change can't raise
-its own cap.
+its own limit.
 
 The merge queue runs `main`'s copy of it as a warn gate (drive.toml's ``warn_gates``), which keeps no PR out: on a PR's head at
 `research queue ready`'s preflight, which prints its failure as a warning, and at the sync on the PR's merge onto `next`, where
 the members below add their bytes too, which drive tells the PR's owner once a head, to trim in their next PR.  Before marking
 a branch, run ``python3 tools/check/gates/markdown_caps.py origin/main HEAD``.
-Exit 0 when no change puts a file over its cap, 1 when one does (with the fix), 2 on a usage or git error; ``--json`` prints
+Exit 0 when no change puts a file over its limit, 1 when one does (with the fix), 2 on a usage or git error; ``--json`` prints
 `KIND`.
 """
 from __future__ import annotations
@@ -29,8 +29,8 @@ import types
 from pathlib import Path
 
 KIND = "markdown-caps-gate/v2"
-#: the module whose caps and fixes the gate applies, read at BASE
-CAPS = "tests/test_repository.py"
+#: the module whose limits and fixes the gate applies, read at BASE
+LIMITS = "tests/test_repository.py"
 #: the subject of the queue's merge of one PR onto `next`
 QUEUE_SUBJECT = "Queue: #"
 
@@ -46,11 +46,11 @@ def git(*args: str, input: str | None = None) -> str:
     return r.stdout
 
 
-def caps_at(rev: str) -> types.ModuleType:
-    """``CAPS`` as it is at ``rev``, as a module."""
-    mod = types.ModuleType("markdown_caps_at_base")
-    mod.__file__ = str(Path.cwd() / CAPS)
-    exec(compile(git("show", f"{rev}:{CAPS}"), f"{rev[:12]}:{CAPS}", "exec"), mod.__dict__)  # noqa: S102  (the base's own copy, from git)
+def limits_at(rev: str) -> types.ModuleType:
+    """``LIMITS`` as it is at ``rev``, as a module."""
+    mod = types.ModuleType("markdown_limits_at_base")
+    mod.__file__ = str(Path.cwd() / LIMITS)
+    exec(compile(git("show", f"{rev}:{LIMITS}"), f"{rev[:12]}:{LIMITS}", "exec"), mod.__dict__)  # noqa: S102  (the base's own copy, from git)
     return mod
 
 
@@ -73,25 +73,25 @@ def below(base: str, top: str) -> str:
 
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
-    caps, lo = caps_at(base), below(base, top)
+    rules, lo = limits_at(base), below(base, top)
     changed = [p for p in git("diff", "--no-renames", "--name-only", "--diff-filter=d", "-z", lo, top).split("\0")
                if p.endswith(".md")]
     was = sizes(lo, changed)
     files, failures, notes = [], [], []
     for path, size in sizes(top, changed).items():
-        cap, before = caps.markdown_cap(path), was[path]
-        files.append({"path": path, "size": size, "below": before, "cap": cap})
-        if not (over := caps.markdown_over_cap(path, size)):
+        limit, before = rules.markdown_cap(path), was[path]
+        files.append({"path": path, "size": size, "below": before, "cap": limit})
+        if not (over := rules.markdown_over_cap(path, size)):
             continue
-        if before is not None and before > cap and size <= before:
-            notes.append(f"{path} is {size} bytes, over its {cap}-byte limit, but was {before} bytes at {lo[:12]} below: not "
+        if before is not None and before > limit and size <= before:
+            notes.append(f"{path} is {size} bytes, over its {limit}-byte limit, but was {before} bytes at {lo[:12]} below: not "
                          f"this change's")
             continue
         where = over.split("; ", 1)[1] if "; " in over else over
-        failures.append({"path": path, "size": size, "below": before, "cap": cap,
-                         "why": f"{path} is {size} bytes at {top[:12]}, over its {cap}-byte limit ({CAPS}), and "
+        failures.append({"path": path, "size": size, "below": before, "cap": limit,
+                         "why": f"{path} is {size} bytes at {top[:12]}, over its {limit}-byte limit ({LIMITS}), and "
                                 + ("is new" if before is None else f"was {before} bytes") + f" at {lo[:12]} below",
-                         "fix": [f"trim {path} to {cap} bytes or fewer ({size - cap} over): {where}"]})
+                         "fix": [f"trim {path} to {limit} bytes or fewer ({size - limit} over): {where}"]})
     return {"kind": KIND, "base": base, "top": top, "below": lo, "files": files, "failures": failures, "notes": notes}
 
 
@@ -104,13 +104,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         doc = gate(a.base, a.top)
     except (GitError, AttributeError, SyntaxError, ValueError) as e:
-        print(f"markdown caps gate: {e}", file=sys.stderr)
+        print(f"markdown size gate: {e}", file=sys.stderr)
         return 2
     if a.json:
         print(json.dumps(doc, indent=1))
     else:
-        print(f"markdown caps {doc['below'][:12]}..{doc['top'][:12]} (base {doc['base'][:12]}): {len(doc['files'])} Markdown "
-              f"file(s) changed, {len(doc['failures'])} put over the cap")
+        print(f"markdown sizes {doc['below'][:12]}..{doc['top'][:12]} (base {doc['base'][:12]}): {len(doc['files'])} Markdown "
+              f"file(s) changed, {len(doc['failures'])} put over the limit")
         print("".join(f"  {f['why']}; {f['fix'][0]}\n" for f in doc["failures"]) + "".join(f"  note: {n}\n" for n in doc["notes"]),
               end="")
     return 1 if doc["failures"] else 0

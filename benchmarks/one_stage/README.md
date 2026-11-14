@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.protocols.proofs.spot.verifier.one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity.protocols.proofs.spot.verifier.one_stage`) end to end: serving's committed values through docket, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
@@ -15,7 +15,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A0's and A5's are SPOT's
   `template_audit.py` and `window_audit.py` (`verity/protocols/proofs/spot/prover/audit/`, its README).
 - `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as SPOT's
-  `verifier/one_stage/compose_circuit.py` does.
+  `prover/audit/compose_circuit.py` does.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
@@ -36,7 +36,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
   `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
   art id, so the run can be verified again from the store.
-- `expert_tables_tp.sh`: the committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm
+- `expert_tables_tp.sh`: the committer's per-expert tables docket of a TP model, one file a rank (`verity-vllm
   tp-register-tables --served`): each rank's expert stacks composed from the checkpoint of record, held to a capture's served
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).
@@ -55,7 +55,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   rows they read from the step blocks committed as plain input rows that no unit of the window writes.
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
   A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy unit whose ports are the
-  bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the certifier's
+  bucket rows of one connection's ingress and egress cells (a row a bucket, docket v2), committed under the certifier's
   salts, proved whole (the work sampling design's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
   own. The units' wiring is the Program's (`warden_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
   cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the certifier signed,
@@ -69,10 +69,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
   of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
   each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
-  registration names; each rank's chunk of a request's reduction, the registered `AllReduce2_v1{H}` with its input's two
+  docket names; each rank's chunk of a request's reduction, the registered `AllReduce2_v1{H}` with its input's two
   rows staged as two ports, is
   proved whole beside a sampled rest, and Lean verifies it with the verifier's own registered reads of both ranks' partials of
-  that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
+  that request at the roots each owner registered, every docket read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
   partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
 - `member_seconds.py` (`a5_tp.sh` with `A5_MEMBER_SECONDS=1`): an audit's seconds a member outside its prover's clock and
@@ -103,10 +103,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
-  registers its weights under its own key (`prove_path.py weights-registration`). Without a registration, `NO WEIGHTS
+  registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
-  sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
-  circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
+  sampled proofs: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
+  circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the docket's
   pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
   Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
   and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
@@ -146,7 +146,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
-  directory of such directories); for onsite, the inference-only policy's case is the registration. The composed params, commitment and
+  directory of such directories); for onsite, the inference-only policy's case is the docket. The composed params, commitment and
   evidence (the composition's formats, `verity/protocols/compose/verifier/lean/README.md`) and every answer go to
   `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
   digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
@@ -155,7 +155,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
   rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
 - `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
-  the window's one-stage registration and the proof system's answer to it) or onsite's `verity/pouw/period/v1`
+  the window's one-stage docket and the proof system's answer to it) or onsite's `verity/pouw/period/v1`
   (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
   window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
   reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
@@ -178,7 +178,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   staged in statements of 1 to 512 units, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
   --gpu` in three arms: `dev`, as SPOT[Flock]'s proof server proves (no ZK server, the witness built on the device), and the
   ZK server's send check on (`fw`) and off (`nofw`) over the host's witness. The Lean verifier checks them, and the job fits the per-session,
-  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
+  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_SAMPLES=c` proves every
   staged unit: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
@@ -243,7 +243,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `retain=host`) against its run root of record, reads each Call's operands and returns through its Program row as the
   deferred replay does, and runs `a11.py`'s and `a9.py`'s staging on them, writing every word where the committed value
   and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
-  registration window naming the committed values.
+  docket window naming the committed values.
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's

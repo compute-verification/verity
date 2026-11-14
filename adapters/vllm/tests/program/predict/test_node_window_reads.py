@@ -14,7 +14,7 @@ from verity_vllm.program.predict.build import Unexpressible
 
 from tests.program.predict.test_node_window import LP, glm_request
 from tests.program.predict.test_node_window_select import FAMILIES as SELECT
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 FAMILIES = {**SELECT, **NE.FAMILIES}
 BLOCKS, OUTPUTS = 6144 // NE.WIDTH, 2
