@@ -197,7 +197,7 @@ def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], a
 def load(path: Path) -> Any:
     """A Build's descriptor (``.json`` or ``.json.gz``) decoded through vLLM's registry."""
     from verity.circuits.codec import decode_program
-    from verity.definitions.registry.catalog import load as registry
+    from verity_vllm.definitions.registry.catalog import load as registry
 
     reg, errors = registry()
     for e in errors:

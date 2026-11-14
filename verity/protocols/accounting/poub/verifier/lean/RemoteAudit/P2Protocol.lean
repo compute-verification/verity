@@ -19,7 +19,7 @@ meta import RemoteAudit.Verifier
 /-!
 # A session over PoUS's P2 store as a core protocol
 
-PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_party.py`) behind the core interface
+PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_parties.py`) behind the core interface
 (`Core.Protocol`), so that onsite can take it as its bandwidth component: its registered store is PoUS's `C*`, so the
 store it audits is the one PoUS's setup published. Its bytes are canonical JSON (`p2_case.py` writes them):
 
@@ -181,7 +181,7 @@ def UNSIGNED : String := "the close's signature does not verify on the params' s
 
 /-- The case's head, the chain's first entry: the commitment's digest (`Commitment.digest`), then the params' clock
 floor in decimal ASCII. So the close binds the registration, its plan and the clock floor with the log, and its chain
-is the one SHA-512 a verifier's device keeps of the case (`p2_party.case_digest`). -/
+is the one SHA-512 a verifier's device keeps of the case (`p2_parties.case_digest`). -/
 def headOf (p : Params) (c : Commitment) : ByteArray := c.digest ++ (toString p.notBeforeNs).toUTF8
 
 /-- Why the close doesn't sign the case whose head is `head` (`headOf`) under `lp`, none when it does: its key isn't

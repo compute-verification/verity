@@ -22,8 +22,8 @@ import itertools
 from pathlib import Path
 
 from verity.circuits.defs import SpecializedDefinition
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.registry import catalog
 
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for

@@ -19,7 +19,7 @@ from verity.circuits import (
 )
 from verity.circuits.codec import IdentityConflict
 from verity.circuits.defs import CompositeDefinition
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests.program.test_running_example import (
     Add16,

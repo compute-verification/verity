@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# What the remote audit's opening draw assumes (trusted)
+# What PoUB's opening draw assumes (trusted)
 
 The premises of `Accounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
 verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a session and the trace over its coins:

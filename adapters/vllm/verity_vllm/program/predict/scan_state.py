@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import boolean_io_shell as BIO
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import blocks as BK
 

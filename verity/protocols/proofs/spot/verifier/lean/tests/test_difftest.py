@@ -4123,7 +4123,7 @@ def public_ports(j):
 
 
 def _roots(ports: list[str], x: int) -> list[dict]:
-    """A registration's roots at `ports`, every fifth with no domain or leaves."""
+    """A docket's roots at `ports`, every fifth with no domain or leaves."""
     return [{"domain": f"d{i}", "leaves": i + x % 3, "port": p, "root": f"r{i}"} if (x + i) % 5 else
             {"port": p, "root": f"r{i}"} for i, p in enumerate(ports)]
 
@@ -6765,7 +6765,7 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     Lean's unit gates laid out a range at a time are its walk's unit by unit. Python's `partition.unit_gates` isn't asked:
     its partition over these templates takes more memory than a suite has."""
     from verity.circuits.population import mixed_population_program
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.periods import interface as IF
 
     load()
