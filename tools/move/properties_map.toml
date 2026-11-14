@@ -22,6 +22,15 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "adapters/vllm/verity_vllm/properties/kernel_allowlist.py" = "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py"
 "adapters/vllm/verity_vllm/properties/quarantine_lint.py" = "adapters/vllm/tests/properties/quarantine_lint.py"
 
+[rewrite]
+# Never rewritten: records of what was (the moves and their maps, changelogs, research's recorded moves), the archive,
+# files whose bytes a digest pins, every Lean file and every kernel source.
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256",
+           "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
+
 [modules]
 "verity_vllm.properties.kernel_allowlist" = "verity_vllm.observe.fold.profiles.kernel_allowlist"
 "verity_vllm.properties.quarantine_lint" = "tests.properties.quarantine_lint"
