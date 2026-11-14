@@ -9,16 +9,23 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import FunctionCall, Region
 from verity.circuits.refs import runs
 
+from tests.observe.test_fold_synthetic import (
+    BN,
+    REQ,
+    SAMPLED,
+    C,
+    _real_memory_available,
+    install_stub_memory,
+    toy_log,
+    toy_profile,
+)
 from verity_vllm.check import fold_compare as cmp
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import fold
-
-from tests.observe.test_fold_synthetic import BN, C, REQ, SAMPLED, _real_memory_available, install_stub_memory, toy_log, toy_profile
 
 _NP = {"bfloat16": np.uint16, "int32": np.uint32, "int64": np.uint64}
 
@@ -118,8 +125,9 @@ def test_snapshot_store_roundtrip(tmp_path, folded):
     call = FunctionCall(r.program.circuit, r.program.circuit.root_scope, len(r.program.root.body.nodes) - len(r.body.nodes) + m["node"])
     assert [int(w) for w in words] == [t[g] for g in call.returns]
     # a strided sub-view (one head of a [NH, D] row) extracts the right elements
-    sub = ViewDesc(view.alloc, view.offset + C["D"], (C["D"],), (1,), view.dtype, view.device)
-    assert [int(w) for w in store.extract(s, sub)] == [t[g] for g in call.returns][C["D"]:2 * C["D"]]
+    d = int(C["D"])
+    sub = ViewDesc(view.alloc, view.offset + d, (d,), (1,), view.dtype, view.device)
+    assert [int(w) for w in store.extract(s, sub)] == [t[g] for g in call.returns][d:2 * d]
 
 
 def test_provenance_and_subcircuits_bit_exact(tmp_path, folded):

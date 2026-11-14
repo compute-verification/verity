@@ -10,6 +10,8 @@ from typing import Any
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
+__all__ = ["launch", "scatter_into", "screen_into"]
+
 #: the liveness screen's relative band, far wider than its FP32 error (2⁻²³)
 BAND = 2.0 ** -10
 

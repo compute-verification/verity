@@ -5,11 +5,13 @@ from __future__ import annotations
 import math
 
 import numpy as np
-
 import torch
-
+from verity.circuits.defs import FunctionDefinition
 from verity.circuits.refs import Coll, PartLog, array_of
 from verity.circuits.types import Array
+from verity.definitions.registry import b1
+from verity.definitions.registry.dense import reciprocal_bits
+
 from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import Alloc, shape_of
@@ -42,7 +44,7 @@ def refuse_cached_prefix(ctx, node, what: str) -> None:
                                                                      f"unified_attention_with_output rule does (KvPrefix[vllm])")
 
 
-def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[object, tuple[Coll, ...]]:
+def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[FunctionDefinition, tuple[Coll, ...]]:
     """The norm Definition for `role` (`rmsnorm`, `rmsnorm_fused`, `layer_norm`, `layer_norm_aten`; its other `statics`) and its trailing
     operands: `EPS` a static, or under `registered_values` eps the registered value `eps` (the f32 word the kernel reads), the same name
     the fold supplies."""
@@ -52,14 +54,13 @@ def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[obje
     return ctx.kind(f"{role}_value", node, N=N, **statics), (ctx.supplied("eps", 32, bits, node),)
 
 
-def scalar_kind(ctx, role: str, node, N: int, C: float) -> tuple[object, tuple[Coll, ...]]:
+def scalar_kind(ctx, role: str, node, N: int, C: float) -> tuple[FunctionDefinition, tuple[Coll, ...]]:
     """The elementwise kind `role` (`bf16_div_scalar`, `bf16_mul_scalar`, `add_scalar_f32`, `add_scalar_bf16`) and its trailing operands:
     `C` a static, or under `registered_values` the f32 word the ATen kernel reads (the division's `RN32(1 / C)`, else `f32(C)`), a
     registered value of its own named by the role (`div_scalar`, `mul_scalar`, `add_scalar_f32`, `add_scalar_bf16`; `_1`, ... for
     another value)."""
     if not ctx.registered_values:
         return ctx.kind(role, node, N=N, C=C), ()
-    from verity.definitions.registry.dense import reciprocal_bits
     bits = reciprocal_bits(C) if role == "bf16_div_scalar" else int(np.float32(C).view(np.uint32))
     return ctx.kind(f"{role}_value", node, N=N), (ctx.supplied(role.removeprefix("bf16_"), 32, bits, node, distinct=True),)
 
@@ -71,10 +72,12 @@ def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, 
     if not ctx.registered_values:
         return ()
     if cap is not None:
-        from verity.definitions.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+        from verity.definitions.registry.dense import (
+            softcap_mul_bits,
+            softcap_scale_log2_bits,
+        )
         return (ctx.supplied(f"softcap_mul_d{D}", 32, softcap_mul_bits(D, cap), node),
                 ctx.supplied("softcap_scale_log2", 32, softcap_scale_log2_bits(cap), node))
-    from verity.definitions.registry import b1
     return (ctx.supplied(f"scale_log2_d{D}", 32, b1.scale_log2_bits(D), node),)
 
 
@@ -115,6 +118,14 @@ def shape(ctx, a) -> tuple[int, ...] | None:
     return ctx.shape_of_node(a) if isinstance(a, torch.fx.Node) else None
 
 
+def known(s: tuple[int, ...] | None) -> tuple[int, ...]:
+    """`shape`'s answer for an operand its rule has matched as a tensor: a TypeError where there is none, as indexing or
+    unpacking the absent shape was."""
+    if s is None:
+        raise TypeError("the operand has no static shape")
+    return s
+
+
 def row_value(ctx, a, name: str, dtype: torch.dtype = torch.bfloat16) -> str | None:
     """Why operand `a` (`name` in the refusal) is not a value collection of `dtype` with rank >= 1, or None if it is or
     is an allocation, which a rule may write."""
@@ -140,7 +151,7 @@ def and_mul_operands(node, ctx):
         return r
     if not isinstance(ctx.val(out), (Alloc, Coll)):
         return "out is not an allocation/value"
-    xs, os_ = shape(ctx, x), shape(ctx, out)
+    xs, os_ = known(shape(ctx, x)), shape(ctx, out)
     if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
         return f"out {os_} vs x {xs}"
     return True
@@ -153,4 +164,4 @@ def call_args(node) -> dict:
             **node.kwargs}
 
 
-__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "call_args"]
+__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "known", "call_args", "norm_kind"]

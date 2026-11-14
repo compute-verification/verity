@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import topp_split as TS
 
