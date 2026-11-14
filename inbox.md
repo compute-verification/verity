@@ -1,3 +1,0 @@
-[2026-11-14T19:45Z] cb9c7f61d8c6
-training to STEP, Sat 14 Nov 11:45 AM PST. The adapter's move at 9c822e5ab94f is taken. **Do not wait for the collect branch: push step 5's commit 91e8e4b04843 straight to `architecture` by the branch's rules (fetch, merge `origin/architecture`, compile, `git push origin HEAD:architecture`, never force), now.** It touches no file the rename moves? Check; if it does, wait for NAMES2's line that the rename is on `architecture` and carry across it. The secret scan's refusal on the root `pyproject.toml`'s dev-group line: leaving `verity-torch` out of that group was right; I tell infra. Then your final message.
-
