@@ -40,8 +40,7 @@ when:
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``);
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
-  integration, where P16's suite doesn't look, or only from a file the public export doesn't copy, or one given another
-  caller, names a file that, in the change's tree, runs it
+  integration, where P16's suite doesn't look, or one given another caller, names a file that, in the change's tree, runs it
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
   declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
   the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
@@ -203,7 +202,7 @@ FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
 LINTS = (LINT, REPO_LINT)
 #: P16's lint (every CLI command has a caller) and its list, whose ``public`` table names each command run from outside the
-#: integration, or only from a file the public export doesn't copy, with the file that runs it
+#: integration, with the file that runs it
 CALLERS_MODULE = f"{LINT}/test_p16_cli_callers.py"
 CALLERS_LIST = f"{LINT}/allowlists/p16_cli_callers.json"
 PUBLIC = "public"
