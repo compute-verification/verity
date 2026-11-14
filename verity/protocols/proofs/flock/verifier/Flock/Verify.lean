@@ -1,12 +1,13 @@
-/-
-The verifier as one total function of its inputs, `Accept` or `Reject reason`.
-`verifyRep` is `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` on one rep's replay transcript; `verify` adds the session checks S1–S18.
--/
 module
 
 public import Flock.Statement
 public import Flock.Ligerito
 public import Flock.Opening
+
+/-!
+The verifier as one total function of its inputs, `Accept` or `Reject reason`.
+`verifyRep` is `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` on one rep's replay transcript; `verify` adds the session checks S1–S18.
+-/
 
 @[expose] public section
 

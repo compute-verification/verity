@@ -41,7 +41,7 @@ def link(i: str, a: str, b: str, beta: int | None, unmediated: str | None = None
 def view_site() -> dict:
     """A site as a registration log's view writes it: a host behind a network certifier, which splits its uplink, and
     a memory challenger; beside them a second host behind a second certifier, a link between the two hosts, the second
-    host's bare uplink, which states no capacity and says why no certifier splits it, and an auditor's host with a
+    host's bare uplink, which states no capacity and says why no certifier splits it, and an auditor's device with a
     link to the first host. Each field a location may state is stated on one of them."""
     return {
         "sheets": [],
@@ -97,7 +97,7 @@ def test_a_link_that_is_no_link_of_the_site_is_refused():
 ])
 def test_a_link_that_joins_no_certifier_and_host_is_refused(name, joins):
     """The certifier's half to the outside, a host's bare uplink, a link between two hosts, the memory challenger's,
-    an auditor's host's."""
+    an auditor's device's."""
     assert refusal(view_site(), name, KEY0) == (f"link {name}: it joins {joins}, not a network certifier and a host; "
                                                  f"{LINKS}")
 

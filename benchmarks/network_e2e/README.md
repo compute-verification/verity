@@ -123,10 +123,10 @@ It does not cover:
 - **A served link's count check, `NetworkServedCounts_v1`.** It has no prover, so a served run gets N2's verdict of
   record and no proof.
 - **Late's head checks.** Late isn't one of `n2_zk`'s members, so it is refused by N2 alone.
-- **A real link, or an auditor's host.** The rehearsal runs over loopback, its check plays the ZK server and the
+- **A real link, or an auditor's device.** The rehearsal runs over loopback, its check plays the ZK server and the
   challenger in one process, and it publishes witness (the records and the certifier's salts) so that its check can be
   replayed. Off the gate the certifier is a process on whatever host ran the rehearsal. Against an endpoint on that
-  host's loopback, that host is the developer's node, not an auditor host; the report's `where` says which. `n2_zk` runs the
+  host's loopback, that host is the developer's node, not an auditor device; the report's `where` says which. `n2_zk` runs the
   prover, the ZK server and the verifier on one node.
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut.
 

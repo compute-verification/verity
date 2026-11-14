@@ -13,12 +13,12 @@ SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`
 (`Registration.Entry.refusal`), and the views the protocols read. Its log holds site entries only; the spec's
 declarations of a day's circuit are the registration log's (`Core.Registration`). Its checks are the spec's, clause for
 clause and in the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
-`verity.device` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
+`verity.accelerator` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
 figures (`DeviceFigures`, the spec's `Definitions/Core/DeviceFigures.lean`), nonnegative rationals (`Figure`, the spec's
 `ℚ≥0`).
 
 The digests are parameters as in the spec (`Registration.Digests`); the deployed ones (`Registration.sha512`) are
-`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.device` writes, under `verity/registration/site/v2`,
+`SHA-512(tag ‖ 0 ‖ canon(j))` over the JSON `verity.accelerator` writes, under `verity/registration/site/v2`,
 `verity/registration/sheet/v2` and `verity/registration/genesis/v1`,
 a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
 `registered`, `host`) are functions of the site alone, but `device`, which reads the auditor's sheet too.
@@ -40,7 +40,7 @@ registered location's. -/
 inductive Kind
   | site
   | host
-  | device
+  | accelerator
   | memory
   | certifier
   | challenger
@@ -52,13 +52,13 @@ inductive Kind
 def Kind.parents : Kind → List (Option Kind)
   | .site => [none]
   | .host => [some .site]
-  | .device => [some .host]
-  | .memory => [some .device, some .host]
+  | .accelerator => [some .host]
+  | .memory => [some .accelerator, some .host]
   | .certifier | .challenger => [some .site, some .auditorHost]
   | .auditorHost => [some .site]
   | .outside => []
 
-/-- The pairs of kinds a link may join, in either order. No link ends at an auditor's host. -/
+/-- The pairs of kinds a link may join, in either order. No link ends at an auditor's device. -/
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
 
@@ -171,11 +171,11 @@ the bits a second read from or written to a host's leaves of that tier together,
 empty on every other location. `key` is the public key one of the auditor's devices or hosts is registered under, and
 `scheme` the id of the signature scheme that key is of (`SCHEMES`), which says how many levels of keys stand under it;
 both empty on every other location.
-`drift` is how far the clock of an auditor's host may run from real time, as a share of it, and it is the drift of
+`drift` is how far the clock of an auditor's device may run from real time, as a share of it, and it is the drift of
 every device of the auditor's in that host, which reads that clock (`Site.drift?`); none on every other location, and a
 device at the site, or in a host that states none, times nothing. `timeUnit` is the Site's unit of time in seconds, on a
 location of kind `site` and none on every other (`Site.timeUnit`). `timebase` is the SKU of the time base the clock of
-an auditor's host runs on, the card the auditor reads the clock's drift from; none on every other location. -/
+an auditor's device runs on, the card the auditor reads the clock's drift from; none on every other location. -/
 structure Loc where
   id : String
   kind : Kind
@@ -408,7 +408,7 @@ def Refs : Prop :=
   (∀ x ∈ e.locs, ∀ p ∈ x.parent, (S.add e).Known p) ∧
     ∀ k ∈ e.links, (S.add e).Known k.ends.1 ∧ (S.add e).Known k.ends.2
 
-/-- `kind`: parents and tiers by kind, so an auditor's host is at the site and holds only the auditor's devices; links
+/-- `kind`: parents and tiers by kind, so an auditor's device is at the site and holds only the auditor's devices; links
 between kinds a link may join, each at a positive capacity or, where it says no certifier splits it, at none, and each
 certifier splitting exactly one uplink. -/
 def Kinds : Prop :=
@@ -421,7 +421,7 @@ def Kinds : Prop :=
 /-- `sheetDigest`: each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered
 sheet's digest. -/
 def Sheets : Prop :=
-  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .device → x.sheet ∈ (S.add e).sheets.map D.sheet
+  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .accelerator → x.sheet ∈ (S.add e).sheets.map D.sheet
 
 /-- `figures`: each new sheet is accepted against the auditor's sheet `a` for its SKU: its figures against `a`'s
 estimate, and its memory figures exactly `a`'s. -/
@@ -454,11 +454,11 @@ def Timed : Prop :=
 /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
 def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
-    ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
+    ∀ x ∈ (S.add e).locs, x.kind = .accelerator → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
-/-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key and its
+/-- `owner`: each new certifier, challenger or auditor's device is the auditor's own, owned by it, with its key and its
 key's scheme, one the check knows (`SCHEMES`); every other new location is the prover's and states no scheme; and each
-new auditor's host states its time base, the auditor's for it, held as its key is, and the auditor's figure for its
+new auditor's device states its time base, the auditor's for it, held as its key is, and the auditor's figure for its
 clock, below 1 where there is one, and no other new location states a time base or a clock. -/
 def Owners : Prop :=
   ∀ x ∈ e.locs,
@@ -533,7 +533,7 @@ def Complete (D : Digests) (A : Auditor) (S : Site) : Prop :=
       ∃ x ∈ S.locs, x.id = f.1 ∧ x.kind = .memory ∧ x.parent = some h.id) ∧
     ∀ g ∈ A.hosts.lookup h.id,
       (∀ k ∈ g.cards, k.2 ≤ (S.locs.filter fun d =>
-        d.kind = .device ∧ d.parent = some h.id ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
+        d.kind = .accelerator ∧ d.parent = some h.id ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
       ∀ w ∈ g.ways, ∃ k ∈ S.links, k.id = w.1 ∧ (k.ends.1 = h.id ∨ k.ends.2 = h.id) ∧ k.β = w.2
 
 instance instDecidableComplete (D : Digests) (A : Auditor) (S : Site) : Decidable (Complete D A S) := by
@@ -561,7 +561,7 @@ namespace Site
 variable (S : Site)
 
 /-- The devices, in the log's order: the locations that compute. -/
-def units : List String := (S.locs.filter (·.kind = .device)).map (·.id)
+def units : List String := (S.locs.filter (·.kind = .accelerator)).map (·.id)
 
 /-- A location or a link is registered under `i`. -/
 def registered (i : String) : Bool := S.locs.any (·.id == i) || S.links.any (·.id == i)
@@ -569,7 +569,7 @@ def registered (i : String) : Bool := S.locs.any (·.id == i) || S.links.any (·
 /-- Device `d`'s data sheet, or `none` when `d` is no device or names no registered sheet. -/
 def sheetOf (digest : Sheet → String) (d : String) : Option Sheet :=
   match S.loc? d with
-  | some x => if x.kind = .device then S.sheet? digest x else none
+  | some x => if x.kind = .accelerator then S.sheet? digest x else none
   | none => none
 
 /-- The classes of op a device model counts a tick (`Accounting.OpClass`): tensor-core MACs, CUDA-core ops and oracle
@@ -615,13 +615,13 @@ def host (i : String) : Option String :=
   (S.loc? i).bind fun x =>
     if x.kind = .host then some x.id else (S.host? x).filter fun h => S.kind? h = some .host
 
-/-- The auditor's host whose clock device `d` of the auditor's reads: the one it is in. None for a device at the
+/-- The auditor's device whose clock device `d` of the auditor's reads: the one it is in. None for a device at the
 site. -/
 def clock? (d : String) : Option String :=
   ((S.loc? d).bind fun x => x.parent).filter fun p => S.kind? p = some .auditorHost
 
 /-- How far the clock device `d` of the auditor's reads may run from real time, as a share of it: what the auditor's
-host it is in states. None for a device at the site or in a host that states none. -/
+device it is in states. None for a device at the site or in a host that states none. -/
 def drift? (d : String) : Option Figure := (S.clock? d).bind fun h => (S.loc? h).bind fun x => x.drift
 
 /-- `x` is `i` or lies under it, following at most `n` parents. -/
@@ -636,7 +636,7 @@ with an end in it. -/
 def part (digest : Sheet → String) (i : String) : Site :=
   let locs := S.locs.filter (S.within i (S.locs.length + 1))
   let ids := locs.map (·.id)
-  let digests := (locs.filter (·.kind = .device)).map (·.sheet)
+  let digests := (locs.filter (·.kind = .accelerator)).map (·.sheet)
   ⟨S.sheets.filter (digests.contains <| digest ·), locs,
     S.links.filter fun k => ids.contains k.ends.1 || ids.contains k.ends.2⟩
 
@@ -697,8 +697,10 @@ def GENESIS : String := "verity/registration/genesis/v1"
 def tagged (tag : String) (j : Json) : String :=
   Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ ((Flock.canon j).toOption.getD "").toUTF8))
 
+/-- A kind's word in the site format (`SITE`, `verity/registration/site/v1`). `.accelerator`'s word stays `"device"`: it
+is the format's, and every registration's digest covers it. -/
 def Kind.name : Kind → String
-  | .site => "site" | .host => "host" | .device => "device" | .memory => "memory" | .certifier => "certifier"
+  | .site => "site" | .host => "host" | .accelerator => "device" | .memory => "memory" | .certifier => "certifier"
   | .challenger => "challenger" | .auditorHost => "auditor-host" | .outside => "outside"
 
 def Tier.name : Tier → String
@@ -819,7 +821,7 @@ def Loc.ofJson (j : Json) : V Loc := do
     "tier", "time_unit", "timebase"] "a location"
   let get := fun k => Flock.J.get j k "a location"
   pure { id := ← Flock.J.str j "id" "a location",
-         kind := ← byName [.site, .host, .device, .memory, .certifier, .challenger, .auditorHost, .outside] Kind.name
+         kind := ← byName [.site, .host, .accelerator, .memory, .certifier, .challenger, .auditorHost, .outside] Kind.name
            (← get "kind") "a location's kind",
          parent := ← optOf (Flock.J.asStr · "a location's parent") (← get "parent"),
          owner := ← byName [.prover, .auditor] Owner.name (← get "owner") "a location's owner",

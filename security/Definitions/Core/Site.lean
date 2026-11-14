@@ -20,11 +20,11 @@ counts are public.
 * **Locations** (`Site.Loc`): the site at the root, which states the Site's unit of time (`Site.timeUnit`); its hosts,
   the prover's machines; a host's devices; memory leaves by tier and bytes under a device or a host; and the auditor's
   own: its hosts, machines of the auditor's at the site, and its devices, the network certifiers and memory challengers,
-  each at the site or in one of the auditor's hosts (`Site.Kind.parents`). A host is registered hardware with no compute
+  each at the site or in one of the auditor's devices (`Site.Kind.parents`). A host is registered hardware with no compute
   rate: the Site's compute is its devices'. A host states its on-chip state and, for a tier, the rate its leaves of
   that tier share; a memory leaf directly under a host states its own rate. A device names its sheet by digest. The
   auditor's devices and hosts carry their keys, each with the scheme the key is of (`Site.SCHEMES`), and an auditor's
-  host states the time base its clock runs on and how far that clock may run from real time.
+  device states the time base its clock runs on and how far that clock may run from real time.
 * **Sheets** (`Site.Sheet`): a card, the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the
   SKU, the tensor clock and the peak rate of each operand class) and its memory figures. A device's figures are its
   sheet's, and its device model (`Accounting.Device`) is read off them (`Site.device`).
@@ -60,7 +60,7 @@ them), and refused by the first check it fails (`Registration.Entry.refusal`):
 | `sheetDigest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.Accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's rate and bytes for it (`Rates`), each new host the auditor's on-chip state and shared rates for it (`Chips`), and each new location of kind `site` the Site's unit of time (`Timed`) |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key and its key's scheme, and every other new location is the prover's; each new auditor's host states the auditor's time base and clock figure for it |
+| `owner` | each new certifier, challenger or auditor's device is the auditor's own, with its key and its key's scheme, and every other new location is the prover's; each new auditor's device states the auditor's time base and clock figure for it |
 | `uncertified` | onsite: every boundary link is certified, or says why no certifier splits it |
 | `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
@@ -100,7 +100,7 @@ registered location's. -/
 inductive Kind
   | site
   | host
-  | device
+  | accelerator
   | memory
   | certifier
   | challenger
@@ -109,19 +109,19 @@ inductive Kind
   deriving DecidableEq, Repr
 
 /-- The kinds of parent a location of each kind may have, `none` being the root: the site at the root, a host under the
-site, a device under a host, memory under a device or a host, an auditor's host at the site, and the auditor's devices
+site, a device under a host, memory under a device or a host, an auditor's device at the site, and the auditor's devices
 at the site or in one of its hosts. -/
 def Kind.parents : Kind → List (Option Kind)
   | .site => [none]
   | .host => [some .site]
-  | .device => [some .host]
-  | .memory => [some .device, some .host]
+  | .accelerator => [some .host]
+  | .memory => [some .accelerator, some .host]
   | .certifier | .challenger => [some .site, some .auditorHost]
   | .auditorHost => [some .site]
   | .outside => []
 
 /-- The pairs of kinds a link may join, in either order: two hosts, a host and the outside, a certifier and a host or
-the outside, and a memory challenger and a host. No link ends at an auditor's host. -/
+the outside, and a memory challenger and a host. No link ends at an auditor's device. -/
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
 
@@ -169,7 +169,7 @@ a sheet's is, and none on every other location. `shared` is, for a tier, the bit
 host's leaves of that tier together, where one ceiling holds them all; empty on every other location. `key` is the
 public key one of the auditor's devices or hosts is registered under, and `scheme` the id of the signature scheme that
 key is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location.
-`timebase` is the SKU of the time base the clock of an auditor's host runs on, and `drift` how far that clock may run
+`timebase` is the SKU of the time base the clock of an auditor's device runs on, and `drift` how far that clock may run
 from real time, as a share of it: the drift of every device of the auditor's in that host, which reads that clock. Both
 are none on every other location, and a device at the site, or in a host that states no drift, times nothing.
 `timeUnit` is the Site's unit of time in seconds, on a location of kind `site` and none on every other
@@ -483,7 +483,7 @@ CUDA-core ops or oracle queries a tick, or its side channels, so they are parame
 `none` when the Site states no unit of time, and for anything else. -/
 def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) {ι : Type} (cuda oracle : ℕ)
     (cap : ι → ℕ) : Option (Accounting.Device ι) :=
-  if x.kind = .device then
+  if x.kind = .accelerator then
     S.timeUnit.bind fun tick => (S.sheet? digest x).bind fun k => (A.sheet k.sku).map fun a =>
       let f := k.figures.bounding (A.estimate a)
       { chip := k.chip
@@ -512,7 +512,7 @@ def Refs : Prop :=
   (∀ x ∈ e.locs, ∀ p ∈ x.parent, (S.add e).Known p) ∧
     ∀ k ∈ e.links, (S.add e).Known k.ends.1 ∧ (S.add e).Known k.ends.2
 
-/-- `kind`: each new location sits under a parent of a kind its own allows, so an auditor's host is at the site and
+/-- `kind`: each new location sits under a parent of a kind its own allows, so an auditor's device is at the site and
 holds only the auditor's devices, and has a tier exactly when it is memory; each new link joins two different ends, of
 kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; and each certifier
 splits exactly one uplink, the far ends of its links being one host and the outside. -/
@@ -526,7 +526,7 @@ def Kinds : Prop :=
 /-- `sheetDigest`: each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered
 sheet's digest. -/
 def Sheets : Prop :=
-  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .device → x.sheet ∈ (S.add e).sheets.map D.sheet
+  (∀ k ∈ e.sheets, (A.sheet k.sku).isSome) ∧ ∀ x ∈ e.locs, x.kind = .accelerator → x.sheet ∈ (S.add e).sheets.map D.sheet
 
 /-- `figures`: each new sheet is accepted against the auditor's sheet `a` for its SKU: its figures against `a`'s estimate
 (`DeviceFigures.Accepted`: the SKU `a`'s, the clock and every peak rate within the tolerance of `a`'s both ways, every
@@ -559,11 +559,11 @@ def Chips : Prop :=
 /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
 def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
-    ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
+    ∀ x ∈ (S.add e).locs, x.kind = .accelerator → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
-/-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key and its
+/-- `owner`: each new certifier, challenger or auditor's device is the auditor's own, owned by it, with its key and its
 key's scheme, one the check knows (`SCHEMES`); every other new location is the prover's and states no scheme; and each
-new auditor's host states its time base, the auditor's for it, held as its key is, and the auditor's figure for its
+new auditor's device states its time base, the auditor's for it, held as its key is, and the auditor's figure for its
 clock, below 1 where there is one, and no other new location states a time base or a clock. -/
 def Owners : Prop :=
   ∀ x ∈ e.locs,
@@ -701,7 +701,7 @@ def Complete (D : Digests) (A : Auditor) (S : Site) : Prop :=
     (∀ f ∈ A.memory, f.2.host = h.id → ∃ x ∈ S.locs, x.id = f.1 ∧ x.kind = .memory ∧ x.parent = some h.id) ∧
     ∀ g ∈ A.hosts.lookup h.id,
       (∀ k ∈ g.cards, k.2 ≤ (S.locs.filter fun d =>
-        d.kind = .device ∧ d.parent = some h.id ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
+        d.kind = .accelerator ∧ d.parent = some h.id ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
       ∀ w ∈ g.ways, ∃ k ∈ S.links, k.id = w.1 ∧ (k.ends.1 = h.id ∨ k.ends.2 = h.id) ∧ k.β = w.2
 
 instance instDecidableComplete (D : Digests) (A : Auditor) (S : Site) : Decidable (Complete D A S) := by

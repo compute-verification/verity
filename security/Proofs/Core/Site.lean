@@ -293,7 +293,7 @@ def auditor : Auditor :=
 
 /-- A device under `parent` with sheet `k`. -/
 def device (id parent : String) (k : Sheet) : Loc :=
-  { id, kind := .device, parent := some parent, sheet := digests.sheet k }
+  { id, kind := .accelerator, parent := some parent, sheet := digests.sheet k }
 
 /-- A memory leaf of tier `t` under the device `parent`, holding `bytes`. -/
 def memory (id parent : String) (t : Tier) (bytes : ℕ) : Loc :=
@@ -339,7 +339,7 @@ def remote : Entry := .site "genesis"
 def next (locs : List Loc) (links : List Link := []) (sheets : List Sheet := []) (previous := "genesis+") : Entry :=
   .site previous ⟨sheets, locs, links⟩
 
-/-- The auditor's host `vm0`, at the site, with its time base and its clock's drift. -/
+/-- The auditor's device `vm0`, at the site, with its time base and its clock's drift. -/
 def vm0 : Loc := { own "vm0" .auditorHost "site0" "key1" with timebase := some "tb0", drift := some (1 / 2000) }
 
 /-- A later entry for each check, with the refusal it samples on the onsite site. -/

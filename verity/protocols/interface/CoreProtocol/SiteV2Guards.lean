@@ -20,7 +20,7 @@ private def us : Figure := if h : 0 ≤ mkRat 1 1000000 then ⟨_, h⟩ else ⟨
 private def root : Loc := { id := "site0", kind := .site, timeUnit := some ns }
 private def dram (bw : Option Nat) (bytes : Nat := 1 <<< 31) : Loc :=
   { id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes, bw }
-private def gpu : Loc := { id := "gpu0", kind := .device, parent := some "node0", sheet := "s" }
+private def gpu : Loc := { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := "s" }
 private def hbm (bw : Option Nat) : Loc :=
   { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30, bw }
 private def auditor : Registration.Auditor :=
@@ -126,7 +126,7 @@ private def D : Registration.Digests := ⟨fun k => k.sku, fun _ => "", fun _ =>
 private def card : Sheet :=
   { figures := ⟨"k", ⟨0, by decide⟩, fun _ => ⟨0, by decide⟩⟩, bw := 1, chip := 1, mem := 1 <<< 30 }
 private def gpus (n : Nat) : List Loc :=
-  (List.range n).map fun i => { id := s!"gpu{i}", kind := .device, parent := some "node0", sheet := "k" }
+  (List.range n).map fun i => { id := s!"gpu{i}", kind := .accelerator, parent := some "node0", sheet := "k" }
 private def node (xs : List Loc) : Site := empty.add { sheets := [card], locs := [root, host] ++ xs }
 private def listed (n : Nat) : Registration.Auditor :=
   { withDisk with hosts := [("node0", { chip := 8002732032, cards := [("k", n)] })] }
@@ -192,7 +192,7 @@ private def keyed : Registration.Auditor := keyedAt root2
 #guard (bare (some "a stand-in")).toJson.compress ==
   "{\"beta\":1000000000,\"ends\":[\"node0\",\"outside\"],\"id\":\"eth0\",\"latency\":0," ++
   "\"unmediated\":\"a stand-in\"}"
--- an auditor's host: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
+-- an auditor's device: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
 -- under no host of the prover's, holds no device and no memory leaf, and no link ends at it
 private def vm (parent : String := "site0") : Loc :=
   { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2,
@@ -217,14 +217,14 @@ private def vmKeyed : Registration.Auditor :=
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with owner := .prover }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with key := "k9" }] })
 #guard !decide (Entry.Owners keyed { locs := [root, vm] })
--- its time base: an auditor's host states the auditor's for it, held as its key is; refused with none, with another,
+-- its time base: an auditor's device states the auditor's for it, held as its key is; refused with none, with another,
 -- or where the auditor has none for the host; no other location states one, the auditor's device in the host neither
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := none }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := some "tb1" }] })
 #guard !decide (Entry.Owners { vmKeyed with timebases := [] } { locs := [root, vm] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, vm, { inVm with timebase := some "tb0" }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { host with timebase := some "tb0" }] })
--- its clock's drift: an auditor's host states the auditor's figure for its clock, or none where the auditor has none;
+-- its clock's drift: an auditor's device states the auditor's figure for its clock, or none where the auditor has none;
 -- refused with another, at 1 or more, and on any other location, the auditor's device in the host among them
 private def drifts (drift : List (String × Figure)) : Registration.Auditor := { vmKeyed with drift }
 private def slow : Loc := { vm with drift := some tenth }

@@ -456,9 +456,9 @@ theorem siteRefusal : (Core.Site.Entry.refusal D A c S e).map refusal =
 /-- The devices under a host of one SKU are as many in code as in the spec. -/
 theorem cards_site (i sku : String) :
     ((site S).locs.filter fun d =>
-        d.kind = .device ∧ d.parent = some i ∧ ((site S).sheet? (digests D).sheet d).map (·.sku) = some sku).length =
+        d.kind = .accelerator ∧ d.parent = some i ∧ ((site S).sheet? (digests D).sheet d).map (·.sku) = some sku).length =
       (S.locs.filter fun d =>
-        d.kind = .device ∧ d.parent = some i ∧ (S.sheet? D.sheet d).map (·.sku) = some sku).length := by
+        d.kind = .accelerator ∧ d.parent = some i ∧ (S.sheet? D.sheet d).map (·.sku) = some sku).length := by
   rw [site_locs, List.filter_map, List.length_map]
   refine congrArg List.length (List.filter_congr fun d _ => decide_eq_decide.mpr ?_)
   simp [sheet?_site, kind_eq_iff, ofKind]
@@ -466,12 +466,12 @@ theorem cards_site (i sku : String) :
 /-- A host's cards and ways out are registered in code exactly when they are in the spec. -/
 theorem inventory_iff (i : String) (g : Core.Site.HostFigures) :
     ((∀ k ∈ (hostFigures g).cards, k.2 ≤ ((site S).locs.filter fun d =>
-          d.kind = .device ∧ d.parent = some i ∧
+          d.kind = .accelerator ∧ d.parent = some i ∧
             ((site S).sheet? (digests D).sheet d).map (·.sku) = some k.1).length) ∧
         ∀ w ∈ (hostFigures g).ways,
           ∃ k ∈ (site S).links, k.id = w.1 ∧ (k.ends.1 = i ∨ k.ends.2 = i) ∧ k.β = w.2) ↔
       (∀ k ∈ g.cards, k.2 ≤ (S.locs.filter fun d =>
-          d.kind = .device ∧ d.parent = some i ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
+          d.kind = .accelerator ∧ d.parent = some i ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
         ∀ w ∈ g.ways, ∃ k ∈ S.links, k.id = w.1 ∧ (k.ends.1 = i ∨ k.ends.2 = i) ∧ k.β = w.2 := by
   refine and_congr (forall₂_congr fun k _ => ?_) (forall₂_congr fun w _ => ?_)
   · exact iff_of_eq (congrArg (k.2 ≤ ·) (cards_site D S i k.1))

@@ -419,7 +419,7 @@ def hex (c : Char) : String := String.ofList (List.replicate 128 c)
 def locs : List Loc :=
   [{ id := "site0", kind := .site, timeUnit := some (fig 1 1000000000) },
    { id := "node0", kind := .host, parent := some "site0", chip := some (1 <<< 25) },
-   { id := "gpu0", kind := .device, parent := some "node0", sheet := Site.Registration.sha512.sheet sheet },
+   { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := Site.Registration.sha512.sheet sheet },
    { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30 },
    { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0", scheme := lms },
    { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1", scheme := lms }]
@@ -494,7 +494,7 @@ private def fast : Sheet :=
 private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := (64 <<< 30) + 1 }
 #guard refusal .remote [site ⟨[sheet], locs.take 3 ++ [over], []⟩] == some (0, .site .capacity)
 #guard refusal .onsite entries { auditor with key := fun _ => some "k1" } == some (0, .site .owner)
--- an auditor's host: the auditor's own, at the site, with its key and its time base; a certifier in it registers as
+-- an auditor's device: the auditor's own, at the site, with its key and its time base; a certifier in it registers as
 -- one at the site does; without the auditor's key or time base for the host, or with the host under the prover's,
 -- the entry is refused
 private def vm0 : Loc :=

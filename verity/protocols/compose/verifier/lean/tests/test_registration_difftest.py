@@ -69,7 +69,7 @@ ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d
          {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
 DAY0 = G.Declaration(0, "1" * 128, ("block0",))
 EXAMPLE = (G.site((SHEET,), LOCS, LINKS), G.Information(ITEMS), DAY0)
-#: An auditor's host at the site (the Lean's `vm0`), and `AUDITOR` holding its key and time base (`withVm`).
+#: An auditor's device at the site (the Lean's `vm0`), and `AUDITOR` holding its key and time base (`withVm`).
 VM0 = S.Loc("vm0", "auditor-host", "site0", owner="auditor", key="k2", scheme=LMS, timebase="tb0")
 WITH_VM = dataclasses.replace(AUDITOR, keys=(*AUDITOR.keys, ("vm0", "k2", LMS)), timebases=(("vm0", "tb0"),))
 
@@ -84,7 +84,7 @@ def drifted(*drift: tuple[str, Fraction]) -> G.Auditor:
 
 
 def in_vm(host: S.Loc = VM0, drift: Fraction | None = None) -> list:
-    """The example's site with its certifier in the auditor's host `host`, registered after it (the Lean's `inVm`),
+    """The example's site with its certifier in the auditor's device `host`, registered after it (the Lean's `inVm`),
     the certifier stating the drift `drift`."""
     locs = tuple(dataclasses.replace(x, parent="vm0", drift=drift) if x.id == "cert0" else x for x in LOCS)
     return [G.site((SHEET,), (*locs, host), LINKS)]
@@ -196,7 +196,7 @@ FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": [
 #: Site entries that, after the example's, each fail one check of their own: an uplink no certifier splits
 #: (`uncertified`, onsite), a host's memory no challenger reaches (`challenger-reach`, onsite), a device's memory over its
 #: sheet's (`capacity`), a sheet the auditor has no data sheet for (`sheet-digest`), a certifier that splits no uplink
-#: (`kind`), an auditor's host whose key the auditor does not hold (`owner`; `WITH_VM` holds it). The second is checked
+#: (`kind`), an auditor's device whose key the auditor does not hold (`owner`; `WITH_VM` holds it). The second is checked
 #: under `WIDE`, which has figures for its host and DRAM.
 TWISTS = (G.site(links=(S.Link("l3", ("node0", S.OUTSIDE), 1, 0),)),
           G.site(locs=(S.Loc("node1", "host", "site0", chip=1 << 25),

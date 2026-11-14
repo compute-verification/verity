@@ -286,7 +286,8 @@ def _entry(v: object) -> dict[str, object]:
     return {"value": v, "unit": "-", "mark": "ceiling", "source": "a test's card"}
 
 
-CARD_FILE = {"sku": "sim-file", "sm": {"count": _entry(2)}, "clock": {"sm": _entry(1530)},
+CARD_FILE = {"sku": "sim-file", "kind": "gpu", "sm": {"count": _entry(2)},
+             "clock": {"default": "sm", "sm": _entry(1530)},
              "rate": {"tensor": _entry(1024)}, "memory": {"bandwidth": _entry(1.23456e12)},
              "store": {"reg": _entry(65536), "reg_extra": _entry(0), "smem": _entry(262144), "l2": _entry(1 << 20),
                        "dram": _entry(16 << 30)}}
@@ -930,7 +931,7 @@ G_IN_VM = replace(G_CERT, parent="vm0")
 G_UPLINKS = (Link("up0", ("node0", "cert0"), 1, 0), Link("up1", ("cert0", OUTSIDE), 1, 0))
 G_KEYED = replace(G_AUDITOR, keys=(("cert0", "k0", ROOT2),))
 VM_KEYED = replace(G_KEYED, keys=(*G_KEYED.keys, ("vm0", "k1", ROOT2)), timebases=(("vm0", "tb0"),))
-"""`SiteV2Guards.lean`'s certifier, at the site and in the auditor's host `vm0`, its two uplinks, and the auditors
+"""`SiteV2Guards.lean`'s certifier, at the site and in the auditor's device `vm0`, its two uplinks, and the auditors
 that hold the certifier's key and, beside it, the host's key and time base."""
 
 
@@ -939,7 +940,7 @@ def g_vm(parent: str = "site0") -> Loc:
 
 
 def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
-    """An auditor's host, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
+    """An auditor's device, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
     it, it is under no host of the prover's, holds no device and no memory leaf, and no link ends at it. `Owners`: it
     is the auditor's own, with its key, and states its time base, the auditor's for it, held as its key is: refused
     with none, with another, or where the auditor has none for the host; no other location states one, the auditor's
@@ -978,7 +979,7 @@ def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
 
 
 def test_a_clocks_drift_is_its_auditors_hosts() -> None:
-    """`Owners`: an auditor's host states the auditor's figure for its clock, or none where the auditor has none;
+    """`Owners`: an auditor's device states the auditor's figure for its clock, or none where the auditor has none;
     refused with another, at 1 or more, and on any other location, the auditor's device in the host among them. The
     clock a device of the auditor's reads is its host's, with the host's drift (`Site.clock`, `Site.drift`); a device
     at the site reads none, and neither does the host itself."""

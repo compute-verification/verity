@@ -159,7 +159,7 @@ ENTRIES = {
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
 VM0 = Loc("vm0", "auditor-host", "site0", "auditor", key="dummy-vm0-key", scheme=SCHEME, timebase="tb0")
 HOUSED = Entry("", locs=(VM0, Loc("chal9", "challenger", "vm0", "auditor", scheme=SCHEME)))
-"""An auditor's host at the site with a second memory challenger in it; the onsite auditor holds their keys and the
+"""An auditor's device at the site with a second memory challenger in it; the onsite auditor holds their keys and the
 host's time base."""
 LATERS = [*(e for _, e in ENTRIES.values()), HOUSED]
 
@@ -401,7 +401,7 @@ def test_the_sample_site(server):
 
 
 def test_an_auditors_host(server):
-    """An auditor's host with a challenger in it is taken with the host's key and time base, and refused by `owner`
+    """An auditor's device with a challenger in it is taken with the host's key and time base, and refused by `owner`
     without the key, with another time base than the auditor's or with none, and by `kind` under a host of the
     prover's, on both sides; in the views the host and the device in it are in no host of the prover's."""
     log = grown()

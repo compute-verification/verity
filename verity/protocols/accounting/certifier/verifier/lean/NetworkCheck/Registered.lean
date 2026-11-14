@@ -130,7 +130,7 @@ private def key1 : String := String.ofList (List.replicate 96 'b')
 certifier, and a memory challenger. -/
 private def exampleLocs (key : String) : List Loc :=
   [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" },
-   { id := "gpu0", kind := .device, parent := some "node0", sheet := "sheet0" },
+   { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := "sheet0" },
    { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30 },
    { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key },
    { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1" }]

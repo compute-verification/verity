@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from verity.definitions.numerics import derived_rows as DR
@@ -164,12 +164,9 @@ def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, 
 
 
 # ---------------------------------------------------------------------------------------------------- FA2 (cc 10.0 and 12.0)
-def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int | None) -> dict[str, Any]:
-    """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count.  Only a swapped launch
-    reads `max_seqlen_k`; one given none (a FULL graph's on a device that binds no max_model_len) is refused."""
+def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int) -> dict[str, Any]:
+    """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count."""
     if max(qlens) == 1 and NH > KVH and D % 8 == 0:
-        if max_seqlen_k is None:
-            raise Unmodelled("FA2's split count reads max_seqlen_k and the launch has none: a FULL graph's is the device's max_model_len")
         ns = W.fa2_num_splits(batch, KVH, NH // KVH, max_seqlen_k, D, sms)
         return {"swapped": True, "BN": W.fa2_align_kblock_n(D) if ns == 1 else W.fa2_split_kblock_n(D), "NS": ns,
                 "batch": batch, "max_seqlen_k": max_seqlen_k}
@@ -201,8 +198,9 @@ def launch(device: DeviceBindings, qlens: list[int], klens: list[int], heads: tu
                 for q, k, ns in zip(qlens, klens, sp["NS"])]
         return sp["NS"], rows, {"fa3": {"BM": sp["BM"], "BN": sp["BN"], "static_splits": sp["static"]}}
     full = mode == "FULL"
+    # `device_of` binds no FA2 device without its max_model_len; one built without it fails where the split count reads it
     la = fa2_launch(qlens, NH=NH, KVH=KVH, D=D, sms=device.sms, batch=padded if full else len(qlens),
-                    max_seqlen_k=device.max_model_len if full else max(klens))
+                    max_seqlen_k=cast(int, device.max_model_len) if full else max(klens))
     rows = [fa2_attention_rows(q, k, la, NH=NH, KVH=KVH, D=D, dot=device.dot) for q, k in zip(qlens, klens)]
     return [la["NS"]] * len(qlens), rows, {"fa2": la}
 
