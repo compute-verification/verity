@@ -7,6 +7,7 @@ from contextlib import contextmanager
 
 from verity_vllm.program.frontend import targets as T
 from verity_torch.frontend.outcomes import refuse
+from verity_torch.frontend.rules.profile import read_batch_invariance
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 __all__ = ["launch_batch_declared", "launch_region", "traced_launch_tokens"]
@@ -189,6 +190,9 @@ def observe_target_profile(profile: TargetProfile | None) -> None:
 
 def active_target_profile() -> TargetProfile:
     return _OBSERVED.get("target_profile") or DEFAULT_TARGET
+
+
+read_batch_invariance(lambda: active_target_profile().batch_invariant)
 
 
 def observe_attention_impls(impls: dict) -> None:

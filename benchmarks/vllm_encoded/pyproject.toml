@@ -8,8 +8,9 @@ testpaths = ["tests"]
 # the word codecs' references, which the layouts must equal, and (the KV-append capture's CPU references) the KV codec
 # with its key derivation, the remote bandwidth audit's codec it takes (on the commitments) and the circuits' E4M3
 # append Definition; the kernels open through cuda_lib.py
-inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/codec_tensor/wide.py",
-          "benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/cuda_lib.py",
+inputs = ["verity/protocols/accounting/poub/prover/word_codec/paged.py",
+          "benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/codec_tensor/wide.py",
+          "verity/protocols/accounting/poub/prover/word_codec/kv.py", "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py", "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",

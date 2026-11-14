@@ -27,7 +27,7 @@ What code outside this directory may use. Everything else here is internal.
 |---|---|
 | `pous-setup COMMAND` (the Lean executable, `check/`) | The setup protocol of record, `verity/pous/p2/v4/setup` (`PousCheck.SetupProtocol.protocol`), on the core protocols' command line: `id`, `check PARAMS COMMITMENT EVIDENCE`, or `serve`, which reads one case `{"commitment", "evidence", "params"}` a line and writes one answer a line. It accepts `C*` when it decodes to the committed `W`, and publishes `blocks`, `commitment`, `root` and `salt`. |
 | `pous-run-protocol [--test] COMMAND` (the Lean executable, `check/`) | The run protocol of record, `verity/pous/p2/v4/run` (`PousCheck.RunProtocol.protocol`), on the same command line. It accepts a period's run when setup accepts `C*` and publishes the run's commitment, and the run the memory challenger signed passes against it. It publishes `certified`, `eps` and `s_bits`. After `--test` it accepts the test signers' schemes and only them. |
-| `pous-timed-audit READY.json LEAVES.bin AUDIT.json` (the Lean executable, `check/`) | The verdict of record on a strict timed audit's record (`PousCheck.TimedAudit.verdict`), printed. `check/timed_audit.py`'s `lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]` runs it on a record held in memory. |
+| `pous-timed-audit READY.json LEAVES.bin AUDIT.json` (the Lean executable, `check/`) | The verdict of record on a P2 v4 timed audit's record (`PousCheck.TimedAudit.verdict`), printed; it exits 0 when it accepts. `check/timed_audit.py`'s `lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]` runs it on a record held in memory. |
 | `PousCheck.SetupProtocol`, `PousCheck.RunProtocol`, `PousCheck.Run`, `PousCheck.TimedAudit`, `PousCheck.Verdict`, `PousCheck.Merkle` (Lean modules of the package `pous_check`, `check/`) | What another Lake package imports: the two protocols (`SetupProtocol.protocol`, `RunProtocol.protocol`), the run's check (`Run.check`), the timed audit's verdict (`TimedAudit.verdict`), the verdict proof block's gates (`Verdict.prog`), and the store's leaves and paths (`Merkle.packageLeaf`, `Merkle.verifyPath`). |
 | `schemes.get(name: str = DEFAULT, segments: int = 1, params: Geometry \| None = None) -> Scheme` (`schemes/__init__.py`), and `schemes.p2` | The registered scheme `name` (`schemes.REGISTRY`), at its registered point for `segments` segments of `W` or at `params`. `DEFAULT` is the band scheme, `band-chain/d12/v1`; a period runs P2, `p2-16448/v4`. `schemes.p2` is P2's codec, the names of its `__all__`: its parameters (`P2Params`, `POINT`), `encode_segment(params: P2Params, prims, salt: bytes, s: int, w_seg: bytes) -> list[bytes]`, `decode_segment(params: P2Params, prims, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes`, its key expanders and its certificates' points. |
 | `setup.commit(params: Geometry, w: bytes \| Iterable[bytes]) -> bytes` and `setup.verifier_key_from_encoding(params: Geometry, prims, commitment: bytes, salt: bytes, encoded: Iterable[Sequence[bytes]], codec: Codec \| None = None) -> VerifierKey` (`setup.py`) | Setup: the server's commitment to `W` before any salt exists; the verifier's 24-byte salt, sampled after the commitment by `setup.py`'s function between the two, which the example below calls; and the public-encoder check, which decodes the server's `C*`, checks it against the commitment and returns `vk` (`verifier.VerifierKey`), raising `ValueError` on any mismatch. |
@@ -231,7 +231,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
   `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
   fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
-  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `verity/protocols/accounting/pous/verifier/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
   `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
   are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
   (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
@@ -265,6 +265,6 @@ authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 suc
 `SHA-512("verity/pous/p2/transcript/v4\0" ‖ AUDIT_OPEN ‖ every challenge and response frame)`.
 
 The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
-beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
+beside `p2_v1/reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
 `NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
-`cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates them and rewrites their pins.
+`uv run python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors` regenerates them and rewrites their pins.
