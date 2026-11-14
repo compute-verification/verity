@@ -203,6 +203,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 if str(HERE.parent / "network_traces") not in sys.path:
     sys.path.insert(0, str(HERE.parent / "network_traces"))
+if str(HERE.parents[1]) not in sys.path:
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from served_integrity import exact_delta  # noqa: E402
@@ -1491,7 +1493,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     `Core.Registration` by difftest), whose auditor holds the record's key for a network certifier the log places.
     ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
     import composite as CO
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
     from verity.protocols.accounting.registration.verifier import registration as REG
 
     out: dict[str, Any] = {"is": CHECKED[AUDITOR_RECORD], "holds": False, "from": {}}
