@@ -1166,6 +1166,12 @@
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
+  },
   "Properties.Site.refuses": {
    "honest": ["Properties.Site.refuses_honest"],
    "nontrivial": "Properties.Site.refuses_nontrivial"
@@ -1414,12 +1420,6 @@
   "Pous.Period.SecurityProofs.pooledShort_log": {
    "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
    "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
-  },
-  "Properties.Challenger.Drawn.familyOneCommitment": {
-   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
-  },
-  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
-   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   }
  },
  "unwitnessed": {

@@ -567,7 +567,7 @@ theorem caseAt_spec (inner : Inner) (p : AuditParams) (ledger pins session : Jso
 -- `mvcgen` splits `executionPhaseAt` into one goal per refusal and per answer of the audit
 set_option maxHeartbeats 4000000 in
 /-- What `executionPhaseAt` read where it returns: the ledger's window on the root, its session pinned on main's line, its
-files under the key, its coin commitment withheld, the one registration it sampled, the one case, and that case's
+files under the key, its coin commitment withheld, the one registration its log shows, the one case, and that case's
 record and answer (`caseAt`). An accept adds the window with its one audit and the record; an undecided adds the
 record and is kept. -/
 theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins : Json} {bs : Core.Blobs}
@@ -578,9 +578,9 @@ theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledge
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
       pinsReason au.session opened pins = none ∧
       firstParentReason au.session au.pinned p.main = none ∧
-      sessionNamed au p.ledger.key we.session = .ok (lc, roots) ∧
+      challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
       withheldOn ledger w.root = true ∧
-      (sampledOn p.ledger.label w.root roots).toList = [d] ∧
+      (sampledOn w.root roots).toList = [d] ∧
       we.audits.toList = [k] ∧
       caseAt inner p ledger pins we.session w d st.before k bs = .ok (record, o) ∧
       ((∃ published profile, o = .accept published profile ∧
@@ -593,9 +593,9 @@ theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledge
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
       pinsReason au.session opened pins = none ∧
       firstParentReason au.session au.pinned p.main = none ∧
-      sessionNamed au p.ledger.key we.session = .ok (lc, roots) ∧
+      challengePhaseNamed au p.ledger.key we.session = .ok (lc, roots) ∧
       withheldOn ledger w.root = true ∧
-      (sampledOn p.ledger.label w.root roots).toList = [d] ∧
+      (sampledOn w.root roots).toList = [d] ∧
       we.audits.toList = [k] ∧
       caseAt inner p ledger pins we.session w d st.before k bs = .ok (record, o) ∧
       ((∃ published profile, o = .accept published profile ∧
