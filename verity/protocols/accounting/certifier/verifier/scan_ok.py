@@ -6,15 +6,18 @@ row's by its index in the member's tree, so the tree of a member whose every pro
 its n rows `OK_ROW` under salts 0 … n − 1, at the member's ``o0`` frame domain (`binding`), which is its template's
 and its proof blocks' count's and names no run, round or execution phase. One execution phase's scan has the members
 `members` gives, a function of the schedule's T alone, so the roots are constants of T (`constants`). A scan has at
-least two ticks: at T = 1 its one bucket would be its first and its last, a member no scan is staged with, so
-`constants` refuses a T below 2 (`FewTicks`).
+least two ticks: at T = 1 its one bucket would be ``last`` and ``ingress-0`` a member of no proof block, a shape no
+scan is staged in, so `constants` refuses a T below 2 (`FewTicks`).
+
+The scan's start unit, the member ``start``, is none of them: it has no ok bit, and its ``o0`` (`START`) is the state
+it copies, a row of the scan's state.
 
 The period check (its rows form's `okChecks`; Lean `NetworkCheck.ScanOk`, which this mirrors) computes them
 once a period, from T, and holds every execution phase's scan's registration to them by comparison alone (`held`): its
 ``roots`` name each member's ``<member>/o0`` at the constant's root, leaves and domain, and no other port ending
-``/o0``. A member's statement reads its ``o0`` rows at the root its registration names, so a proof block's ok word
-opens a row `OK_ROW` or SHA-512 collides: the bit is the verifier's own computation from public parameters, never a
-row the prover's registered file states.
+``/o0`` but the start unit's. A member's statement reads its ``o0`` rows at the root its registration names, so a
+proof block's ok word opens a row `OK_ROW` or SHA-512 collides: the bit is the verifier's own computation from public
+parameters, never a row the prover's registered file states.
 
 The salts hide nothing and need not: an ok row's content is the one the verifier accepts.
 """
@@ -31,14 +34,16 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.rowleaf import bit_row
 
-__all__ = ["OK_ROW", "PORT", "SALT_BYTES", "SALT_TAG", "WORD_BITS", "Constant", "FewTicks", "binding", "committed",
-           "constant", "constants", "held", "known", "members", "ok_port", "salt", "set_of"]
+__all__ = ["OK_ROW", "PORT", "SALT_BYTES", "SALT_TAG", "START", "WORD_BITS", "Constant", "FewTicks", "binding",
+           "committed", "constant", "constants", "held", "known", "members", "ok_port", "salt", "set_of"]
 
 #: the ok row the verifier accepts: a proof block's one output bit, 1, in its one word
 OK_ROW = (1,)
 WORD_BITS = 16
 #: a scan proof block's public word, its first output
 PORT = "o0"
+#: the start unit's first output, as a registration's ``roots`` name it: the state it copies, no ok bit
+START = "start/" + PORT
 SALT_BYTES = hm96.SHA512.salt_bytes
 #: the ok rows' hm96 salt tag
 SALT_TAG = domains.CERTIFIER_SCAN_OK_ROW_SALT.encode() + b"\0"
@@ -72,13 +77,12 @@ def binding(template: str, n: int) -> bytes:
 
 
 def members(T: int) -> tuple[tuple[str, str, int], ...]:
-    """One execution phase's scan's members, (name, template, proof blocks), in its Program's order: bucket 0's
-    ``first``; ``ingress-0``, buckets 1 … T − 2, and ``last``, bucket T − 1, whose next state no state leaf holds,
-    so it is a member of its own; and ``egress-0``, the T egress buckets. 2T proof blocks. Read at T ≥ 2, where
-    bucket 0 is not bucket T − 1 (`constants`)."""
+    """One execution phase's scan's members with an ok bit, (name, template, proof blocks), in its Program's order
+    after the start unit: ``ingress-0``, buckets 0 … T − 2, and ``last``, bucket T − 1, whose next state no state
+    leaf holds, so it is a member of its own; and ``egress-0``, the T egress buckets. 2T proof blocks. Read at T ≥ 2,
+    where ``ingress-0`` has a proof block (`constants`)."""
     T = int(T)
-    return (("first", "first", 1), *((("ingress-0", "ingress", T - 2),) if T >= 3 else ()),
-            *((("last", "ingress", 1),) if T >= 2 else ()), ("egress-0", "egress", T))
+    return (("ingress-0", "ingress", T - 1), ("last", "ingress", 1), ("egress-0", "egress", T))
 
 
 def committed(template: str, n: int) -> ADV.Committed:
@@ -113,8 +117,8 @@ def constant(name: str, template: str, n: int) -> Constant:
 
 def constants(T: int) -> tuple[Constant, ...]:
     """Each member's constant at the schedule's `T` (`members`, `constant`), in order: what one period check computes
-    once. A `T` below 2 is refused (`FewTicks`): its bucket 0 would be the scan's first and its last, and no scan is
-    staged with such a member."""
+    once. A `T` below 2 is refused (`FewTicks`): ``ingress-0`` would be a member of no proof block, and no scan is
+    staged so."""
     if int(T) < 2:
         raise FewTicks(int(T))
     return tuple(constant(*m) for m in members(T))
@@ -127,12 +131,12 @@ def ok_port(port: object) -> bool:
 
 def held(consts: Sequence[Constant], registration: dict) -> bool:
     """Whether a scan's registration names its ok bits at the constants: every constant's port is in its ``roots``,
-    and every ``roots`` entry whose port ends ``/o0`` is at its port's constant, in leaves, domain and root. It
-    compares and hashes nothing."""
+    and every ``roots`` entry whose port ends ``/o0``, but the start unit's (`START`), is at its port's constant, in
+    leaves, domain and root. It compares and hashes nothing."""
     roots = registration.get("roots")
     entries = [e for e in roots if isinstance(e, dict)] if isinstance(roots, list) else []
     ports = [e.get("port") for e in entries]
     return all(c.port in ports for c in consts) and all(
         any(c.port == e["port"] and type(e.get("leaves")) is int and e["leaves"] == c.leaves
             and e.get("domain") == c.domain and e.get("root") == c.root for c in consts)
-        for e in entries if ok_port(e.get("port")))
+        for e in entries if ok_port(e.get("port")) and e["port"] != START)

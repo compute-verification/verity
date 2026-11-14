@@ -47,7 +47,7 @@ so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.jso
 loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it. Under
 `--lengths 2` the run is longer where it must be to admit its last group (`closing_windows`).
 
-**Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
+**Subcommands**, in this directory with `verity` installed (`uv sync`):
 
     python warden_serve.py keys --dir KEYDIR [--height 10]
     python warden_serve.py traffic --out TRAFFIC.json --model NAME [--requests 100] [--rate 0.5] [--seed 0]
@@ -102,7 +102,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
   Before the origin `serve` runs on the C allocator (it re-executes itself with `PYTHONMALLOC=malloc`) and makes its
   process ready for the run's growth (`prepare_process`: its descriptor table, its heap, its pages locked where
-  permitted), and from it to the end a process of its own (`stall_probe`, unless `--no-stall-probe`) samples every
+  permitted), and from it to the end, when a harness passes `serve` a `StallProbe`, a process of its own samples every
   thread of both processes each millisecond into `stalls.json`, every episode in uninterruptible sleep with the kernel
   function it slept in; `warden.json` keeps what was prepared (`process`) and each thread's episodes and page faults
   (`stalls`).
@@ -180,14 +180,17 @@ every execution phase that has connection rows to a registration that verifies a
 the records. Under `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its
 head, or in the network certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each
 to the one that is due. The network certifier then admits nothing in the run's last `WardenParams.span` buckets, so
-`rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). With `--head-offset
-N --head-wait W` beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands
-each one back, and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N
-buckets after the close that handed its execution phase or up to W ticks later. A line not back by then is never
-written, and the tick writes its note that the line missed. The run ticks on past its last window until its last line
-has left or missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json`
-alone (`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side,
-which is not built. `check` counts the execution phases whose line missed, which have no head.
+`rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). An arrival in them
+is turned away (`warden`'s "The lengths rows"): no refusal, so no window's records are withheld for it. Its client
+reads the one `REFUSED` cell a refused one does, `warden.json` counts it on its own (`turned_away`, `counts`), and
+`check`'s summary has that count beside the clients' refused outcomes, which hold it. With `--head-offset N
+--head-wait W` beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands each
+one back, and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets
+after the close that handed its execution phase or up to W ticks later. A line not back by then is never written, and
+the tick writes its note that the line missed. The run ticks on past its last window until its last line has left or
+missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json` alone
+(`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is
+not built. `check` counts the execution phases whose line missed, which have no head.
 """
 
 from __future__ import annotations
@@ -218,19 +221,18 @@ import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
+from typing import Any, Protocol
 
 from verity.protocols.accounting.certifier.verifier import blob_files as bf
-import certifier_key as ck
+from verity.protocols.accounting.certifier.device import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import record_files as RF
-import runner_parts as rp
+from verity.protocols.accounting.certifier.device import runner_parts as rp
 from verity.protocols.accounting.certifier.device import load_relay as lr
 from verity.protocols.accounting.certifier.verifier import load_check as LK
-import runner_cli as cli
-import stall_probe
-from runner_parts import _quiet_runtime, _usage
+from verity.protocols.accounting.certifier.device import runner_cli as cli
+from verity.protocols.accounting.certifier.device.runner_parts import _quiet_runtime, _usage
 from verity.protocols.accounting.certifier.verifier.record_files import pack_record
-from runner_parts import served_model
+from verity.protocols.accounting.certifier.device.runner_parts import served_model
 from verity.protocols.accounting.certifier.verifier.record_files import certified_json
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import connection_rows_check as CRC, io_tie as IT, warden_rows as WR
@@ -245,7 +247,16 @@ from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS,
 from verity.protocols.accounting.certifier.verifier.relay_check import (CELLS_TIMING, CERTIFIED, EGRESS, ENDPOINTS,
     FAILS, INGRESS, KIND_CHARS, LINK, _quantiles, check)
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
+HERE = Path(__file__).resolve().parent
+
+
+class StallProbe(Protocol):
+    """What samples the network certifier's threads for D episodes: a harness's (`benchmarks/network_traces/
+    stall_probe.py`), which `serve` takes as `probe`."""
+
+    def start(self, out: Path, origin: float, pids: dict[str, int], threads: dict[int, str]) -> Any: ...
+
+    def stop(self, sampler: Any, out: Path) -> Any: ...
 #: in a key directory, beside the key and its leaf state: the key's device state (`certificate.DeviceState`)
 DEVICE = "device.json"
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
@@ -980,13 +991,13 @@ async def listening(handle, listen: tuple[str, int], sock: socket.socket | None 
 
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
-                announce=cli._announce, probe: bool = False, process: dict | None = None,
+                announce=cli._announce, probe: StallProbe | None = None, process: dict | None = None,
                 load_heads: Path | None = None, paced_ms: float = cli.PACED_MS, watermark: bool = False,
                 clock=raw_clock, sleep=None, wall=time.time, sock: socket.socket | None = None) -> dict:
     """One run of the network certifier on its host's raw clock (the module docstring's `serve`), on the listening
     socket `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its
     records published by a `PublisherProcess` that holds the key in `key` and first signs the load's heads
-    `load_heads` when given, its threads sampled by `stall_probe` when `probe`, each bucket released by its pacer
+    `load_heads` when given, its threads sampled by `probe` when given, each bucket released by its pacer
     `paced_ms` after its boundary (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark
     stream sent to `upstream` when `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with
     `process`, what `prepare_process` did.
@@ -1029,9 +1040,9 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
         if lines is not None:
             publish.heads(lambda window, line: loop.call_soon_threadsafe(warden.head_back, window, line))
         server = await listening(warden.handle, listen, sock)
-        sampler = stall_probe.start(out / "stalls.json", origin,
-                                    {"warden": os.getpid(), "publisher": publish.process.pid},
-                                    {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
+        sampler = probe.start(out / "stalls.json", origin,
+                              {"warden": os.getpid(), "publisher": publish.process.pid},
+                              {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
         deployment = deployment_record(params, publish.key, session, origin_unix=started[1] + start_in,
                                        windows=windows, slack=slack, run_id=warden.run_id, start=publish.start,
                                        origin_raw=origin)
@@ -1048,10 +1059,9 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
             refused = await loop.run_in_executor(None, publish.close)
             if lines is not None:
                 lines.close()
-            stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
+            stalls = sampler and probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
-    log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
-           "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
+    log = {"connections": warden.log, **counts(warden),
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": _usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
@@ -1071,6 +1081,14 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def counts(device: Warden) -> dict:
+    """What `warden.json` counts of a run: the connections that took an ordinal, the refusals and their windows, the
+    arrivals turned away, which are neither, those of them whose client reset its link after the cell, and the
+    ticks."""
+    return {"ordinals": device.ordinals, "refused": device.refused, "refused_windows": sorted(device.refused_windows),
+            "turned_away": device.turned_away, "turned_away_reset": device.turned_away_reset, "ticks": device.ticks}
 
 
 def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float,
@@ -1127,7 +1145,8 @@ def table(result: dict) -> str:
     load = "" if "load" not in s else (f"load {s['load']['registered']}/{s['load']['values']} values registered"
                                        f"{'' if s['load'].get('relayed') else ', not the relay heads'}; ")
     return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {load}{s['ended']}/{s['requests']} ended, "
-            f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
+            f"{s['refused']} refused or turned away ({s['turned_away']} turned away), failed {s['failed']}; "
+            f"{s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
             f"cells {s['cells']}; start at {s['start']['base_ms']} ms of the key's life; tick lateness "
@@ -1367,8 +1386,9 @@ def parser() -> argparse.ArgumentParser:
     for q in (s, se):
         q.add_argument("--windows", required=True, type=int, help="the run's length, in execution phases")
     se.set_defaults(ids=True, prompts=None, window_per_group=False, load_store=None)
-    s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=True,
-                   help="sample the network certifier's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
+    s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=False,
+                   help="sample the network certifier's threads every millisecond for D episodes: a harness's "
+                        "(stall_probe.py; stalls.json), not built into the device's command line")
     s.add_argument("--load-heads", type=Path,
                    help="the load's heads (load_relay.py's load-heads.json), signed first in the session: load.json")
     r.add_argument("--load-store", type=Path,
@@ -1446,6 +1466,10 @@ def main(argv=None) -> int:
         return 0
     if args.command == "serve":
         _check_paced(args)
+        if args.stall_probe:
+            raise NotImplementedError("network/certifier-programs-leave-benchmarks: the stall probe is a harness's "
+                                      "(benchmarks/network_traces/stall_probe.py), which a harness passes to "
+                                      "`serve` as `probe`; the device's own command line has none")
         out = args.out.resolve()
         if out == args.key.resolve() or out in args.key.resolve().parents:
             raise SystemExit(f"the key {args.key} is inside --out {args.out}, which is published")
@@ -1464,7 +1488,7 @@ def main(argv=None) -> int:
         try:
             asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
                               session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
-                              probe=args.stall_probe, process=process, load_heads=args.load_heads,
+                              process=process, load_heads=args.load_heads,
                               paced_ms=args.paced_ms, watermark=args.watermark,
                               sock=None if args.listen_fd is None else socket.socket(fileno=args.listen_fd)))
         except (ClockRefused, StartRefused) as e:
