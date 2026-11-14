@@ -20,18 +20,20 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as EMB
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.definitions.registry import boolean_dsa_norm as BDN
-from verity.definitions.registry import dsa_norm as DN
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import history as HW
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
+from verity.definitions.registry import boolean_dsa_norm as BDN
+from verity.definitions.registry import dsa_norm as DN
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import history_rows as HR
