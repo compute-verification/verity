@@ -13,14 +13,22 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
   domain to the verifier's own entry (`link_words`).
 * `Supply`, `supplied`, `sources`, `history`: a parameter the verifier supplies. `supplied` makes its value at public
   salts and the verifier fills it from its own sources (`sources`), reading each source's bytes by the row's leaf type
-  (`DIGEST` or `INDEX`), so no row there is one the prover picks after the coins. Two kinds:
+  (`DIGEST` or `INDEX`), so no row there is one the prover picks after the coins. Three kinds:
   a table read's ``root`` and ``domain`` (`EmbeddingRead_v1{V, H}`), each sampled span's the table round 1 served for it
   (`boundary_tables`: committed at serve, its root a port of the class's round-1 record, its rows filled to its class's
   C, `boundary_tables.class_rows`), which the challenger names from its own sample and copies round 1's root for
   (`history`), the tables' strings published (`interior_rows.Interior.published`), so the verifier recomputes the served
-  root from them; and an index, row r of a sampled span the I32 the parameter holds there, which the verifier fills
-  from its own bytes. Every read must open its span's table at its key (`gates.embedding.reference`) and every unit's
-  supplied row must be the value's at its place before anything is committed; `table_reads` makes such reads.
+  root from them; the ``root`` and ``domain`` of a read of a registered table (``tables``), below; and an index, row r
+  of a sampled span the I32 the parameter holds there, which the verifier fills from its own bytes. Every read must
+  open its table at its key (`gates.embedding.reference`) and every unit's supplied row must be the value's at its
+  place before anything is committed; `table_reads` makes such reads.
+* Registered tables (`Supply`'s ``tables``, `tied`, `pinned`, `opened_registered`): a table registered before the first
+  window's coins, whose registration the verifier pinned (the per-expert weight tables, `records.expert_tables`), which
+  a fused block (`fused`: a GEMM over the rows its own read opens) or a table read opens at a hidden key. Its root and
+  domain id are no rows of the prover's: row r of every sampled span is table ``tables[r]``'s, which the challenger
+  fills from the entry it pinned (`sources`' ``pins``, ``bytes`` sources), so R7 refuses a record whose value commits
+  another root. A fused block whose ``root`` or ``domain`` no such `Supply` ties is refused (`tied`): left untied they
+  would be rows the interior commits as its own, and nothing would hold its read to the registered table.
 * `Return`, `returns`: the block's return a template's output port writes, the other end of a replay block. The
   interior registers no value for it: where round 1's record commits the return as a port, round 2 reads the
   template's output only at that port, so the interior commits those output rows under the serve's salts at the rows
@@ -95,14 +103,17 @@ class Supply:
     """A replay-block parameter the verifier supplies, and the port that reads it: template ``template``'s parameter
     ``port`` reads the registered value ``value``, named and placed as an `Operand` is (``per`` rows a sampled span, unit
     j reading its row ``at[j]``). ``index``: the rows are indices, row r of a span the I32 ``index[r]`` (two u16 words, the low one first),
-    from a ``bytes`` source; None for a table read's ``root`` or ``domain`` (``port``, one of `TABLE`), every row of
-    sampled span s its table's, from a ``history`` source."""
+    from a ``bytes`` source; None for a table read's ``root`` or ``domain`` (``port``, one of `TABLE`). ``tables``: the
+    read is of registered tables, row r of every sampled span the root or domain id of table ``tables[r]`` (its
+    parameter in the registration the verifier pinned), from a ``bytes`` source of that pin; None for a read of round
+    1's history, every row of sampled span s its table's, from a ``history`` source."""
     template: str
     port: str
     value: str
     per: int
     at: tuple[int, ...]
     index: tuple[int, ...] | None = None
+    tables: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         _places(self.value, self.per, self.at)
@@ -111,6 +122,9 @@ class Supply:
                              "it holds no indices")
         if self.index is not None and (len(self.index) != self.per or any(not 0 <= x < 1 << 32 for x in self.index)):
             raise ValueError(f"{self.value}: {len(self.index)} indices for its {self.per} rows a sampled span, each an I32")
+        if self.tables is not None and (self.index is not None or len(self.tables) != self.per):
+            raise ValueError(f"{self.value}: {len(self.tables)} registered tables for its {self.per} rows a sampled span, "
+                             f"each a table's {' or '.join(TABLE)} and no index")
 
     @property
     def words(self) -> int:
@@ -153,9 +167,9 @@ class Return:
 def values(links: Sequence[Link]) -> dict[str, Link]:
     """Each value ``links`` name, in their order, by the first link that reads it. Refused by name where two links read
     one value unlike each other: one the verifier's and one the replay's, or at other rows a sampled span, a row's
-    leaf type, indices or (a table's) parameter."""
+    leaf type, indices, registered tables or (a table's) parameter."""
     def kind(x: Link) -> tuple[Any, ...]:
-        mine = (x.index, x.port if x.index is None else None) if isinstance(x, Supply) else ()
+        mine = (x.index, x.tables, x.port if x.index is None else None) if isinstance(x, Supply) else ()
         return (type(x), x.per, x.leaf, *mine)
     out: dict[str, Link] = {}
     for x in links:
@@ -189,8 +203,10 @@ def link_words(links: Sequence[Link]) -> dict[str, int]:
 
 def link_schemas(members: CS.Member | Sequence[CS.Member], links: Sequence[Link]) -> dict[str, str]:
     """The challenger's copy of each of ``links``' values' row format (`Stream.register_interiors`' ``schemas``): its
-    reading port's, from the templates' layouts (``members``, one or one a template)."""
+    reading port's, from the templates' layouts (``members``, one or one a template). Refused where ``links`` leave a
+    fused block untied (`tied`), so a challenger registers no interior whose blocks' roots it does not supply."""
     ms = {m.template: m for m in ([members] if isinstance(members, CS.Member) else members)}
+    tied(list(ms.values()), links)
     out: dict[str, str] = {}
     for x in links:
         s = ms[x.template].schema(x.port)
@@ -215,14 +231,17 @@ def cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[
 
 
 def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n_rho: Cells,
-          supplied: Mapping[str, Sequence[int] | None] | None = None) -> tuple[Link, ...]:
+          supplied: Mapping[str, Sequence[int] | None] | None = None,
+          tables: Mapping[str, Sequence[str]] | None = None) -> tuple[Link, ...]:
     """The links of the replay block ``program`` defines under descriptor id ``key``, as the interior registers their
     values: each parameter of the block a template's port reads, under the name round 2 gives it where round 1's record
     ``record`` names its ports (`second_stage.replay_links`), with its rows a block and the row each of the template's n_t
     units reads as round 2 derives them (`second_stage.replay_rows`). ``members`` and ``n_rho``: the window's templates
     and their units a span, as `interior_rows.interior_window` takes them. ``supplied``: the block's parameters the
     verifier supplies, by name, each its indices a row or None for a table read's root or domain (a `Supply`); every
-    other is the replay's (an `Operand` of its port's words). A return link names an output port and is none of them.
+    other is the replay's (an `Operand` of its port's words). ``tables``: of those table parameters, the ones that are
+    registered tables', by name, each the tables a row (`Supply`'s ``tables``). A return link names an output port and
+    is none of them.
     ValueError where the Definition makes no links, or a link names a template the window has none of or a unit no run
     places."""
     by = {m.template: (m, n) for m, n in zip(*cells(members, n_rho), strict=True)}
@@ -242,7 +261,9 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
         if any(a is None for a in at):
             raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
         if b.value in (supplied or {}):
-            out.append(Supply(x.template, x.port, x.value, r.per, at, supplied[b.value]))
+            named = (tables or {}).get(b.value)
+            out.append(Supply(x.template, x.port, x.value, r.per, at, supplied[b.value],
+                              None if named is None else tuple(named)))
         else:
             out.append(Operand(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
     return tuple(out)
@@ -301,17 +322,30 @@ def _supplies(links: Sequence[Link]) -> tuple[Supply, ...]:
     return tuple(x for x in values(links).values() if isinstance(x, Supply))
 
 
+def _pin(s: Supply, table: str, pins: Mapping[str, Mapping[str, Any]] | None) -> str:
+    """The hex of ``s``'s parameter (root or domain id) in the entry the verifier pinned for registered table ``table``."""
+    e = (pins or {}).get(table)
+    if e is None or s.port not in e:
+        raise ValueError(f"{s.value}: registered table {table} has no pin: its {s.port} is the one in the entry the "
+                         "verifier pinned, and it pinned none")
+    return str(e[s.port])
+
+
 def supplied(program: str, links: Sequence[Link], q: int, entries: Sequence[Mapping[str, Any]] = (),
-             schemas: Mapping[str, str] | None = None) -> tuple[Any, ...]:
+             schemas: Mapping[str, str] | None = None,
+             pins: Mapping[str, Mapping[str, Any]] | None = None) -> tuple[Any, ...]:
     """The values the `Supply`s of ``links`` name for ``q`` sampled spans, each committed as core's `Registered` under
     ``program`` at its public salts (`registered.supplied_salts`), as `interface.supplied` fills a served window's table reads: an
     index's row ``s·per + r`` the I32 ``index[r]``'s two u16 words, the low one first; a table read's, its span's table's root or domain id as a
     `Digest` port's 32 words (`interface.digest_words`), from the tables' entries alone (``entries[s]`` sampled span s's,
-    `history.HistoryTable.entry`). ``schemas``: each value's row format, its reading port's (`registered.SCHEMA_V2`
-    where none is given)."""
+    `history.HistoryTable.entry`); a registered table's, row ``s·per + r`` table ``tables[r]``'s root or domain id, from
+    the entry the verifier pinned for it alone (``pins``, by parameter: its registration's ``values``). ``schemas``: each
+    value's row format, its reading port's (`registered.SCHEMA_V2` where none is given)."""
     out = []
     for s in _supplies(links):
-        if s.index is None:
+        if s.tables is not None:
+            rows = [digest_words(bytes.fromhex(_pin(s, t, pins))) for _ in range(q) for t in s.tables]
+        elif s.index is None:
             if len(entries) != q:
                 raise ValueError(f"{s.value}: {len(entries)} tables for {q} sampled spans")
             rows = [digest_words(bytes.fromhex(e[s.port])) for e in entries for _ in range(s.per)]
@@ -322,15 +356,21 @@ def supplied(program: str, links: Sequence[Link], q: int, entries: Sequence[Mapp
     return tuple(out)
 
 
-def sources(links: Sequence[Link], q: int, names: Sequence[str] = ()) -> dict[str, list[list[dict[str, str]]]]:
+def sources(links: Sequence[Link], q: int, names: Sequence[str] = (),
+            pins: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, list[list[dict[str, str]]]]:
     """The challenger's copy of `supplied`'s values for ``q`` sampled spans (`Stream.register_interiors`' ``supplied``):
     each row one source; an `Operand` has none. An index's row ``s·per + r`` is ``{"bytes": ...}``, ``index[r]`` as four big-endian bytes, which
     the verifier reads as the row's two u16 leaves, the low one first (`registered.bytes_leaves`). A table read's is
     ``{"history": "<names[s]>/root"}`` or ``/domain``, which the verifier resolves to the root or domain id it recomputed
-    for table ``names[s]``, the one the challenger names for sampled span s."""
+    for table ``names[s]``, the one the challenger names for sampled span s. A registered table's row ``s·per + r`` is
+    ``{"bytes": ...}``, the root or domain id of the entry the challenger pinned for table ``tables[r]`` (``pins``, by
+    parameter), which the verifier reads as a `Digest`'s leaves (`registered.digest_leaves`): the pin reaches the
+    interior's registration here, and a table with no pin is refused by name."""
     out = {}
     for s in _supplies(links):
-        if s.index is None:
+        if s.tables is not None:
+            out[s.value] = [[{"bytes": _pin(s, t, pins)}] for _ in range(q) for t in s.tables]
+        elif s.index is None:
             if len(names) != q:
                 raise ValueError(f"{s.value}: {len(names)} tables' names for {q} sampled spans")
             out[s.value] = [[{"history": f"{n}/{s.port}"}] for n in names for _ in range(s.per)]
@@ -420,6 +460,66 @@ def reader(m: CS.Member) -> tuple[int, int] | None:
     return int(b["V"]), int(b["H"])
 
 
+def fused(m: CS.Member) -> tuple[int, int] | None:
+    """(V, H) of a member of fused blocks (`serving_templates.FUSED`: a GEMM over the rows its own read ``READ`` opens,
+    its parameters a read's, `READ`, then its operands'), its read's; None for any other."""
+    tp = SRW.template(m.template)
+    if tp.layout != "fused":
+        return None
+    b = tp.fn.bindings["READ"].bindings
+    return int(b["V"]), int(b["H"])
+
+
+def tied(ms: Sequence[CS.Member], links: Sequence[Link]) -> dict[int, tuple[Supply, int, int, bool]]:
+    """The members of ``ms`` whose units open registered tables, by place: each one's ``root`` `Supply` (its
+    ``tables``, and the one each unit opens: unit j of a span table ``tables[at[j]]``), its read's V and H, and whether
+    it is a fused block. A table read whose `Supply`s name no registered table reads round 1's history and is none of
+    them. Refused by name: a fused block whose ``root`` or ``domain`` no `Supply` of registered tables ties, which
+    would commit them as rows of its own that nothing holds to a registered table; and a member whose ``root`` and
+    ``domain`` are not the same tables' at the same places."""
+    by = {(x.template, x.port): x for x in links if isinstance(x, Supply) and x.index is None}
+    out: dict[int, tuple[Supply, int, int, bool]] = {}
+    for k, m in enumerate(ms):
+        block = fused(m)
+        vh = block or reader(m)
+        if vh is None:
+            continue
+        root, dom = (by.get((m.template, p)) for p in TABLE)
+        if not any(x is not None and x.tables is not None for x in (root, dom)):
+            if block is None:
+                continue
+            raise ValueError(f"{m.template}: a fused block's {' and '.join(TABLE)} are left untied: they are a registered "
+                             "table's, as the verifier pinned it, so give the `Supply` of each with its tables "
+                             "(`Supply.tables`); left as the block's own rows, nothing holds its read to that table")
+        if root is None or dom is None or (root.tables, root.at) != (dom.tables, dom.at):
+            raise ValueError(f"{m.template}: its {' and '.join(TABLE)} are not the same registered tables' at the same "
+                             "places: each unit opens one table, under that table's root and domain id")
+        out[k] = (root, *vh, block is not None)
+    return out
+
+
+#: what holds a registered table to its pin: its entry's fields (`registered.Registered.entry`)
+PIN = (*RG.ENTRY_KEYS, RG.WIDTH_KEY)
+
+
+def pinned(names: Sequence[str], tables: Mapping[str, Any], pins: Mapping[str, Mapping[str, Any]]) -> None:
+    """Each registered table of ``names`` is the one the verifier pinned: ``tables[name]`` (core's `Registered`, its
+    rows held: `expert_rows.commit_tables`) has the entry ``pins[name]`` (the registration's ``values``, by parameter).
+    Refused by name: a table with no pin, a table the prover holds no rows of, and a table that is another than the
+    pinned one (another root, shape or domain)."""
+    for n in names:
+        pin, t = pins.get(n), tables.get(n)
+        if pin is None:
+            raise ValueError(f"registered table {n} has no pin: a read opens the table the verifier pinned before the "
+                             "coins, and it pinned none under that name")
+        if t is None:
+            raise ValueError(f"registered table {n} is not held: its reads open it from its rows, salts and tree")
+        mine = t.entry()
+        if [mine.get(k) for k in PIN] != [pin.get(k) for k in PIN]:
+            raise ValueError(f"registered table {n} is not the one the verifier pinned under its name: its "
+                             f"{', '.join(k for k in PIN if mine.get(k) != pin.get(k))} differ")
+
+
 def _digests(words: np.ndarray) -> bytes:
     """`interface.digest_words`' inverse over consecutive 32-word digests: their bytes."""
     return np.asarray(words, dtype="<u2").view("<u8").astype(">u8").tobytes()
@@ -466,9 +566,22 @@ def opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, t
             V: int) -> None:
     """Every read of member ``m`` (``d``, its Q·n_t units, unit u of sampled span u // n_t) opens its span's table at its
     key: its root and domain id are the table's, and `gates.embedding.reference` gives its h with ok = 1."""
+    _opened(m, d, cell, lambda u: tcs[u // cell], V, False)
+
+
+def opened_registered(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, tie: Supply,
+                      tables: Mapping[str, Any], V: int, block: bool) -> None:
+    """Every unit of member ``m`` (``d``, as `opened` takes it) opens the registered table its place gives it at its
+    key: unit u, the table ``tie.tables[tie.at[u mod n_t]]`` of ``tables`` (``tie``: the member's ``root`` `Supply`,
+    `tied`). Its root and domain id are that table's, and `gates.embedding.reference` gives ok = 1, which its verdict
+    is; a table read's h is the row. ``block``: the member is a fused block, whose rows opened are no output of it."""
+    _opened(m, d, cell, lambda u: tables[(tie.tables or ())[tie.at[u % cell]]], V, block)
+
+
+def _opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, of: Any, V: int, block: bool) -> None:
     r, o = d["rows"], d["outs"]
     for u in range(len(r["tok"])):
-        tc = tcs[u // cell]
+        tc = of(u)
         tok = int(r["tok"][u][0]) | int(r["tok"][u][1]) << 16
         what = f"{m.template}: read {u} (sampled span {u // cell}, key {tok})"
         root, dom = _digests(r["root"][u]), _digests(r["domain"][u])
@@ -477,11 +590,13 @@ def opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, t
         path = _digests(r["path"][u])
         h, ok = EMB.reference(V, tok, root, dom, [int(w) for w in r["row"][u]], _digests(r["salt"][u]),
                               [path[i:i + 64] for i in range(0, len(path), 64)])
-        if ok != 1 or int(o["o1"][u][0]) != 1 or [int(w) for w in o["o0"][u]] != list(h):
+        if ok != 1 or int(o["o1"][u][0]) != 1 or not (block or [int(w) for w in o["o0"][u]] == list(h)):
             raise ValueError(f"{what} does not open its table there: its row, salt and path are no opening of {tc.value}'s "
-                             "root at its key, or its h and ok are not the read's")
+                             "root at its key, or its " + ("verdict is not the read's ok" if block
+                                                           else "h and ok are not the read's"))
 
 
-__all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "Cells", "Link", "Members", "Operand", "Return", "Supply", "cells",
-           "history", "kept_table", "link_schemas", "link_values", "link_words", "links", "opened", "operand", "placed",
-           "reader", "returns", "sources", "span_values", "supplied", "table_reads", "values", "wired"]
+__all__ = ["DIGEST", "HELD", "INDEX", "PIN", "READ", "TABLE", "Cells", "Link", "Members", "Operand", "Return", "Supply",
+           "cells", "fused", "history", "kept_table", "link_schemas", "link_values", "link_words", "links", "opened",
+           "opened_registered", "operand", "pinned", "placed", "reader", "returns", "sources", "span_values", "supplied",
+           "table_reads", "tied", "values", "wired"]
