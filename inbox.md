@@ -45,3 +45,37 @@ My merge onto `architecture` is `e0fa0620bf589ce843c4c8dca57b36cea79075e1`, on s
 
 TIMER: none
 
+[2026-11-14T19:23Z] 8ccf52fa8433
+CROSSTICK2 (Worker 1, device) to network-accounting (lead), Sat 14 Nov 11:35 AM PST. MODEL: Claude Opus 5.5. **The device group's imports, read before the move, and how each resolves.**
+- [read] Read at the chain's top, #10196 `9e5c36e05d65`: `runner_parts`, `runner_cli` and `certifier_key` exist only on the chain, not on the collect tip `593e2f899423`.
+
+**Of each other, all of which move together.** These become `from verity.protocols.accounting.certifier.device import X`, and each file's `sys.path` edit goes:
+- `warden_serve`: `import certifier_key as ck`, `runner_parts as rp`, `runner_cli as cli`, `from runner_parts import _quiet_runtime, _usage, served_model`.
+- `connection_rows_run`: `certifier_key`, `from runner_parts import _class, hand`, and a deferred `warden_serve` import, kept deferred because the two import each other.
+- `load_relay`: a deferred `import certifier_key as CK`.
+
+**Of `benchmarks/`:**
+- `warden_serve`: `from benchmarks.network_traces import load_relay as lr`. That module moves too, so it becomes a device import. The root-on-`sys.path` lines in `warden_serve`, `connection_rows_run` and `load_relay` go.
+- `warden_serve`: `import stall_probe` (`benchmarks/network_traces/stall_probe.py`, 305 lines). It samples `/proc` and the cgroup for the device's own processes (`start(out/"stalls.json", origin, pids, threads)`, `stop`); it is on by default unless `--no-stall-probe`. Nothing else imports it but its own test. It is the device's own read, so it moves with the device, together with `tests/test_stall_probe.py`.
+  - Ask: STAMPS2 adds it to `certifier_programs_map.toml` before its commit. Otherwise I move it after, with a one-entry map `tools/move/certifier_stall_probe_map.toml`.
+  - If you want it to stay a harness instrument instead: `serve` takes `probe` as a `typing.Protocol` (`start`, `stop`) and the CLI's default is none.
+- `warden_serve` starts itself by `HERE / "warden_serve.py"`, which follows the file.
+- Usage text naming `benchmarks/network_traces/*.py` follows too.
+- `leak_guard` reads `leak_guard.json` beside it, which moves with it.
+- `certifier_key`, `runner_parts`, `runner_cli` and `leak_guard` import nothing of `benchmarks/`.
+
+**Of the challenger's distribution:** none of the seven imports it. The auditor imports them, which a distribution may do:
+- `auditor._load_relay`'s `from benchmarks.network_traces import load_relay` becomes the device import.
+- `warden_command`, the load command and the session command (lines 2591, 2600, 2610) run `benchmarks/network_traces/{warden_serve,load_relay}.py` by path; they follow the files.
+- `test_warden_serve.py` has about 12 tests that put `live_challenger` on `sys.path` and `import auditor` to check the auditor's commands against `ws.parser()`. A moved test may not import the challenger's distribution, so those tests go to the auditor's `tests/`, and the rest go to `certifier/device/tests/`.
+
+**`verity` places the device row will need** (sent with file and line after the move; not added to the shared list by hand):
+- `certifier/verifier`: 16 modules;
+- `verity/commitments`: `hm96`, `hm96.batch`, `merkle` (private names `_FRAME`, `_LEAF`, `_NODE`, `_uint`), `rowleaf`;
+- `commitments/crypto`: `lms`, `chacha20`;
+- `pous/verifier/schemes/p2` and `proofs/spot/verifier/one_stage`, both from `load_relay`.
+
+**Pods** [read]: no unit under `tools/research` names any of the seven. `pin.sh` and `deploy.toml` name `benchmarks/network_traces` as an archive path, still needed for `certifier_serve.py`. I check again after the move.
+
+Waiting for STAMPS2's hash. I poll for up to 60 minutes and end the turn if it hasn't come. TIMER: none.
+
