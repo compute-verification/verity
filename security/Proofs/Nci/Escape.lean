@@ -3,7 +3,7 @@ module
 public import Definitions.Nci.Assumptions.Remote
 
 /-!
-# The escaped blocks under sampled proofs
+# The escaped blocks under SPOT
 
 `sampled_escape` bounds the work each identity's escaped blocks skip by `((1 − q)/q) B` in expectation under
 `SampledDetection`. Its proof is Wald's identity on one identity's faulty blocks with no earlier detection: they are
@@ -79,7 +79,7 @@ theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β �
     · exact (hnd (e ▸ hd)).elim
     · exact hC b' hb' hd e hid
 
-/-- **Sampled proofs bound the escaped work** ([SAMPLED-DETECTION]): under `SampledDetection` at a chance
+/-- **SPOT bound the escaped work** ([SAMPLED-DETECTION]): under `SampledDetection` at a chance
 `q ∈ (0, 1]`, with each faulty block skipping `w_b ∈ [0, B]`, the declared work that identity `j`'s faulty blocks
 accepted before its first detection (`escaped`) skip is at most `((1 − q)/q) B` in expectation.
 

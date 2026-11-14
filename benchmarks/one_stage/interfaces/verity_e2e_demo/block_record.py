@@ -15,8 +15,7 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
-  proofs' Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
   profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
   the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
   at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
@@ -33,7 +32,7 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   block, the accepted legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it; its
   ``named_terms`` gives, by subprotocol, the terms those errors leave out, which its sums and the monitoring period's
   leave out too (``{}``: they leave none out). The statement names five audits; the wipe is ``outside_statement``.
-  The product (`PRODUCTS`) is onsite's, every leg, unless ``product`` names another: remote's composes sampled proofs
+  The product (`PRODUCTS`) is onsite's, every leg, unless ``product`` names another: remote's composes SPOT
   and PoUW, and its other legs are ``dropped``, not run and not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `MONITORING_PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this

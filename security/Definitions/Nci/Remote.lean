@@ -16,7 +16,7 @@ residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer can
   (`wrongCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
 * the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected incorrect proof block until the halt `Δ` later,
   its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
-* the escape slack `θ`: under sampled proofs (tier T5) a faulty block that isn't sampled is accepted, so the faulty blocks
+* the escape slack `θ`: under SPOT (tier T5) a faulty block that isn't sampled is accepted, so the faulty blocks
   an identity runs before its first detection (`escaped`) skip declared work too, at most `θ C` outside an event of
   probability at most `J ((1 − q)/q) B/(θ C)`, each faulty block with no earlier detection of its identity
   (`noDetectionBefore`) being detected with probability at least `q`.

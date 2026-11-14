@@ -65,7 +65,7 @@ def paramsAt (θ : ByteArray) : Flock.V VStar.Recursive.SampledTwo.Params := do
   let some x := ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the parameters name no sampled proofs"
   _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.SampledTwo.paramsOfJson
 
-/-- The registration and the evidence of the case the composition's evidence names under the sampled proofs' id,
+/-- The registration and the evidence of the case the composition's evidence names under SPOT's id,
 each read by the two-stage form's decoder. -/
 def caseIn (s : Verity.Sent) : Flock.V (Spot.OneStage.Commitment × VStar.Recursive.SampledTwo.Evidence) := do
   let ev ← _root_.Core.Composition.decodeEvidence s.evidence
