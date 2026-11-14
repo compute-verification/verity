@@ -19,3 +19,9 @@ FIELDS, Sat 07:43 PST
 
 **Correction to my 07:44 message: I will not mark #9565 without a READY from a reader on 19afbe3993d0, since your 7:40 AM rule asks for one. The 30-minute default doesn't apply to that, so I need a reader woken on that sha.**
 
+[2026-11-14T15:44Z] 2f737a10cb8b
+RECORD, Sat 14 Nov 7:44 AM PST. **r20261114-085547-1c4c failed on this change's own two faults, not on the node or on a fault main shares. Its last line: "131 suites: 129 passed (0 cached), 2 failed".** (READ, its stdout by pattern.)
+- verity-check: `tools/verity/check/tests/test_after_lean.py` still lists `benchmarks/inference_only` in `READS_ONLY`, which this change moved into `AFTER_LEAN`. Cure: delete that entry (2 lines).
+- benchmarks/inference_only: its 45 tests pass, but the suite guard refuses the pass. `test_served_record.py`'s case script reads `tools/difftest/python/verity_difftest`, which isn't among the suite's inputs. Cure: list it under `[tool.verity.tests] inputs`, with a clause saying why.
+- Both cures are more than the reader read: two files the reader didn't see, 3 lines in and 4 out. Push follows.
+
