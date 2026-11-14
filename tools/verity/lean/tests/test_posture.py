@@ -44,25 +44,25 @@ def test_each_premise_is_marked_on_the_list_in_the_gap_pending_or_off_and_open_o
     assert P.line(ks).endswith("assumptions: H.CR [on], H.Prf [OFF]; open: none; witnesses take: none")
 
 
-def test_a_listed_choosing_definition_under_a_collision_premise_shows_as_an_open_premise_with_the_lists_ticket():
+def test_each_definition_a_records_choosing_names_shows_as_an_open_premise_with_the_lists_ticket():
     def rec_reading(choosing, cites=(), assumptions=("H.CR",)):
         r = rec(assumptions)
         r["premises"] |= {"domain": [f"D.{c}" for c in cites], P.CHOOSING: list(choosing)}
         return r
 
     lock = {
-        "assumptions": {"H.CR": {"owner": "@lean"}, "H.Prf": {"owner": "@lean"}},
+        "assumptions": {"H.CR": {"owner": "@lean"}},
         P.CHOOSING: {"D.byChoice": {"owner": "@proofs", "issue": "PRF-1", "due": "2026-11-20"},
                      "D.cited": {"owner": "@soundness", "issue": "PRF-2", "due": "2026-11-21"}},
         "domain": {"D.Sub": {"owner": "@proofs", "cites": "G.sub"}},
-        "deployed": ["G.reads", "G.cites", "G.search", "G.noCR"],
-        "guarantees": {"G.reads": rec_reading(["D.byChoice", "D.search"]), "G.cites": rec_reading([], ["Sub"]),
-                       "G.sub": rec_reading(["D.cited"]), "G.search": rec_reading(["D.search"]),
-                       "G.noCR": rec_reading(["D.byChoice"], assumptions=["H.Prf"])},
+        "deployed": ["G.reads", "G.cites", "G.noCR", "G.none"],
+        "guarantees": {"G.reads": rec_reading(["D.byChoice"]), "G.cites": rec_reading([], ["Sub"]),
+                       "G.sub": rec_reading(["D.cited"]), "G.noCR": rec_reading(["D.byChoice"], assumptions=()),
+                       "G.none": rec_reading([])},
     }
-    trust = TRUST | {"list": TRUST["list"] | {"H.CR": {"reason": "collision resistance", "collision": True}}}
-    reads, cites, search, no_cr = P.postures({"L/lean-audit.json": lock}, trust, A)
-    assert reads["open"] == {"D.byChoice": {"mark": "chooses", "owner": "@proofs", "issue": "PRF-1", "due": "2026-11-20"}}
+    reads, cites, no_cr, none = P.postures({"L/lean-audit.json": lock}, TRUST, A)
+    by_choice = {"D.byChoice": {"mark": "chooses", "owner": "@proofs", "issue": "PRF-1", "due": "2026-11-20"}}
+    assert reads["open"] == by_choice and no_cr["open"] == by_choice and none["open"] == {}
     assert cites["open"] == {"D.cited": {"mark": "chooses", "owner": "@soundness", "issue": "PRF-2", "due": "2026-11-21"}}
-    assert search["open"] == {} and no_cr["open"] == {} and reads["assumptions"] == {"H.CR": "on"}
+    assert reads["assumptions"] == {"H.CR": "on"}
     assert P.line(reads).endswith("open: D.byChoice [chooses] @proofs PRF-1 due 2026-11-20; witnesses take: none")

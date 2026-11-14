@@ -1,9 +1,9 @@
 {
  "list": {
-  "Claims.ExpectedCR": {"reason": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512)", "collision": true},
-  "Claims.StrictBirthday": {"reason": "SHA-512 collision resistance: the strict birthday bound at one finder (cr/sha-512)", "collision": true},
-  "FlockSoundness.Assumptions.SHA512CRExpected": {"reason": "SHA-512 collision resistance, in expected time (ecr/sha-512)", "collision": true},
-  "FlockSoundness.Assumptions.SHA512CRStrict": {"reason": "SHA-512 collision resistance, in strict time (cr/sha-512)", "collision": true},
+  "Claims.ExpectedCR": {"reason": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512)"},
+  "Claims.StrictBirthday": {"reason": "SHA-512 collision resistance: the strict birthday bound at one finder (cr/sha-512)"},
+  "FlockSoundness.Assumptions.SHA512CRExpected": {"reason": "SHA-512 collision resistance, in expected time (ecr/sha-512)"},
+  "FlockSoundness.Assumptions.SHA512CRStrict": {"reason": "SHA-512 collision resistance, in strict time (cr/sha-512)"},
   "FlockSoundness.Assumptions.UniformRandomBytes": {"reason": "the honest verifier server's uniform randomness: the bytes it reads from its operating system are uniform"},
   "FlockSoundness.Assumptions.UniformRandomBytesTest": {"reason": "the honest verifier server's uniform randomness, at one test"},
   "Verity.Assumptions.ChallengerLogsCoins": {"reason": "the honest verifier server: its challenger logs every coin it releases, each its own flip"},
@@ -17,9 +17,5 @@
   "FlockSoundness.Assumptions.KeyedStreamsUniform": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for the streamed wipe's labels and PoUS only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]},
   "Hash.Assumptions.Sha512Prf": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for PoUS's index streams and the streamed wipe's labels only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]}
  },
- "pending": {
-  "Flock.SecurityProofs.SessionLoopZKDeployed": {
-   "Claims.ZKServer.Loop.Src": "the lock trusts the prover-side firewall's operating-system randomness for this guarantee (`trust.extra`) and the list doesn't name it: a ruling puts it on the list or in the gap"
-  }
- }
+ "pending": {}
 }

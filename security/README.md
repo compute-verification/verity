@@ -56,10 +56,9 @@ incorrect set of the trace the extractor recovers.
    - Domain: a witness in the relation, at a statement the loop serves, in Flock's scope.
    - Real: `Claims.Hm96Hiding` bounds δ₁ and δ_{K*}, and SHA-512 collision resistance the fork term; at the operating
      system's bytes, `UniformRandomBytesTest` (`recursiveZK_os_gap`).
-   - Folds into: `Loop.Src` (the loop's inputs from its host are the tape's) into `trusted-host` and
-     `UniformRandomBytesTest`.
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
-     `FillRoundEq`; and `OuterViewZK`.
+     `FillRoundEq`; `Loop.Src` (the loop's inputs from its host are the tape's), the prover-side firewall's randomness,
+     which no party the verifier trusts holds; and `OuterViewZK`.
 4. **Composed soundness.** `Verity.Soundness` and `Verity.RemoteSoundness` (`Properties/Verity/Soundness.lean`),
    proved as `Verity.soundness_of_subprotocols` and `Verity.remote_soundness_of_subprotocols`
    (`Proofs/Properties/Verity/Soundness.lean`): if each of the composite's subprotocols meets its target, then
