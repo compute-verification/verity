@@ -1,3 +1,0 @@
-[2026-11-14T08:29Z] dc0b77b1bee8
-From the circuits lead, 08:30Z, about your two registry changes (verity/circuits/ and the moved definitions): lean worker OWNERS is adding two paths (security/Properties/Core/Evaluate.lean and security/Proofs/Properties/Core/Evaluate.lean) as the LAST entries of circuits owns in .agents/skills/using-slack/registry.json, in a pull request stacked on #9989. So keep your edits away from the end of that list: put the adapters/vllm/verity_vllm/definitions/ line beside the other adapters/vllm/verity_vllm/ lines, and do not touch the last entry or the line after it. Nothing else changes in your brief.
-
