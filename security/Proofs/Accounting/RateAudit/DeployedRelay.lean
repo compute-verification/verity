@@ -17,7 +17,7 @@ and the tier reads are the device's plus its completed bits.
 
 **A pass, a window, a session.** `RatePaid` bounds each simulated pass at `m` relayed words; a window's unpaid words
 are its passes' at each candidate (`GrindChain.pr_unpaid_le`), with the completed bits, at most `X`, paid from the
-slack; the session is `DeployedSession.pr_paid_of_window` and the samples, as in `Deployed.lean`.
+slack; the session is `DeployedRun.pr_paid_of_window` and the samples, as in `Deployed.lean`.
 -/
 
 @[expose] public section
@@ -352,7 +352,7 @@ theorem relayErr_toReal (P G N h L m q lam : ℕ) :
   ring
 
 /-- Window `w`'s bound with any side sources, at the slack `S + (L − ρ) + X + (λ + m·b)` a pass. -/
-theorem window_relay_le (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) {lam m rounds cRoot F : ℕ}
+theorem window_relay_le (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) {lam m rounds cRoot F : ℕ}
     {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot) (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
     (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) (w : Fin n) (η) :
     Pous.pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
@@ -367,7 +367,7 @@ theorem window_relay_le (A : DeployedSession n P N b h ρ S L q r s d G) (tier :
   omega
 
 /-- **Paid** for the deployed session's run with any side sources, at the run's slack `λ + m·b`. -/
-theorem ofDeployed_paid_relay (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
+theorem ofDeployed_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam m rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = n * P) (hab : a.b = b) (hal : a.lam = lam + m * b)
     (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
@@ -376,7 +376,7 @@ theorem ofDeployed_paid_relay (A : DeployedSession n P N b h ρ S L q r s d G) (
       ((n * P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam)) := by
   classical
   set X := Deployed.rebuildBits b rounds cRoot F
-  have h₂ := DeployedSession.pr_unpaid_le A tier (S + (L - ρ) + X + (lam + m * b)) _
+  have h₂ := DeployedRun.pr_unpaid_le A tier (S + (L - ρ) + X + (lam + m * b)) _
     (window_relay_le A tier hrc hW hF)
   have hT : (n : ℝ≥0∞) * (P * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam))) ≠ ⊤ :=
     ENNReal.mul_ne_top (ENNReal.natCast_ne_top n) (ENNReal.mul_ne_top (ENNReal.natCast_ne_top P)
@@ -403,7 +403,7 @@ theorem ofDeployed_paid_relay (A : DeployedSession n P N b h ρ S L q r s d G) (
   omega
 
 /-- **Paid** for window `w`'s run with any side sources, at the run's slack `λ + m·b`. -/
-theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedWindow_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam m rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam + m * b)
     (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
@@ -412,7 +412,7 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
       ((P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam)) := by
   classical
   set X := Deployed.rebuildBits b rounds cRoot F
-  have h₂ := DeployedSession.pr_window_le A w
+  have h₂ := DeployedRun.pr_window_le A w
     (fun C y => C.reads tier y.1 y.2.1 + P * (S + (L - ρ) + X + (lam + m * b)) < (C.correctAll y.1 y.2.1).card * b) _
     (window_relay_le A tier hrc hW hF w)
   have hT : (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)) ≠ ⊤ :=
@@ -433,7 +433,7 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
 `ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the samples' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
 theorem run_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
-    (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)
+    (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)
     (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
     (hu : Pous.pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         ∃ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 +
@@ -446,7 +446,7 @@ theorem run_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
             ∃ w, (((A.win w x.2).reads tier (store x.1) (x.2 w).1 : ℕ) : ℝ) <
               (1 - (dw + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * (P * N * b)))
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) + εu := by
-  have main := DeployedSession.pr_paid_of_unpaid_map store A tier
+  have main := DeployedRun.pr_paid_of_unpaid_map store A tier
     (S + (L - ρ) + Deployed.rebuildBits b rounds cRoot F + (lam + m * b))
     ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊ εu hu
   have hγ := Deployed.gammaPass_mul N b ρ S L (lam + m * b) rounds cRoot F hN hb
@@ -483,7 +483,7 @@ open Bandwidth (pr_mono)
 theorem RemoteRunConservationRelay : Accounting.Guarantees.RemoteRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF
   refine (run_relay_of_unpaid id A tier lam m rounds cRoot F dbar dw hn hP hN hb hdw _
-    (DeployedSession.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
+    (DeployedRun.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
   ring
 
 /-- **The deployed session with relaying side sources conserves its words as a run of the remote audit**

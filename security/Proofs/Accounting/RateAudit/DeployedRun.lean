@@ -47,9 +47,9 @@ import Proofs.Pous.Prob
 `Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
-  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedSession.pr_samples_pooled_le`).
+  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedRun.pr_samples_pooled_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
-  (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_sample_le`) covers.
+  (`DeployedRun.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_sample_le`) covers.
 
 `Accounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
 `n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
@@ -79,7 +79,7 @@ theorem pouw_pr_le {α : Type} [Fintype α] {Q : α → Prop} {B : ℝ≥0∞} (
   exact ENNReal.toReal_mono hB h
 
 /-- The run's tier reads are the session's windows' reads. -/
-theorem ofDeployed_reads (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
+theorem ofDeployed_reads (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).reads x = ∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 := by
   simp only [Run.reads, Run.ofDeployed, DeployedWindow.reads]
@@ -87,7 +87,7 @@ theorem ofDeployed_reads (A : DeployedSession n P N b h ρ S L q r s d G) (tier 
   exact Finset.sum_congr rfl fun w _ => Finset.sum_comm
 
 /-- The run's payments at every location: its tier reads and the `n·P` passes' `L − ρ`, `S` and `X` bits. -/
-theorem ofDeployed_paid (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
+theorem ofDeployed_paid (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).paid x =
       (Run.ofDeployed A tier X Nd a).reads x + n * P * (L - ρ) + n * P * S + n * P * X := by
@@ -112,13 +112,13 @@ theorem roErr_toReal (n P G N h q lam : ℕ) :
   ring
 
 /-- **Sampled** for the deployed session's run, at the monitoring period's sample. -/
-theorem ofDeployed_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
+theorem ofDeployed_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (dbar : ℝ) (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdbar : dbar ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = n * P * N * b) :
     (Run.ofDeployed A tier X Nd a).Sampled dbar ((1 - dbar) ^ (d * n)) := by
   classical
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
-  have hK := DeployedSession.pr_samples_pooled_le A ⌊(1 - dbar) * ((n * P * N : ℕ) : ℝ)⌋₊
+  have hK := DeployedRun.pr_samples_pooled_le A ⌊(1 - dbar) * ((n * P * N : ℕ) : ℝ)⌋₊
   have h2 := Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
   push_cast at hK h2
   have hB := hK.trans h2
@@ -137,7 +137,7 @@ theorem ofDeployed_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (tie
   exact (lt_of_mul_lt_mul_right this hb'.le).le
 
 /-- **Paid** for the deployed session's run: some window's words exceed its payments whenever the session's do. -/
-theorem ofDeployed_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
+theorem ofDeployed_paid_route (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = n * P) (hab : a.b = b) (hal : a.lam = lam)
     (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
@@ -150,7 +150,7 @@ theorem ofDeployed_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (
   have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X :=
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
   have hε := fun w η j ι c => PIDevice.pr_unpaid_le ((A.window w η).device j ι c) tier X lam (hA w η j ι c)
-  have h₂ := DeployedSession.pr_unpaid_le A tier (S + (L - ρ) + X + lam) _
+  have h₂ := DeployedRun.pr_unpaid_le A tier (S + (L - ρ) + X + lam) _
     (fun w η => (A.window w η).pr_unpaid_sample_le tier X _ d _ (hX w η) (hε w η))
   have hT : (n : ℝ≥0∞) * (P * (G * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)))
       ≠ ⊤ :=
@@ -177,14 +177,14 @@ theorem roErr_toReal_window (P G N h q lam : ℕ) :
   simpa using this
 
 /-- Window `w`'s run's tier reads are the window's reads. -/
-theorem ofDeployedWindow_reads (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedWindow_reads (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployedWindow A w tier X Nd a).reads x = (A.win w x.2).reads tier x.1 (x.2 w).1 := by
   simp only [Run.reads, Run.ofDeployedWindow, DeployedWindow.reads]
   exact Finset.sum_comm
 
 /-- Window `w`'s run's payments at every location: its tier reads and the `P` passes' `L − ρ`, `S` and `X` bits. -/
-theorem ofDeployedWindow_paid (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedWindow_paid (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
     (Run.ofDeployedWindow A w tier X Nd a).paid x =
       (Run.ofDeployedWindow A w tier X Nd a).reads x + P * (L - ρ) + P * S + P * X := by
@@ -192,7 +192,7 @@ theorem ofDeployedWindow_paid (A : DeployedSession n P N b h ρ S L q r s d G) (
   simp [Run.ofDeployedWindow]
 
 /-- **Sampled** for window `w`'s run, at the window's sample. -/
-theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedWindow_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (dw : ℝ) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdw : dw ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = P * N * b) :
     (Run.ofDeployedWindow A w tier X Nd a).Sampled dw ((1 - dw / n) ^ (d * n)) := by
@@ -201,7 +201,7 @@ theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
   have hn' : (1 : ℝ) ≤ n := by exact_mod_cast hn
   have hu : dw / n ≤ 1 := div_le_one_of_le₀ (by linarith) (by linarith)
-  have hK := DeployedSession.pr_samples_window_le A ⌊(1 - dw) * ((P * N : ℕ) : ℝ)⌋₊
+  have hK := DeployedRun.pr_samples_window_le A ⌊(1 - dw) * ((P * N : ℕ) : ℝ)⌋₊
   have h2 := Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
   rw [show ((n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞)) = n * P * N by push_cast; ring] at h2
   have hB := hK.trans h2
@@ -219,7 +219,7 @@ theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G
   exact (lt_of_mul_lt_mul_right this hb'.le).le
 
 /-- **Paid** for window `w`'s run: `RatePaidNamedRO` at each of its passes and candidates. -/
-theorem ofDeployedWindow_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedWindow_paid_route (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam)
     (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
@@ -232,7 +232,7 @@ theorem ofDeployedWindow_paid_route (A : DeployedSession n P N b h ρ S L q r s 
   have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X :=
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
   have hε := fun w η j ι c => PIDevice.pr_unpaid_le ((A.window w η).device j ι c) tier X lam (hA w η j ι c)
-  have h₂ := DeployedSession.pr_window_le A w
+  have h₂ := DeployedRun.pr_window_le A w
     (fun C y => C.reads tier y.1 y.2.1 + P * (S + (L - ρ) + X + lam) < (C.correctAll y.1 y.2.1).card * b) _
     (fun η => (A.window w η).pr_unpaid_sample_le tier X _ d _ (hX w η) (hε w η))
   have hT : (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)) ≠ ⊤ :=
