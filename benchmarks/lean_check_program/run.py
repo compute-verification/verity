@@ -54,7 +54,7 @@ def child(report: Path, argv: list[str]) -> int:
         try:
             return run(argv, *a, **k)
         finally:
-            name = next((Path(x).name for x in argv if Path(x).name in ("facts", "unread")), None)
+            name = next((n for x in argv for n in ("facts", "unread") if Path(x).name.split("-")[0] == n), None)
             if name and "-o" not in argv:
                 seconds[f"run {name}"] += time.monotonic() - s
 

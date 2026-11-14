@@ -38,6 +38,7 @@ import bisect
 import contextlib
 import datetime
 import difflib
+import fcntl
 import gzip
 import hashlib
 import json
@@ -974,8 +975,9 @@ def facts_program(pkg: Path) -> str:
 
 def program(pkg: Path, source: str) -> str:
     """The tool's Lean program ``source`` (`Facts.lean`, `Unread.lean`) compiled (`lean -c`, then `leanc`) with ``pkg``'s
-    toolchain, once per toolchain and source in a process. The program is checked against the digest it had when compiled
-    before each use. Raises RuntimeError when it does not compile or has changed."""
+    toolchain, once per toolchain and source in a process, and with `PROGRAMS` once per `program_key` across processes
+    (`kept_program`). The program is checked against the digest it had when compiled or taken before each use. Raises
+    RuntimeError when it does not compile or has changed."""
     src = TOOL / source
     stem = src.stem
     toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
@@ -984,19 +986,159 @@ def program(pkg: Path, source: str) -> str:
         lock = _programs_locks.setdefault(key, threading.Lock())
     with lock:
         if key not in _programs or not _programs[key][0].exists():
-            d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
-            atexit.register(shutil.rmtree, d, True)
-            exe = d / stem.lower()
-            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
-                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / f"{stem}.c"), "-o", str(exe)]):
-                rc, text = run(argv, pkg, d / "compile.log")
-                if rc:
-                    raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+            if (exe := kept_program(pkg, src)) is None:
+                d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
+                atexit.register(shutil.rmtree, d, True)
+                exe = d / stem.lower()
+                for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
+                             ["lake", "env", "leanc", *LEANC_FLAGS, str(d / f"{stem}.c"), "-o", str(exe)]):
+                    rc, text = run(argv, pkg, d / "compile.log")
+                    if rc:
+                        raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
             _programs[key] = (exe, sha256(exe))
         exe, digest = _programs[key]
     if sha256(exe) != digest:
         raise RuntimeError(f"tamper: the compiled `{source}` ({exe}) changed after it was compiled")
     return str(exe)
+
+
+#: `--program-cache`: where `program` keeps each compiled program for later processes (`kept_program`), or None
+PROGRAMS: Path | None = None
+#: `leanc`'s flags for a program (`facts_program` says why it exports its symbols)
+LEANC_FLAGS = ["-O3", "-DNDEBUG", "-rdynamic"]
+#: what names a kept program's key (`program_key`): bump it with any change to how `kept_program` compiles
+PROGRAM_SCHEMA = "lean-program/v1"
+
+
+def program_key(pkg: Path, src: Path) -> tuple[str, Path] | None:
+    """(The key `kept_program` keeps the program ``src`` under, the toolchain directory it compiles with), or None when
+    the key can't be computed. The key is a digest of everything the compile reads: ``src``'s bytes (it imports the
+    toolchain's modules alone, the only ones the compile's search path holds), the toolchain `elan` resolves for ``pkg``
+    (its real directory and the path, mode, size, mtime and inode of every file and link in it: the compiler, the C
+    compiler and linker it brings, their sysroot and the modules), the flags (`PROGRAM_SCHEMA`, `LEANC_FLAGS`) and the
+    environment (`program_env`, the same for every caller)."""
+    if (tc := elan_toolchain(pkg)) is None or not (tc / "bin" / "leanc").is_file():
+        return None
+    try:
+        h = hashlib.sha256(json.dumps({"schema": PROGRAM_SCHEMA, "source": sha256(src), "toolchain": str(tc),
+                                       "leanc": LEANC_FLAGS, "env": program_env(tc)}).encode())
+        for top, dirs, files in os.walk(tc):
+            dirs.sort()
+            for name in sorted([*dirs, *files]):
+                p = os.path.join(top, name)
+                st = os.lstat(p)
+                link = os.readlink(p) if os.path.islink(p) else ""
+                h.update(f"{os.path.relpath(p, tc)}\0{st.st_mode}\0{st.st_size}\0{st.st_mtime_ns}\0{st.st_ino}\0{link}\n"
+                         .encode())
+    except OSError:
+        return None
+    return h.hexdigest(), tc
+
+
+def elan_toolchain(pkg: Path) -> Path | None:
+    """The real directory of the toolchain `lake env` runs in ``pkg`` (`elan which lean`: the package's `lean-toolchain`
+    or an override), or None when `elan` doesn't name one."""
+    try:
+        r = subprocess.run(["elan", "which", "lean"], cwd=pkg, env=lake_env(), capture_output=True, text=True,
+                           timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return Path(r.stdout.strip()).resolve().parents[1] if r.returncode == 0 and r.stdout.strip() else None
+
+
+def program_env(tc: Path) -> dict[str, str]:
+    """The environment `kept_program` compiles in: the toolchain's `bin` alone on the path, and nothing of the caller's
+    (`LEAN_PATH`, `LEAN_SYSROOT`, `LEAN_CC`, a C compiler's variables), so the program is the same for every caller."""
+    return {"PATH": str(tc / "bin")}
+
+
+def kept_program(pkg: Path, src: Path) -> Path | None:
+    """The program ``src`` from `PROGRAMS` under its `program_key`, compiled into it first when it isn't there: one
+    process compiles while the others wait on its `.compile` lock, and the program appears whole, renamed into place.
+    This process holds the program's `.lock` shared until it exits, and `evict` removes none that is held. None when there
+    is no `PROGRAMS`, its key can't be computed, or a build could write it (`sandbox_reads_only`): the caller then
+    compiles its own. Raises RuntimeError when it does not compile."""
+    if PROGRAMS is None or not sandbox_reads_only(PROGRAMS) or (k := program_key(pkg, src)) is None:
+        return None
+    key, tc = k
+    name = f"{src.stem.lower()}-{key}"
+    exe = PROGRAMS / name
+    held = open(PROGRAMS / f".{name}.lock", "a")
+    try:
+        fcntl.flock(held, fcntl.LOCK_SH)
+        if not exe.is_file():
+            with open(PROGRAMS / f".{name}.compile", "a") as compiling:
+                fcntl.flock(compiling, fcntl.LOCK_EX)
+                if not exe.is_file():
+                    compile_program(src, tc, exe)
+                    evict(src.stem.lower())
+        os.utime(exe)
+    except BaseException:
+        held.close()
+        raise
+    _TAKEN.append(held)
+    return exe
+
+
+#: how many programs of one source `evict` keeps, the most recently taken first, beside those a process holds
+PROGRAMS_KEPT = 8
+#: the `.lock` of each kept program this process took, held shared until it exits (`kept_program`)
+_TAKEN: list = []
+
+
+def compile_program(src: Path, tc: Path, exe: Path) -> None:
+    """``src`` compiled with the toolchain at ``tc`` in `program_env` into ``exe``, which appears whole or not at all."""
+    d = Path(tempfile.mkdtemp(prefix=f".{src.stem.lower()}-", dir=exe.parent))
+    try:
+        c, out = d / f"{src.stem}.c", d / src.stem.lower()
+        for argv in ([str(tc / "bin" / "lean"), "-R", str(src.parent), "-c", str(c), str(src)],
+                     [str(tc / "bin" / "leanc"), *LEANC_FLAGS, str(c), "-o", str(out)]):
+            r = subprocess.run(argv, cwd=d, env=program_env(tc), capture_output=True, text=True)
+            if r.returncode:
+                raise RuntimeError(f"`{' '.join(argv)}` failed (exit {r.returncode}):\n{(r.stdout + r.stderr)[-3000:]}")
+        os.replace(out, exe)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def evict(stem: str) -> None:
+    """Remove `PROGRAMS`' programs of ``stem`` past the `PROGRAMS_KEPT` most recently taken, but for those a process holds
+    (its `.lock` shared): one is removed only under its `.lock` held exclusively, which no process then holds."""
+    def taken(p: Path) -> int:
+        try:
+            return p.stat().st_mtime_ns
+        except FileNotFoundError:                   # another process's `evict` removed it since the glob
+            return 0
+    kept = sorted(PROGRAMS.glob(f"{stem}-*"), key=taken, reverse=True)
+    for exe in kept[PROGRAMS_KEPT:]:
+        with open(exe.with_name(f".{exe.name}.lock"), "a") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            exe.unlink(missing_ok=True)
+
+
+#: {directory: whether a sandboxed build can't write it}, probed once a process (`sandbox_reads_only`)
+_READS_ONLY: dict[Path, bool] = {}
+
+
+def sandbox_reads_only(d: Path) -> bool:
+    """Whether builds run in the sandbox here (`sandboxed`) and it leaves ``d`` read-only (checked, not assumed: a mount
+    whose read-only remount failed stays writable), so no build can have written what ``d`` holds."""
+    d = d.resolve()
+    if d not in _READS_ONLY:
+        d.mkdir(parents=True, exist_ok=True)
+        probe = Path(tempfile.mkdtemp(prefix="lean-audit-sandbox-"))
+        try:
+            _READS_ONLY[d] = sandboxed() and subprocess.run(
+                [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), str(probe), "--", "bash", "-c",
+                 f'! touch "{d}/.sandbox-probe" 2>/dev/null'], capture_output=True, timeout=60).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            _READS_ONLY[d] = False
+        (d / ".sandbox-probe").unlink(missing_ok=True)
+        shutil.rmtree(probe, ignore_errors=True)
+    return _READS_ONLY[d]
 
 
 #: the packages whose audit writes `Unread.lean`'s facts (`unread_facts`) for `unread.py`'s ratchet, which `lean_audit.py`
@@ -6280,7 +6422,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS, DEV_CACHE, TREE
+    global TOOL, ARTIFACTS, DEV_CACHE, TREE, PROGRAMS
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -6314,6 +6456,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
+    ap.add_argument("--program-cache", type=Path, metavar="DIR", help="keep the tool's compiled Lean programs here for later "
+                    "runs, each under a key of everything it is compiled from (`program_key`), where builds run in the "
+                    "sandbox and it leaves DIR read-only (`kept_program`)")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
                     "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
                     "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
@@ -6405,10 +6550,12 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
-    for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache)):
+    for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache),
+                    ("--program-cache", a.program_cache)):
         if d is not None and (over := build_roots_over(d, pkgs)):
             ap.error(f"{flag} {d} overlaps {', '.join(map(str, over))}, which a build writes, so a build could forge its "
                      f"entries: put the cache outside every audited package's .lake and its path dependencies'")
+    PROGRAMS = a.program_cache.resolve() if a.program_cache else None
     if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
