@@ -15,7 +15,7 @@ sampling design's alone, at the analysis the extractor defines (`Extractor.analy
   the sample (`Extractor.ksAvg`);
 * `Trials.errOf_plur_le`: at the plurality, a trial's binding error is at most its finder's collision term,
   `2·E[cost]/2^256 + 1/(eM)` (`LinkFinder.link_mass_le`, with the finder's output from two openings,
-  `LinkFinder.outOf_spec`);
+  `LinkFinder.outOf_listed_spec`);
 * `Trials.link_le_bindErr`: so the binding error at the committed trace is at most `ε_bind` (`Trials.Transfers`);
 * `GenericSampledKS`, `GenericSampledKSPa`, `GenericSampledKSEscape`, `GenericSampledKSCount`.
 -/
