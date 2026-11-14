@@ -985,7 +985,7 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 def _auditor():
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
-    return LC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    return LC._module("a5_auditor", Path(__file__).resolve().parents[6] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
@@ -1192,13 +1192,13 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     assert not seen
 
 
-def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
+def _audited(window: Path, out: Path, docket: dict | None = None, accepted: bool = True) -> Path:
     """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
-    summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks
+    summary, and an audit record of ``docket`` (default the window's) accepting a subset sample of 2 proof blocks
     on coins its check verified, which says its audit wrote the case for the compiled check (`served_integrity.answer`
     accepts with no less); or, not ``accepted``, a check before the sample that failed."""
     mine, _doc, _sets = RA.verifier_window(window, D.parse_design(SAMPLING_DESIGN), None)
-    rec = registration or json.loads((window / "registration.json").read_text())
+    rec = docket or json.loads((window / "registration.json").read_text())
     (out / "window").mkdir(parents=True)
     (out / "window" / "program.json").write_bytes(canonical_json(encode_program(mine.program)))
     if not accepted:

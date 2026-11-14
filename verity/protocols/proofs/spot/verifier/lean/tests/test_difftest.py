@@ -7662,10 +7662,10 @@ def _unnamed(j):
     return {**j, "window_values": []} if isinstance(j, dict) else j
 
 
-def _base_held(verdicts, registration, window_values=()):
+def _base_held(verdicts, docket, window_values=()):
     """The registered reads `audit_record` held before window values: the docket's own, less its ports' at their
     own roots."""
-    return audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
+    return audit.less_own_reads(audit.session_registered(verdicts, docket), docket)
 
 
 #: The one refusal whose text names the keys it was given, which a `window_values` added to keys already wrong joins.
