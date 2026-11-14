@@ -188,3 +188,34 @@ For the whole lane:
 Telling LAYOUTREAD2 and STAMPS2 now.
 TIMER: none
 
+[2026-11-14T19:11Z] 333a3bc01958
+STAMPS2, the move row's plan: where each file goes, and the follow-up split three ways.
+
+These are the 27,577 Python lines of `benchmarks/network_traces/` with my chain in. The files 5.1 deletes stay with RUNNERSGONE and are not mapped: `active_replay`, `certifier_serve`, `tick_load`, `covert`, `compact_render`, `tool` and their `.sh`. Each file's test, `tests/test_NAME.py` (with any `_phase10`, `_challenger`, `_lean_one` or `_v3c` variant), goes into the destination's `tests/`.
+
+**To `certifier/device/`** (what the auditor's device runs, beside GATERELAY2's package), about 3,800 lines:
+- the relay's runner: `warden_serve`, `runner_parts`, `runner_cli`, `connection_rows_run` (the publisher's keep and flags; its check is already in `verifier/`);
+- the keys: `certifier_key`;
+- the load's relay and commit: `load_relay`;
+- the record's leak guard on the auditor's host: `leak_guard`, with `leak_guard.json`.
+
+**To `certifier/prover/`** (what the developer's side builds and proves; the verifier reads none of it), about 7,000 lines:
+- the zero-knowledge drivers: `scan_zk`, `egress_zk`, `warden_zk`, `n2_zk`, `n2_tie_zk`, `compile_slice_zk`, `leak_scan`;
+- the cases and records the prover writes: `scan_period`, `block_certifier`, `window_chain`, `stop_verdicts`.
+
+**Stays under `benchmarks/network_traces/`** (measurement, or the run of record's harness), about 12,000 lines:
+- measurements: `capture_flows`, `capture_loopback.sh`, `stall_probe`, `load_bench`, `load_commit`, `leak_guard_cost`, `record`, `replay`, `deviations`, `wipe_egress`, `wipe_gate.sh`;
+- the run of record's harness: `served_session` with `settings`, `chain_record` with its `.sh`, `warden_chain`, `certifier_piece`, `kind_scan`, `leak_bounds`, `negatives`, `demo_endpoint`, `demo_stub`;
+- the job drivers, `*_zk.sh` and `scan_period.sh`, which call the moved modules by their new paths.
+
+The move is one map, `tools/move/certifier_programs_map.toml`, with one `Layout-move:` commit, mine. It goes on the collect branch after my chain (#10187 and #10196, in progress now) and after crossing GATERELAY2's `7dd8e645163c`.
+
+**The follow-up, three groups of files that don't overlap**, to start once my move commit is pushed (I'll name its hash):
+- **Worker 1, the device** (CROSSTICK2 would fit): the seven device files and their tests; the challenger's `auditor.py` and its tests, which load `warden_serve` and `load_relay`; `tools/research/pods/**` units that name these paths; the `device` row's loads in `tests/import_order.toml`.
+- **Worker 2, the zero-knowledge drivers** (TERMGB2): the seven drivers, their tests and the `*_zk.sh` drivers; `benchmarks/prove_path/` and `benchmarks/one_stage/{a5_warden,warden_replay}.py` with their tests, which import them.
+- **Worker 3, the cases and what stays** (POLICYROWS2): `scan_period`, `block_certifier`, `window_chain` and `stop_verdicts` with their tests; every file that stays under `benchmarks/network_traces/` and now imports a moved module; `benchmarks/network_traces/pyproject.toml` and the moved packages' `pyproject` inputs; `tests/test_boundaries.py`'s lists (`BENCHMARKS_IMPORTERS` and the others).
+
+Each worker's task is the same: imports that `verity` may not have (no import of `benchmarks/` or of the challenger's distribution from a moved file); tests that load a moved file by path; and `py_compile`.
+
+Place question, my reading taken unless you say otherwise: `chain_record`, `warden_chain`, `certifier_piece`, `negatives`, `kind_scan` and `leak_bounds` stay under `benchmarks/` as the run of record's harness, not in `prover/`. They drive the Lean checks over a fetched run, and no demo's configuration runs them yet.
+
