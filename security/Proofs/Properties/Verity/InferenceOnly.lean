@@ -34,7 +34,7 @@ open Accounting Core
 /-- **A composite's acceptance holds the policy's case to its check's**: on what composite `k` accepted as a `same`
 composition, every decoding of the policy's case meets `PolicyHeld`. -/
 theorem policyHeld_of_same {k : Verity.Registration.Composite} {s : Sent} (h : SameAccepts k s)
-    {p : NciCheck.Protocol.Params} {r : NciCheck.Protocol.Commitment} {e : NciCheck.Protocol.Evidence}
+    {p r e}
     (hc : PolicyCase k s p r e) : Properties.Remote.PolicyHeld p r e := by
   obtain ⟨ps, c, ev, ⟨h1, h2, h3⟩, pub, prof, ⟨⟨-, hcases, -⟩, -⟩, -⟩ := h
   obtain ⟨ps', c', ev', ⟨h1', h2', h3'⟩, ⟨P, n, cs⟩, hx, hx1, hp, hr, he⟩ := hc
