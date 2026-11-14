@@ -7,7 +7,7 @@ public import NciCheck.DescDifftest
 public import NciCheck.DescLiveness
 public import NciCheck.DescFuzz
 public import NciCheck.Baseline
-public import NciCheck.RecordText
+public import Spot.RecordText
 public import NciCheck.Record
 public import NciCheck.RecordCount
 public import NciCheck.RecordRows

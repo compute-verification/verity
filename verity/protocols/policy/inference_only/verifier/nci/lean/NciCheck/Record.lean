@@ -1,7 +1,7 @@
 module
 
 public import NciCheck.Baseline
-public import NciCheck.RecordText
+public import Spot.RecordText
 public import NciCheck.DefinitionDigest
 public import Spot.Wires
 public import Flock.TemplateQuery

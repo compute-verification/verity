@@ -1039,7 +1039,7 @@
   "NciCheck.Desc",
   "NciCheck.Protocol",
   "NciCheck.DefinitionDigest",
-  "NciCheck.RecordText",
+  "Spot.RecordText",
   "Flock",
   "Base",
   "Circuits",
@@ -2575,7 +2575,7 @@
   "Properties.Nci.Record": {
    "imports": [
     "NciCheck.DefinitionDigest",
-    "NciCheck.RecordText",
+    "Spot.RecordText",
     "Flock.TemplateQuery",
     "Spot.Wires",
     "Spot.Bits",
@@ -2583,7 +2583,7 @@
     "Properties.Nci.Record"
    ],
    "except": [],
-   "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
+   "why": "the circuit record's properties are stated over the code they are about (the record's text as Spot.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
    "sealed": true
   },
   "Properties.Pouw.PearlPlus": {
@@ -21980,7 +21980,7 @@
     "_private.NciCheck.Protocol.0.NciCheck.Protocol.exactly": "eff71d8e4f72fea837e7e7caf9c07ae941f0e250289048831359d441a939b00a"
    }
   },
-  "NciCheck.RecordText": {
+  "Spot.RecordText": {
    "digest": "c39b26588d69a293201e122fc08201d9ad5969f273dc38652972d571dff63e5e",
    "definitions": {
     "NciCheck.RecordText.Decl": "a370a4704f72b7a0c91483a0c26d4a67047ee7ceecaec37f31711e6a5a8fe13a",

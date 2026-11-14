@@ -4638,7 +4638,7 @@
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordCount.lean", "count": 7},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordDifftest.lean", "count": 10},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordDifftestMain.lean", "count": 4},
-    {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean", "count": 2},
+    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean", "count": 2},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_record_reference.py", "count": 1},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py", "count": 3},
     {"file": "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_record_difftest.py", "count": 3},

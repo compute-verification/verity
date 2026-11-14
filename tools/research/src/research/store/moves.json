@@ -2452,6 +2452,11 @@
       "paths": {
         "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean"
+      }
     }
   ]
 }

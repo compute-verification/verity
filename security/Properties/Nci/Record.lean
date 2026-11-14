@@ -3,7 +3,7 @@ module
 public import Properties.Nci
 public import Properties.Nci.Baseline
 public import NciCheck.DefinitionDigest
-public import NciCheck.RecordText
+public import Spot.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
 public import Spot.Bits
